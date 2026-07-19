@@ -7,6 +7,3524 @@ datasource db {
   provider = "postgresql"
 }
 
-// Phase 01 intentionally contains no product/domain models. Phase 02 owns the
-// first domain migration. The committed foundation migration only establishes
-// Prisma migration history and performs no schema mutation.
+enum Role {
+  CANDIDATE
+  EMPLOYER
+  RECRUITER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum DataProvenance {
+  LIVE
+  DEMO
+  TEST
+}
+
+enum CompanyMembershipRole {
+  OWNER
+  ADMIN
+  RECRUITER
+  VIEWER
+}
+
+enum CompanyMembershipStatus {
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum CompanyInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum CompanyInvitationEventKind {
+  CREATED
+  RESENT
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum CompanyMembershipEventKind {
+  CREATED
+  ROLE_CHANGED
+  SUSPENDED
+  REACTIVATED
+  PLAN_LIMIT_SUSPENDED
+  PLAN_LIMIT_REACTIVATED
+  REMOVED
+}
+
+enum CompanyStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum CompanyStatusEventKind {
+  DRAFT_CREATED
+  ONBOARDING_COMPLETED
+  SUSPENDED
+  REACTIVATED
+  CLOSED
+}
+
+enum CompanyClaimStatus {
+  PENDING
+  NEEDS_EVIDENCE
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum CompanyClaimEventKind {
+  CREATED
+  EVIDENCE_REQUESTED
+  EVIDENCE_ADDED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum CompanyVerificationStatus {
+  DRAFT
+  PENDING
+  CHANGES_REQUESTED
+  VERIFIED
+  REJECTED
+  REVOKED
+}
+
+enum CompanyVerificationEventKind {
+  DRAFT_CREATED
+  SUBMITTED
+  EVIDENCE_REQUESTED
+  RESUBMITTED
+  VERIFIED
+  REJECTED
+  REVOKED
+}
+
+enum OnboardingStatus {
+  DRAFT
+  COMPLETE
+}
+
+enum CandidateOnboardingEventKind {
+  DRAFT_CREATED
+  COMPLETED
+  REOPENED
+}
+
+enum DocumentPurpose {
+  CV
+}
+
+enum DocumentStatus {
+  ACTIVE
+  REMOVED
+  REJECTED
+}
+
+enum JobAssignmentRole {
+  EDITOR
+  REVIEWER
+  PIPELINE
+}
+
+enum JobAssignmentStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum JobAssignmentEventKind {
+  ASSIGNED
+  ROLE_CHANGED
+  REVOKED
+  EXPIRED
+}
+
+enum JobStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  PUBLISHED
+  PAUSED
+  EXPIRED
+  CLOSED
+  REJECTED
+  REMOVED
+}
+
+enum JobStatusEventKind {
+  DRAFT_CREATED
+  DRAFT_UPDATED
+  SUBMITTED
+  REVIEW_STARTED
+  CHANGES_REQUESTED
+  APPROVED
+  PUBLISHED
+  PAUSED
+  REACTIVATED
+  EXPIRED
+  CLOSED
+  REJECTED
+  REVISION_REOPENED
+  IMPORT_ROLLED_BACK
+}
+
+enum JobType {
+  PERMANENT
+  TEMPORARY
+  FREELANCE
+  INTERNSHIP
+  APPRENTICESHIP
+  HOLIDAY_JOB
+}
+
+enum JobOrigin {
+  MANUAL
+  IMPORT
+}
+
+enum RemoteType {
+  ONSITE
+  HYBRID
+  REMOTE
+}
+
+enum Language {
+  DE
+  FR
+  IT
+  EN
+}
+
+enum LanguageLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+  NATIVE
+}
+
+enum SalaryPeriod {
+  YEARLY
+  MONTHLY
+  HOURLY
+}
+
+enum ApplicationEffort {
+  SIMPLE
+  MEDIUM
+  LONG
+}
+
+enum RemotePreference {
+  ONSITE
+  HYBRID
+  REMOTE
+  ANY
+}
+
+enum Seniority {
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  IN_REVIEW
+  SHORTLISTED
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ApplicationRejectionReason {
+  NOT_A_MATCH
+  POSITION_FILLED
+  REQUIREMENTS_NOT_MET
+  OTHER_REVIEWED
+}
+
+enum ApplicationEventKind {
+  STATUS_CHANGE
+  CANDIDATE_NOTE_UPDATED
+  EMPLOYER_NOTE_ADDED
+  MESSAGE_SENT
+  SCHEDULED_INTERVIEW
+}
+
+enum ConversationKind {
+  APPLICATION
+  TALENT_RADAR
+}
+
+enum ConversationParticipantKind {
+  USER
+  COMPANY_PRINCIPAL
+}
+
+enum SubscriptionStatus {
+  SCHEDULED
+  ACTIVE
+  CANCELLING
+  EXPIRED
+  CANCELLED
+}
+
+enum PlanPriceMode {
+  FIXED
+  CONTRACT
+}
+
+enum BillingInterval {
+  MONTHLY
+  ANNUAL
+}
+
+enum SubscriptionChangeKind {
+  DOWNGRADE
+  CANCEL
+}
+
+enum SubscriptionChangeStatus {
+  PENDING
+  APPLIED
+  REVOKED
+}
+
+enum SubscriptionEventKind {
+  ACTIVATED
+  CHANGE_SCHEDULED
+  CHANGED
+  CANCELLATION_SCHEDULED
+  EXPIRED
+  CANCELLED
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentProvider {
+  MOCK
+  STRIPE
+}
+
+enum PaymentEventKind {
+  CHECKOUT_CREATED
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  VOID
+}
+
+enum BoostStatus {
+  SCHEDULED
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum ProductType {
+  JOB_BOOST
+  ADDITIONAL_JOB
+  FEATURED_JOB
+  FEATURED_EMPLOYER
+  NEWSLETTER
+  SOCIAL_PUSH
+  IMPORT_SETUP
+  CONTACT_PACK
+  SUCCESS_FEE
+}
+
+enum FulfillmentContextType {
+  NONE
+  SUBSCRIPTION
+  JOB_BOOST
+  ADDITIONAL_JOB
+  IMPORT_SETUP
+  CONTACT_PACK
+}
+
+enum CreditType {
+  JOB_BOOST
+  TALENT_CONTACT
+  NEWSLETTER
+  SOCIAL_PUSH
+}
+
+enum CreditFundingSource {
+  PLAN_ALLOWANCE
+  PURCHASED_PACK
+  ADMIN_GRANT
+}
+
+enum CreditLedgerKind {
+  GRANT
+  CONSUME
+  EXPIRE
+  REVERSAL
+}
+
+enum AnalyticsLevel {
+  NONE
+  BASIC
+  ADVANCED
+  PRO
+}
+
+enum EntitlementKey {
+  ACTIVE_JOB_LIMIT
+  SEAT_LIMIT
+  TALENT_RADAR_ACCESS
+  TALENT_CONTACT_ALLOWANCE
+  JOB_BOOST_ALLOWANCE
+  ANALYTICS_LEVEL
+  ENHANCED_COMPANY_PROFILE
+  EMPLOYER_IMPORT_ACCESS
+}
+
+enum EntitlementValueType {
+  BOOLEAN
+  INTEGER
+  ANALYTICS_LEVEL
+}
+
+enum EntitlementIntegerMode {
+  ADD
+  REPLACE
+}
+
+enum CatalogVersionStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  INACTIVE
+}
+
+enum TaxRateReviewStatus {
+  DRAFT
+  APPROVED
+  RETIRED
+}
+
+enum SalaryDatasetReviewStatus {
+  DRAFT
+  APPROVED
+  RETIRED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  WON
+  LOST
+}
+
+enum SalesActivityKind {
+  NOTE
+  CONTACT_ATTEMPT
+  STATUS_CHANGE
+  TASK_ASSIGNED
+  OUTCOME
+}
+
+enum AbuseTargetType {
+  JOB
+  COMPANY
+  USER
+  MESSAGE
+}
+
+enum AbuseStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum AbuseSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AbuseEventKind {
+  CREATED
+  TRIAGED
+  ASSIGNED
+  RESTRICTION_APPLIED
+  RESTRICTION_LIFTED
+  RESOLVED
+  DISMISSED
+  NOTE_ADDED
+}
+
+enum ModerationRestrictionType {
+  HIDE_JOB
+  PAUSE_COMPANY
+  SUSPEND_USER
+  BLOCK_MESSAGE_THREAD
+}
+
+enum ModerationRestrictionStatus {
+  ACTIVE
+  LIFTED
+  EXPIRED
+}
+
+enum ImportInputSource {
+  UPLOAD
+  PASTE
+}
+
+enum ImportFormat {
+  XML
+  JSON
+}
+
+enum ImportRunStatus {
+  PENDING
+  PARSING
+  PREVIEW_READY
+  PARTIALLY_COMMITTED
+  COMMITTED
+  PARTIALLY_ROLLED_BACK
+  ROLLED_BACK
+  FAILED
+}
+
+enum ImportItemStatus {
+  PENDING
+  OK
+  ERROR
+  COMMITTED
+  ROLLED_BACK
+  CONFLICT_MANUAL_REMEDIATION
+}
+
+enum ImportDecisionKind {
+  APPROVE
+  REJECT
+}
+
+enum ImportSetupApprovalStatus {
+  DRAFT
+  APPROVED
+  USED
+  EXPIRED
+  REVOKED
+}
+
+enum ImportAccessGrantStatus {
+  SCHEDULED
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum AdditionalJobPermitStatus {
+  SCHEDULED
+  ACTIVE
+  CONSUMED
+  EXPIRED
+  REVOKED
+}
+
+enum EmailLogStatus {
+  QUEUED
+  MOCK_RECORDED
+  SENT
+  FAILED
+}
+
+enum ContactRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+}
+
+enum ContactRequestEventKind {
+  CREATED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+  REVEAL_GRANTED
+}
+
+enum RevealField {
+  DISPLAY_NAME
+  EMAIL
+  PHONE
+  CV_METADATA
+}
+
+enum PrivacyRequestType {
+  EXPORT
+  DELETE
+  CORRECT
+}
+
+enum PrivacyRequestStatus {
+  PENDING
+  IDENTITY_CHECK
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum PrivacyRequestEventKind {
+  CREATED
+  IDENTITY_REQUESTED
+  VERIFIED
+  PROCESSING_STARTED
+  MANIFEST_CREATED
+  COMPLETED
+  REJECTED
+  CANCELLED
+  NOTE_ADDED
+}
+
+enum PrivacyCorrectionFieldCode {
+  DISPLAY_NAME
+  LEGAL_NAME
+  EMAIL
+  PHONE
+  LOCATION
+  PROFILE_PREFERENCES
+  CONSENT_HISTORY
+  APPLICATION_DATA
+  OTHER_ACCOUNT_DATA
+}
+
+enum PrivacyCorrectionOutcomeCode {
+  CORRECTED_VIA_CANONICAL_COMMAND
+  NO_CHANGE_REQUIRED
+  REFERRED_FOR_POLICY
+}
+
+enum PrivacyDeletionDependencyCode {
+  ACCOUNTING_RETENTION
+  ACTIVE_APPLICATIONS
+  MESSAGES
+  ABUSE_SECURITY_AUDIT
+  LEGAL_HOLD
+  ACTIVE_COMPANY_DUTY
+  NONE
+}
+
+enum PrivacyDeletionOutcomeCode {
+  ASSESSMENT_COMPLETED_NO_ERASURE
+}
+
+enum PrivacyRequestRejectionCode {
+  IDENTITY_NOT_VERIFIED
+  DUPLICATE
+  OUT_OF_SCOPE
+  INSUFFICIENT_INFORMATION
+  ABUSIVE_REQUEST
+}
+
+enum IdentityRevealRevokeReason {
+  PRIVACY_CHOICE
+  TRUST_CONCERN
+  OTHER
+}
+
+enum RadarConsentKind {
+  TALENT_RADAR_VISIBILITY
+}
+
+enum UserConsentKind {
+  TERMS
+  MARKETING
+  DATA_USE
+  JOB_ALERT_DELIVERY
+}
+
+enum AlertFrequency {
+  DAILY
+  WEEKLY
+}
+
+enum JobAlertStatus {
+  ACTIVE
+  PAUSED
+  UNSUBSCRIBED
+  DELETED
+}
+
+enum JobAlertEventKind {
+  CREATED
+  UPDATED
+  PAUSED
+  RESUMED
+  DIGEST_MOCK_RECORDED
+  UNSUBSCRIBED
+  DELETED
+}
+
+enum ContentPageType {
+  GUIDE
+  CLUSTER
+}
+
+enum ContentRevisionStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+  UNPUBLISHED
+}
+
+enum ContentEventKind {
+  DRAFTED
+  SUBMITTED_FOR_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+  UNPUBLISHED
+}
+
+enum SupportCategory {
+  ACCOUNT
+  APPLICATION
+  EMPLOYER
+  BILLING
+  PRIVACY
+  ABUSE
+  OTHER
+}
+
+enum SupportPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum SupportCaseStatus {
+  OPEN
+  TRIAGED
+  WAITING_FOR_REQUESTER
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SupportCaseEventKind {
+  CREATED
+  TRIAGED
+  ASSIGNED
+  INFORMATION_REQUESTED
+  REPLIED
+  RESOLVED
+  REOPENED
+  CLOSED
+}
+
+enum SystemTaskKind {
+  MODERATION
+  VERIFICATION
+  SUPPORT
+  SALES_FOLLOW_UP
+  CONTENT_REVIEW
+  SUPPLY_GAP
+  USAGE_DIAGNOSTIC
+  RENEWAL_REVIEW
+  RETENTION_RISK
+  CREDIT_EXPIRY
+}
+
+enum SystemTaskStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  DONE
+  DISMISSED
+  EXPIRED
+}
+
+enum NotificationKind {
+  APPLICATION_SUBMITTED
+  APPLICATION_STATUS_CHANGED
+  MESSAGE_RECEIVED
+  CONTACT_REQUEST_RECEIVED
+  CONTACT_REQUEST_ACCEPTED
+  CONTACT_REQUEST_DECLINED
+  CONTACT_REQUEST_CANCELLED
+  IDENTITY_REVEAL_GRANTED
+  IDENTITY_REVEAL_REVOKED
+  JOB_REVIEW_CHANGED
+  COMPANY_VERIFICATION_CHANGED
+  TEAM_INVITATION_CREATED
+  TEAM_MEMBERSHIP_CHANGED
+  ORDER_PAID
+  INVOICE_ISSUED
+  SUBSCRIPTION_CHANGED
+  USAGE_WARNING
+  SYSTEM_TASK_ASSIGNED
+  SUPPORT_CASE_CHANGED
+  PRIVACY_REQUEST_CHANGED
+}
+
+enum AuditActorKind {
+  USER
+  SYSTEM
+  ANONYMOUS
+}
+
+enum AuditResult {
+  SUCCEEDED
+  DENIED
+  FAILED
+}
+
+enum AuditTargetType {
+  USER
+  SESSION
+  COMPANY
+  MEMBERSHIP
+  INVITATION
+  CLAIM_REQUEST
+  VERIFICATION_REQUEST
+  JOB
+  JOB_REVISION
+  JOB_ASSIGNMENT
+  APPLICATION
+  CONVERSATION
+  MESSAGE
+  RADAR_PROFILE
+  CONTACT_REQUEST
+  IDENTITY_REVEAL_GRANT
+  PRIVACY_REQUEST
+  ABUSE_REPORT
+  MODERATION_RESTRICTION
+  PLAN_VERSION
+  PRODUCT_VERSION
+  SUBSCRIPTION
+  ORDER
+  INVOICE
+  CREDIT_LEDGER_ENTRY
+  JOB_BOOST
+  IMPORT_SOURCE
+  IMPORT_RUN
+  SUPPORT_CASE
+  CONTENT_REVISION
+  SALES_LEAD
+  SYSTEM_TASK
+  CLUSTER_LAUNCH_ASSESSMENT
+  TAX_RATE_VERSION
+}
+
+enum AuditAction {
+  USER_REGISTERED
+  USER_LOGIN
+  USER_LOGIN_FAILED
+  USER_LOGOUT
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+  SESSION_REVOKED
+  USER_SUSPENDED
+  USER_REACTIVATED
+  COMPANY_CREATED_WITH_OWNER
+  COMPANY_CLAIM_REQUESTED
+  COMPANY_CLAIM_EVIDENCE_REQUESTED
+  COMPANY_CLAIM_APPROVED
+  COMPANY_CLAIM_REJECTED
+  COMPANY_PROFILE_UPDATED
+  COMPANY_ONBOARDING_COMPLETED
+  COMPANY_VERIFICATION_SUBMITTED
+  COMPANY_VERIFICATION_CHANGES_REQUESTED
+  COMPANY_VERIFIED
+  COMPANY_VERIFICATION_REJECTED
+  COMPANY_VERIFICATION_REVOKED
+  COMPANY_SUSPENDED
+  COMPANY_REACTIVATED
+  INVITATION_SENT
+  INVITATION_REVOKED
+  INVITATION_ACCEPTED
+  MEMBERSHIP_ROLE_CHANGED
+  MEMBERSHIP_REMOVED
+  JOB_ASSIGNMENT_CREATED
+  JOB_ASSIGNMENT_REVOKED
+  JOB_DRAFT_UPDATED
+  JOB_SUBMITTED
+  JOB_REVIEW_STARTED
+  JOB_CHANGES_REQUESTED
+  JOB_APPROVED
+  JOB_PUBLISHED
+  JOB_REJECTED
+  JOB_FLAGGED
+  JOB_PAUSED
+  JOB_REACTIVATED
+  JOB_EXPIRED
+  JOB_CLOSED
+  JOB_REPORTING_CHECKED
+  APPLICATION_SUBMITTED
+  APPLICATION_STATUS_CHANGED
+  APPLICATION_WITHDRAWN
+  APPLICATION_EMPLOYER_NOTE_ADDED
+  MESSAGE_SENT
+  CANDIDATE_ONBOARDING_COMPLETED
+  CANDIDATE_ONBOARDING_REOPENED
+  USER_CONSENT_CHANGED
+  RADAR_CONSENT_CHANGED
+  CONTACT_REQUEST_SENT
+  CONTACT_REQUEST_ACCEPTED
+  CONTACT_REQUEST_DECLINED
+  CONTACT_REQUEST_EXPIRED
+  CONTACT_REQUEST_CANCELLED
+  IDENTITY_REVEALED
+  IDENTITY_REVEAL_REVOKED
+  PRIVACY_CASE_ACCESSED
+  PRIVACY_REQUEST_CREATED
+  PRIVACY_REQUEST_STATUS_CHANGED
+  PRIVACY_EXPORT_MANIFEST_CREATED
+  CHECKOUT_CREATED
+  ORDER_PAID
+  ORDER_FAILED
+  ORDER_CANCELLED
+  INVOICE_ISSUED
+  INVOICE_PAID
+  INVOICE_VOIDED
+  SUBSCRIPTION_ACTIVATED
+  SUBSCRIPTION_CHANGED
+  SUBSCRIPTION_CANCELLING
+  SUBSCRIPTION_EXPIRED
+  CREDITS_GRANTED
+  CREDITS_CONSUMED
+  CREDITS_EXPIRED
+  CREDIT_CONSUME_REVERSED
+  JOB_BOOST_ACTIVATED
+  JOB_BOOST_CANCELLED
+  JOB_BOOST_EXPIRED
+  ABUSE_REPORT_SUBMITTED
+  ABUSE_REPORT_TRIAGED
+  MODERATION_RESTRICTION_APPLIED
+  MODERATION_RESTRICTION_LIFTED
+  MODERATION_RESTRICTION_EXPIRED
+  ABUSE_REPORT_RESOLVED
+  IMPORT_PARSED
+  IMPORT_DECISION_RECORDED
+  IMPORT_COMMITTED
+  IMPORT_ROLLED_BACK
+  IMPORT_SETUP_APPROVED
+  IMPORT_SETUP_REVOKED
+  SUPPORT_CASE_CREATED
+  SUPPORT_CASE_TRIAGED
+  SUPPORT_CASE_ASSIGNED
+  SUPPORT_CASE_REPLIED
+  SUPPORT_CASE_RESOLVED
+  SUPPORT_CASE_REOPENED
+  CONTENT_DRAFTED
+  CONTENT_REVIEWED
+  CONTENT_PUBLISHED
+  CONTENT_UNPUBLISHED
+  TAXONOMY_CHANGED
+  LEAD_STATUS_CHANGED
+  SYSTEM_TASK_ASSIGNED
+  SYSTEM_TASK_OUTCOME_RECORDED
+  CLUSTER_ASSESSMENT_APPROVED
+  CLUSTER_ACTIVATED
+  CLUSTER_REVOKED
+  CATALOG_VERSION_SCHEDULED
+  CATALOG_VERSION_DEACTIVATED
+  TAX_RATE_APPROVED
+  RATE_LIMITED
+  AUTHORIZATION_DENIED_SENSITIVE
+  MAINTENANCE_PROJECTION_SYNCED
+}
+
+enum AnalyticsPurpose {
+  ESSENTIAL_OPERATIONAL
+  PRODUCT_ANALYTICS
+}
+
+enum AnalyticsEventKind {
+  PUBLIC_VALUE_VIEWED
+  SEARCH_SUBMITTED
+  SEARCH_RESULTS_VIEWED
+  JOB_DETAIL_VIEWED
+  JOB_SAVED
+  APPLY_INTENT_STARTED
+  APPLICATION_SUBMITTED
+  APPLICATION_STATUS_CHANGED
+  CANDIDATE_REGISTERED
+  CANDIDATE_PROFILE_COMPLETED
+  RADAR_OPTED_IN
+  JOB_ALERT_ACTIVATED
+  EMPLOYER_REGISTERED
+  COMPANY_ONBOARDING_COMPLETED
+  COMPANY_VERIFICATION_SUBMITTED
+  COMPANY_VERIFIED
+  JOB_DRAFT_CREATED
+  JOB_SUBMITTED
+  JOB_PUBLISHED
+  EMPLOYER_RESPONSE_RECORDED
+  CONTACT_REQUEST_SENT
+  CONTACT_REQUEST_ACCEPTED
+  CONTACT_REQUEST_DECLINED
+  IDENTITY_REVEAL_GRANTED
+  PRICING_VIEWED
+  LIMIT_REACHED
+  CHECKOUT_STARTED
+  CHECKOUT_COMPLETED
+  SUBSCRIPTION_CHANGED
+  LEAD_SUBMITTED
+  LEAD_QUALIFIED
+  LEAD_WON
+  BOOST_ACTIVATED
+  MODERATION_ACTIONED
+}
+
+enum JobReportingResult {
+  REQUIRES_REPORTING
+  NOT_REQUIRED
+  UNKNOWN
+}
+
+enum RequiredDocumentKind {
+  NONE
+  CV
+  COVER_LETTER
+  CERTIFICATES
+  REFERENCES
+  PORTFOLIO
+  OTHER
+}
+
+enum ApplicationContactKind {
+  EMAIL
+  PHONE
+  APPLY_URL
+}
+
+enum JobBenefitCode {
+  FLEXIBLE_WORK
+  HOME_OFFICE
+  PAID_TRAINING
+  PENSION_TOP_UP
+  PARENTAL_LEAVE
+  CHILDCARE_SUPPORT
+  PUBLIC_TRANSPORT_SUPPORT
+  MEAL_SUPPORT
+  HEALTH_WELLBEING
+  EXTRA_LEAVE
+  PERFORMANCE_BONUS
+}
+
+enum ClusterLaunchAssessmentStatus {
+  DRAFT
+  READY
+  ACTIVATED
+  REVOKED
+  EXPIRED
+}
+
+enum ClusterLaunchEventKind {
+  EVALUATED
+  PRODUCT_APPROVED
+  OPS_APPROVED
+  ACTIVATED
+  REVOKED
+  EXPIRED
+}
+
+enum RecruiterMandateStatus {
+  SCHEDULED
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum RecruiterMandateEventKind {
+  GRANTED
+  REVOKED
+  EXPIRED
+}
+
+enum ReferralAttributionKind {
+  VISIT
+  CONVERSION
+}
+
+model User {
+  id                       String                       @id @default(uuid()) @db.Uuid
+  email                    String                       @db.VarChar(320)
+  emailNormalized          String                       @unique @db.VarChar(320)
+  role                     Role
+  name                     String?                      @db.VarChar(160)
+  status                   UserStatus                   @default(ACTIVE)
+  dataProvenance           DataProvenance               @default(LIVE)
+  emailVerifiedAt          DateTime?                    @db.Timestamptz(3)
+  lastLoginAt              DateTime?                    @db.Timestamptz(3)
+  createdAt                DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime                     @updatedAt @db.Timestamptz(3)
+  credential               Credential?
+  sessions                 Session[]
+  passwordResetTokens      PasswordResetToken[]
+  candidateProfile         CandidateProfile?
+  employerProfile          EmployerProfile?
+  companyMemberships       CompanyMembership[]
+  claimRequests            CompanyClaimRequest[]        @relation("ClaimRequester")
+  verificationRequests     CompanyVerificationRequest[] @relation("VerificationRequester")
+  notifications            Notification[]
+  userConsents             UserConsentEvent[]           @relation("ConsentOwner")
+  privacyRequests          PrivacyRequest[]             @relation("PrivacyRequester")
+  privacyChallenges        PrivacyIdentityChallenge[]
+  conversationParticipants ConversationParticipant[]
+  revealConfirmations      IdentityRevealConfirmation[]
+  revealGrantsRevoked      IdentityRevealGrant[]        @relation("RevealGrantRevoker")
+  messages                 Message[]
+  contactRequestsMade      EmployerContactRequest[]
+  ordersCreated            Order[]
+  abuseReportsFiled        AbuseReport[]                @relation("AbuseReporter")
+  abuseReportsAssigned     AbuseReport[]                @relation("AbuseAssignee")
+  auditLogs                AuditLog[]
+  salesLeadsOwned          SalesLead[]
+  systemTasksOwned         SystemTask[]
+  supportCasesRequested    SupportCase[]                @relation("SupportRequester")
+  supportCasesAssigned     SupportCase[]                @relation("SupportAssignee")
+  recruiterMandates        RecruiterMandate[]           @relation("MandateRecruiter")
+  recruiterMandatesGranted RecruiterMandate[]           @relation("MandateGrantor")
+  jobAssignmentsCreated    JobAssignment[]              @relation("JobAssignmentAssigner")
+  taxRatesReviewed         TaxRateVersion[]             @relation("TaxRateReviewer")
+
+  @@index([status, role])
+  @@index([dataProvenance, status])
+}
+
+model Credential {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @db.Uuid
+  passwordHash      String   @db.VarChar(255)
+  algorithm         String   @db.VarChar(32)
+  algorithmVersion  Int
+  passwordChangedAt DateTime @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model Session {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid
+  tokenHash         String    @unique @db.VarChar(64)
+  expiresAt         DateTime  @db.Timestamptz(3)
+  absoluteExpiresAt DateTime  @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  rotatedAt         DateTime? @db.Timestamptz(3)
+  revokedAt         DateTime? @db.Timestamptz(3)
+  userAgent         String?   @db.VarChar(512)
+  ipHash            String?   @db.VarChar(128)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @db.Uuid
+  tokenHash          String    @unique @db.VarChar(64)
+  expiresAt          DateTime  @db.Timestamptz(3)
+  usedAt             DateTime? @db.Timestamptz(3)
+  requestedIpHash    String?   @db.VarChar(128)
+  requestedUserAgent String?   @db.VarChar(512)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  user               User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt, usedAt])
+}
+
+model RateLimitBucket {
+  id          String   @id @default(uuid()) @db.Uuid
+  namespace   String   @db.VarChar(64)
+  keyHash     String   @db.VarChar(128)
+  windowStart DateTime @db.Timestamptz(3)
+  windowEnd   DateTime @db.Timestamptz(3)
+  count       Int      @default(0)
+  version     Int      @default(1)
+  expiresAt   DateTime @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([namespace, keyHash, windowStart])
+  @@index([expiresAt])
+}
+
+model Canton {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  code               String                    @unique @db.Char(2)
+  name               String                    @db.VarChar(120)
+  slug               String                    @unique @db.VarChar(120)
+  language           Language
+  cities             City[]
+  companies          CompanyLocation[]
+  candidates         CandidateProfile[]
+  jobRevisions       JobRevision[]
+  jobsPublished      Job[]                     @relation("PublishedCanton")
+  salaryBands        SalaryBand[]
+  clusterAssessments ClusterLaunchAssessment[]
+  metricDailyRows    MetricDaily[]
+  createdAt          DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                  @updatedAt @db.Timestamptz(3)
+
+  @@index([slug])
+}
+
+model City {
+  id               String            @id @default(uuid()) @db.Uuid
+  cantonId         String            @db.Uuid
+  name             String            @db.VarChar(160)
+  slug             String            @db.VarChar(160)
+  latitude         Decimal?          @db.Decimal(9, 6)
+  longitude        Decimal?          @db.Decimal(9, 6)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+  canton           Canton            @relation(fields: [cantonId], references: [id], onDelete: Restrict)
+  companyLocations CompanyLocation[]
+  jobRevisions     JobRevision[]
+  jobsPublished    Job[]             @relation("PublishedCity")
+
+  @@unique([cantonId, slug])
+  @@unique([id, cantonId])
+  @@index([cantonId])
+}
+
+model Category {
+  id                   String                        @id @default(uuid()) @db.Uuid
+  parentId             String?                       @db.Uuid
+  name                 String                        @db.VarChar(160)
+  slug                 String                        @unique @db.VarChar(160)
+  isActive             Boolean                       @default(true)
+  sortOrder            Int                           @default(0)
+  createdAt            DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                      @updatedAt @db.Timestamptz(3)
+  parent               Category?                     @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children             Category[]                    @relation("CategoryTree")
+  candidatePreferences CandidatePreferenceCategory[]
+  jobRevisions         JobRevision[]
+  jobsPublished        Job[]                         @relation("PublishedCategory")
+  salaryBands          SalaryBand[]
+  clusterAssessments   ClusterLaunchAssessment[]
+  metricDailyRows      MetricDaily[]
+
+  @@index([parentId, isActive, sortOrder])
+}
+
+model Skill {
+  id                String             @id @default(uuid()) @db.Uuid
+  name              String             @unique @db.VarChar(160)
+  slug              String             @unique @db.VarChar(160)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  candidateSkills   CandidateSkill[]
+  jobRevisionSkills JobRevisionSkill[]
+}
+
+model CandidateProfile {
+  id                  String                        @id @default(uuid()) @db.Uuid
+  userId              String                        @unique @db.Uuid
+  cantonId            String?                       @db.Uuid
+  firstName           String?                       @db.VarChar(100)
+  lastName            String?                       @db.VarChar(100)
+  publicDisplayName   String?                       @db.VarChar(160)
+  phone               String?                       @db.VarChar(40)
+  postalCode          String?                       @db.VarChar(16)
+  cityLabel           String?                       @db.VarChar(160)
+  summary             String?                       @db.VarChar(3000)
+  onboardingStatus    OnboardingStatus              @default(DRAFT)
+  createdAt           DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                      @updatedAt @db.Timestamptz(3)
+  user                User                          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  canton              Canton?                       @relation(fields: [cantonId], references: [id], onDelete: Restrict)
+  onboardingEvents    CandidateOnboardingEvent[]
+  skills              CandidateSkill[]
+  languages           CandidateLanguage[]
+  preference          CandidatePreference?
+  documents           CandidateDocumentMetadata[]
+  applications        Application[]
+  savedJobs           SavedJob[]
+  jobAlerts           JobAlert[]
+  radarConsents       CandidateConsent[]
+  radarProfile        RadarProfile?
+  radarMappings       RadarOpaqueMapping[]
+  radarSessionEntries RadarSearchSessionCandidate[]
+  contactRequests     EmployerContactRequest[]
+  revealGrants        IdentityRevealGrant[]
+
+  @@index([onboardingStatus, cantonId])
+}
+
+model CandidateOnboardingEvent {
+  id                 String                       @id @default(uuid()) @db.Uuid
+  candidateProfileId String                       @db.Uuid
+  kind               CandidateOnboardingEventKind
+  actorUserId        String?                      @db.Uuid
+  reasonCode         String?                      @db.VarChar(64)
+  correlationId      String                       @db.VarChar(128)
+  createdAt          DateTime                     @default(now()) @db.Timestamptz(3)
+  candidateProfile   CandidateProfile             @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+
+  @@index([candidateProfileId, createdAt])
+}
+
+model CandidateSkill {
+  id                 String           @id @default(uuid()) @db.Uuid
+  candidateProfileId String           @db.Uuid
+  skillId            String           @db.Uuid
+  level              Int?
+  years              Int?
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  skill              Skill            @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  @@unique([candidateProfileId, skillId])
+  @@index([candidateProfileId])
+  @@index([skillId])
+}
+
+model CandidateLanguage {
+  id                 String           @id @default(uuid()) @db.Uuid
+  candidateProfileId String           @db.Uuid
+  code               String           @db.Char(2)
+  level              LanguageLevel
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+
+  @@unique([candidateProfileId, code])
+  @@index([candidateProfileId])
+}
+
+model CandidatePreference {
+  id                 String                        @id @default(uuid()) @db.Uuid
+  candidateProfileId String                        @unique @db.Uuid
+  desiredTitles      String[]
+  desiredJobTypes    JobType[]
+  salaryPeriod       SalaryPeriod?
+  salaryMinChf       Int?
+  salaryMaxChf       Int?
+  workloadMin        Int?
+  workloadMax        Int?
+  remotePreference   RemotePreference?
+  mobilityRadiusKm   Int?
+  availableFrom      DateTime?                     @db.Date
+  createdAt          DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                      @updatedAt @db.Timestamptz(3)
+  candidateProfile   CandidateProfile              @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  categories         CandidatePreferenceCategory[]
+}
+
+model CandidatePreferenceCategory {
+  candidatePreferenceId String              @db.Uuid
+  categoryId            String              @db.Uuid
+  candidatePreference   CandidatePreference @relation(fields: [candidatePreferenceId], references: [id], onDelete: Restrict)
+  category              Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([candidatePreferenceId, categoryId])
+  @@index([categoryId])
+}
+
+model CandidateDocumentMetadata {
+  id                 String                          @id @default(uuid()) @db.Uuid
+  candidateProfileId String                          @db.Uuid
+  storageKey         String                          @unique @db.VarChar(512)
+  safeFilename       String                          @db.VarChar(255)
+  mimeType           String                          @db.VarChar(128)
+  sizeBytes          Int
+  purpose            DocumentPurpose
+  status             DocumentStatus                  @default(ACTIVE)
+  createdAt          DateTime                        @default(now()) @db.Timestamptz(3)
+  removedAt          DateTime?                       @db.Timestamptz(3)
+  candidateProfile   CandidateProfile                @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  applicationLinks   ApplicationSubmissionDocument[]
+
+  @@index([candidateProfileId, status, purpose])
+}
+
+model EmployerProfile {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @db.Uuid
+  displayName String?  @db.VarChar(160)
+  phone       String?  @db.VarChar(40)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model Company {
+  id                          String                       @id @default(uuid()) @db.Uuid
+  name                        String                       @db.VarChar(200)
+  slug                        String                       @unique @db.VarChar(200)
+  uid                         String?                      @unique @db.VarChar(32)
+  industry                    String?                      @db.VarChar(160)
+  size                        String?                      @db.VarChar(64)
+  website                     String?                      @db.VarChar(512)
+  logoStorageKey              String?                      @db.VarChar(512)
+  coverStorageKey             String?                      @db.VarChar(512)
+  about                       String?                      @db.VarChar(5000)
+  values                      String[]
+  benefits                    String[]
+  responseTargetDays          Int?
+  responseSampleSize          Int                          @default(0)
+  responseWithinTargetBps     Int?
+  status                      CompanyStatus                @default(DRAFT)
+  dataProvenance              DataProvenance               @default(LIVE)
+  createdAt                   DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime                     @updatedAt @db.Timestamptz(3)
+  statusEvents                CompanyStatusEvent[]
+  memberships                 CompanyMembership[]
+  locations                   CompanyLocation[]
+  invitations                 CompanyInvitation[]
+  claimRequests               CompanyClaimRequest[]
+  verificationRequests        CompanyVerificationRequest[]
+  jobs                        Job[]
+  jobAssignments              JobAssignment[]
+  applicationEmployerNotes    ApplicationEmployerNote[]
+  billingProfile              CompanyBillingProfile?
+  subscriptions               EmployerSubscription[]
+  orders                      Order[]
+  invoices                    Invoice[]
+  entitlementGrants           EntitlementGrant[]
+  creditAccounts              CreditAccount[]
+  radarMappings               RadarOpaqueMapping[]
+  radarSearchBudgets          RadarSearchBudget[]
+  radarSearchSessions         RadarSearchSession[]
+  contactRequests             EmployerContactRequest[]
+  revealGrants                IdentityRevealGrant[]
+  importRights                ImportSourceCompanyRight[]
+  importSetupApprovals        ImportSetupApproval[]
+  importAccessGrants          ImportAccessGrant[]
+  additionalJobPermits        AdditionalJobPermit[]
+  jobBoosts                   JobBoost[]
+  conversations               Conversation[]
+  conversationParticipants    ConversationParticipant[]
+  subscriptionChangeSchedules SubscriptionChangeSchedule[]
+  recruiterMandates           RecruiterMandate[]
+  importDecisions             ImportDecision[]
+  analyticsEvents             AnalyticsEvent[]
+  metricDailyRows             MetricDaily[]
+  supportCases                SupportCase[]
+  salesLeads                  SalesLead[]
+  systemTasks                 SystemTask[]
+  auditLogs                   AuditLog[]
+
+  @@index([status, dataProvenance])
+}
+
+model CompanyStatusEvent {
+  id            String                 @id @default(uuid()) @db.Uuid
+  companyId     String                 @db.Uuid
+  kind          CompanyStatusEventKind
+  fromStatus    CompanyStatus?
+  toStatus      CompanyStatus
+  actorUserId   String?                @db.Uuid
+  reasonCode    String?                @db.VarChar(64)
+  correlationId String                 @db.VarChar(128)
+  createdAt     DateTime               @default(now()) @db.Timestamptz(3)
+  company       Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, createdAt])
+}
+
+model CompanyMembership {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  companyId           String                   @db.Uuid
+  userId              String                   @db.Uuid
+  role                CompanyMembershipRole
+  status              CompanyMembershipStatus  @default(ACTIVE)
+  joinedAt            DateTime                 @default(now()) @db.Timestamptz(3)
+  removedAt           DateTime?                @db.Timestamptz(3)
+  createdAt           DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                 @updatedAt @db.Timestamptz(3)
+  company             Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  events              CompanyMembershipEvent[]
+  radarSearchSessions RadarSearchSession[]
+  jobAssignments      JobAssignment[]
+
+  @@unique([companyId, userId])
+  @@unique([id, companyId, userId])
+  @@index([companyId, status, role])
+  @@index([userId, status])
+}
+
+model CompanyMembershipEvent {
+  id            String                     @id @default(uuid()) @db.Uuid
+  membershipId  String                     @db.Uuid
+  kind          CompanyMembershipEventKind
+  fromRole      CompanyMembershipRole?
+  toRole        CompanyMembershipRole?
+  actorUserId   String?                    @db.Uuid
+  reasonCode    String?                    @db.VarChar(64)
+  correlationId String                     @db.VarChar(128)
+  createdAt     DateTime                   @default(now()) @db.Timestamptz(3)
+  membership    CompanyMembership          @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+
+  @@index([membershipId, createdAt])
+}
+
+model CompanyLocation {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  cantonId   String   @db.Uuid
+  cityId     String   @db.Uuid
+  address    String?  @db.VarChar(255)
+  postalCode String?  @db.VarChar(16)
+  latitude   Decimal? @db.Decimal(9, 6)
+  longitude  Decimal? @db.Decimal(9, 6)
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  canton     Canton   @relation(fields: [cantonId], references: [id], onDelete: Restrict)
+  city       City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([cantonId, cityId])
+}
+
+model CompanyInvitation {
+  id                     String                   @id @default(uuid()) @db.Uuid
+  companyId              String                   @db.Uuid
+  inviterUserId          String                   @db.Uuid
+  acceptedByUserId       String?                  @db.Uuid
+  inviteeEmailNormalized String                   @db.VarChar(320)
+  intendedRole           CompanyMembershipRole
+  tokenHash              String                   @unique @db.VarChar(64)
+  status                 CompanyInvitationStatus  @default(PENDING)
+  expiresAt              DateTime                 @db.Timestamptz(3)
+  acceptedAt             DateTime?                @db.Timestamptz(3)
+  revokedAt              DateTime?                @db.Timestamptz(3)
+  createdAt              DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                 @updatedAt @db.Timestamptz(3)
+  company                Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  events                 CompanyInvitationEvent[]
+
+  @@index([companyId, status, expiresAt])
+  @@index([inviteeEmailNormalized, status])
+}
+
+model CompanyInvitationEvent {
+  id            String                     @id @default(uuid()) @db.Uuid
+  invitationId  String                     @db.Uuid
+  kind          CompanyInvitationEventKind
+  actorUserId   String?                    @db.Uuid
+  reasonCode    String?                    @db.VarChar(64)
+  correlationId String                     @db.VarChar(128)
+  createdAt     DateTime                   @default(now()) @db.Timestamptz(3)
+  invitation    CompanyInvitation          @relation(fields: [invitationId], references: [id], onDelete: Restrict)
+
+  @@index([invitationId, createdAt])
+}
+
+model CompanyClaimRequest {
+  id                      String                 @id @default(uuid()) @db.Uuid
+  requesterEmployerUserId String                 @db.Uuid
+  candidateCompanyId      String                 @db.Uuid
+  requestedRole           CompanyMembershipRole  @default(OWNER)
+  approvedRole            CompanyMembershipRole?
+  matchSignals            Json
+  evidenceSummary         String?                @db.VarChar(1000)
+  status                  CompanyClaimStatus     @default(PENDING)
+  idempotencyKey          String                 @unique @db.VarChar(128)
+  reviewedAt              DateTime?              @db.Timestamptz(3)
+  createdAt               DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime               @updatedAt @db.Timestamptz(3)
+  requester               User                   @relation("ClaimRequester", fields: [requesterEmployerUserId], references: [id], onDelete: Restrict)
+  candidateCompany        Company                @relation(fields: [candidateCompanyId], references: [id], onDelete: Restrict)
+  events                  CompanyClaimEvent[]
+
+  @@index([candidateCompanyId, status])
+  @@index([requesterEmployerUserId, status])
+}
+
+model CompanyClaimEvent {
+  id             String                @id @default(uuid()) @db.Uuid
+  claimRequestId String                @db.Uuid
+  kind           CompanyClaimEventKind
+  actorUserId    String?               @db.Uuid
+  reasonCode     String?               @db.VarChar(64)
+  evidenceRef    String?               @db.VarChar(255)
+  correlationId  String                @db.VarChar(128)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  claimRequest   CompanyClaimRequest   @relation(fields: [claimRequestId], references: [id], onDelete: Restrict)
+
+  @@index([claimRequestId, createdAt])
+}
+
+model CompanyVerificationRequest {
+  id                  String                      @id @default(uuid()) @db.Uuid
+  companyId           String                      @db.Uuid
+  requestedByUserId   String                      @db.Uuid
+  supersedesRequestId String?                     @unique @db.Uuid
+  status              CompanyVerificationStatus   @default(DRAFT)
+  evidenceMetadata    Json?
+  createdAt           DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                    @updatedAt @db.Timestamptz(3)
+  company             Company                     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  requestedBy         User                        @relation("VerificationRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  supersedes          CompanyVerificationRequest? @relation("VerificationSupersession", fields: [supersedesRequestId], references: [id], onDelete: Restrict)
+  supersededBy        CompanyVerificationRequest? @relation("VerificationSupersession")
+  events              CompanyVerificationEvent[]
+
+  @@index([companyId, status, createdAt])
+}
+
+model CompanyVerificationEvent {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  verificationRequestId String                       @db.Uuid
+  kind                  CompanyVerificationEventKind
+  fromStatus            CompanyVerificationStatus?
+  toStatus              CompanyVerificationStatus
+  actorUserId           String?                      @db.Uuid
+  reasonCode            String?                      @db.VarChar(64)
+  evidenceRef           String?                      @db.VarChar(255)
+  idempotencyKey        String                       @unique @db.VarChar(128)
+  correlationId         String                       @db.VarChar(128)
+  createdAt             DateTime                     @default(now()) @db.Timestamptz(3)
+  verificationRequest   CompanyVerificationRequest   @relation(fields: [verificationRequestId], references: [id], onDelete: Restrict)
+
+  @@index([verificationRequestId, createdAt])
+}
+
+model Job {
+  id                    String                @id @default(uuid()) @db.Uuid
+  companyId             String                @db.Uuid
+  slug                  String                @unique @db.VarChar(220)
+  status                JobStatus             @default(DRAFT)
+  origin                JobOrigin             @default(MANUAL)
+  sourceReference       String                @default("platform-manual") @db.VarChar(255)
+  importSourceId        String?               @db.Uuid
+  currentRevisionId     String?               @unique @db.Uuid
+  publishedRevisionId   String?               @unique @db.Uuid
+  publishedAt           DateTime?             @db.Timestamptz(3)
+  expiresAt             DateTime?             @db.Timestamptz(3)
+  publishedCategoryId   String?               @db.Uuid
+  publishedCantonId     String?               @db.Uuid
+  publishedCityId       String?               @db.Uuid
+  publishedSalaryPeriod SalaryPeriod?
+  publishedSalaryMin    Int?
+  publishedSalaryMax    Int?
+  dataProvenance        DataProvenance        @default(LIVE)
+  createdByUserId       String                @db.Uuid
+  createdAt             DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime              @updatedAt @db.Timestamptz(3)
+  company               Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  currentRevision       JobRevision?          @relation("CurrentJobRevision", fields: [currentRevisionId, id], references: [id, jobId], onDelete: Restrict)
+  publishedRevision     JobRevision?          @relation("PublishedJobRevision", fields: [publishedRevisionId, id], references: [id, jobId], onDelete: Restrict)
+  publishedCategory     Category?             @relation("PublishedCategory", fields: [publishedCategoryId], references: [id], onDelete: Restrict)
+  publishedCanton       Canton?               @relation("PublishedCanton", fields: [publishedCantonId], references: [id], onDelete: Restrict)
+  publishedCity         City?                 @relation("PublishedCity", fields: [publishedCityId], references: [id], onDelete: Restrict)
+  revisions             JobRevision[]         @relation("JobRevisions")
+  statusEvents          JobStatusEvent[]
+  assignments           JobAssignment[]
+  applications          Application[]
+  savedBy               SavedJob[]
+  alertDigestItems      JobAlertDigestItem[]
+  viewAggregates        JobViewAggregate[]
+  boosts                JobBoost[]
+  additionalPermits     AdditionalJobPermit[]
+  orderLines            OrderLine[]
+  importDecision        ImportDecision?
+  recruiterMandateLinks RecruiterMandateJob[]
+  analyticsEvents       AnalyticsEvent[]
+  importSource          ImportSource?         @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+
+  @@unique([currentRevisionId, id])
+  @@unique([publishedRevisionId, id])
+  @@index([status, publishedAt])
+  @@index([companyId, status])
+  @@index([publishedCategoryId, publishedCantonId, status])
+  @@index([publishedSalaryPeriod, publishedSalaryMin, publishedSalaryMax, status])
+  @@index([expiresAt, status])
+  @@index([dataProvenance, status, publishedAt])
+}
+
+model JobRevision {
+  id                      String                          @id @default(uuid()) @db.Uuid
+  jobId                   String                          @db.Uuid
+  revisionNumber          Int
+  title                   String                          @db.VarChar(200)
+  description             String                          @db.Text
+  tasks                   String[]
+  requirements            String[]
+  applicationProcessSteps String[]
+  requiredDocumentKinds   RequiredDocumentKind[]
+  jobType                 JobType
+  remoteType              RemoteType
+  categoryId              String                          @db.Uuid
+  cantonId                String                          @db.Uuid
+  cityId                  String?                         @db.Uuid
+  locationLabel           String?                         @db.VarChar(200)
+  workloadMin             Int
+  workloadMax             Int
+  salaryPeriod            SalaryPeriod?
+  salaryMin               Int?
+  salaryMax               Int?
+  startDate               DateTime?                       @db.Date
+  startByArrangement      Boolean                         @default(false)
+  validThrough            DateTime?                       @db.Timestamptz(3)
+  responseTargetDays      Int
+  applicationEffort       ApplicationEffort
+  inclusionStatement      String?                         @db.VarChar(1000)
+  applicationContactKind  ApplicationContactKind
+  applicationContactValue String                          @db.VarChar(512)
+  authoredByUserId        String                          @db.Uuid
+  contentChecksum         String                          @db.VarChar(64)
+  submittedAt             DateTime?                       @db.Timestamptz(3)
+  approvedAt              DateTime?                       @db.Timestamptz(3)
+  rejectedAt              DateTime?                       @db.Timestamptz(3)
+  createdAt               DateTime                        @default(now()) @db.Timestamptz(3)
+  job                     Job                             @relation("JobRevisions", fields: [jobId], references: [id], onDelete: Restrict)
+  currentForJob           Job?                            @relation("CurrentJobRevision")
+  publishedForJob         Job?                            @relation("PublishedJobRevision")
+  category                Category                        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  canton                  Canton                          @relation(fields: [cantonId], references: [id], onDelete: Restrict)
+  city                    City?                           @relation(fields: [cityId, cantonId], references: [id, cantonId], onDelete: Restrict)
+  benefits                JobRevisionBenefit[]
+  skills                  JobRevisionSkill[]
+  languages               JobRevisionLanguage[]
+  scoreSnapshots          JobScoreSnapshot[]
+  statusEvents            JobStatusEvent[]
+  reportingChecks         JobReportingCheck[]
+  applicationsSubmitted   Application[]
+  submissionSnapshots     ApplicationSubmissionSnapshot[]
+
+  @@unique([jobId, revisionNumber])
+  @@unique([jobId, contentChecksum])
+  @@unique([id, jobId])
+  @@index([categoryId, cantonId, cityId])
+  @@index([jobId, createdAt])
+}
+
+model JobRevisionBenefit {
+  id            String         @id @default(uuid()) @db.Uuid
+  jobRevisionId String         @db.Uuid
+  benefitCode   JobBenefitCode
+  description   String         @db.VarChar(500)
+  sortOrder     Int
+  jobRevision   JobRevision    @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+
+  @@unique([jobRevisionId, benefitCode])
+  @@unique([jobRevisionId, sortOrder])
+}
+
+model JobRevisionSkill {
+  id            String      @id @default(uuid()) @db.Uuid
+  jobRevisionId String      @db.Uuid
+  skillId       String      @db.Uuid
+  required      Boolean     @default(true)
+  jobRevision   JobRevision @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+  skill         Skill       @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  @@unique([jobRevisionId, skillId])
+  @@index([jobRevisionId])
+  @@index([skillId])
+}
+
+model JobRevisionLanguage {
+  id            String        @id @default(uuid()) @db.Uuid
+  jobRevisionId String        @db.Uuid
+  code          String        @db.Char(2)
+  minLevel      LanguageLevel
+  jobRevision   JobRevision   @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+
+  @@unique([jobRevisionId, code])
+  @@index([jobRevisionId])
+  @@index([code])
+}
+
+model JobScoreSnapshot {
+  id              String      @id @default(uuid()) @db.Uuid
+  jobRevisionId   String      @db.Uuid
+  scoreVersion    String      @db.VarChar(32)
+  scorePoints     Int
+  maxPoints       Int
+  evidence        Json
+  factorBreakdown Json
+  evidenceHash    String      @db.VarChar(64)
+  calculatedAt    DateTime    @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  jobRevision     JobRevision @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+
+  @@unique([jobRevisionId, scoreVersion])
+  @@index([scoreVersion, calculatedAt])
+}
+
+model JobStatusEvent {
+  id             String             @id @default(uuid()) @db.Uuid
+  jobId          String             @db.Uuid
+  jobRevisionId  String?            @db.Uuid
+  kind           JobStatusEventKind
+  fromStatus     JobStatus?
+  toStatus       JobStatus
+  actorUserId    String?            @db.Uuid
+  reasonCode     String?            @db.VarChar(64)
+  idempotencyKey String             @unique @db.VarChar(128)
+  correlationId  String             @db.VarChar(128)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
+  job            Job                @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  jobRevision    JobRevision?       @relation(fields: [jobRevisionId, jobId], references: [id, jobId], onDelete: Restrict)
+
+  @@index([jobId, createdAt])
+}
+
+model JobAssignment {
+  id               String               @id @default(uuid()) @db.Uuid
+  membershipId     String               @db.Uuid
+  companyId        String               @db.Uuid
+  jobId            String               @db.Uuid
+  userId           String               @db.Uuid
+  role             JobAssignmentRole
+  status           JobAssignmentStatus  @default(ACTIVE)
+  assignedByUserId String               @db.Uuid
+  validFrom        DateTime             @default(now()) @db.Timestamptz(3)
+  expiresAt        DateTime?            @db.Timestamptz(3)
+  revokedAt        DateTime?            @db.Timestamptz(3)
+  createdAt        DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @db.Timestamptz(3)
+  job              Job                  @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  company          Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  membership       CompanyMembership    @relation(fields: [membershipId, companyId, userId], references: [id, companyId, userId], onDelete: Restrict)
+  assignedBy       User                 @relation("JobAssignmentAssigner", fields: [assignedByUserId], references: [id], onDelete: Restrict)
+  events           JobAssignmentEvent[]
+
+  @@index([companyId, status])
+  @@index([membershipId, status])
+  @@index([userId, jobId])
+  @@index([jobId, status])
+}
+
+model JobAssignmentEvent {
+  id              String                 @id @default(uuid()) @db.Uuid
+  jobAssignmentId String                 @db.Uuid
+  kind            JobAssignmentEventKind
+  fromRole        JobAssignmentRole?
+  toRole          JobAssignmentRole?
+  actorUserId     String?                @db.Uuid
+  reasonCode      String?                @db.VarChar(64)
+  correlationId   String                 @db.VarChar(128)
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  jobAssignment   JobAssignment          @relation(fields: [jobAssignmentId], references: [id], onDelete: Restrict)
+
+  @@index([jobAssignmentId, createdAt])
+}
+
+model JobReportingCheck {
+  id                      String                @id @default(uuid()) @db.Uuid
+  jobRevisionId           String                @db.Uuid
+  occupationCodeVersionId String                @db.Uuid
+  occupationCodeId        String?               @db.Uuid
+  occupationCodeSnapshot  String?               @db.VarChar(32)
+  occupationLabelSnapshot String?               @db.VarChar(255)
+  result                  JobReportingResult
+  reasonSnapshot          String                @db.VarChar(1000)
+  disclaimerSnapshot      String                @db.VarChar(1000)
+  sourceSnapshot          String                @db.VarChar(500)
+  checkedByUserId         String?               @db.Uuid
+  checkedAt               DateTime              @db.Timestamptz(3)
+  jobRevision             JobRevision           @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+  occupationCodeVersion   OccupationCodeVersion @relation(fields: [occupationCodeVersionId], references: [id], onDelete: Restrict)
+  occupationCode          OccupationCode?       @relation(fields: [occupationCodeId, occupationCodeVersionId], references: [id, occupationCodeVersionId], onDelete: Restrict)
+
+  @@index([jobRevisionId, checkedAt])
+  @@index([occupationCodeId])
+}
+
+model JobViewAggregate {
+  id                String   @id @default(uuid()) @db.Uuid
+  jobId             String   @db.Uuid
+  windowStart       DateTime @db.Timestamptz(3)
+  windowEnd         DateTime @db.Timestamptz(3)
+  viewCount         Int
+  threshold         Int
+  definitionVersion String   @db.VarChar(32)
+  refreshedAt       DateTime @db.Timestamptz(3)
+  job               Job      @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@unique([jobId, windowStart, windowEnd, definitionVersion])
+  @@index([jobId, windowEnd])
+}
+
+model Application {
+  id                     String                          @id @default(uuid()) @db.Uuid
+  jobId                  String                          @db.Uuid
+  submittedJobRevisionId String                          @db.Uuid
+  candidateProfileId     String                          @db.Uuid
+  status                 ApplicationStatus               @default(SUBMITTED)
+  coverLetter            String?                         @db.VarChar(10000)
+  rejectionReason        ApplicationRejectionReason?
+  rejectionNote          String?                         @db.VarChar(1000)
+  submittedAt            DateTime                        @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                        @updatedAt @db.Timestamptz(3)
+  job                    Job                             @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  submittedJobRevision   JobRevision                     @relation(fields: [submittedJobRevisionId], references: [id], onDelete: Restrict)
+  candidateProfile       CandidateProfile                @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  submissionSnapshot     ApplicationSubmissionSnapshot?
+  submissionDocuments    ApplicationSubmissionDocument[]
+  events                 ApplicationEvent[]
+  candidateNote          ApplicationCandidateNote?
+  employerNotes          ApplicationEmployerNote[]
+  conversation           Conversation?
+
+  @@unique([jobId, candidateProfileId])
+  @@unique([id, submittedJobRevisionId])
+  @@index([jobId, status, updatedAt])
+  @@index([candidateProfileId, updatedAt])
+}
+
+model ApplicationSubmissionSnapshot {
+  id                        String                 @id @default(uuid()) @db.Uuid
+  applicationId             String                 @unique @db.Uuid
+  jobRevisionId             String                 @db.Uuid
+  candidateFirstName        String                 @db.VarChar(100)
+  candidateLastName         String                 @db.VarChar(100)
+  candidateEmail            String                 @db.VarChar(320)
+  coverLetterSnapshot       String?                @db.VarChar(10000)
+  recipientCompanyName      String                 @db.VarChar(200)
+  applicationContactKind    ApplicationContactKind
+  applicationContactValue   String                 @db.VarChar(512)
+  responseTargetDays        Int
+  applicationEffort         ApplicationEffort
+  requiredDocumentKinds     RequiredDocumentKind[]
+  confirmationNoticeVersion String                 @db.VarChar(32)
+  confirmationNoticeHash    String                 @db.VarChar(64)
+  submittedAt               DateTime               @db.Timestamptz(3)
+  application               Application            @relation(fields: [applicationId, jobRevisionId], references: [id, submittedJobRevisionId], onDelete: Restrict)
+  jobRevision               JobRevision            @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+
+  @@unique([applicationId, jobRevisionId])
+}
+
+model ApplicationSubmissionDocument {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  applicationId      String                    @db.Uuid
+  documentMetadataId String                    @db.Uuid
+  createdAt          DateTime                  @default(now()) @db.Timestamptz(3)
+  application        Application               @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  documentMetadata   CandidateDocumentMetadata @relation(fields: [documentMetadataId], references: [id], onDelete: Restrict)
+
+  @@unique([applicationId, documentMetadataId])
+  @@index([documentMetadataId])
+}
+
+model ApplicationEvent {
+  id            String               @id @default(uuid()) @db.Uuid
+  applicationId String               @db.Uuid
+  actorUserId   String?              @db.Uuid
+  kind          ApplicationEventKind
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus?
+  metadata      Json?
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  application   Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@index([applicationId, createdAt])
+}
+
+model ApplicationCandidateNote {
+  id            String      @id @default(uuid()) @db.Uuid
+  applicationId String      @unique @db.Uuid
+  body          String      @db.VarChar(3000)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+}
+
+model ApplicationEmployerNote {
+  id            String      @id @default(uuid()) @db.Uuid
+  applicationId String      @db.Uuid
+  companyId     String      @db.Uuid
+  authorUserId  String      @db.Uuid
+  body          String      @db.VarChar(3000)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([applicationId, createdAt])
+  @@index([companyId, createdAt])
+}
+
+model SavedJob {
+  id                 String           @id @default(uuid()) @db.Uuid
+  candidateProfileId String           @db.Uuid
+  jobId              String           @db.Uuid
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  job                Job              @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@unique([candidateProfileId, jobId])
+  @@index([jobId])
+}
+
+model JobAlert {
+  id                     String                     @id @default(uuid()) @db.Uuid
+  candidateProfileId     String                     @db.Uuid
+  query                  Json
+  frequency              AlertFrequency
+  status                 JobAlertStatus             @default(ACTIVE)
+  nextDueAt              DateTime                   @db.Timestamptz(3)
+  lastSuccessfulCutoffAt DateTime?                  @db.Timestamptz(3)
+  createdAt              DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                   @updatedAt @db.Timestamptz(3)
+  candidateProfile       CandidateProfile           @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  events                 JobAlertEvent[]
+  digests                JobAlertDigest[]
+  digestItems            JobAlertDigestItem[]
+  unsubscribeTokens      JobAlertUnsubscribeToken[]
+
+  @@index([status, nextDueAt])
+  @@index([candidateProfileId, status])
+}
+
+model JobAlertEvent {
+  id          String            @id @default(uuid()) @db.Uuid
+  jobAlertId  String            @db.Uuid
+  kind        JobAlertEventKind
+  actorUserId String?           @db.Uuid
+  reasonCode  String?           @db.VarChar(64)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  jobAlert    JobAlert          @relation(fields: [jobAlertId], references: [id], onDelete: Restrict)
+
+  @@index([jobAlertId, createdAt])
+}
+
+model JobAlertDigest {
+  id                String                     @id @default(uuid()) @db.Uuid
+  jobAlertId        String                     @db.Uuid
+  policyVersion     String                     @db.VarChar(32)
+  windowStart       DateTime                   @db.Timestamptz(3)
+  windowEnd         DateTime                   @db.Timestamptz(3)
+  scheduledFor      DateTime                   @db.Timestamptz(3)
+  runAt             DateTime?                  @db.Timestamptz(3)
+  itemCount         Int                        @default(0)
+  createdAt         DateTime                   @default(now()) @db.Timestamptz(3)
+  jobAlert          JobAlert                   @relation(fields: [jobAlertId], references: [id], onDelete: Restrict)
+  items             JobAlertDigestItem[]
+  unsubscribeTokens JobAlertUnsubscribeToken[]
+
+  @@unique([jobAlertId, scheduledFor])
+  @@unique([id, jobAlertId])
+  @@index([scheduledFor, runAt])
+}
+
+model JobAlertDigestItem {
+  id         String         @id @default(uuid()) @db.Uuid
+  digestId   String         @db.Uuid
+  jobAlertId String         @db.Uuid
+  jobId      String         @db.Uuid
+  sortOrder  Int
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+  digest     JobAlertDigest @relation(fields: [digestId, jobAlertId], references: [id, jobAlertId], onDelete: Restrict)
+  jobAlert   JobAlert       @relation(fields: [jobAlertId], references: [id], onDelete: Restrict)
+  job        Job            @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@unique([jobAlertId, jobId])
+  @@unique([digestId, sortOrder])
+  @@index([jobId])
+}
+
+model JobAlertUnsubscribeToken {
+  id         String         @id @default(uuid()) @db.Uuid
+  jobAlertId String         @db.Uuid
+  digestId   String         @db.Uuid
+  tokenHash  String         @unique @db.VarChar(64)
+  issuedAt   DateTime       @default(now()) @db.Timestamptz(3)
+  expiresAt  DateTime       @db.Timestamptz(3)
+  usedAt     DateTime?      @db.Timestamptz(3)
+  jobAlert   JobAlert       @relation(fields: [jobAlertId], references: [id], onDelete: Restrict)
+  digest     JobAlertDigest @relation(fields: [digestId, jobAlertId], references: [id, jobAlertId], onDelete: Restrict)
+
+  @@index([jobAlertId, expiresAt])
+}
+
+model Conversation {
+  id                  String                       @id @default(uuid()) @db.Uuid
+  companyId           String                       @db.Uuid
+  kind                ConversationKind
+  applicationId       String?                      @unique @db.Uuid
+  contactRequestId    String?                      @unique @db.Uuid
+  subject             String                       @db.VarChar(200)
+  createdAt           DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                     @updatedAt @db.Timestamptz(3)
+  company             Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  application         Application?                 @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  contactRequest      EmployerContactRequest?      @relation(fields: [contactRequestId], references: [id], onDelete: Restrict)
+  participants        ConversationParticipant[]
+  messages            Message[]
+  revealGrant         IdentityRevealGrant?
+  revealConfirmations IdentityRevealConfirmation[]
+
+  @@unique([id, companyId])
+  @@index([companyId, updatedAt])
+}
+
+model ConversationParticipant {
+  id             String                      @id @default(uuid()) @db.Uuid
+  conversationId String                      @db.Uuid
+  kind           ConversationParticipantKind
+  userId         String?                     @db.Uuid
+  companyId      String?                     @db.Uuid
+  joinedAt       DateTime                    @default(now()) @db.Timestamptz(3)
+  leftAt         DateTime?                   @db.Timestamptz(3)
+  lastReadAt     DateTime?                   @db.Timestamptz(3)
+  conversation   Conversation                @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  user           User?                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  company        Company?                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([conversationId, kind, userId, companyId])
+  @@index([userId, conversationId])
+  @@index([companyId, conversationId])
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  senderUserId   String       @db.Uuid
+  body           String       @db.VarChar(5000)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  editedAt       DateTime?    @db.Timestamptz(3)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  sender         User         @relation(fields: [senderUserId], references: [id], onDelete: Restrict)
+
+  @@index([conversationId, createdAt])
+}
+
+model Notification {
+  id              String           @id @default(uuid()) @db.Uuid
+  recipientUserId String           @db.Uuid
+  kind            NotificationKind
+  schemaVersion   String           @db.VarChar(32)
+  payload         Json
+  dedupeKey       String           @unique @db.VarChar(160)
+  readAt          DateTime?        @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  recipient       User             @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
+
+  @@index([recipientUserId, readAt, createdAt])
+}
+
+model EmailLog {
+  id                String         @id @default(uuid()) @db.Uuid
+  recipient         String         @db.VarChar(320)
+  purpose           String         @db.VarChar(64)
+  templateKey       String         @db.VarChar(64)
+  payload           Json
+  status            EmailLogStatus @default(MOCK_RECORDED)
+  providerReference String?        @db.VarChar(255)
+  errorCode         String?        @db.VarChar(64)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([recipient, createdAt])
+}
+
+model CandidateConsent {
+  id                 String           @id @default(uuid()) @db.Uuid
+  candidateProfileId String           @db.Uuid
+  kind               RadarConsentKind
+  granted            Boolean
+  noticeVersion      String           @db.VarChar(32)
+  noticeHash         String           @db.VarChar(64)
+  actorUserId        String           @db.Uuid
+  effectiveAt        DateTime         @db.Timestamptz(3)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+
+  @@index([candidateProfileId, kind, effectiveAt, createdAt])
+}
+
+model UserConsentEvent {
+  id            String          @id @default(uuid()) @db.Uuid
+  userId        String          @db.Uuid
+  kind          UserConsentKind
+  granted       Boolean
+  purpose       String          @db.VarChar(160)
+  noticeVersion String          @db.VarChar(32)
+  noticeHash    String          @db.VarChar(64)
+  actorUserId   String?         @db.Uuid
+  effectiveAt   DateTime        @db.Timestamptz(3)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  user          User            @relation("ConsentOwner", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, kind, effectiveAt, createdAt])
+}
+
+model RadarProfile {
+  id                 String            @id @default(uuid()) @db.Uuid
+  candidateProfileId String            @unique @db.Uuid
+  displayLabel       String            @db.VarChar(160)
+  cantonBucket       String            @db.VarChar(64)
+  categoryBucket     String            @db.VarChar(120)
+  seniority          Seniority?
+  remotePreference   RemotePreference?
+  workloadMin        Int?
+  workloadMax        Int?
+  salaryYearlyMinChf Int?
+  salaryYearlyMaxChf Int?
+  languageCodes      String[]
+  skillSlugs         String[]
+  publishedAt        DateTime?         @db.Timestamptz(3)
+  withdrawnAt        DateTime?         @db.Timestamptz(3)
+  projectionVersion  String            @db.VarChar(32)
+  projectionHash     String            @db.VarChar(64)
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
+  candidateProfile   CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+
+  @@index([publishedAt, withdrawnAt, cantonBucket, categoryBucket])
+}
+
+model RadarOpaqueMapping {
+  id                   String           @id @default(uuid()) @db.Uuid
+  candidateProfileId   String           @db.Uuid
+  companyId            String           @db.Uuid
+  epoch                DateTime         @db.Date
+  lookupHmac           String           @unique @db.VarChar(128)
+  encryptedToken       Bytes
+  nonce                Bytes
+  authTag              Bytes
+  lookupKeyVersion     String           @db.VarChar(32)
+  encryptionKeyVersion String           @db.VarChar(32)
+  validFrom            DateTime         @db.Timestamptz(3)
+  validTo              DateTime         @db.Timestamptz(3)
+  revokedAt            DateTime?        @db.Timestamptz(3)
+  revocationReason     String?          @db.VarChar(64)
+  candidateProfile     CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  company              Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([candidateProfileId, companyId, epoch])
+  @@index([companyId, lookupHmac, epoch])
+  @@index([validTo, revokedAt])
+}
+
+model RadarSearchBudget {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @db.Uuid
+  calendarDate DateTime @db.Date
+  filterHash   String   @db.VarChar(64)
+  firstUsedAt  DateTime @default(now()) @db.Timestamptz(3)
+  lastUsedAt   DateTime @default(now()) @db.Timestamptz(3)
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, calendarDate, filterHash])
+  @@index([companyId, calendarDate, filterHash])
+}
+
+model RadarSearchSession {
+  id                String                        @id @default(uuid()) @db.Uuid
+  companyId         String                        @db.Uuid
+  membershipId      String                        @db.Uuid
+  requestingUserId  String                        @db.Uuid
+  filterHash        String                        @db.VarChar(64)
+  calendarDate      DateTime                      @db.Date
+  policyVersion     String                        @db.VarChar(32)
+  normalizedFilters Json
+  resultCount       Int
+  expiresAt         DateTime                      @db.Timestamptz(3)
+  createdAt         DateTime                      @default(now()) @db.Timestamptz(3)
+  company           Company                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  membership        CompanyMembership             @relation(fields: [membershipId, companyId, requestingUserId], references: [id, companyId, userId], onDelete: Restrict)
+  candidates        RadarSearchSessionCandidate[]
+
+  @@unique([companyId, filterHash, calendarDate, policyVersion])
+  @@index([membershipId, createdAt])
+  @@index([expiresAt])
+}
+
+model RadarSearchSessionCandidate {
+  id                   String             @id @default(uuid()) @db.Uuid
+  radarSearchSessionId String             @db.Uuid
+  candidateProfileId   String             @db.Uuid
+  position             Int
+  radarSearchSession   RadarSearchSession @relation(fields: [radarSearchSessionId], references: [id], onDelete: Restrict)
+  candidateProfile     CandidateProfile   @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+
+  @@unique([radarSearchSessionId, candidateProfileId])
+  @@unique([radarSearchSessionId, position])
+}
+
+model EmployerContactRequest {
+  id                     String                       @id @default(uuid()) @db.Uuid
+  companyId              String                       @db.Uuid
+  candidateProfileId     String                       @db.Uuid
+  requestingUserId       String                       @db.Uuid
+  creditLedgerEntryId    String                       @unique @db.Uuid
+  messagePreview         String                       @db.VarChar(1000)
+  idempotencyKey         String                       @db.VarChar(128)
+  status                 ContactRequestStatus         @default(PENDING)
+  fundingSource          CreditFundingSource
+  clusterPolicyVersion   String                       @db.VarChar(32)
+  cantonBucketSnapshot   String                       @db.VarChar(64)
+  categoryBucketSnapshot String                       @db.VarChar(120)
+  expiresAt              DateTime                     @db.Timestamptz(3)
+  terminalAt             DateTime?                    @db.Timestamptz(3)
+  createdAt              DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                     @updatedAt @db.Timestamptz(3)
+  company                Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  candidateProfile       CandidateProfile             @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  requestingUser         User                         @relation(fields: [requestingUserId], references: [id], onDelete: Restrict)
+  creditLedgerEntry      CreditLedgerEntry            @relation(fields: [creditLedgerEntryId], references: [id], onDelete: Restrict)
+  events                 ContactRequestEvent[]
+  conversation           Conversation?
+  revealGrant            IdentityRevealGrant?
+  revealConfirmations    IdentityRevealConfirmation[]
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, status, createdAt])
+  @@index([candidateProfileId, status, createdAt])
+}
+
+model ContactRequestEvent {
+  id               String                  @id @default(uuid()) @db.Uuid
+  contactRequestId String                  @db.Uuid
+  kind             ContactRequestEventKind
+  actorUserId      String?                 @db.Uuid
+  reasonCode       String?                 @db.VarChar(64)
+  correlationId    String                  @db.VarChar(128)
+  createdAt        DateTime                @default(now()) @db.Timestamptz(3)
+  contactRequest   EmployerContactRequest  @relation(fields: [contactRequestId], references: [id], onDelete: Restrict)
+
+  @@index([contactRequestId, createdAt])
+}
+
+model IdentityRevealGrant {
+  id                       String                       @id @default(uuid()) @db.Uuid
+  candidateProfileId       String                       @db.Uuid
+  companyId                String                       @db.Uuid
+  contactRequestId         String                       @unique @db.Uuid
+  conversationId           String?                      @unique @db.Uuid
+  noticeVersion            String                       @db.VarChar(32)
+  confirmationSnapshotHash String                       @db.VarChar(128)
+  revealedAt               DateTime                     @db.Timestamptz(3)
+  revokedAt                DateTime?                    @db.Timestamptz(3)
+  revokedByUserId          String?                      @db.Uuid
+  revokeReason             IdentityRevealRevokeReason?
+  candidateProfile         CandidateProfile             @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  company                  Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  contactRequest           EmployerContactRequest       @relation(fields: [contactRequestId], references: [id], onDelete: Restrict)
+  conversation             Conversation?                @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  revokedBy                User?                        @relation("RevealGrantRevoker", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+  fields                   IdentityRevealGrantField[]
+  confirmations            IdentityRevealConfirmation[]
+
+  @@index([companyId, candidateProfileId])
+  @@index([candidateProfileId, revokedAt])
+}
+
+model IdentityRevealGrantField {
+  id                   String              @id @default(uuid()) @db.Uuid
+  grantId              String              @db.Uuid
+  field                RevealField
+  ciphertext           Bytes
+  nonce                Bytes
+  authTag              Bytes
+  encryptionKeyVersion String              @db.VarChar(32)
+  schemaVersion        String              @db.VarChar(32)
+  integrityHmac        String              @db.VarChar(128)
+  createdAt            DateTime            @default(now()) @db.Timestamptz(3)
+  grant                IdentityRevealGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
+
+  @@unique([grantId, field])
+}
+
+model IdentityRevealConfirmation {
+  id               String                 @id @default(uuid()) @db.Uuid
+  grantId          String                 @db.Uuid
+  actorUserId      String                 @db.Uuid
+  contactRequestId String                 @db.Uuid
+  conversationId   String?                @db.Uuid
+  completeFieldSet RevealField[]
+  newlyAddedFields RevealField[]
+  noticeVersion    String                 @db.VarChar(32)
+  previewHmac      String                 @db.VarChar(128)
+  idempotencyKey   String                 @unique @db.VarChar(128)
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  grant            IdentityRevealGrant    @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  actor            User                   @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  contactRequest   EmployerContactRequest @relation(fields: [contactRequestId], references: [id], onDelete: Restrict)
+  conversation     Conversation?          @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([grantId, createdAt])
+}
+
+model PrivacyRequest {
+  id                     String                          @id @default(uuid()) @db.Uuid
+  requesterUserId        String                          @db.Uuid
+  type                   PrivacyRequestType
+  status                 PrivacyRequestStatus            @default(PENDING)
+  version                Int                             @default(1)
+  dueAt                  DateTime                        @db.Timestamptz(3)
+  assignedAdminUserId    String?                         @db.Uuid
+  assignmentReasonCode   String?                         @db.VarChar(64)
+  verifiedAt             DateTime?                       @db.Timestamptz(3)
+  processingStartedAt    DateTime?                       @db.Timestamptz(3)
+  completedAt            DateTime?                       @db.Timestamptz(3)
+  idempotencyKey         String                          @unique @db.VarChar(128)
+  correctionOutcome      PrivacyCorrectionOutcomeCode?
+  deletionDependencies   PrivacyDeletionDependencyCode[]
+  deletionOutcome        PrivacyDeletionOutcomeCode?
+  rejectionCode          PrivacyRequestRejectionCode?
+  safeOutcomeNote        String?                         @db.VarChar(500)
+  exportManifest         Json?
+  exportManifestChecksum String?                         @db.VarChar(64)
+  exportExpiresAt        DateTime?                       @db.Timestamptz(3)
+  createdAt              DateTime                        @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                        @updatedAt @db.Timestamptz(3)
+  requester              User                            @relation("PrivacyRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  correctionFields       PrivacyRequestCorrectionField[]
+  events                 PrivacyRequestEvent[]
+  challenges             PrivacyIdentityChallenge[]
+
+  @@unique([id, requesterUserId])
+  @@index([requesterUserId, createdAt])
+  @@index([status, dueAt])
+  @@index([assignedAdminUserId, status, dueAt])
+}
+
+model PrivacyRequestCorrectionField {
+  privacyRequestId String                     @db.Uuid
+  fieldCode        PrivacyCorrectionFieldCode
+  correctionText   String                     @db.VarChar(1000)
+  reviewedAt       DateTime?                  @db.Timestamptz(3)
+  privacyRequest   PrivacyRequest             @relation(fields: [privacyRequestId], references: [id], onDelete: Restrict)
+
+  @@id([privacyRequestId, fieldCode])
+}
+
+model PrivacyRequestEvent {
+  id               String                  @id @default(uuid()) @db.Uuid
+  privacyRequestId String                  @db.Uuid
+  kind             PrivacyRequestEventKind
+  fromStatus       PrivacyRequestStatus?
+  toStatus         PrivacyRequestStatus
+  actorUserId      String?                 @db.Uuid
+  reasonCode       String?                 @db.VarChar(64)
+  safeNote         String?                 @db.VarChar(500)
+  idempotencyKey   String                  @unique @db.VarChar(128)
+  correlationId    String                  @db.VarChar(128)
+  createdAt        DateTime                @default(now()) @db.Timestamptz(3)
+  privacyRequest   PrivacyRequest          @relation(fields: [privacyRequestId], references: [id], onDelete: Restrict)
+
+  @@index([privacyRequestId, createdAt])
+}
+
+model PrivacyIdentityChallenge {
+  id               String         @id @default(uuid()) @db.Uuid
+  privacyRequestId String         @db.Uuid
+  userId           String         @db.Uuid
+  attempts         Int            @default(0)
+  expiresAt        DateTime       @db.Timestamptz(3)
+  verifiedAt       DateTime?      @db.Timestamptz(3)
+  consumedAt       DateTime?      @db.Timestamptz(3)
+  idempotencyKey   String         @unique @db.VarChar(128)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  privacyRequest   PrivacyRequest @relation(fields: [privacyRequestId, userId], references: [id, requesterUserId], onDelete: Restrict)
+  user             User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([privacyRequestId, expiresAt])
+}
+
+model AbuseReport {
+  id             String                  @id @default(uuid()) @db.Uuid
+  targetType     AbuseTargetType
+  targetId       String                  @db.Uuid
+  reporterUserId String?                 @db.Uuid
+  reasonCode     String                  @db.VarChar(64)
+  description    String                  @db.VarChar(2000)
+  severity       AbuseSeverity           @default(MEDIUM)
+  status         AbuseStatus             @default(OPEN)
+  assigneeUserId String?                 @db.Uuid
+  dueAt          DateTime                @db.Timestamptz(3)
+  resolutionCode String?                 @db.VarChar(64)
+  resolvedAt     DateTime?               @db.Timestamptz(3)
+  createdAt      DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                @updatedAt @db.Timestamptz(3)
+  events         AbuseReportEvent[]
+  restrictions   ModerationRestriction[]
+  reporter       User?                   @relation("AbuseReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+  assignee       User?                   @relation("AbuseAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, severity, dueAt])
+  @@index([assigneeUserId, status, dueAt])
+  @@index([targetType, targetId, createdAt])
+}
+
+model AbuseReportEvent {
+  id            String         @id @default(uuid()) @db.Uuid
+  abuseReportId String         @db.Uuid
+  kind          AbuseEventKind
+  actorUserId   String?        @db.Uuid
+  reasonCode    String?        @db.VarChar(64)
+  safeNote      String?        @db.VarChar(500)
+  correlationId String         @db.VarChar(128)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  abuseReport   AbuseReport    @relation(fields: [abuseReportId], references: [id], onDelete: Restrict)
+
+  @@index([abuseReportId, createdAt])
+}
+
+model ModerationRestriction {
+  id              String                      @id @default(uuid()) @db.Uuid
+  abuseReportId   String                      @db.Uuid
+  targetType      ModerationRestrictionType
+  targetId        String                      @db.Uuid
+  status          ModerationRestrictionStatus @default(ACTIVE)
+  reason          String                      @db.VarChar(1000)
+  appliedByUserId String                      @db.Uuid
+  startsAt        DateTime                    @default(now()) @db.Timestamptz(3)
+  endsAt          DateTime?                   @db.Timestamptz(3)
+  liftedAt        DateTime?                   @db.Timestamptz(3)
+  correlationId   String                      @db.VarChar(128)
+  abuseReport     AbuseReport                 @relation(fields: [abuseReportId], references: [id], onDelete: Restrict)
+
+  @@index([targetType, targetId, status])
+  @@index([status, endsAt])
+}
+
+model AuditLog {
+  id            String          @id @default(uuid()) @db.Uuid
+  actorUserId   String?         @db.Uuid
+  actorKind     AuditActorKind
+  capability    String          @db.VarChar(128)
+  action        AuditAction
+  targetType    AuditTargetType
+  targetId      String          @db.Uuid
+  companyId     String?         @db.Uuid
+  result        AuditResult
+  reasonCode    String?         @db.VarChar(64)
+  correlationId String          @db.VarChar(128)
+  metadata      Json?
+  ipHash        String?         @db.VarChar(128)
+  ipHashVersion String?         @db.VarChar(32)
+  retainUntil   DateTime        @db.Timestamptz(3)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  company       Company?        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  actor         User?           @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([targetType, targetId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([retainUntil])
+}
+
+model SalaryDatasetVersion {
+  id           String                    @id @default(uuid()) @db.Uuid
+  datasetKey   String                    @db.VarChar(64)
+  version      String                    @db.VarChar(32)
+  source       String                    @db.VarChar(500)
+  referenceUrl String?                   @db.VarChar(1000)
+  methodology  String                    @db.VarChar(3000)
+  locale       String                    @db.VarChar(16)
+  dataAsOf     DateTime                  @db.Date
+  validFrom    DateTime                  @db.Timestamptz(3)
+  validTo      DateTime?                 @db.Timestamptz(3)
+  publishedAt  DateTime?                 @db.Timestamptz(3)
+  reviewStatus SalaryDatasetReviewStatus @default(DRAFT)
+  createdAt    DateTime                  @default(now()) @db.Timestamptz(3)
+  bands        SalaryBand[]
+
+  @@unique([datasetKey, version])
+  @@index([datasetKey, reviewStatus, validFrom, validTo])
+}
+
+model SalaryBand {
+  id                     String               @id @default(uuid()) @db.Uuid
+  salaryDatasetVersionId String               @db.Uuid
+  categoryId             String               @db.Uuid
+  cantonId               String?              @db.Uuid
+  seniority              Seniority?
+  workloadMin            Int
+  workloadMax            Int
+  period                 SalaryPeriod
+  p25Chf                 Int
+  medianChf              Int
+  p75Chf                 Int
+  sampleSize             Int
+  notes                  String?              @db.VarChar(1000)
+  salaryDatasetVersion   SalaryDatasetVersion @relation(fields: [salaryDatasetVersionId], references: [id], onDelete: Restrict)
+  category               Category             @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  canton                 Canton?              @relation(fields: [cantonId], references: [id], onDelete: Restrict)
+
+  @@index([salaryDatasetVersionId, categoryId, cantonId, seniority, period])
+}
+
+model OccupationCodeVersion {
+  id              String              @id @default(uuid()) @db.Uuid
+  datasetKey      String              @db.VarChar(64)
+  datasetYear     Int
+  version         String              @db.VarChar(32)
+  source          String              @db.VarChar(500)
+  referenceUrl    String?             @db.VarChar(1000)
+  validFrom       DateTime            @db.Timestamptz(3)
+  validTo         DateTime?           @db.Timestamptz(3)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  codes           OccupationCode[]
+  reportingChecks JobReportingCheck[]
+
+  @@unique([datasetKey, version])
+  @@index([datasetKey, validFrom, validTo])
+}
+
+model OccupationCode {
+  id                      String                @id @default(uuid()) @db.Uuid
+  occupationCodeVersionId String                @db.Uuid
+  code                    String                @db.VarChar(32)
+  label                   String                @db.VarChar(255)
+  result                  JobReportingResult
+  effectiveFrom           DateTime?             @db.Date
+  effectiveTo             DateTime?             @db.Date
+  occupationCodeVersion   OccupationCodeVersion @relation(fields: [occupationCodeVersionId], references: [id], onDelete: Restrict)
+  reportingChecks         JobReportingCheck[]
+
+  @@unique([occupationCodeVersionId, code])
+  @@unique([id, occupationCodeVersionId])
+  @@index([code, result])
+}
+
+model ImportSource {
+  id               String                     @id @default(uuid()) @db.Uuid
+  name             String                     @db.VarChar(200)
+  sourceReference  String                     @db.VarChar(500)
+  licenseReference String                     @db.VarChar(500)
+  provenance       DataProvenance             @default(LIVE)
+  format           ImportFormat
+  isActive         Boolean                    @default(true)
+  createdAt        DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                   @updatedAt @db.Timestamptz(3)
+  companyRights    ImportSourceCompanyRight[]
+  runs             ImportRun[]
+  setupApprovals   ImportSetupApproval[]
+  accessGrants     ImportAccessGrant[]
+  orderLines       OrderLine[]
+  jobs             Job[]
+
+  @@unique([name, sourceReference])
+  @@index([isActive, provenance])
+}
+
+model ImportSourceCompanyRight {
+  id              String       @id @default(uuid()) @db.Uuid
+  importSourceId  String       @db.Uuid
+  companyId       String       @db.Uuid
+  rightsEvidence  String       @db.VarChar(1000)
+  grantedByUserId String       @db.Uuid
+  validFrom       DateTime     @db.Timestamptz(3)
+  validTo         DateTime?    @db.Timestamptz(3)
+  revokedAt       DateTime?    @db.Timestamptz(3)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+  importSource    ImportSource @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([importSourceId, companyId, validFrom])
+  @@index([companyId, validFrom, validTo])
+}
+
+model ImportRun {
+  id                   String            @id @default(uuid()) @db.Uuid
+  importSourceId       String            @db.Uuid
+  actorUserId          String            @db.Uuid
+  inputSource          ImportInputSource
+  format               ImportFormat
+  checksum             String            @db.VarChar(64)
+  status               ImportRunStatus   @default(PENDING)
+  redactedErrorSummary String?           @db.VarChar(1000)
+  startedAt            DateTime?         @db.Timestamptz(3)
+  completedAt          DateTime?         @db.Timestamptz(3)
+  createdAt            DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime          @updatedAt @db.Timestamptz(3)
+  importSource         ImportSource      @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  items                ImportItem[]
+
+  @@unique([importSourceId, checksum])
+  @@index([importSourceId, status, createdAt])
+}
+
+model ImportItem {
+  id                   String           @id @default(uuid()) @db.Uuid
+  runId                String           @db.Uuid
+  sourceItemKey        String           @db.VarChar(160)
+  normalizedPreview    Json
+  normalizedChecksum   String           @db.VarChar(64)
+  dedupeKey            String           @db.VarChar(160)
+  status               ImportItemStatus @default(PENDING)
+  validationSummary    Json?
+  redactedErrorSummary String?          @db.VarChar(1000)
+  createdAt            DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime         @updatedAt @db.Timestamptz(3)
+  run                  ImportRun        @relation(fields: [runId], references: [id], onDelete: Restrict)
+  decision             ImportDecision?
+
+  @@unique([runId, sourceItemKey])
+  @@unique([runId, dedupeKey])
+  @@index([runId, status])
+}
+
+model ImportDecision {
+  id                String             @id @default(uuid()) @db.Uuid
+  importItemId      String             @unique @db.Uuid
+  kind              ImportDecisionKind
+  selectedCompanyId String?            @db.Uuid
+  actorUserId       String             @db.Uuid
+  reasonCode        String             @db.VarChar(64)
+  committedJobId    String?            @unique @db.Uuid
+  idempotencyKey    String             @unique @db.VarChar(128)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  importItem        ImportItem         @relation(fields: [importItemId], references: [id], onDelete: Restrict)
+  selectedCompany   Company?           @relation(fields: [selectedCompanyId], references: [id], onDelete: Restrict)
+  committedJob      Job?               @relation(fields: [committedJobId], references: [id], onDelete: Restrict)
+
+  @@index([selectedCompanyId, kind])
+}
+
+model AnalyticsEvent {
+  id                        String             @id @default(uuid()) @db.Uuid
+  producer                  String             @db.VarChar(64)
+  dedupeKey                 String             @db.VarChar(160)
+  kind                      AnalyticsEventKind
+  schemaVersion             String             @db.VarChar(32)
+  purpose                   AnalyticsPurpose
+  occurredAt                DateTime           @db.Timestamptz(3)
+  receivedAt                DateTime           @default(now()) @db.Timestamptz(3)
+  pseudonymousActorId       String?            @db.VarChar(128)
+  pseudonymousSessionId     String?            @db.VarChar(128)
+  companyId                 String?            @db.Uuid
+  jobId                     String?            @db.Uuid
+  actorProvenanceSnapshot   DataProvenance?
+  companyProvenanceSnapshot DataProvenance?
+  jobProvenanceSnapshot     DataProvenance?
+  properties                Json
+  retainUntil               DateTime           @db.Timestamptz(3)
+  company                   Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                       Job?               @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@unique([producer, dedupeKey])
+  @@index([kind, occurredAt])
+  @@index([companyId, occurredAt])
+  @@index([jobId, occurredAt])
+  @@index([retainUntil])
+}
+
+model MetricDaily {
+  id                String    @id @default(uuid()) @db.Uuid
+  metricKey         String    @db.VarChar(64)
+  definitionVersion String    @db.VarChar(32)
+  thresholdVersion  String    @db.VarChar(32)
+  calendarDate      DateTime  @db.Date
+  companyId         String?   @db.Uuid
+  cantonId          String?   @db.Uuid
+  categoryId        String?   @db.Uuid
+  valueInteger      Int
+  sampleSize        Int
+  refreshedAt       DateTime  @db.Timestamptz(3)
+  company           Company?  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  canton            Canton?   @relation(fields: [cantonId], references: [id], onDelete: Restrict)
+  category          Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@unique([metricKey, definitionVersion, calendarDate, companyId, cantonId, categoryId])
+  @@index([calendarDate, metricKey])
+}
+
+model ClusterLaunchAssessment {
+  id                         String                        @id @default(uuid()) @db.Uuid
+  cantonId                   String                        @db.Uuid
+  categoryId                 String                        @db.Uuid
+  policyVersion              String                        @db.VarChar(32)
+  evaluatedAt                DateTime                      @db.Timestamptz(3)
+  evidenceWindowStart        DateTime                      @db.Timestamptz(3)
+  evidenceWindowEnd          DateTime                      @db.Timestamptz(3)
+  liveJobCount               Int
+  activeCandidateCount       Int
+  activeEmployerCount        Int
+  responseRateBasisPoints    Int
+  contentCoverageBasisPoints Int
+  medianApplicationsTimes2   Int
+  dataProvenance             DataProvenance
+  evidenceHash               String                        @db.VarChar(64)
+  validUntil                 DateTime                      @db.Timestamptz(3)
+  status                     ClusterLaunchAssessmentStatus @default(DRAFT)
+  productApprovedByUserId    String?                       @db.Uuid
+  productApprovedAt          DateTime?                     @db.Timestamptz(3)
+  opsApprovedByUserId        String?                       @db.Uuid
+  opsApprovedAt              DateTime?                     @db.Timestamptz(3)
+  activatedAt                DateTime?                     @db.Timestamptz(3)
+  revokedAt                  DateTime?                     @db.Timestamptz(3)
+  activationReason           String?                       @db.VarChar(500)
+  revokeReason               String?                       @db.VarChar(500)
+  createdAt                  DateTime                      @default(now()) @db.Timestamptz(3)
+  canton                     Canton                        @relation(fields: [cantonId], references: [id], onDelete: Restrict)
+  category                   Category                      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  events                     ClusterLaunchEvent[]
+
+  @@unique([cantonId, categoryId, policyVersion, evaluatedAt])
+  @@index([cantonId, categoryId, policyVersion, status, validUntil])
+}
+
+model ClusterLaunchEvent {
+  id                        String                  @id @default(uuid()) @db.Uuid
+  clusterLaunchAssessmentId String                  @db.Uuid
+  kind                      ClusterLaunchEventKind
+  actorUserId               String?                 @db.Uuid
+  reasonCode                String?                 @db.VarChar(64)
+  correlationId             String                  @db.VarChar(128)
+  createdAt                 DateTime                @default(now()) @db.Timestamptz(3)
+  clusterLaunchAssessment   ClusterLaunchAssessment @relation(fields: [clusterLaunchAssessmentId], references: [id], onDelete: Restrict)
+
+  @@index([clusterLaunchAssessmentId, createdAt])
+}
+
+model Plan {
+  id            String        @id @default(uuid()) @db.Uuid
+  code          String        @unique @db.VarChar(64)
+  name          String        @db.VarChar(160)
+  isDefaultFree Boolean       @default(false)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
+  versions      PlanVersion[]
+}
+
+model PlanVersion {
+  id                      String                 @id @default(uuid()) @db.Uuid
+  planId                  String                 @db.Uuid
+  version                 Int
+  status                  CatalogVersionStatus   @default(DRAFT)
+  priceMode               PlanPriceMode
+  billingInterval         BillingInterval
+  termMonths              Int
+  netPriceRappen          Int?
+  monthlyEquivalentRappen Int?
+  currency                String                 @default("CHF") @db.Char(3)
+  isPublic                Boolean                @default(false)
+  isSelfService           Boolean                @default(false)
+  validFrom               DateTime               @db.Timestamptz(3)
+  validTo                 DateTime?              @db.Timestamptz(3)
+  createdAt               DateTime               @default(now()) @db.Timestamptz(3)
+  plan                    Plan                   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  entitlements            PlanEntitlement[]
+  subscriptions           EmployerSubscription[]
+  orderLines              OrderLine[]
+  creditLedgerEntries     CreditLedgerEntry[]
+
+  @@unique([planId, version])
+  @@index([planId, status, validFrom, validTo])
+}
+
+model PlanEntitlement {
+  id                  String               @id @default(uuid()) @db.Uuid
+  planVersionId       String               @db.Uuid
+  key                 EntitlementKey
+  valueType           EntitlementValueType
+  booleanValue        Boolean?
+  integerValue        Int?
+  analyticsLevelValue AnalyticsLevel?
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  planVersion         PlanVersion          @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([planVersionId, key])
+}
+
+model EmployerSubscription {
+  id                              String                       @id @default(uuid()) @db.Uuid
+  companyId                       String                       @db.Uuid
+  planVersionId                   String                       @db.Uuid
+  sourceOrderId                   String?                      @unique @db.Uuid
+  status                          SubscriptionStatus
+  currentPeriodStart              DateTime                     @db.Timestamptz(3)
+  currentPeriodEnd                DateTime                     @db.Timestamptz(3)
+  billingIntervalSnapshot         BillingInterval
+  termMonthsSnapshot              Int
+  recurringNetRappenSnapshot      Int
+  monthlyEquivalentRappenSnapshot Int
+  currencySnapshot                String                       @db.Char(3)
+  activatedAt                     DateTime?                    @db.Timestamptz(3)
+  endedAt                         DateTime?                    @db.Timestamptz(3)
+  createdAt                       DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt                       DateTime                     @updatedAt @db.Timestamptz(3)
+  company                         Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  planVersion                     PlanVersion                  @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  sourceOrder                     Order?                       @relation("SubscriptionSourceOrder", fields: [sourceOrderId], references: [id], onDelete: Restrict)
+  events                          SubscriptionEvent[]
+  currentChangeSchedules          SubscriptionChangeSchedule[] @relation("CurrentSubscriptionSchedule")
+  successorChangeSchedule         SubscriptionChangeSchedule?  @relation("SuccessorSubscriptionSchedule")
+
+  @@unique([id, companyId])
+  @@index([companyId, status, currentPeriodEnd])
+  @@index([planVersionId, currentPeriodStart])
+}
+
+model SubscriptionEvent {
+  id             String                @id @default(uuid()) @db.Uuid
+  subscriptionId String                @db.Uuid
+  kind           SubscriptionEventKind
+  actorUserId    String?               @db.Uuid
+  reasonCode     String?               @db.VarChar(64)
+  idempotencyKey String                @unique @db.VarChar(128)
+  correlationId  String                @db.VarChar(128)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  subscription   EmployerSubscription  @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([subscriptionId, createdAt])
+}
+
+model SubscriptionChangeSchedule {
+  id                        String                   @id @default(uuid()) @db.Uuid
+  companyId                 String                   @db.Uuid
+  currentSubscriptionId     String                   @db.Uuid
+  successorSubscriptionId   String?                  @unique @db.Uuid
+  kind                      SubscriptionChangeKind
+  status                    SubscriptionChangeStatus @default(PENDING)
+  effectiveAt               DateTime                 @db.Timestamptz(3)
+  retainedMembershipIds     String[]
+  retainedDefaultOwnerId    String                   @db.Uuid
+  invitationRevocationScope Json
+  actorUserId               String                   @db.Uuid
+  idempotencyKey            String                   @unique @db.VarChar(128)
+  appliedAt                 DateTime?                @db.Timestamptz(3)
+  revokedAt                 DateTime?                @db.Timestamptz(3)
+  createdAt                 DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime                 @updatedAt @db.Timestamptz(3)
+  company                   Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  currentSubscription       EmployerSubscription     @relation("CurrentSubscriptionSchedule", fields: [currentSubscriptionId, companyId], references: [id, companyId], onDelete: Restrict)
+  successorSubscription     EmployerSubscription?    @relation("SuccessorSubscriptionSchedule", fields: [successorSubscriptionId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([successorSubscriptionId, companyId])
+  @@index([companyId, status, effectiveAt])
+}
+
+model Product {
+  id        String           @id @default(uuid()) @db.Uuid
+  code      String           @unique @db.VarChar(64)
+  name      String           @db.VarChar(160)
+  type      ProductType
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+  versions  ProductVersion[]
+}
+
+model ProductVersion {
+  id                  String               @id @default(uuid()) @db.Uuid
+  productId           String               @db.Uuid
+  version             Int
+  status              CatalogVersionStatus @default(DRAFT)
+  netPriceRappen      Int
+  currency            String               @default("CHF") @db.Char(3)
+  durationDays        Int?
+  creditType          CreditType?
+  creditAmount        Int?
+  isPublic            Boolean              @default(false)
+  isSelfService       Boolean              @default(false)
+  priority            Int                  @default(0)
+  requiresLegalReview Boolean              @default(false)
+  validFrom           DateTime             @db.Timestamptz(3)
+  validTo             DateTime?            @db.Timestamptz(3)
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  product             Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
+  orderLines          OrderLine[]
+
+  @@unique([productId, version])
+  @@index([productId, status, validFrom, validTo])
+}
+
+model CompanyBillingProfile {
+  id                  String   @id @default(uuid()) @db.Uuid
+  companyId           String   @unique @db.Uuid
+  legalName           String   @db.VarChar(200)
+  billingContactEmail String   @db.VarChar(320)
+  street              String   @db.VarChar(200)
+  postalCode          String   @db.VarChar(16)
+  city                String   @db.VarChar(160)
+  countryCode         String   @default("CH") @db.Char(2)
+  uid                 String?  @db.VarChar(32)
+  vatNumber           String?  @db.VarChar(32)
+  version             Int      @default(1)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+}
+
+model Order {
+  id                          String                @id @default(uuid()) @db.Uuid
+  companyId                   String                @db.Uuid
+  createdByUserId             String                @db.Uuid
+  status                      OrderStatus           @default(DRAFT)
+  provider                    PaymentProvider       @default(MOCK)
+  clientIdempotencyKey        String                @unique @db.VarChar(128)
+  providerIdempotencyKey      String?               @unique @db.VarChar(128)
+  providerReference           String?               @unique @db.VarChar(255)
+  billingLegalNameSnapshot    String                @db.VarChar(200)
+  billingContactEmailSnapshot String                @db.VarChar(320)
+  billingStreetSnapshot       String                @db.VarChar(200)
+  billingPostalCodeSnapshot   String                @db.VarChar(16)
+  billingCitySnapshot         String                @db.VarChar(160)
+  billingCountryCodeSnapshot  String                @db.Char(2)
+  billingUidSnapshot          String?               @db.VarChar(32)
+  billingVatNumberSnapshot    String?               @db.VarChar(32)
+  currency                    String                @default("CHF") @db.Char(3)
+  netTotalRappen              Int
+  vatTotalRappen              Int
+  totalRappen                 Int
+  paidAt                      DateTime?             @db.Timestamptz(3)
+  failedAt                    DateTime?             @db.Timestamptz(3)
+  cancelledAt                 DateTime?             @db.Timestamptz(3)
+  expiresAt                   DateTime?             @db.Timestamptz(3)
+  createdAt                   DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime              @updatedAt @db.Timestamptz(3)
+  company                     Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  createdBy                   User                  @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lines                       OrderLine[]
+  paymentEvents               PaymentEvent[]
+  invoice                     Invoice?
+  subscription                EmployerSubscription? @relation("SubscriptionSourceOrder")
+
+  @@index([companyId, status, createdAt])
+  @@index([status, expiresAt])
+}
+
+model OrderLine {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  orderId              String                 @db.Uuid
+  planVersionId        String?                @db.Uuid
+  productVersionId     String?                @db.Uuid
+  taxRateVersionId     String                 @db.Uuid
+  quantity             Int                    @default(1)
+  unitNetRappen        Int
+  netRappen            Int
+  taxRateBasisPoints   Int
+  vatRappen            Int
+  totalRappen          Int
+  currency             String                 @db.Char(3)
+  descriptionSnapshot  String                 @db.VarChar(255)
+  fulfillmentContext   FulfillmentContextType
+  targetJobId          String?                @db.Uuid
+  targetImportSourceId String?                @db.Uuid
+  targetCreditType     CreditType?
+  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
+  order                Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  planVersion          PlanVersion?           @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  productVersion       ProductVersion?        @relation(fields: [productVersionId], references: [id], onDelete: Restrict)
+  taxRateVersion       TaxRateVersion         @relation(fields: [taxRateVersionId], references: [id], onDelete: Restrict)
+  targetJob            Job?                   @relation(fields: [targetJobId], references: [id], onDelete: Restrict)
+  targetImportSource   ImportSource?          @relation(fields: [targetImportSourceId], references: [id], onDelete: Restrict)
+  invoiceLine          InvoiceLine?
+  jobBoost             JobBoost?
+  additionalJobPermit  AdditionalJobPermit?
+  importSetupApproval  ImportSetupApproval?
+  importAccessGrant    ImportAccessGrant?
+  creditLedgerEntries  CreditLedgerEntry[]
+
+  @@index([orderId])
+  @@index([planVersionId])
+  @@index([productVersionId])
+  @@index([targetJobId])
+}
+
+model Invoice {
+  id                          String        @id @default(uuid()) @db.Uuid
+  orderId                     String        @unique @db.Uuid
+  companyId                   String        @db.Uuid
+  number                      String        @unique @db.VarChar(32)
+  status                      InvoiceStatus @default(DRAFT)
+  billingLegalNameSnapshot    String        @db.VarChar(200)
+  billingContactEmailSnapshot String        @db.VarChar(320)
+  billingStreetSnapshot       String        @db.VarChar(200)
+  billingPostalCodeSnapshot   String        @db.VarChar(16)
+  billingCitySnapshot         String        @db.VarChar(160)
+  billingCountryCodeSnapshot  String        @db.Char(2)
+  billingUidSnapshot          String?       @db.VarChar(32)
+  billingVatNumberSnapshot    String?       @db.VarChar(32)
+  currency                    String        @db.Char(3)
+  netTotalRappen              Int
+  vatTotalRappen              Int
+  totalRappen                 Int
+  dueAt                       DateTime      @db.Timestamptz(3)
+  issuedAt                    DateTime?     @db.Timestamptz(3)
+  paidAt                      DateTime?     @db.Timestamptz(3)
+  voidedAt                    DateTime?     @db.Timestamptz(3)
+  createdAt                   DateTime      @default(now()) @db.Timestamptz(3)
+  order                       Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  company                     Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  lines                       InvoiceLine[]
+
+  @@index([companyId, status, issuedAt])
+  @@index([status, dueAt])
+}
+
+model InvoiceLine {
+  id                  String    @id @default(uuid()) @db.Uuid
+  invoiceId           String    @db.Uuid
+  orderLineId         String    @unique @db.Uuid
+  sortOrder           Int
+  descriptionSnapshot String    @db.VarChar(255)
+  quantity            Int
+  unitNetRappen       Int
+  netRappen           Int
+  taxRateBasisPoints  Int
+  vatRappen           Int
+  totalRappen         Int
+  currency            String    @db.Char(3)
+  invoice             Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  orderLine           OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, sortOrder])
+}
+
+model TaxRateVersion {
+  id               String              @id @default(uuid()) @db.Uuid
+  jurisdiction     String              @db.VarChar(32)
+  taxType          String              @db.VarChar(64)
+  rateBasisPoints  Int
+  validFrom        DateTime            @db.Timestamptz(3)
+  validTo          DateTime?           @db.Timestamptz(3)
+  source           String              @db.VarChar(500)
+  referenceUrl     String?             @db.VarChar(1000)
+  reviewStatus     TaxRateReviewStatus @default(DRAFT)
+  reviewedByUserId String?             @db.Uuid
+  reviewedAt       DateTime?           @db.Timestamptz(3)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  orderLines       OrderLine[]
+  reviewedBy       User?               @relation("TaxRateReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([jurisdiction, taxType, reviewStatus, validFrom, validTo])
+}
+
+model EntitlementGrant {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  companyId           String                  @db.Uuid
+  key                 EntitlementKey
+  valueType           EntitlementValueType
+  booleanValue        Boolean?
+  integerValue        Int?
+  analyticsLevelValue AnalyticsLevel?
+  integerMode         EntitlementIntegerMode?
+  reasonCode          String                  @db.VarChar(64)
+  grantedByUserId     String                  @db.Uuid
+  validFrom           DateTime                @db.Timestamptz(3)
+  validTo             DateTime                @db.Timestamptz(3)
+  idempotencyKey      String                  @unique @db.VarChar(128)
+  revokedAt           DateTime?               @db.Timestamptz(3)
+  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
+  company             Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, key, validFrom])
+  @@index([companyId, key, validFrom, validTo])
+}
+
+model CreditAccount {
+  id            String              @id @default(uuid()) @db.Uuid
+  companyId     String              @db.Uuid
+  creditType    CreditType
+  fundingSource CreditFundingSource
+  periodStart   DateTime            @db.Timestamptz(3)
+  periodEnd     DateTime            @db.Timestamptz(3)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  company       Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  entries       CreditLedgerEntry[]
+
+  @@unique([companyId, creditType, fundingSource, periodStart])
+  @@index([companyId, creditType, periodEnd])
+}
+
+model CreditLedgerEntry {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  accountId           String                  @db.Uuid
+  fundingSource       CreditFundingSource
+  kind                CreditLedgerKind
+  amount              Int
+  sourcePlanVersionId String?                 @db.Uuid
+  sourceOrderLineId   String?                 @db.Uuid
+  reversalOfEntryId   String?                 @unique @db.Uuid
+  validFrom           DateTime                @db.Timestamptz(3)
+  validTo             DateTime                @db.Timestamptz(3)
+  idempotencyKey      String                  @db.VarChar(128)
+  reasonCode          String?                 @db.VarChar(64)
+  actorUserId         String?                 @db.Uuid
+  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
+  account             CreditAccount           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  sourcePlanVersion   PlanVersion?            @relation(fields: [sourcePlanVersionId], references: [id], onDelete: Restrict)
+  sourceOrderLine     OrderLine?              @relation(fields: [sourceOrderLineId], references: [id], onDelete: Restrict)
+  reversalOfEntry     CreditLedgerEntry?      @relation("CreditLedgerReversal", fields: [reversalOfEntryId], references: [id], onDelete: Restrict)
+  reversedByEntry     CreditLedgerEntry?      @relation("CreditLedgerReversal")
+  contactRequest      EmployerContactRequest?
+  fundedJobBoost      JobBoost?               @relation("LedgerFundedJobBoost")
+
+  @@unique([accountId, idempotencyKey])
+  @@index([accountId, createdAt])
+  @@index([validTo, kind])
+}
+
+model PaymentEvent {
+  id                String           @id @default(uuid()) @db.Uuid
+  orderId           String           @db.Uuid
+  provider          PaymentProvider
+  kind              PaymentEventKind
+  providerReference String?          @unique @db.VarChar(255)
+  idempotencyKey    String           @unique @db.VarChar(128)
+  payload           Json
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  order             Order            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+}
+
+model JobBoost {
+  id                          String             @id @default(uuid()) @db.Uuid
+  jobId                       String             @db.Uuid
+  companyId                   String             @db.Uuid
+  orderLineId                 String?            @unique @db.Uuid
+  consumedCreditLedgerEntryId String?            @unique @db.Uuid
+  idempotencyKey              String             @unique @db.VarChar(128)
+  startsAt                    DateTime           @db.Timestamptz(3)
+  endsAt                      DateTime           @db.Timestamptz(3)
+  status                      BoostStatus
+  cancellationReason          String?            @db.VarChar(500)
+  cancelledByUserId           String?            @db.Uuid
+  cancelledAt                 DateTime?          @db.Timestamptz(3)
+  createdAt                   DateTime           @default(now()) @db.Timestamptz(3)
+  job                         Job                @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  company                     Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  orderLine                   OrderLine?         @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+  consumedCreditLedgerEntry   CreditLedgerEntry? @relation("LedgerFundedJobBoost", fields: [consumedCreditLedgerEntryId], references: [id], onDelete: Restrict)
+
+  @@index([jobId, startsAt, endsAt, status])
+  @@index([companyId, status, endsAt])
+}
+
+model AdditionalJobPermit {
+  id          String                    @id @default(uuid()) @db.Uuid
+  companyId   String                    @db.Uuid
+  targetJobId String                    @db.Uuid
+  orderLineId String                    @unique @db.Uuid
+  status      AdditionalJobPermitStatus @default(SCHEDULED)
+  validFrom   DateTime                  @db.Timestamptz(3)
+  validTo     DateTime                  @db.Timestamptz(3)
+  activatedAt DateTime?                 @db.Timestamptz(3)
+  consumedAt  DateTime?                 @db.Timestamptz(3)
+  revokedAt   DateTime?                 @db.Timestamptz(3)
+  createdAt   DateTime                  @default(now()) @db.Timestamptz(3)
+  company     Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  targetJob   Job                       @relation(fields: [targetJobId], references: [id], onDelete: Restrict)
+  orderLine   OrderLine                 @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, status, validFrom, validTo])
+  @@index([targetJobId, status, validFrom, validTo])
+}
+
+model ImportSetupApproval {
+  id                   String                    @id @default(uuid()) @db.Uuid
+  companyId            String                    @db.Uuid
+  importSourceId       String                    @db.Uuid
+  orderLineId          String?                   @unique @db.Uuid
+  sourceRightsEvidence String                    @db.VarChar(1000)
+  mappingEvidence      String                    @db.VarChar(1000)
+  approvedByUserId     String?                   @db.Uuid
+  approvalReason       String?                   @db.VarChar(500)
+  validUntil           DateTime                  @db.Timestamptz(3)
+  status               ImportSetupApprovalStatus @default(DRAFT)
+  idempotencyKey       String                    @unique @db.VarChar(128)
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
+  company              Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  importSource         ImportSource              @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  orderLine            OrderLine?                @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+  accessGrant          ImportAccessGrant?
+
+  @@index([companyId, status, validUntil])
+}
+
+model ImportAccessGrant {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  companyId             String                  @db.Uuid
+  importSourceId        String                  @db.Uuid
+  importSetupApprovalId String                  @unique @db.Uuid
+  orderLineId           String                  @unique @db.Uuid
+  status                ImportAccessGrantStatus @default(SCHEDULED)
+  validFrom             DateTime                @db.Timestamptz(3)
+  validTo               DateTime                @db.Timestamptz(3)
+  auditCorrelationId    String                  @db.VarChar(128)
+  revokedAt             DateTime?               @db.Timestamptz(3)
+  createdAt             DateTime                @default(now()) @db.Timestamptz(3)
+  company               Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  importSource          ImportSource            @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  importSetupApproval   ImportSetupApproval     @relation(fields: [importSetupApprovalId], references: [id], onDelete: Restrict)
+  orderLine             OrderLine               @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, importSourceId, status, validFrom, validTo])
+}
+
+model SalesLead {
+  id                     String          @id @default(uuid()) @db.Uuid
+  companyId              String?         @db.Uuid
+  emailNormalized        String          @db.VarChar(320)
+  organizationNormalized String?         @db.VarChar(200)
+  purpose                String          @db.VarChar(128)
+  consentSource          String          @db.VarChar(128)
+  needSummary            String?         @db.VarChar(2000)
+  status                 LeadStatus      @default(NEW)
+  ownerUserId            String?         @db.Uuid
+  nextAt                 DateTime?       @db.Timestamptz(3)
+  retainUntil            DateTime        @db.Timestamptz(3)
+  createdAt              DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @db.Timestamptz(3)
+  company                Company?        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  owner                  User?           @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  activities             SalesActivity[]
+
+  @@unique([emailNormalized, purpose])
+  @@index([status, nextAt])
+  @@index([ownerUserId, status, nextAt])
+}
+
+model SalesActivity {
+  id          String            @id @default(uuid()) @db.Uuid
+  salesLeadId String            @db.Uuid
+  kind        SalesActivityKind
+  actorUserId String?           @db.Uuid
+  safeNote    String?           @db.VarChar(1000)
+  outcomeCode String?           @db.VarChar(64)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  salesLead   SalesLead         @relation(fields: [salesLeadId], references: [id], onDelete: Restrict)
+
+  @@index([salesLeadId, createdAt])
+}
+
+model SystemTask {
+  id                  String           @id @default(uuid()) @db.Uuid
+  companyId           String?          @db.Uuid
+  kind                SystemTaskKind
+  reasonCode          String           @db.VarChar(64)
+  evidenceWindowStart DateTime?        @db.Timestamptz(3)
+  evidenceWindowEnd   DateTime?        @db.Timestamptz(3)
+  evidenceReference   String?          @db.VarChar(255)
+  ownerUserId         String?          @db.Uuid
+  dueAt               DateTime         @db.Timestamptz(3)
+  status              SystemTaskStatus @default(OPEN)
+  outcomeCode         String?          @db.VarChar(64)
+  idempotencyKey      String           @unique @db.VarChar(128)
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
+  company             Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  owner               User?            @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, dueAt])
+  @@index([ownerUserId, status, dueAt])
+  @@index([companyId, status, dueAt])
+}
+
+model ReferralLink {
+  id             String                @id @default(uuid()) @db.Uuid
+  publicCodeHash String                @unique @db.VarChar(128)
+  encryptedCode  Bytes
+  source         String                @db.VarChar(64)
+  campaign       String                @db.VarChar(128)
+  targetPath     String                @db.VarChar(500)
+  keyVersion     String                @db.VarChar(32)
+  expiresAt      DateTime              @db.Timestamptz(3)
+  revokedAt      DateTime?             @db.Timestamptz(3)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  attributions   ReferralAttribution[]
+
+  @@index([expiresAt, revokedAt])
+}
+
+model ReferralAttribution {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  referralLinkId        String                  @db.Uuid
+  kind                  ReferralAttributionKind
+  pseudonymousVisitorId String                  @db.VarChar(128)
+  dedupeKey             String                  @unique @db.VarChar(160)
+  selfReferralFlag      Boolean                 @default(false)
+  botFlag               Boolean                 @default(false)
+  retainUntil           DateTime                @db.Timestamptz(3)
+  occurredAt            DateTime                @db.Timestamptz(3)
+  referralLink          ReferralLink            @relation(fields: [referralLinkId], references: [id], onDelete: Restrict)
+
+  @@index([referralLinkId, occurredAt])
+  @@index([retainUntil])
+}
+
+model RecruiterMandate {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  recruiterUserId      String                  @db.Uuid
+  clientCompanyId      String                  @db.Uuid
+  grantedByOwnerUserId String                  @db.Uuid
+  status               RecruiterMandateStatus  @default(SCHEDULED)
+  validFrom            DateTime                @db.Timestamptz(3)
+  validTo              DateTime                @db.Timestamptz(3)
+  revokedAt            DateTime?               @db.Timestamptz(3)
+  reasonCode           String                  @db.VarChar(64)
+  idempotencyKey       String                  @unique @db.VarChar(128)
+  createdAt            DateTime                @default(now()) @db.Timestamptz(3)
+  recruiter            User                    @relation("MandateRecruiter", fields: [recruiterUserId], references: [id], onDelete: Restrict)
+  grantedByOwner       User                    @relation("MandateGrantor", fields: [grantedByOwnerUserId], references: [id], onDelete: Restrict)
+  clientCompany        Company                 @relation(fields: [clientCompanyId], references: [id], onDelete: Restrict)
+  jobs                 RecruiterMandateJob[]
+  events               RecruiterMandateEvent[]
+
+  @@index([recruiterUserId, clientCompanyId, status, validFrom, validTo])
+}
+
+model RecruiterMandateJob {
+  recruiterMandateId String           @db.Uuid
+  jobId              String           @db.Uuid
+  recruiterMandate   RecruiterMandate @relation(fields: [recruiterMandateId], references: [id], onDelete: Restrict)
+  job                Job              @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@id([recruiterMandateId, jobId])
+  @@index([jobId])
+}
+
+model RecruiterMandateEvent {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  recruiterMandateId String                    @db.Uuid
+  kind               RecruiterMandateEventKind
+  actorUserId        String                    @db.Uuid
+  reasonCode         String?                   @db.VarChar(64)
+  correlationId      String                    @db.VarChar(128)
+  createdAt          DateTime                  @default(now()) @db.Timestamptz(3)
+  recruiterMandate   RecruiterMandate          @relation(fields: [recruiterMandateId], references: [id], onDelete: Restrict)
+
+  @@index([recruiterMandateId, createdAt])
+}
+
+model ContentPage {
+  id                         String            @id @default(uuid()) @db.Uuid
+  slug                       String            @unique @db.VarChar(220)
+  locale                     String            @db.VarChar(16)
+  type                       ContentPageType
+  canonicalPath              String            @db.VarChar(500)
+  dataProvenance             DataProvenance    @default(LIVE)
+  currentPublishedRevisionId String?           @unique @db.Uuid
+  createdAt                  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime          @updatedAt @db.Timestamptz(3)
+  currentPublishedRevision   ContentRevision?  @relation("PublishedContentRevision", fields: [currentPublishedRevisionId, id], references: [id, contentPageId], onDelete: Restrict)
+  revisions                  ContentRevision[] @relation("ContentRevisions")
+  events                     ContentEvent[]
+
+  @@unique([canonicalPath, locale])
+  @@unique([currentPublishedRevisionId, id])
+  @@index([type, locale, dataProvenance])
+}
+
+model ContentRevision {
+  id               String                @id @default(uuid()) @db.Uuid
+  contentPageId    String                @db.Uuid
+  revisionNumber   Int
+  status           ContentRevisionStatus @default(DRAFT)
+  title            String                @db.VarChar(220)
+  excerpt          String                @db.VarChar(500)
+  body             String                @db.Text
+  heroMetadata     Json?
+  authoredByUserId String                @db.Uuid
+  contentHash      String                @db.VarChar(64)
+  reviewedAt       DateTime?             @db.Timestamptz(3)
+  publishedAt      DateTime?             @db.Timestamptz(3)
+  createdAt        DateTime              @default(now()) @db.Timestamptz(3)
+  contentPage      ContentPage           @relation("ContentRevisions", fields: [contentPageId], references: [id], onDelete: Restrict)
+  publishedForPage ContentPage?          @relation("PublishedContentRevision")
+  events           ContentEvent[]
+
+  @@unique([contentPageId, revisionNumber])
+  @@unique([contentPageId, contentHash])
+  @@unique([id, contentPageId])
+  @@index([status, publishedAt])
+}
+
+model ContentEvent {
+  id                String           @id @default(uuid()) @db.Uuid
+  contentPageId     String           @db.Uuid
+  contentRevisionId String           @db.Uuid
+  kind              ContentEventKind
+  actorUserId       String           @db.Uuid
+  reasonCode        String?          @db.VarChar(64)
+  correlationId     String           @db.VarChar(128)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  contentPage       ContentPage      @relation(fields: [contentPageId], references: [id], onDelete: Restrict)
+  contentRevision   ContentRevision  @relation(fields: [contentRevisionId, contentPageId], references: [id, contentPageId], onDelete: Restrict)
+
+  @@index([contentPageId, createdAt])
+  @@index([contentRevisionId, createdAt])
+}
+
+model SupportCase {
+  id              String             @id @default(uuid()) @db.Uuid
+  requesterUserId String             @db.Uuid
+  companyId       String?            @db.Uuid
+  category        SupportCategory
+  priority        SupportPriority    @default(NORMAL)
+  status          SupportCaseStatus  @default(OPEN)
+  subject         String             @db.VarChar(200)
+  description     String             @db.VarChar(3000)
+  assigneeUserId  String?            @db.Uuid
+  dueAt           DateTime           @db.Timestamptz(3)
+  correlationId   String             @db.VarChar(128)
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @db.Timestamptz(3)
+  requester       User               @relation("SupportRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  assignee        User?              @relation("SupportAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
+  company         Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  events          SupportCaseEvent[]
+
+  @@index([status, priority, dueAt])
+  @@index([assigneeUserId, status, dueAt])
+  @@index([requesterUserId, createdAt])
+}
+
+model SupportCaseEvent {
+  id            String               @id @default(uuid()) @db.Uuid
+  supportCaseId String               @db.Uuid
+  kind          SupportCaseEventKind
+  actorUserId   String               @db.Uuid
+  safeBody      String?              @db.VarChar(3000)
+  reasonCode    String?              @db.VarChar(64)
+  correlationId String               @db.VarChar(128)
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  supportCase   SupportCase          @relation(fields: [supportCaseId], references: [id], onDelete: Restrict)
+
+  @@index([supportCaseId, createdAt])
+}

@@ -124,10 +124,13 @@ jobs:
       - name: Unit-Tests
         run: npm test
 
-      - name: Baseline-Migration anwenden
+      - name: Committed Migrations anwenden
         run: npm run db:migrate
 
-      - name: Technischen Phase-01-Seed ausführen
+      - name: Migrationsstatus prüfen
+        run: npm run db:migrate:status
+
+      - name: Technischen Phase-02-Seed ausführen
         run: npm run db:seed
 
       - name: Datenbank-Smoke ausführen

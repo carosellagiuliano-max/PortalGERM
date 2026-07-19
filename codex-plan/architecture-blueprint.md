@@ -193,6 +193,33 @@ Jede Zeile ist eine Seitengruppe. Für jede konkrete Route gelten zusätzlich Lo
 
 ## 6. Domänenmodell und zentrale Invarianten
 
+### Physische Phase-02-Schemakarte
+
+Die implementierte Struktur ist bewusst in fachliche Aggregate gegliedert; die Pfeile zeigen die wichtigsten Scope- und Historienabhängigkeiten, nicht jede einzelne Prisma-Relation. Die vollständige Feld- und Constraint-Referenz steht in [`prisma/schema.prisma`](../prisma/schema.prisma), die nicht von Prisma ausdrückbaren PostgreSQL-Invarianten in der committed Phase-02-Migration.
+
+```mermaid
+flowchart LR
+  Identity["Identity<br/>User · Credential · Session"] --> Candidate["Candidate<br/>Profile · Preference · Documents"]
+  Identity --> Tenant["Tenant<br/>Company · Membership · Invitation"]
+  Tenant --> Jobs["Jobs<br/>Job · Revision · Assignment · Score"]
+  Candidate --> Applications["Applications<br/>Submission Snapshot · Events"]
+  Jobs --> Applications
+  Applications --> Messaging["Messaging<br/>Conversation · Participant · Message"]
+  Candidate --> Radar["Talent Radar<br/>Consent · Safe Profile · Search Session"]
+  Tenant --> Radar
+  Radar --> Reveal["Contact & Reveal<br/>Request · Encrypted Grant · Confirmation"]
+  Tenant --> Billing["Billing<br/>Catalog · Subscription · Order · Invoice"]
+  Billing --> Ledger["Entitlements & Credits<br/>Grant · Account · Append-only Ledger"]
+  Ledger --> Reveal
+  Ledger --> Boosts["Targeted fulfillment<br/>Boost · Permit · Import grant"]
+  Jobs --> Boosts
+  Jobs --> Import["Import<br/>Source · Rights · Run · Decision"]
+  Tenant --> Import
+  Identity --> Privacy["Privacy & Trust<br/>Consent · Request · Challenge · Abuse"]
+  Identity --> Ops["Operations<br/>Audit · Analytics · Support · Content"]
+  Tenant --> Ops
+```
+
 ### Identity und Tenant
 
 - `User`, `Credential`, `Session`, `PasswordResetToken` (Mock), `UserStatus`.

@@ -25,6 +25,7 @@
     "db:validate": "prisma validate",
     "db:migrate": "npm run env:validate && prisma migrate deploy",
     "db:migrate:dev": "tsx scripts/require-local-database.ts && prisma migrate dev",
+    "db:migrate:status": "npm run env:validate && prisma migrate status",
     "db:seed": "npm run env:validate && tsx prisma/seed.ts",
     "db:smoke": "npm run env:validate && tsx scripts/db-smoke.ts",
     "db:studio": "tsx scripts/require-local-database.ts && prisma studio",

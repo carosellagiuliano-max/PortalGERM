@@ -1,8 +1,8 @@
 # SwissTalentHub / PortalGERM
 
-**Phase 01: technische Foundation ist implementiert und verifiziert; Phase 02 wurde noch nicht begonnen.** Vorhanden sind eine reproduzierbare Next.js-/TypeScript-Basis, UI-Primitives, Env-Validierung, Prisma/PostgreSQL-Grundlage, Health-Routen und Test-/CI-Infrastruktur.
+**Phasen 01 und 02 sind implementiert und verifiziert; Phase 03 wurde noch nicht begonnen.** Vorhanden sind die reproduzierbare Next.js-/TypeScript-Foundation sowie der persistente Prisma/PostgreSQL-Domänenvertrag für Identity, Kandidaten, Firmen, Jobs, Bewerbungen, Talent Radar/Privacy, Billing und Operations.
 
-Noch **nicht** implementiert sind Jobsuche, Authentifizierung, Kandidaten-, Arbeitgeber- und Adminportale, fachliche Datenmodelle, Billing sowie Mock- oder Real-Provider. Die Startseite weist diesen Umfang ausdrücklich aus; es gibt keine Fake-Logins, Fake-Jobs oder funktionslosen Produkt-CTAs. Ein vorhandenes File oder eine grüne Oberfläche ist kein Implementierungsnachweis.
+Noch **nicht** implementiert sind Authentifizierungs- und Produkt-Use-Cases, Jobsuche, Kandidaten-, Arbeitgeber- und Adminportale, Katalog-/Demo-Fixtures, Billing-Abläufe sowie Mock- oder Real-Provider. Phase 02 liefert Persistenz und Datenintegrität, aber noch keine Nutzerfunktion. Die Startseite weist diesen Umfang ausdrücklich aus; es gibt keine Fake-Logins, Fake-Jobs oder funktionslosen Produkt-CTAs.
 
 ## Verbindliche Runtime
 
@@ -38,12 +38,13 @@ docker compose up -d postgres
 npm run db:generate
 npm run db:validate
 npm run db:migrate
+npm run db:migrate:status
 npm run db:seed
 npm run db:smoke
 npm run dev
 ```
 
-Danach ist die Foundation unter [http://127.0.0.1:3000](http://127.0.0.1:3000) erreichbar.
+Danach ist die technische App-Shell unter [http://127.0.0.1:3000](http://127.0.0.1:3000) erreichbar.
 
 `npm ci` verwendet ausschliesslich das committed Lockfile und eine versionsgenaue Allowlist für geprüfte Dependency-Install-Scripts. `npm run env:init` erzeugt einmalig eine ignorierte `.env.local` mit lokal gültigen, voneinander verschiedenen Zufallsschlüsseln. Der Befehl überschreibt keine vorhandene Datei, läuft nur lokal, übernimmt keine URL aus dem Shell-Environment und setzt auf unterstützenden Dateisystemen Modus `0600`. `.env.example` ist absichtlich nicht direkt lauffähig und enthält nur erkennbare Platzhalter.
 
@@ -93,6 +94,7 @@ akzeptiert eine Production-URL.
 npm run db:generate
 npm run db:validate
 npm run db:migrate
+npm run db:migrate:status
 npm run db:seed
 npm run db:smoke
 ```
@@ -100,13 +102,14 @@ npm run db:smoke
 - `db:generate` erzeugt den ignorierten Prisma Client neu.
 - `db:validate` prüft Schema und Konfiguration ohne Datenbankmutation.
 - `db:migrate` verwendet `prisma migrate deploy` gegen die explizite `DATABASE_URL`.
-- Die Phase-01-Baseline enthält bewusst keine Fachmodelle. Sie beweist nur den Migrationspfad.
-- `db:seed` prüft per `SELECT 1` die Erreichbarkeit und schreibt keine Demo- oder Domainzeilen.
+- `db:migrate:status` bestätigt, dass alle committed Migrationen angewandt sind.
+- Auf die leere Phase-01-Baseline folgt die Phase-02-Domänenmigration. Sie enthält zusätzlich zu Prisma-SQL benannte Checks, Composite-FKs, Partial-/Exclusion-Indizes sowie Lifecycle-, Append-only- und Concurrency-Trigger.
+- `db:seed` prüft die Erreichbarkeit repräsentativer Phase-02-Tabellen und schreibt keine Katalog-, Demo- oder Domainzeilen.
 - `db:smoke` führt ebenfalls nur einen read-only `SELECT 1` aus; bei `APP_ENV=ci` verwendet es `TEST_DATABASE_URL`.
 
 Die interaktiven Befehle `npm run db:migrate:dev` und `npm run db:studio` besitzen zusätzlich einen Fail-closed-Guard: Sie akzeptieren nur `APP_ENV=local`, einen Loopback-Host und keine production-/staging-bezeichnete Datenbank. `db:migrate` bleibt der nicht-interaktive Deploy-Pfad für eine ausdrücklich vollständig konfigurierte Zielumgebung.
 
-Fachmodelle und fachliche Seeds gehören erst in Phase 02 beziehungsweise Phase 05. Es gibt in Phase 01 keinen automatischen Reset und keinen Production-Seed.
+Vollständige positive und negative fachliche Fixtures gehören in Phase 05. Es gibt keinen automatischen Reset und keinen Production-Seed. Die Gruppierung der Modelle und der Umgang mit dem strengeren SQL-Vertrag sind in [`prisma/README.md`](./prisma/README.md) dokumentiert.
 
 ## Qualitätsbefehle
 
@@ -137,7 +140,7 @@ npm run db:validate
 docker compose config --quiet
 ```
 
-Die Linux-CI führt Clean Install, Env-Validierung, Prisma Generate/Validate, Lint, Typecheck, Unit-Tests, Baseline-Migration, technischen Seed, DB-Smoke, PostgreSQL-Integrationstests, Production Build und einen HTTP-Smoke aus. Ein separater `windows-latest`-Job wiederholt ohne Docker mindestens Install, Env-, Prisma-, Lint-, Typecheck-, Unit- und Build-Prüfung und belegt damit die npm-cmd-Portabilität.
+Die Linux-CI führt Clean Install, Env-Validierung, Prisma Generate/Validate, Lint, Typecheck, Unit-Tests, alle committed Migrationen samt Statusprüfung, technischen Phase-02-Seed, DB-Smoke, PostgreSQL-Integrationstests, Production Build und einen HTTP-Smoke aus. Ein separater `windows-latest`-Job wiederholt ohne Docker mindestens Install, Env-, Prisma-, Lint-, Typecheck-, Unit- und Build-Prüfung und belegt damit die npm-cmd-Portabilität.
 
 ## Health-Routen
 
@@ -151,18 +154,19 @@ Health-Routen sind Betriebschecks, keine Produktfeatures und keine Autorisierung
 - Keine echten Secrets, Provider-Keys, persönlichen Daten oder Produktionsdaten in Repository, Fixtures oder CI.
 - Keine automatische oder unbeabsichtigte Verbindung zu einer unbekannten oder Production-Datenbank; Tests verwenden immer die isolierte Testdatenbank. Der Deploy-Migrationspfad benötigt eine ausdrücklich konfigurierte Zielumgebung.
 - Keine Real-Provider werden durch Env-Keys automatisch aktiviert; deren Variablen müssen leer bleiben.
-- Der Phase-01-Logger redigiert sensitive Werte; Stacktraces und Konfiguration gehören nicht in Nutzerantworten.
+- Der Foundation-Logger redigiert sensitive Werte; Stacktraces und Konfiguration gehören nicht in Nutzerantworten.
 - Basisheader sind vorbereitet. Vollständige CSP/HSTS-, Auth-, Rate-Limit- und Autorisierungshärtung folgen in ihren besitzenden Phasen.
-- Die Foundation ist weder ein demo-fertiges Produkt noch produktionsbereit oder vollständig DSG-konform.
+- Das technische Fundament und Schema sind weder ein demo-fertiges Produkt noch produktionsbereit oder vollständig DSG-konform.
 
 ## Plan und Evidence
 
 1. [`AGENTS.md`](./AGENTS.md) — Implementierungs- und Evidence-Regeln.
 2. [`codex-plan/00-PLAN.md`](./codex-plan/00-PLAN.md) — Masterplan und Status.
 3. [`codex-plan/01-setup-foundation.md`](./codex-plan/01-setup-foundation.md) — verbindlicher Phase-01-Vertrag.
-4. [`codex-plan/decisions.md`](./codex-plan/decisions.md) — Architekturentscheidungen.
-5. [`codex-plan/requirements-matrix.md`](./codex-plan/requirements-matrix.md) — Traceability.
-6. [`codex-plan/implementation-plan.md`](./codex-plan/implementation-plan.md) — Ausführungsschritte 01–18.
-7. [`codex-plan/evidence/2026-07-19-phase-01.md`](./codex-plan/evidence/2026-07-19-phase-01.md) — reproduzierbarer Phase-01-Abnahmenachweis.
+4. [`codex-plan/02-prisma-schema.md`](./codex-plan/02-prisma-schema.md) — verbindlicher Phase-02-Schema- und Migrationsvertrag.
+5. [`codex-plan/decisions.md`](./codex-plan/decisions.md) — Architekturentscheidungen.
+6. [`codex-plan/requirements-matrix.md`](./codex-plan/requirements-matrix.md) — Traceability.
+7. [`codex-plan/implementation-plan.md`](./codex-plan/implementation-plan.md) — Ausführungsschritte 01–18.
+8. [`codex-plan/evidence/2026-07-19-phase-01.md`](./codex-plan/evidence/2026-07-19-phase-01.md) — reproduzierbarer Phase-01-Abnahmenachweis.
 
 Ein Checkbox-Häkchen bedeutet „im Zielrepository implementiert und verifiziert“. Evidence nennt mindestens Datum, Zielcommit, Umgebung, OS, Node/npm-Version, Befehl beziehungsweise manuellen Check, Exit-Code/Ergebnis und bekannte Limitation. Zuerst wird die Detailphase aktualisiert, danach gegebenenfalls der Masterplan.
