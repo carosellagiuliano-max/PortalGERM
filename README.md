@@ -124,6 +124,9 @@ eindeutig test-bezeichnete, von `DATABASE_URL` getrennte `TEST_DATABASE_URL`.
 `test:e2e` startet nach einem erfolgreichen Build selbst einen Production-Server
 auf einem freien Loopback-Port, prüft Inhalt, Health/404, Security-, Correlation-
 und No-store-Header sowie eine Secret-Canary und beendet den Prozess wieder.
+`typecheck` erzeugt davor mit `next typegen` die von Next verwaltete und bewusst
+ignorierte `next-env.d.ts`; dadurch hinterlassen `dev` und `build` keinen
+versionsabhängigen Diff im Repository.
 
 Zusätzliche Konfigurationschecks:
 
