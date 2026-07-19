@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 19. Juli 2026. **Phasen 01 und 02 sind im Zielrepository implementiert und verifiziert; Phasen 03–18 sind offen.** Foundation und persistenter Domänenvertrag sind kein fertiges Produkt: Auth, Policies, Produktportale, Billing-Use-Cases und Provider sind noch nicht umgesetzt.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 19. Juli 2026. **Phasen 01 bis 03 sind im Zielrepository implementiert und verifiziert; Phasen 04–18 sind offen.** Foundation, persistenter Domänenvertrag und Core Policies sind kein fertiges Produkt: End-to-End-Auth, Produktportale, Billing-Use-Cases und Provider folgen in den nächsten Phasen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -36,7 +36,7 @@ Die wichtigsten Differenzierungen sind:
 
 Der vollständige Ausgangs-`codex-plan` mit 24 Dateien wurde in das leere Ziel übertragen und vor Überarbeitung per SHA-256 bytegenau verglichen. Das verlinkte Root-`AGENTS.md` wurde zusätzlich übernommen. Der Ziel-Baseline-Commit enthielt nur `README.md`.
 
-Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis sowie den unabhängig auditierten Phase-02-Domänenvertrag. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md) und [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
+Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag sowie die reproduzierbar verifizierten Phase-03-Core-Policies. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md) und [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
 
 ## 4. Unverhandelbare Invarianten
 
@@ -73,7 +73,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 [`02-prisma-schema.md`](./02-prisma-schema.md) · draftfähige Profile, Tenant-/Job-/Application-/Privacy-/Billing-/Ops-Modelle, Constraints, Indizes und echte Migrationen.
 
-### [ ] 03 — Core Policies und Scoring
+### [x] 03 — Core Policies und Scoring
 
 [`03-core-libraries-scoring.md`](./03-core-libraries-scoring.md) · Auth-/Ownership-/Entitlement-Policies, Statusmaschinen, Safe DTOs, Fair/Match, Rappen/VAT, Audit/Events plus Unit-/DB-Tests.
 
