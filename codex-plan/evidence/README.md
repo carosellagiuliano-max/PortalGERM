@@ -14,6 +14,11 @@ gelten nicht als Nachweis.
 - Secrets, vollständige Verbindungs-URLs, personenbezogene Daten und rohe
   Fehlerobjekte werden weder im Record noch in angehängten Logs gespeichert.
 
+## Records
+
+- [`2026-07-19-phase-01.md`](./2026-07-19-phase-01.md) — Foundation und Governance.
+- [`2026-07-19-phase-02.md`](./2026-07-19-phase-02.md) — Prisma-Domänenvertrag und PostgreSQL-Migration.
+
 ## Pflichtfelder eines Records
 
 1. Datum, Zeitzone, Phase, Branch und vollständiger Ziel-Commit.

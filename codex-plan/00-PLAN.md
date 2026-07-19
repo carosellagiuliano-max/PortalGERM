@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 19. Juli 2026. **Phase 01 ist im Zielrepository implementiert und verifiziert; Phasen 02–18 sind offen.** Die Foundation ist kein fertiges Produkt: Domainmodelle, Auth, Produktportale, Billing und Provider sind noch nicht umgesetzt.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 19. Juli 2026. **Phasen 01 und 02 sind im Zielrepository implementiert und verifiziert; Phasen 03–18 sind offen.** Foundation und persistenter Domänenvertrag sind kein fertiges Produkt: Auth, Policies, Produktportale, Billing-Use-Cases und Provider sind noch nicht umgesetzt.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -36,7 +36,7 @@ Die wichtigsten Differenzierungen sind:
 
 Der vollständige Ausgangs-`codex-plan` mit 24 Dateien wurde in das leere Ziel übertragen und vor Überarbeitung per SHA-256 bytegenau verglichen. Das verlinkte Root-`AGENTS.md` wurde zusätzlich übernommen. Der Ziel-Baseline-Commit enthielt nur `README.md`.
 
-Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis; der Nachweis referenziert den unveränderlichen Code-Commit in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
+Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis sowie den unabhängig auditierten Phase-02-Domänenvertrag. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md) und [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
 
 ## 4. Unverhandelbare Invarianten
 
@@ -69,7 +69,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 [`01-setup-foundation.md`](./01-setup-foundation.md) · reproduzierbare Windows/CI-kompatible Toolchain, Env, App-/DB-Skeleton, Evidence. Keine Quellhäkchen übernehmen.
 
-### [ ] 02 — Schema und Migrationen
+### [x] 02 — Schema und Migrationen
 
 [`02-prisma-schema.md`](./02-prisma-schema.md) · draftfähige Profile, Tenant-/Job-/Application-/Privacy-/Billing-/Ops-Modelle, Constraints, Indizes und echte Migrationen.
 
@@ -218,4 +218,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phase 01 wurde gemäss [`01-setup-foundation.md`](./01-setup-foundation.md) umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 02; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 und 02 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 03 — Core Policies und Scoring; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
