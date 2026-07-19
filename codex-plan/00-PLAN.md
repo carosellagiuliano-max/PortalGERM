@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 19. Juli 2026. **Implementierungsstatus im Zielrepository: 0 %.** `PortalGERM` enthält Planungsdokumente und kein Anwendungsskeleton. Kein Produktfeature, Mock-Provider oder Test ist umgesetzt oder lokal im Ziel verifiziert.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 19. Juli 2026. **Phase 01 ist im Zielrepository implementiert und verifiziert; Phasen 02–18 sind offen.** Die Foundation ist kein fertiges Produkt: Domainmodelle, Auth, Produktportale, Billing und Provider sind noch nicht umgesetzt.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -36,7 +36,7 @@ Die wichtigsten Differenzierungen sind:
 
 Der vollständige Ausgangs-`codex-plan` mit 24 Dateien wurde in das leere Ziel übertragen und vor Überarbeitung per SHA-256 bytegenau verglichen. Das verlinkte Root-`AGENTS.md` wurde zusätzlich übernommen. Der Ziel-Baseline-Commit enthielt nur `README.md`.
 
-Das Quellprojekt besitzt lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. Details und Befehle: [`repository-audit.md`](./repository-audit.md).
+Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis; der Nachweis referenziert den unveränderlichen Code-Commit in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
 
 ## 4. Unverhandelbare Invarianten
 
@@ -65,7 +65,7 @@ Das Quellprojekt besitzt lediglich eine Phase-01-Referenz: statische Homepage/UI
 
 > Jede Phase bleibt `[ ]`, bis Code, Persistenz, Server-Policies, UX-Zustände, Seeds, Tests und Evidence im **Zielrepository** vollständig vorhanden sind.
 
-### [ ] 01 — Foundation und Governance
+### [x] 01 — Foundation und Governance
 
 [`01-setup-foundation.md`](./01-setup-foundation.md) · reproduzierbare Windows/CI-kompatible Toolchain, Env, App-/DB-Skeleton, Evidence. Keine Quellhäkchen übernehmen.
 
@@ -218,4 +218,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Nach fachlicher Freigabe beginnt der Coding-Agent mit [`01-setup-foundation.md`](./01-setup-foundation.md). Die Referenz aus `PortalGIT` darf verglichen, aber wegen Status-, Plattform- und Reproduzierbarkeitsproblemen nicht blind übernommen oder als erledigt markiert werden.
+Phase 01 wurde gemäss [`01-setup-foundation.md`](./01-setup-foundation.md) umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 02; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

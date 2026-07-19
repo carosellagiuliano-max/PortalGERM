@@ -1,6 +1,6 @@
 # SwissTalentHub / PortalGERM
 
-PortalGERM befindet sich in **Phase 01: technische Foundation**. Vorhanden sind eine reproduzierbare Next.js-/TypeScript-Basis, UI-Primitives, Env-Validierung, Prisma/PostgreSQL-Grundlage, Health-Routen und Test-/CI-Infrastruktur.
+**Phase 01: technische Foundation ist implementiert und verifiziert; Phase 02 wurde noch nicht begonnen.** Vorhanden sind eine reproduzierbare Next.js-/TypeScript-Basis, UI-Primitives, Env-Validierung, Prisma/PostgreSQL-Grundlage, Health-Routen und Test-/CI-Infrastruktur.
 
 Noch **nicht** implementiert sind Jobsuche, Authentifizierung, Kandidaten-, Arbeitgeber- und Adminportale, fachliche Datenmodelle, Billing sowie Mock- oder Real-Provider. Die Startseite weist diesen Umfang ausdrücklich aus; es gibt keine Fake-Logins, Fake-Jobs oder funktionslosen Produkt-CTAs. Ein vorhandenes File oder eine grüne Oberfläche ist kein Implementierungsnachweis.
 
@@ -163,5 +163,6 @@ Health-Routen sind Betriebschecks, keine Produktfeatures und keine Autorisierung
 4. [`codex-plan/decisions.md`](./codex-plan/decisions.md) — Architekturentscheidungen.
 5. [`codex-plan/requirements-matrix.md`](./codex-plan/requirements-matrix.md) — Traceability.
 6. [`codex-plan/implementation-plan.md`](./codex-plan/implementation-plan.md) — Ausführungsschritte 01–18.
+7. [`codex-plan/evidence/2026-07-19-phase-01.md`](./codex-plan/evidence/2026-07-19-phase-01.md) — reproduzierbarer Phase-01-Abnahmenachweis.
 
 Ein Checkbox-Häkchen bedeutet „im Zielrepository implementiert und verifiziert“. Evidence nennt mindestens Datum, Zielcommit, Umgebung, OS, Node/npm-Version, Befehl beziehungsweise manuellen Check, Exit-Code/Ergebnis und bekannte Limitation. Zuerst wird die Detailphase aktualisiert, danach gegebenenfalls der Masterplan.

@@ -573,4 +573,4 @@ flowchart LR
 
 ## Startentscheidung
 
-Nach Freigabe dieses Plans beginnt die Implementierung ausschliesslich mit **Schritt 01** im Zielrepository. Quell-Foundation kann als Referenz verglichen werden, wird aber nicht blind kopiert: plattformunabhängige Scripts, korrekte Dependencies, Migration/Evidence und Zielstatus müssen neu verifiziert werden.
+Schritt 01 ist gemäss [Phase-01-Evidence](./evidence/2026-07-19-phase-01.md) abgeschlossen. Der nächste zulässige Schritt ist **Schritt 02** im Zielrepository. Quellcode bleibt reine Vergleichsbasis und darf auch in späteren Schritten nicht blind kopiert oder als Ziel-Evidence behandelt werden.

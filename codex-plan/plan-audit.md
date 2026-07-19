@@ -1,6 +1,6 @@
 # SwissTalentHub — Plan-Audit und Verbesserungsregister
 
-> **Auditstand:** 19. Juli 2026. Klassifizierung bezieht sich auf den Zeitpunkt, zu dem die Lücke geschlossen sein muss. „Im Plan gelöst“ bedeutet nur, dass eine eindeutige Sollentscheidung dokumentiert ist — nicht, dass Code existiert.
+> **Auditstand:** 19. Juli 2026. Klassifizierung bezieht sich auf den Zeitpunkt, zu dem die Lücke geschlossen sein muss. „Im Plan gelöst“ bedeutet nur, dass eine eindeutige Sollentscheidung dokumentiert ist — nicht, dass Code existiert. Ausnahme: Phase 01 ist inzwischen separat durch [Ziel-Evidence](./evidence/2026-07-19-phase-01.md) als implementiert verifiziert.
 
 ## 1. Auditumfang und Urteil
 
@@ -22,7 +22,7 @@ Vollständig gelesen und gegeneinander geprüft wurden:
 |---|---|---|---|
 | AUD-P0-01 | Ziel enthielt nur README, Plan behauptete Phase-01-Code und trug geerbte `[x]`. Das hätte Coding-Agenten Phasen überspringen lassen. | Masterstatus 0 %, neue Evidence-Regel, Phase-01-Häkchen zurücksetzen; Repository-Audit. | im Plan gelöst |
 | AUD-P0-02 | `../AGENTS.md` fehlte im Ziel und `../plan.md` existiert nirgends; Relative Links/Source of Truth waren unklar. | Root-AGENTS mitübertragen; `codex-plan` explizit alleinige Source of Truth; tote historische Referenzen nicht normativ. | im Plan gelöst |
-| AUD-P0-03 | Phase-01-Skripte der Referenz sind Windows-inkompatibel; Docker-Begründung veraltet; Client-Generation/Dependencies nicht reproduzierbar. | Phase 01 verlangt plattformneutrale Scripts, Pins, clean install, DB-Smoke und neue Ziel-Evidence. | im Plan gelöst; Code offen |
+| AUD-P0-03 | Phase-01-Skripte der Referenz sind Windows-inkompatibel; Docker-Begründung veraltet; Client-Generation/Dependencies nicht reproduzierbar. | Phase 01 verlangt plattformneutrale Scripts, Pins, clean install, DB-Smoke und neue Ziel-Evidence. | im Ziel implementiert und verifiziert |
 | AUD-P0-04 | Registrierungsinputs passten nicht zu Pflichtfeldern von Candidate/Company; Profile konnten nicht atomar erstellt werden. | draftfähige Profile, atomare Employer-Erstellung und Schema-/Onboarding-Vertrag in Blueprint/Phase 02/06. | im Plan gelöst |
 | AUD-P0-05 | Session-Token im Klartext, E-Mail-Normalisierung/Reset-/Safe-next-Vertrag fehlte. | gehashte Tokens, `emailNormalized`, Safe Redirect, Rotation/Revocation und Reset-Mock E2E. | im Plan gelöst |
 | AUD-P0-06 | Keine kanonische RBAC-Matrix; globale Rolle, Company-Rolle, JobAssignment und Multi-Company-Kontext vermischt. | zweistufiges Rollenmodell, Autorisierungsreihenfolge und REQ-IAM-*; fremde Objekt-ID → sichere 404. | im Plan gelöst |
@@ -157,4 +157,4 @@ The listed implementation baselines are executable and may not be paused or rein
 
 ## 10. Implementierungsbereitschaft
 
-Coding darf nach Product-/Commercial-Freigabe der als Hypothesen markierten Grundrichtung mit **Phase 01** beginnen. Die offenen Business-/Legal-Entscheidungen blockieren nicht das gesamte Foundation-Arbeitspaket, besitzen aber harte Deadlines vor ihren betroffenen Phasen beziehungsweise vor Pilot-Go-live. Keine spätere Phase darf wegen vorhandener Quellfiles oder alter Soll-Evidence übersprungen werden.
+Phase 01 ist implementiert und verifiziert. Der nächste Implementierungsschritt ist **Phase 02**; die offenen Business-/Legal-Entscheidungen besitzen weiterhin harte Deadlines vor ihren betroffenen Phasen beziehungsweise vor Pilot-Go-live. Keine spätere Phase darf wegen vorhandener Quellfiles oder alter Soll-Evidence übersprungen werden.

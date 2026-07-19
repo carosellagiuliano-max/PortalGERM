@@ -1,6 +1,6 @@
 # Phase 01 — Foundation, Toolchain und Repository-Governance
 
-> Detail zu [00-PLAN.md](./00-PLAN.md) und Schritt 01 in [implementation-plan.md](./implementation-plan.md). **PortalGERM target status: NOT IMPLEMENTED.** Die 34 Quellhäkchen und alten WSL-Verifikationsnotizen wurden bewusst nicht übernommen.
+> Detail zu [00-PLAN.md](./00-PLAN.md) und Schritt 01 in [implementation-plan.md](./implementation-plan.md). **PortalGERM target status: IMPLEMENTED AND VERIFIED.** Nachweis: [Evidence vom 19. Juli 2026](./evidence/2026-07-19-phase-01.md).
 
 ## Ziel und geschäftlicher Nutzen
 
@@ -15,56 +15,56 @@ Eine reproduzierbare, plattformneutrale Next.js-/PostgreSQL-Basis schaffen, auf 
 
 ## Voraussetzungen
 
-- [ ] Plan, ADR-012/013/015/016/023/027 und Source of Truth gelesen.
-- [ ] Node.js ≥ 20 und kompatible npm-Version verfügbar; exact versions to be pinned.
-- [ ] Lokale/CI PostgreSQL-Instanz erreichbar oder Docker Compose funktionsfähig.
-- [ ] Ziel-Arbeitsbaum geprüft; keine fremden Änderungen überschreiben.
+- [x] Plan, ADR-012/013/015/016/023/027 und Source of Truth gelesen.
+- [x] Node.js ≥ 20 und kompatible npm-Version verfügbar; exact versions to be pinned.
+- [x] Lokale/CI PostgreSQL-Instanz erreichbar oder Docker Compose funktionsfähig.
+- [x] Ziel-Arbeitsbaum geprüft; keine fremden Änderungen überschreiben.
 
 ## Deliverables
 
 ### Toolchain und Paketkonfiguration
 
-- [ ] Next.js App Router, React, TypeScript strict, Tailwind und shadcn/ui in kompatiblen **exakt gelockten** Versionen installieren.
-- [ ] `packageManager` und `engines` dokumentieren/pinnen; `npm ci` in Clean Clone verifizieren.
-- [ ] `@prisma/client` als Runtime-Dependency; Prisma/tsx/Vitest/ESLint als passende Dev-Dependencies.
-- [ ] `package.json`-Scripts plattformneutral: `dev`, `build`, `start`, `lint`, `typecheck`, `test`, `test:integration`, `test:e2e` (darf bis 17 als klarer Placeholder exit non-zero/skip policy dokumentieren), `env:init`, `env:validate`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`.
-- [ ] Kein `NEXT_PRIVATE_OUTPUT_TRACE_ROOT=$PWD` oder anderes POSIX-only npm-Script; falls nötig `cross-env` oder Node-Wrapper.
-- [ ] Prisma Client wird in Install/Build/CI explizit generiert; kein nur lokal vorhandenes ignoriertes Artefakt als Voraussetzung.
+- [x] Next.js App Router, React, TypeScript strict, Tailwind und shadcn/ui in kompatiblen **exakt gelockten** Versionen installieren.
+- [x] `packageManager` und `engines` dokumentieren/pinnen; `npm ci` in Clean Clone verifizieren.
+- [x] `@prisma/client` als Runtime-Dependency; Prisma/tsx/Vitest/ESLint als passende Dev-Dependencies.
+- [x] `package.json`-Scripts plattformneutral: `dev`, `build`, `start`, `lint`, `typecheck`, `test`, `test:integration`, `test:e2e` (darf bis 17 als klarer Placeholder exit non-zero/skip policy dokumentieren), `env:init`, `env:validate`, `db:generate`, `db:migrate`, `db:seed`, `db:studio`.
+- [x] Kein `NEXT_PRIVATE_OUTPUT_TRACE_ROOT=$PWD` oder anderes POSIX-only npm-Script; falls nötig `cross-env` oder Node-Wrapper.
+- [x] Prisma Client wird in Install/Build/CI explizit generiert; kein nur lokal vorhandenes ignoriertes Artefakt als Voraussetzung.
 
 ### Verzeichnis- und App-Skeleton
 
-- [ ] `app/(public)`, `app/(auth)`, `app/candidate`, `app/employer`, `app/admin` und `app/api` vorbereitet.
-- [ ] `components/ui`, `components/shared`, rollen-/domänenspezifische Ordner gemäss Blueprint.
-- [ ] `lib/{config,db,auth,validation,security,policies,domains,providers,privacy,audit,analytics,notifications,search,scoring,utils}`.
-- [ ] `prisma/{schema.prisma,migrations,seed}` und `tests/{unit,integration,e2e,fixtures}`.
-- [ ] `app/layout.tsx` mit `lang="de-CH"`, Inter oder begründeter Font, Metadata, Toaster und Skip Link.
-- [ ] Basis-Homepage kommuniziert Foundation ehrlich; jede sichtbare Navigation/CTA funktioniert oder ist klar als noch nicht verfügbar gekennzeichnet.
-- [ ] `loading.tsx`, `error.tsx`, `not-found.tsx` als sichere, barrierearme Basis.
+- [x] `app/(public)`, `app/(auth)`, `app/candidate`, `app/employer`, `app/admin` und `app/api` vorbereitet.
+- [x] `components/ui`, `components/shared`, rollen-/domänenspezifische Ordner gemäss Blueprint.
+- [x] `lib/{config,db,auth,validation,security,policies,domains,providers,privacy,audit,analytics,notifications,search,scoring,utils}`.
+- [x] `prisma/{schema.prisma,migrations,seed}` und `tests/{unit,integration,e2e,fixtures}`.
+- [x] `app/layout.tsx` mit `lang="de-CH"`, Inter oder begründeter Font, Metadata, Toaster und Skip Link.
+- [x] Basis-Homepage kommuniziert Foundation ehrlich; jede sichtbare Navigation/CTA funktioniert oder ist klar als noch nicht verfügbar gekennzeichnet.
+- [x] `loading.tsx`, `error.tsx`, `not-found.tsx` als sichere, barrierearme Basis.
 
 ### UI- und Designsystem-Basis
 
-- [ ] originale Swiss-clean Tokens in `globals.css`; keine kopierten Portal-Farben/Layout/Copy.
-- [ ] notwendige shadcn/ui-Primitives (Button, Input, Label, Card, Badge, Dialog, Menu, Form, Select, Tabs, Sonner, Tooltip, Separator, Progress, Avatar, Alert, Sheet, Popover, Checkbox, Radio, Textarea).
-- [ ] Komponenten funktionieren mit Tastatur/Fokus; 360px-Shell und Mobile Navigation getestet.
-- [ ] Tailwind-v4-vs-anderer-Version-Konfiguration entspricht tatsächlich installierter Version; keine tote `tailwind.config.ts`-Anforderung.
+- [x] originale Swiss-clean Tokens in `globals.css`; keine kopierten Portal-Farben/Layout/Copy.
+- [x] notwendige shadcn/ui-Primitives (Button, Input, Label, Card, Badge, Dialog, Menu, Form, Select, Tabs, Sonner, Tooltip, Separator, Progress, Avatar, Alert, Sheet, Popover, Checkbox, Radio, Textarea).
+- [x] Komponenten funktionieren mit Tastatur/Fokus; 360px-Shell und Mobile Navigation getestet.
+- [x] Tailwind-v4-vs-anderer-Version-Konfiguration entspricht tatsächlich installierter Version; keine tote `tailwind.config.ts`-Anforderung.
 
 ### Prisma, PostgreSQL und Env
 
-- [ ] PostgreSQL Datasource und generator in `prisma/schema.prisma`; noch keine Fachmodelle vortäuschen.
-- [ ] `prisma.config.ts`/Migration-Pfad und minimale Baseline-Migration bewusst festgelegt.
-- [ ] `.env.example` documents required `DATABASE_URL`, `APP_URL`, `NEXT_PUBLIC_APP_NAME`, `SESSION_SECRET`, `AUDIT_IP_HASH_KEYS`, `RADAR_OPAQUE_LOOKUP_KEYS`, `RADAR_OPAQUE_ENCRYPTION_KEYS`, `REVEAL_CONFIRMATION_KEYS`, `PII_REVEAL_KEYS`, `RATE_LIMIT_BACKEND=postgres`, non-production-only `ENABLE_LOCAL_MOCK_MAILBOX=false`/`DEV_MAILBOX_SECRET`, Ops-only `BACKUP_AGE_RECIPIENT` plus external secret-mounted `BACKUP_AGE_IDENTITY_FILE` path, and clearly inactive provider placeholders. Tax values are versioned domain data, not Env defaults.
-- [ ] Secret/keyring format is exact: `SESSION_SECRET` is base64 for 32 random bytes; every `*_KEYS` is comma-separated `version:base64-32-byte-key` with the first entry the active writer and remaining unique versions read-only for rotation. HMAC and AES keyrings are never reused. `DEV_MAILBOX_SECRET` is ≥32 random bytes. `.env.example` contains unmistakable non-secret placeholders; Production/Staging startup fails on placeholder/missing/duplicate version, wrong decoded length, mailbox enabled or `RATE_LIMIT_BACKEND!=postgres`. Rotation writes with the new first version, reads old versions until an audited migration/retention cutoff, and never deletes an old key while referenced rows exist.
-- [ ] Zod-`envSchema` loads server-only, returns only typed non-secret config and key handles, fails with variable name/reason but never value, and is tested for every invalid/rotation case. Cross-platform `npm run env:init` refuses Production, creates ignored `.env.local` only when absent, generates local secrets without echoing them to logs and supports a no-write CI validation mode; `npm run env:validate` validates the active process environment. The Ops identity path always points outside the repository and its key material is never copied into Env or logs.
-- [ ] `.env*` korrekt ignoriert; keine echten Secrets getrackt.
-- [ ] `docker-compose.yml` für PostgreSQL 16 (oder begründete Version), Healthcheck und named volume; keine automatisch destructive reset command.
+- [x] PostgreSQL Datasource und generator in `prisma/schema.prisma`; noch keine Fachmodelle vortäuschen.
+- [x] `prisma.config.ts`/Migration-Pfad und minimale Baseline-Migration bewusst festgelegt.
+- [x] `.env.example` documents required `DATABASE_URL`, `APP_URL`, `NEXT_PUBLIC_APP_NAME`, `SESSION_SECRET`, `AUDIT_IP_HASH_KEYS`, `RADAR_OPAQUE_LOOKUP_KEYS`, `RADAR_OPAQUE_ENCRYPTION_KEYS`, `REVEAL_CONFIRMATION_KEYS`, `PII_REVEAL_KEYS`, `RATE_LIMIT_BACKEND=postgres`, non-production-only `ENABLE_LOCAL_MOCK_MAILBOX=false`/`DEV_MAILBOX_SECRET`, Ops-only `BACKUP_AGE_RECIPIENT` plus external secret-mounted `BACKUP_AGE_IDENTITY_FILE` path, and clearly inactive provider placeholders. Tax values are versioned domain data, not Env defaults.
+- [x] Secret/keyring format is exact: `SESSION_SECRET` is base64 for 32 random bytes; every `*_KEYS` is comma-separated `version:base64-32-byte-key` with the first entry the active writer and remaining unique versions read-only for rotation. HMAC and AES keyrings are never reused. `DEV_MAILBOX_SECRET` is ≥32 random bytes. `.env.example` contains unmistakable non-secret placeholders; Production/Staging startup fails on placeholder/missing/duplicate version, wrong decoded length, mailbox enabled or `RATE_LIMIT_BACKEND!=postgres`. Rotation writes with the new first version, reads old versions until an audited migration/retention cutoff, and never deletes an old key while referenced rows exist.
+- [x] Zod-`envSchema` loads server-only, returns only typed non-secret config and key handles, fails with variable name/reason but never value, and is tested for every invalid/rotation case. Cross-platform `npm run env:init` refuses Production, creates ignored `.env.local` only when absent, generates local secrets without echoing them to logs and supports a no-write CI validation mode; `npm run env:validate` validates the active process environment. The Ops identity path always points outside the repository and its key material is never copied into Env or logs.
+- [x] `.env*` korrekt ignoriert; keine echten Secrets getrackt.
+- [x] `docker-compose.yml` für PostgreSQL 16 (oder begründete Version), Healthcheck und named volume; keine automatisch destructive reset command.
 
 ### Security-/Operations-Basis
 
-- [ ] `/health/live` liefert minimalen Prozessstatus ohne Konfiguration/PII.
-- [ ] Grundheader (`nosniff`, frame protection, Referrer/Permissions Policy); vollständige CSP/HSTS-Laufzeit in 16.
-- [ ] strukturierter Logger/Correlation-ID-Interface vorbereitet, noch ohne sensitive Daten.
-- [ ] CI führt Clean Install, Lint, Typecheck, Unit, Prisma Generate/Validate und Build aus; Integration-DB wird isoliert.
-- [ ] `codex-plan/evidence/README.md` definiert Evidence-Record-Format.
+- [x] `/health/live` liefert minimalen Prozessstatus ohne Konfiguration/PII.
+- [x] Grundheader (`nosniff`, frame protection, Referrer/Permissions Policy); vollständige CSP/HSTS-Laufzeit in 16.
+- [x] strukturierter Logger/Correlation-ID-Interface vorbereitet, noch ohne sensitive Daten.
+- [x] CI führt Clean Install, Lint, Typecheck, Unit, Prisma Generate/Validate und Build aus; Integration-DB wird isoliert.
+- [x] `codex-plan/evidence/README.md` definiert Evidence-Record-Format.
 
 ## Dateien/Ordner
 
@@ -96,21 +96,25 @@ Noch keine fachlichen Events. Logger-Interface und Correlation ID dürfen aufgeb
 
 ## Tests und Akzeptanzkriterien
 
-- [ ] `envSchema` akzeptiert gültige Testwerte und redigiert Fehler.
-- [ ] Root-Layout rendert `lang=de-CH`, Skip Link und funktionale Basisnavigation.
-- [ ] `/` und `/health/live` liefern HTTP 200 im Production Build.
-- [ ] 404/Error zeigen sichere Texte; Errorlog enthält Correlation ID, keine Secret-Canary.
-- [ ] PostgreSQL-Verbindung in isolierter Umgebung erfolgreich; Prisma Generate/Validate grün.
-- [ ] Windows/npm-cmd und CI führen `dev`/`build` ohne POSIX-Env-Syntaxfehler aus.
-- [ ] 360px ohne horizontalen Overflow; Navigation erreichbar; keyboard smoke besteht.
-- [ ] Clean Clone `npm ci` + Quality Commands exit 0.
+- [x] `envSchema` akzeptiert gültige Testwerte und redigiert Fehler.
+- [x] Root-Layout rendert `lang=de-CH`, Skip Link und funktionale Basisnavigation.
+- [x] `/` und `/health/live` liefern HTTP 200 im Production Build.
+- [x] 404/Error zeigen sichere Texte; Errorlog enthält Correlation ID, keine Secret-Canary.
+- [x] PostgreSQL-Verbindung in isolierter Umgebung erfolgreich; Prisma Generate/Validate grün.
+- [x] Windows/npm-cmd und CI führen `dev`/`build` ohne POSIX-Env-Syntaxfehler aus.
+- [x] 360px ohne horizontalen Overflow; Navigation erreichbar; keyboard smoke besteht.
+- [x] Clean Clone `npm ci` + Quality Commands exit 0.
+
+## Evidence
+
+- [Phase-01-Record vom 19. Juli 2026](./evidence/2026-07-19-phase-01.md) für den unveränderlichen Code-Commit `d2f3742140f38c94636cc3b7433630dcb2777b9d`.
 
 ## Verifikationsbefehle und erwartete Resultate
 
 ```powershell
 npm ci                       # exit 0 from lockfile
 npm run db:generate          # Prisma Client generated
-npx prisma validate          # schema valid
+npm run db:validate          # schema valid
 docker compose config --quiet
 npm run lint                 # 0 errors
 npm run typecheck            # 0 errors
