@@ -1695,8 +1695,9 @@ model JobRevision {
   requiredDocumentKinds   RequiredDocumentKind[]
   jobType                 JobType
   remoteType              RemoteType
+  remoteCountryCode       String?                         @db.Char(2)
   categoryId              String                          @db.Uuid
-  cantonId                String                          @db.Uuid
+  cantonId                String?                         @db.Uuid
   cityId                  String?                         @db.Uuid
   locationLabel           String?                         @db.VarChar(200)
   workloadMin             Int
@@ -1722,7 +1723,7 @@ model JobRevision {
   currentForJob           Job?                            @relation("CurrentJobRevision")
   publishedForJob         Job?                            @relation("PublishedJobRevision")
   category                Category                        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  canton                  Canton                          @relation(fields: [cantonId], references: [id], onDelete: Restrict)
+  canton                  Canton?                         @relation(fields: [cantonId], references: [id], onDelete: Restrict)
   city                    City?                           @relation(fields: [cityId, cantonId], references: [id, cantonId], onDelete: Restrict)
   benefits                JobRevisionBenefit[]
   skills                  JobRevisionSkill[]
@@ -1783,6 +1784,7 @@ model JobScoreSnapshot {
   scoreVersion    String      @db.VarChar(32)
   scorePoints     Int
   maxPoints       Int
+  inputSnapshot   Json
   evidence        Json
   factorBreakdown Json
   evidenceHash    String      @db.VarChar(64)
@@ -2140,11 +2142,12 @@ model Notification {
   kind            NotificationKind
   schemaVersion   String           @db.VarChar(32)
   payload         Json
-  dedupeKey       String           @unique @db.VarChar(160)
+  dedupeKey       String           @db.VarChar(160)
   readAt          DateTime?        @db.Timestamptz(3)
   createdAt       DateTime         @default(now()) @db.Timestamptz(3)
   recipient       User             @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
 
+  @@unique([recipientUserId, kind, dedupeKey])
   @@index([recipientUserId, readAt, createdAt])
 }
 
@@ -2405,7 +2408,7 @@ model PrivacyRequest {
   verifiedAt             DateTime?                       @db.Timestamptz(3)
   processingStartedAt    DateTime?                       @db.Timestamptz(3)
   completedAt            DateTime?                       @db.Timestamptz(3)
-  idempotencyKey         String                          @unique @db.VarChar(128)
+  idempotencyKey         String                          @db.VarChar(128)
   correctionOutcome      PrivacyCorrectionOutcomeCode?
   deletionDependencies   PrivacyDeletionDependencyCode[]
   deletionOutcome        PrivacyDeletionOutcomeCode?
@@ -2422,7 +2425,9 @@ model PrivacyRequest {
   challenges             PrivacyIdentityChallenge[]
 
   @@unique([id, requesterUserId])
+  @@unique([requesterUserId, idempotencyKey])
   @@index([requesterUserId, createdAt])
+  @@index([requesterUserId, type, status])
   @@index([status, dueAt])
   @@index([assignedAdminUserId, status, dueAt])
 }

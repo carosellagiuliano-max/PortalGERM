@@ -507,6 +507,10 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     expect(migrations.rows.map((row) => row.migration_name)).toEqual([
       "20260719000000_foundation_baseline",
       "20260719181200_phase_02_domain_schema",
+      "20260719223000_phase_03_contract_corrections",
+      "20260719224500_phase_03_score_input_snapshot",
+      "20260719230000_phase_03_privacy_atomicity",
+      "20260719231500_phase_03_remote_job_projection",
     ]);
     expect(
       migrations.rows.every(
