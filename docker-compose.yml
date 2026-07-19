@@ -1,0 +1,40 @@
+name: swisstalenthub
+
+services:
+  postgres:
+    image: postgres:16.13-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
+    environment:
+      POSTGRES_DB: swisstalenthub
+      POSTGRES_USER: swisstalenthub
+      POSTGRES_PASSWORD: local-development-only
+    ports:
+      - "127.0.0.1:5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swisstalenthub -d swisstalenthub"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - swisstalenthub-postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  postgres-test:
+    image: postgres:16.13-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: swisstalenthub_test
+      POSTGRES_USER: swisstalenthub_test
+      POSTGRES_PASSWORD: local-test-only
+    ports:
+      - "127.0.0.1:5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swisstalenthub_test -d swisstalenthub_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
+    restart: "no"
+
+volumes:
+  swisstalenthub-postgres:

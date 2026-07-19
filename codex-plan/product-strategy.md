@@ -137,7 +137,7 @@ Jeder Import speichert Quelle, Nutzungsgrundlage, Zeitstempel, Original-ID, Prü
 | Phase | Ziel / Hauptaktion | Kritische Zustände und Regeln | Conversion-/Retention-Mechanik |
 |---|---|---|---|
 | Entdecken | ROI, Zielgruppe und Prozess verstehen | branchenspezifische Landingpage, Preis-/Leistung ohne versteckte Gebühren, Demo-Anfrage | Demo-Lead oder „erste Stelle vorbereiten“ |
-| Registrieren | Benutzer, Firma und Owner-Mitgliedschaft anlegen | Dubletten-/Claim-Prozess, E-Mail-Domain als Signal statt automatischer Beweis | Onboarding-Checkliste |
+| Registrieren | Benutzer anlegen und genau einen Firmenpfad wählen | Neue Firma: `DRAFT` Company + Owner-Membership atomar; bestehender Match: nur User/Profile + pending Claim und **0** Company-Zugriff/Membership bis Adminfreigabe. E-Mail-Domain/UID/Name sind Signale, kein Beweis. | Onboarding- oder Claim-Statuscheckliste |
 | Verifizieren | Firma beanspruchen und Nachweise liefern | `CHANGES_REQUESTED` wird im selben VerificationRequest resubmittet; nach `REJECTED/REVOKED` entsteht ein neuer superseding Request; Begründung/Events/Audit, Company-Sperre separat | Profilvertrauen und Publikationsfreigabe |
 | Team | Nutzer einladen und Rollen vergeben | Ablauf/Single-use der Einladung, Seat-Limit, letzter Owner nicht entfernbar, Unternehmenswechsel | zusätzlicher Seat als nutzwertbasierter Upgrade-Trigger |
 | Stelle erstellen | 5-Schritt-Draft mit Auto-Save | serverseitige Revalidierung, klare Gehalts-/Pensumsfelder, Score-Vorschläge | Time-to-first-draft, Completion Rate |

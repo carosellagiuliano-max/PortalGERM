@@ -149,7 +149,7 @@ See `00-PLAN.md` "Routes summary".
 
 ## §32 Main Business Flows
 **Candidate:** register → SwissJobPass → search → see Fair-Job-Score & salary → save → apply → track → Jobabo → Talent Radar opt-in → contact request → reveal.
-**Employer free:** register → company → post 1 job → admin review → published → see usage limit.
+**Employer free:** register → Company onboarding or pending Claim → verification submit → Admin verifies → draft 1 job → submit/admin review → publish → see usage limit.
 **Employer upgrade:** try 2nd job on Free Basic → upgrade modal → choose plan → mock checkout → Order/Invoice → subscription active → limit increases.
 **Boost:** select job → "Job boosten" → use credit or buy → mock payment → JobBoost record → ranks higher → "Geboostet" badge → expires by endsAt.
 **Talent Radar:** locked state without candidate query → entitlement → Safe anonymous cards → atomic funded contact → candidate accepts/declines → scoped explicit reveal → employer sees only granted identity.
@@ -160,7 +160,7 @@ Build every external integration with adapter pattern: mock payments → Stripe 
 
 ## §34 Documentation Rules
 README explains: product overview · stack · architecture · setup · env vars · DB setup · seed · demo accounts · routes · roles · monetization · mock integrations · security/privacy notes · limitations · how to swap mocks for real providers.
-`.env.example` follows Phase 01 exactly: DB/App/name, 32-byte base64 Session secret; versioned 32-byte base64 Audit/Radar lookup/Radar encryption/Reveal confirmation/PII Reveal keyrings; `RATE_LIMIT_BACKEND=postgres`; guarded local mailbox; Ops backup Age recipient; inactive future-provider vars. First keyring version writes and older versions read only. Production/Staging fails on placeholder/missing/length/version/reuse/mailbox/backend errors. Tax rates remain reviewed versioned data.
+`.env.example` follows Phase 01 exactly: DB/App/name, 32-byte base64 Session secret; versioned 32-byte base64 Audit/Radar lookup/Radar encryption/Reveal confirmation/PII Reveal keyrings; `RATE_LIMIT_BACKEND=postgres`; guarded local mailbox; Ops backup Age recipient plus an external secret-mounted `BACKUP_AGE_IDENTITY_FILE` path; inactive future-provider vars. First keyring version writes and older versions read only. Production/Staging fails on placeholder/missing/length/version/reuse/mailbox/backend errors. Tax rates remain reviewed versioned data.
 
 ## §35 Definition of Done
 Works end-to-end · no broken routes · UI states (loading/empty/error) · server-side perms enforced · ownership checks · Zod validation · sensitive data protected · seed works · demo accounts work · TS/Prisma clean · build/lint/tests run where practical · README updated when behavior changed.

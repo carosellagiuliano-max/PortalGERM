@@ -1,0 +1,30 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Environment and local credentials
+.env
+.env.*
+!.env.example
+
+# Generated Prisma client
+lib/generated/
+
+# Test and browser artifacts
+test-results/
+playwright-report/
+
+# Logs and editor/OS files
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local operational artifacts
+*.dump
+*.dump.age
+*.sha256

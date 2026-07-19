@@ -59,7 +59,7 @@ Write the real `README.md`, finalise `.env.example`, and verify the Masterplan P
 
 ### `.env.example` confirmed
 
-- [ ] Matches Phase 01, Billing Phase 12, encrypted Radar/Reveal Phase 14 and Backup/Ops expectations exactly, including keyring lengths/versions/rotation, `RATE_LIMIT_BACKEND=postgres` and `BACKUP_AGE_RECIPIENT`
+- [ ] Matches Phase 01, Billing Phase 12, encrypted Radar/Reveal Phase 14 and Backup/Ops expectations exactly, including keyring lengths/versions/rotation, `RATE_LIMIT_BACKEND=postgres`, `BACKUP_AGE_RECIPIENT` and an external secret-mounted `BACKUP_AGE_IDENTITY_FILE` path
 - [ ] Comments explaining which vars are required vs placeholders
 
 ### Run quality gates

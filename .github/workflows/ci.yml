@@ -1,0 +1,241 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-postgres:
+    name: Linux / PostgreSQL 16
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_ENV: ci
+      NODE_ENV: test
+      DATABASE_URL: postgresql://swisstalenthub_ci:ci-only-password@127.0.0.1:5432/swisstalenthub_ci?schema=public
+      TEST_DATABASE_URL: postgresql://swisstalenthub_ci:ci-only-password@127.0.0.1:5432/swisstalenthub_ci_test?schema=public
+      APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_APP_NAME: SwissTalentHub CI
+      RATE_LIMIT_BACKEND: postgres
+      ENABLE_LOCAL_MOCK_MAILBOX: "false"
+      LOG_LEVEL: warn
+    services:
+      postgres:
+        image: postgres:16.13-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
+        env:
+          POSTGRES_DB: swisstalenthub_ci
+          POSTGRES_USER: swisstalenthub_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U swisstalenthub_ci -d swisstalenthub_ci"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js 24.18.0 einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: npm 11.16.0 einrichten
+        run: npm install --global npm@11.16.0
+
+      - name: Runtime-Pins verifizieren
+        shell: bash
+        run: |
+          test "$(node --version)" = "v24.18.0"
+          test "$(npm --version)" = "11.16.0"
+
+      - name: Flüchtige CI-Schlüssel erzeugen
+        shell: bash
+        run: |
+          new_key() {
+            openssl rand -base64 32 | tr -d '\n'
+          }
+
+          session_secret=$(new_key)
+          audit_key=$(new_key)
+          radar_lookup_key=$(new_key)
+          radar_encryption_key=$(new_key)
+          reveal_confirmation_key=$(new_key)
+          pii_reveal_key=$(new_key)
+
+          for secret_value in \
+            "$session_secret" \
+            "$audit_key" \
+            "$radar_lookup_key" \
+            "$radar_encryption_key" \
+            "$reveal_confirmation_key" \
+            "$pii_reveal_key"; do
+            echo "::add-mask::$secret_value"
+          done
+
+          {
+            echo "SESSION_SECRET=$session_secret"
+            echo "AUDIT_IP_HASH_KEYS=v1:$audit_key"
+            echo "RADAR_OPAQUE_LOOKUP_KEYS=v1:$radar_lookup_key"
+            echo "RADAR_OPAQUE_ENCRYPTION_KEYS=v1:$radar_encryption_key"
+            echo "REVEAL_CONFIRMATION_KEYS=v1:$reveal_confirmation_key"
+            echo "PII_REVEAL_KEYS=v1:$pii_reveal_key"
+          } >> "$GITHUB_ENV"
+
+      - name: Abhängigkeiten reproduzierbar installieren
+        run: npm ci
+
+      - name: Umgebung validieren
+        run: npm run env:validate
+
+      - name: Isolierte Testdatenbank anlegen
+        shell: bash
+        run: >-
+          docker exec "${{ job.services.postgres.id }}"
+          createdb -U swisstalenthub_ci swisstalenthub_ci_test
+
+      - name: Prisma Client generieren
+        run: npm run db:generate
+
+      - name: Prisma-Schema validieren
+        run: npm run db:validate
+
+      - name: Docker-Compose-Konfiguration validieren
+        run: docker compose config --quiet
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit-Tests
+        run: npm test
+
+      - name: Baseline-Migration anwenden
+        run: npm run db:migrate
+
+      - name: Technischen Phase-01-Seed ausführen
+        run: npm run db:seed
+
+      - name: Datenbank-Smoke ausführen
+        run: npm run db:smoke
+
+      - name: PostgreSQL-Integrationstests
+        run: npm run test:integration
+
+      - name: Production Build
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Production-HTTP-Smoke
+        run: npm run test:e2e
+
+  windows-portability:
+    name: Windows portability
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      APP_ENV: ci
+      NODE_ENV: test
+      DATABASE_URL: postgresql://phase01_ci:ci-only-password@127.0.0.1:65535/phase01_ci?schema=public
+      TEST_DATABASE_URL: postgresql://phase01_ci:ci-only-password@127.0.0.1:65535/phase01_ci_test?schema=public
+      APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_APP_NAME: SwissTalentHub CI
+      RATE_LIMIT_BACKEND: postgres
+      ENABLE_LOCAL_MOCK_MAILBOX: "false"
+      LOG_LEVEL: warn
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js 24.18.0 einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: npm 11.16.0 einrichten
+        run: npm install --global npm@11.16.0
+
+      - name: Runtime-Pins verifizieren
+        shell: pwsh
+        run: |
+          if ((node --version).Trim() -ne "v24.18.0") {
+            throw "Unerwartete Node-Version: $(node --version)"
+          }
+          if ((npm --version).Trim() -ne "11.16.0") {
+            throw "Unerwartete npm-Version: $(npm --version)"
+          }
+
+      - name: Flüchtige CI-Schlüssel erzeugen
+        shell: pwsh
+        run: |
+          function New-TestKey {
+            $bytes = [byte[]]::new(32)
+            [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+            [Convert]::ToBase64String($bytes)
+          }
+
+          $sessionSecret = New-TestKey
+          $auditKey = New-TestKey
+          $radarLookupKey = New-TestKey
+          $radarEncryptionKey = New-TestKey
+          $revealConfirmationKey = New-TestKey
+          $piiRevealKey = New-TestKey
+
+          @(
+            $sessionSecret,
+            $auditKey,
+            $radarLookupKey,
+            $radarEncryptionKey,
+            $revealConfirmationKey,
+            $piiRevealKey
+          ) | ForEach-Object { Write-Output "::add-mask::$_" }
+
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "SESSION_SECRET=$sessionSecret"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "AUDIT_IP_HASH_KEYS=v1:$auditKey"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "RADAR_OPAQUE_LOOKUP_KEYS=v1:$radarLookupKey"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "RADAR_OPAQUE_ENCRYPTION_KEYS=v1:$radarEncryptionKey"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "REVEAL_CONFIRMATION_KEYS=v1:$revealConfirmationKey"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "PII_REVEAL_KEYS=v1:$piiRevealKey"
+
+      - name: Abhängigkeiten reproduzierbar installieren
+        run: npm ci
+
+      - name: Umgebung validieren
+        run: npm run env:validate
+
+      - name: Prisma Client generieren
+        run: npm run db:generate
+
+      - name: Prisma-Schema validieren
+        run: npm run db:validate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit-Tests
+        run: npm test
+
+      - name: Production Build
+        run: npm run build
+        env:
+          NODE_ENV: production

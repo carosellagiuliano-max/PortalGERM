@@ -115,7 +115,7 @@
 | REQ-QA-001 | Unit + echte Postgres-Integration + kritische E2E-Flows. | Engineering · P0 · jede Phase/17 | fixtures/test DB | isolation, deterministic seed; no mock-only atomicity proof | all commands exit 0; concurrency/IDOR/privacy/E2E tests present |
 | REQ-QA-002 | Jede Route hat UX-State, 360px und Accessibility-Beleg. | alle · P0/P1 · 07–18 | route read models | state matrix, keyboard/focus/contrast | route checklist + desktop/mobile evidence; critical axe violations 0 |
 | REQ-OPS-001 | CI/Preview/Staging/Production, Migration/Rollback und Env validation. | Ops · P1 before launch · 01/18 | migrations/config | no demo seed prod; fail-fast secrets; explicit release | clean clone pipeline succeeds; migration dry-run and rollback documented |
-| REQ-OPS-002 | Logs/Metriken/Health/Alerts ohne sensible Daten. | Ops · P1 · 03/11/18 | Audit/metrics/system tasks | request/correlation ID; redaction; runbooks | health distinguishes live/ready; simulated failure observable, no PII |
+| REQ-OPS-002 | Logs/Metriken/Health/Alerts ohne sensible Daten. | Ops · P1 · 03/11/16/18 | Audit/metrics/system tasks | request/correlation ID; redaction; runbooks | health distinguishes live/ready; simulated failure observable, no PII |
 | REQ-OPS-003 | Backups und Restore-Probe vor Production. | Ops/Owner · P1 · 18 | DB backup metadata | encrypted, retention, RPO/RTO confirmed | dated restore succeeds in isolated environment |
 | REQ-DOC-001 | Checkbox bedeutet implementiert + verifiziert; Evidence ist datiert. | Engineering/Product · P0 · alle | evidence log/docs | no inherited completion; command+result+limitation | audit script: 0 `[x]` without linked evidence record |
 

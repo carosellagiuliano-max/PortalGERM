@@ -1,0 +1,113 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  --radius-sm: calc(var(--radius) * 0.65);
+  --radius-md: calc(var(--radius) * 0.85);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.35);
+  --radius-2xl: calc(var(--radius) * 1.75);
+}
+
+:root {
+  color-scheme: light;
+  --background: oklch(0.988 0.004 164);
+  --foreground: oklch(0.205 0.026 229);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0.026 229);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0.026 229);
+  --primary: oklch(0.39 0.085 203);
+  --primary-foreground: oklch(0.985 0.004 164);
+  --secondary: oklch(0.956 0.014 166);
+  --secondary-foreground: oklch(0.28 0.048 204);
+  --muted: oklch(0.958 0.008 218);
+  --muted-foreground: oklch(0.49 0.035 226);
+  --accent: oklch(0.935 0.032 161);
+  --accent-foreground: oklch(0.27 0.058 188);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.89 0.013 214);
+  --input: oklch(0.89 0.013 214);
+  --ring: oklch(0.55 0.09 203);
+  --radius: 0.625rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    min-width: 320px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  :focus-visible {
+    outline: 3px solid color-mix(in oklch, var(--ring) 65%, transparent);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--accent) 78%, transparent);
+  }
+}
+
+@layer components {
+  .page-shell {
+    width: min(100% - 2rem, 72rem);
+    margin-inline: auto;
+  }
+
+  .eyebrow {
+    @apply text-xs font-semibold tracking-[0.16em] text-primary uppercase;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -119,7 +119,7 @@ For each company: `dataProvenance=DEMO`, original about-text, values, benefits, 
 - [ ] `ApplicationEvent` history for ≥20 applications
 - [ ] ~40 `SavedJob`
 - [ ] ~15 `JobAlert` across all lifecycle states with deterministic nextDue/cutoff, Digest/Item/no-repeat and 180-day hashed unsubscribe-token boundary fixtures
-- [ ] ~20 `Conversation` + Participant + Message fixtures (Application plus only **accepted** Talent Radar requests; pending/declined requests have no Conversation)
+- [ ] Every seeded Application above has exactly one Application Conversation + Participants; additionally seed exactly one Radar Conversation per **accepted** Talent Radar request. Pending/declined requests have no Conversation. Message fixtures cover representative threads without reducing the required Application-Conversation count.
 - [ ] ≥5 `EmployerContactRequest` (some accepted, some pending) on opted-in candidates
 - [ ] ≥2 request-unique scoped `IdentityRevealGrant` fixtures tied to accepted ContactRequest/Conversation with AES-GCM typed immutable value snapshots + Confirmation events, plus decline/no-reveal, whole-grant revoked, stale-preview, add-field and 14-day expiry/30-day cooldown boundaries; individual field rows are never revoked/rewritten
 - [ ] ≥3 `AbuseReport` open for admin demo

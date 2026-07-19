@@ -1,0 +1,12 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Phase 01 intentionally contains no product/domain models. Phase 02 owns the
+// first domain migration. The committed foundation migration only establishes
+// Prisma migration history and performs no schema mutation.

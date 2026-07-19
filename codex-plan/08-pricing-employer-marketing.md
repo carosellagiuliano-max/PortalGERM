@@ -75,7 +75,7 @@ Build the public pricing, employer education and persisted demo/lead flow. Pages
 - [ ] Lead fields: company name, contact person, email, optional phone, company size, hiring need, bounded message and optional desired callback window; purpose/consent and retention notice are visible
 - [ ] Zod-validated server action: creates `SalesLead { status: NEW }` + sends mock email `demo_request_received` to admin distribution list (configurable later) + audit-log entry
 - [ ] Success state: "Danke — deine Anfrage ist erfasst. Unser internes Ziel ist eine Antwort innerhalb eines Werktags; dies ist keine Garantie." Persist `dueAt` from the same versioned Sales SLA policy shown to Ops.
-- [ ] Rate-limited (5/h/IP from Phase 06)
+- [ ] Rate-limited by canonical `RATE_LIMIT_PRESETS_V1` (`LEAD`: 10/hour/IP from Phase 03/06)
 - [ ] Reference disclaimer: "Wir verwenden deine Angaben nur zur Kontaktaufnahme."
 - [ ] Optional honeypot field for bot mitigation
 
