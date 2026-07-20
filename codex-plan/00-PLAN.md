@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 20. Juli 2026. **Phasen 01 bis 04 sind im Zielrepository implementiert und verifiziert; Phasen 05–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies und lokale Provider-Mocks sind kein fertiges Produkt: fachliche Demo-Seeds, End-to-End-Auth, Produktportale und Billing-Use-Cases folgen in den nächsten Phasen.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 20. Juli 2026. **Phasen 01 bis 05 sind im Zielrepository implementiert und verifiziert; Phasen 06–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks und deterministische Demo-Seeds sind kein fertiges Produkt: End-to-End-Auth, Produktportale und Billing-Use-Cases folgen in den nächsten Phasen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -36,7 +36,7 @@ Die wichtigsten Differenzierungen sind:
 
 Der vollständige Ausgangs-`codex-plan` mit 24 Dateien wurde in das leere Ziel übertragen und vor Überarbeitung per SHA-256 bytegenau verglichen. Das verlinkte Root-`AGENTS.md` wurde zusätzlich übernommen. Der Ziel-Baseline-Commit enthielt nur `README.md`.
 
-Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag, die reproduzierbar verifizierten Phase-03-Core-Policies und die netzwerkfreien Phase-04-Provider-Mocks. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md), [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md) und [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
+Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag, die reproduzierbar verifizierten Phase-03-Core-Policies, die netzwerkfreien Phase-04-Provider-Mocks und den deterministischen Phase-05-Demo-Seed mit Produktionssperre. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md), [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md), [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md) und [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
 
 ## 4. Unverhandelbare Invarianten
 
@@ -81,7 +81,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 [`04-mock-adapters.md`](./04-mock-adapters.md) · persistierende, netzwerkfreie Adapter; Payment-Adapter besitzt nicht das Fulfillment.
 
-### [ ] 05 — Seed und Test-Harness
+### [x] 05 — Seed und Test-Harness
 
 [`05-seed-data.md`](./05-seed-data.md) · deterministische positive/negative Fixtures, Prod-Guard, Idempotenz, manifestierte Counts.
 
@@ -218,4 +218,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 und 02 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 03 — Core Policies und Scoring; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 05 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 06 — Auth, Tenant und Onboarding; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

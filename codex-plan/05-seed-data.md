@@ -1,6 +1,6 @@
 # Phase 05 — Seed Data
 
-> **PortalGERM target status: NOT IMPLEMENTED.** Counts below are coverage targets/hypotheses, not market activity. Seed must be deterministic, idempotent, environment-bound and production-blocked (ADR-027).
+> **PortalGERM target status: IMPLEMENTED AND VERIFIED.** The deterministic Phase-05 demo seed is implemented at code commit `8987a94cac047834aff79b5bc3d4f14715f4e970`; reproducible verification is recorded in [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md). Counts remain DEMO coverage, never market activity.
 
 > Detail file for [00-PLAN.md](./00-PLAN.md) Phase 05. Read [99-rules-quickref.md](./99-rules-quickref.md) §19, §22 before starting.
 
@@ -10,39 +10,39 @@ Populate the database with realistic, Swiss-specific data so every dashboard, li
 
 ## Prerequisites
 
-- [ ] Phase 02 schema deployed
-- [ ] Phase 03 helpers (`slugify`, password hashing, deterministic random) available
-- [ ] Phase 04 provider contracts/mocks available for provider-backed fixture states
+- [x] Phase 02 schema deployed
+- [x] Phase 03 helpers (`slugify`, password hashing, deterministic random) available
+- [x] Phase 04 provider contracts/mocks available for provider-backed fixture states
 
 ## Deliverables (checklist)
 
 ### Idempotency & ordering
-- [ ] Use `prisma.$transaction` per logical block where possible
-- [ ] All upserts keyed on `slug` / `email` / `code` so re-running is safe
-- [ ] Seed script logs the versioned manifest at the end (including `26 cantons, ≥29 cities, 115 jobs`) and hashes it for exact second-run comparison
+- [x] Use `prisma.$transaction` per logical block where possible
+- [x] Stable natural keys and UUIDv5 semantic identities feed create-or-verify writes; a repeat verifies equality and rejects drift instead of mutating immutable fixtures
+- [x] Seed script logs the versioned manifest at the end (including `26 cantons, ≥29 cities, 115 jobs`) and hashes it for exact second-run comparison
 
 ### Swiss reference data
 
-- [ ] **All 26 cantons** with `code`, `name`, `slug`, `language`:
+- [x] **All 26 cantons** with `code`, `name`, `slug`, `language`:
   AG, AR, AI, BL, BS, BE, FR, GE, GL, GR, JU, LU, NE, NW, OW, SH, SZ, SO, SG, TG, TI, UR, VS, VD, ZG, ZH (slug examples: `aargau`, `genf`, `genève`→`geneve`, `zürich`→`zuerich`, etc.)
-- [ ] **Cities** (≥29) — Zürich, Winterthur, Basel, Bern, Luzern, St. Gallen, Chur, Aarau, Zug, Schaffhausen, Lausanne, Genève, Fribourg, Neuchâtel, Sion, Lugano, Bellinzona, Biel/Bienne, Thun, Köniz, Rapperswil-Jona, Wil, Frauenfeld, Baden, Olten, Solothurn, Uster, Wetzikon, Dietikon — each linked to its canton with seeded lat/lng
-- [ ] **Job categories** (18) — Informatik, Gesundheit/Pflege, Bau/Handwerk, KV/Administration, Verkauf, Gastronomie/Hotellerie, Bildung/Soziales, Finanzen/Treuhand/Recht, Logistik/Transport, Engineering/Technik, Marketing/Kommunikation, Reinigung/Facility, Management/Kader, Lehrstellen, Temporärarbeit, Produktion/Industrie, HR/Recruiting, Kundendienst/Callcenter
-- [ ] **Skills** — at least 60 across categories (e.g. `TypeScript`, `React`, `Pflegefachfrau HF`, `Schreiner EFZ`, `Buchhaltung`, `SAP`, `SQL`, `Französisch`, `Italienisch`, `MS Office`, `Patientenbetreuung`, `Servicekompetenz`, etc.)
-- [ ] **Occupation codes** — a reviewed Mock `OccupationCodeVersion` with datasetVersion/year, source/official URL, disclaimer and effective period plus ≥40 linked CH-ISCO entries with mixed reporting results. Historical `JobReportingCheck` fixtures snapshot that exact version/reason/source.
-- [ ] **Salary data** — at least one `APPROVED` `SalaryDatasetVersion` with original fictional/mock source, method and non-overlapping `[validFrom,validTo)`. Precomputed YEARLY/FTE bands store `p25Chf≤medianChf≤p75Chf`, band-level `sampleSize`, Category and exact/fallback nullable Canton/Seniority scopes. Cover exact, Canton-all-seniority, national-Seniority and national-all for representative categories, including 29/30/49/50/99/100 sample boundaries, ambiguous/no-version and no-result fixtures; no raw-count public DTO or ad-hoc quantile merge.
+- [x] **Cities** (≥29) — Zürich, Winterthur, Basel, Bern, Luzern, St. Gallen, Chur, Aarau, Zug, Schaffhausen, Lausanne, Genève, Fribourg, Neuchâtel, Sion, Lugano, Bellinzona, Biel/Bienne, Thun, Köniz, Rapperswil-Jona, Wil, Frauenfeld, Baden, Olten, Solothurn, Uster, Wetzikon, Dietikon — each linked to its canton with seeded lat/lng
+- [x] **Job categories** (18) — Informatik, Gesundheit/Pflege, Bau/Handwerk, KV/Administration, Verkauf, Gastronomie/Hotellerie, Bildung/Soziales, Finanzen/Treuhand/Recht, Logistik/Transport, Engineering/Technik, Marketing/Kommunikation, Reinigung/Facility, Management/Kader, Lehrstellen, Temporärarbeit, Produktion/Industrie, HR/Recruiting, Kundendienst/Callcenter
+- [x] **Skills** — at least 60 across categories (e.g. `TypeScript`, `React`, `Pflegefachfrau HF`, `Schreiner EFZ`, `Buchhaltung`, `SAP`, `SQL`, `Französisch`, `Italienisch`, `MS Office`, `Patientenbetreuung`, `Servicekompetenz`, etc.)
+- [x] **Occupation codes** — a reviewed Mock `OccupationCodeVersion` with datasetVersion/year, source/official URL, disclaimer and effective period plus ≥40 linked CH-ISCO entries with mixed reporting results. Historical `JobReportingCheck` fixtures snapshot that exact version/reason/source.
+- [x] **Salary data** — at least one `APPROVED` `SalaryDatasetVersion` with original fictional/mock source, method and non-overlapping `[validFrom,validTo)`. Precomputed YEARLY/FTE bands store `p25Chf≤medianChf≤p75Chf`, band-level `sampleSize`, Category and exact/fallback nullable Canton/Seniority scopes. Cover exact, Canton-all-seniority, national-Seniority and national-all for representative categories, including 29/30/49/50/99/100 sample boundaries, ambiguous/no-version and no-result fixtures; no raw-count public DTO or ad-hoc quantile merge.
 
 ### Demo accounts (must work for login after Phase 06)
 
-- [ ] `candidate@demo.ch` / `Demo12345!` (Role `CANDIDATE`) → linked `CandidateProfile`
-- [ ] `employer@demo.ch` / `Demo12345!` (Role `EMPLOYER`) → Owner `CompanyMembership` of a Pro-plan demo company
-- [ ] `recruiter@demo.ch` / `Demo12345!` (Role `RECRUITER`) → Recruiter `CompanyMembership` of the same Pro-plan company
-- [ ] `admin@demo.ch` / `Demo12345!` (Role `ADMIN`)
+- [x] `candidate@demo.ch` / `Demo12345!` (Role `CANDIDATE`) → linked `CandidateProfile`
+- [x] `employer@demo.ch` / `Demo12345!` (Role `EMPLOYER`) → Owner `CompanyMembership` of a Pro-plan demo company
+- [x] `recruiter@demo.ch` / `Demo12345!` (Role `RECRUITER`) → Recruiter `CompanyMembership` of the same Pro-plan company
+- [x] `admin@demo.ch` / `Demo12345!` (Role `ADMIN`)
 
 ### Plans (exact numbers from `99-rules-quickref.md` §13)
 
 > Seed stable `Plan` identities, immutable effective `PlanVersion` prices in Rappen and typed `PlanEntitlement` rows. The values below are packaging hypotheses (ADR-025), not mutable columns or proven willingness to pay.
 
-- [ ] Every PlanVersion has exactly one correctly typed row for all eight `EntitlementKey`s; zero/false/`NONE` is explicit rather than a missing key. Seed verifier rejects unknown, duplicate or mistyped keys. The complete P0 matrix is literal:
+- [x] Every PlanVersion has exactly one correctly typed row for all eight `EntitlementKey`s; zero/false/`NONE` is explicit rather than a missing key. Seed verifier rejects unknown, duplicate or mistyped keys. The complete P0 matrix is literal:
 
 | Plan | Price mode / interval / term | net / monthly-equivalent Rappen | active jobs | seats | Radar | contacts/period | boosts/period | analytics | enhanced profile | employer import |
 |---|---|---:|---:|---:|---|---:|---:|---|---|---|
@@ -54,7 +54,7 @@ Populate the database with realistic, Swiss-specific data so every dashboard, li
 
 The Enterprise numbers are an explicit fictional contract fixture, not „unlimited“ or a public offer; a different negotiated contract creates a new private immutable version/snapshot. Verification is available on every plan and is not an Entitlement. Import remains false for every P0 plan and can be raised only by the P1 approved Import-Setup grant.
 
-- [ ] Seed the monthly Free/Starter/Pro/Business versions as the P0 catalog; only Starter/Pro are paid self-service. Inactive 10-for-12 annual research versions are exact: Starter `149000 / 12417`, Pro `399000 / 33250`, Business `899000 / 74917` net/monthly-equivalent Rappen, `ANNUAL`, `termMonths=12`. `monthlyEquivalentRappen = roundHalfUp(netPriceRappen/12)`; they remain hidden/uncheckoutable until a recorded P1 Commercial decision.
+- [x] Seed the monthly Free/Starter/Pro/Business versions as the P0 catalog; only Starter/Pro are paid self-service. Inactive 10-for-12 annual research versions are exact: Starter `149000 / 12417`, Pro `399000 / 33250`, Business `899000 / 74917` net/monthly-equivalent Rappen, `ANNUAL`, `termMonths=12`. `monthlyEquivalentRappen = roundHalfUp(netPriceRappen/12)`; they remain hidden/uncheckoutable until a recorded P1 Commercial decision.
 
 ### Products (one-time)
 
@@ -74,16 +74,16 @@ The Enterprise numbers are an explicit fictional contract fixture, not „unlimi
 | `contact-pack-50` | Talent Radar Contact Pack 50 | `CONTACT_PACK` | `29900` | 50 credits |
 | `success-fee` | Success Fee (Coming soon) | `SUCCESS_FEE` | 0 | `requiresLegalReview: true`, `status: INACTIVE` |
 
-- [ ] Seed the four P0 ProductVersions with `CatalogVersionStatus.ACTIVE`: `boost-7d`, `boost-30d`, `contact-pack-10`, `contact-pack-50`. Contact Packs are fulfillable in Phase 12. Boost checkout additionally requires the authorized job context and Phase-13 handler; before that it is denied/no CTA. Additional-Job/Import-Setup and Featured/Newsletter/Social/Success Fee are `INACTIVE` for their P1/P2/legal gates. Catalog presence or status alone never proves fulfillability.
+- [x] Seed the four P0 ProductVersions with `CatalogVersionStatus.ACTIVE`: `boost-7d`, `boost-30d`, `contact-pack-10`, `contact-pack-50`. Contact Packs are fulfillable in Phase 12. Boost checkout additionally requires the authorized job context and Phase-13 handler; before that it is denied/no CTA. Additional-Job/Import-Setup and Featured/Newsletter/Social/Success Fee are `INACTIVE` for their P1/P2/legal gates. Catalog presence or status alone never proves fulfillability.
 
 ### Companies (≥25, mixed plans)
 
 Required mix:
-- [ ] 5 × Free Basic (small KMU)
-- [ ] 6 × Starter (mid KMU)
-- [ ] 6 × Pro (incl. the demo Pro company `employer@demo.ch` belongs to)
-- [ ] 5 × Business (incl. one healthcare, one IT, one logistics)
-- [ ] 3 × Enterprise-style mock (large industrial / construction / finance)
+- [x] 5 × Free Basic (small KMU)
+- [x] 6 × Starter (mid KMU)
+- [x] 6 × Pro (incl. the demo Pro company `employer@demo.ch` belongs to)
+- [x] 5 × Business (incl. one healthcare, one IT, one logistics)
+- [x] 3 × Enterprise-style mock (large industrial / construction / finance)
 
 Industry coverage: KMU, Healthcare, IT, Construction, Hospitality, Retail, Logistics, Education/Social, Finance/Treuhand, large enterprise. **Use original fictional names** (no real Swiss employer brands).
 
@@ -91,73 +91,75 @@ For each company: `dataProvenance=DEMO`, original about-text, values, benefits, 
 
 ### Jobs (115, deterministic mixed manifest)
 
-- [ ] Distribution: 75 DE, 20 FR, 8 IT, 12 EN
-- [ ] Mix all categories (≥2 per category)
-- [ ] Mix `JobType`: 75 PERMANENT, 15 TEMPORARY, 8 FREELANCE, 6 INTERNSHIP, 7 APPRENTICESHIP, 4 HOLIDAY_JOB
-- [ ] ~50 % salary disclosed
-- [ ] Mixed response targets and historical response-event fixtures, including unknown/insufficient-evidence states; never seed an unproven guarantee badge
-- [ ] ~30 % `applicationEffort: SIMPLE`, 50 % MEDIUM, 20 % LONG
-- [ ] ~25 % `remoteType: REMOTE` or `HYBRID`
-- [ ] Exact canonical lifecycle: 100 eligible `PUBLISHED`, 3 `DRAFT`, 3 `SUBMITTED`, 2 `IN_REVIEW`, 1 `CHANGES_REQUESTED`, 2 `APPROVED`, and one each `PAUSED`, `EXPIRED`, `REJECTED`, `CLOSED` (=115). Dates/Company status make only the intended 100 publicly eligible in explicit Demo mode.
-- [ ] Every Job has `dataProvenance=DEMO`. At the anchor clock, exactly 50 current eligible Jobs fall in the single demonstration pair Zürich × Engineering/Technik; each other start pair remains below 50. This exercises only the count-threshold UI/negative DEMO guard and **cannot** create an activated assessment, market evidence or Production indexability. Phase 15's isolated test factory—not this seed—creates the complete positive LIVE six-gate case.
-- [ ] Each relevant approved JobRevision has a `JobScoreSnapshot` computed by the Phase-03 helper (never random and never a mutable `Job.fairJobScore` scalar)
-- [ ] ≥5 active `JobBoost` records on eligible, relevant demo-company jobs (so search proves labelled sponsored placement without overriding relevance)
-- [ ] `JobRevisionSkill` and `JobRevisionLanguage` rows on every approved/current Revision, including missing/empty/partial negative Match fixtures; no Job-level competing requirement rows
+- [x] Distribution: 75 DE, 20 FR, 8 IT, 12 EN
+- [x] Mix all categories (≥2 per category)
+- [x] Mix `JobType`: 75 PERMANENT, 15 TEMPORARY, 8 FREELANCE, 6 INTERNSHIP, 7 APPRENTICESHIP, 4 HOLIDAY_JOB
+- [x] ~50 % salary disclosed
+- [x] Mixed response targets and historical response-event fixtures, including unknown/insufficient-evidence states; never seed an unproven guarantee badge
+- [x] ~30 % `applicationEffort: SIMPLE`, 50 % MEDIUM, 20 % LONG
+- [x] ~25 % `remoteType: REMOTE` or `HYBRID`
+- [x] Exact canonical lifecycle: 100 eligible `PUBLISHED`, 3 `DRAFT`, 3 `SUBMITTED`, 2 `IN_REVIEW`, 1 `CHANGES_REQUESTED`, 2 `APPROVED`, and one each `PAUSED`, `EXPIRED`, `REJECTED`, `CLOSED` (=115). Dates/Company status make only the intended 100 publicly eligible in explicit Demo mode.
+- [x] Every Job has `dataProvenance=DEMO`. At the anchor clock, exactly 50 current eligible Jobs fall in the single demonstration pair Zürich × Engineering/Technik; each other start pair remains below 50. This exercises only the count-threshold UI/negative DEMO guard and **cannot** create an activated assessment, market evidence or Production indexability. Phase 15's isolated test factory—not this seed—creates the complete positive LIVE six-gate case.
+- [x] Each relevant approved JobRevision has a `JobScoreSnapshot` computed by the Phase-03 helper (never random and never a mutable `Job.fairJobScore` scalar)
+- [x] ≥5 active `JobBoost` records on eligible, relevant demo-company jobs (so search proves labelled sponsored placement without overriding relevance)
+- [x] `JobRevisionSkill` and `JobRevisionLanguage` rows on every approved/current Revision, including missing/empty/partial negative Match fixtures; no Job-level competing requirement rows
 
 ### Candidates (30)
 
-- [ ] One per Swiss canton where possible; mix workloads & seniorities
-- [ ] Opted-in candidates receive RadarProfile fixtures with coarse, non-unique `displayLabel`; two Company+30-day-epoch-scoped `RadarOpaqueMapping` sets prove random cross-Company non-correlation, encrypted token/lookup HMAC, rotation/revocation and no PK/name derivation. Seed persistent SearchBudget/Session samples for repeat/parallel enumeration tests.
-- [ ] **10 with explicit active Radar opt-in** — write matching versioned CandidateConsent events and safe RadarProfile; default remains off
-- [ ] Include COMPLETE, DRAFT and REOPENED onboarding histories. Only candidates meeting the exact completion predicate plus current opt-in have a searchable RadarProfile; include consented-but-incomplete and complete-but-opted-out negative fixtures.
-- [ ] All with `CandidateProfile` + **`CandidateSkill` rows (3–8 each, linked to seeded `Skill`s)** + **`CandidateLanguage` rows (2–3 each, `code` + `level`)** + `desiredJobTypes` + salary expectation, remote preference, availability — so match-score and Talent Radar filters have real data
-- [ ] CV metadata only (no bytes): one candidate-owned `CandidateDocumentMetadata { safeFileName: 'lebenslauf.pdf', size: 123_456, mimeType: 'application/pdf', storageKey: 'mock-storage/<id>', purpose: CV, status: ACTIVE }`; no duplicate embedded CandidateProfile CV fields and no downloadable URL
+- [x] One per Swiss canton where possible; mix workloads & seniorities
+- [x] Opted-in candidates receive RadarProfile fixtures with coarse, non-unique `displayLabel`; two Company+30-day-epoch-scoped `RadarOpaqueMapping` sets prove random cross-Company non-correlation, encrypted token/lookup HMAC, rotation/revocation and no PK/name derivation. Seed persistent SearchBudget/Session samples for repeat/parallel enumeration tests.
+- [x] **10 with explicit active Radar opt-in** — write matching versioned CandidateConsent events and safe RadarProfile; default remains off
+- [x] Include COMPLETE, DRAFT and REOPENED onboarding histories. Only candidates meeting the exact completion predicate plus current opt-in have a searchable RadarProfile; include consented-but-incomplete and complete-but-opted-out negative fixtures.
+- [x] All with `CandidateProfile` + **`CandidateSkill` rows (3–8 each, linked to seeded `Skill`s)** + **`CandidateLanguage` rows (2–3 each, `code` + `level`)** + `desiredJobTypes` + salary expectation, remote preference, availability — so match-score and Talent Radar filters have real data
+- [x] CV metadata only (no bytes): one candidate-owned `CandidateDocumentMetadata { safeFileName: 'lebenslauf.pdf', size: 123_456, mimeType: 'application/pdf', storageKey: 'mock-storage/<id>', purpose: CV, status: ACTIVE }`; no duplicate embedded CandidateProfile CV fields and no downloadable URL
 
 ### Applications, saved jobs, alerts, messages, abuse
 
-- [ ] ~80 `Application` rows distributed across statuses (including `INTERVIEW`/`OFFER`), each with immutable submitted Revision + `ApplicationSubmissionSnapshot`, required document links where applicable and exactly one Application Conversation; invalid transition/snapshot fixtures live only in test factories
-- [ ] `ApplicationEvent` history for ≥20 applications
-- [ ] ~40 `SavedJob`
-- [ ] ~15 `JobAlert` across all lifecycle states with deterministic nextDue/cutoff, Digest/Item/no-repeat and 180-day hashed unsubscribe-token boundary fixtures
-- [ ] Every seeded Application above has exactly one Application Conversation + Participants; additionally seed exactly one Radar Conversation per **accepted** Talent Radar request. Pending/declined requests have no Conversation. Message fixtures cover representative threads without reducing the required Application-Conversation count.
-- [ ] ≥5 `EmployerContactRequest` (some accepted, some pending) on opted-in candidates
-- [ ] ≥2 request-unique scoped `IdentityRevealGrant` fixtures tied to accepted ContactRequest/Conversation with AES-GCM typed immutable value snapshots + Confirmation events, plus decline/no-reveal, whole-grant revoked, stale-preview, add-field and 14-day expiry/30-day cooldown boundaries; individual field rows are never revoked/rewritten
-- [ ] ≥3 `AbuseReport` open for admin demo
+- [x] ~80 `Application` rows distributed across statuses (including `INTERVIEW`/`OFFER`), each with immutable submitted Revision + `ApplicationSubmissionSnapshot`, required document links where applicable and exactly one Application Conversation; invalid transition/snapshot fixtures live only in test factories
+- [x] `ApplicationEvent` history for ≥20 applications
+- [x] ~40 `SavedJob`
+- [x] ~15 `JobAlert` across all lifecycle states with deterministic nextDue/cutoff, Digest/Item/no-repeat and 180-day hashed unsubscribe-token boundary fixtures
+- [x] Every seeded Application above has exactly one Application Conversation + Participants; additionally seed exactly one Radar Conversation per **accepted** Talent Radar request. Pending/declined requests have no Conversation. Message fixtures cover representative threads without reducing the required Application-Conversation count.
+- [x] ≥5 `EmployerContactRequest` (some accepted, some pending) on opted-in candidates
+- [x] ≥2 request-unique scoped `IdentityRevealGrant` fixtures tied to accepted ContactRequest/Conversation with AES-GCM typed immutable value snapshots + Confirmation events, plus decline/no-reveal, whole-grant revoked, stale-preview, add-field and 14-day expiry/30-day cooldown boundaries; individual field rows are never revoked/rewritten
+- [x] ≥3 `AbuseReport` open for admin demo
 
 ### Billing data
 
-- [ ] `EmployerSubscription` history for every paying Company links immutable PlanVersions and periods. Include ACTIVE, CANCELLING + pending CANCEL schedule, EXPIRED/CANCELLED and Pro→Starter SCHEDULED-successor fixtures; no `cancelAtPeriodEnd`, `renewsAt` or competing end truth. Assert one effective Subscription and one pending schedule at the anchor instant.
-- [ ] ≥10 `Order` (mix `PAID`, `PENDING`, `CANCELLED`) with Invoice linked for paid ones; seed a reviewed planning `TaxRateVersion` of `810` basis points and immutable rate/amount snapshots with consistent integer-Rappen totals
-- [ ] ≥6 `Invoice` (mix `ISSUED`, `PAID`, `VOID`; include an unpaid issued invoice past due date to test derived overdue display) — numbers via the concurrency-safe allocator
-- [ ] ≥5 active `JobBoost` + 5 expired
-- [ ] Entitlement/Credit Ledger grants for Pro/Business: period allowance and a separately funded purchased Contact Pack with expiry/source
-- [ ] ≥4 `SalesLead` (mix statuses) so admin leads page is populated
-- [ ] `PaymentEvent` rows mirroring order state transitions
-- [ ] Every OrderLine satisfies the PlanVersion/ProductVersion XOR and typed target-context rule; Invoice snapshots a complete historical Billing address. Include a currentPeriodEnd exact-boundary fixture and separated PLAN_ALLOWANCE/PURCHASED_PACK/ADMIN_GRANT ledger rows.
+- [x] `EmployerSubscription` history for every paying Company links immutable PlanVersions and periods. Include ACTIVE, CANCELLING + pending CANCEL schedule, EXPIRED/CANCELLED and Pro→Starter SCHEDULED-successor fixtures; no `cancelAtPeriodEnd`, `renewsAt` or competing end truth. Assert one effective Subscription and one pending schedule at the anchor instant.
+- [x] ≥10 `Order` (mix `PAID`, `PENDING`, `CANCELLED`) with Invoice linked for paid ones; seed a reviewed planning `TaxRateVersion` of `810` basis points and immutable rate/amount snapshots with consistent integer-Rappen totals
+- [x] ≥6 `Invoice` (mix `ISSUED`, `PAID`, `VOID`; include an unpaid issued invoice past due date to test derived overdue display) — numbers via the concurrency-safe allocator
+- [x] ≥5 active `JobBoost` + 5 expired
+- [x] Entitlement/Credit Ledger grants for Pro/Business: period allowance and a separately funded purchased Contact Pack with expiry/source
+- [x] ≥4 `SalesLead` (mix statuses) so admin leads page is populated
+- [x] `PaymentEvent` rows mirroring order state transitions
+- [x] Every OrderLine satisfies the PlanVersion/ProductVersion XOR and typed target-context rule; Invoice snapshots a complete historical Billing address. Include a currentPeriodEnd exact-boundary fixture and separated PLAN_ALLOWANCE/PURCHASED_PACK/ADMIN_GRANT ledger rows.
 
 ### Audit & analytics
 
-- [ ] ≥30 `AuditLog` entries spanning admin actions (job approved/rejected, company verified, invoice marked paid, credits granted, user suspended)
-- [ ] ≥300 schema-v1 `AnalyticsEvent` rows from the closed taxonomy, deterministically covering Candidate activation, Employer activation, Search→Detail→Apply, Lead→Qualified→Won and Checkout cohorts plus small-count suppression; no `JobViewEvent` competing truth and no free-text/PII properties
+- [x] ≥30 `AuditLog` entries spanning admin actions (job approved/rejected, company verified, invoice marked paid, credits granted, user suspended)
+- [x] ≥300 schema-v1 `AnalyticsEvent` rows from the closed taxonomy, deterministically covering Candidate activation, Employer activation, Search→Detail→Apply, Lead→Qualified→Won and Checkout cohorts plus small-count suppression; no `JobViewEvent` competing truth and no free-text/PII properties
 
 ### Guide articles (≥7)
 
-- [ ] "So erkennst du faire Stelleninserate"
-- [ ] "Lohn verhandeln in der Schweiz"
-- [ ] "Bewerbung bei KMU vs Konzern"
-- [ ] "Was bedeutet Pensum 80–100 %?"
-- [ ] "Stellenmeldepflicht einfach erklärt"
-- [ ] "Wie du Ghosting im Bewerbungsprozess reduzierst"
-- [ ] "Wie Arbeitgeber mit Lohntransparenz bessere Bewerbungen erhalten"
+- [x] "So erkennst du faire Stelleninserate"
+- [x] "Lohn verhandeln in der Schweiz"
+- [x] "Bewerbung bei KMU vs Konzern"
+- [x] "Was bedeutet Pensum 80–100 %?"
+- [x] "Stellenmeldepflicht einfach erklärt"
+- [x] "Wie du Ghosting im Bewerbungsprozess reduzierst"
+- [x] "Wie Arbeitgeber mit Lohntransparenz bessere Bewerbungen erhalten"
 
 Each: 300–600 words, original copy.
-- [ ] All demo `ContentPage` rows carry `dataProvenance=DEMO`; local/preview UI must show the persistent Demo banner and Production/public SEO queries must exclude them
+- [x] All demo `ContentPage` rows carry `dataProvenance=DEMO` and cannot contribute to LIVE evidence. Production/public SEO consumption and the persistent Demo banner remain explicit owner-gates for Phases 07/15 and are not claimed as Phase-05 UI.
 
 ## Files to create / modify
 
-- `prisma/seed.ts` — main entry
-- `prisma/seed/{cantons.ts, cities.ts, categories.ts, skills.ts, occupation-codes.ts, salary-bands.ts, plans.ts, products.ts, demo-users.ts, companies.ts, jobs.ts, candidates.ts, applications.ts, messages.ts, billing.ts, boosts.ts, leads.ts, abuse.ts, audit.ts, analytics.ts, content.ts, support.ts}` (one file per concern; orchestrated from `seed.ts`)
-- `prisma/seed/utils.ts` — deterministic random + helpers (e.g. `pick`, `sample`)
+- `prisma/seed.ts` — production-gated entry point
+- `prisma/seed/orchestrator.ts` and `prisma/seed/blocks/*.ts` — ordered transactional reference, company/job, candidate/workflow and billing/ops/content blocks
+- `prisma/seed/{contract,contract-identities,ids,identity-catalog,guard,lifecycle,manifest,verifier,create-or-verify}.ts` — versioned contract, UUIDv5 identities, environment guard, create-or-verify lifecycle and read-only verification
+- `prisma/seed/fixtures/*.ts` and `prisma/seed/utils.ts` — literal Swiss/demo fixtures and deterministic helpers
+- `scripts/seed-verify.ts`, migration/schema changes and focused Unit/PostgreSQL tests — operator command, immutable manifest contract and regression coverage
 
 ## Rules to respect (from `99-rules-quickref.md`)
 
@@ -169,16 +171,16 @@ Each: 300–600 words, original copy.
 
 ## Verification
 
-> **Plan status:** Not implemented in this repository yet. Treat the checks below as target verification steps. Do not mark any checkbox until code exists and the command/output has been verified.
+> **Plan status:** Implemented and verified on 20 July 2026. The seed ran twice with an unchanged manifest and was repeated from a clean detached worktree/database; full command results, exact counts and limitations are in [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md). The final local manifest SHA-256 is `01df0c5672d6dc16c2eaae464cf2b58a219da65205184852ca94543b975d623f`.
 
-- [ ] `npx prisma db seed` runs cleanly first time
-- [ ] Running it again logs "no changes" / "upserted" without duplications (`prisma studio` shows constant counts)
-- [ ] All four demo accounts exist with hashed passwords (NOT plain)
-- [ ] At least one company per plan exists
-- [ ] `select count(*) from "Job" where status = 'PUBLISHED'` = 100 and the canonical public-eligibility query in explicit Demo mode returns exactly 100 at the anchor clock; Zürich × Engineering/Technik returns exactly 50, another start pair <50, and Production-mode predicate returns zero DEMO Jobs
-- [ ] `select count(*) from "JobBoost" where status = 'ACTIVE'` ≥ 5
-- [ ] `select count(*) from "AbuseReport" where status = 'OPEN'` ≥ 3
-- [ ] Seed verifier asserts all DEMO Company/Job/Content rows are labelled, none contributes to LIVE launch metrics, and a Production seed attempt fails before any write
+- [x] `npx prisma db seed` runs cleanly first time
+- [x] Running it again produces the identical persisted manifest, counts and SHA-256 without duplicates; `npm run seed:verify` independently verifies the sealed database read-only
+- [x] All four demo accounts exist with hashed passwords (NOT plain)
+- [x] At least one company per plan exists
+- [x] `select count(*) from "Job" where status = 'PUBLISHED'` = 100 and the canonical public-eligibility query in explicit Demo mode returns exactly 100 at the anchor clock; Zürich × Engineering/Technik returns exactly 50, another start pair <50, and Production-mode predicate returns zero DEMO Jobs
+- [x] `select count(*) from "JobBoost" where status = 'ACTIVE'` ≥ 5
+- [x] `select count(*) from "AbuseReport" where status = 'OPEN'` ≥ 3
+- [x] Seed verifier asserts all DEMO Company/Job/Content rows are labelled, none contributes to LIVE launch metrics, and a Production seed attempt fails before any write
 
 ## Common pitfalls
 
