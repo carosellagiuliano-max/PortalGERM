@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { cache, Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -8,12 +10,17 @@ import {
   BanknoteIcon,
   BriefcaseBusinessIcon,
   CalendarDaysIcon,
-  ExternalLinkIcon,
   LanguagesIcon,
   MapPinIcon,
 } from "lucide-react";
 
 import { CandidateMatch } from "@/components/public/candidate-match";
+import {
+  ApplyIntentConfirmation,
+  JobIntentAuthenticationLinks,
+  PublicJobActions,
+  SaveIntentConfirmation,
+} from "@/components/public/apply-save-actions";
 import { FairScoreBreakdown } from "@/components/public/fair-score";
 import { JobCard, JOB_TYPE_LABELS, REMOTE_LABELS, SALARY_PERIOD_LABELS } from "@/components/public/job-card";
 import { ReportForm } from "@/components/public/report-form";
@@ -23,7 +30,15 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getServerEnvironment } from "@/lib/config/env";
-import { buildPublicJobPostingJsonLd, publicApplicationHref, serializeJsonLd } from "@/lib/jobs/job-json-ld";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import {
+  buildJobIntentNextPath,
+  verifyJobIntent,
+  type SignedJobIntentPayloadV1,
+} from "@/lib/auth/signed-intent";
+import { getApplicationConfirmationView } from "@/lib/applications/confirmation";
+import { getDatabase } from "@/lib/db/client";
+import { buildPublicJobPostingJsonLd, serializeJsonLd } from "@/lib/jobs/job-json-ld";
 import { getPublicJobBySlug, listRelatedPublicJobs } from "@/lib/jobs/public-read-model";
 import type { PublicJobDetailModel } from "@/lib/public/types";
 import { getPublicDataContext } from "@/lib/public/environment";
@@ -47,24 +62,48 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description,
     alternates: { canonical: `/jobs/${job.slug}` },
     openGraph: { title: job.title, description, type: "website" },
+    referrer: "no-referrer",
     robots: indexable
       ? { index: true, follow: true }
       : { index: false, follow: false, noarchive: true, nosnippet: true },
   };
 }
 
-export default async function JobDetailPage({ params }: PageProps) {
+export default async function JobDetailPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const query = await searchParams;
   const job = await getJob(slug);
   if (job === null) notFound();
   const related = await listRelatedPublicJobs(job, { limit: 4 });
-  const applicationHref = publicApplicationHref(job);
   const appUrl = getServerEnvironment().APP_URL;
   const jsonLd = buildPublicJobPostingJsonLd(job, appUrl);
   const emitJsonLd = getPublicDataContext().publicIndexingAllowed && job.dataProvenance === "LIVE";
   const salary = job.salaryMin !== null && job.salaryMax !== null && job.salaryPeriod !== null
     ? formatSalaryRange(job.salaryMin, job.salaryMax, SALARY_PERIOD_LABELS[job.salaryPeriod])
     : null;
+  const intentValue = firstValue(query.intent);
+  const environment = getServerEnvironment();
+  const intent = verifyJobIntent(
+    intentValue,
+    { now: new Date(), jobSlug: job.slug },
+    environment.secrets.session,
+  );
+  const currentUser = intent === null ? null : await getCurrentUser();
+  const confirmation =
+    intent?.action === "APPLY" && currentUser?.role === "CANDIDATE"
+      ? await getApplicationConfirmationView(
+          {
+            candidateUserId: currentUser.id,
+            jobSlug: job.slug,
+            now: new Date(),
+            environment:
+              environment.APP_ENV === "production" || environment.APP_ENV === "staging"
+                ? "production"
+                : "non-production",
+          },
+          getDatabase(),
+        )
+      : null;
 
   return (
     <div>
@@ -93,18 +132,32 @@ export default async function JobDetailPage({ params }: PageProps) {
 
           <aside className="rounded-xl border bg-card p-5 shadow-sm lg:sticky lg:top-24">
             <p className="text-sm font-medium">Interessiert?</p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">Die Bewerbung erfolgt beim angegebenen Kontakt des Unternehmens. SwissTalentHub versendet in dieser Phase keine Bewerbung.</p>
-            {applicationHref === null ? (
-              <p className="mt-5 rounded-lg bg-muted p-3 text-sm text-muted-foreground">Der Bewerbungskontakt ist derzeit nicht sicher verfügbar.</p>
-            ) : (
-              <a href={applicationHref} target={applicationHref.startsWith("http") ? "_blank" : undefined} rel={applicationHref.startsWith("http") ? "noopener noreferrer" : undefined} className={buttonVariants({ size: "lg", className: "mt-5 w-full" })}>
-                Extern bewerben <ExternalLinkIcon data-icon="inline-end" />
-              </a>
-            )}
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Speichere die Stelle privat oder starte die Bewerbung. Nach einer
+              Anmeldung bleibt immer eine ausdrückliche Bestätigung erforderlich.
+            </p>
+            <div className="mt-5"><PublicJobActions jobSlug={job.slug} /></div>
             <div className="mt-3"><ShareButton title={job.title} /></div>
             <p className="mt-4 text-xs leading-5 text-muted-foreground">Gültig bis {formatDate(job.expiresAt)}</p>
           </aside>
         </section>
+
+        {firstValue(query.saved) === "1" ? (
+          <p className="mt-6 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-950" role="status">
+            Die Stelle wurde in deiner privaten Merkliste gespeichert.
+          </p>
+        ) : null}
+        {firstValue(query.candidateRequired) === "1" ? (
+          <p className="mt-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-950" role="status">
+            Für Speichern und interne Bewerbungen ist ein Kandidatenkonto erforderlich.
+          </p>
+        ) : null}
+        <IntentResumePanel
+          intent={intent}
+          signedIntent={intentValue}
+          currentUser={currentUser}
+          confirmation={confirmation}
+        />
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
           <article className="grid gap-8">
@@ -144,7 +197,93 @@ export default async function JobDetailPage({ params }: PageProps) {
   );
 }
 
-type PageProps = Readonly<{ params: Promise<{ slug: string }> }>;
+type JobDetailSearchParams = Promise<{
+  intent?: string | string[];
+  saved?: string | string[];
+  candidateRequired?: string | string[];
+}>;
+
+type PageProps = Readonly<{
+  params: Promise<{ slug: string }>;
+  searchParams: JobDetailSearchParams;
+}>;
+
+function firstValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function IntentResumePanel({
+  intent,
+  signedIntent,
+  currentUser,
+  confirmation,
+}: Readonly<{
+  intent: SignedJobIntentPayloadV1 | null;
+  signedIntent: string | undefined;
+  currentUser: Awaited<ReturnType<typeof getCurrentUser>>;
+  confirmation: Awaited<ReturnType<typeof getApplicationConfirmationView>> | null;
+}>) {
+  if (intent === null || signedIntent === undefined) return null;
+  const next = buildJobIntentNextPath(intent.jobSlug, signedIntent);
+  let content: React.ReactNode;
+  if (currentUser === null) {
+    content = (
+      <div className="grid gap-4">
+        <p className="text-sm leading-6 text-muted-foreground">
+          Melde dich an oder erstelle ein Kandidatenkonto. Die Aktion wird danach
+          nicht automatisch ausgeführt.
+        </p>
+        <JobIntentAuthenticationLinks next={next} />
+      </div>
+    );
+  } else if (currentUser.role !== "CANDIDATE") {
+    content = (
+      <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950">
+        Diese Aktion ist ausschliesslich mit einem Kandidatenkonto möglich.
+      </p>
+    );
+  } else if (intent.action === "SAVE") {
+    content = <SaveIntentConfirmation signedIntent={signedIntent} />;
+  } else if (confirmation === null || !confirmation.ok) {
+    content = (
+      <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+        Die Bewerbung kann aus diesem Link nicht fortgesetzt werden. Bitte starte
+        erneut über die aktuelle Stellenanzeige.
+      </p>
+    );
+  } else if (confirmation.value.externalApplyHref !== null) {
+    content = (
+      <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+        Diese Stelle nutzt eine externe Bewerbungsseite. Starte die Bewerbung erneut
+        über den oberen Button, damit das aktuelle Ziel geprüft wird.
+      </p>
+    );
+  } else {
+    content = (
+      <ApplyIntentConfirmation
+        signedIntent={signedIntent}
+        idempotencyKey={randomUUID()}
+        projection={confirmation.value.projection}
+        identityComplete={confirmation.value.identityComplete}
+        documents={confirmation.value.documents.map((document) => ({
+          id: document.id,
+          safeFilename: document.safeFilename,
+          mimeType: document.mimeType,
+          sizeBytes: document.sizeBytes,
+        }))}
+      />
+    );
+  }
+  return (
+    <section className="mt-8 rounded-xl border bg-card p-5 shadow-sm" aria-labelledby="resume-intent-title">
+      <p className="text-sm font-medium text-primary">Sicher fortsetzen</p>
+      <h2 id="resume-intent-title" className="mt-1 text-xl font-semibold">
+        {intent.action === "SAVE" ? "Stelle speichern" : "Bewerbung prüfen"}
+      </h2>
+      <div className="mt-4">{content}</div>
+    </section>
+  );
+}
 
 function Fact({ icon: Icon, label, value }: Readonly<{ icon: typeof MapPinIcon; label: string; value: string }>) {
   return <div className="flex gap-3 rounded-lg bg-muted/35 p-3"><Icon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" /><div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-0.5 font-medium">{value}</dd></div></div>;

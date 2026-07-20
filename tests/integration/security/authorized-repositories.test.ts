@@ -267,8 +267,12 @@ async function seed() {
     [IDS.candidateProfile, IDS.candidateUser],
   );
   await pool.query(
-    `INSERT INTO "Application" ("id","jobId","submittedJobRevisionId","candidateProfileId","updatedAt") VALUES
-      ($1,$2,$3,$4,now()), ($5,$6,$7,$4,now())`,
+    `INSERT INTO "Application" (
+      "id","jobId","submittedJobRevisionId","candidateProfileId","idempotencyKey",
+      "submissionPayloadHash","updatedAt"
+    ) VALUES
+      ($1,$2,$3,$4,'authorized-application-a',$8,now()),
+      ($5,$6,$7,$4,'authorized-application-b',$9,now())`,
     [
       IDS.applicationA,
       IDS.jobA,
@@ -277,6 +281,8 @@ async function seed() {
       IDS.applicationB,
       IDS.jobB,
       IDS.revisionB,
+      "a".repeat(64),
+      "b".repeat(64),
     ],
   );
   const orderSql = `INSERT INTO "Order" (

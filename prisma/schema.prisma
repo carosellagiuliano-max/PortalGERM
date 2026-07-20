@@ -242,6 +242,18 @@ enum RemotePreference {
   ANY
 }
 
+enum WorkPermitType {
+  SWISS_OR_EU_EFTA
+  B
+  C
+  G
+  L
+  F
+  N
+  S
+  OTHER
+}
+
 enum Seniority {
   JUNIOR
   MID
@@ -991,6 +1003,7 @@ enum AnalyticsEventKind {
   JOB_DETAIL_VIEWED
   JOB_SAVED
   APPLY_INTENT_STARTED
+  EXTERNAL_APPLY_CLICKED
   APPLICATION_SUBMITTED
   APPLICATION_STATUS_CHANGED
   CANDIDATE_REGISTERED
@@ -1114,6 +1127,8 @@ model User {
   verificationRequests     CompanyVerificationRequest[] @relation("VerificationRequester")
   notifications            Notification[]
   userConsents             UserConsentEvent[]           @relation("ConsentOwner")
+  userConsentsActed        UserConsentEvent[]           @relation("UserConsentActor")
+  candidateConsentsActed   CandidateConsent[]           @relation("CandidateConsentActor")
   privacyRequests          PrivacyRequest[]             @relation("PrivacyRequester")
   privacyChallenges        PrivacyIdentityChallenge[]
   conversationParticipants ConversationParticipant[]
@@ -1200,22 +1215,22 @@ model RateLimitBucket {
 }
 
 model Canton {
-  id                    String                    @id @default(uuid()) @db.Uuid
-  code                  String                    @unique @db.Char(2)
-  name                  String                    @db.VarChar(120)
-  slug                  String                    @unique @db.VarChar(120)
-  language              Language
-  cities                City[]
-  companies             CompanyLocation[]
-  companyRegistrations  Company[]                 @relation("CompanyRegistrationCanton")
-  candidates            CandidateProfile[]
-  jobRevisions          JobRevision[]
-  jobsPublished         Job[]                     @relation("PublishedCanton")
-  salaryBands           SalaryBand[]
-  clusterAssessments    ClusterLaunchAssessment[]
-  metricDailyRows       MetricDaily[]
-  createdAt             DateTime                  @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime                  @updatedAt @db.Timestamptz(3)
+  id                   String                    @id @default(uuid()) @db.Uuid
+  code                 String                    @unique @db.Char(2)
+  name                 String                    @db.VarChar(120)
+  slug                 String                    @unique @db.VarChar(120)
+  language             Language
+  cities               City[]
+  companies            CompanyLocation[]
+  companyRegistrations Company[]                 @relation("CompanyRegistrationCanton")
+  candidates           CandidateProfile[]
+  jobRevisions         JobRevision[]
+  jobsPublished        Job[]                     @relation("PublishedCanton")
+  salaryBands          SalaryBand[]
+  clusterAssessments   ClusterLaunchAssessment[]
+  metricDailyRows      MetricDaily[]
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
 
   @@index([slug])
 }
@@ -1279,7 +1294,8 @@ model CandidateProfile {
   phone               String?                       @db.VarChar(40)
   postalCode          String?                       @db.VarChar(16)
   cityLabel           String?                       @db.VarChar(160)
-  summary             String?                       @db.VarChar(3000)
+  summary             String?                       @db.VarChar(500)
+  workPermitType      WorkPermitType?
   onboardingStatus    OnboardingStatus              @default(DRAFT)
   createdAt           DateTime                      @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime                      @updatedAt @db.Timestamptz(3)
@@ -1398,65 +1414,65 @@ model EmployerProfile {
 }
 
 model Company {
-  id                          String                       @id @default(uuid()) @db.Uuid
-  name                        String                       @db.VarChar(200)
-  slug                        String                       @unique @db.VarChar(200)
-  uid                         String?                      @unique @db.VarChar(32)
-  registrationEmailDomainNormalized String?               @db.VarChar(253)
-  registrationNameNormalized String?                      @db.VarChar(200)
-  registrationCantonId       String?                      @db.Uuid
-  industry                    String?                      @db.VarChar(160)
-  size                        String?                      @db.VarChar(64)
-  website                     String?                      @db.VarChar(512)
-  logoStorageKey              String?                      @db.VarChar(512)
-  coverStorageKey             String?                      @db.VarChar(512)
-  about                       String?                      @db.VarChar(5000)
-  values                      String[]
-  benefits                    String[]
-  responseTargetDays          Int?
-  responseSampleSize          Int                          @default(0)
-  responseWithinTargetBps     Int?
-  status                      CompanyStatus                @default(DRAFT)
-  dataProvenance              DataProvenance               @default(LIVE)
-  createdAt                   DateTime                     @default(now()) @db.Timestamptz(3)
-  updatedAt                   DateTime                     @updatedAt @db.Timestamptz(3)
-  registrationCanton          Canton?                      @relation("CompanyRegistrationCanton", fields: [registrationCantonId], references: [id], onDelete: Restrict)
-  statusEvents                CompanyStatusEvent[]
-  memberships                 CompanyMembership[]
-  locations                   CompanyLocation[]
-  invitations                 CompanyInvitation[]
-  claimRequests               CompanyClaimRequest[]
-  verificationRequests        CompanyVerificationRequest[]
-  jobs                        Job[]
-  jobAssignments              JobAssignment[]
-  applicationEmployerNotes    ApplicationEmployerNote[]
-  billingProfile              CompanyBillingProfile?
-  subscriptions               EmployerSubscription[]
-  orders                      Order[]
-  invoices                    Invoice[]
-  entitlementGrants           EntitlementGrant[]
-  creditAccounts              CreditAccount[]
-  radarMappings               RadarOpaqueMapping[]
-  radarSearchBudgets          RadarSearchBudget[]
-  radarSearchSessions         RadarSearchSession[]
-  contactRequests             EmployerContactRequest[]
-  revealGrants                IdentityRevealGrant[]
-  importRights                ImportSourceCompanyRight[]
-  importSetupApprovals        ImportSetupApproval[]
-  importAccessGrants          ImportAccessGrant[]
-  additionalJobPermits        AdditionalJobPermit[]
-  jobBoosts                   JobBoost[]
-  conversations               Conversation[]
-  conversationParticipants    ConversationParticipant[]
-  subscriptionChangeSchedules SubscriptionChangeSchedule[]
-  recruiterMandates           RecruiterMandate[]
-  importDecisions             ImportDecision[]
-  analyticsEvents             AnalyticsEvent[]
-  metricDailyRows             MetricDaily[]
-  supportCases                SupportCase[]
-  salesLeads                  SalesLead[]
-  systemTasks                 SystemTask[]
-  auditLogs                   AuditLog[]
+  id                                String                       @id @default(uuid()) @db.Uuid
+  name                              String                       @db.VarChar(200)
+  slug                              String                       @unique @db.VarChar(200)
+  uid                               String?                      @unique @db.VarChar(32)
+  registrationEmailDomainNormalized String?                      @db.VarChar(253)
+  registrationNameNormalized        String?                      @db.VarChar(200)
+  registrationCantonId              String?                      @db.Uuid
+  industry                          String?                      @db.VarChar(160)
+  size                              String?                      @db.VarChar(64)
+  website                           String?                      @db.VarChar(512)
+  logoStorageKey                    String?                      @db.VarChar(512)
+  coverStorageKey                   String?                      @db.VarChar(512)
+  about                             String?                      @db.VarChar(5000)
+  values                            String[]
+  benefits                          String[]
+  responseTargetDays                Int?
+  responseSampleSize                Int                          @default(0)
+  responseWithinTargetBps           Int?
+  status                            CompanyStatus                @default(DRAFT)
+  dataProvenance                    DataProvenance               @default(LIVE)
+  createdAt                         DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt                         DateTime                     @updatedAt @db.Timestamptz(3)
+  registrationCanton                Canton?                      @relation("CompanyRegistrationCanton", fields: [registrationCantonId], references: [id], onDelete: Restrict)
+  statusEvents                      CompanyStatusEvent[]
+  memberships                       CompanyMembership[]
+  locations                         CompanyLocation[]
+  invitations                       CompanyInvitation[]
+  claimRequests                     CompanyClaimRequest[]
+  verificationRequests              CompanyVerificationRequest[]
+  jobs                              Job[]
+  jobAssignments                    JobAssignment[]
+  applicationEmployerNotes          ApplicationEmployerNote[]
+  billingProfile                    CompanyBillingProfile?
+  subscriptions                     EmployerSubscription[]
+  orders                            Order[]
+  invoices                          Invoice[]
+  entitlementGrants                 EntitlementGrant[]
+  creditAccounts                    CreditAccount[]
+  radarMappings                     RadarOpaqueMapping[]
+  radarSearchBudgets                RadarSearchBudget[]
+  radarSearchSessions               RadarSearchSession[]
+  contactRequests                   EmployerContactRequest[]
+  revealGrants                      IdentityRevealGrant[]
+  importRights                      ImportSourceCompanyRight[]
+  importSetupApprovals              ImportSetupApproval[]
+  importAccessGrants                ImportAccessGrant[]
+  additionalJobPermits              AdditionalJobPermit[]
+  jobBoosts                         JobBoost[]
+  conversations                     Conversation[]
+  conversationParticipants          ConversationParticipant[]
+  subscriptionChangeSchedules       SubscriptionChangeSchedule[]
+  recruiterMandates                 RecruiterMandate[]
+  importDecisions                   ImportDecision[]
+  analyticsEvents                   AnalyticsEvent[]
+  metricDailyRows                   MetricDaily[]
+  supportCases                      SupportCase[]
+  salesLeads                        SalesLead[]
+  systemTasks                       SystemTask[]
+  auditLogs                         AuditLog[]
 
   @@index([status, dataProvenance])
   @@index([registrationEmailDomainNormalized])
@@ -1903,77 +1919,89 @@ model JobViewAggregate {
 }
 
 model Application {
-  id                     String                          @id @default(uuid()) @db.Uuid
-  jobId                  String                          @db.Uuid
-  submittedJobRevisionId String                          @db.Uuid
-  candidateProfileId     String                          @db.Uuid
-  status                 ApplicationStatus               @default(SUBMITTED)
-  coverLetter            String?                         @db.VarChar(10000)
-  rejectionReason        ApplicationRejectionReason?
-  rejectionNote          String?                         @db.VarChar(1000)
-  submittedAt            DateTime                        @default(now()) @db.Timestamptz(3)
-  updatedAt              DateTime                        @updatedAt @db.Timestamptz(3)
-  job                    Job                             @relation(fields: [jobId], references: [id], onDelete: Restrict)
-  submittedJobRevision   JobRevision                     @relation(fields: [submittedJobRevisionId], references: [id], onDelete: Restrict)
-  candidateProfile       CandidateProfile                @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
-  submissionSnapshot     ApplicationSubmissionSnapshot?
-  submissionDocuments    ApplicationSubmissionDocument[]
-  events                 ApplicationEvent[]
-  candidateNote          ApplicationCandidateNote?
-  employerNotes          ApplicationEmployerNote[]
-  conversation           Conversation?
+  id                           String                          @id @default(uuid()) @db.Uuid
+  jobId                        String                          @db.Uuid
+  submittedJobRevisionId       String                          @db.Uuid
+  candidateProfileId           String                          @db.Uuid
+  idempotencyKey               String                          @default(uuid()) @db.VarChar(128)
+  submissionPayloadHash        String                          @db.Char(64)
+  submissionPayloadHashVersion String                          @default("application-submission-payload-v1") @db.VarChar(48)
+  status                       ApplicationStatus               @default(SUBMITTED)
+  coverLetter                  String?                         @db.VarChar(4000)
+  rejectionReason              ApplicationRejectionReason?
+  rejectionNote                String?                         @db.VarChar(1000)
+  submittedAt                  DateTime                        @default(now()) @db.Timestamptz(3)
+  updatedAt                    DateTime                        @updatedAt @db.Timestamptz(3)
+  job                          Job                             @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  submittedJobRevision         JobRevision                     @relation(fields: [submittedJobRevisionId], references: [id], onDelete: Restrict)
+  candidateProfile             CandidateProfile                @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  submissionSnapshot           ApplicationSubmissionSnapshot?
+  submissionDocuments          ApplicationSubmissionDocument[]
+  events                       ApplicationEvent[]
+  candidateNote                ApplicationCandidateNote?
+  employerNotes                ApplicationEmployerNote[]
+  conversation                 Conversation?
 
   @@unique([jobId, candidateProfileId])
+  @@unique([candidateProfileId, idempotencyKey])
   @@unique([id, submittedJobRevisionId])
   @@index([jobId, status, updatedAt])
   @@index([candidateProfileId, updatedAt])
 }
 
 model ApplicationSubmissionSnapshot {
-  id                        String                 @id @default(uuid()) @db.Uuid
-  applicationId             String                 @unique @db.Uuid
-  jobRevisionId             String                 @db.Uuid
-  candidateFirstName        String                 @db.VarChar(100)
-  candidateLastName         String                 @db.VarChar(100)
-  candidateEmail            String                 @db.VarChar(320)
-  coverLetterSnapshot       String?                @db.VarChar(10000)
-  recipientCompanyName      String                 @db.VarChar(200)
-  applicationContactKind    ApplicationContactKind
-  applicationContactValue   String                 @db.VarChar(512)
-  responseTargetDays        Int
-  applicationEffort         ApplicationEffort
-  requiredDocumentKinds     RequiredDocumentKind[]
-  confirmationNoticeVersion String                 @db.VarChar(32)
-  confirmationNoticeHash    String                 @db.VarChar(64)
-  submittedAt               DateTime               @db.Timestamptz(3)
-  application               Application            @relation(fields: [applicationId, jobRevisionId], references: [id, submittedJobRevisionId], onDelete: Restrict)
-  jobRevision               JobRevision            @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+  id                              String                 @id @default(uuid()) @db.Uuid
+  applicationId                   String                 @unique @db.Uuid
+  jobRevisionId                   String                 @db.Uuid
+  candidateFirstName              String                 @db.VarChar(100)
+  candidateLastName               String                 @db.VarChar(100)
+  candidateEmail                  String                 @db.VarChar(320)
+  coverLetterSnapshot             String?                @db.VarChar(4000)
+  recipientCompanyName            String                 @db.VarChar(200)
+  applicationContactKind          ApplicationContactKind
+  applicationContactValue         String                 @db.VarChar(512)
+  responseTargetDays              Int
+  applicationEffort               ApplicationEffort
+  requiredDocumentKinds           RequiredDocumentKind[]
+  confirmationNoticeVersion       String                 @db.VarChar(32)
+  confirmationNoticeHash          String                 @db.VarChar(64)
+  confirmationSnapshotHash        String                 @db.Char(64)
+  confirmationSnapshotHashVersion String                 @default("application-confirmation-snapshot-v1") @db.VarChar(48)
+  submittedAt                     DateTime               @db.Timestamptz(3)
+  application                     Application            @relation(fields: [applicationId, jobRevisionId], references: [id, submittedJobRevisionId], onDelete: Restrict)
+  jobRevision                     JobRevision            @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
 
   @@unique([applicationId, jobRevisionId])
 }
 
 model ApplicationSubmissionDocument {
-  id                 String                    @id @default(uuid()) @db.Uuid
-  applicationId      String                    @db.Uuid
-  documentMetadataId String                    @db.Uuid
-  createdAt          DateTime                  @default(now()) @db.Timestamptz(3)
-  application        Application               @relation(fields: [applicationId], references: [id], onDelete: Restrict)
-  documentMetadata   CandidateDocumentMetadata @relation(fields: [documentMetadataId], references: [id], onDelete: Restrict)
+  id                   String                    @id @default(uuid()) @db.Uuid
+  applicationId        String                    @db.Uuid
+  documentMetadataId   String                    @db.Uuid
+  safeFilenameSnapshot String                    @db.VarChar(255)
+  mimeTypeSnapshot     String                    @db.VarChar(128)
+  sizeBytesSnapshot    Int
+  storageKeyHash       String                    @db.Char(64)
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  application          Application               @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  documentMetadata     CandidateDocumentMetadata @relation(fields: [documentMetadataId], references: [id], onDelete: Restrict)
 
   @@unique([applicationId, documentMetadataId])
   @@index([documentMetadataId])
 }
 
 model ApplicationEvent {
-  id            String               @id @default(uuid()) @db.Uuid
-  applicationId String               @db.Uuid
-  actorUserId   String?              @db.Uuid
-  kind          ApplicationEventKind
-  fromStatus    ApplicationStatus?
-  toStatus      ApplicationStatus?
-  metadata      Json?
-  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
-  application   Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  id             String               @id @default(uuid()) @db.Uuid
+  applicationId  String               @db.Uuid
+  actorUserId    String?              @db.Uuid
+  kind           ApplicationEventKind
+  fromStatus     ApplicationStatus?
+  toStatus       ApplicationStatus?
+  idempotencyKey String               @unique @default(uuid()) @db.VarChar(128)
+  correlationId  String               @default(uuid()) @db.VarChar(128)
+  metadata       Json?
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  application    Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
 
   @@index([applicationId, createdAt])
 }
@@ -1981,7 +2009,7 @@ model ApplicationEvent {
 model ApplicationCandidateNote {
   id            String      @id @default(uuid()) @db.Uuid
   applicationId String      @unique @db.Uuid
-  body          String      @db.VarChar(3000)
+  body          String      @db.VarChar(1000)
   createdAt     DateTime    @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
@@ -2047,18 +2075,20 @@ model JobAlertEvent {
 }
 
 model JobAlertDigest {
-  id                String                     @id @default(uuid()) @db.Uuid
-  jobAlertId        String                     @db.Uuid
-  policyVersion     String                     @db.VarChar(32)
-  windowStart       DateTime                   @db.Timestamptz(3)
-  windowEnd         DateTime                   @db.Timestamptz(3)
-  scheduledFor      DateTime                   @db.Timestamptz(3)
-  runAt             DateTime?                  @db.Timestamptz(3)
-  itemCount         Int                        @default(0)
-  createdAt         DateTime                   @default(now()) @db.Timestamptz(3)
-  jobAlert          JobAlert                   @relation(fields: [jobAlertId], references: [id], onDelete: Restrict)
-  items             JobAlertDigestItem[]
-  unsubscribeTokens JobAlertUnsubscribeToken[]
+  id                     String                     @id @default(uuid()) @db.Uuid
+  jobAlertId             String                     @db.Uuid
+  policyVersion          String                     @db.VarChar(32)
+  alertNameSnapshot      String                     @db.VarChar(80)
+  recipientEmailSnapshot String                     @db.VarChar(320)
+  windowStart            DateTime                   @db.Timestamptz(3)
+  windowEnd              DateTime                   @db.Timestamptz(3)
+  scheduledFor           DateTime                   @db.Timestamptz(3)
+  runAt                  DateTime?                  @db.Timestamptz(3)
+  itemCount              Int                        @default(0)
+  createdAt              DateTime                   @default(now()) @db.Timestamptz(3)
+  jobAlert               JobAlert                   @relation(fields: [jobAlertId], references: [id], onDelete: Restrict)
+  items                  JobAlertDigestItem[]
+  unsubscribeTokens      JobAlertUnsubscribeToken[]
 
   @@unique([jobAlertId, scheduledFor])
   @@unique([id, jobAlertId])
@@ -2130,6 +2160,8 @@ model ConversationParticipant {
   company        Company?                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
   @@unique([conversationId, kind, userId, companyId])
+  @@unique([conversationId, userId])
+  @@unique([conversationId, companyId])
   @@index([userId, conversationId])
   @@index([companyId, conversationId])
 }
@@ -2138,6 +2170,7 @@ model Message {
   id             String       @id @default(uuid()) @db.Uuid
   conversationId String       @db.Uuid
   senderUserId   String       @db.Uuid
+  idempotencyKey String       @unique @default(uuid()) @db.VarChar(128)
   body           String       @db.VarChar(5000)
   createdAt      DateTime     @default(now()) @db.Timestamptz(3)
   editedAt       DateTime?    @db.Timestamptz(3)
@@ -2189,6 +2222,7 @@ model CandidateConsent {
   effectiveAt        DateTime         @db.Timestamptz(3)
   createdAt          DateTime         @default(now()) @db.Timestamptz(3)
   candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  actor              User             @relation("CandidateConsentActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([candidateProfileId, kind, effectiveAt, createdAt])
 }
@@ -2205,6 +2239,7 @@ model UserConsentEvent {
   effectiveAt   DateTime        @db.Timestamptz(3)
   createdAt     DateTime        @default(now()) @db.Timestamptz(3)
   user          User            @relation("ConsentOwner", fields: [userId], references: [id], onDelete: Restrict)
+  actor         User?           @relation("UserConsentActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([userId, kind, effectiveAt, createdAt])
 }
@@ -2217,6 +2252,7 @@ model RadarProfile {
   categoryBucket     String            @db.VarChar(120)
   seniority          Seniority?
   remotePreference   RemotePreference?
+  availabilityBucket String?           @db.VarChar(32)
   workloadMin        Int?
   workloadMax        Int?
   salaryYearlyMinChf Int?
@@ -2862,28 +2898,28 @@ model Plan {
 }
 
 model PlanVersion {
-  id                      String                 @id @default(uuid()) @db.Uuid
-  planId                  String                 @db.Uuid
-  version                 Int
-  status                  CatalogVersionStatus   @default(DRAFT)
-  priceMode               PlanPriceMode
-  billingInterval         BillingInterval
-  termMonths              Int
-  netPriceRappen          Int?
-  monthlyEquivalentRappen Int?
-  currency                String                 @default("CHF") @db.Char(3)
-  isPublic                Boolean                @default(false)
-  isSelfService           Boolean                @default(false)
-  validFrom               DateTime               @db.Timestamptz(3)
-  validTo                 DateTime?              @db.Timestamptz(3)
-  createdAt               DateTime               @default(now()) @db.Timestamptz(3)
-  plan                    Plan                   @relation(fields: [planId], references: [id], onDelete: Restrict)
-  entitlements            PlanEntitlement[]
-  subscriptions           EmployerSubscription[]
-  orderLines              OrderLine[]
-  creditLedgerEntries     CreditLedgerEntry[]
-  interestedSalesLeads    SalesLead[]             @relation("InterestedPlanVersion")
-  interestedSalesLeadIntakes SalesLeadIntake[]     @relation("InterestedPlanVersionIntake")
+  id                         String                 @id @default(uuid()) @db.Uuid
+  planId                     String                 @db.Uuid
+  version                    Int
+  status                     CatalogVersionStatus   @default(DRAFT)
+  priceMode                  PlanPriceMode
+  billingInterval            BillingInterval
+  termMonths                 Int
+  netPriceRappen             Int?
+  monthlyEquivalentRappen    Int?
+  currency                   String                 @default("CHF") @db.Char(3)
+  isPublic                   Boolean                @default(false)
+  isSelfService              Boolean                @default(false)
+  validFrom                  DateTime               @db.Timestamptz(3)
+  validTo                    DateTime?              @db.Timestamptz(3)
+  createdAt                  DateTime               @default(now()) @db.Timestamptz(3)
+  plan                       Plan                   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  entitlements               PlanEntitlement[]
+  subscriptions              EmployerSubscription[]
+  orderLines                 OrderLine[]
+  creditLedgerEntries        CreditLedgerEntry[]
+  interestedSalesLeads       SalesLead[]            @relation("InterestedPlanVersion")
+  interestedSalesLeadIntakes SalesLeadIntake[]      @relation("InterestedPlanVersionIntake")
 
   @@unique([planId, version])
   @@index([planId, status, validFrom, validTo])
@@ -3332,37 +3368,37 @@ model ImportAccessGrant {
 }
 
 model SalesLead {
-  id                     String          @id @default(uuid()) @db.Uuid
-  companyId              String?         @db.Uuid
-  emailNormalized        String          @db.VarChar(320)
-  organizationNormalized String?         @db.VarChar(200)
-  organizationName       String?         @db.VarChar(200)
-  contactName            String?         @db.VarChar(160)
-  phoneNormalized        String?         @db.VarChar(32)
-  companySizeCode        String?         @db.VarChar(64)
-  hiringNeedCode         String?         @db.VarChar(64)
-  interestCode           String?         @db.VarChar(64)
-  callbackWindowCode     String?         @db.VarChar(64)
-  purpose                String          @db.VarChar(128)
-  consentSource          String          @db.VarChar(128)
-  needSummary            String?         @db.VarChar(2000)
-  message                String?         @db.VarChar(2000)
-  noticeVersion          String?         @db.VarChar(32)
-  noticeHash             String?         @db.Char(64)
-  slaPolicyVersion       String?         @db.VarChar(32)
-  dueAt                  DateTime?       @db.Timestamptz(3)
-  interestedPlanVersionId String?        @db.Uuid
-  status                 LeadStatus      @default(NEW)
-  ownerUserId            String?         @db.Uuid
-  nextAt                 DateTime?       @db.Timestamptz(3)
-  retainUntil            DateTime        @db.Timestamptz(3)
-  createdAt              DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt              DateTime        @updatedAt @db.Timestamptz(3)
-  company                Company?        @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  owner                  User?           @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
-  interestedPlanVersion  PlanVersion?    @relation("InterestedPlanVersion", fields: [interestedPlanVersionId], references: [id], onDelete: Restrict)
-  activities             SalesActivity[]
-  intakes                SalesLeadIntake[]
+  id                      String            @id @default(uuid()) @db.Uuid
+  companyId               String?           @db.Uuid
+  emailNormalized         String            @db.VarChar(320)
+  organizationNormalized  String?           @db.VarChar(200)
+  organizationName        String?           @db.VarChar(200)
+  contactName             String?           @db.VarChar(160)
+  phoneNormalized         String?           @db.VarChar(32)
+  companySizeCode         String?           @db.VarChar(64)
+  hiringNeedCode          String?           @db.VarChar(64)
+  interestCode            String?           @db.VarChar(64)
+  callbackWindowCode      String?           @db.VarChar(64)
+  purpose                 String            @db.VarChar(128)
+  consentSource           String            @db.VarChar(128)
+  needSummary             String?           @db.VarChar(2000)
+  message                 String?           @db.VarChar(2000)
+  noticeVersion           String?           @db.VarChar(32)
+  noticeHash              String?           @db.Char(64)
+  slaPolicyVersion        String?           @db.VarChar(32)
+  dueAt                   DateTime?         @db.Timestamptz(3)
+  interestedPlanVersionId String?           @db.Uuid
+  status                  LeadStatus        @default(NEW)
+  ownerUserId             String?           @db.Uuid
+  nextAt                  DateTime?         @db.Timestamptz(3)
+  retainUntil             DateTime          @db.Timestamptz(3)
+  createdAt               DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime          @updatedAt @db.Timestamptz(3)
+  company                 Company?          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  owner                   User?             @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  interestedPlanVersion   PlanVersion?      @relation("InterestedPlanVersion", fields: [interestedPlanVersionId], references: [id], onDelete: Restrict)
+  activities              SalesActivity[]
+  intakes                 SalesLeadIntake[]
 
   @@unique([emailNormalized, purpose])
   @@index([status, nextAt])
@@ -3372,18 +3408,18 @@ model SalesLead {
 }
 
 model SalesActivity {
-  id          String            @id @default(uuid()) @db.Uuid
-  salesLeadId String            @db.Uuid
-  kind        SalesActivityKind
-  actorUserId String?           @db.Uuid
-  safeNote    String?           @db.VarChar(1000)
-  outcomeCode String?           @db.VarChar(64)
-  idempotencyKey String?        @unique @db.VarChar(128)
-  payloadHash    String?        @db.Char(64)
-  correlationId  String?        @db.VarChar(128)
-  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
-  salesLead   SalesLead         @relation(fields: [salesLeadId], references: [id], onDelete: Restrict)
-  intake      SalesLeadIntake?
+  id             String            @id @default(uuid()) @db.Uuid
+  salesLeadId    String            @db.Uuid
+  kind           SalesActivityKind
+  actorUserId    String?           @db.Uuid
+  safeNote       String?           @db.VarChar(1000)
+  outcomeCode    String?           @db.VarChar(64)
+  idempotencyKey String?           @unique @db.VarChar(128)
+  payloadHash    String?           @db.Char(64)
+  correlationId  String?           @db.VarChar(128)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  salesLead      SalesLead         @relation(fields: [salesLeadId], references: [id], onDelete: Restrict)
+  intake         SalesLeadIntake?
 
   @@index([salesLeadId, createdAt])
 }

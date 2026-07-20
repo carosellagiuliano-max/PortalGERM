@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { registerCandidateAction } from "@/lib/auth/server-actions";
 
-export function CandidateRegistrationForm() {
+export function CandidateRegistrationForm({ next }: Readonly<{ next?: string }>) {
   const [state, formAction, pending] = useActionState(
     registerCandidateAction,
     INITIAL_AUTH_ACTION_STATE,
@@ -25,6 +25,7 @@ export function CandidateRegistrationForm() {
 
   return (
     <form action={formAction} className="grid gap-5" noValidate>
+      {next === undefined ? null : <input type="hidden" name="next" value={next} />}
       <FormFeedback state={state} />
       <TextField
         id="candidate-name"

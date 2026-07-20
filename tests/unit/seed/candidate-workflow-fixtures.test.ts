@@ -8,6 +8,7 @@ import {
   CANDIDATE_WORKFLOW_SEED_IDENTITIES,
   CONTACT_REQUEST_FIXTURES,
   JOB_ALERT_FIXTURES,
+  PRIVACY_REQUEST_FIXTURES,
   RADAR_COMPANY_SLOTS,
   SAVED_JOB_FIXTURES,
 } from "@/prisma/seed/fixtures/candidate-workflows";
@@ -67,7 +68,9 @@ describe("Phase 05 candidate-workflow fixtures", () => {
 
   it("contains exact application, save, alert, request and conversation inputs", () => {
     expect(APPLICATION_FIXTURES).toHaveLength(80);
-    expect(APPLICATION_FIXTURES.filter((item) => item.hasDetailedHistory)).toHaveLength(
+    expect(
+      APPLICATION_FIXTURES.filter((item) => item.hasConversationMessages),
+    ).toHaveLength(
       20,
     );
     expect(new Set(APPLICATION_FIXTURES.map((item) => item.jobIndex)).size).toBe(80);
@@ -75,12 +78,20 @@ describe("Phase 05 candidate-workflow fixtures", () => {
       true,
     );
     expect(APPLICATION_FIXTURES.some((item) => item.status === "OFFER")).toBe(true);
-    expect(SAVED_JOB_FIXTURES).toHaveLength(40);
+    expect(SAVED_JOB_FIXTURES).toHaveLength(41);
+    expect(
+      SAVED_JOB_FIXTURES.filter((item) => item.jobPool === "EXPIRED"),
+    ).toHaveLength(1);
     expect(JOB_ALERT_FIXTURES).toHaveLength(15);
     expect(new Set(JOB_ALERT_FIXTURES.map((alert) => alert.status))).toEqual(
       new Set(["ACTIVE", "PAUSED", "UNSUBSCRIBED", "DELETED"]),
     );
     expect(CONTACT_REQUEST_FIXTURES).toHaveLength(6);
+    expect(PRIVACY_REQUEST_FIXTURES.map(({ type }) => type).sort()).toEqual([
+      "CORRECT",
+      "DELETE",
+      "EXPORT",
+    ]);
     expect(
       CONTACT_REQUEST_FIXTURES.filter((request) => request.status === "ACCEPTED"),
     ).toHaveLength(2);
@@ -91,6 +102,7 @@ describe("Phase 05 candidate-workflow fixtures", () => {
       CONTACT_REQUEST_FIXTURES.filter((request) => request.status === "DECLINED"),
     ).toHaveLength(2);
     expect(RADAR_COMPANY_SLOTS).toHaveLength(2);
+    expect(CANDIDATE_FIXTURES.filter(({ userStatus }) => userStatus === "SUSPENDED")).toHaveLength(1);
   });
 
   it("links every document required by a submitted application", () => {

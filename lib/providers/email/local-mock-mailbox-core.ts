@@ -13,7 +13,7 @@ export const LOCAL_MOCK_MAILBOX_TTL_MS = 15 * 60 * 1_000;
 
 export type LocalMockMailboxTemplateKey = Extract<
   EmailTemplateKey,
-  "password_reset_mock" | "company_invitation"
+  "password_reset_mock" | "company_invitation" | "job_alert_digest_mock"
 >;
 
 export type LocalMockMailboxEnvelope = Readonly<{
@@ -64,7 +64,7 @@ export class LocalMockMailboxInputError extends Error {
 }
 
 /**
- * Ephemeral reset/invitation capture. It has no database dependency and exposes
+ * Ephemeral protected-action capture. It has no database dependency and exposes
  * no query/list API: every envelope read authenticates and consumes one item.
  */
 export class LocalMockMailbox {
@@ -181,7 +181,8 @@ function normalizeCaptureInput(
   }
   if (
     input.templateKey !== "password_reset_mock" &&
-    input.templateKey !== "company_invitation"
+    input.templateKey !== "company_invitation" &&
+    input.templateKey !== "job_alert_digest_mock"
   ) {
     throw new LocalMockMailboxInputError("template_not_allowed");
   }
@@ -241,6 +242,18 @@ function parseActionUrl(
         [...fragment.keys()].length !== 1 ||
         tokenValues.length !== 1 ||
         !isPlausibleMailboxToken(tokenValues[0])
+      ) {
+        throw new LocalMockMailboxInputError("action_url_invalid");
+      }
+    } else if (templateKey === "job_alert_digest_mock") {
+      const segments = url.pathname.split("/").filter(Boolean);
+      if (
+        segments.length !== 3 ||
+        segments[0] !== "alerts" ||
+        segments[1] !== "unsubscribe" ||
+        !isPlausibleMailboxToken(segments[2]) ||
+        url.search !== "" ||
+        url.hash !== ""
       ) {
         throw new LocalMockMailboxInputError("action_url_invalid");
       }

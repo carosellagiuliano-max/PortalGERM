@@ -173,7 +173,7 @@ export async function loginWithPassword(
 }
 
 export async function registerCandidate(
-  input: CandidateRegistrationInput,
+  input: CandidateRegistrationInput & Readonly<{ next?: string | null }>,
   dependencies: AuthServiceDependencies,
 ): Promise<RegistrationResult> {
   if (!hasExplicitTermsAcceptance(input)) {
@@ -253,7 +253,10 @@ export async function registerCandidate(
     return Object.freeze({
       ok: true,
       session,
-      destination: "/candidate/jobpass",
+      destination:
+        input.next == null
+          ? "/candidate/jobpass"
+          : resolveSafeNext(input.next, "CANDIDATE"),
       branch: "CANDIDATE",
     });
   } catch {

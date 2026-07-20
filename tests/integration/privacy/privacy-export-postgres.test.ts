@@ -387,6 +387,7 @@ async function createExportFixture(client: DatabaseClient, suffix: string) {
       jobId: job.id,
       submittedJobRevisionId: revision.id,
       candidateProfileId: profile.id,
+      submissionPayloadHash: "b".repeat(64),
       coverLetter: "OWN_APPLICATION_PII_CANARY",
     },
   });
@@ -395,6 +396,7 @@ async function createExportFixture(client: DatabaseClient, suffix: string) {
       jobId: job.id,
       submittedJobRevisionId: revision.id,
       candidateProfileId: foreignProfile.id,
+      submissionPayloadHash: "c".repeat(64),
       coverLetter: "FOREIGN_APPLICATION_PII_CANARY",
     },
   });

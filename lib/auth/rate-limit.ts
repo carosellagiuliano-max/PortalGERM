@@ -12,6 +12,10 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
   "REGISTER",
   "FORGOT_PASSWORD",
   "APPLICATION_SUBMIT",
+  "APPLICATION_CANDIDATE_MUTATION",
+  "CANDIDATE_PROFILE_MUTATION",
+  "JOB_ALERT_MUTATION",
+  "MESSAGE_SEND",
   "PRIVACY_REQUEST",
   "PRIVACY_IDENTITY_CHALLENGE",
   "LEAD",
@@ -39,6 +43,30 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
     buckets: [
       { scope: "USER", limit: 30, windowMs: HOUR },
       { scope: "IP", limit: 100, windowMs: HOUR },
+    ],
+  },
+  APPLICATION_CANDIDATE_MUTATION: {
+    buckets: [
+      { scope: "USER", limit: 60, windowMs: HOUR },
+      { scope: "IP", limit: 120, windowMs: HOUR },
+    ],
+  },
+  CANDIDATE_PROFILE_MUTATION: {
+    buckets: [
+      { scope: "USER", limit: 30, windowMs: HOUR },
+      { scope: "IP", limit: 100, windowMs: HOUR },
+    ],
+  },
+  JOB_ALERT_MUTATION: {
+    buckets: [
+      { scope: "USER", limit: 60, windowMs: HOUR },
+      { scope: "IP", limit: 120, windowMs: HOUR },
+    ],
+  },
+  MESSAGE_SEND: {
+    buckets: [
+      { scope: "USER", limit: 60, windowMs: HOUR },
+      { scope: "IP", limit: 120, windowMs: HOUR },
     ],
   },
   PRIVACY_REQUEST: {

@@ -23,7 +23,7 @@ const userId = "11111111-1111-4111-8111-111111111111";
 const profileId = "22222222-2222-4222-8222-222222222222";
 const actorId = "33333333-3333-4333-8333-333333333333";
 const now = new Date("2026-07-19T10:00:00.000Z");
-const noticeHash = "a".repeat(64);
+const noticeHash = RADAR_CONSENT_NOTICE_V1.hash;
 
 function radarRepository(
   latest: RadarConsentRepository["latest"] = vi.fn(async () => null),
@@ -86,14 +86,22 @@ describe("strictly separated consent domains", () => {
     expect(await hasCurrentRadarConsent(profileId, now, radarRepository(vi.fn(async () => ({
       granted: true,
       noticeVersion: "talent-radar-v1",
+      noticeHash,
     }))))).toBe(true);
     expect(await hasCurrentRadarConsent(profileId, now, radarRepository(vi.fn(async () => ({
       granted: false,
       noticeVersion: "talent-radar-v1",
+      noticeHash,
     }))))).toBe(false);
     expect(await hasCurrentRadarConsent(profileId, now, radarRepository(vi.fn(async () => ({
       granted: true,
       noticeVersion: "talent-radar-v0",
+      noticeHash,
+    }))))).toBe(false);
+    expect(await hasCurrentRadarConsent(profileId, now, radarRepository(vi.fn(async () => ({
+      granted: true,
+      noticeVersion: "talent-radar-v1",
+      noticeHash: "a".repeat(64),
     }))))).toBe(false);
     const repository = radarRepository();
     expect(await hasCurrentRadarConsent("not-an-id", now, repository)).toBe(false);

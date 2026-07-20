@@ -12,16 +12,16 @@ import {
   stableSeedId,
 } from "@/prisma/seed/ids";
 
-describe("stable Phase-06 seed identities", () => {
+describe("stable Phase-09 seed identities", () => {
   it("rotates the manifest version without changing Phase-05 semantic IDs", () => {
-    expect(SEED_DATASET_VERSION).toBe("phase-06-demo-v2");
+    expect(SEED_DATASET_VERSION).toBe("phase-09-demo-v6");
     expect(SEED_COMPATIBILITY_BASE_VERSION).toBe("phase-05-demo-v1");
     expect(stableSeedId("user", "candidate@demo.ch")).toBe(
       "b05d30e2-ade6-57f2-b376-12cef27a86e4",
     );
-    expect(
-      stableSeedId("company", "novarigi-digital"),
-    ).toBe("3faaae32-cdfd-50e3-aebd-abe989d28209");
+    expect(stableSeedId("company", "novarigi-digital")).toBe(
+      "3faaae32-cdfd-50e3-aebd-abe989d28209",
+    );
   });
 
   it("derives the same RFC UUID from the same canonical semantic key", () => {
@@ -61,11 +61,7 @@ describe("stable Phase-06 seed identities", () => {
     const second = createSeedIdentity("company", "second-company");
 
     expectIdentityError(
-      () =>
-        assertSeedIdentityIntegrity([
-          first,
-          { ...second, id: first.id },
-        ]),
+      () => assertSeedIdentityIntegrity([first, { ...second, id: first.id }]),
       "DUPLICATE_ID",
     );
   });
@@ -75,10 +71,7 @@ describe("stable Phase-06 seed identities", () => {
     const unrelated = createSeedIdentity("company", "unrelated-company");
 
     expectIdentityError(
-      () =>
-        assertSeedIdentityIntegrity([
-          { ...first, id: unrelated.id },
-        ]),
+      () => assertSeedIdentityIntegrity([{ ...first, id: unrelated.id }]),
       "ID_DRIFT",
     );
   });

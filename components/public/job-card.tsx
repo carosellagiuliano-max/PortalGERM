@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { FairScoreBadge } from "@/components/public/fair-score";
+import { PublicJobActions } from "@/components/public/apply-save-actions";
 import { ResponseSignal } from "@/components/public/response-signal";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,6 +86,7 @@ export function JobCard({ job }: Readonly<{ job: PublicJobCardModel }>) {
           <ResponseSignal response={job.response} compact />
           <p className="mt-2 text-muted-foreground">Publiziert am {formatDate(job.publishedAt)}</p>
         </div>
+        <PublicJobActions jobSlug={job.slug} />
       </CardContent>
     </Card>
   );

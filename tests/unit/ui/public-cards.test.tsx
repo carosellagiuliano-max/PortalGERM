@@ -1,5 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+vi.mock("@/components/public/apply-save-actions", () => ({
+  PublicJobActions: () => null,
+}));
 
 import { CompanyCard } from "@/components/public/company-card";
 import { JobCard } from "@/components/public/job-card";

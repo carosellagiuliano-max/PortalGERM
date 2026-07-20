@@ -16,6 +16,7 @@ describe("Phase 06 security headers", () => {
     expect(headers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ source: "/reset-password" }),
+        expect.objectContaining({ source: "/alerts/unsubscribe/:path*" }),
         expect.objectContaining({ source: "/candidate/:path*" }),
         expect.objectContaining({ source: "/employer/:path*" }),
         expect.objectContaining({ source: "/admin/:path*" }),
@@ -26,6 +27,19 @@ describe("Phase 06 security headers", () => {
       expect.arrayContaining([
         { key: "Cache-Control", value: "no-store, max-age=0" },
         { key: "Referrer-Policy", value: "no-referrer" },
+      ]),
+    );
+    const unsubscribe = headers?.find(
+      ({ source }) => source === "/alerts/unsubscribe/:path*",
+    );
+    expect(unsubscribe?.headers).toEqual(
+      expect.arrayContaining([
+        { key: "Cache-Control", value: "no-store, max-age=0" },
+        { key: "Referrer-Policy", value: "no-referrer" },
+        {
+          key: "X-Robots-Tag",
+          value: "noindex, nofollow, noarchive, nosnippet",
+        },
       ]),
     );
   });

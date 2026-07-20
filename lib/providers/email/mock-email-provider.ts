@@ -106,7 +106,7 @@ export class EmailLogIdempotencyConflictError extends Error {
 }
 
 /**
- * Truthful local adapter: records a redacted EmailLog and, for reset/invite
+ * Truthful local adapter: records a redacted EmailLog and, for protected actions
  * only, optionally forwards the raw one-time link to the ephemeral mailbox.
  * Token hash lifecycle, rotation and revocation stay in the owning Phase-06/10
  * domain transaction; this adapter never persists or revives a raw token.
@@ -132,8 +132,8 @@ export class MockEmailProvider implements EmailProvider {
     const parsed = emailInputSchema.safeParse(input);
     if (!parsed.success) {
       throw new MockEmailInputError(
-        parsed.error.issues.map((issue) =>
-          `${issue.path.join(".") || "input"}:${issue.code}`
+        parsed.error.issues.map(
+          (issue) => `${issue.path.join(".") || "input"}:${issue.code}`,
         ),
       );
     }
@@ -146,9 +146,10 @@ export class MockEmailProvider implements EmailProvider {
 
     const action = getSensitiveAction(templateKey, data);
     const operationParts = resolveOperationParts(templateKey, data);
-    const operation = operationParts === undefined
-      ? undefined
-      : buildOperationIdentity(to, templateKey, operationParts);
+    const operation =
+      operationParts === undefined
+        ? undefined
+        : buildOperationIdentity(to, templateKey, operationParts);
     const sensitiveValues = collectSensitiveValues(data, action);
     const persisted = renderEmailTemplate(
       templateKey,
@@ -166,34 +167,40 @@ export class MockEmailProvider implements EmailProvider {
     const messageFingerprint = buildMessageFingerprint(
       to,
       templateKey,
-      outbound.subject,
-      outbound.body,
+      templateKey === "job_alert_digest_mock"
+        ? persisted.subject
+        : outbound.subject,
+      templateKey === "job_alert_digest_mock" ? persisted.body : outbound.body,
     );
-    const mailboxEnvelope = action === undefined || this.#mailbox === undefined
-      ? undefined
-      : Object.freeze({
-          to,
-          templateKey: action.templateKey,
-          subject: outbound.subject,
-          body: outbound.body,
-          actionUrl: action.url,
-        });
+    const mailboxEnvelope =
+      action === undefined || this.#mailbox === undefined
+        ? undefined
+        : Object.freeze({
+            to,
+            templateKey: action.templateKey,
+            subject: outbound.subject,
+            body: outbound.body,
+            actionUrl: action.url,
+          });
     if (mailboxEnvelope !== undefined) {
       await this.#mailbox?.validate(mailboxEnvelope);
     }
 
-    const providerReference = operation === undefined
-      ? `mock-email-v2:unscoped:${messageFingerprint}`
-      : `mock-email-v2:${operation.digest}:${messageFingerprint}`;
-    const row = await this.#repository.record(Object.freeze({
-      ...(operation === undefined ? {} : { id: operation.id }),
-      recipient: to,
-      purpose: templateKey,
-      templateKey,
-      payload,
-      status: "MOCK_RECORDED" as const,
-      providerReference,
-    }));
+    const providerReference =
+      operation === undefined
+        ? `mock-email-v2:unscoped:${messageFingerprint}`
+        : `mock-email-v2:${operation.digest}:${messageFingerprint}`;
+    const row = await this.#repository.record(
+      Object.freeze({
+        ...(operation === undefined ? {} : { id: operation.id }),
+        recipient: to,
+        purpose: templateKey,
+        templateKey,
+        payload,
+        status: "MOCK_RECORDED" as const,
+        providerReference,
+      }),
+    );
 
     if (mailboxEnvelope !== undefined) {
       // Capture is intentionally retried even when the EmailLog already exists.
@@ -207,7 +214,8 @@ export class MockEmailProvider implements EmailProvider {
 }
 
 type SensitiveAction = Readonly<{
-  templateKey: "password_reset_mock" | "company_invitation";
+  templateKey:
+    "password_reset_mock" | "company_invitation" | "job_alert_digest_mock";
   url: string;
   taints: readonly string[];
 }>;
@@ -221,6 +229,9 @@ function getSensitiveAction(
   }
   if (templateKey === "company_invitation") {
     return parseSensitiveAction(templateKey, data, "invitationUrl", false);
+  }
+  if (templateKey === "job_alert_digest_mock") {
+    return parseJobAlertUnsubscribeAction(data);
   }
   return undefined;
 }
@@ -259,7 +270,7 @@ function parseSensitiveAction(
   }
   const rawToken = requireFragmentToken
     ? fragmentToken
-    : queryToken ?? pathToken;
+    : (queryToken ?? pathToken);
   if (!isPlausibleRawToken(rawToken)) {
     throw new MockEmailInputError([`data.${dataKey}:token_invalid`]);
   }
@@ -274,6 +285,41 @@ function parseSensitiveAction(
     ...fragment.values(),
   ]);
   return Object.freeze({ templateKey, url: value, taints });
+}
+
+function parseJobAlertUnsubscribeAction(
+  data: Readonly<Record<string, unknown>>,
+): SensitiveAction {
+  const value = actionUrl(data, "unsubscribeUrl");
+  if (value === undefined) {
+    throw new MockEmailInputError(["data.unsubscribeUrl:invalid"]);
+  }
+  const url = new URL(value);
+  const pathSegments = url.pathname
+    .split("/")
+    .filter(Boolean)
+    .map(safeDecodeURIComponent);
+  const rawToken = pathSegments[2];
+  if (
+    pathSegments.length !== 3 ||
+    pathSegments[0] !== "alerts" ||
+    pathSegments[1] !== "unsubscribe" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    !isPlausibleRawToken(rawToken) ||
+    !/^[A-Za-z0-9_-]+$/u.test(rawToken)
+  ) {
+    throw new MockEmailInputError(["data.unsubscribeUrl:invalid"]);
+  }
+  return Object.freeze({
+    templateKey: "job_alert_digest_mock",
+    url: value,
+    taints: uniqueSensitiveValues([
+      value,
+      rawToken,
+      encodeURIComponent(rawToken),
+    ]),
+  });
 }
 
 function resolveOperationParts(
@@ -395,21 +441,24 @@ function collectSensitiveValues(
   action: SensitiveAction | undefined,
 ) {
   const keyedValues = Object.entries(data)
-    .filter(([key, value]) => SENSITIVE_KEY.test(key) && typeof value === "string")
+    .filter(
+      ([key, value]) => SENSITIVE_KEY.test(key) && typeof value === "string",
+    )
     .map(([, value]) => value as string)
     .filter((value) => value.length >= 8);
-  return uniqueSensitiveValues([
-    ...keyedValues,
-    ...(action?.taints ?? []),
-  ]);
+  return uniqueSensitiveValues([...keyedValues, ...(action?.taints ?? [])]);
 }
 
 function uniqueSensitiveValues(values: readonly string[]) {
-  return [...new Set(values.filter((value) => value.length >= 4))]
-    .sort((left, right) => right.length - left.length);
+  return [...new Set(values.filter((value) => value.length >= 4))].sort(
+    (left, right) => right.length - left.length,
+  );
 }
 
-function redactPersistedText(value: string, sensitiveValues: readonly string[]) {
+function redactPersistedText(
+  value: string,
+  sensitiveValues: readonly string[],
+) {
   let redacted = value.replace(CONTROL_CHARACTERS, " ");
   for (const sensitive of sensitiveValues) {
     redacted = redacted.split(sensitive).join("[geschützt]");

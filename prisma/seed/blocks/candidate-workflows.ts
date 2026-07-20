@@ -3,6 +3,8 @@ import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import {
   AlertFrequency,
+  ApplicationContactKind,
+  ApplicationEffort,
   ApplicationEventKind,
   ApplicationRejectionReason,
   ApplicationStatus,
@@ -20,13 +22,34 @@ import {
   JobAlertStatus,
   LanguageLevel,
   OnboardingStatus,
+  PrivacyCorrectionFieldCode,
+  PrivacyRequestEventKind,
+  PrivacyRequestStatus,
+  PrivacyRequestType,
   RadarConsentKind,
   RemotePreference,
+  RequiredDocumentKind,
   RevealField,
   Role,
   Seniority,
+  UserConsentKind,
   UserStatus,
 } from "@/lib/generated/prisma/enums";
+import {
+  applicationSubmissionPayloadHash,
+  buildApplicationConfirmationProjection,
+} from "@/lib/applications/integrity";
+import { RADAR_CONSENT_NOTICE_V1 } from "@/lib/privacy/radar-consent";
+import {
+  createJobAlertUnsubscribeToken,
+  defaultJobAlertQuery,
+  firstJobAlertDueAt,
+  jobAlertConsentNoticeHash,
+  JOB_ALERT_DELIVERY_NOTICE_V1,
+  JOB_ALERT_POLICY_V1,
+  nextJobAlertDueAt,
+} from "@/lib/candidate/job-alert-policy";
+import { renderEmailTemplate } from "@/lib/providers/email/templates";
 import {
   buildRadarOpaqueLookup,
   decryptRadarOpaqueToken,
@@ -52,10 +75,12 @@ import {
 } from "@/prisma/seed/create-or-verify";
 import {
   APPLICATION_FIXTURES,
+  applicationTransitionFixtures,
   CANDIDATE_FIXTURES,
   CANDIDATE_WORKFLOW_BLOCK_DIGEST,
   CONTACT_REQUEST_FIXTURES,
   JOB_ALERT_FIXTURES,
+  PRIVACY_REQUEST_FIXTURES,
   RADAR_COMPANY_SLOTS,
   SAVED_JOB_FIXTURES,
 } from "@/prisma/seed/fixtures/candidate-workflows";
@@ -94,7 +119,11 @@ export type CandidateWorkflowCandidateHandle = Readonly<{
 }>;
 
 export type CandidateWorkflowSeedResult = Readonly<{
-  applications: readonly Readonly<{ id: string; jobId: string; candidateProfileId: string }>[];
+  applications: readonly Readonly<{
+    id: string;
+    jobId: string;
+    candidateProfileId: string;
+  }>[];
   blockDigest: typeof CANDIDATE_WORKFLOW_BLOCK_DIGEST;
   candidates: readonly CandidateWorkflowCandidateHandle[];
   contactRequests: readonly Readonly<{ id: string; status: string }>[];
@@ -143,7 +172,9 @@ export const DEMO_ONLY_CANDIDATE_WORKFLOW_CRYPTO = Object.freeze({
 export function candidateWorkflowSeedCryptoFromEnvironment(
   environment: Pick<ServerEnvironment, "secrets">,
 ): CandidateWorkflowSeedCryptoConfig {
-  const unwrap = <TPurpose extends keyof ServerEnvironment["secrets"]["keyrings"]>(
+  const unwrap = <
+    TPurpose extends keyof ServerEnvironment["secrets"]["keyrings"],
+  >(
     purpose: TPurpose,
   ): readonly Readonly<{ version: string; secret: string }>[] =>
     Object.freeze(
@@ -206,7 +237,10 @@ function verifyRow<TRecord extends object>(
       project: (candidate) =>
         toCanonicalValue(
           Object.fromEntries(
-            keys.map((key) => [key, (candidate as Record<string, unknown>)[key]]),
+            keys.map((key) => [
+              key,
+              (candidate as Record<string, unknown>)[key],
+            ]),
           ),
         ),
     },
@@ -234,10 +268,15 @@ function toCanonicalValue(value: unknown): CanonicalJsonValue {
   }
   if (typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, toCanonicalValue(entry)]),
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        toCanonicalValue(entry),
+      ]),
     );
   }
-  throw new TypeError("Seed projections may contain only canonical data values.");
+  throw new TypeError(
+    "Seed projections may contain only canonical data values.",
+  );
 }
 
 function dateAt(anchorAt: Date, offsetMs: number): Date {
@@ -281,7 +320,9 @@ function requireValidCryptoConfig(
 
   for (const [label, keyring] of keyrings) {
     if (keyring.length === 0) {
-      throw new TypeError(`${label} seed keyring requires an active writer key.`);
+      throw new TypeError(
+        `${label} seed keyring requires an active writer key.`,
+      );
     }
     const versions = new Set<string>();
     for (const key of keyring) {
@@ -302,7 +343,9 @@ function requireValidCryptoConfig(
 
 function resolveDependencies(dependencies: CandidateWorkflowDependencies) {
   const companies = RADAR_COMPANY_SLOTS.map((slug) => {
-    const company = dependencies.companies.find((candidate) => candidate.slug === slug);
+    const company = dependencies.companies.find(
+      (candidate) => candidate.slug === slug,
+    );
     if (company === undefined) {
       throw new Error(`Candidate workflow seed requires company ${slug}.`);
     }
@@ -316,7 +359,15 @@ function resolveDependencies(dependencies: CandidateWorkflowDependencies) {
       `Candidate workflow seed requires exactly 100 published jobs; received ${publishedJobs.length}.`,
     );
   }
-  return { companies, publishedJobs };
+  const expiredJobs = dependencies.jobs.filter(
+    (job) => job.status === "EXPIRED" && job.publishedRevisionId !== null,
+  );
+  if (expiredJobs.length !== 1) {
+    throw new Error(
+      `Candidate workflow seed requires exactly one expired saved-job fixture target; received ${expiredJobs.length}.`,
+    );
+  }
+  return { companies, expiredJobs, publishedJobs };
 }
 
 async function loadReferenceMaps(db: DatabaseClient) {
@@ -355,7 +406,9 @@ async function seedCandidate(
   const userId = stableSeedId("user", fixture.email);
   const candidateProfileId = stableSeedId("candidate-profile", fixture.email);
   const cantonId = references.cantonByCode.get(fixture.cantonCode) as string;
-  const categoryId = references.categoryBySlug.get(fixture.categorySlug) as string;
+  const categoryId = references.categoryBySlug.get(
+    fixture.categorySlug,
+  ) as string;
   const userCreatedAt = dateAt(anchorAt, (-120 + fixtureIndex) * DAY_MS);
   const profileCreatedAt = dateAt(anchorAt, (-100 + fixtureIndex) * DAY_MS);
 
@@ -364,9 +417,25 @@ async function seedCandidate(
     email: fixture.email,
     emailNormalized: fixture.email.toLowerCase(),
     role: Role.CANDIDATE,
-    status: UserStatus.ACTIVE,
+    status: enumValue(UserStatus, fixture.userStatus),
     dataProvenance: DataProvenance.DEMO,
   };
+  const existingUser = await tx.user.findUnique({ where: { id: userId } });
+  if (
+    fixture.userStatus === "SUSPENDED" &&
+    existingUser?.status === UserStatus.ACTIVE &&
+    existingUser.role === Role.CANDIDATE &&
+    existingUser.dataProvenance === DataProvenance.DEMO &&
+    existingUser.emailNormalized === fixture.email.toLowerCase()
+  ) {
+    // Phase 09 adds one deterministic suspended-candidate fixture. This
+    // one-way reconciliation upgrades the previous sealed dataset once; every
+    // subsequent run remains projection-verification-only.
+    await tx.user.update({
+      where: { id: userId },
+      data: { status: UserStatus.SUSPENDED },
+    });
+  }
   await ensureRow({
     entity: "User",
     naturalKey: fixture.email,
@@ -525,14 +594,22 @@ async function seedCandidate(
         tx.candidateDocumentMetadata.findUnique({ where: { id } }),
       create: () =>
         tx.candidateDocumentMetadata.create({
-          data: { ...expected, purpose: "CV", status: "ACTIVE", createdAt: profileCreatedAt },
+          data: {
+            ...expected,
+            purpose: "CV",
+            status: "ACTIVE",
+            createdAt: profileCreatedAt,
+          },
         }),
     });
   }
 
   if (fixture.finalOnboardingStatus === "COMPLETE") {
     await tx.candidateProfile.updateMany({
-      where: { id: candidateProfileId, onboardingStatus: OnboardingStatus.DRAFT },
+      where: {
+        id: candidateProfileId,
+        onboardingStatus: OnboardingStatus.DRAFT,
+      },
       data: { onboardingStatus: OnboardingStatus.COMPLETE },
     });
   }
@@ -550,10 +627,7 @@ async function seedCandidate(
   for (const [eventIndex, kind] of fixture.onboardingHistory.entries()) {
     const naturalKey = `${fixture.key}:${String(eventIndex).padStart(2, "0")}:${kind}`;
     const id = stableSeedId("candidate-onboarding-event", naturalKey);
-    const createdAt = dateAt(
-      profileCreatedAt,
-      (eventIndex + 1) * 10 * DAY_MS,
-    );
+    const createdAt = dateAt(profileCreatedAt, (eventIndex + 1) * 10 * DAY_MS);
     const expected = {
       id,
       candidateProfileId,
@@ -594,8 +668,8 @@ async function seedRadarProfilesAndConsents(
       candidateProfileId: candidate.id,
       kind: RadarConsentKind.TALENT_RADAR_VISIBILITY,
       granted: fixture.radarConsent === "GRANTED",
-      noticeVersion: "talent-radar-v1",
-      noticeHash: sha256Utf8("talent-radar-notice-v1"),
+      noticeVersion: RADAR_CONSENT_NOTICE_V1.noticeVersion,
+      noticeHash: RADAR_CONSENT_NOTICE_V1.hash,
       actorUserId: candidate.userId,
       effectiveAt,
       createdAt: effectiveAt,
@@ -610,7 +684,9 @@ async function seedRadarProfilesAndConsents(
   }
 
   for (let index = 0; index < 10; index += 1) {
-    const fixture = CANDIDATE_FIXTURES[index] as (typeof CANDIDATE_FIXTURES)[number];
+    const fixture = CANDIDATE_FIXTURES[
+      index
+    ] as (typeof CANDIDATE_FIXTURES)[number];
     const candidate = candidates[index] as CandidateWorkflowCandidateHandle;
     const publishedAt = dateAt(anchorAt, (-20 + index) * HOUR_MS);
     const projection = {
@@ -642,7 +718,9 @@ async function seedRadarProfilesAndConsents(
       expected,
       findExisting: () => db.radarProfile.findUnique({ where: { id } }),
       create: () =>
-        db.radarProfile.create({ data: { ...expected, createdAt: publishedAt } }),
+        db.radarProfile.create({
+          data: { ...expected, createdAt: publishedAt },
+        }),
     });
   }
 }
@@ -666,7 +744,9 @@ async function seedRadarMappingsAndSearchEvidence(
       const epochLabel = epochLabels[epochIndex] as string;
       const validTo = dateAt(epochStart, 30 * DAY_MS);
       for (let candidateIndex = 0; candidateIndex < 10; candidateIndex += 1) {
-        const candidate = candidates[candidateIndex] as CandidateWorkflowCandidateHandle;
+        const candidate = candidates[
+          candidateIndex
+        ] as CandidateWorkflowCandidateHandle;
         const naturalKey = `${company.slug}:${epochLabel}:${candidate.key}`;
         const id = stableSeedId("radar-opaque-mapping", naturalKey);
         const revoked = epochIndex === 0 && candidateIndex === companyIndex;
@@ -690,7 +770,8 @@ async function seedRadarMappingsAndSearchEvidence(
           entity: "RadarOpaqueMapping",
           naturalKey,
           expected,
-          findExisting: () => db.radarOpaqueMapping.findUnique({ where: { id } }),
+          findExisting: () =>
+            db.radarOpaqueMapping.findUnique({ where: { id } }),
           create: () => {
             const { envelope } = encryptRadarOpaqueToken(
               crypto.radarLookupKeys,
@@ -725,14 +806,18 @@ async function seedRadarMappingsAndSearchEvidence(
           ({ version }) => version === mapping.lookupKeyVersion,
         );
         if (lookupKey === undefined) {
-          throw new Error(`RadarOpaqueMapping ${naturalKey} has no readable lookup key.`);
+          throw new Error(
+            `RadarOpaqueMapping ${naturalKey} has no readable lookup key.`,
+          );
         }
         const lookup = buildRadarOpaqueLookup(token, [lookupKey], binding);
         if (
           lookup.lookupKeyVersion !== mapping.lookupKeyVersion ||
           lookup.lookupHmac !== mapping.lookupHmac
         ) {
-          throw new Error(`RadarOpaqueMapping ${naturalKey} failed semantic verification.`);
+          throw new Error(
+            `RadarOpaqueMapping ${naturalKey} failed semantic verification.`,
+          );
         }
       }
 
@@ -752,7 +837,8 @@ async function seedRadarMappingsAndSearchEvidence(
         entity: "RadarSearchBudget",
         naturalKey: searchNaturalKey,
         expected: budgetExpected,
-        findExisting: () => db.radarSearchBudget.findUnique({ where: { id: budgetId } }),
+        findExisting: () =>
+          db.radarSearchBudget.findUnique({ where: { id: budgetId } }),
         create: () => db.radarSearchBudget.create({ data: budgetExpected }),
       });
 
@@ -777,13 +863,17 @@ async function seedRadarMappingsAndSearchEvidence(
         entity: "RadarSearchSession",
         naturalKey: searchNaturalKey,
         expected: sessionExpected,
-        findExisting: () => db.radarSearchSession.findUnique({ where: { id: sessionId } }),
+        findExisting: () =>
+          db.radarSearchSession.findUnique({ where: { id: sessionId } }),
         create: () => db.radarSearchSession.create({ data: sessionExpected }),
       });
 
       for (let position = 0; position < 5; position += 1) {
-        const candidateIndex = (companyIndex * 3 + epochIndex * 2 + position) % 10;
-        const candidate = candidates[candidateIndex] as CandidateWorkflowCandidateHandle;
+        const candidateIndex =
+          (companyIndex * 3 + epochIndex * 2 + position) % 10;
+        const candidate = candidates[
+          candidateIndex
+        ] as CandidateWorkflowCandidateHandle;
         const candidateNaturalKey = `${company.slug}:${epochLabel}:${position}`;
         const id = stableSeedId(
           "radar-search-session-candidate",
@@ -801,7 +891,8 @@ async function seedRadarMappingsAndSearchEvidence(
           expected,
           findExisting: () =>
             db.radarSearchSessionCandidate.findUnique({ where: { id } }),
-          create: () => db.radarSearchSessionCandidate.create({ data: expected }),
+          create: () =>
+            db.radarSearchSessionCandidate.create({ data: expected }),
         });
       }
     }
@@ -811,10 +902,11 @@ async function seedRadarMappingsAndSearchEvidence(
 type PublishedRevisionSnapshot = Readonly<{
   id: string;
   jobId: string;
-  applicationContactKind: string;
+  title: string;
+  applicationContactKind: ApplicationContactKind;
   applicationContactValue: string;
-  applicationEffort: string;
-  requiredDocumentKinds: readonly string[];
+  applicationEffort: ApplicationEffort;
+  requiredDocumentKinds: readonly RequiredDocumentKind[];
   responseTargetDays: number;
 }>;
 
@@ -822,12 +914,15 @@ async function loadPublishedRevisionSnapshots(
   db: DatabaseClient,
   publishedJobs: readonly CandidateWorkflowJobHandle[],
 ): Promise<ReadonlyMap<string, PublishedRevisionSnapshot>> {
-  const revisionIds = publishedJobs.map((job) => job.publishedRevisionId as string);
+  const revisionIds = publishedJobs.map(
+    (job) => job.publishedRevisionId as string,
+  );
   const revisions = await db.jobRevision.findMany({
     where: { id: { in: revisionIds } },
     select: {
       id: true,
       jobId: true,
+      title: true,
       applicationContactKind: true,
       applicationContactValue: true,
       applicationEffort: true,
@@ -836,7 +931,9 @@ async function loadPublishedRevisionSnapshots(
     },
   });
   if (revisions.length !== publishedJobs.length) {
-    throw new Error("Candidate workflow seed could not resolve every published revision.");
+    throw new Error(
+      "Candidate workflow seed could not resolve every published revision.",
+    );
   }
   const revisionById = new Map<string, PublishedRevisionSnapshot>();
   for (const revision of revisions) {
@@ -860,24 +957,60 @@ async function seedApplication(
   publishedJobs: readonly CandidateWorkflowJobHandle[],
   companiesById: ReadonlyMap<string, CandidateWorkflowCompanyHandle>,
   revisionsById: ReadonlyMap<string, PublishedRevisionSnapshot>,
-): Promise<Readonly<{ id: string; jobId: string; candidateProfileId: string; conversationId: string }>> {
-  const candidate = candidates[fixture.candidateIndex] as CandidateWorkflowCandidateHandle;
+): Promise<
+  Readonly<{
+    id: string;
+    jobId: string;
+    candidateProfileId: string;
+    conversationId: string;
+  }>
+> {
+  const candidate = candidates[
+    fixture.candidateIndex
+  ] as CandidateWorkflowCandidateHandle;
   const candidateFixture = CANDIDATE_FIXTURES[
     fixture.candidateIndex
   ] as (typeof CANDIDATE_FIXTURES)[number];
   if (candidateFixture.firstName === null) {
-    throw new Error(`Application fixture ${fixture.key} uses an incomplete identity.`);
+    throw new Error(
+      `Application fixture ${fixture.key} uses an incomplete identity.`,
+    );
   }
   const job = publishedJobs[fixture.jobIndex] as CandidateWorkflowJobHandle;
   const revisionId = job.publishedRevisionId as string;
   const revision = revisionsById.get(revisionId);
   const company = companiesById.get(job.companyId);
   if (revision === undefined || company === undefined) {
-    throw new Error(`Application fixture ${fixture.key} has unresolved job scope.`);
+    throw new Error(
+      `Application fixture ${fixture.key} has unresolved job scope.`,
+    );
   }
   const id = stableSeedId("application", fixture.key);
   const submittedAt = dateAt(anchorAt, (-70 + applicationIndex * 0.5) * DAY_MS);
   const coverLetter = `Fiktives Motivationsschreiben für Demo-Bewerbung ${String(applicationIndex + 1).padStart(3, "0")}.`;
+  const confirmation = buildApplicationConfirmationProjection({
+    candidate: {
+      firstName: candidateFixture.firstName,
+      lastName: candidateFixture.lastName,
+      email: candidateFixture.email,
+    },
+    recipient: {
+      companyName: company.name,
+      contactKind: revision.applicationContactKind,
+      contactValue: revision.applicationContactValue,
+    },
+    job: {
+      revisionId,
+      slug: job.slug,
+      title: revision.title,
+      responseTargetDays: revision.responseTargetDays,
+      applicationEffort: revision.applicationEffort,
+      requiredDocumentKinds: revision.requiredDocumentKinds,
+    },
+  });
+  const selectedDocumentIds = fixture.linksCv
+    ? [stableSeedId("candidate-document", `${candidateFixture.key}:cv`)]
+    : [];
   const status = enumValue(ApplicationStatus, fixture.status);
   const rejected = fixture.status === "REJECTED";
   const applicationExpected = {
@@ -887,9 +1020,7 @@ async function seedApplication(
     candidateProfileId: candidate.id,
     status,
     coverLetter,
-    rejectionReason: rejected
-      ? ApplicationRejectionReason.NOT_A_MATCH
-      : null,
+    rejectionReason: rejected ? ApplicationRejectionReason.NOT_A_MATCH : null,
     rejectionNote: rejected ? "Fiktive, sachliche Demo-Absage." : null,
     submittedAt,
   };
@@ -898,7 +1029,18 @@ async function seedApplication(
     naturalKey: fixture.key,
     expected: applicationExpected,
     findExisting: () => tx.application.findUnique({ where: { id } }),
-    create: () => tx.application.create({ data: applicationExpected }),
+    create: () =>
+      tx.application.create({
+        data: {
+          ...applicationExpected,
+          idempotencyKey: `seed:application:${fixture.key}`,
+          submissionPayloadHash: applicationSubmissionPayloadHash({
+            confirmationSnapshotHash: confirmation.confirmationSnapshotHash,
+            coverLetter,
+            selectedDocumentIds,
+          }),
+        },
+      }),
   });
 
   const snapshotId = stableSeedId("application-snapshot", fixture.key);
@@ -916,8 +1058,8 @@ async function seedApplication(
     responseTargetDays: revision.responseTargetDays,
     applicationEffort: revision.applicationEffort,
     requiredDocumentKinds: revision.requiredDocumentKinds,
-    confirmationNoticeVersion: "application-confirmation-v1",
-    confirmationNoticeHash: sha256Utf8("application-confirmation-notice-v1"),
+    confirmationNoticeVersion: confirmation.confirmationVersion,
+    confirmationNoticeHash: confirmation.confirmationNoticeHash,
     submittedAt,
   };
   await ensureRow({
@@ -925,23 +1067,25 @@ async function seedApplication(
     naturalKey: fixture.key,
     expected: snapshotExpected,
     findExisting: () =>
-      tx.applicationSubmissionSnapshot.findUnique({ where: { id: snapshotId } }),
+      tx.applicationSubmissionSnapshot.findUnique({
+        where: { id: snapshotId },
+      }),
     create: () =>
       tx.applicationSubmissionSnapshot.create({
         data: {
           ...snapshotExpected,
-          applicationContactKind: snapshotExpected.applicationContactKind as never,
+          applicationContactKind:
+            snapshotExpected.applicationContactKind as never,
           applicationEffort: snapshotExpected.applicationEffort as never,
-          requiredDocumentKinds: snapshotExpected.requiredDocumentKinds as never,
+          requiredDocumentKinds:
+            snapshotExpected.requiredDocumentKinds as never,
+          confirmationSnapshotHash: confirmation.confirmationSnapshotHash,
         },
       }),
   });
 
   if (fixture.linksCv) {
-    const documentMetadataId = stableSeedId(
-      "candidate-document",
-      `${candidateFixture.key}:cv`,
-    );
+    const documentMetadataId = selectedDocumentIds[0] as string;
     const documentId = stableSeedId("application-document", fixture.key);
     const documentExpected = {
       id: documentId,
@@ -953,10 +1097,21 @@ async function seedApplication(
       naturalKey: fixture.key,
       expected: documentExpected,
       findExisting: () =>
-        tx.applicationSubmissionDocument.findUnique({ where: { id: documentId } }),
+        tx.applicationSubmissionDocument.findUnique({
+          where: { id: documentId },
+        }),
       create: () =>
         tx.applicationSubmissionDocument.create({
-          data: { ...documentExpected, createdAt: submittedAt },
+          data: {
+            ...documentExpected,
+            safeFilenameSnapshot: "lebenslauf.pdf",
+            mimeTypeSnapshot: "application/pdf",
+            sizeBytesSnapshot: 123_456,
+            storageKeyHash: sha256Utf8(
+              `mock-storage/${candidate.id}/lebenslauf.pdf`,
+            ),
+            createdAt: submittedAt,
+          },
         }),
     });
   }
@@ -980,45 +1135,50 @@ async function seedApplication(
     entity: "ApplicationEvent",
     naturalKey: submittedEventNaturalKey,
     expected: submittedEventExpected,
-    findExisting: () => tx.applicationEvent.findUnique({ where: { id: submittedEventId } }),
-    create: () => tx.applicationEvent.create({ data: submittedEventExpected }),
+    findExisting: () =>
+      tx.applicationEvent.findUnique({ where: { id: submittedEventId } }),
+    create: () =>
+      tx.applicationEvent.create({
+        data: {
+          ...submittedEventExpected,
+          idempotencyKey: `seed:application-event:${submittedEventNaturalKey}`,
+          correlationId: `seed:application:${fixture.key}`,
+        },
+      }),
   });
 
-  if (fixture.hasDetailedHistory) {
-    const currentEventNaturalKey = `${fixture.key}:current-status`;
-    const currentEventId = stableSeedId(
-      "application-event",
-      currentEventNaturalKey,
-    );
-    const priorStatusByTarget: Readonly<Record<string, string>> = {
-      IN_REVIEW: "SUBMITTED",
-      SHORTLISTED: "IN_REVIEW",
-      INTERVIEW: "SHORTLISTED",
-      OFFER: "INTERVIEW",
-      HIRED: "OFFER",
-      REJECTED: "IN_REVIEW",
-      WITHDRAWN: "SUBMITTED",
-    };
-    const priorStatus = priorStatusByTarget[fixture.status];
-    if (priorStatus === undefined) {
-      throw new Error(`No valid application history edge for ${fixture.status}.`);
-    }
-    const currentEventExpected = {
-      id: currentEventId,
+  for (const transition of applicationTransitionFixtures(fixture)) {
+    const eventId = stableSeedId("application-event", transition.naturalKey);
+    const eventExpected = {
+      id: eventId,
       applicationId: id,
-      actorUserId: company.ownerUserId,
+      actorUserId:
+        transition.actor === "CANDIDATE"
+          ? candidate.userId
+          : company.ownerUserId,
       kind: ApplicationEventKind.STATUS_CHANGE,
-      fromStatus: enumValue(ApplicationStatus, priorStatus),
-      toStatus: status,
-      metadata: { source: "demo-pipeline-history" },
-      createdAt: dateAt(submittedAt, 2 * DAY_MS),
+      fromStatus: enumValue(ApplicationStatus, transition.fromStatus),
+      toStatus: enumValue(ApplicationStatus, transition.toStatus),
+      metadata: { source: "phase-09-demo-status-chain-v1" },
+      createdAt: dateAt(
+        submittedAt,
+        Math.round((2 * DAY_MS * transition.stepIndex) / transition.stepCount),
+      ),
     };
     await ensureRow({
       entity: "ApplicationEvent",
-      naturalKey: currentEventNaturalKey,
-      expected: currentEventExpected,
-      findExisting: () => tx.applicationEvent.findUnique({ where: { id: currentEventId } }),
-      create: () => tx.applicationEvent.create({ data: currentEventExpected }),
+      naturalKey: transition.naturalKey,
+      expected: eventExpected,
+      findExisting: () =>
+        tx.applicationEvent.findUnique({ where: { id: eventId } }),
+      create: () =>
+        tx.applicationEvent.create({
+          data: {
+            ...eventExpected,
+            idempotencyKey: `seed:application-event:${transition.naturalKey}`,
+            correlationId: `seed:application:${fixture.key}`,
+          },
+        }),
     });
   }
 
@@ -1037,7 +1197,8 @@ async function seedApplication(
     entity: "Conversation",
     naturalKey: conversationNaturalKey,
     expected: conversationExpected,
-    findExisting: () => tx.conversation.findUnique({ where: { id: conversationId } }),
+    findExisting: () =>
+      tx.conversation.findUnique({ where: { id: conversationId } }),
     create: () => tx.conversation.create({ data: conversationExpected }),
   });
 
@@ -1061,8 +1222,11 @@ async function seedApplication(
     naturalKey: candidateParticipantNaturalKey,
     expected: candidateParticipantExpected,
     findExisting: () =>
-      tx.conversationParticipant.findUnique({ where: { id: candidateParticipantId } }),
-    create: () => tx.conversationParticipant.create({ data: candidateParticipantExpected }),
+      tx.conversationParticipant.findUnique({
+        where: { id: candidateParticipantId },
+      }),
+    create: () =>
+      tx.conversationParticipant.create({ data: candidateParticipantExpected }),
   });
 
   const companyParticipantNaturalKey = `${fixture.key}:company`;
@@ -1085,13 +1249,19 @@ async function seedApplication(
     naturalKey: companyParticipantNaturalKey,
     expected: companyParticipantExpected,
     findExisting: () =>
-      tx.conversationParticipant.findUnique({ where: { id: companyParticipantId } }),
-    create: () => tx.conversationParticipant.create({ data: companyParticipantExpected }),
+      tx.conversationParticipant.findUnique({
+        where: { id: companyParticipantId },
+      }),
+    create: () =>
+      tx.conversationParticipant.create({ data: companyParticipantExpected }),
   });
 
-  if (fixture.hasDetailedHistory) {
+  if (fixture.hasConversationMessages) {
     const candidateMessageNaturalKey = `${fixture.key}:candidate-message`;
-    const candidateMessageId = stableSeedId("message", candidateMessageNaturalKey);
+    const candidateMessageId = stableSeedId(
+      "message",
+      candidateMessageNaturalKey,
+    );
     const candidateMessageExpected = {
       id: candidateMessageId,
       conversationId,
@@ -1104,12 +1274,16 @@ async function seedApplication(
       entity: "Message",
       naturalKey: candidateMessageNaturalKey,
       expected: candidateMessageExpected,
-      findExisting: () => tx.message.findUnique({ where: { id: candidateMessageId } }),
+      findExisting: () =>
+        tx.message.findUnique({ where: { id: candidateMessageId } }),
       create: () => tx.message.create({ data: candidateMessageExpected }),
     });
 
     const employerMessageNaturalKey = `${fixture.key}:employer-message`;
-    const employerMessageId = stableSeedId("message", employerMessageNaturalKey);
+    const employerMessageId = stableSeedId(
+      "message",
+      employerMessageNaturalKey,
+    );
     const employerMessageExpected = {
       id: employerMessageId,
       conversationId,
@@ -1122,7 +1296,8 @@ async function seedApplication(
       entity: "Message",
       naturalKey: employerMessageNaturalKey,
       expected: employerMessageExpected,
-      findExisting: () => tx.message.findUnique({ where: { id: employerMessageId } }),
+      findExisting: () =>
+        tx.message.findUnique({ where: { id: employerMessageId } }),
       create: () => tx.message.create({ data: employerMessageExpected }),
     });
   }
@@ -1140,11 +1315,15 @@ async function seedSavedJobs(
   anchorAt: Date,
   candidates: readonly CandidateWorkflowCandidateHandle[],
   publishedJobs: readonly CandidateWorkflowJobHandle[],
+  expiredJobs: readonly CandidateWorkflowJobHandle[],
 ): Promise<void> {
   for (const [index, fixture] of SAVED_JOB_FIXTURES.entries()) {
     const id = stableSeedId("saved-job", fixture.key);
-    const candidate = candidates[fixture.candidateIndex] as CandidateWorkflowCandidateHandle;
-    const job = publishedJobs[fixture.jobIndex] as CandidateWorkflowJobHandle;
+    const candidate = candidates[
+      fixture.candidateIndex
+    ] as CandidateWorkflowCandidateHandle;
+    const jobPool = fixture.jobPool === "EXPIRED" ? expiredJobs : publishedJobs;
+    const job = jobPool[fixture.jobIndex] as CandidateWorkflowJobHandle;
     const expected = {
       id,
       candidateProfileId: candidate.id,
@@ -1167,150 +1346,425 @@ async function seedJobAlerts(
   candidates: readonly CandidateWorkflowCandidateHandle[],
   publishedJobs: readonly CandidateWorkflowJobHandle[],
 ): Promise<void> {
-  const terminalEventByStatus: Readonly<Record<string, string>> = {
-    PAUSED: "PAUSED",
-    UNSUBSCRIBED: "UNSUBSCRIBED",
-    DELETED: "DELETED",
-  };
+  const digestJobIds = [
+    ...new Set(
+      JOB_ALERT_FIXTURES.flatMap((fixture) =>
+        fixture.jobIndices.map(
+          (jobIndex) =>
+            (publishedJobs[jobIndex] as CandidateWorkflowJobHandle).id,
+        ),
+      ),
+    ),
+  ];
+  const digestJobReferences = await db.job.findMany({
+    where: { id: { in: digestJobIds } },
+    select: { id: true, publishedCategoryId: true, publishedCantonId: true },
+  });
+  const firstDigestJob = digestJobReferences[0];
+  if (
+    firstDigestJob === undefined ||
+    firstDigestJob.publishedCategoryId === null ||
+    firstDigestJob.publishedCantonId === null ||
+    digestJobReferences.length !== digestJobIds.length ||
+    digestJobReferences.some(
+      (job) =>
+        job.publishedCategoryId !== firstDigestJob.publishedCategoryId ||
+        job.publishedCantonId !== firstDigestJob.publishedCantonId,
+    )
+  ) {
+    throw new Error(
+      "JobAlert demo digest fixtures must share one published category and Canton.",
+    );
+  }
+  const alertQuery = Object.freeze({
+    ...defaultJobAlertQuery(),
+    categoryId: firstDigestJob.publishedCategoryId,
+    cantonId: firstDigestJob.publishedCantonId,
+  });
 
   for (const [index, fixture] of JOB_ALERT_FIXTURES.entries()) {
-    const candidate = candidates[fixture.candidateIndex] as CandidateWorkflowCandidateHandle;
+    const candidate = candidates[
+      fixture.candidateIndex
+    ] as CandidateWorkflowCandidateHandle;
+    const candidateFixture = CANDIDATE_FIXTURES[
+      fixture.candidateIndex
+    ] as (typeof CANDIDATE_FIXTURES)[number];
+    const recipient = candidateFixture.email;
     const id = stableSeedId("job-alert", fixture.key);
     const createdAt = dateAt(anchorAt, (-45 + index) * DAY_MS);
-    const nextDueAt = dateAt(anchorAt, (1 + (index % 7)) * DAY_MS);
+    const consentAt = dateAt(createdAt, -HOUR_MS);
+    const scheduledFor = firstJobAlertDueAt(
+      createdAt,
+      enumValue(AlertFrequency, fixture.frequency),
+    );
+    const runAt = dateAt(anchorAt, -2 * HOUR_MS);
+    const terminalAt = dateAt(runAt, 30 * 60 * 1_000);
+    const nextDueAt = nextJobAlertDueAt(
+      runAt,
+      enumValue(AlertFrequency, fixture.frequency),
+    );
     const alertExpected = {
       id,
       candidateProfileId: candidate.id,
-      query: {
-        category: CANDIDATE_FIXTURES[fixture.candidateIndex]?.categorySlug,
-        canton: CANDIDATE_FIXTURES[fixture.candidateIndex]?.cantonCode,
-        page: 1,
-      },
+      query: alertQuery,
       frequency: enumValue(AlertFrequency, fixture.frequency),
       status: enumValue(JobAlertStatus, fixture.status),
       nextDueAt,
-      lastSuccessfulCutoffAt: dateAt(anchorAt, -2 * DAY_MS),
+      lastSuccessfulCutoffAt: runAt,
       createdAt,
+      updatedAt: fixture.status === "ACTIVE" ? runAt : terminalAt,
     };
-    await ensureRow({
-      entity: "JobAlert",
-      naturalKey: fixture.key,
-      expected: alertExpected,
-      findExisting: () => db.jobAlert.findUnique({ where: { id } }),
-      create: () => db.jobAlert.create({ data: alertExpected }),
-    });
-
-    const createdEventNaturalKey = `${fixture.key}:created`;
-    const createdEventId = stableSeedId("job-alert-event", createdEventNaturalKey);
-    const createdEventExpected = {
-      id: createdEventId,
-      jobAlertId: id,
-      kind: JobAlertEventKind.CREATED,
-      actorUserId: candidate.userId,
-      reasonCode: null,
-      createdAt,
-    };
-    await ensureRow({
-      entity: "JobAlertEvent",
-      naturalKey: createdEventNaturalKey,
-      expected: createdEventExpected,
-      findExisting: () => db.jobAlertEvent.findUnique({ where: { id: createdEventId } }),
-      create: () => db.jobAlertEvent.create({ data: createdEventExpected }),
-    });
-
-    if (fixture.status !== "ACTIVE") {
-      const eventKind = terminalEventByStatus[fixture.status];
-      if (eventKind === undefined) {
-        throw new Error(`Missing JobAlert event mapping for ${fixture.status}.`);
-      }
-      const eventNaturalKey = `${fixture.key}:${fixture.status.toLowerCase()}`;
-      const eventId = stableSeedId("job-alert-event", eventNaturalKey);
-      const eventExpected = {
-        id: eventId,
-        jobAlertId: id,
-        kind: enumValue(JobAlertEventKind, eventKind),
-        actorUserId: candidate.userId,
-        reasonCode: "demo-lifecycle",
-        createdAt: dateAt(createdAt, DAY_MS),
-      };
-      await ensureRow({
-        entity: "JobAlertEvent",
-        naturalKey: eventNaturalKey,
-        expected: eventExpected,
-        findExisting: () => db.jobAlertEvent.findUnique({ where: { id: eventId } }),
-        create: () => db.jobAlertEvent.create({ data: eventExpected }),
-      });
-    }
-
     const digestId = stableSeedId("job-alert-digest", fixture.key);
-    const scheduledFor = dateAt(anchorAt, (-3 + (index % 3)) * DAY_MS);
     const digestExpected = {
       id: digestId,
       jobAlertId: id,
-      policyVersion: "job-alert-digest-v1",
-      windowStart: dateAt(scheduledFor, -7 * DAY_MS),
-      windowEnd: scheduledFor,
+      policyVersion: JOB_ALERT_POLICY_V1.version,
+      alertNameSnapshot: "Dein Jobabo",
+      recipientEmailSnapshot: recipient,
+      windowStart: createdAt,
+      windowEnd: runAt,
       scheduledFor,
-      runAt: dateAt(scheduledFor, 5 * 60 * 1_000),
+      runAt,
       itemCount: 2,
-      createdAt: scheduledFor,
+      createdAt: runAt,
     };
-    await ensureRow({
-      entity: "JobAlertDigest",
-      naturalKey: fixture.key,
-      expected: digestExpected,
-      findExisting: () => db.jobAlertDigest.findUnique({ where: { id: digestId } }),
-      create: () => db.jobAlertDigest.create({ data: digestExpected }),
-    });
-
-    for (const [itemIndex, jobIndex] of fixture.jobIndices.entries()) {
-      const itemNaturalKey = `${fixture.key}:${itemIndex}`;
-      const itemId = stableSeedId("job-alert-digest-item", itemNaturalKey);
-      const job = publishedJobs[jobIndex] as CandidateWorkflowJobHandle;
-      const itemExpected = {
-        id: itemId,
-        digestId,
-        jobAlertId: id,
-        jobId: job.id,
-        sortOrder: itemIndex,
-        createdAt: digestExpected.runAt,
-      };
-      await ensureRow({
-        entity: "JobAlertDigestItem",
-        naturalKey: itemNaturalKey,
-        expected: itemExpected,
-        findExisting: () => db.jobAlertDigestItem.findUnique({ where: { id: itemId } }),
-        create: () => db.jobAlertDigestItem.create({ data: itemExpected }),
-      });
-    }
-
     const tokenId = stableSeedId("job-alert-unsubscribe-token", fixture.key);
-    const issuedAt = digestExpected.runAt;
+    const token = buildDemoJobAlertUnsubscribeToken(fixture.key, runAt);
     const tokenExpected = {
       id: tokenId,
       jobAlertId: id,
       digestId,
-      tokenHash: sha256Utf8(`job-alert-unsubscribe:${fixture.key}`),
-      issuedAt,
-      expiresAt: dateAt(issuedAt, fixture.expiresAtBoundaryDays * DAY_MS),
+      tokenHash: token.tokenHash,
+      issuedAt: token.issuedAt,
+      expiresAt: token.expiresAt,
       usedAt:
         fixture.status === "UNSUBSCRIBED" || fixture.status === "DELETED"
-          ? dateAt(issuedAt, DAY_MS)
+          ? terminalAt
           : null,
     };
-    await ensureRow({
-      entity: "JobAlertUnsubscribeToken",
-      naturalKey: fixture.key,
-      expected: tokenExpected,
-      findExisting: () =>
-        db.jobAlertUnsubscribeToken.findUnique({ where: { id: tokenId } }),
-      create: () => db.jobAlertUnsubscribeToken.create({ data: tokenExpected }),
+    const persistedEmail = renderEmailTemplate("job_alert_digest_mock", {
+      alertName: "Dein Jobabo",
+      jobCount: digestExpected.itemCount,
+    });
+    const emailNaturalKey = `${fixture.key}:digest-recorded`;
+    const emailId = stableSeedId("email-log", emailNaturalKey);
+    const emailExpected = {
+      id: emailId,
+      recipient,
+      purpose: "job_alert_digest_mock",
+      templateKey: "job_alert_digest_mock",
+      payload: {
+        schemaVersion: "1",
+        deliveryStatus: "mock_recorded",
+        externalDeliveryClaimed: false,
+        subject: persistedEmail.subject,
+        body: persistedEmail.body,
+      },
+      status: "MOCK_RECORDED" as const,
+      providerReference: `mock-email-v2:seed:${sha256Utf8(emailNaturalKey)}`,
+      errorCode: null,
+      createdAt: runAt,
+    };
+
+    await db.$transaction(async (transaction) => {
+      await reconcileLegacyDemoJobAlertProjection(transaction, {
+        current: alertExpected,
+        legacyQuery: {
+          category: candidateFixture.categorySlug,
+          canton: candidateFixture.cantonCode,
+          page: 1,
+        },
+        legacyLastSuccessfulCutoffAt: dateAt(anchorAt, -2 * DAY_MS),
+        legacyNextDueAt: dateAt(anchorAt, (1 + (index % 7)) * DAY_MS),
+      });
+      const consentNaturalKey = `${fixture.key}:delivery-granted`;
+      const consentId = stableSeedId("user-consent-event", consentNaturalKey);
+      const consentExpected = {
+        id: consentId,
+        userId: candidate.userId,
+        kind: UserConsentKind.JOB_ALERT_DELIVERY,
+        granted: true,
+        purpose: JOB_ALERT_DELIVERY_NOTICE_V1.purpose,
+        noticeVersion: JOB_ALERT_DELIVERY_NOTICE_V1.version,
+        noticeHash: jobAlertConsentNoticeHash(),
+        actorUserId: candidate.userId,
+        effectiveAt: consentAt,
+        createdAt: consentAt,
+      };
+      await ensureRow({
+        entity: "UserConsentEvent",
+        naturalKey: consentNaturalKey,
+        expected: consentExpected,
+        findExisting: () =>
+          transaction.userConsentEvent.findUnique({ where: { id: consentId } }),
+        create: () =>
+          transaction.userConsentEvent.create({ data: consentExpected }),
+      });
+
+      await ensureRow({
+        entity: "JobAlert",
+        naturalKey: fixture.key,
+        expected: alertExpected,
+        findExisting: () => transaction.jobAlert.findUnique({ where: { id } }),
+        create: () => transaction.jobAlert.create({ data: alertExpected }),
+      });
+
+      const createdEventNaturalKey = `${fixture.key}:created`;
+      const createdEventId = stableSeedId(
+        "job-alert-event",
+        createdEventNaturalKey,
+      );
+      const createdEventExpected = {
+        id: createdEventId,
+        jobAlertId: id,
+        kind: JobAlertEventKind.CREATED,
+        actorUserId: candidate.userId,
+        reasonCode: "EXPLICIT_ACTIVATION",
+        createdAt,
+      };
+      await ensureRow({
+        entity: "JobAlertEvent",
+        naturalKey: createdEventNaturalKey,
+        expected: createdEventExpected,
+        findExisting: () =>
+          transaction.jobAlertEvent.findUnique({
+            where: { id: createdEventId },
+          }),
+        create: () =>
+          transaction.jobAlertEvent.create({ data: createdEventExpected }),
+      });
+
+      await ensureRow({
+        entity: "JobAlertDigest",
+        naturalKey: fixture.key,
+        expected: digestExpected,
+        findExisting: () =>
+          transaction.jobAlertDigest.findUnique({ where: { id: digestId } }),
+        create: () =>
+          transaction.jobAlertDigest.create({ data: digestExpected }),
+      });
+
+      for (const [itemIndex, jobIndex] of fixture.jobIndices.entries()) {
+        const itemNaturalKey = `${fixture.key}:${itemIndex}`;
+        const itemId = stableSeedId("job-alert-digest-item", itemNaturalKey);
+        const job = publishedJobs[jobIndex] as CandidateWorkflowJobHandle;
+        const itemExpected = {
+          id: itemId,
+          digestId,
+          jobAlertId: id,
+          jobId: job.id,
+          sortOrder: itemIndex,
+          createdAt: runAt,
+        };
+        await ensureRow({
+          entity: "JobAlertDigestItem",
+          naturalKey: itemNaturalKey,
+          expected: itemExpected,
+          findExisting: () =>
+            transaction.jobAlertDigestItem.findUnique({
+              where: { id: itemId },
+            }),
+          create: () =>
+            transaction.jobAlertDigestItem.create({ data: itemExpected }),
+        });
+      }
+
+      await ensureRow({
+        entity: "JobAlertUnsubscribeToken",
+        naturalKey: fixture.key,
+        expected: tokenExpected,
+        findExisting: () =>
+          transaction.jobAlertUnsubscribeToken.findUnique({
+            where: { id: tokenId },
+          }),
+        create: () =>
+          transaction.jobAlertUnsubscribeToken.create({ data: tokenExpected }),
+      });
+
+      await ensureRow({
+        entity: "EmailLog",
+        naturalKey: emailNaturalKey,
+        expected: emailExpected,
+        findExisting: () =>
+          transaction.emailLog.findUnique({ where: { id: emailId } }),
+        create: () => transaction.emailLog.create({ data: emailExpected }),
+      });
+
+      const digestEventNaturalKey = `${fixture.key}:digest-recorded`;
+      const digestEventId = stableSeedId(
+        "job-alert-event",
+        digestEventNaturalKey,
+      );
+      const digestEventExpected = {
+        id: digestEventId,
+        jobAlertId: id,
+        kind: JobAlertEventKind.DIGEST_MOCK_RECORDED,
+        actorUserId: null,
+        reasonCode: JOB_ALERT_POLICY_V1.version,
+        createdAt: runAt,
+      };
+      await ensureRow({
+        entity: "JobAlertEvent",
+        naturalKey: digestEventNaturalKey,
+        expected: digestEventExpected,
+        findExisting: () =>
+          transaction.jobAlertEvent.findUnique({
+            where: { id: digestEventId },
+          }),
+        create: () =>
+          transaction.jobAlertEvent.create({ data: digestEventExpected }),
+      });
+
+      if (fixture.status !== "ACTIVE") {
+        const terminal = terminalJobAlertEvent(
+          fixture.status,
+          candidate.userId,
+        );
+        const eventNaturalKey = `${fixture.key}:${fixture.status.toLowerCase()}`;
+        const eventId = stableSeedId("job-alert-event", eventNaturalKey);
+        const eventExpected = {
+          id: eventId,
+          jobAlertId: id,
+          ...terminal,
+          createdAt: terminalAt,
+        };
+        await ensureRow({
+          entity: "JobAlertEvent",
+          naturalKey: eventNaturalKey,
+          expected: eventExpected,
+          findExisting: () =>
+            transaction.jobAlertEvent.findUnique({ where: { id: eventId } }),
+          create: () =>
+            transaction.jobAlertEvent.create({ data: eventExpected }),
+        });
+      }
     });
   }
 }
 
+async function reconcileLegacyDemoJobAlertProjection(
+  db: WriteClient,
+  input: Readonly<{
+    current: Readonly<{
+      id: string;
+      candidateProfileId: string;
+      query: Readonly<Record<string, unknown>>;
+      frequency: AlertFrequency;
+      status: JobAlertStatus;
+      nextDueAt: Date;
+      lastSuccessfulCutoffAt: Date;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
+    legacyQuery: Readonly<Record<string, unknown>>;
+    legacyLastSuccessfulCutoffAt: Date;
+    legacyNextDueAt: Date;
+  }>,
+) {
+  await db.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"
+    FROM "JobAlert"
+    WHERE "id" = ${input.current.id}::uuid
+    FOR UPDATE
+  `;
+  const existing = await db.jobAlert.findUnique({
+    where: { id: input.current.id },
+    select: {
+      candidateProfileId: true,
+      query: true,
+      frequency: true,
+      status: true,
+      nextDueAt: true,
+      lastSuccessfulCutoffAt: true,
+      createdAt: true,
+      updatedAt: true,
+      candidateProfile: {
+        select: { user: { select: { dataProvenance: true } } },
+      },
+    },
+  });
+  if (existing === null) return;
+
+  const commonProjectionMatches =
+    existing.candidateProfileId === input.current.candidateProfileId &&
+    existing.candidateProfile.user.dataProvenance === DataProvenance.DEMO &&
+    existing.frequency === input.current.frequency &&
+    existing.status === input.current.status &&
+    existing.createdAt.getTime() === input.current.createdAt.getTime();
+  const currentQueryMatches =
+    sha256CanonicalJson(existing.query as CanonicalJsonValue) ===
+    sha256CanonicalJson(input.current.query as CanonicalJsonValue);
+  const currentProjectionMatches =
+    commonProjectionMatches &&
+    currentQueryMatches &&
+    existing.nextDueAt.getTime() === input.current.nextDueAt.getTime() &&
+    existing.lastSuccessfulCutoffAt?.getTime() ===
+      input.current.lastSuccessfulCutoffAt.getTime() &&
+    existing.updatedAt.getTime() === input.current.updatedAt.getTime();
+  if (currentProjectionMatches) return;
+
+  const legacyQueryMatches =
+    sha256CanonicalJson(existing.query as CanonicalJsonValue) ===
+    sha256CanonicalJson(input.legacyQuery as CanonicalJsonValue);
+  const legacyProjectionMatches =
+    commonProjectionMatches &&
+    legacyQueryMatches &&
+    existing.nextDueAt.getTime() === input.legacyNextDueAt.getTime() &&
+    existing.lastSuccessfulCutoffAt?.getTime() ===
+      input.legacyLastSuccessfulCutoffAt.getTime();
+  if (!legacyProjectionMatches) return;
+
+  await db.jobAlert.update({
+    where: { id: input.current.id },
+    data: {
+      query: input.current.query as Prisma.InputJsonValue,
+      nextDueAt: input.current.nextDueAt,
+      lastSuccessfulCutoffAt: input.current.lastSuccessfulCutoffAt,
+      updatedAt: input.current.updatedAt,
+    },
+  });
+}
+
+export function buildDemoJobAlertUnsubscribeToken(
+  fixtureKey: string,
+  issuedAt: Date,
+) {
+  const entropy = Buffer.from(
+    sha256Utf8(`phase-09-demo-job-alert-token-v1:${fixtureKey}`),
+    "hex",
+  );
+  return createJobAlertUnsubscribeToken(issuedAt, () => entropy);
+}
+
+function terminalJobAlertEvent(status: string, candidateUserId: string) {
+  switch (status) {
+    case "PAUSED":
+      return Object.freeze({
+        kind: JobAlertEventKind.PAUSED,
+        actorUserId: candidateUserId,
+        reasonCode: "EXPLICIT_ALERT_ACTION",
+      });
+    case "UNSUBSCRIBED":
+      return Object.freeze({
+        kind: JobAlertEventKind.UNSUBSCRIBED,
+        actorUserId: null,
+        reasonCode: "ONE_CLICK_TOKEN",
+      });
+    case "DELETED":
+      return Object.freeze({
+        kind: JobAlertEventKind.DELETED,
+        actorUserId: candidateUserId,
+        reasonCode: "EXPLICIT_DELETE",
+      });
+    default:
+      throw new Error(`Missing JobAlert event mapping for ${status}.`);
+  }
+}
+
 function contactTiming(anchorAt: Date, key: string) {
-  const values: Readonly<Record<string, Readonly<{ createdAt: Date; terminalAt: Date | null }>>> = {
+  const values: Readonly<
+    Record<string, Readonly<{ createdAt: Date; terminalAt: Date | null }>>
+  > = {
     "contact-accepted-a": {
       createdAt: dateAt(anchorAt, -2 * DAY_MS),
       terminalAt: dateAt(anchorAt, -2 * DAY_MS + 2 * HOUR_MS),
@@ -1397,13 +1851,16 @@ async function seedContactCreditFunding(
       entity: "CreditLedgerEntry",
       naturalKey: grantNaturalKey,
       expected: grantExpected,
-      findExisting: () => db.creditLedgerEntry.findUnique({ where: { id: grantId } }),
+      findExisting: () =>
+        db.creditLedgerEntry.findUnique({ where: { id: grantId } }),
       create: () => db.creditLedgerEntry.create({ data: grantExpected }),
     });
   }
 
   for (const request of CONTACT_REQUEST_FIXTURES) {
-    const company = companies[request.companySlot] as CandidateWorkflowCompanyHandle;
+    const company = companies[
+      request.companySlot
+    ] as CandidateWorkflowCompanyHandle;
     const accountId = accountIds.get(request.companySlot) as string;
     const naturalKey = `candidate-workflows:${request.key}:consume`;
     const id = stableSeedId("credit-ledger-entry", naturalKey);
@@ -1449,18 +1906,24 @@ async function seedContactRequestsAndConversations(
   anchorAt: Date,
   candidates: readonly CandidateWorkflowCandidateHandle[],
   companies: readonly CandidateWorkflowCompanyHandle[],
-): Promise<Readonly<{
-  requests: readonly Readonly<{ id: string; status: string }>[];
-  conversations: readonly Readonly<{ id: string; kind: string }>[];
-  acceptedScopes: readonly AcceptedContactScope[];
-}>> {
+): Promise<
+  Readonly<{
+    requests: readonly Readonly<{ id: string; status: string }>[];
+    conversations: readonly Readonly<{ id: string; kind: string }>[];
+    acceptedScopes: readonly AcceptedContactScope[];
+  }>
+> {
   const requests: Array<Readonly<{ id: string; status: string }>> = [];
   const conversations: Array<Readonly<{ id: string; kind: string }>> = [];
   const acceptedScopes: AcceptedContactScope[] = [];
 
   for (const request of CONTACT_REQUEST_FIXTURES) {
-    const company = companies[request.companySlot] as CandidateWorkflowCompanyHandle;
-    const candidate = candidates[request.candidateIndex] as CandidateWorkflowCandidateHandle;
+    const company = companies[
+      request.companySlot
+    ] as CandidateWorkflowCompanyHandle;
+    const candidate = candidates[
+      request.candidateIndex
+    ] as CandidateWorkflowCandidateHandle;
     const candidateFixture = CANDIDATE_FIXTURES[
       request.candidateIndex
     ] as (typeof CANDIDATE_FIXTURES)[number];
@@ -1493,13 +1956,17 @@ async function seedContactRequestsAndConversations(
       entity: "EmployerContactRequest",
       naturalKey: request.key,
       expected,
-      findExisting: () => db.employerContactRequest.findUnique({ where: { id } }),
+      findExisting: () =>
+        db.employerContactRequest.findUnique({ where: { id } }),
       create: () => db.employerContactRequest.create({ data: expected }),
     });
     requests.push(Object.freeze({ id, status: request.status }));
 
     const createdEventNaturalKey = `${request.key}:created`;
-    const createdEventId = stableSeedId("contact-request-event", createdEventNaturalKey);
+    const createdEventId = stableSeedId(
+      "contact-request-event",
+      createdEventNaturalKey,
+    );
     const createdEventExpected = {
       id: createdEventId,
       contactRequestId: id,
@@ -1513,8 +1980,10 @@ async function seedContactRequestsAndConversations(
       entity: "ContactRequestEvent",
       naturalKey: createdEventNaturalKey,
       expected: createdEventExpected,
-      findExisting: () => db.contactRequestEvent.findUnique({ where: { id: createdEventId } }),
-      create: () => db.contactRequestEvent.create({ data: createdEventExpected }),
+      findExisting: () =>
+        db.contactRequestEvent.findUnique({ where: { id: createdEventId } }),
+      create: () =>
+        db.contactRequestEvent.create({ data: createdEventExpected }),
     });
 
     if (request.status !== "PENDING") {
@@ -1529,7 +1998,9 @@ async function seedContactRequestsAndConversations(
         kind: enumValue(ContactRequestEventKind, request.status),
         actorUserId: candidate.userId,
         reasonCode:
-          request.status === "DECLINED" ? "DEMO_NOT_AVAILABLE" : "DEMO_ACCEPTED",
+          request.status === "DECLINED"
+            ? "DEMO_NOT_AVAILABLE"
+            : "DEMO_ACCEPTED",
         correlationId: `seed:contact:${request.key}:terminal`,
         createdAt: timing.terminalAt as Date,
       };
@@ -1539,7 +2010,8 @@ async function seedContactRequestsAndConversations(
         expected: terminalEventExpected,
         findExisting: () =>
           db.contactRequestEvent.findUnique({ where: { id: terminalEventId } }),
-        create: () => db.contactRequestEvent.create({ data: terminalEventExpected }),
+        create: () =>
+          db.contactRequestEvent.create({ data: terminalEventExpected }),
       });
     }
 
@@ -1562,10 +2034,13 @@ async function seedContactRequestsAndConversations(
       entity: "Conversation",
       naturalKey: conversationNaturalKey,
       expected: conversationExpected,
-      findExisting: () => db.conversation.findUnique({ where: { id: conversationId } }),
+      findExisting: () =>
+        db.conversation.findUnique({ where: { id: conversationId } }),
       create: () => db.conversation.create({ data: conversationExpected }),
     });
-    conversations.push(Object.freeze({ id: conversationId, kind: "TALENT_RADAR" }));
+    conversations.push(
+      Object.freeze({ id: conversationId, kind: "TALENT_RADAR" }),
+    );
 
     const candidateParticipantNaturalKey = `${request.key}:candidate`;
     const candidateParticipantId = stableSeedId(
@@ -1587,9 +2062,13 @@ async function seedContactRequestsAndConversations(
       naturalKey: candidateParticipantNaturalKey,
       expected: candidateParticipantExpected,
       findExisting: () =>
-        db.conversationParticipant.findUnique({ where: { id: candidateParticipantId } }),
+        db.conversationParticipant.findUnique({
+          where: { id: candidateParticipantId },
+        }),
       create: () =>
-        db.conversationParticipant.create({ data: candidateParticipantExpected }),
+        db.conversationParticipant.create({
+          data: candidateParticipantExpected,
+        }),
     });
 
     const companyParticipantNaturalKey = `${request.key}:company`;
@@ -1612,7 +2091,9 @@ async function seedContactRequestsAndConversations(
       naturalKey: companyParticipantNaturalKey,
       expected: companyParticipantExpected,
       findExisting: () =>
-        db.conversationParticipant.findUnique({ where: { id: companyParticipantId } }),
+        db.conversationParticipant.findUnique({
+          where: { id: companyParticipantId },
+        }),
       create: () =>
         db.conversationParticipant.create({ data: companyParticipantExpected }),
     });
@@ -1628,7 +2109,10 @@ async function seedContactRequestsAndConversations(
         body: employer
           ? "Guten Tag, diese Nachricht gehört zu einer fiktiven Talent-Radar-Anfrage."
           : "Danke, ich bestätige den fiktiven Kontakt und die gewählten Freigabefelder.",
-        createdAt: dateAt(timing.terminalAt as Date, employer ? HOUR_MS : 2 * HOUR_MS),
+        createdAt: dateAt(
+          timing.terminalAt as Date,
+          employer ? HOUR_MS : 2 * HOUR_MS,
+        ),
         editedAt: null,
       };
       await ensureRow({
@@ -1641,7 +2125,10 @@ async function seedContactRequestsAndConversations(
     }
 
     const revealEventNaturalKey = `${request.key}:reveal-granted`;
-    const revealEventId = stableSeedId("contact-request-event", revealEventNaturalKey);
+    const revealEventId = stableSeedId(
+      "contact-request-event",
+      revealEventNaturalKey,
+    );
     const revealedAt = dateAt(timing.terminalAt as Date, 3 * HOUR_MS);
     const revealEventExpected = {
       id: revealEventId,
@@ -1658,7 +2145,8 @@ async function seedContactRequestsAndConversations(
       expected: revealEventExpected,
       findExisting: () =>
         db.contactRequestEvent.findUnique({ where: { id: revealEventId } }),
-      create: () => db.contactRequestEvent.create({ data: revealEventExpected }),
+      create: () =>
+        db.contactRequestEvent.create({ data: revealEventExpected }),
     });
 
     acceptedScopes.push(
@@ -1707,20 +2195,23 @@ async function seedIdentityRevealGrant(
 
   await db.$transaction(
     async (tx) => {
-      const initialGrantExpected = existing === null
-        ? {
-            ...finalGrantExpected,
-            revokedAt: null,
-            revokedByUserId: null,
-            revokeReason: null,
-          }
-        : finalGrantExpected;
+      const initialGrantExpected =
+        existing === null
+          ? {
+              ...finalGrantExpected,
+              revokedAt: null,
+              revokedByUserId: null,
+              revokeReason: null,
+            }
+          : finalGrantExpected;
       await ensureRow({
         entity: "IdentityRevealGrant",
         naturalKey: scope.fixtureKey,
         expected: initialGrantExpected,
-        findExisting: () => tx.identityRevealGrant.findUnique({ where: { id: grantId } }),
-        create: () => tx.identityRevealGrant.create({ data: initialGrantExpected }),
+        findExisting: () =>
+          tx.identityRevealGrant.findUnique({ where: { id: grantId } }),
+        create: () =>
+          tx.identityRevealGrant.create({ data: initialGrantExpected }),
       });
 
       type RevealFieldName = "DISPLAY_NAME" | "EMAIL" | "PHONE";
@@ -1735,7 +2226,9 @@ async function seedIdentityRevealGrant(
         },
       });
       const displayName = [candidate.firstName, candidate.lastName]
-        .filter((part): part is string => part !== null && part.trim().length > 0)
+        .filter(
+          (part): part is string => part !== null && part.trim().length > 0,
+        )
         .join(" ");
       const phone = candidate.phone?.replace(/[^+\d]/g, "") ?? "";
       const revealValue = (fieldName: RevealFieldName): RevealValue => {
@@ -1778,7 +2271,8 @@ async function seedIdentityRevealGrant(
           entity: "IdentityRevealGrantField",
           naturalKey,
           expected,
-          findExisting: () => tx.identityRevealGrantField.findUnique({ where: { id } }),
+          findExisting: () =>
+            tx.identityRevealGrantField.findUnique({ where: { id } }),
           create: () => {
             const encrypted = encryptRevealValues(
               [value],
@@ -1786,7 +2280,9 @@ async function seedIdentityRevealGrant(
               binding,
             )[0];
             if (encrypted === undefined) {
-              throw new Error(`IdentityRevealGrantField ${naturalKey} was not encrypted.`);
+              throw new Error(
+                `IdentityRevealGrantField ${naturalKey} was not encrypted.`,
+              );
             }
             return tx.identityRevealGrantField.create({
               data: {
@@ -1862,9 +2358,10 @@ async function seedIdentityRevealGrant(
               data: { ...expected, previewHmac: preview.evidence.previewHmac },
             }),
         });
-        const validPreviewHmac = crypto.revealConfirmationKeys.some((key) =>
-          buildRevealPreview(values, previewScope, [key], createdAt).evidence
-            .previewHmac === confirmation.previewHmac,
+        const validPreviewHmac = crypto.revealConfirmationKeys.some(
+          (key) =>
+            buildRevealPreview(values, previewScope, [key], createdAt).evidence
+              .previewHmac === confirmation.previewHmac,
         );
         if (!validPreviewHmac) {
           throw new Error(
@@ -1910,7 +2407,9 @@ async function seedIdentityRevealGrant(
           },
         });
         if (transition.count !== 1) {
-          throw new Error(`Reveal Grant ${scope.fixtureKey} revocation did not apply.`);
+          throw new Error(
+            `Reveal Grant ${scope.fixtureKey} revocation did not apply.`,
+          );
         }
       }
 
@@ -1928,16 +2427,106 @@ async function seedIdentityRevealGrant(
   );
 }
 
+async function seedPrivacyRequests(
+  db: DatabaseClient,
+  anchorAt: Date,
+  candidates: readonly CandidateWorkflowCandidateHandle[],
+): Promise<void> {
+  for (const [index, fixture] of PRIVACY_REQUEST_FIXTURES.entries()) {
+    const candidate = candidates[
+      fixture.candidateIndex
+    ] as CandidateWorkflowCandidateHandle;
+    const createdAt = dateAt(anchorAt, (-6 + index) * HOUR_MS);
+    const requestId = stableSeedId("privacy-request", fixture.key);
+    const requestExpected = {
+      id: requestId,
+      requesterUserId: candidate.userId,
+      type: enumValue(PrivacyRequestType, fixture.type),
+      status: PrivacyRequestStatus.PENDING,
+      version: 1,
+      dueAt: dateAt(createdAt, 30 * DAY_MS),
+      idempotencyKey: `seed:privacy-request:${fixture.key}`,
+      deletionDependencies: [],
+      createdAt,
+    };
+
+    await db.$transaction(async (transaction) => {
+      await ensureRow({
+        entity: "PrivacyRequest",
+        naturalKey: fixture.key,
+        expected: requestExpected,
+        findExisting: () =>
+          transaction.privacyRequest.findUnique({ where: { id: requestId } }),
+        create: () =>
+          transaction.privacyRequest.create({ data: requestExpected }),
+      });
+
+      const eventExpected = {
+        id: stableSeedId("privacy-request-event", `${fixture.key}:created`),
+        privacyRequestId: requestId,
+        kind: PrivacyRequestEventKind.CREATED,
+        fromStatus: null,
+        toStatus: PrivacyRequestStatus.PENDING,
+        actorUserId: candidate.userId,
+        reasonCode: "candidate-self-service",
+        safeNote: null,
+        idempotencyKey: `seed:privacy-request-event:${fixture.key}:created`,
+        correlationId: `seed:privacy-request:${fixture.key}`,
+        createdAt,
+      };
+      await ensureRow({
+        entity: "PrivacyRequestEvent",
+        naturalKey: `${fixture.key}:created`,
+        expected: eventExpected,
+        findExisting: () =>
+          transaction.privacyRequestEvent.findUnique({
+            where: { id: eventExpected.id },
+          }),
+        create: () =>
+          transaction.privacyRequestEvent.create({ data: eventExpected }),
+      });
+
+      for (const field of fixture.correctionFields) {
+        const fieldCode = enumValue(PrivacyCorrectionFieldCode, field);
+        const fieldExpected = {
+          privacyRequestId: requestId,
+          fieldCode,
+          correctionText:
+            "Bitte diese fiktiven Profildaten anhand der Demo-Unterlagen korrigieren.",
+        };
+        await ensureRow({
+          entity: "PrivacyRequestCorrectionField",
+          naturalKey: `${fixture.key}:${field}`,
+          expected: fieldExpected,
+          findExisting: () =>
+            transaction.privacyRequestCorrectionField.findUnique({
+              where: {
+                privacyRequestId_fieldCode: {
+                  privacyRequestId: requestId,
+                  fieldCode,
+                },
+              },
+            }),
+          create: () =>
+            transaction.privacyRequestCorrectionField.create({
+              data: fieldExpected,
+            }),
+        });
+      }
+    });
+  }
+}
+
 export async function seedCandidateWorkflows(
   db: DatabaseClient,
   anchorAtInput: Date,
   dependencies: CandidateWorkflowDependencies,
-  cryptoInput: CandidateWorkflowSeedCryptoConfig =
-    DEMO_ONLY_CANDIDATE_WORKFLOW_CRYPTO,
+  cryptoInput: CandidateWorkflowSeedCryptoConfig = DEMO_ONLY_CANDIDATE_WORKFLOW_CRYPTO,
 ): Promise<CandidateWorkflowSeedResult> {
   const anchorAt = requireValidAnchor(anchorAtInput);
   const crypto = requireValidCryptoConfig(cryptoInput);
-  const { companies, publishedJobs } = resolveDependencies(dependencies);
+  const { companies, expiredJobs, publishedJobs } =
+    resolveDependencies(dependencies);
   const references = await loadReferenceMaps(db);
   const companiesById = new Map(
     dependencies.companies.map((company) => [company.id, company]),
@@ -1962,12 +2551,14 @@ export async function seedCandidateWorkflows(
     crypto,
   );
 
-  const applications: Array<Readonly<{
-    id: string;
-    jobId: string;
-    candidateProfileId: string;
-    conversationId: string;
-  }>> = [];
+  const applications: Array<
+    Readonly<{
+      id: string;
+      jobId: string;
+      candidateProfileId: string;
+      conversationId: string;
+    }>
+  > = [];
   for (const [index, fixture] of APPLICATION_FIXTURES.entries()) {
     const application = await db.$transaction(
       (tx) =>
@@ -1986,8 +2577,9 @@ export async function seedCandidateWorkflows(
     applications.push(application);
   }
 
-  await seedSavedJobs(db, anchorAt, candidates, publishedJobs);
+  await seedSavedJobs(db, anchorAt, candidates, publishedJobs, expiredJobs);
   await seedJobAlerts(db, anchorAt, candidates, publishedJobs);
+  await seedPrivacyRequests(db, anchorAt, candidates);
   await seedContactCreditFunding(db, anchorAt, companies);
   const contactResult = await seedContactRequestsAndConversations(
     db,
@@ -2012,7 +2604,9 @@ export async function seedCandidateWorkflows(
     conversations.length !== 82 ||
     contactResult.requests.length !== 6
   ) {
-    throw new Error("Candidate workflow seed result violates its exact count contract.");
+    throw new Error(
+      "Candidate workflow seed result violates its exact count contract.",
+    );
   }
 
   return Object.freeze({

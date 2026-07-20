@@ -8,7 +8,15 @@ export const metadata: Metadata = {
   description: "Sicheres Kandidatenkonto für SwissTalentHub erstellen.",
 };
 
-export default function CandidateRegistrationPage() {
+type CandidateRegistrationSearchParams = Promise<{
+  next?: string | string[];
+}>;
+
+export default async function CandidateRegistrationPage({
+  searchParams,
+}: Readonly<{ searchParams: CandidateRegistrationSearchParams }>) {
+  const query = await searchParams;
+  const next = Array.isArray(query.next) ? query.next[0] : query.next;
   return (
     <AuthCard
       eyebrow="Für Kandidat:innen"
@@ -21,7 +29,7 @@ export default function CandidateRegistrationPage() {
         </>
       }
     >
-      <CandidateRegistrationForm />
+      <CandidateRegistrationForm next={next} />
     </AuthCard>
   );
 }

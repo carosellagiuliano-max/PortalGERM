@@ -105,4 +105,25 @@ describe("process-local mock mailbox", () => {
       } as unknown as LocalMockMailboxCaptureInput),
     ).toThrow(LocalMockMailboxInputError);
   });
+
+  it("accepts only the closed same-origin job-alert unsubscribe path", () => {
+    const mailbox = new LocalMockMailbox({
+      allowedOrigin: "http://127.0.0.1:3000",
+      secret,
+    });
+    const token = Buffer.alloc(32, 0x33).toString("base64url");
+    const input = {
+      ...baseInput,
+      templateKey: "job_alert_digest_mock" as const,
+      actionUrl: `http://127.0.0.1:3000/alerts/unsubscribe/${token}`,
+    };
+
+    expect(mailbox.capture(input)).toBe("recorded");
+    expect(() =>
+      mailbox.capture({
+        ...input,
+        actionUrl: `http://127.0.0.1:3000/alerts/unsubscribe/${token}?next=https://evil.test`,
+      }),
+    ).toThrow(LocalMockMailboxInputError);
+  });
 });

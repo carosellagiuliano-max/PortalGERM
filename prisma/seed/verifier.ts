@@ -5,7 +5,16 @@ import {
   getAnalyticsRetainUntilV1,
 } from "@/lib/analytics/event-contracts";
 import { verifyPassword } from "@/lib/auth/password";
+import {
+  firstJobAlertDueAt,
+  jobAlertConsentNoticeHash,
+  JOB_ALERT_DELIVERY_NOTICE_V1,
+  JOB_ALERT_POLICY_V1,
+  nextJobAlertDueAt,
+  parseStoredJobAlertQuery,
+} from "@/lib/candidate/job-alert-policy";
 import type { Prisma, PrismaClient } from "@/lib/generated/prisma/client";
+import { renderEmailTemplate } from "@/lib/providers/email/templates";
 import {
   FAIR_JOB_FACTOR_ORDER_V2,
   FAIR_JOB_FACTOR_POINTS_V2,
@@ -30,6 +39,9 @@ import {
   type SeedCounts,
 } from "@/prisma/seed/contract";
 import {
+  APPLICATION_FIXTURES,
+  APPLICATION_STATUS_PATHS,
+  applicationTransitionFixtures,
   CANDIDATE_FIXTURES,
   AUTH_RBAC_SEED_IDENTITIES,
   CANTON_FIXTURES,
@@ -45,6 +57,7 @@ import {
   JOB_EFFORT_DISTRIBUTION,
   JOB_STATUS_DISTRIBUTION,
   JOB_TYPE_DISTRIBUTION,
+  JOB_ALERT_FIXTURES,
   OCCUPATION_CODES_2026_FIXTURE,
   PLAN_ENTITLEMENT_FIXTURES,
   PLAN_FIXTURES,
@@ -171,7 +184,19 @@ const CITY_INCLUDE = {
 const APPLICATION_INCLUDE = {
   candidateProfile: { include: { user: true } },
   conversation: true,
-  job: { include: { company: true } },
+  events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+  job: {
+    include: {
+      company: {
+        include: {
+          memberships: {
+            orderBy: { id: "asc" },
+            where: { role: "OWNER", status: "ACTIVE" },
+          },
+        },
+      },
+    },
+  },
   submissionDocuments: {
     include: { documentMetadata: true },
     orderBy: { id: "asc" },
@@ -179,6 +204,30 @@ const APPLICATION_INCLUDE = {
   submissionSnapshot: true,
   submittedJobRevision: true,
 } satisfies Prisma.ApplicationInclude;
+const JOB_ALERT_INCLUDE = {
+  candidateProfile: { include: { user: true } },
+  digests: {
+    include: {
+      items: {
+        include: {
+          job: {
+            select: {
+              publishedAt: true,
+              publishedCategoryId: true,
+              publishedCantonId: true,
+            },
+          },
+        },
+        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+      },
+      unsubscribeTokens: {
+        orderBy: [{ issuedAt: "asc" }, { id: "asc" }],
+      },
+    },
+    orderBy: [{ scheduledFor: "asc" }, { id: "asc" }],
+  },
+  events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+} satisfies Prisma.JobAlertInclude;
 const CONVERSATION_INCLUDE = {
   messages: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
   participants: { orderBy: { id: "asc" } },
@@ -213,10 +262,17 @@ const BOOST_INCLUDE = {
 const ABUSE_REPORT_INCLUDE = {
   events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
 } satisfies Prisma.AbuseReportInclude;
+const PRIVACY_REQUEST_INCLUDE = {
+  correctionFields: { orderBy: { fieldCode: "asc" } },
+  events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+} satisfies Prisma.PrivacyRequestInclude;
 
 type ObservedCity = Prisma.CityGetPayload<{ include: typeof CITY_INCLUDE }>;
 type ObservedApplication = Prisma.ApplicationGetPayload<{
   include: typeof APPLICATION_INCLUDE;
+}>;
+type ObservedJobAlert = Prisma.JobAlertGetPayload<{
+  include: typeof JOB_ALERT_INCLUDE;
 }>;
 type ObservedConversation = Prisma.ConversationGetPayload<{
   include: typeof CONVERSATION_INCLUDE;
@@ -242,6 +298,9 @@ type ObservedBoost = Prisma.JobBoostGetPayload<{
 }>;
 type ObservedAbuseReport = Prisma.AbuseReportGetPayload<{
   include: typeof ABUSE_REPORT_INCLUDE;
+}>;
+type ObservedPrivacyRequest = Prisma.PrivacyRequestGetPayload<{
+  include: typeof PRIVACY_REQUEST_INCLUDE;
 }>;
 
 /**
@@ -274,7 +333,7 @@ export async function verifyDemoSeedDatabase(
   verifyCompanies(context, observed, expected, anchorAt);
   await verifyAuthRbac(context, observed, anchorAt);
   verifyJobs(context, observed, expected, anchorAt);
-  verifyCandidateWorkflows(context, observed, expected);
+  verifyCandidateWorkflows(context, observed, expected, anchorAt);
   verifyBilling(context, observed, expected, anchorAt);
   verifyOperationsAndContent(context, observed, expected);
 
@@ -411,6 +470,14 @@ async function loadObservedSeedState(
     CANDIDATE_WORKFLOW_SEED_IDENTITIES,
     "application",
   );
+  const jobAlertIds = identityIdsByEntity(
+    CANDIDATE_WORKFLOW_SEED_IDENTITIES,
+    "job-alert",
+  );
+  const jobAlertEmailIds = identityIdsByEntity(
+    CANDIDATE_WORKFLOW_SEED_IDENTITIES,
+    "email-log",
+  );
   const conversationIds = identityIdsByEntity(
     CANDIDATE_WORKFLOW_SEED_IDENTITIES,
     "conversation",
@@ -434,6 +501,10 @@ async function loadObservedSeedState(
   const radarSearchSessionIds = identityIdsByEntity(
     CANDIDATE_WORKFLOW_SEED_IDENTITIES,
     "radar-search-session",
+  );
+  const privacyRequestIds = identityIdsByEntity(
+    CANDIDATE_WORKFLOW_SEED_IDENTITIES,
+    "privacy-request",
   );
   const orderIds = identityIdsByEntity(BILLING_OPS_SEED_IDENTITIES, "order");
   const invoiceIds = identityIdsByEntity(
@@ -626,8 +697,20 @@ async function loadObservedSeedState(
     where: { candidateProfileId: { in: candidateIds } },
     orderBy: { id: "asc" },
   });
-  const jobAlerts = await db.jobAlert.findMany({
-    where: { candidateProfileId: { in: candidateIds } },
+  const jobAlerts: ObservedJobAlert[] = await db.jobAlert.findMany({
+    where: { id: { in: jobAlertIds } },
+    include: JOB_ALERT_INCLUDE,
+    orderBy: { id: "asc" },
+  });
+  const jobAlertDeliveryConsents = await db.userConsentEvent.findMany({
+    where: {
+      kind: "JOB_ALERT_DELIVERY",
+      userId: { in: candidates.map((candidate) => candidate.userId) },
+    },
+    orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+  });
+  const jobAlertEmails = await db.emailLog.findMany({
+    where: { id: { in: jobAlertEmailIds } },
     orderBy: { id: "asc" },
   });
   const conversations: ObservedConversation[] = await db.conversation.findMany({
@@ -659,6 +742,12 @@ async function loadObservedSeedState(
     await db.radarSearchSession.findMany({
       where: { id: { in: radarSearchSessionIds } },
       include: RADAR_SEARCH_SESSION_INCLUDE,
+      orderBy: { id: "asc" },
+    });
+  const privacyRequests: ObservedPrivacyRequest[] =
+    await db.privacyRequest.findMany({
+      where: { id: { in: privacyRequestIds } },
+      include: PRIVACY_REQUEST_INCLUDE,
       orderBy: { id: "asc" },
     });
   const subscriptions: ObservedSubscription[] =
@@ -742,6 +831,8 @@ async function loadObservedSeedState(
     demoAccounts,
     expiredAuthSession,
     invoices,
+    jobAlertDeliveryConsents,
+    jobAlertEmails,
     jobAlerts,
     jobs,
     metricRowsForDemoCompanies,
@@ -753,6 +844,7 @@ async function loadObservedSeedState(
     producerAnalyticsCount,
     productVersions,
     products,
+    privacyRequests,
     radarMappings,
     radarSearchBudgets,
     radarSearchSessions,
@@ -791,6 +883,7 @@ function verifyGoldenCounts(
     jobAlerts: observed.jobAlerts.length,
     employerContactRequests: observed.contactRequests.length,
     identityRevealGrants: observed.revealGrants.length,
+    privacyRequests: observed.privacyRequests.length,
     conversations: observed.conversations.length,
     orders: observed.orders.length,
     invoices: observed.invoices.length,
@@ -1262,8 +1355,7 @@ async function verifyAuthRbac(
           actorUserId: fixtures.recruiterMembership.event.actorUserId,
           reasonCode: fixtures.recruiterMembership.event.reasonCode,
           correlationId: fixtures.recruiterMembership.event.correlationId,
-          createdAt:
-            fixtures.recruiterMembership.event.createdAt.toISOString(),
+          createdAt: fixtures.recruiterMembership.event.createdAt.toISOString(),
         },
       ],
     );
@@ -1356,7 +1448,9 @@ async function verifyAuthRbac(
 
 function verifyPasswordResetEvidence(
   context: VerificationContext,
-  observed: Awaited<ReturnType<typeof loadObservedSeedState>>["authResetEvidence"],
+  observed: Awaited<
+    ReturnType<typeof loadObservedSeedState>
+  >["authResetEvidence"],
   expected:
     | ReturnType<typeof buildAuthRbacSeedFixtures>["expiredReset"]
     | ReturnType<typeof buildAuthRbacSeedFixtures>["usedReset"],
@@ -1605,8 +1699,7 @@ function verifyJobs(
         "Job current revision",
       ).requiredDocumentKinds;
       return (
-        kinds.length >= 1 &&
-        (!kinds.includes("NONE") || kinds.length === 1)
+        kinds.length >= 1 && (!kinds.includes("NONE") || kinds.length === 1)
       );
     }),
     true,
@@ -1752,6 +1845,7 @@ function verifyCandidateWorkflows(
   context: VerificationContext,
   observed: Awaited<ReturnType<typeof loadObservedSeedState>>,
   expected: ReturnType<typeof buildExpectedScope>,
+  anchorAt: Date,
 ): void {
   check(
     context,
@@ -1887,9 +1981,7 @@ function verifyCandidateWorkflows(
         snapshot.applicationEffort ===
           application.submittedJobRevision.applicationEffort &&
         canonicalJson(snapshot.requiredDocumentKinds) ===
-          canonicalJson(
-            application.submittedJobRevision.requiredDocumentKinds,
-          )
+          canonicalJson(application.submittedJobRevision.requiredDocumentKinds)
       );
     }),
     true,
@@ -1904,8 +1996,8 @@ function verifyCandidateWorkflows(
         declaredKinds.length >= 1 &&
         (!declaredKinds.includes("NONE") || declaredKinds.length === 1);
       const requiredKinds = declaredKinds
-          .filter((kind) => kind !== "NONE")
-          .sort();
+        .filter((kind) => kind !== "NONE")
+        .sort();
       const linkedKinds = application.submissionDocuments
         .map(({ documentMetadata }) => documentMetadata.purpose)
         .sort();
@@ -1931,6 +2023,456 @@ function verifyCandidateWorkflows(
       0,
     ),
     3,
+  );
+  const applicationById = new Map(
+    observed.applications.map((application) => [application.id, application]),
+  );
+  check(
+    context,
+    "Application status timelines are complete canonical chains",
+    APPLICATION_FIXTURES.every((fixture) => {
+      const application = applicationById.get(
+        stableSeedId("application", fixture.key),
+      );
+      if (application === undefined || application.status !== fixture.status) {
+        return false;
+      }
+      const path = APPLICATION_STATUS_PATHS[fixture.status];
+      const events = application.events.filter(
+        (event) => event.kind === "STATUS_CHANGE",
+      );
+      if (events.length !== path.length) return false;
+      const submitted = events[0];
+      if (
+        submitted?.fromStatus !== null ||
+        submitted?.toStatus !== "SUBMITTED" ||
+        submitted.actorUserId !== application.candidateProfile.userId
+      ) {
+        return false;
+      }
+      return applicationTransitionFixtures(fixture).every(
+        (transition, index) => {
+          const event = events[index + 1];
+          return (
+            event?.fromStatus === transition.fromStatus &&
+            event.toStatus === transition.toStatus &&
+            (transition.actor === "CANDIDATE"
+              ? event.actorUserId === application.candidateProfile.userId
+              : event.actorUserId !== null &&
+                event.actorUserId !== application.candidateProfile.userId) &&
+            (event.metadata as { source?: unknown } | null)?.source ===
+              "phase-09-demo-status-chain-v1"
+          );
+        },
+      );
+    }),
+    true,
+  );
+
+  const deliveryConsentById = new Map(
+    observed.jobAlertDeliveryConsents.map((consent) => [consent.id, consent]),
+  );
+  const alertEmailById = new Map(
+    observed.jobAlertEmails.map((email) => [email.id, email]),
+  );
+  const alertById = new Map(
+    observed.jobAlerts.map((alert) => [alert.id, alert]),
+  );
+  check(
+    context,
+    "JobAlert demo commits satisfy JOB_ALERT_POLICY_V1",
+    JOB_ALERT_FIXTURES.every((fixture) => {
+      const alert = alertById.get(stableSeedId("job-alert", fixture.key));
+      const consent = deliveryConsentById.get(
+        stableSeedId("user-consent-event", `${fixture.key}:delivery-granted`),
+      );
+      const email = alertEmailById.get(
+        stableSeedId("email-log", `${fixture.key}:digest-recorded`),
+      );
+      const digest = alert?.digests[0];
+      const token = digest?.unsubscribeTokens[0];
+      const storedQuery =
+        alert === undefined ? null : parseStoredJobAlertQuery(alert.query);
+      if (
+        alert === undefined ||
+        consent === undefined ||
+        email === undefined ||
+        digest === undefined ||
+        token === undefined ||
+        storedQuery?.kind !== "v1"
+      ) {
+        return false;
+      }
+      const expectedRunAt = new Date(anchorAt.getTime() - 2 * 60 * 60 * 1_000);
+      const createdEvent = alert.events.find(
+        (event) => event.kind === "CREATED",
+      );
+      const digestEvent = alert.events.find(
+        (event) => event.kind === "DIGEST_MOCK_RECORDED",
+      );
+      const terminalEvent = alert.events.find((event) =>
+        ["PAUSED", "UNSUBSCRIBED", "DELETED"].includes(event.kind),
+      );
+      const serializedEmail = JSON.stringify(email.payload);
+      return (
+        alert.status === fixture.status &&
+        alert.lastSuccessfulCutoffAt?.getTime() ===
+          digest.windowEnd.getTime() &&
+        alert.nextDueAt.getTime() ===
+          nextJobAlertDueAt(expectedRunAt, alert.frequency).getTime() &&
+        consent.userId === alert.candidateProfile.userId &&
+        consent.kind === "JOB_ALERT_DELIVERY" &&
+        consent.granted &&
+        consent.noticeVersion === JOB_ALERT_DELIVERY_NOTICE_V1.version &&
+        consent.noticeHash === jobAlertConsentNoticeHash() &&
+        digest.policyVersion === JOB_ALERT_POLICY_V1.version &&
+        digest.alertNameSnapshot === "Dein Jobabo" &&
+        digest.recipientEmailSnapshot ===
+          alert.candidateProfile.user.emailNormalized &&
+        digest.windowStart.getTime() === alert.createdAt.getTime() &&
+        digest.windowEnd.getTime() === expectedRunAt.getTime() &&
+        digest.scheduledFor.getTime() ===
+          firstJobAlertDueAt(alert.createdAt, alert.frequency).getTime() &&
+        digest.runAt?.getTime() === expectedRunAt.getTime() &&
+        digest.itemCount === 2 &&
+        digest.items.length === 2 &&
+        digest.items.every(
+          (item, index) =>
+            item.sortOrder === index &&
+            item.job.publishedCategoryId === storedQuery.query.categoryId &&
+            item.job.publishedCantonId === storedQuery.query.cantonId,
+        ) &&
+        digest.unsubscribeTokens.length === 1 &&
+        token.expiresAt.getTime() - token.issuedAt.getTime() ===
+          JOB_ALERT_POLICY_V1.unsubscribeLifetimeDays * 86_400_000 &&
+        createdEvent?.reasonCode === "EXPLICIT_ACTIVATION" &&
+        digestEvent?.reasonCode === JOB_ALERT_POLICY_V1.version &&
+        (fixture.status === "ACTIVE"
+          ? terminalEvent === undefined
+          : terminalEvent?.kind === fixture.status) &&
+        email.purpose === "job_alert_digest_mock" &&
+        email.templateKey === "job_alert_digest_mock" &&
+        email.status === "MOCK_RECORDED" &&
+        !serializedEmail.includes("/alerts/unsubscribe/") &&
+        !serializedEmail.includes("http://") &&
+        !serializedEmail.includes("https://")
+      );
+    }),
+    true,
+  );
+  const applicationFixtureById = new Map(
+    APPLICATION_FIXTURES.map((fixture) => [
+      stableSeedId("application", fixture.key),
+      fixture,
+    ]),
+  );
+  check(
+    context,
+    "Application status-event count",
+    observed.applications.reduce(
+      (total, application) => total + application.events.length,
+      0,
+    ),
+    APPLICATION_FIXTURES.reduce(
+      (total, fixture) =>
+        total + APPLICATION_STATUS_PATHS[fixture.status].length,
+      0,
+    ),
+  );
+  check(
+    context,
+    "Application status-event chains are complete and canonical",
+    observed.applications.every((application) => {
+      const fixture = applicationFixtureById.get(application.id);
+      if (fixture === undefined || application.status !== fixture.status) {
+        return false;
+      }
+      const transitions = applicationTransitionFixtures(fixture);
+      if (
+        application.events.length !== transitions.length + 1 ||
+        application.events.some((event) => event.kind !== "STATUS_CHANGE")
+      ) {
+        return false;
+      }
+      const submitted = application.events[0];
+      if (
+        submitted === undefined ||
+        submitted.id !==
+          stableSeedId("application-event", `${fixture.key}:submitted`) ||
+        submitted.actorUserId !== application.candidateProfile.userId ||
+        submitted.fromStatus !== null ||
+        submitted.toStatus !== "SUBMITTED"
+      ) {
+        return false;
+      }
+      for (const [index, transition] of transitions.entries()) {
+        const event = application.events[index + 1];
+        const expectedActorUserId =
+          transition.actor === "CANDIDATE"
+            ? application.candidateProfile.userId
+            : application.job.company.memberships[0]?.userId;
+        if (
+          event === undefined ||
+          event.id !==
+            stableSeedId("application-event", transition.naturalKey) ||
+          event.actorUserId !== expectedActorUserId ||
+          event.fromStatus !== transition.fromStatus ||
+          event.toStatus !== transition.toStatus ||
+          event.createdAt.getTime() <=
+            application.events[index]!.createdAt.getTime()
+        ) {
+          return false;
+        }
+      }
+      return application.events.at(-1)?.toStatus === application.status;
+    }),
+    true,
+  );
+  const expectedApplicationEdges = sortedStrings(
+    Array.from(
+      new Set(
+        APPLICATION_FIXTURES.flatMap((fixture) => {
+          const path = APPLICATION_STATUS_PATHS[fixture.status];
+          return path
+            .slice(1)
+            .map((toStatus, index) => `${path[index] ?? "NULL"}->${toStatus}`);
+        }),
+      ),
+    ),
+  );
+  const observedApplicationEdges = sortedStrings(
+    Array.from(
+      new Set(
+        observed.applications.flatMap((application) =>
+          application.events
+            .slice(1)
+            .map((event) => `${event.fromStatus ?? "NULL"}->${event.toStatus}`),
+        ),
+      ),
+    ),
+  );
+  check(
+    context,
+    "Application status-event edge coverage",
+    observedApplicationEdges,
+    expectedApplicationEdges,
+  );
+
+  const expectedConsentIds = sortedStrings(
+    JOB_ALERT_FIXTURES.map((fixture) =>
+      stableSeedId("user-consent-event", `${fixture.key}:delivery-granted`),
+    ),
+  );
+  check(
+    context,
+    "current JobAlert delivery-consent evidence",
+    sortedStrings(
+      observed.jobAlertDeliveryConsents.map((consent) => consent.id),
+    ),
+    expectedConsentIds,
+  );
+  check(
+    context,
+    "JobAlert delivery consent uses the current notice",
+    observed.jobAlerts.every((alert) => {
+      const candidateConsents = observed.jobAlertDeliveryConsents.filter(
+        (consent) => consent.userId === alert.candidateProfile.userId,
+      );
+      const current = candidateConsents.at(-1);
+      const fixture = JOB_ALERT_FIXTURES.find(
+        (candidate) => stableSeedId("job-alert", candidate.key) === alert.id,
+      );
+      return (
+        fixture !== undefined &&
+        candidateConsents.length === 1 &&
+        current?.id ===
+          stableSeedId(
+            "user-consent-event",
+            `${fixture.key}:delivery-granted`,
+          ) &&
+        current.kind === "JOB_ALERT_DELIVERY" &&
+        current.granted &&
+        current.purpose === JOB_ALERT_DELIVERY_NOTICE_V1.purpose &&
+        current.noticeVersion === JOB_ALERT_DELIVERY_NOTICE_V1.version &&
+        current.noticeHash === jobAlertConsentNoticeHash() &&
+        current.actorUserId === alert.candidateProfile.userId &&
+        current.effectiveAt.getTime() <= alert.createdAt.getTime()
+      );
+    }),
+    true,
+  );
+
+  const emailById = new Map(
+    observed.jobAlertEmails.map((email) => [email.id, email]),
+  );
+  check(
+    context,
+    "JOB_ALERT_POLICY_V1 digest commits",
+    observed.jobAlerts.every((alert) => {
+      const fixture = JOB_ALERT_FIXTURES.find(
+        (candidate) => stableSeedId("job-alert", candidate.key) === alert.id,
+      );
+      const digest = alert.digests[0];
+      const token = digest?.unsubscribeTokens[0];
+      if (
+        fixture === undefined ||
+        alert.digests.length !== 1 ||
+        digest === undefined ||
+        digest.items.length !== 2 ||
+        digest.unsubscribeTokens.length !== 1 ||
+        token === undefined ||
+        digest.runAt === null
+      ) {
+        return false;
+      }
+      const terminalEvent = alert.events.at(-1);
+      const terminalTokenUseExpected =
+        alert.status === "UNSUBSCRIBED" || alert.status === "DELETED";
+      const tokenUseMatches = terminalTokenUseExpected
+        ? token.usedAt?.getTime() === terminalEvent?.createdAt.getTime()
+        : token.usedAt === null;
+      const itemWindowMatches = digest.items.every(
+        (item, itemIndex) =>
+          item.digestId === digest.id &&
+          item.jobAlertId === alert.id &&
+          item.sortOrder === itemIndex &&
+          item.job.publishedAt !== null &&
+          item.job.publishedAt.getTime() > digest.windowStart.getTime() &&
+          item.job.publishedAt.getTime() <= digest.windowEnd.getTime(),
+      );
+      return (
+        alert.frequency === fixture.frequency &&
+        alert.status === fixture.status &&
+        digest.policyVersion === JOB_ALERT_POLICY_V1.version &&
+        digest.alertNameSnapshot === "Dein Jobabo" &&
+        digest.recipientEmailSnapshot ===
+          alert.candidateProfile.user.emailNormalized &&
+        digest.itemCount === digest.items.length &&
+        digest.windowStart.getTime() === alert.createdAt.getTime() &&
+        digest.windowEnd.getTime() === digest.runAt.getTime() &&
+        alert.lastSuccessfulCutoffAt?.getTime() ===
+          digest.windowEnd.getTime() &&
+        digest.scheduledFor.getTime() ===
+          firstJobAlertDueAt(alert.createdAt, alert.frequency).getTime() &&
+        alert.nextDueAt.getTime() ===
+          nextJobAlertDueAt(digest.windowEnd, alert.frequency).getTime() &&
+        itemWindowMatches &&
+        token.id === stableSeedId("job-alert-unsubscribe-token", fixture.key) &&
+        token.digestId === digest.id &&
+        token.jobAlertId === alert.id &&
+        token.tokenHash === expectedDemoJobAlertTokenHash(fixture.key) &&
+        token.issuedAt.getTime() === digest.runAt.getTime() &&
+        token.expiresAt.getTime() - token.issuedAt.getTime() ===
+          JOB_ALERT_POLICY_V1.unsubscribeLifetimeDays * 86_400_000 &&
+        tokenUseMatches
+      );
+    }),
+    true,
+  );
+  check(
+    context,
+    "JobAlert lifecycle and digest events",
+    observed.jobAlerts.every((alert) => {
+      const fixture = JOB_ALERT_FIXTURES.find(
+        (candidate) => stableSeedId("job-alert", candidate.key) === alert.id,
+      );
+      if (fixture === undefined) return false;
+      const created = alert.events[0];
+      const digestRecorded = alert.events[1];
+      const expectedEventCount = alert.status === "ACTIVE" ? 2 : 3;
+      if (
+        alert.events.length !== expectedEventCount ||
+        created?.id !==
+          stableSeedId("job-alert-event", `${fixture.key}:created`) ||
+        created.kind !== "CREATED" ||
+        created.actorUserId !== alert.candidateProfile.userId ||
+        created.reasonCode !== "EXPLICIT_ACTIVATION" ||
+        digestRecorded?.id !==
+          stableSeedId("job-alert-event", `${fixture.key}:digest-recorded`) ||
+        digestRecorded.kind !== "DIGEST_MOCK_RECORDED" ||
+        digestRecorded.actorUserId !== null ||
+        digestRecorded.reasonCode !== JOB_ALERT_POLICY_V1.version
+      ) {
+        return false;
+      }
+      if (alert.status === "ACTIVE") return true;
+      const terminal = alert.events[2];
+      const expectedTerminal =
+        alert.status === "PAUSED"
+          ? {
+              actorUserId: alert.candidateProfile.userId,
+              kind: "PAUSED",
+              reasonCode: "EXPLICIT_ALERT_ACTION",
+            }
+          : alert.status === "UNSUBSCRIBED"
+            ? {
+                actorUserId: null,
+                kind: "UNSUBSCRIBED",
+                reasonCode: "ONE_CLICK_TOKEN",
+              }
+            : {
+                actorUserId: alert.candidateProfile.userId,
+                kind: "DELETED",
+                reasonCode: "EXPLICIT_DELETE",
+              };
+      return (
+        terminal?.id ===
+          stableSeedId(
+            "job-alert-event",
+            `${fixture.key}:${alert.status.toLowerCase()}`,
+          ) &&
+        terminal.kind === expectedTerminal.kind &&
+        terminal.actorUserId === expectedTerminal.actorUserId &&
+        terminal.reasonCode === expectedTerminal.reasonCode
+      );
+    }),
+    true,
+  );
+  check(
+    context,
+    "redacted JobAlert MOCK EmailLogs",
+    JOB_ALERT_FIXTURES.every((fixture) => {
+      const alert = observed.jobAlerts.find(
+        (candidate) => candidate.id === stableSeedId("job-alert", fixture.key),
+      );
+      const email = emailById.get(
+        stableSeedId("email-log", `${fixture.key}:digest-recorded`),
+      );
+      if (alert === undefined || email === undefined) return false;
+      const payload = email.payload;
+      if (
+        payload === null ||
+        Array.isArray(payload) ||
+        typeof payload !== "object"
+      ) {
+        return false;
+      }
+      const expectedEmail = renderEmailTemplate("job_alert_digest_mock", {
+        alertName: "Dein Jobabo",
+        jobCount: 2,
+      });
+      const body = payload.body;
+      return (
+        observed.jobAlertEmails.length === JOB_ALERT_FIXTURES.length &&
+        email.recipient === alert.candidateProfile.user.emailNormalized &&
+        email.purpose === "job_alert_digest_mock" &&
+        email.templateKey === "job_alert_digest_mock" &&
+        email.status === "MOCK_RECORDED" &&
+        email.errorCode === null &&
+        /^mock-email-v2:seed:[a-f0-9]{64}$/u.test(
+          email.providerReference ?? "",
+        ) &&
+        payload.schemaVersion === "1" &&
+        payload.deliveryStatus === "mock_recorded" &&
+        payload.externalDeliveryClaimed === false &&
+        payload.subject === expectedEmail.subject &&
+        body === expectedEmail.body &&
+        typeof body === "string" &&
+        body.includes("Geschützter Abmeldelink nicht verfügbar") &&
+        !/(?:https?:\/\/|[?&]token=|[A-Za-z0-9_-]{43})/u.test(body)
+      );
+    }),
+    true,
   );
   check(
     context,
@@ -2296,9 +2838,13 @@ function verifyOperationsAndContent(
   const demoJobIds = new Set(observed.jobs.map((job) => job.id));
   check(
     context,
-    "closed analytics v1 kind coverage",
+    "sealed analytics seed kind coverage",
     sortedStrings(Object.keys(analyticsKindCounts)),
-    sortedStrings(ANALYTICS_EVENT_KINDS_V1),
+    sortedStrings(
+      ANALYTICS_EVENT_KINDS_V1.filter(
+        (kind) => kind !== "EXTERNAL_APPLY_CLICKED",
+      ),
+    ),
   );
   for (const event of observed.analyticsEvents) {
     const contract = ANALYTICS_EVENT_CONTRACTS_V1[event.kind];
@@ -2768,6 +3314,14 @@ function buildObservedDigest(
     })),
     applications: observed.applications.map((application) => ({
       candidateProfileId: application.candidateProfileId,
+      events: application.events.map((event) => ({
+        actorUserId: event.actorUserId,
+        createdAt: event.createdAt.toISOString(),
+        fromStatus: event.fromStatus,
+        id: event.id,
+        kind: event.kind,
+        toStatus: event.toStatus,
+      })),
       id: application.id,
       jobId: application.jobId,
       status: application.status,
@@ -2784,6 +3338,100 @@ function buildObservedDigest(
       submittedAt: application.submittedAt.toISOString(),
       submittedJobRevisionId: application.submittedJobRevisionId,
       updatedAt: application.updatedAt.toISOString(),
+    })),
+    jobAlertDeliveryConsents: observed.jobAlertDeliveryConsents.map(
+      (consent) => ({
+        actorUserId: consent.actorUserId,
+        createdAt: consent.createdAt.toISOString(),
+        effectiveAt: consent.effectiveAt.toISOString(),
+        granted: consent.granted,
+        id: consent.id,
+        kind: consent.kind,
+        noticeHash: consent.noticeHash,
+        noticeVersion: consent.noticeVersion,
+        purpose: consent.purpose,
+        userId: consent.userId,
+      }),
+    ),
+    jobAlertEmails: observed.jobAlertEmails.map((email) => ({
+      createdAt: email.createdAt.toISOString(),
+      errorCode: email.errorCode,
+      id: email.id,
+      payloadCanonical: canonicalJson(email.payload as CanonicalJsonValue),
+      providerReference: email.providerReference,
+      purpose: email.purpose,
+      recipient: email.recipient,
+      status: email.status,
+      templateKey: email.templateKey,
+    })),
+    jobAlerts: observed.jobAlerts.map((alert) => ({
+      candidateProfileId: alert.candidateProfileId,
+      createdAt: alert.createdAt.toISOString(),
+      digests: alert.digests.map((digest) => ({
+        alertNameSnapshot: digest.alertNameSnapshot,
+        createdAt: digest.createdAt.toISOString(),
+        id: digest.id,
+        itemCount: digest.itemCount,
+        items: digest.items.map((item) => ({
+          createdAt: item.createdAt.toISOString(),
+          digestId: item.digestId,
+          id: item.id,
+          jobAlertId: item.jobAlertId,
+          jobId: item.jobId,
+          sortOrder: item.sortOrder,
+        })),
+        jobAlertId: digest.jobAlertId,
+        policyVersion: digest.policyVersion,
+        recipientEmailSnapshot: digest.recipientEmailSnapshot,
+        runAt: digest.runAt?.toISOString() ?? null,
+        scheduledFor: digest.scheduledFor.toISOString(),
+        unsubscribeTokens: digest.unsubscribeTokens.map((token) => ({
+          digestId: token.digestId,
+          expiresAt: token.expiresAt.toISOString(),
+          id: token.id,
+          issuedAt: token.issuedAt.toISOString(),
+          jobAlertId: token.jobAlertId,
+          tokenHash: token.tokenHash,
+          usedAt: token.usedAt?.toISOString() ?? null,
+        })),
+        windowEnd: digest.windowEnd.toISOString(),
+        windowStart: digest.windowStart.toISOString(),
+      })),
+      events: alert.events.map((event) => ({
+        actorUserId: event.actorUserId,
+        createdAt: event.createdAt.toISOString(),
+        id: event.id,
+        kind: event.kind,
+        reasonCode: event.reasonCode,
+      })),
+      frequency: alert.frequency,
+      id: alert.id,
+      lastSuccessfulCutoffAt:
+        alert.lastSuccessfulCutoffAt?.toISOString() ?? null,
+      nextDueAt: alert.nextDueAt.toISOString(),
+      queryCanonical: canonicalJson(alert.query as CanonicalJsonValue),
+      status: alert.status,
+      updatedAt: alert.updatedAt.toISOString(),
+    })),
+    privacyRequests: observed.privacyRequests.map((request) => ({
+      correctionFields: request.correctionFields.map((field) => ({
+        fieldCode: field.fieldCode,
+        correctionTextHash: sha256Utf8(field.correctionText),
+      })),
+      createdAt: request.createdAt.toISOString(),
+      dueAt: request.dueAt.toISOString(),
+      events: request.events.map((event) => ({
+        actorUserId: event.actorUserId,
+        createdAt: event.createdAt.toISOString(),
+        fromStatus: event.fromStatus,
+        id: event.id,
+        kind: event.kind,
+        toStatus: event.toStatus,
+      })),
+      id: request.id,
+      requesterUserId: request.requesterUserId,
+      status: request.status,
+      type: request.type,
     })),
     authRbac: {
       expiredSession:
@@ -2804,11 +3452,13 @@ function buildObservedDigest(
           ? null
           : {
               companyId: observed.recruiterSecondMembership.companyId,
-              events: observed.recruiterSecondMembership.events.map((event) => ({
-                id: event.id,
-                kind: event.kind,
-                membershipId: event.membershipId,
-              })),
+              events: observed.recruiterSecondMembership.events.map(
+                (event) => ({
+                  id: event.id,
+                  kind: event.kind,
+                  membershipId: event.membershipId,
+                }),
+              ),
               id: observed.recruiterSecondMembership.id,
               role: observed.recruiterSecondMembership.role,
               status: observed.recruiterSecondMembership.status,
@@ -3241,6 +3891,14 @@ function sortedNumberRecord(
 
 function sortedStrings(values: readonly string[]): readonly string[] {
   return [...values].sort((left, right) => left.localeCompare(right));
+}
+
+function expectedDemoJobAlertTokenHash(fixtureKey: string): string {
+  const entropy = Buffer.from(
+    sha256Utf8(`phase-09-demo-job-alert-token-v1:${fixtureKey}`),
+    "hex",
+  );
+  return sha256Utf8(entropy.toString("base64url"));
 }
 
 function compareKey<Key extends string>(

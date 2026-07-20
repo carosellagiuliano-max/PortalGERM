@@ -6,6 +6,7 @@ import type {
   RemoteType,
   SalaryPeriod,
 } from "@/lib/generated/prisma/enums";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { getDatabase } from "@/lib/db/client";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { PublicJobProjection } from "@/lib/search/types";
@@ -53,6 +54,60 @@ export type PublicEligibilitySnapshot = Readonly<{
 export type PublicEligibilityResult =
   | Readonly<{ eligible: true; job: PublicJobProjection }>
   | Readonly<{ eligible: false }>;
+
+const MAX_PUBLIC_ELIGIBILITY_BATCH_SIZE = 500;
+const publicEligibilityJobSelect = {
+  id: true,
+  slug: true,
+  companyId: true,
+  status: true,
+  dataProvenance: true,
+  publishedRevisionId: true,
+  publishedAt: true,
+  expiresAt: true,
+  company: {
+    select: {
+      name: true,
+      status: true,
+      dataProvenance: true,
+      verificationRequests: {
+        where: { status: "VERIFIED", supersededBy: null },
+        select: { id: true },
+        take: 2,
+      },
+    },
+  },
+  publishedRevision: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      approvedAt: true,
+      rejectedAt: true,
+      validThrough: true,
+      categoryId: true,
+      cantonId: true,
+      cityId: true,
+      salaryMin: true,
+      salaryMax: true,
+      salaryPeriod: true,
+      responseTargetDays: true,
+      remoteType: true,
+      jobType: true,
+      workloadMin: true,
+      workloadMax: true,
+      scoreSnapshots: {
+        where: { scoreVersion: "v2" },
+        select: { scorePoints: true },
+        take: 2,
+      },
+    },
+  },
+} as const satisfies Prisma.JobSelect;
+
+type PublicEligibilityJobRow = Prisma.JobGetPayload<{
+  select: typeof publicEligibilityJobSelect;
+}>;
 
 export function evaluatePublicJobEligibility(
   snapshot: PublicEligibilitySnapshot | null,
@@ -125,65 +180,79 @@ export async function isJobPubliclyEligible(
   return evaluatePublicJobEligibility(snapshot, now, environment);
 }
 
+/**
+ * Transaction-aware variant for state-changing paths such as Apply. The
+ * caller owns transaction isolation and every subsequent write therefore sees
+ * the same eligibility decision instead of opening a second transaction.
+ */
+export async function isJobPubliclyEligibleInTransaction(
+  jobId: string,
+  now: Date,
+  environment: PublicEligibilityEnvironment,
+  transaction: Prisma.TransactionClient,
+): Promise<PublicEligibilityResult> {
+  const snapshot = await loadPublicEligibilitySnapshot(jobId, now, transaction);
+  return evaluatePublicJobEligibility(snapshot, now, environment);
+}
+
+/**
+ * Batch variant for paginated readers. Snapshot loading is shared with the
+ * single-job path and every row still passes through the canonical evaluator,
+ * so batching cannot introduce a second public-eligibility policy.
+ */
+export async function filterPubliclyEligibleJobsInTransaction(
+  jobIds: readonly string[],
+  now: Date,
+  environment: PublicEligibilityEnvironment,
+  transaction: Prisma.TransactionClient,
+): Promise<readonly PublicJobProjection[]> {
+  const uniqueJobIds = [...new Set(jobIds)];
+  if (uniqueJobIds.length > MAX_PUBLIC_ELIGIBILITY_BATCH_SIZE) {
+    throw new RangeError("A public-eligibility batch exceeded its safety bound.");
+  }
+  const snapshots = await loadPublicEligibilitySnapshots(
+    uniqueJobIds,
+    now,
+    transaction,
+  );
+  const eligible: PublicJobProjection[] = [];
+  for (const jobId of uniqueJobIds) {
+    const result = evaluatePublicJobEligibility(
+      snapshots.get(jobId) ?? null,
+      now,
+      environment,
+    );
+    if (result.eligible) eligible.push(result.job);
+  }
+  return Object.freeze(eligible);
+}
+
 async function loadPublicEligibilitySnapshot(
   jobId: string,
   now: Date,
-  database: Parameters<Parameters<DatabaseClient["$transaction"]>[0]>[0],
+  database: Prisma.TransactionClient,
 ): Promise<PublicEligibilitySnapshot | null> {
-  const job = await database.job.findFirst({
-    where: { id: jobId },
-    select: {
-      id: true,
-      slug: true,
-      companyId: true,
-      status: true,
-      dataProvenance: true,
-      publishedRevisionId: true,
-      publishedAt: true,
-      expiresAt: true,
-      company: {
-        select: {
-          name: true,
-          status: true,
-          dataProvenance: true,
-          verificationRequests: {
-            where: { status: "VERIFIED", supersededBy: null },
-            select: { id: true },
-            take: 2,
-          },
-        },
-      },
-      publishedRevision: {
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          approvedAt: true,
-          rejectedAt: true,
-          validThrough: true,
-          categoryId: true,
-          cantonId: true,
-          cityId: true,
-          salaryMin: true,
-          salaryMax: true,
-          salaryPeriod: true,
-          responseTargetDays: true,
-          remoteType: true,
-          jobType: true,
-          workloadMin: true,
-          workloadMax: true,
-          scoreSnapshots: {
-            where: { scoreVersion: "v2" },
-            select: { scorePoints: true },
-            take: 2,
-          },
-        },
-      },
-    },
-  });
-  if (job === null) return null;
+  const snapshots = await loadPublicEligibilitySnapshots(
+    [jobId],
+    now,
+    database,
+  );
+  return snapshots.get(jobId) ?? null;
+}
 
-  const restrictionCount = await database.moderationRestriction.count({
+async function loadPublicEligibilitySnapshots(
+  jobIds: readonly string[],
+  now: Date,
+  database: Prisma.TransactionClient,
+): Promise<ReadonlyMap<string, PublicEligibilitySnapshot>> {
+  if (jobIds.length === 0) return new Map();
+  const jobs = await database.job.findMany({
+    where: { id: { in: [...jobIds] } },
+    select: publicEligibilityJobSelect,
+  });
+  if (jobs.length === 0) return new Map();
+
+  const restrictions = await database.moderationRestriction.findMany({
     where: {
       status: "ACTIVE",
       startsAt: { lte: now },
@@ -192,13 +261,42 @@ async function loadPublicEligibilitySnapshot(
       AND: [
         {
           OR: [
-            { targetType: "HIDE_JOB", targetId: job.id },
-            { targetType: "PAUSE_COMPANY", targetId: job.companyId },
+            { targetType: "HIDE_JOB", targetId: { in: jobs.map(({ id }) => id) } },
+            {
+              targetType: "PAUSE_COMPANY",
+              targetId: { in: jobs.map(({ companyId }) => companyId) },
+            },
           ],
         },
       ],
     },
+    select: { targetType: true, targetId: true },
   });
+  const hiddenJobIds = new Set(
+    restrictions
+      .filter(({ targetType }) => targetType === "HIDE_JOB")
+      .map(({ targetId }) => targetId),
+  );
+  const pausedCompanyIds = new Set(
+    restrictions
+      .filter(({ targetType }) => targetType === "PAUSE_COMPANY")
+      .map(({ targetId }) => targetId),
+  );
+  return new Map(
+    jobs.map((job) => [
+      job.id,
+      toPublicEligibilitySnapshot(
+        job,
+        hiddenJobIds.has(job.id) || pausedCompanyIds.has(job.companyId),
+      ),
+    ]),
+  );
+}
+
+function toPublicEligibilitySnapshot(
+  job: PublicEligibilityJobRow,
+  hasEffectivePublicHideRestriction: boolean,
+): PublicEligibilitySnapshot {
   const revision = job.publishedRevision;
   return {
     id: job.id,
@@ -241,6 +339,6 @@ async function loadPublicEligibilitySnapshot(
                 ? (revision.scoreSnapshots[0]?.scorePoints ?? null)
                 : null,
           },
-    hasEffectivePublicHideRestriction: restrictionCount > 0,
+    hasEffectivePublicHideRestriction,
   };
 }

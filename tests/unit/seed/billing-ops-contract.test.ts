@@ -104,7 +104,11 @@ describe("Phase-05 reference, Billing/Ops and content contract", () => {
     expect(new Set(fixtures.map(({ id }) => id)).size).toBe(300);
     expect(new Set(fixtures.map(({ dedupeKey }) => dedupeKey)).size).toBe(300);
     expect(new Set(fixtures.map(({ kind }) => kind))).toEqual(
-      new Set(ANALYTICS_EVENT_KINDS_V1),
+      new Set(
+        ANALYTICS_EVENT_KINDS_V1.filter(
+          (kind) => kind !== "EXTERNAL_APPLY_CLICKED",
+        ),
+      ),
     );
     expect(buildAnalyticsSeedFixtures(anchorAt, companies, jobs)).toEqual(
       fixtures,

@@ -38,4 +38,23 @@ describe("role-bound safe next", () => {
       "/employer/dashboard",
     );
   });
+
+  it("allows only the strict signed job-intent shape for candidates", () => {
+    const intent = "eyJ2ZXJzaW9uIjoxfQ.signature";
+    expect(
+      parseSafeNext(`/jobs/pflege-zuerich?intent=${intent}`, "CANDIDATE"),
+    ).toBe(`/jobs/pflege-zuerich?intent=${intent}`);
+    expect(parseSafeNext(`/jobs/pflege-zuerich?intent=${intent}`, "EMPLOYER")).toBeNull();
+  });
+
+  it.each([
+    "/jobs/pflege-zuerich",
+    "/jobs/pflege-zuerich?intent=a.b&next=/admin",
+    "/jobs/pflege-zuerich?intent=a.b&intent=c.d",
+    "/jobs/pflege-zuerich?intent=a.b#fragment",
+    "/jobs/Pflege-Zuerich?intent=a.b",
+    "/jobs/pflege-zuerich?intent=not-a-token",
+  ])("rejects ambiguous candidate job-intent next path %s", (value) => {
+    expect(parseSafeNext(value, "CANDIDATE")).toBeNull();
+  });
 });

@@ -3,9 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
-type MigratedDatabase = Awaited<
-  ReturnType<typeof createMigratedTestDatabase>
->;
+type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
 type SqlStatement = Readonly<{
   text: string;
@@ -13,8 +11,7 @@ type SqlStatement = Readonly<{
 }>;
 
 type WriteOutcome =
-  | Readonly<{ ok: true }>
-  | Readonly<{ error: unknown; ok: false }>;
+  Readonly<{ ok: true }> | Readonly<{ error: unknown; ok: false }>;
 
 const SQLSTATE = {
   checkViolation: "23514",
@@ -155,10 +152,7 @@ function pool() {
 }
 
 function explicitUuid(sequence: number) {
-  return (
-    "00000000-0000-4000-8000-" +
-    sequence.toString(16).padStart(12, "0")
-  );
+  return "00000000-0000-4000-8000-" + sequence.toString(16).padStart(12, "0");
 }
 
 async function expectConstraintViolation(
@@ -338,9 +332,7 @@ async function insertTaxRate(
       (input.reviewStatus ?? "DRAFT") === "APPROVED"
         ? explicitUuid(9_000)
         : null,
-      (input.reviewStatus ?? "DRAFT") === "APPROVED"
-        ? input.validFrom
-        : null,
+      (input.reviewStatus ?? "DRAFT") === "APPROVED" ? input.validFrom : null,
     ],
   );
 }
@@ -516,6 +508,19 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260720210000_phase_08_sales_lead_intake",
       "20260720210100_phase_08_sales_lead_intake_constraints",
       "20260720210200_phase_08_sales_lead_intake_snapshots",
+      "20260720230000_phase_09_candidate_contract",
+      "20260720230100_phase_09_document_snapshot_sha256",
+      "20260720230200_phase_09_consent_scope",
+      "20260720230300_phase_09_radar_withdrawal_state",
+      "20260720230400_phase_09_external_apply_event",
+      "20260720230500_phase_09_radar_consent_currentness",
+      "20260720230600_phase_09_application_content_hashes",
+      "20260720230700_phase_09_demo_application_notice_reconciliation",
+      "20260720230800_phase_09_legacy_demo_application_reconciliation",
+      "20260720230900_phase_09_candidate_language_codes",
+      "20260720231000_phase_09_demo_application_event_reconciliation",
+      "20260720231100_phase_09_demo_job_alert_reconciliation",
+      "20260720231200_phase_09_job_alert_delivery_snapshots",
     ]);
     expect(
       migrations.rows.every(
@@ -567,10 +572,9 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     }
 
     for (const name of namedConstraints) {
-      expect(
-        byName.has(name),
-        "Missing PostgreSQL constraint " + name,
-      ).toBe(true);
+      expect(byName.has(name), "Missing PostgreSQL constraint " + name).toBe(
+        true,
+      );
     }
 
     const indexes = await target.query<{
@@ -590,10 +594,9 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     );
 
     for (const name of PARTIAL_UNIQUE_INDEXES) {
-      expect(
-        indexesByName.has(name),
-        "Missing PostgreSQL index " + name,
-      ).toBe(true);
+      expect(indexesByName.has(name), "Missing PostgreSQL index " + name).toBe(
+        true,
+      );
       expect(indexesByName.get(name)).toContain("CREATE UNIQUE INDEX");
       expect(indexesByName.get(name)).toContain(" WHERE ");
     }
@@ -604,7 +607,12 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         "WHERE schemaname = 'public'",
         "  AND indexname = ANY($1::text[])",
       ].join("\n"),
-      [["candidate_single_active_cv_unique", "credit_ledger_purchased_grant_source_unique"]],
+      [
+        [
+          "candidate_single_active_cv_unique",
+          "credit_ledger_purchased_grant_source_unique",
+        ],
+      ],
     );
     expect(addedIndexes.rows.map((row) => row.index_name).sort()).toEqual([
       "candidate_single_active_cv_unique",
@@ -1282,21 +1290,21 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     }>(
       [
         "SELECT",
-        "  (SELECT id::text FROM \"PlanVersion\"",
+        '  (SELECT id::text FROM "PlanVersion"',
         "   WHERE \"planId\" = $1 AND status = 'ACTIVE'",
-        "     AND \"validFrom\" <= $4::timestamptz",
-        "     AND (\"validTo\" IS NULL OR $4::timestamptz < \"validTo\"))",
+        '     AND "validFrom" <= $4::timestamptz',
+        '     AND ("validTo" IS NULL OR $4::timestamptz < "validTo"))',
         "    AS plan_version_id,",
-        "  (SELECT id::text FROM \"ProductVersion\"",
+        '  (SELECT id::text FROM "ProductVersion"',
         "   WHERE \"productId\" = $2 AND status = 'ACTIVE'",
-        "     AND \"validFrom\" <= $4::timestamptz",
-        "     AND (\"validTo\" IS NULL OR $4::timestamptz < \"validTo\"))",
+        '     AND "validFrom" <= $4::timestamptz',
+        '     AND ("validTo" IS NULL OR $4::timestamptz < "validTo"))',
         "    AS product_version_id,",
-        "  (SELECT id::text FROM \"TaxRateVersion\"",
+        '  (SELECT id::text FROM "TaxRateVersion"',
         "   WHERE jurisdiction = $3 AND \"taxType\" = 'VAT'",
         "     AND \"reviewStatus\" = 'APPROVED'",
-        "     AND \"validFrom\" <= $4::timestamptz",
-        "     AND (\"validTo\" IS NULL OR $4::timestamptz < \"validTo\"))",
+        '     AND "validFrom" <= $4::timestamptz',
+        '     AND ("validTo" IS NULL OR $4::timestamptz < "validTo"))',
         "    AS tax_rate_id",
       ].join("\n"),
       [planId, productId, "CH-temporal", boundary],
@@ -1350,7 +1358,6 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       [planId],
     );
     expect(accepted.rows[0]?.count).toBe("1");
-
   });
 
   it("resolves concurrent pending SubscriptionChangeSchedule writes through partial uniqueness", async () => {
@@ -1414,9 +1421,9 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       '  "updatedAt"',
       ") VALUES (",
       "  $1, $2, $3, 'CANCEL', 'PENDING',",
-        "  $4::timestamptz, ARRAY[$6]::text[], $5,",
-        "  '{}'::jsonb, $5, $7,",
-        "  $8::timestamptz",
+      "  $4::timestamptz, ARRAY[$6]::text[], $5,",
+      "  '{}'::jsonb, $5, $7,",
+      "  $8::timestamptz",
       ")",
     ].join("\n");
     const commonScheduleValues = [
@@ -1571,11 +1578,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         'INSERT INTO "CandidateProfile" ("id", "userId", "updatedAt")',
         "VALUES ($1, $2, $3::timestamptz)",
       ].join("\n"),
-      [
-        candidateProfileId,
-        candidateUserId,
-        "2043-01-01T00:00:00.000Z",
-      ],
+      [candidateProfileId, candidateUserId, "2043-01-01T00:00:00.000Z"],
     );
     await insertUser(target, employerUserId, "reveal-employer@example.test");
     await insertCompany(target, companyId, "reveal-contract");
@@ -1787,14 +1790,10 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       [
         'UPDATE "IdentityRevealGrant"',
         'SET "revokedAt" = $2::timestamptz, "revokedByUserId" = $3,',
-        '  "revokeReason" = \'PRIVACY_CHOICE\'',
+        "  \"revokeReason\" = 'PRIVACY_CHOICE'",
         'WHERE "id" = $1',
       ].join("\n"),
-      [
-        revealGrantId,
-        "2043-01-06T00:00:00.000Z",
-        candidateUserId,
-      ],
+      [revealGrantId, "2043-01-06T00:00:00.000Z", candidateUserId],
     );
     await expectConstraintViolation(
       target.query(
@@ -2021,12 +2020,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         '  "normalizedChecksum", "dedupeKey", "status", "updatedAt"',
         ") VALUES ($1, $2, 'source-item-1', '{}'::jsonb, $3, 'source-item-1', 'OK', $4::timestamptz)",
       ].join("\n"),
-      [
-        importItemId,
-        importRunId,
-        "b".repeat(64),
-        "2042-03-01T00:00:00.000Z",
-      ],
+      [importItemId, importRunId, "b".repeat(64), "2042-03-01T00:00:00.000Z"],
     );
     await target.query(
       [
@@ -2055,13 +2049,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
           '  "importSourceId", "createdByUserId", "updatedAt"',
           ") VALUES ($1, $2, 'import-without-decision', 'IMPORT', 'source-item-1', $3, $4, $5::timestamptz)",
         ].join("\n"),
-        [
-          jobId,
-          companyId,
-          importSourceId,
-          userId,
-          "2042-03-01T00:00:00.000Z",
-        ],
+        [jobId, companyId, importSourceId, userId, "2042-03-01T00:00:00.000Z"],
       );
       await expectConstraintViolation(
         client.query("COMMIT"),
@@ -2083,13 +2071,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
           '  "importSourceId", "createdByUserId", "updatedAt"',
           ") VALUES ($1, $2, 'import-with-decision', 'IMPORT', 'source-item-1', $3, $4, $5::timestamptz)",
         ].join("\n"),
-        [
-          jobId,
-          companyId,
-          importSourceId,
-          userId,
-          "2042-03-01T00:00:00.000Z",
-        ],
+        [jobId, companyId, importSourceId, userId, "2042-03-01T00:00:00.000Z"],
       );
       await committed.query(
         'UPDATE "ImportDecision" SET "committedJobId" = $2 WHERE "id" = $1',

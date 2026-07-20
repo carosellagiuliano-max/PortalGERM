@@ -2304,14 +2304,21 @@ export function buildAnalyticsSeedFixtures(
     });
   }
 
+  // The 300-row Phase-05 analytics stream is sealed evidence. Phase 09 adds
+  // EXTERNAL_APPLY_CLICKED to the runtime taxonomy, but inserting it into this
+  // modulo stream would silently rewrite every subsequent deterministic row.
+  // External-click behavior has dedicated action/contract tests instead.
+  const sealedSeedKinds = ANALYTICS_EVENT_KINDS_V1.filter(
+    (kind) => kind !== AnalyticsEventKind.EXTERNAL_APPLY_CLICKED,
+  );
   const backgroundCount = ANALYTICS_COUNT - specs.length;
-  if (backgroundCount < ANALYTICS_EVENT_KINDS_V1.length) {
+  if (backgroundCount < sealedSeedKinds.length) {
     throw new Error("Analytics seed background cannot cover the closed taxonomy.");
   }
   for (let index = 0; index < backgroundCount; index += 1) {
     const kind = requireAt(
-      ANALYTICS_EVENT_KINDS_V1,
-      index % ANALYTICS_EVENT_KINDS_V1.length,
+      sealedSeedKinds,
+      index % sealedSeedKinds.length,
       "Background Analytics kind",
     );
     const company = requireAt(
@@ -2357,8 +2364,8 @@ export function buildAnalyticsSeedFixtures(
   });
   const coveredKinds = new Set(fixtures.map((fixture) => fixture.kind));
   if (
-    coveredKinds.size !== ANALYTICS_EVENT_KINDS_V1.length ||
-    ANALYTICS_EVENT_KINDS_V1.some((kind) => !coveredKinds.has(kind))
+    coveredKinds.size !== sealedSeedKinds.length ||
+    sealedSeedKinds.some((kind) => !coveredKinds.has(kind))
   ) {
     throw new Error("Analytics seed does not cover the closed v1 taxonomy.");
   }
@@ -2382,6 +2389,7 @@ function analyticsDimensions(
     AnalyticsEventKind.JOB_DETAIL_VIEWED,
     AnalyticsEventKind.JOB_SAVED,
     AnalyticsEventKind.APPLY_INTENT_STARTED,
+    AnalyticsEventKind.EXTERNAL_APPLY_CLICKED,
     AnalyticsEventKind.APPLICATION_SUBMITTED,
     AnalyticsEventKind.APPLICATION_STATUS_CHANGED,
     AnalyticsEventKind.JOB_DRAFT_CREATED,
@@ -2452,6 +2460,12 @@ function analyticsProperties(
       return { surface: "JOB_DETAIL", intent: "SAVE" };
     case AnalyticsEventKind.APPLY_INTENT_STARTED:
       return { surface: "JOB_DETAIL", intent: "APPLY" };
+    case AnalyticsEventKind.EXTERNAL_APPLY_CLICKED:
+      return {
+        surface: "JOB_DETAIL",
+        intent: "APPLY",
+        destinationKind: "EXTERNAL_HTTP_URL",
+      };
     case AnalyticsEventKind.CANDIDATE_REGISTERED:
     case AnalyticsEventKind.CANDIDATE_PROFILE_COMPLETED:
     case AnalyticsEventKind.RADAR_OPTED_IN:

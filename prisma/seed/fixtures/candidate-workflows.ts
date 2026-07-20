@@ -6,12 +6,13 @@ import { sha256CanonicalJson } from "@/prisma/seed/canonical-json";
 
 export const CANDIDATE_COUNT = 30 as const;
 export const APPLICATION_COUNT = 80 as const;
-export const SAVED_JOB_COUNT = 40 as const;
+export const SAVED_JOB_COUNT = 41 as const;
 export const JOB_ALERT_COUNT = 15 as const;
 export const CONTACT_REQUEST_COUNT = 6 as const;
 export const RADAR_PROFILE_COUNT = 10 as const;
 export const RADAR_CONVERSATION_COUNT = 2 as const;
 export const APPLICATION_CONVERSATION_COUNT = 80 as const;
+export const PRIVACY_REQUEST_COUNT = 3 as const;
 
 export const RADAR_COMPANY_SLOTS = [
   "novarigi-digital",
@@ -231,12 +232,9 @@ export type CandidateFixture = Readonly<{
   postalCode: string;
   cityLabel: string;
   summary: string;
+  userStatus: "ACTIVE" | "SUSPENDED";
   finalOnboardingStatus: "COMPLETE" | "DRAFT";
-  onboardingHistory: readonly (
-    | "DRAFT_CREATED"
-    | "COMPLETED"
-    | "REOPENED"
-  )[];
+  onboardingHistory: readonly ("DRAFT_CREATED" | "COMPLETED" | "REOPENED")[];
   skillSlugs: readonly string[];
   languages: readonly Readonly<{ code: string; level: string }>[];
   categorySlug: string;
@@ -264,10 +262,17 @@ export const CANDIDATE_FIXTURES: readonly CandidateFixture[] = Object.freeze(
         SKILL_SLUGS[(skillStart + skillIndex) % SKILL_SLUGS.length] as string,
     );
     const languageCount = index % 2 === 0 ? 2 : 3;
-    const languages = Array.from({ length: languageCount }, (_, languageIndex) => ({
-      code: LANGUAGE_ROTATION[(index + languageIndex) % LANGUAGE_ROTATION.length] as string,
-      level: LANGUAGE_LEVELS[(index + languageIndex) % LANGUAGE_LEVELS.length] as string,
-    }));
+    const languages = Array.from(
+      { length: languageCount },
+      (_, languageIndex) => ({
+        code: LANGUAGE_ROTATION[
+          (index + languageIndex) % LANGUAGE_ROTATION.length
+        ] as string,
+        level: LANGUAGE_LEVELS[
+          (index + languageIndex) % LANGUAGE_LEVELS.length
+        ] as string,
+      }),
+    );
     const reopened = index >= 28;
     const finalOnboardingStatus =
       index === 10 || index === 26 || index === 27 || reopened
@@ -293,10 +298,13 @@ export const CANDIDATE_FIXTURES: readonly CandidateFixture[] = Object.freeze(
       cityLabel: `Demo-Ort ${String((index % 9) + 1).padStart(2, "0")}`,
       summary:
         "Fiktives Demo-Profil mit nachvollziehbaren Präferenzen und ohne reale personenbezogene Daten.",
+      userStatus: index === 27 ? "SUSPENDED" : "ACTIVE",
       finalOnboardingStatus,
       onboardingHistory: Object.freeze(onboardingHistory),
       skillSlugs: Object.freeze(skillSlugs),
-      languages: Object.freeze(languages.map((language) => Object.freeze(language))),
+      languages: Object.freeze(
+        languages.map((language) => Object.freeze(language)),
+      ),
       categorySlug: CATEGORY_SLUGS[index % CATEGORY_SLUGS.length] as string,
       desiredTitles: Object.freeze([
         `Fachperson ${String((index % 8) + 1).padStart(2, "0")}`,
@@ -308,8 +316,9 @@ export const CANDIDATE_FIXTURES: readonly CandidateFixture[] = Object.freeze(
       salaryMaxChf: 82_000 + (index % 8) * 5_000,
       workloadMin: 60 + (index % 3) * 10,
       workloadMax: 80 + (index % 3) * 10,
-      remotePreference:
-        REMOTE_PREFERENCES[index % REMOTE_PREFERENCES.length] as string,
+      remotePreference: REMOTE_PREFERENCES[
+        index % REMOTE_PREFERENCES.length
+      ] as string,
       mobilityRadiusKm: 15 + (index % 6) * 10,
       seniority: SENIORITIES[index % SENIORITIES.length] as string,
       radarConsent: index <= 10 ? "GRANTED" : index === 11 ? "DENIED" : null,
@@ -357,45 +366,122 @@ const APPLICATION_STATUSES = [
   ...REMAINING_APPLICATION_STATUSES,
 ] as const;
 
+export type ApplicationFixtureStatus = (typeof APPLICATION_STATUSES)[number];
+
+export const APPLICATION_STATUS_PATHS = Object.freeze({
+  SUBMITTED: Object.freeze(["SUBMITTED"]),
+  IN_REVIEW: Object.freeze(["SUBMITTED", "IN_REVIEW"]),
+  SHORTLISTED: Object.freeze(["SUBMITTED", "IN_REVIEW", "SHORTLISTED"]),
+  INTERVIEW: Object.freeze([
+    "SUBMITTED",
+    "IN_REVIEW",
+    "SHORTLISTED",
+    "INTERVIEW",
+  ]),
+  OFFER: Object.freeze([
+    "SUBMITTED",
+    "IN_REVIEW",
+    "SHORTLISTED",
+    "INTERVIEW",
+    "OFFER",
+  ]),
+  HIRED: Object.freeze([
+    "SUBMITTED",
+    "IN_REVIEW",
+    "SHORTLISTED",
+    "INTERVIEW",
+    "OFFER",
+    "HIRED",
+  ]),
+  REJECTED: Object.freeze(["SUBMITTED", "IN_REVIEW", "REJECTED"]),
+  WITHDRAWN: Object.freeze(["SUBMITTED", "WITHDRAWN"]),
+} as const satisfies Readonly<
+  Record<ApplicationFixtureStatus, readonly ApplicationFixtureStatus[]>
+>);
+
 const APPLICATION_CANDIDATE_INDICES = CANDIDATE_FIXTURES.flatMap(
   (candidate, index) =>
-    candidate.firstName !== null && candidate.lastName.length > 0 ? [index] : [],
+    candidate.firstName !== null && candidate.lastName.length > 0
+      ? [index]
+      : [],
 );
 
 export type ApplicationFixture = Readonly<{
   key: string;
   candidateIndex: number;
   jobIndex: number;
-  status: string;
-  hasDetailedHistory: boolean;
+  status: ApplicationFixtureStatus;
+  hasConversationMessages: boolean;
   linksCv: boolean;
 }>;
 
-export const APPLICATION_FIXTURES: readonly ApplicationFixture[] = Object.freeze(
-  Array.from({ length: APPLICATION_COUNT }, (_, index) => {
-    const candidateIndex = APPLICATION_CANDIDATE_INDICES[
-      index % APPLICATION_CANDIDATE_INDICES.length
-    ] as number;
-    return Object.freeze({
-      key: `application-${String(index + 1).padStart(3, "0")}`,
-      candidateIndex,
-      jobIndex: index,
-      status: APPLICATION_STATUSES[index] as string,
-      hasDetailedHistory: index < 20,
-      linksCv: candidateIndex === 0,
-    });
-  }),
-);
+export type ApplicationTransitionFixture = Readonly<{
+  actor: "CANDIDATE" | "EMPLOYER";
+  fromStatus: ApplicationFixtureStatus;
+  naturalKey: string;
+  stepIndex: number;
+  stepCount: number;
+  toStatus: ApplicationFixtureStatus;
+}>;
 
-export const SAVED_JOB_FIXTURES = Object.freeze(
-  Array.from({ length: SAVED_JOB_COUNT }, (_, index) =>
+export function applicationTransitionFixtures(
+  application: Pick<ApplicationFixture, "key" | "status">,
+): readonly ApplicationTransitionFixture[] {
+  const path = APPLICATION_STATUS_PATHS[application.status];
+  const transitions = path.slice(1).map((toStatus, index) => {
+    const fromStatus = path[index];
+    if (fromStatus === undefined) {
+      throw new Error(
+        `Missing application transition origin for ${application.key}.`,
+      );
+    }
+    const stepIndex = index + 1;
+    const stepCount = path.length - 1;
+    return Object.freeze({
+      actor: toStatus === "WITHDRAWN" ? "CANDIDATE" : "EMPLOYER",
+      fromStatus,
+      naturalKey: `${application.key}:status:${String(stepIndex).padStart(2, "0")}:${fromStatus.toLowerCase()}-to-${toStatus.toLowerCase()}`,
+      stepIndex,
+      stepCount,
+      toStatus,
+    });
+  });
+  return Object.freeze(transitions);
+}
+
+export const APPLICATION_FIXTURES: readonly ApplicationFixture[] =
+  Object.freeze(
+    Array.from({ length: APPLICATION_COUNT }, (_, index) => {
+      const candidateIndex = APPLICATION_CANDIDATE_INDICES[
+        index % APPLICATION_CANDIDATE_INDICES.length
+      ] as number;
+      return Object.freeze({
+        key: `application-${String(index + 1).padStart(3, "0")}`,
+        candidateIndex,
+        jobIndex: index,
+        status: APPLICATION_STATUSES[index] as ApplicationFixtureStatus,
+        hasConversationMessages: index < 20,
+        linksCv: candidateIndex === 0,
+      });
+    }),
+  );
+
+export const SAVED_JOB_FIXTURES = Object.freeze([
+  ...Array.from({ length: SAVED_JOB_COUNT - 1 }, (_, index) =>
     Object.freeze({
       key: `saved-job-${String(index + 1).padStart(2, "0")}`,
       candidateIndex: (index + 7) % CANDIDATE_COUNT,
+      jobPool: "PUBLISHED" as const,
       jobIndex: (index + 40) % 100,
     }),
   ),
-);
+  Object.freeze({
+    key: "saved-job-expired-01",
+    candidateIndex: 0,
+    jobPool: "EXPIRED" as const,
+    jobIndex: 0,
+  }),
+]);
 
 const ALERT_STATUSES = [
   ...Array.from({ length: 6 }, () => "ACTIVE" as const),
@@ -412,18 +498,74 @@ export const JOB_ALERT_FIXTURES = Object.freeze(
       frequency: index % 3 === 0 ? ("WEEKLY" as const) : ("DAILY" as const),
       status: ALERT_STATUSES[index] as string,
       jobIndices: Object.freeze([(index * 2) % 100, (index * 2 + 1) % 100]),
-      expiresAtBoundaryDays: index % 2 === 0 ? 180 : 179,
     }),
   ),
 );
 
 export const CONTACT_REQUEST_FIXTURES = Object.freeze([
-  Object.freeze({ key: "contact-accepted-a", companySlot: 0, candidateIndex: 0, status: "ACCEPTED", timing: "cooldown-a" }),
-  Object.freeze({ key: "contact-accepted-b", companySlot: 1, candidateIndex: 1, status: "ACCEPTED", timing: "cooldown-b" }),
-  Object.freeze({ key: "contact-pending-a", companySlot: 0, candidateIndex: 2, status: "PENDING", timing: "current" }),
-  Object.freeze({ key: "contact-pending-b", companySlot: 1, candidateIndex: 3, status: "PENDING", timing: "current" }),
-  Object.freeze({ key: "contact-declined-a", companySlot: 0, candidateIndex: 0, status: "DECLINED", timing: "historic-a" }),
-  Object.freeze({ key: "contact-declined-b", companySlot: 1, candidateIndex: 1, status: "DECLINED", timing: "historic-b" }),
+  Object.freeze({
+    key: "contact-accepted-a",
+    companySlot: 0,
+    candidateIndex: 0,
+    status: "ACCEPTED",
+    timing: "cooldown-a",
+  }),
+  Object.freeze({
+    key: "contact-accepted-b",
+    companySlot: 1,
+    candidateIndex: 1,
+    status: "ACCEPTED",
+    timing: "cooldown-b",
+  }),
+  Object.freeze({
+    key: "contact-pending-a",
+    companySlot: 0,
+    candidateIndex: 2,
+    status: "PENDING",
+    timing: "current",
+  }),
+  Object.freeze({
+    key: "contact-pending-b",
+    companySlot: 1,
+    candidateIndex: 3,
+    status: "PENDING",
+    timing: "current",
+  }),
+  Object.freeze({
+    key: "contact-declined-a",
+    companySlot: 0,
+    candidateIndex: 0,
+    status: "DECLINED",
+    timing: "historic-a",
+  }),
+  Object.freeze({
+    key: "contact-declined-b",
+    companySlot: 1,
+    candidateIndex: 1,
+    status: "DECLINED",
+    timing: "historic-b",
+  }),
+] as const);
+
+export const PRIVACY_REQUEST_FIXTURES = Object.freeze([
+  Object.freeze({
+    key: "privacy-export-pending",
+    candidateIndex: 0,
+    type: "EXPORT",
+    correctionFields: [],
+  }),
+  Object.freeze({
+    key: "privacy-delete-pending",
+    candidateIndex: 1,
+    type: "DELETE",
+    correctionFields: [],
+  }),
+  Object.freeze({
+    key: "privacy-correct-pending",
+    candidateIndex: 2,
+    type: "CORRECT",
+    correctionFields: ["PROFILE_PREFERENCES", "LOCATION"],
+  }),
 ] as const);
 
 export const CANDIDATE_WORKFLOW_FIXTURE_CONTRACT = Object.freeze({
@@ -431,6 +573,7 @@ export const CANDIDATE_WORKFLOW_FIXTURE_CONTRACT = Object.freeze({
     key: candidate.key,
     cantonCode: candidate.cantonCode,
     onboardingStatus: candidate.finalOnboardingStatus,
+    userStatus: candidate.userStatus,
     skillSlugs: candidate.skillSlugs,
     languages: candidate.languages,
     categorySlug: candidate.categorySlug,
@@ -441,6 +584,7 @@ export const CANDIDATE_WORKFLOW_FIXTURE_CONTRACT = Object.freeze({
   savedJobs: SAVED_JOB_FIXTURES,
   alerts: JOB_ALERT_FIXTURES,
   contactRequests: CONTACT_REQUEST_FIXTURES,
+  privacyRequests: PRIVACY_REQUEST_FIXTURES,
   radarCompanySlots: RADAR_COMPANY_SLOTS,
 });
 
@@ -481,7 +625,10 @@ function buildIdentitySpecs() {
       add("radar-profile", candidate.key);
       RADAR_COMPANY_SLOTS.forEach((companySlug) => {
         ["previous", "current"].forEach((epoch) =>
-          add("radar-opaque-mapping", `${companySlug}:${epoch}:${candidate.key}`),
+          add(
+            "radar-opaque-mapping",
+            `${companySlug}:${epoch}:${candidate.key}`,
+          ),
         );
       });
     }
@@ -494,13 +641,13 @@ function buildIdentitySpecs() {
       add("application-document", application.key);
     }
     add("application-event", `${application.key}:submitted`);
-    if (application.hasDetailedHistory) {
-      add("application-event", `${application.key}:current-status`);
-    }
+    applicationTransitionFixtures(application).forEach((transition) =>
+      add("application-event", transition.naturalKey),
+    );
     add("conversation", `${application.key}:conversation`);
     add("conversation-participant", `${application.key}:candidate`);
     add("conversation-participant", `${application.key}:company`);
-    if (application.hasDetailedHistory) {
+    if (application.hasConversationMessages) {
       add("message", `${application.key}:candidate-message`);
       add("message", `${application.key}:employer-message`);
     }
@@ -508,8 +655,10 @@ function buildIdentitySpecs() {
 
   SAVED_JOB_FIXTURES.forEach((savedJob) => add("saved-job", savedJob.key));
   JOB_ALERT_FIXTURES.forEach((alert) => {
+    add("user-consent-event", `${alert.key}:delivery-granted`);
     add("job-alert", alert.key);
     add("job-alert-event", `${alert.key}:created`);
+    add("job-alert-event", `${alert.key}:digest-recorded`);
     if (alert.status !== "ACTIVE") {
       add("job-alert-event", `${alert.key}:${alert.status.toLowerCase()}`);
     }
@@ -518,6 +667,7 @@ function buildIdentitySpecs() {
       add("job-alert-digest-item", `${alert.key}:${itemIndex}`),
     );
     add("job-alert-unsubscribe-token", alert.key);
+    add("email-log", `${alert.key}:digest-recorded`);
   });
 
   RADAR_COMPANY_SLOTS.forEach((companySlug) => {
@@ -540,7 +690,10 @@ function buildIdentitySpecs() {
     add("employer-contact-request", request.key);
     add("contact-request-event", `${request.key}:created`);
     if (request.status !== "PENDING") {
-      add("contact-request-event", `${request.key}:${request.status.toLowerCase()}`);
+      add(
+        "contact-request-event",
+        `${request.key}:${request.status.toLowerCase()}`,
+      );
     }
     if (request.status === "ACCEPTED") {
       add("contact-request-event", `${request.key}:reveal-granted`);
@@ -564,15 +717,22 @@ function buildIdentitySpecs() {
     }
   });
 
+  PRIVACY_REQUEST_FIXTURES.forEach((request) => {
+    add("privacy-request", request.key);
+    add("privacy-request-event", `${request.key}:created`);
+    request.correctionFields.forEach((field) =>
+      add("privacy-request-correction-field", `${request.key}:${field}`),
+    );
+  });
+
   return specs;
 }
 
-export const CANDIDATE_WORKFLOW_SEED_IDENTITIES =
-  assertSeedIdentityIntegrity(
-    buildIdentitySpecs().map(([entity, naturalKey]) =>
-      createSeedIdentity(entity, naturalKey),
-    ),
-  );
+export const CANDIDATE_WORKFLOW_SEED_IDENTITIES = assertSeedIdentityIntegrity(
+  buildIdentitySpecs().map(([entity, naturalKey]) =>
+    createSeedIdentity(entity, naturalKey),
+  ),
+);
 
 export const CANDIDATE_WORKFLOW_BLOCK_DIGEST = Object.freeze({
   name: "candidate-workflows",

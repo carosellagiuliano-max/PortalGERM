@@ -46,13 +46,35 @@ export function parseSafeNext(
     if (url.origin !== SAFE_NEXT_BASE || url.username || url.password) {
       return null;
     }
-    const allowed = SAFE_NEXT_PREFIXES_BY_ROLE_V1[role].some(
+    const allowedPrivatePath = SAFE_NEXT_PREFIXES_BY_ROLE_V1[role].some(
       (prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`),
     );
-    return allowed ? `${url.pathname}${url.search}${url.hash}` : null;
+    const allowedJobIntentPath =
+      role === "CANDIDATE" &&
+      url.hash === "" &&
+      isStructurallySafeCandidateJobIntentPath(url.pathname, url.searchParams);
+    return allowedPrivatePath || allowedJobIntentPath
+      ? `${url.pathname}${url.search}${url.hash}`
+      : null;
   } catch {
     return null;
   }
+}
+
+function isStructurallySafeCandidateJobIntentPath(
+  pathname: string,
+  searchParams: URLSearchParams,
+): boolean {
+  const match = /^\/jobs\/([a-z0-9]+(?:-[a-z0-9]+)*)$/u.exec(pathname);
+  if (match === null || match[1]!.length > 220) return false;
+  if ([...searchParams.keys()].some((key) => key !== "intent")) return false;
+  const values = searchParams.getAll("intent");
+  return (
+    values.length === 1 &&
+    values[0]!.length > 0 &&
+    values[0]!.length <= 1_024 &&
+    /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(values[0]!)
+  );
 }
 
 export function resolveSafeNext(

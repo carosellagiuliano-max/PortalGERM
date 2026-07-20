@@ -36,10 +36,11 @@ async function main() {
   try {
     const result = await runSmoke();
     console.info(
-      `HTTP smoke passed on ${result.baseUrl}: Phase-07/08 public routes, health, anonymous auth redirects and protected response headers verified.`,
+      `HTTP smoke passed on ${result.baseUrl}: Phase-07/08 public routes, Phase-09 unsubscribe privacy, health, anonymous auth redirects and protected response headers verified.`,
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "HTTP smoke failed.";
+    const message =
+      error instanceof Error ? error.message : "HTTP smoke failed.";
     console.error(redactDiagnostics(message));
     process.exitCode = 1;
   }
@@ -117,10 +118,8 @@ async function runHttpSmoke(databaseUrl: string) {
   );
 
   const exit = new Promise<ChildExit>((resolveExit) => {
-    child.once(
-      "exit",
-      (code: number | null, signal: NodeJS.Signals | null) =>
-        resolveExit({ code, signal }),
+    child.once("exit", (code: number | null, signal: NodeJS.Signals | null) =>
+      resolveExit({ code, signal }),
     );
   });
   let diagnostics = "";
@@ -152,7 +151,9 @@ async function runHttpSmoke(databaseUrl: string) {
 
   if (smokeFailure !== undefined) {
     const message =
-      smokeFailure instanceof Error ? smokeFailure.message : "Unknown smoke failure";
+      smokeFailure instanceof Error
+        ? smokeFailure.message
+        : "Unknown smoke failure";
     const safeDiagnostics = redactDiagnostics(diagnostics.trim());
     throw new Error(
       safeDiagnostics.length > 0
@@ -200,7 +201,9 @@ async function waitUntilLive(
     await delay(200);
   }
 
-  throw new Error(`Production server did not become live within ${timeoutMs}ms.`);
+  throw new Error(
+    `Production server did not become live within ${timeoutMs}ms.`,
+  );
 }
 
 async function verifyResponses(baseUrl: string, secretCanary: string) {
@@ -229,22 +232,18 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   ] as const;
 
   for (const route of anonymousPrivateRoutes) {
-    const privateResponse = await request(
-      baseUrl,
-      route.path,
-      secretCanary,
-    );
+    const privateResponse = await request(baseUrl, route.path, secretCanary);
     expectStatus(privateResponse, 307);
     expectLoginRedirect(privateResponse, baseUrl, route.next);
-    expectCacheDirectives(privateResponse, ["private", "no-store", "max-age=0"]);
+    expectCacheDirectives(privateResponse, [
+      "private",
+      "no-store",
+      "max-age=0",
+    ]);
     expectNoIndex(privateResponse);
   }
 
-  const resetPassword = await request(
-    baseUrl,
-    "/reset-password",
-    secretCanary,
-  );
+  const resetPassword = await request(baseUrl, "/reset-password", secretCanary);
   expectStatus(resetPassword, 200);
   expectContent(resetPassword, "text/html", "Neues Passwort festlegen");
   expectCacheDirectives(resetPassword, ["no-store", "max-age=0"]);
@@ -255,6 +254,19 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   expectContent(forbidden, "text/html", "Zugriff nicht erlaubt");
   expectCacheDirectives(forbidden, ["private", "no-store", "max-age=0"]);
   expectNoIndex(forbidden);
+
+  const unsubscribe = await request(
+    baseUrl,
+    "/alerts/unsubscribe/not-a-valid-token",
+    secretCanary,
+  );
+  expectStatus(unsubscribe, 200);
+  expectContent(unsubscribe, "text/html", "Jobabo sicher pausieren");
+  expectCacheDirectives(unsubscribe, ["no-store", "max-age=0"]);
+  expectNoIndex(unsubscribe);
+  if (unsubscribe.response.headers.get("referrer-policy") !== "no-referrer") {
+    throw new Error("The unsubscribe route must enforce no-referrer.");
+  }
 
   const live = await request(baseUrl, "/health/live", secretCanary, {
     "x-correlation-id": suppliedCorrelationId,
@@ -279,7 +291,9 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   );
   expectStatus(productionMailbox, 404);
   expectNoStore(productionMailbox);
-  if (productionMailbox.response.headers.get("x-robots-tag") !== NOINDEX_POLICY) {
+  if (
+    productionMailbox.response.headers.get("x-robots-tag") !== NOINDEX_POLICY
+  ) {
     throw new Error(
       "/dev/mailbox must remain noindex when it fails closed in Production.",
     );
@@ -294,15 +308,39 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   expectContent(missing, "text/html", "Diese Seite ist nicht verfügbar");
 }
 
-async function verifyPhase08PublicRoutes(baseUrl: string, secretCanary: string) {
+async function verifyPhase08PublicRoutes(
+  baseUrl: string,
+  secretCanary: string,
+) {
   const pages = [
-    { path: "/pricing", expectedText: "Wähle den Plan, der dein Recruiting wachsen lässt" },
-    { path: "/employers", expectedText: "Bessere Bewerbungen. Faires Recruiting." },
-    { path: "/employers/post-job", expectedText: "Ein klarer Ablauf für ein transparentes Stelleninserat." },
-    { path: "/employers/talent-radar", expectedText: "Anonyme Talente entdecken" },
-    { path: "/employers/employer-branding", expectedText: "Zeige Arbeitsumfeld und Benefits" },
-    { path: "/employers/xml-import", expectedText: "Wiederkehrende Stellen strukturiert vorbereiten" },
-    { path: "/employers/demo", expectedText: "Lass uns deinen Recruiting-Bedarf einordnen." },
+    {
+      path: "/pricing",
+      expectedText: "Wähle den Plan, der dein Recruiting wachsen lässt",
+    },
+    {
+      path: "/employers",
+      expectedText: "Bessere Bewerbungen. Faires Recruiting.",
+    },
+    {
+      path: "/employers/post-job",
+      expectedText: "Ein klarer Ablauf für ein transparentes Stelleninserat.",
+    },
+    {
+      path: "/employers/talent-radar",
+      expectedText: "Anonyme Talente entdecken",
+    },
+    {
+      path: "/employers/employer-branding",
+      expectedText: "Zeige Arbeitsumfeld und Benefits",
+    },
+    {
+      path: "/employers/xml-import",
+      expectedText: "Wiederkehrende Stellen strukturiert vorbereiten",
+    },
+    {
+      path: "/employers/demo",
+      expectedText: "Lass uns deinen Recruiting-Bedarf einordnen.",
+    },
   ] as const;
 
   for (const page of pages) {
@@ -313,9 +351,15 @@ async function verifyPhase08PublicRoutes(baseUrl: string, secretCanary: string) 
   }
   const pricing = await request(baseUrl, "/pricing", secretCanary);
   expectContent(pricing, "text/html", "CHF 149.00");
-  expectContent(pricing, "text/html", "Erfolgsbasierte Vermittlungsmodelle werden erst nach rechtlicher Prüfung aktiviert.");
+  expectContent(
+    pricing,
+    "text/html",
+    "Erfolgsbasierte Vermittlungsmodelle werden erst nach rechtlicher Prüfung aktiviert.",
+  );
   if (pricing.body.includes("Preise momentan nicht verfügbar")) {
-    throw new Error("/pricing failed closed despite a complete seeded catalog.");
+    throw new Error(
+      "/pricing failed closed despite a complete seeded catalog.",
+    );
   }
 }
 
@@ -325,11 +369,7 @@ async function verifyPhase07PublicRoutes(
   home: SmokeResponse,
 ) {
   const fixtures = phase07RouteFixtures();
-  expectContent(
-    home,
-    "text/html",
-    "Demo-Daten – keine reale Marktaktivität.",
-  );
+  expectContent(home, "text/html", "Demo-Daten – keine reale Marktaktivität.");
 
   const publicPages = [
     { path: "/jobs", expectedText: "Finde deinen nächsten fairen Job." },
@@ -467,9 +507,12 @@ function assertSecurityHeaders(path: string, headers: Headers) {
   const expected = {
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
-    "referrer-policy": path === "/dev/mailbox" || path === "/reset-password"
-      ? "no-referrer"
-      : "strict-origin-when-cross-origin",
+    "referrer-policy":
+      path === "/dev/mailbox" ||
+      path === "/reset-password" ||
+      path.startsWith("/alerts/unsubscribe/")
+        ? "no-referrer"
+        : "strict-origin-when-cross-origin",
     "permissions-policy": "camera=(), microphone=(), geolocation=()",
   } as const;
 
@@ -504,11 +547,15 @@ function expectContent(
   expectedContentType: string,
   expectedText: string,
 ) {
-  if (!result.response.headers.get("content-type")?.includes(expectedContentType)) {
+  if (
+    !result.response.headers.get("content-type")?.includes(expectedContentType)
+  ) {
     throw new Error(`${result.path} returned the wrong content type.`);
   }
   if (!result.body.includes(expectedText)) {
-    throw new Error(`${result.path} did not contain its expected safe content.`);
+    throw new Error(
+      `${result.path} did not contain its expected safe content.`,
+    );
   }
 }
 
@@ -535,9 +582,7 @@ function expectCacheDirectives(
 ) {
   const value = result.response.headers.get("cache-control");
   const actualDirectives = new Set(
-    value
-      ?.split(",")
-      .map((directive) => directive.trim().toLowerCase()) ?? [],
+    value?.split(",").map((directive) => directive.trim().toLowerCase()) ?? [],
   );
   const missing = expectedDirectives.filter(
     (directive) => !actualDirectives.has(directive.toLowerCase()),
@@ -564,11 +609,12 @@ function expectHtmlNoIndex(result: SmokeResponse) {
   const robotsTag = metaTags.find(
     (tag) => htmlAttribute(tag, "name")?.toLowerCase() === "robots",
   );
-  const directives = robotsTag === undefined
-    ? ""
-    : htmlAttribute(robotsTag, "content") ?? "";
+  const directives =
+    robotsTag === undefined ? "" : (htmlAttribute(robotsTag, "content") ?? "");
   if (!hasRobotsDirective(directives, "noindex")) {
-    throw new Error(`${result.path} did not expose its required noindex policy.`);
+    throw new Error(
+      `${result.path} did not expose its required noindex policy.`,
+    );
   }
 }
 
@@ -663,10 +709,19 @@ function phase07RouteFixtures() {
       "registrationEmailDomainNormalized",
       "PRIVATE_EMPLOYER_NOTE_CANARY",
       "cvStorageKey",
-    ].filter((marker): marker is string => marker !== null && marker.length > 0),
+    ].filter(
+      (marker): marker is string => marker !== null && marker.length > 0,
+    ),
   );
 
-  return Object.freeze({ job, canton, category, company, guide, privateMarkers });
+  return Object.freeze({
+    job,
+    canton,
+    category,
+    company,
+    guide,
+    privateMarkers,
+  });
 }
 
 function expectLoginRedirect(
@@ -749,10 +804,7 @@ function parsePositiveInteger(
   return value;
 }
 
-async function stopChild(
-  child: SmokeChild,
-  exit: Promise<ChildExit>,
-) {
+async function stopChild(child: SmokeChild, exit: Promise<ChildExit>) {
   if (child.exitCode !== null || child.signalCode !== null) {
     await exit;
     return;

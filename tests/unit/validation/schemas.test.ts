@@ -119,6 +119,15 @@ describe("candidate validation", () => {
       remotePreference: "HYBRID",
     };
     expect(swissJobPassSchema.safeParse(base).success).toBe(true);
+    expect(swissJobPassSchema.parse(base).languages[0]?.code).toBe("de");
+    for (const code of ["12", "<>", "d1", "éé"]) {
+      expect(
+        swissJobPassSchema.safeParse({
+          ...base,
+          languages: [{ code, level: "C1" }],
+        }).success,
+      ).toBe(false);
+    }
     expect(
       swissJobPassSchema.safeParse({ ...base, desiredSalaryMin: 80_000 })
         .success,
@@ -218,19 +227,22 @@ describe("employer validation", () => {
     ["data:text/html,<script>alert(1)</script>", false],
     ["ftp://company.example.ch", false],
     ["https://user:secret@company.example.ch", false],
-  ] as const)("accepts only safe absolute HTTP(S) company websites: %s", (website, expected) => {
-    expect(
-      companyProfileSchema.safeParse({
-        name: "Talent AG",
-        industry: "IT",
-        size: "20-49",
-        website,
-        about: ITEM,
-        values: ["Fairness"],
-        benefits: ["Weiterbildung"],
-      }).success,
-    ).toBe(expected);
-  });
+  ] as const)(
+    "accepts only safe absolute HTTP(S) company websites: %s",
+    (website, expected) => {
+      expect(
+        companyProfileSchema.safeParse({
+          name: "Talent AG",
+          industry: "IT",
+          size: "20-49",
+          website,
+          about: ITEM,
+          values: ["Fairness"],
+          benefits: ["Weiterbildung"],
+        }).success,
+      ).toBe(expected);
+    },
+  );
 
   it("enforces start XOR, remote CH, P0 documents and declared contact kind", () => {
     expect(
@@ -293,24 +305,29 @@ describe("employer validation", () => {
     ["ftp://jobs.example.ch/apply", false],
     ["/relative/apply", false],
     ["https://user:secret@jobs.example.ch/apply", false],
-  ] as const)("accepts only safe absolute HTTP(S) APPLY_URL values: %s", (url, expected) => {
-    const application = {
-      applicationEffort: validJob.applicationEffort,
-      applicationProcessSteps: validJob.applicationProcessSteps,
-      requiredDocumentKinds: validJob.requiredDocumentKinds,
-      applicationContactKind: "APPLY_URL" as const,
-      applicationContactValue: url,
-    };
+  ] as const)(
+    "accepts only safe absolute HTTP(S) APPLY_URL values: %s",
+    (url, expected) => {
+      const application = {
+        applicationEffort: validJob.applicationEffort,
+        applicationProcessSteps: validJob.applicationProcessSteps,
+        requiredDocumentKinds: validJob.requiredDocumentKinds,
+        applicationContactKind: "APPLY_URL" as const,
+        applicationContactValue: url,
+      };
 
-    expect(jobPostingApplicationSchema.safeParse(application).success).toBe(expected);
-    expect(
-      jobPostingFinalSchema.safeParse({
-        ...validJob,
-        applicationContactKind: application.applicationContactKind,
-        applicationContactValue: application.applicationContactValue,
-      }).success,
-    ).toBe(expected);
-  });
+      expect(jobPostingApplicationSchema.safeParse(application).success).toBe(
+        expected,
+      );
+      expect(
+        jobPostingFinalSchema.safeParse({
+          ...validJob,
+          applicationContactKind: application.applicationContactKind,
+          applicationContactValue: application.applicationContactValue,
+        }).success,
+      ).toBe(expected);
+    },
+  );
 });
 
 describe("billing and admin validation", () => {

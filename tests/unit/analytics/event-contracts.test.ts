@@ -30,6 +30,11 @@ const validProperties = {
   JOB_DETAIL_VIEWED: { surface: "JOB_DETAIL", locale: "de-CH" },
   JOB_SAVED: { surface: "JOB_DETAIL", intent: "SAVE" },
   APPLY_INTENT_STARTED: { surface: "JOB_DETAIL", intent: "APPLY" },
+  EXTERNAL_APPLY_CLICKED: {
+    surface: "JOB_DETAIL",
+    intent: "APPLY",
+    destinationKind: "EXTERNAL_HTTP_URL",
+  },
   APPLICATION_SUBMITTED: { fromStatus: "DRAFT", toStatus: "SUBMITTED" },
   APPLICATION_STATUS_CHANGED: { fromStatus: "SUBMITTED", toStatus: "IN_REVIEW" },
   CANDIDATE_REGISTERED: { onboardingRuleVersion: "candidate-v1" },
@@ -72,8 +77,8 @@ const validProperties = {
 } as const satisfies Record<AnalyticsEventKindValue, Readonly<Record<string, unknown>>>;
 
 describe("analytics event contracts v1", () => {
-  it("covers all and only the 34 Prisma event kinds", () => {
-    expect(ANALYTICS_EVENT_KINDS_V1).toHaveLength(34);
+  it("covers all and only the 35 Prisma event kinds", () => {
+    expect(ANALYTICS_EVENT_KINDS_V1).toHaveLength(35);
     expect(Object.keys(ANALYTICS_EVENT_CONTRACTS_V1).sort()).toEqual(
       Object.values(AnalyticsEventKind).sort(),
     );
@@ -82,14 +87,14 @@ describe("analytics event contracts v1", () => {
     );
   });
 
-  it("classifies exactly seven kinds as PRODUCT_ANALYTICS", () => {
+  it("classifies exactly eight kinds as PRODUCT_ANALYTICS", () => {
     const productKinds = Object.entries(ANALYTICS_EVENT_CONTRACTS_V1)
       .filter(([, contract]) => contract.purpose === "PRODUCT_ANALYTICS")
       .map(([kind]) => kind)
       .sort();
 
     expect(productKinds).toEqual([...PRODUCT_ANALYTICS_KINDS_V1].sort());
-    expect(productKinds).toHaveLength(7);
+    expect(productKinds).toHaveLength(8);
     expect(METRIC_DAILY_RETENTION_MONTHS_V1).toBe(25);
     for (const [kind, contract] of Object.entries(ANALYTICS_EVENT_CONTRACTS_V1)) {
       expect(contract.retentionDays).toBe(
@@ -179,6 +184,27 @@ describe("analytics event contracts v1", () => {
         alertFrequency: "DAILY",
       }).success,
     ).toBe(false);
+  });
+
+  it("keeps external apply clicks distinct and tightly allowlisted", () => {
+    expect(
+      ANALYTICS_EVENT_PROPERTIES_V1.EXTERNAL_APPLY_CLICKED.safeParse({
+        surface: "JOB_DETAIL",
+        intent: "APPLY",
+        destinationKind: "EXTERNAL_HTTP_URL",
+      }).success,
+    ).toBe(true);
+    expect(
+      ANALYTICS_EVENT_PROPERTIES_V1.EXTERNAL_APPLY_CLICKED.safeParse({
+        surface: "JOB_DETAIL",
+        intent: "APPLY",
+        destinationKind: "EXTERNAL_HTTP_URL",
+        destinationUrl: "https://employer.example/private-campaign",
+      }).success,
+    ).toBe(false);
+    expect(
+      ANALYTICS_EVENT_CONTRACTS_V1.EXTERNAL_APPLY_CLICKED.metricMappings,
+    ).not.toContain("CANDIDATE_ACTIVATION");
   });
 
   it("rejects unknown properties and PII canaries for every kind", () => {

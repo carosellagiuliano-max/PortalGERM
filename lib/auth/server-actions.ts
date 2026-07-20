@@ -135,7 +135,7 @@ export async function registerCandidateAction(
   _previousState: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
-  const values = registrationValues(formData, ["name", "email"]);
+  const values = registrationValues(formData, ["name", "email", "next"]);
   const parsed = candidateRegistrationSchema.safeParse({
     name: stringField(formData, "name"),
     email: stringField(formData, "email"),
@@ -149,11 +149,14 @@ export async function registerCandidateAction(
   const request = await getAuthRequestContext();
   if (!isValidAuthMutationOrigin(request)) return originError(values);
   const environment = getServerEnvironment();
-  const result = await registerCandidate(parsed.data, {
+  const result = await registerCandidate(
+    { ...parsed.data, next: nullableStringField(formData, "next") },
+    {
     database: getDatabase(),
     environment,
     request,
-  });
+    },
+  );
   if (!result.ok) return registrationFailure(result.code, values);
   const cookieStore = await cookies();
   writeSessionCookie(cookieStore, result.session);

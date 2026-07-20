@@ -50,6 +50,22 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
       { scope: "ACTOR_OR_IP_TARGET", limit: 3, windowMs: 24 * 60 * 60_000 },
     ]);
     expect(RATE_LIMIT_PRESETS_V1.RADAR_LIST.buckets[0]).toMatchObject({ limit: 10, windowMs: 60_000 });
+    expect(RATE_LIMIT_PRESETS_V1.MESSAGE_SEND.buckets).toEqual([
+      { scope: "USER", limit: 60, windowMs: 60 * 60_000 },
+      { scope: "IP", limit: 120, windowMs: 60 * 60_000 },
+    ]);
+    expect(RATE_LIMIT_PRESETS_V1.APPLICATION_CANDIDATE_MUTATION.buckets).toEqual([
+      { scope: "USER", limit: 60, windowMs: 60 * 60_000 },
+      { scope: "IP", limit: 120, windowMs: 60 * 60_000 },
+    ]);
+    expect(RATE_LIMIT_PRESETS_V1.CANDIDATE_PROFILE_MUTATION.buckets).toEqual([
+      { scope: "USER", limit: 30, windowMs: 60 * 60_000 },
+      { scope: "IP", limit: 100, windowMs: 60 * 60_000 },
+    ]);
+    expect(RATE_LIMIT_PRESETS_V1.JOB_ALERT_MUTATION.buckets).toEqual([
+      { scope: "USER", limit: 60, windowMs: 60 * 60_000 },
+      { scope: "IP", limit: 120, windowMs: 60 * 60_000 },
+    ]);
     expect(RADAR_DISTINCT_FILTER_BUDGET_V1).toEqual({ limit: 30, calendarTimeZone: "Europe/Zurich" });
   });
 

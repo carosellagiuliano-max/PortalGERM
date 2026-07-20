@@ -22,7 +22,9 @@ const authorization = `Bearer ${secret}`;
 function createMemoryRepository() {
   const rows = new Map<string, MockEmailLogRecord>();
   const record = vi.fn<EmailLogRepository["record"]>(async (input) => {
-    const id = input.id ?? `22222222-2222-4222-8222-${String(rows.size + 1).padStart(12, "0")}`;
+    const id =
+      input.id ??
+      `22222222-2222-4222-8222-${String(rows.size + 1).padStart(12, "0")}`;
     const existing = rows.get(id);
     if (existing !== undefined) {
       if (existing.providerReference !== input.providerReference) {
@@ -95,8 +97,7 @@ describe("MockEmailProvider", () => {
 
   it("redacts reset URL/token, dedupes its EmailLog and captures one raw envelope", async () => {
     const token = "reset-token-canary-that-must-never-persist";
-    const resetUrl =
-      `http://127.0.0.1:3000/reset-password#token=${token}`;
+    const resetUrl = `http://127.0.0.1:3000/reset-password#token=${token}`;
     const { repository, rows } = createMemoryRepository();
     const mailbox = createMailbox();
     const provider = new MockEmailProvider(repository, {
@@ -137,6 +138,71 @@ describe("MockEmailProvider", () => {
     expect(mailbox.mailbox.consume(authorization)).toEqual({ status: "empty" });
   });
 
+  it("captures a job-alert unsubscribe URL while persisting neither URL nor token", async () => {
+    const rawToken = Buffer.alloc(32, 0x42).toString("base64url");
+    const unsubscribeUrl = `http://127.0.0.1:3000/alerts/unsubscribe/${rawToken}`;
+    const { repository, rows } = createMemoryRepository();
+    const mailbox = createMailbox();
+    const provider = new MockEmailProvider(repository, {
+      mailbox: { validate: mailbox.validate, capture: mailbox.capture },
+    });
+
+    await provider.send({
+      to: "candidate@example.test",
+      templateKey: "job_alert_digest_mock",
+      data: {
+        alertName: "Pflege Zürich",
+        jobCount: 3,
+        idempotencyKey: "digest-00000000-0000-4000-8000-000000000001",
+        unsubscribeUrl,
+      },
+      subject: "Neue Stellen aus deinem Jobabo",
+    });
+
+    const persisted = JSON.stringify([...rows.values()]);
+    expect(persisted).not.toContain(rawToken);
+    expect(persisted).not.toContain(unsubscribeUrl);
+    expect(persisted).not.toMatch(/https?:\/\//iu);
+    expect(mailbox.mailbox.consume(authorization)).toMatchObject({
+      status: "delivered",
+      envelope: {
+        actionUrl: unsubscribeUrl,
+        templateKey: "job_alert_digest_mock",
+      },
+    });
+  });
+
+  it("allows a failed job-alert capture to rotate only its redacted action token", async () => {
+    const { repository, rows } = createMemoryRepository();
+    const provider = new MockEmailProvider(repository);
+    const send = (fill: number) => {
+      const rawToken = Buffer.alloc(32, fill).toString("base64url");
+      return provider.send({
+        to: "candidate@example.test",
+        templateKey: "job_alert_digest_mock",
+        data: {
+          alertName: "Pflege Zürich",
+          jobCount: 3,
+          idempotencyKey: "digest-00000000-0000-4000-8000-000000000099",
+          unsubscribeUrl: `http://127.0.0.1:3000/alerts/unsubscribe/${rawToken}`,
+        },
+        subject: "Neue Stellen aus deinem Jobabo",
+      });
+    };
+
+    const first = await send(0x31);
+    const rotated = await send(0x32);
+
+    expect(rotated.logId).toBe(first.logId);
+    expect(rows).toHaveLength(1);
+    expect(JSON.stringify([...rows.values()])).not.toContain(
+      Buffer.alloc(32, 0x31).toString("base64url"),
+    );
+    expect(JSON.stringify([...rows.values()])).not.toContain(
+      Buffer.alloc(32, 0x32).toString("base64url"),
+    );
+  });
+
   it("dedupes an invitation version and gives a new version a new log identity", async () => {
     const { repository, rows } = createMemoryRepository();
     const provider = new MockEmailProvider(repository);
@@ -170,15 +236,16 @@ describe("MockEmailProvider", () => {
     const provider = new MockEmailProvider(repository, {
       mailbox: { validate: mailbox.validate, capture: mailbox.capture },
     });
-    const send = (token: string) => provider.send({
-      to: "candidate@example.test",
-      templateKey: "password_reset_mock",
-      data: {
-        idempotencyKey: "password-reset-version-conflict",
-        resetUrl: `http://127.0.0.1:3000/reset-password#token=${token}`,
-      },
-      subject: "Passwort für SwissTalentHub zurücksetzen",
-    });
+    const send = (token: string) =>
+      provider.send({
+        to: "candidate@example.test",
+        templateKey: "password_reset_mock",
+        data: {
+          idempotencyKey: "password-reset-version-conflict",
+          resetUrl: `http://127.0.0.1:3000/reset-password#token=${token}`,
+        },
+        subject: "Passwort für SwissTalentHub zurücksetzen",
+      });
     const firstToken = "first-reset-token-that-is-at-least-thirty-two-bytes";
     const changedToken = "changed-token-that-is-at-least-thirty-two-bytes";
 
@@ -204,16 +271,18 @@ describe("MockEmailProvider", () => {
       mailbox: { validate: mailbox.validate, capture: mailbox.capture },
     });
 
-    await expect(provider.send({
-      to: "candidate@example.test",
-      templateKey: "password_reset_mock",
-      data: {
-        idempotencyKey: "password-reset-invalid-envelope",
-        resetUrl:
-          "https://evil.example/reset-password#token=valid-token-that-is-at-least-thirty-two-bytes",
-      },
-      subject: "Passwort für SwissTalentHub zurücksetzen",
-    })).rejects.toThrow("action_url_invalid");
+    await expect(
+      provider.send({
+        to: "candidate@example.test",
+        templateKey: "password_reset_mock",
+        data: {
+          idempotencyKey: "password-reset-invalid-envelope",
+          resetUrl:
+            "https://evil.example/reset-password#token=valid-token-that-is-at-least-thirty-two-bytes",
+        },
+        subject: "Passwort für SwissTalentHub zurücksetzen",
+      }),
+    ).rejects.toThrow("action_url_invalid");
 
     expect(record).not.toHaveBeenCalled();
     expect(rows).toHaveLength(0);
@@ -239,7 +308,9 @@ describe("MockEmailProvider", () => {
       subject: "Passwort für SwissTalentHub zurücksetzen",
     };
 
-    await expect(provider.send(input)).rejects.toThrow("transient capture failure");
+    await expect(provider.send(input)).rejects.toThrow(
+      "transient capture failure",
+    );
     const retry = await provider.send(input);
 
     expect(retry.logId).toMatch(/^[0-9a-f-]{36}$/);
@@ -276,7 +347,9 @@ describe("MockEmailProvider", () => {
     };
 
     await provider.send(input);
-    expect(mailbox.consume(authorization)).toMatchObject({ status: "delivered" });
+    expect(mailbox.consume(authorization)).toMatchObject({
+      status: "delivered",
+    });
     nowMs += LOCAL_MOCK_MAILBOX_TTL_MS;
     await provider.send(input);
 
@@ -291,16 +364,17 @@ describe("MockEmailProvider", () => {
       invitationVersion: string,
       idempotencyKey: string,
       token: string,
-    ) => provider.send({
-      to: "recruiter@example.test",
-      templateKey: "company_invitation",
-      data: {
-        idempotencyKey,
-        invitationVersion,
-        invitationUrl: `http://127.0.0.1:3000/invitations/${token}`,
-      },
-      subject: "Einladung zu einem Unternehmen auf SwissTalentHub",
-    });
+    ) =>
+      provider.send({
+        to: "recruiter@example.test",
+        templateKey: "company_invitation",
+        data: {
+          idempotencyKey,
+          invitationVersion,
+          invitationUrl: `http://127.0.0.1:3000/invitations/${token}`,
+        },
+        subject: "Einladung zu einem Unternehmen auf SwissTalentHub",
+      });
 
     const left = await send(
       "a",

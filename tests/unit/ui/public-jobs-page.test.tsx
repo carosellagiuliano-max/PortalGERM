@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
+
 const publicJobsData = vi.hoisted(() => ({
   getPublicCatalog: vi.fn(),
   listPublicJobs: vi.fn(),
@@ -9,6 +11,10 @@ const publicJobsData = vi.hoisted(() => ({
 vi.mock("@/lib/jobs/public-read-model", () => ({
   getPublicCatalog: publicJobsData.getPublicCatalog,
   listPublicJobs: publicJobsData.listPublicJobs,
+}));
+
+vi.mock("@/components/public/apply-save-actions", () => ({
+  PublicJobActions: () => null,
 }));
 
 import JobsPage from "@/app/(public)/jobs/page";

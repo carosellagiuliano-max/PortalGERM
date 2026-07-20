@@ -24,6 +24,7 @@ export const PRODUCT_ANALYTICS_KINDS_V1 = Object.freeze([
   AnalyticsEventKind.JOB_DETAIL_VIEWED,
   AnalyticsEventKind.JOB_SAVED,
   AnalyticsEventKind.APPLY_INTENT_STARTED,
+  AnalyticsEventKind.EXTERNAL_APPLY_CLICKED,
   AnalyticsEventKind.PRICING_VIEWED,
 ] as const);
 
@@ -118,6 +119,13 @@ const jobDetailProperties = z
 const intentProperties = z
   .object({ surface, intent: intent.optional() })
   .strict();
+const externalApplyClickProperties = z
+  .object({
+    surface: z.literal("JOB_DETAIL"),
+    intent: z.literal("APPLY"),
+    destinationKind: z.literal("EXTERNAL_HTTP_URL"),
+  })
+  .strict();
 const pricingProperties = z
   .object({ surface, planSlug: boundedSlug.optional() })
   .strict();
@@ -162,6 +170,7 @@ export const ANALYTICS_EVENT_PROPERTIES_V1 = {
   JOB_DETAIL_VIEWED: jobDetailProperties,
   JOB_SAVED: intentProperties,
   APPLY_INTENT_STARTED: intentProperties,
+  EXTERNAL_APPLY_CLICKED: externalApplyClickProperties,
   APPLICATION_SUBMITTED: workflowProperties,
   APPLICATION_STATUS_CHANGED: workflowProperties,
   CANDIDATE_REGISTERED: onboardingProperties,
@@ -244,6 +253,7 @@ export const ANALYTICS_EVENT_CONTRACTS_V1 = Object.freeze({
   JOB_DETAIL_VIEWED: productContract(jobDetailProperties, "DISCOVERY", ["SEARCH_FUNNEL", "JOB_CONTENT"]),
   JOB_SAVED: productContract(intentProperties, "CANDIDATE", ["CANDIDATE_VALUE"]),
   APPLY_INTENT_STARTED: productContract(intentProperties, "CANDIDATE", ["SEARCH_FUNNEL", "JOB_CONTENT"]),
+  EXTERNAL_APPLY_CLICKED: productContract(externalApplyClickProperties, "CANDIDATE", ["JOB_CONTENT"]),
   APPLICATION_SUBMITTED: essentialContract(workflowProperties, "CANDIDATE", ["SEARCH_FUNNEL", "CANDIDATE_ACTIVATION"]),
   APPLICATION_STATUS_CHANGED: essentialContract(workflowProperties, "EMPLOYER", ["EMPLOYER_RESPONSE"]),
   CANDIDATE_REGISTERED: essentialContract(onboardingProperties, "CANDIDATE", ["CANDIDATE_ACTIVATION"]),
@@ -304,6 +314,7 @@ export const analyticsEventV1Schema = z.discriminatedUnion("kind", [
   eventSchema(AnalyticsEventKind.JOB_DETAIL_VIEWED, jobDetailProperties),
   eventSchema(AnalyticsEventKind.JOB_SAVED, intentProperties),
   eventSchema(AnalyticsEventKind.APPLY_INTENT_STARTED, intentProperties),
+  eventSchema(AnalyticsEventKind.EXTERNAL_APPLY_CLICKED, externalApplyClickProperties),
   eventSchema(AnalyticsEventKind.APPLICATION_SUBMITTED, workflowProperties),
   eventSchema(AnalyticsEventKind.APPLICATION_STATUS_CHANGED, workflowProperties),
   eventSchema(AnalyticsEventKind.CANDIDATE_REGISTERED, onboardingProperties),

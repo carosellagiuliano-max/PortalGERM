@@ -30,7 +30,16 @@ export default async function LoginPage({
       description="Melde dich mit deiner E-Mail-Adresse und deinem Passwort an. Zugangsdaten werden bei Fehlern immer gleich behandelt."
       footer={
         <>
-          Noch kein Konto? <AuthTextLink href="/register">Jetzt registrieren</AuthTextLink>
+          Noch kein Konto?{" "}
+          <AuthTextLink
+            href={
+              next === undefined
+                ? "/register/candidate"
+                : `/register/candidate?next=${encodeURIComponent(next)}`
+            }
+          >
+            Jetzt registrieren
+          </AuthTextLink>
         </>
       }
     >
