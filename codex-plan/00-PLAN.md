@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 20. Juli 2026. **Phasen 01 bis 06 sind im Zielrepository implementiert und verifiziert; Phasen 07–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds und End-to-End-Auth sind noch kein fertiges Produkt: öffentliche Discovery, vollständige Produktportale und Billing-Use-Cases folgen in den nächsten Phasen.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 20. Juli 2026. **Phasen 01 bis 07 sind im Zielrepository implementiert und verifiziert; Phasen 08–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth und öffentliche Discovery sind noch kein fertiges Produkt: Pricing, vollständige Produktportale und Billing-Use-Cases folgen in den nächsten Phasen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -36,7 +36,7 @@ Die wichtigsten Differenzierungen sind:
 
 Der vollständige Ausgangs-`codex-plan` mit 24 Dateien wurde in das leere Ziel übertragen und vor Überarbeitung per SHA-256 bytegenau verglichen. Das verlinkte Root-`AGENTS.md` wurde zusätzlich übernommen. Der Ziel-Baseline-Commit enthielt nur `README.md`.
 
-Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag, die reproduzierbar verifizierten Phase-03-Core-Policies, die netzwerkfreien Phase-04-Provider-Mocks und den deterministischen Phase-05-Demo-Seed mit Produktionssperre. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md), [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md), [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md) und [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
+Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag, die reproduzierbar verifizierten Phase-03-Core-Policies, die netzwerkfreien Phase-04-Provider-Mocks, den deterministischen Phase-05-Demo-Seed mit Produktionssperre, End-to-End-Auth aus Phase 06 und die sicher projizierte öffentliche Discovery aus Phase 07. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md), [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md), [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md), [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md), [`evidence/2026-07-20-phase-06.md`](./evidence/2026-07-20-phase-06.md) und [`evidence/2026-07-20-phase-07.md`](./evidence/2026-07-20-phase-07.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
 
 ## 4. Unverhandelbare Invarianten
 
@@ -89,7 +89,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 [`06-auth-rbac.md`](./06-auth-rbac.md) · Auth-End-to-End, Sessions, Firmenkontext, Einladungsgrundlage, vollständige RBAC-/IDOR-Tests.
 
-### [ ] 07 — Öffentliche Discovery
+### [x] 07 — Öffentliche Discovery
 
 [`07-public-pages.md`](./07-public-pages.md) · nützliche Suche/Detail/Firma/Salary/Guide; Clusterseiten bis SEO-Gate nicht indexiert.
 
@@ -218,4 +218,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 06 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 07 — Öffentliche Discovery und Karriere-Entscheidung; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 07 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 08 — Pricing und Arbeitgeberakquise; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

@@ -22,6 +22,7 @@ gelten nicht als Nachweis.
 - [`2026-07-20-phase-04.md`](./2026-07-20-phase-04.md) — Provider Ports, lokale Mocks und geschützte Mailbox.
 - [`2026-07-20-phase-05.md`](./2026-07-20-phase-05.md) — Deterministischer Schweizer Demo-Seed und Test-Harness.
 - [`2026-07-20-phase-06.md`](./2026-07-20-phase-06.md) — Authentifizierung, Sessions, RBAC, Firmenkontext und sicheres Onboarding.
+- [`2026-07-20-phase-07.md`](./2026-07-20-phase-07.md) — Öffentliche Jobsuche, Firmen, Lohn-Radar, Ratgeber und Auth-Polish.
 
 ## Pflichtfelder eines Records
 
