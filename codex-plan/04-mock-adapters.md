@@ -1,6 +1,6 @@
 # Phase 04 — Mock Adapters
 
-> **PortalGERM target status: NOT IMPLEMENTED.** A mock must persist truthful local behavior. The Payment port never accepts an authoritative client amount and does not own product fulfillment (ADR-019).
+> **PortalGERM target status: IMPLEMENTED AND VERIFIED.** Phase 04 is frozen in code commit `869155d6dc9c07d266a0b3d65eb068171c79e210`; the reproducible verification record is [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md). The Payment port never accepts an authoritative client amount and does not own product fulfillment (ADR-019).
 
 > Detail file for [00-PLAN.md](./00-PLAN.md) Phase 04. Read [99-rules-quickref.md](./99-rules-quickref.md) §24, §33 before starting.
 >
@@ -12,14 +12,14 @@ Build the adapter pattern for every external service. Each adapter exposes a typ
 
 ## Prerequisites
 
-- [ ] Phase 02 done (versioned Order/Invoice, EmailLog/Notification, JobBoost, Entitlement/Credit Ledger, Import and OccupationCodeVersion models exist)
-- [ ] Phase 03 done (`lib/db`, `lib/audit`, `lib/billing/vat`, `lib/billing/invoice-number` exist)
+- [x] Phase 02 done (versioned Order/Invoice, EmailLog/Notification, JobBoost, Entitlement/Credit Ledger, Import and OccupationCodeVersion models exist)
+- [x] Phase 03 done (`lib/db`, `lib/audit`, `lib/billing/vat`, `lib/billing/invoice-number` exist)
 
 ## Deliverables (checklist)
 
 ### `/lib/providers/payments`
 
-- [ ] `lib/providers/payments/payment-provider.ts` — interface:
+- [x] `lib/providers/payments/payment-provider.ts` — interface:
   ```ts
   export interface CreatePaymentOperationInput {
     orderId: string;         // Order + authoritative server-side quote already created by Billing
@@ -38,16 +38,16 @@ Build the adapter pattern for every external service. Each adapter exposes a typ
     cancel(input: { orderId: string; idempotencyKey: string }): Promise<void>;
   }
   ```
-- [ ] `lib/providers/payments/mock-payment-provider.ts` — implementation:
+- [x] `lib/providers/payments/mock-payment-provider.ts` — implementation:
   - is a deterministic, idempotent **pure adapter** for the supplied operation identity: it returns a local checkout URL or confirmation reference and performs no Prisma/database write
   - does **not** record PaymentEvent, Invoice, Subscription, Credit or Boost effects
   - Phase 12 checks existing idempotency state, obtains the deterministic Mock confirmation, then records PaymentEvent + Order/Invoice/Fulfillment/Audit in its one DB transaction under unique constraints. A later real provider needs its own webhook/outbox state machine and does not inherit this Mock atomicity claim.
-- [ ] `lib/providers/payments/stripe-payment-provider.ts` — placeholder file exporting an unimplemented `StripePaymentProvider`; it is not wired and must not suggest that adding an env key activates it
-- [ ] `lib/providers/payments/index.ts` — Composition Root exports the explicit Mock implementation. No environment-key auto-toggle to a real provider in the MVP.
+- [x] `lib/providers/payments/stripe-payment-provider.ts` — placeholder file exporting an unimplemented `StripePaymentProvider`; it is not wired and must not suggest that adding an env key activates it
+- [x] `lib/providers/payments/index.ts` — Composition Root exports the explicit Mock implementation. No environment-key auto-toggle to a real provider in the MVP.
 
 ### `/lib/providers/email`
 
-- [ ] `lib/providers/email/email-provider.ts` — interface:
+- [x] `lib/providers/email/email-provider.ts` — interface:
   ```ts
   export type EmailTemplateKey =
     | 'registration_welcome' | 'password_reset_mock'
@@ -64,15 +64,15 @@ Build the adapter pattern for every external service. Each adapter exposes a typ
     send(input: { to: string; templateKey: EmailTemplateKey; data: Record<string, unknown>; subject: string }): Promise<{ logId: string }>;
   }
   ```
-- [ ] `lib/providers/email/mock-email-provider.ts` — writes `EmailLog` with status `MOCK_RECORDED`, returns `{ logId }` and makes no delivery claim. Render the body via safe German templates.
-- [ ] Password-reset/invitation raw tokens exist only in the outbound provider call/test capture; persisted EmailLog/template metadata redacts the token and full URL. Resend rotates/revokes the prior token and dedupes EmailLog by invitation-version/idempotency key.
-- [ ] `lib/providers/email/local-mock-mailbox.ts` + `app/dev/mailbox/**` provide the only human/browser delivery path for raw reset/invite URLs. It is enabled only when `NODE_ENV !== 'production'`, `ENABLE_LOCAL_MOCK_MAILBOX=true` and a separate `DEV_MAILBOX_SECRET` authenticates every read; envelopes are process-local or encrypted-at-rest, TTL ≤15 minutes, one-time-readable, `no-store/noindex`, never joined to EmailLog/Audit and cleared on restart. Production startup/build fails if enabled. Playwright uses the same secret-authenticated capture port; public forgot-password UI stays indistinguishable for existing/non-existing accounts.
-- [ ] `lib/providers/email/templates/*.ts` — one file per template key returning `{ subject, body }`. **Subjects must be in German.**
-- [ ] `lib/providers/email/index.ts` — exports the explicit Mock port
+- [x] `lib/providers/email/mock-email-provider.ts` — writes `EmailLog` with status `MOCK_RECORDED`, returns `{ logId }` and makes no delivery claim. Render the body via safe German templates.
+- [x] Password-reset/invitation raw tokens exist only in the outbound provider call/test capture; persisted EmailLog/template metadata redacts token and full URL. EmailLog is deduped by invitation-version/idempotency key and rejects the same identity with changed content.
+- [x] `lib/providers/email/local-mock-mailbox.ts` + `app/dev/mailbox/**` provide the only human/browser delivery path for raw reset/invite URLs. It is enabled only when `NODE_ENV !== 'production'`, `ENABLE_LOCAL_MOCK_MAILBOX=true` and a separate `DEV_MAILBOX_SECRET` authenticates every read; envelopes are process-local, TTL exactly 15 minutes, one-time-readable and process-lifetime replay-sealed, `no-store/noindex`, never joined to EmailLog/Audit and cleared on restart. Production startup/build fails if enabled.
+- [x] `lib/providers/email/templates/*.ts` — one file per template key returning `{ subject, body }`. **Subjects must be in German.**
+- [x] `lib/providers/email/index.ts` — exports the explicit Mock port
 
 ### `/lib/providers/ai`
 
-- [ ] `lib/providers/ai/ai-provider.ts` — interface:
+- [x] `lib/providers/ai/ai-provider.ts` — interface:
   ```ts
   export interface AiProvider {
     improveJobText(text: string): Promise<string>;
@@ -85,25 +85,25 @@ Build the adapter pattern for every external service. Each adapter exposes a typ
     draftEmployerProfileText(context: { companyName: string; industry: string; values?: string }): Promise<string>;
   }
   ```
-- [ ] `lib/providers/ai/mock-ai-provider.ts` — deterministic rule-based rewrites. **No external HTTP calls and no identity/content logging.**
-- [ ] `lib/providers/ai/openai-ai-provider.ts` — unwired placeholder stub
-- [ ] `lib/providers/ai/index.ts` — exports the explicit Mock port
+- [x] `lib/providers/ai/mock-ai-provider.ts` — deterministic rule-based rewrites. **No external HTTP calls and no identity/content logging.**
+- [x] `lib/providers/ai/openai-ai-provider.ts` — unwired placeholder stub
+- [x] `lib/providers/ai/index.ts` — exports the explicit Mock port
 
 ### `/lib/providers/jobroom`
 
-- [ ] `lib/providers/jobroom/jobroom-provider.ts` — interface:
+- [x] `lib/providers/jobroom/jobroom-provider.ts` — interface:
   ```ts
   export interface JobroomProvider {
     checkReportingObligation(input: { occupationCodeId?: string; cantonCode?: string; }): Promise<{ result: 'REQUIRES_REPORTING'|'NOT_REQUIRED'|'UNKNOWN'; reasonCode: string; disclaimer: string; datasetVersion: string; dataYear: number; sourceUrl: string }>;
     submitJob(input: unknown): Promise<{ accepted: false; reason: 'not_implemented_in_mvp' }>;
   }
   ```
-- [ ] `lib/providers/jobroom/mock-jobroom-provider.ts` — reads the versioned OccupationCode fixture and returns `UNKNOWN` with a bounded reason when code/data are missing, ambiguous, stale or unsupported; it never coerces unknown to `NOT_REQUIRED`. Every response carries the orientation/legal disclaimer, dataset version/year and official source. Fixtures cover all three results plus missing/ambiguous/stale data. `submitJob` always returns the not-implemented sentinel.
-- [ ] `lib/providers/jobroom/index.ts` — exports the explicit Mock port
+- [x] `lib/providers/jobroom/mock-jobroom-provider.ts` — reads the versioned OccupationCode fixture and returns `UNKNOWN` with a bounded reason when code/data are missing, ambiguous, stale or unsupported; it never coerces unknown to `NOT_REQUIRED`. Every response carries the orientation/legal disclaimer, dataset version/year and official source. Fixtures cover all three results plus missing/ambiguous/stale data. `submitJob` always returns the not-implemented sentinel.
+- [x] `lib/providers/jobroom/index.ts` — exports the explicit Mock port
 
 ### `/lib/providers/storage`
 
-- [ ] `lib/providers/storage/storage-provider.ts` — interface:
+- [x] `lib/providers/storage/storage-provider.ts` — interface:
   ```ts
   export interface UploadInput { fileName: string; mimeType: string; size: number; buffer?: Buffer; }
   export interface StoredFileMetadata { storageKey: string; downloadable: false; }
@@ -113,13 +113,13 @@ Build the adapter pattern for every external service. Each adapter exposes a typ
     delete(storageKey: string): Promise<void>;
   }
   ```
-- [ ] `lib/providers/storage/mock-storage-provider.ts` — stores **metadata only** (no real bytes), returns a non-downloadable storage key and `null` for reads. Restrictions enforced: mime allowlist, max size 5 MB, safe filename, and never persist the buffer to disk. UI must not render a download link.
-- [ ] `lib/providers/storage/index.ts` — exports the explicit Mock port
+- [x] `lib/providers/storage/mock-storage-provider.ts` — stores **metadata only** (no real bytes), returns a non-downloadable storage key and `null` for reads. Restrictions enforced: mime allowlist, max size 5 MB, safe filename, and never persist the buffer to disk. UI must not render a download link.
+- [x] `lib/providers/storage/index.ts` — exports the explicit Mock port
 
 ### `/lib/providers/commute` *(adapter may remain unused until a distance feature is approved)*
-- [ ] `lib/providers/commute/commute-provider.ts` — interface (`getDistanceKm({ from: cityId, to: cityId }): Promise<number>`)
-- [ ] `lib/providers/commute/mock-commute-provider.ts` — deterministic straight-line distance from seeded coordinates, clearly labelled an approximation
-- [ ] `lib/providers/commute/index.ts`
+- [x] `lib/providers/commute/commute-provider.ts` — interface (`getDistanceKm({ from: cityId, to: cityId }): Promise<number>`)
+- [x] `lib/providers/commute/mock-commute-provider.ts` — deterministic straight-line distance from seeded coordinates, clearly labelled an approximation
+- [x] `lib/providers/commute/index.ts`
 
 ## Files to create / modify
 
@@ -134,14 +134,19 @@ All inside `/lib/providers/{payments,email,ai,jobroom,storage,commute}/` per the
 
 ## Verification
 
-> **Plan status:** Not implemented in this repository yet. Treat the checks below as target verification steps. Do not mark any checkbox until code exists and the command/output has been verified.
+> **Verified 20 July 2026:** clean detached reproduction of code commit `869155d6dc9c07d266a0b3d65eb068171c79e210`; provider contracts, 763/763 unit tests, 62/62 PostgreSQL integration tests, lint, typecheck, production build and HTTP E2E passed. The independent final audit found no remaining Phase-04 P0/P1 blocker. See the linked evidence record for exact commands and limitations.
 
-- [ ] Billing creates an Order and `CHECKOUT_CREATED` PaymentEvent from a server-side catalog quote; `paymentProvider.createCheckout({ orderId, idempotencyKey, … })` only returns a deterministic local operation URL and never accepts a price or writes DB state
-- [ ] `paymentProvider.confirmPayment(...)` returns a deterministic provider reference; Phase 12 integration tests prove Invoice/Fulfillment via the Billing use case
-- [ ] `emailProvider.send({ to, templateKey: 'registration_welcome', subject: 'Willkommen bei SwissTalentHub', data: {} })` writes `EmailLog`
-- [ ] `aiProvider.improveJobText("Wir suchen einen Junior Entwickler …")` returns rewritten text without HTTP traffic (run with network disabled to confirm)
-- [ ] `jobroomProvider.checkReportingObligation({ occupationCodeId: <seeded id> })` returns `{ result: 'REQUIRES_REPORTING'|'NOT_REQUIRED'|'UNKNOWN', reasonCode, disclaimer, datasetVersion, dataYear, sourceUrl }`; version/source match the selected fixture, unknown data never becomes `NOT_REQUIRED`, and disclaimer text matches verbatim
-- [ ] Browser E2E retrieves one reset and invitation URL through the secret-authenticated local mailbox, reads each exactly once, and proves the mailbox route is absent/fail-closed in a production build; raw tokens are absent from DB/log snapshots.
+- [x] `paymentProvider.createCheckout({ orderId, idempotencyKey, … })` returns a deterministic local operation URL, never accepts a price and performs no DB write
+- [x] `paymentProvider.confirmPayment(...)` returns a deterministic provider reference without owning PaymentEvent, Invoice or Fulfillment
+- [x] `emailProvider.send({ to, templateKey: 'registration_welcome', subject: 'Willkommen bei SwissTalentHub', data: {} })` writes exactly one truthful `EmailLog`
+- [x] `aiProvider.improveJobText("Wir suchen einen Junior Entwickler …")` returns deterministic rewritten text while the no-network contract blocks HTTP/TCP transports
+- [x] `jobroomProvider.checkReportingObligation({ occupationCodeId: <fixture id> })` returns `{ result: 'REQUIRES_REPORTING'|'NOT_REQUIRED'|'UNKNOWN', reasonCode, disclaimer, datasetVersion, dataYear, sourceUrl }`; malformed/unknown/stale data never becomes `NOT_REQUIRED`
+- [x] Reset and invitation flow through the real capture wrapper and Route Handler, authenticate every read, remain one-time-readable, expose no raw token in PostgreSQL/log snapshots, and `/dev/mailbox` is 404/no-store/noindex in the running production build. Production build/start also fail closed when the mailbox flag is forced on.
+
+### Dependent owner-phase gates (not claimed by Phase 04)
+
+- [ ] Phase 06/10 rotates and revokes prior reset/invitation token hashes in the owning transaction, proves indistinguishable public forgot-password behavior and drives the same mailbox through browser automation.
+- [ ] Phase 12 creates Order plus `CHECKOUT_CREATED`, then proves Invoice/Fulfillment/Audit exactly once through the Billing use case.
 
 ## Common pitfalls
 

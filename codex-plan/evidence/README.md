@@ -18,6 +18,8 @@ gelten nicht als Nachweis.
 
 - [`2026-07-19-phase-01.md`](./2026-07-19-phase-01.md) — Foundation und Governance.
 - [`2026-07-19-phase-02.md`](./2026-07-19-phase-02.md) — Prisma-Domänenvertrag und PostgreSQL-Migration.
+- [`2026-07-19-phase-03.md`](./2026-07-19-phase-03.md) — Core Policies, Scoring, Privacy und Analytics.
+- [`2026-07-20-phase-04.md`](./2026-07-20-phase-04.md) — Provider Ports, lokale Mocks und geschützte Mailbox.
 
 ## Pflichtfelder eines Records
 
