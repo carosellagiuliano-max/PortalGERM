@@ -15,9 +15,9 @@ const baseInput = Object.freeze({
   to: "candidate@example.test",
   templateKey: "password_reset_mock",
   subject: "Passwort für SwissTalentHub zurücksetzen",
-  body: "Öffne http://127.0.0.1:3000/reset-password?token=raw-secret",
+  body: "Öffne http://127.0.0.1:3000/reset-password#token=raw-reset-token-that-is-at-least-thirty-two-bytes",
   actionUrl:
-    "http://127.0.0.1:3000/reset-password?token=raw-secret",
+    "http://127.0.0.1:3000/reset-password#token=raw-reset-token-that-is-at-least-thirty-two-bytes",
 } satisfies LocalMockMailboxCaptureInput);
 
 describe("process-local mock mailbox", () => {
@@ -91,7 +91,7 @@ describe("process-local mock mailbox", () => {
     for (const actionUrl of [
       "https://attacker.example/reset?token=secret",
       "http://user:pass@127.0.0.1:3000/reset?token=secret",
-      "http://127.0.0.1:3000/reset#token=secret",
+      "http://127.0.0.1:3000/reset-password?token=query-token-that-is-at-least-thirty-two-bytes",
     ]) {
       expect(() => mailbox.capture({ ...baseInput, actionUrl })).toThrow(
         LocalMockMailboxInputError,

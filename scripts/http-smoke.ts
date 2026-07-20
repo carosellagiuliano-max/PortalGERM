@@ -11,6 +11,7 @@ const HOST = "127.0.0.1";
 const DEFAULT_START_TIMEOUT_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 8_000;
 const MAX_DIAGNOSTIC_CHARACTERS = 24_000;
+const NOINDEX_POLICY = "noindex, nofollow, noarchive, nosnippet";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -27,7 +28,7 @@ async function main() {
   try {
     const result = await runSmoke();
     console.info(
-      `HTTP smoke passed on ${result.baseUrl}: /, live, ready and 404; security and correlation headers verified.`,
+      `HTTP smoke passed on ${result.baseUrl}: public, health, anonymous auth redirects and protected response headers verified.`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "HTTP smoke failed.";
@@ -76,6 +77,7 @@ async function runSmoke() {
     DATABASE_URL: database.connectionString,
     TEST_DATABASE_URL: "",
     RATE_LIMIT_BACKEND: "postgres",
+    TRUSTED_PROXY_HOPS: "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",
     DEV_MAILBOX_SECRET: secretCanary,
     HTTP_SMOKE_SECRET_CANARY: secretCanary,
@@ -185,7 +187,47 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
 
   const home = await request(baseUrl, "/", secretCanary);
   expectStatus(home, 200);
-  expectContent(home, "text/html", "Eine belastbare Grundlage");
+  expectContent(home, "text/html", "Sicher starten");
+
+  const anonymousPrivateRoutes = [
+    {
+      path: "/candidate/dashboard?tab=profile",
+      next: "/candidate/dashboard?tab=profile",
+    },
+    {
+      path: "/employer/dashboard?tab=team",
+      next: "/employer/dashboard?tab=team",
+    },
+    { path: "/admin?view=overview", next: "/admin?view=overview" },
+  ] as const;
+
+  for (const route of anonymousPrivateRoutes) {
+    const privateResponse = await request(
+      baseUrl,
+      route.path,
+      secretCanary,
+    );
+    expectStatus(privateResponse, 307);
+    expectLoginRedirect(privateResponse, baseUrl, route.next);
+    expectCacheDirectives(privateResponse, ["private", "no-store", "max-age=0"]);
+    expectNoIndex(privateResponse);
+  }
+
+  const resetPassword = await request(
+    baseUrl,
+    "/reset-password",
+    secretCanary,
+  );
+  expectStatus(resetPassword, 200);
+  expectContent(resetPassword, "text/html", "Neues Passwort festlegen");
+  expectCacheDirectives(resetPassword, ["no-store", "max-age=0"]);
+  expectNoIndex(resetPassword);
+
+  const forbidden = await request(baseUrl, "/forbidden", secretCanary);
+  expectStatus(forbidden, 200);
+  expectContent(forbidden, "text/html", "Zugriff nicht erlaubt");
+  expectCacheDirectives(forbidden, ["private", "no-store", "max-age=0"]);
+  expectNoIndex(forbidden);
 
   const live = await request(baseUrl, "/health/live", secretCanary, {
     "x-correlation-id": suppliedCorrelationId,
@@ -210,10 +252,7 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   );
   expectStatus(productionMailbox, 404);
   expectNoStore(productionMailbox);
-  if (
-    productionMailbox.response.headers.get("x-robots-tag") !==
-    "noindex, nofollow, noarchive, nosnippet"
-  ) {
+  if (productionMailbox.response.headers.get("x-robots-tag") !== NOINDEX_POLICY) {
     throw new Error(
       "/dev/mailbox must remain noindex when it fails closed in Production.",
     );
@@ -266,7 +305,7 @@ function assertSecurityHeaders(path: string, headers: Headers) {
   const expected = {
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
-    "referrer-policy": path === "/dev/mailbox"
+    "referrer-policy": path === "/dev/mailbox" || path === "/reset-password"
       ? "no-referrer"
       : "strict-origin-when-cross-origin",
     "permissions-policy": "camera=(), microphone=(), geolocation=()",
@@ -314,8 +353,64 @@ function expectJson(result: SmokeResponse, expected: Record<string, string>) {
 }
 
 function expectNoStore(result: SmokeResponse) {
-  if (result.response.headers.get("cache-control") !== "no-store") {
-    throw new Error(`${result.path} must return Cache-Control: no-store.`);
+  expectCacheDirectives(result, ["no-store"]);
+}
+
+function expectCacheDirectives(
+  result: SmokeResponse,
+  expectedDirectives: readonly string[],
+) {
+  const value = result.response.headers.get("cache-control");
+  const actualDirectives = new Set(
+    value
+      ?.split(",")
+      .map((directive) => directive.trim().toLowerCase()) ?? [],
+  );
+  const missing = expectedDirectives.filter(
+    (directive) => !actualDirectives.has(directive.toLowerCase()),
+  );
+
+  if (missing.length > 0) {
+    throw new Error(
+      `${result.path} is missing required Cache-Control directives: ${missing.join(", ")}.`,
+    );
+  }
+}
+
+function expectNoIndex(result: SmokeResponse) {
+  if (result.response.headers.get("x-robots-tag") !== NOINDEX_POLICY) {
+    throw new Error(`${result.path} must remain noindex.`);
+  }
+}
+
+function expectLoginRedirect(
+  result: SmokeResponse,
+  baseUrl: string,
+  expectedNext: string,
+) {
+  const expectedLocation = new URL("/login", baseUrl);
+  expectedLocation.searchParams.set("next", expectedNext);
+  const actualLocation = result.response.headers.get("location");
+  let actualUrl: URL | undefined;
+
+  if (actualLocation !== null) {
+    try {
+      actualUrl = new URL(actualLocation, baseUrl);
+    } catch {
+      // The validation below reports one generic, non-sensitive failure.
+    }
+  }
+
+  if (
+    actualUrl === undefined ||
+    actualUrl.origin !== expectedLocation.origin ||
+    actualUrl.pathname !== expectedLocation.pathname ||
+    actualUrl.search !== expectedLocation.search ||
+    actualUrl.hash !== ""
+  ) {
+    throw new Error(
+      `${result.path} redirected to an unexpected or unsafely encoded login URL.`,
+    );
   }
 }
 

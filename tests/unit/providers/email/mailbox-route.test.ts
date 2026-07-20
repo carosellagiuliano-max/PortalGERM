@@ -54,7 +54,7 @@ describe("GET /dev/mailbox", () => {
       templateKey: "password_reset_mock",
       subject: "Passwort für SwissTalentHub zurücksetzen",
       body: "Lokale Testnachricht",
-      actionUrl: "http://127.0.0.1:3000/reset-password?token=raw",
+      actionUrl: "http://127.0.0.1:3000/reset-password#token=raw-reset-token-that-is-at-least-thirty-two-bytes",
       capturedAt: "2026-07-20T10:00:00.000Z",
       expiresAt: "2026-07-20T10:15:00.000Z",
     });

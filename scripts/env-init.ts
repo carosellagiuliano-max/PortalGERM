@@ -74,6 +74,7 @@ const values: Record<string, string> = {
   REVEAL_CONFIRMATION_KEYS: `v1:${secret()}`,
   PII_REVEAL_KEYS: `v1:${secret()}`,
   RATE_LIMIT_BACKEND: "postgres",
+  TRUSTED_PROXY_HOPS: "0",
   ENABLE_LOCAL_MOCK_MAILBOX: "false",
   DEV_MAILBOX_SECRET: randomBytes(32).toString("base64url"),
   LOG_LEVEL: "info",

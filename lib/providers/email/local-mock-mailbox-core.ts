@@ -188,7 +188,11 @@ function normalizeCaptureInput(
 
   const subject = normalizeBoundedText(input.subject, 200, "subject_invalid");
   const body = normalizeBoundedText(input.body, 10_000, "body_invalid");
-  const actionUrl = parseActionUrl(input.actionUrl, allowedOrigin);
+  const actionUrl = parseActionUrl(
+    input.actionUrl,
+    allowedOrigin,
+    input.templateKey,
+  );
 
   return Object.freeze({
     to: recipient.data,
@@ -210,7 +214,11 @@ function normalizeBoundedText(value: unknown, maximum: number, code: string) {
   return value;
 }
 
-function parseActionUrl(value: string, allowedOrigin: string) {
+function parseActionUrl(
+  value: string,
+  allowedOrigin: string,
+  templateKey: LocalMockMailboxTemplateKey,
+) {
   if (typeof value !== "string" || value.length > 2_048) {
     throw new LocalMockMailboxInputError("action_url_invalid");
   }
@@ -220,9 +228,23 @@ function parseActionUrl(value: string, allowedOrigin: string) {
       url.origin !== allowedOrigin ||
       (url.protocol !== "http:" && url.protocol !== "https:") ||
       url.username !== "" ||
-      url.password !== "" ||
-      url.hash !== ""
+      url.password !== ""
     ) {
+      throw new LocalMockMailboxInputError("action_url_invalid");
+    }
+    if (templateKey === "password_reset_mock") {
+      const fragment = new URLSearchParams(url.hash.replace(/^#/u, ""));
+      const tokenValues = fragment.getAll("token");
+      if (
+        url.pathname !== "/reset-password" ||
+        url.search !== "" ||
+        [...fragment.keys()].length !== 1 ||
+        tokenValues.length !== 1 ||
+        !isPlausibleMailboxToken(tokenValues[0])
+      ) {
+        throw new LocalMockMailboxInputError("action_url_invalid");
+      }
+    } else if (url.hash !== "") {
       throw new LocalMockMailboxInputError("action_url_invalid");
     }
     return url.toString();
@@ -232,6 +254,15 @@ function parseActionUrl(value: string, allowedOrigin: string) {
     }
     throw new LocalMockMailboxInputError("action_url_invalid");
   }
+}
+
+function isPlausibleMailboxToken(value: string | undefined): value is string {
+  return (
+    value !== undefined &&
+    value.length >= 32 &&
+    value.length <= 512 &&
+    /^[A-Za-z0-9_-]+$/u.test(value)
+  );
 }
 
 function parseAllowedOrigin(value: string) {

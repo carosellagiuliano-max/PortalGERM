@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { DatabaseClient } from "@/lib/db/factory";
-import { SEED_DATASET_VERSION, SEED_NAMESPACE } from "@/prisma/seed/contract";
+import {
+  SEED_COMPATIBILITY_BASE_VERSION,
+  SEED_DATASET_VERSION,
+  SEED_MANIFEST_SCHEMA_VERSION,
+  SEED_NAMESPACE,
+} from "@/prisma/seed/contract";
 import { stableSeedId } from "@/prisma/seed/ids";
 import {
   beginSeedRun,
@@ -63,6 +68,77 @@ describe("seed lifecycle", () => {
         contractHash: header.contractHash,
       }),
     });
+  });
+
+  it("inherits the sealed Phase-05 anchor for an additive first run", async () => {
+    const compatibilityAnchor = new Date("2026-07-19T08:00:00.000Z");
+    const inheritedHeader = buildSeedContractHeader({
+      anchorAt: compatibilityAnchor.toISOString(),
+      identities,
+      seedVersion: SEED_DATASET_VERSION,
+    });
+    const findUnique = vi.fn(async (query: {
+      where: { namespace_seedVersion: { seedVersion: string } };
+    }) =>
+      query.where.namespace_seedVersion.seedVersion === SEED_DATASET_VERSION
+        ? null
+        : {
+            anchorAt: compatibilityAnchor,
+            completedAt: new Date("2026-07-19T08:01:00.000Z"),
+            contractHash: "a".repeat(64),
+            createdAt: compatibilityAnchor,
+            manifestHash: "b".repeat(64),
+            namespace: SEED_NAMESPACE,
+            schemaVersion: SEED_MANIFEST_SCHEMA_VERSION,
+            seedVersion: SEED_COMPATIBILITY_BASE_VERSION,
+          },
+    );
+    const create = vi.fn(async () =>
+      row({
+        anchorAt: compatibilityAnchor,
+        contractHash: inheritedHeader.contractHash,
+      }),
+    );
+
+    const lifecycle = await beginSeedRun(
+      database({ findUnique, create }),
+      identities,
+      () => anchorAt,
+    );
+
+    expect(lifecycle.anchorAt).toEqual(compatibilityAnchor);
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        anchorAt: compatibilityAnchor,
+        contractHash: inheritedHeader.contractHash,
+        seedVersion: SEED_DATASET_VERSION,
+      }),
+    });
+  });
+
+  it("rejects an unsealed compatibility manifest", async () => {
+    const findUnique = vi.fn(async (query: {
+      where: { namespace_seedVersion: { seedVersion: string } };
+    }) =>
+      query.where.namespace_seedVersion.seedVersion === SEED_DATASET_VERSION
+        ? null
+        : {
+            anchorAt,
+            completedAt: null,
+            contractHash: "a".repeat(64),
+            createdAt: anchorAt,
+            manifestHash: null,
+            namespace: SEED_NAMESPACE,
+            schemaVersion: SEED_MANIFEST_SCHEMA_VERSION,
+            seedVersion: SEED_COMPATIBILITY_BASE_VERSION,
+          },
+    );
+    const create = vi.fn();
+
+    await expect(
+      beginSeedRun(database({ findUnique, create }), identities),
+    ).rejects.toThrow("must be valid and sealed");
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("reuses an incomplete run's anchor", async () => {

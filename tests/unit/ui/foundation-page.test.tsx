@@ -1,39 +1,51 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import FoundationPage from "@/app/(public)/page";
+import HomePage from "@/app/(public)/page";
 import NotFound from "@/app/not-found";
 import { AppHeader } from "@/components/shared/app-header";
 
-describe("foundation UI", () => {
-  it("states the current scope honestly and exposes no fake product action", () => {
-    render(<FoundationPage />);
+describe("public account entry UI", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("offers the implemented authentication entrances without stale Foundation copy", () => {
+    render(<HomePage />);
 
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "Eine belastbare Grundlage, bevor Produktfunktionen entstehen.",
+        name: "Sicher starten – als Talent oder Arbeitgeber.",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Jobsuche, Anmeldung, Portale und Billing sind noch nicht verfügbar/),
+      screen.getByText(/Registrierung, Anmeldung und geschützte Portale/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {
         level: 2,
-        name: "Technischer Foundation-Umfang",
+        name: "Zugriff wird serverseitig entschieden",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { level: 3, name: "Sichere Konfiguration" }),
+      screen.getByRole("heading", { level: 3, name: "Für Kandidat:innen" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Kandidatenkonto erstellen" })[0]).toHaveAttribute(
+      "href",
+      "/register/candidate",
+    );
+    expect(screen.getByRole("link", { name: "Arbeitgeberkonto erstellen" })).toHaveAttribute(
+      "href",
+      "/register/employer",
+    );
+    expect(screen.queryByText(/noch nicht verfügbar/)).not.toBeInTheDocument();
   });
 
   it("offers real desktop and mobile navigation targets", async () => {
     const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     render(<AppHeader />);
 
     expect(
@@ -53,6 +65,11 @@ describe("foundation UI", () => {
       name: "Mobile Navigation",
     });
     expectNavigationTargets(mobileNavigation);
+    expect(
+      consoleError.mock.calls.some(([message]) =>
+        String(message).includes("expected a native <button>"),
+      ),
+    ).toBe(false);
 
     await user.keyboard("{Escape}");
     await waitFor(() => {
@@ -67,9 +84,13 @@ describe("foundation UI", () => {
       name: "Mobile Navigation",
     });
 
-    await user.click(
-      within(mobileNavigation).getByRole("link", { name: "Grundlage" }),
-    );
+    const candidateLink = within(mobileNavigation).getByRole("link", {
+      name: "Für Kandidat:innen",
+    });
+    candidateLink.addEventListener("click", (event) => event.preventDefault(), {
+      once: true,
+    });
+    await user.click(candidateLink);
     await waitFor(() => {
       expect(
         screen.queryByRole("navigation", { name: "Mobile Navigation" }),
@@ -83,23 +104,28 @@ describe("foundation UI", () => {
     expect(
       screen.getByRole("heading", { name: "Diese Seite ist nicht verfügbar." }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Zur Foundation/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Zur Startseite/ })).toHaveAttribute(
       "href",
       "/",
     );
+    expect(screen.getByRole("link", { name: /Zur Anmeldung/ })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+    expect(screen.getByText(/öffentliche Jobsuche folgt/)).toBeInTheDocument();
   });
 });
 
 function expectNavigationTargets(navigation: HTMLElement) {
-  expect(within(navigation).getByRole("link", { name: "Grundlage" })).toHaveAttribute(
-    "href",
-    "/#foundation",
-  );
   expect(
-    within(navigation).getByRole("link", { name: "Projektstatus" }),
-  ).toHaveAttribute("href", "/#status");
-  expect(within(navigation).getByRole("link", { name: "Live-Status" })).toHaveAttribute(
+    within(navigation).getByRole("link", { name: "Für Kandidat:innen" }),
+  ).toHaveAttribute("href", "/register/candidate");
+  expect(within(navigation).getByRole("link", { name: "Für Arbeitgeber" })).toHaveAttribute(
     "href",
-    "/health/live",
+    "/register/employer",
+  );
+  expect(within(navigation).getByRole("link", { name: "Anmelden" })).toHaveAttribute(
+    "href",
+    "/login",
   );
 }

@@ -18,7 +18,7 @@ const captureInput = Object.freeze({
   templateKey: "password_reset_mock" as const,
   subject: "Passwort für SwissTalentHub zurücksetzen",
   body: "Lokale Nachricht mit einem geschützten Link.",
-  actionUrl: "http://127.0.0.1:3000/reset-password?token=raw",
+  actionUrl: "http://127.0.0.1:3000/reset-password#token=raw-reset-token-that-is-at-least-thirty-two-bytes",
 });
 
 describe("configured local mock mailbox boundary", () => {

@@ -31,11 +31,13 @@ import {
 } from "@/prisma/seed/contract";
 import {
   CANDIDATE_FIXTURES,
+  AUTH_RBAC_SEED_IDENTITIES,
   CANTON_FIXTURES,
   CATEGORY_FIXTURES,
   CITY_FIXTURES,
   COMPANY_FIXTURES,
   DEMO_ACCOUNT_FIXTURES,
+  DEMO_COMPANY_SLUG,
   DEMO_GUIDE_FIXTURES,
   DEMO_LOGIN_PASSWORD,
   ENTITLEMENT_KEYS,
@@ -49,10 +51,12 @@ import {
   PLAN_VERSION_FIXTURES,
   PRODUCT_FIXTURES,
   PRODUCT_VERSION_FIXTURES,
+  RADAR_DEMO_COMPANY_SLUG,
   SALARY_BAND_FIXTURES,
   SALARY_DATASET_FIXTURE,
   SKILL_FIXTURES,
   buildJobFixtures,
+  buildAuthRbacSeedFixtures,
   countGuideWords,
 } from "@/prisma/seed/fixtures";
 import { BILLING_OPS_SEED_IDENTITIES } from "@/prisma/seed/blocks/billing-ops";
@@ -268,6 +272,7 @@ export async function verifyDemoSeedDatabase(
   verifyReferenceCatalog(context, observed, expected);
   await verifyDemoCredentials(context, observed.demoAccounts);
   verifyCompanies(context, observed, expected, anchorAt);
+  await verifyAuthRbac(context, observed, anchorAt);
   verifyJobs(context, observed, expected, anchorAt);
   verifyCandidateWorkflows(context, observed, expected);
   verifyBilling(context, observed, expected, anchorAt);
@@ -350,6 +355,7 @@ function buildExpectedScope(anchorAt: Date) {
     ...candidates.map((handle) => handle.id),
     ...contentPages.map((handle) => handle.id),
     ...BILLING_OPS_SEED_IDENTITIES.map((identity) => identity.id),
+    ...AUTH_RBAC_SEED_IDENTITIES.map((identity) => identity.id),
     ...CANDIDATE_WORKFLOW_SEED_IDENTITIES.map((identity) => identity.id),
   ]);
 
@@ -508,6 +514,26 @@ async function loadObservedSeedState(
     where: { id: { in: DEMO_ACCOUNT_FIXTURES.map((account) => account.id) } },
     include: { credential: true },
     orderBy: { emailNormalized: "asc" },
+  });
+  const authFixtures = buildAuthRbacSeedFixtures(anchorAt);
+  const suspendedAuthActor = await db.user.findUnique({
+    where: { id: authFixtures.suspendedActor.id },
+    include: { credential: true },
+  });
+  const recruiterSecondMembership = await db.companyMembership.findUnique({
+    where: { id: authFixtures.recruiterMembership.id },
+    include: { events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+  });
+  const expiredAuthSession = await db.session.findUnique({
+    where: { id: authFixtures.expiredSession.id },
+  });
+  const authResetEvidence = await db.passwordResetToken.findMany({
+    where: {
+      id: {
+        in: [authFixtures.expiredReset.id, authFixtures.usedReset.id],
+      },
+    },
+    orderBy: { id: "asc" },
   });
   const companies = await db.company.findMany({
     where: { dataProvenance: "DEMO" },
@@ -701,6 +727,7 @@ async function loadObservedSeedState(
     abuseReports,
     analyticsEvents,
     applications,
+    authResetEvidence,
     auditLogs,
     boosts,
     candidates,
@@ -713,6 +740,7 @@ async function loadObservedSeedState(
     conversations,
     creditAccounts,
     demoAccounts,
+    expiredAuthSession,
     invoices,
     jobAlerts,
     jobs,
@@ -728,6 +756,7 @@ async function loadObservedSeedState(
     radarMappings,
     radarSearchBudgets,
     radarSearchSessions,
+    recruiterSecondMembership,
     restrictions,
     revealGrants,
     salaryDataset,
@@ -736,6 +765,7 @@ async function loadObservedSeedState(
     skills,
     subscriptionSchedules,
     subscriptions,
+    suspendedAuthActor,
   };
 }
 
@@ -1126,6 +1156,252 @@ async function verifyDemoCredentials(
     true,
     true,
   ]);
+}
+
+async function verifyAuthRbac(
+  context: VerificationContext,
+  observed: Awaited<ReturnType<typeof loadObservedSeedState>>,
+  anchorAt: Date,
+): Promise<void> {
+  const fixtures = buildAuthRbacSeedFixtures(anchorAt);
+  const actor = observed.suspendedAuthActor;
+  check(context, "Phase-06 suspended auth actor exists", actor !== null, true);
+  if (actor !== null) {
+    check(
+      context,
+      "Phase-06 suspended auth actor contract",
+      {
+        id: actor.id,
+        email: actor.email,
+        emailNormalized: actor.emailNormalized,
+        name: actor.name,
+        role: actor.role,
+        status: actor.status,
+        dataProvenance: actor.dataProvenance,
+        emailVerifiedAt: actor.emailVerifiedAt?.toISOString() ?? null,
+        createdAt: actor.createdAt.toISOString(),
+      },
+      {
+        id: fixtures.suspendedActor.id,
+        email: fixtures.suspendedActor.email,
+        emailNormalized: fixtures.suspendedActor.email,
+        name: fixtures.suspendedActor.name,
+        role: fixtures.suspendedActor.role,
+        status: fixtures.suspendedActor.status,
+        dataProvenance: "DEMO",
+        emailVerifiedAt: fixtures.suspendedActor.emailVerifiedAt.toISOString(),
+        createdAt: fixtures.suspendedActor.createdAt.toISOString(),
+      },
+    );
+    check(
+      context,
+      "Phase-06 suspended actor login material remains bcrypt-only",
+      actor.credential !== null &&
+        actor.credential.algorithm === "bcryptjs" &&
+        actor.credential.algorithmVersion === 1 &&
+        !actor.credential.passwordHash.includes(DEMO_LOGIN_PASSWORD) &&
+        (await verifyPassword(
+          DEMO_LOGIN_PASSWORD,
+          actor.credential.passwordHash,
+        )),
+      true,
+    );
+  }
+
+  const membership = observed.recruiterSecondMembership;
+  check(
+    context,
+    "Phase-06 recruiter second Membership exists",
+    membership !== null,
+    true,
+  );
+  if (membership !== null) {
+    check(
+      context,
+      "Phase-06 recruiter second Membership contract",
+      {
+        id: membership.id,
+        companyId: membership.companyId,
+        userId: membership.userId,
+        role: membership.role,
+        status: membership.status,
+        joinedAt: membership.joinedAt.toISOString(),
+        removedAt: membership.removedAt?.toISOString() ?? null,
+      },
+      {
+        id: fixtures.recruiterMembership.id,
+        companyId: fixtures.recruiterMembership.companyId,
+        userId: fixtures.recruiterMembership.userId,
+        role: fixtures.recruiterMembership.role,
+        status: fixtures.recruiterMembership.status,
+        joinedAt: fixtures.recruiterMembership.joinedAt.toISOString(),
+        removedAt: null,
+      },
+    );
+    check(
+      context,
+      "Phase-06 recruiter second Membership event",
+      membership.events.map((event) => ({
+        id: event.id,
+        membershipId: event.membershipId,
+        kind: event.kind,
+        fromRole: event.fromRole,
+        toRole: event.toRole,
+        actorUserId: event.actorUserId,
+        reasonCode: event.reasonCode,
+        correlationId: event.correlationId,
+        createdAt: event.createdAt.toISOString(),
+      })),
+      [
+        {
+          id: fixtures.recruiterMembership.event.id,
+          membershipId: fixtures.recruiterMembership.id,
+          kind: fixtures.recruiterMembership.event.kind,
+          fromRole: null,
+          toRole: fixtures.recruiterMembership.role,
+          actorUserId: fixtures.recruiterMembership.event.actorUserId,
+          reasonCode: fixtures.recruiterMembership.event.reasonCode,
+          correlationId: fixtures.recruiterMembership.event.correlationId,
+          createdAt:
+            fixtures.recruiterMembership.event.createdAt.toISOString(),
+        },
+      ],
+    );
+  }
+
+  const recruiter = DEMO_ACCOUNT_FIXTURES.find(
+    (account) => account.email === "recruiter@demo.ch",
+  );
+  check(
+    context,
+    "Phase-06 official recruiter fixture exists",
+    recruiter !== undefined,
+    true,
+  );
+  if (recruiter !== undefined) {
+    const activeCompanies = observed.companies
+      .filter((company) =>
+        company.memberships.some(
+          (candidate) =>
+            candidate.userId === recruiter.id &&
+            candidate.role === "RECRUITER" &&
+            candidate.status === "ACTIVE",
+        ),
+      )
+      .map((company) => company.slug)
+      .sort();
+    check(
+      context,
+      "Phase-06 recruiter active Company A/B matrix",
+      activeCompanies,
+      [DEMO_COMPANY_SLUG, RADAR_DEMO_COMPANY_SLUG].sort(),
+    );
+  }
+
+  const session = observed.expiredAuthSession;
+  check(context, "Phase-06 expired Session exists", session !== null, true);
+  if (session !== null) {
+    check(
+      context,
+      "Phase-06 expired Session contract",
+      {
+        id: session.id,
+        userId: session.userId,
+        createdAt: session.createdAt.toISOString(),
+        expiresAt: session.expiresAt.toISOString(),
+        absoluteExpiresAt: session.absoluteExpiresAt.toISOString(),
+        rotatedAt: session.rotatedAt?.toISOString() ?? null,
+        revokedAt: session.revokedAt?.toISOString() ?? null,
+        userAgent: session.userAgent,
+        ipHash: session.ipHash,
+        inertHashMatches:
+          /^[0-9a-f]{64}$/u.test(session.tokenHash) &&
+          session.tokenHash === fixtures.expiredSession.tokenHash,
+        unusableAtAnchor:
+          session.expiresAt.getTime() < anchorAt.getTime() &&
+          session.absoluteExpiresAt.getTime() < anchorAt.getTime(),
+      },
+      {
+        id: fixtures.expiredSession.id,
+        userId: fixtures.expiredSession.userId,
+        createdAt: fixtures.expiredSession.createdAt.toISOString(),
+        expiresAt: fixtures.expiredSession.expiresAt.toISOString(),
+        absoluteExpiresAt:
+          fixtures.expiredSession.absoluteExpiresAt.toISOString(),
+        rotatedAt: null,
+        revokedAt: null,
+        userAgent: fixtures.expiredSession.userAgent,
+        ipHash: null,
+        inertHashMatches: true,
+        unusableAtAnchor: true,
+      },
+    );
+  }
+
+  verifyPasswordResetEvidence(
+    context,
+    observed.authResetEvidence,
+    fixtures.expiredReset,
+    "EXPIRED_UNUSED",
+    anchorAt,
+  );
+  verifyPasswordResetEvidence(
+    context,
+    observed.authResetEvidence,
+    fixtures.usedReset,
+    "USED",
+    anchorAt,
+  );
+}
+
+function verifyPasswordResetEvidence(
+  context: VerificationContext,
+  observed: Awaited<ReturnType<typeof loadObservedSeedState>>["authResetEvidence"],
+  expected:
+    | ReturnType<typeof buildAuthRbacSeedFixtures>["expiredReset"]
+    | ReturnType<typeof buildAuthRbacSeedFixtures>["usedReset"],
+  state: "EXPIRED_UNUSED" | "USED",
+  anchorAt: Date,
+): void {
+  const row = observed.find((candidate) => candidate.id === expected.id);
+  check(
+    context,
+    `Phase-06 ${state} PasswordResetToken exists`,
+    row !== undefined,
+    true,
+  );
+  if (row === undefined) return;
+  check(
+    context,
+    `Phase-06 ${state} PasswordResetToken contract`,
+    {
+      id: row.id,
+      userId: row.userId,
+      createdAt: row.createdAt.toISOString(),
+      expiresAt: row.expiresAt.toISOString(),
+      usedAt: row.usedAt?.toISOString() ?? null,
+      requestedIpHash: row.requestedIpHash,
+      requestedUserAgent: row.requestedUserAgent,
+      inertHashMatches:
+        /^[0-9a-f]{64}$/u.test(row.tokenHash) &&
+        row.tokenHash === expected.tokenHash,
+      expectedState:
+        state === "EXPIRED_UNUSED"
+          ? row.usedAt === null && row.expiresAt.getTime() < anchorAt.getTime()
+          : row.usedAt !== null && row.usedAt.getTime() < anchorAt.getTime(),
+    },
+    {
+      id: expected.id,
+      userId: expected.userId,
+      createdAt: expected.createdAt.toISOString(),
+      expiresAt: expected.expiresAt.toISOString(),
+      usedAt: expected.usedAt?.toISOString() ?? null,
+      requestedIpHash: null,
+      requestedUserAgent: expected.requestedUserAgent,
+      inertHashMatches: true,
+      expectedState: true,
+    },
+  );
 }
 
 function verifyCompanies(
@@ -2509,6 +2785,51 @@ function buildObservedDigest(
       submittedJobRevisionId: application.submittedJobRevisionId,
       updatedAt: application.updatedAt.toISOString(),
     })),
+    authRbac: {
+      expiredSession:
+        observed.expiredAuthSession === null
+          ? null
+          : {
+              absoluteExpiresAt:
+                observed.expiredAuthSession.absoluteExpiresAt.toISOString(),
+              createdAt: observed.expiredAuthSession.createdAt.toISOString(),
+              expiresAt: observed.expiredAuthSession.expiresAt.toISOString(),
+              id: observed.expiredAuthSession.id,
+              revokedAt:
+                observed.expiredAuthSession.revokedAt?.toISOString() ?? null,
+              userId: observed.expiredAuthSession.userId,
+            },
+      membership:
+        observed.recruiterSecondMembership === null
+          ? null
+          : {
+              companyId: observed.recruiterSecondMembership.companyId,
+              events: observed.recruiterSecondMembership.events.map((event) => ({
+                id: event.id,
+                kind: event.kind,
+                membershipId: event.membershipId,
+              })),
+              id: observed.recruiterSecondMembership.id,
+              role: observed.recruiterSecondMembership.role,
+              status: observed.recruiterSecondMembership.status,
+              userId: observed.recruiterSecondMembership.userId,
+            },
+      resets: observed.authResetEvidence.map((reset) => ({
+        createdAt: reset.createdAt.toISOString(),
+        expiresAt: reset.expiresAt.toISOString(),
+        id: reset.id,
+        usedAt: reset.usedAt?.toISOString() ?? null,
+        userId: reset.userId,
+      })),
+      suspendedActor:
+        observed.suspendedAuthActor === null
+          ? null
+          : {
+              id: observed.suspendedAuthActor.id,
+              role: observed.suspendedAuthActor.role,
+              status: observed.suspendedAuthActor.status,
+            },
+    },
     billing: {
       boosts: observed.boosts.map((boost) => ({
         id: boost.id,

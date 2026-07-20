@@ -5,6 +5,10 @@ import {
   seedBillingOpsContent,
 } from "@/prisma/seed/blocks/billing-ops";
 import {
+  buildAuthRbacSeedBlockDigest,
+  seedAuthRbacFixtures,
+} from "@/prisma/seed/blocks/auth-rbac";
+import {
   DEMO_ONLY_CANDIDATE_WORKFLOW_CRYPTO,
   seedCandidateWorkflows,
   type CandidateWorkflowSeedCryptoConfig,
@@ -68,6 +72,7 @@ export type SeedOrchestrationPorts = Readonly<{
   buildPlanningGraph: typeof buildSeedPlanningGraph;
   completeSeedRun: typeof completeSeedRun;
   seedBillingOpsContent: typeof seedBillingOpsContent;
+  seedAuthRbac: typeof seedAuthRbacFixtures;
   seedCandidateWorkflows: typeof seedCandidateWorkflows;
   seedCompaniesJobs: typeof seedDemoAccountsCompaniesAndJobs;
   seedReferenceCatalog: typeof seedReferenceCatalog;
@@ -112,6 +117,7 @@ const DEFAULT_ORCHESTRATION_PORTS: SeedOrchestrationPorts = Object.freeze({
   buildPlanningGraph: buildSeedPlanningGraph,
   completeSeedRun,
   seedBillingOpsContent,
+  seedAuthRbac: seedAuthRbacFixtures,
   seedCandidateWorkflows,
   seedCompaniesJobs: seedDemoAccountsCompaniesAndJobs,
   seedReferenceCatalog,
@@ -165,6 +171,7 @@ export async function orchestrateDemoSeed(
 
   const referenceCatalog = await ports.seedReferenceCatalog(database);
   const companiesJobs = await ports.seedCompaniesJobs(database, anchorAt);
+  const authRbac = await ports.seedAuthRbac(database, anchorAt);
   const candidateWorkflows = await ports.seedCandidateWorkflows(
     database,
     anchorAt,
@@ -186,11 +193,16 @@ export async function orchestrateDemoSeed(
   assertCompleteIdentityContract(planning.identities, [
     REFERENCE_CATALOG_SEED_IDENTITIES,
     companiesJobs.identities,
+    authRbac.identities,
     CANDIDATE_WORKFLOW_SEED_IDENTITIES,
     billingOps.identities,
   ]);
 
   const expectedStaticDigests = buildStaticSeedBlockDigests(planning);
+  assertBlockDigest(
+    authRbac.blockDigest,
+    requireBlockDigest(expectedStaticDigests, "auth-rbac"),
+  );
   assertBlockDigest(
     companiesJobs.blockDigest,
     requireBlockDigest(expectedStaticDigests, "companies-jobs"),
@@ -273,12 +285,12 @@ export async function verifyPersistedDemoSeed(
 
   if (persisted === null) {
     throw new SeedLifecycleError(
-      "No Phase-05 demo seed manifest exists for read-only verification.",
+      "No Phase-06 demo seed manifest exists for read-only verification.",
     );
   }
   if (persisted.completedAt === null || persisted.manifestHash === null) {
     throw new SeedLifecycleError(
-      "The Phase-05 demo seed manifest is not sealed.",
+      "The Phase-06 demo seed manifest is not sealed.",
     );
   }
 
@@ -355,6 +367,7 @@ export function buildStaticSeedBlockDigests(
 
   return Object.freeze([
     referenceCatalog,
+    buildAuthRbacSeedBlockDigest(),
     companiesJobs,
     CANDIDATE_WORKFLOW_BLOCK_DIGEST,
     buildBillingOpsSeedBlockDigest({

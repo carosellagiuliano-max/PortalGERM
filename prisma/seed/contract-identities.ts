@@ -6,6 +6,7 @@ import {
 import { REFERENCE_CATALOG_SEED_IDENTITIES } from "@/prisma/seed/blocks/reference-catalog";
 import type { SeedIdentityRecord } from "@/prisma/seed/contract";
 import {
+  AUTH_RBAC_SEED_IDENTITIES,
   CANDIDATE_WORKFLOW_SEED_IDENTITIES,
   COMPANY_FIXTURES,
   COMPANIES_JOBS_SEED_IDENTITIES,
@@ -61,6 +62,7 @@ export function buildSeedPlanningGraph(): SeedPlanningGraph {
   const identities = mergeSeedIdentitySets(
     REFERENCE_CATALOG_SEED_IDENTITIES,
     COMPANIES_JOBS_SEED_IDENTITIES,
+    AUTH_RBAC_SEED_IDENTITIES,
     CANDIDATE_WORKFLOW_SEED_IDENTITIES,
     buildBillingOpsSeedIdentities({ companies, jobs }),
   );

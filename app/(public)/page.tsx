@@ -1,12 +1,13 @@
+import Link from "next/link";
 import {
-  BlocksIcon,
-  CheckCircle2Icon,
-  DatabaseIcon,
+  ArrowRightIcon,
+  BriefcaseBusinessIcon,
   ShieldCheckIcon,
-  WrenchIcon,
+  UserRoundIcon,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,94 +16,107 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-const foundations = [
+const entrances = [
   {
-    title: "Reproduzierbare Toolchain",
+    title: "Für Kandidat:innen",
     description:
-      "Node, npm und alle Pakete sind exakt gepinnt. Windows und CI verwenden dieselben portablen Scripts.",
-    icon: WrenchIcon,
+      "Erstelle ein sicheres Konto und starte mit deinem privaten SwissJobPass-Entwurf – ohne automatische Talent-Radar-Freigabe.",
+    href: "/register/candidate",
+    action: "Kandidatenkonto erstellen",
+    icon: UserRoundIcon,
   },
   {
-    title: "PostgreSQL und Prisma",
+    title: "Für Arbeitgeber",
     description:
-      "Die Migrations- und Client-Pipeline ist vorbereitet. Fachmodelle beginnen bewusst erst in Phase 02.",
-    icon: DatabaseIcon,
+      "Registriere deinen persönlichen Zugang. Firmenansprüche werden kontrolliert geprüft und niemals allein per Domain vergeben.",
+    href: "/register/employer",
+    action: "Arbeitgeberkonto erstellen",
+    icon: BriefcaseBusinessIcon,
   },
   {
-    title: "Sichere Konfiguration",
+    title: "Sicher getrennte Bereiche",
     description:
-      "Env- und Keyring-Verträge validieren Länge, Rotation, Wiederverwendung und produktionsnahe Schutzregeln.",
+      "Serverseitige Sitzungen, Rollen und Firmenmitgliedschaften schützen Kandidaten-, Arbeitgeber- und Adminbereiche.",
+    href: "/login",
+    action: "Sicher anmelden",
     icon: ShieldCheckIcon,
   },
 ] as const;
 
-export default function FoundationPage() {
+export default function HomePage() {
   return (
     <>
-      <section className="page-shell grid gap-10 py-16 sm:py-24 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)] lg:items-center">
+      <section className="page-shell grid gap-10 py-16 sm:py-24 lg:grid-cols-[minmax(0,1.15fr)_minmax(19rem,0.85fr)] lg:items-center">
         <div className="max-w-3xl">
           <Badge variant="secondary" className="mb-5">
-            Phase 01 · technische Foundation
+            Phase 06 · sichere Konten und Rollen
           </Badge>
           <p className="eyebrow mb-4">SwissTalentHub</p>
           <h1 className="text-balance text-4xl leading-[1.08] font-semibold tracking-[-0.035em] sm:text-5xl lg:text-6xl">
-            Eine belastbare Grundlage, bevor Produktfunktionen entstehen.
+            Sicher starten – als Talent oder Arbeitgeber.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
-            Dieses Repository befindet sich bewusst in der Foundation-Phase. Jobsuche,
-            Anmeldung, Portale und Billing sind noch nicht verfügbar und werden hier
-            nicht vorgetäuscht.
+            Registrierung, Anmeldung und geschützte Portale sind jetzt miteinander
+            verbunden. Jede Rolle sieht nur ihren eigenen Bereich; Firmenzugriffe werden
+            zusätzlich über aktive Mitgliedschaften abgesichert.
           </p>
+          <div className="mt-8 flex flex-col gap-3 min-[420px]:flex-row">
+            <Link href="/register" className={buttonVariants({ size: "lg", className: "h-11" })}>
+              Konto erstellen <ArrowRightIcon data-icon="inline-end" />
+            </Link>
+            <Link
+              href="/login"
+              className={buttonVariants({ variant: "outline", size: "lg", className: "h-11" })}
+            >
+              Anmelden
+            </Link>
+          </div>
         </div>
 
         <Card id="status" className="border-primary/15 bg-card shadow-sm">
           <CardHeader>
             <div className="mb-2 flex items-center gap-2 text-primary">
-              <CheckCircle2Icon className="size-5" />
-              <span className="text-sm font-semibold">Aktueller Umfang</span>
+              <ShieldCheckIcon className="size-5" aria-hidden="true" />
+              <span className="text-sm font-semibold">Sicherheitsprinzip</span>
             </div>
-            <CardTitle as="h2">Technischer Foundation-Umfang</CardTitle>
-            <CardDescription>
-              Technische Nachweise werden mit reproduzierbaren Befehlen geprüft und im
-              Repository dokumentiert.
+            <CardTitle as="h2" className="text-xl">
+              Zugriff wird serverseitig entschieden
+            </CardTitle>
+            <CardDescription className="leading-6">
+              Die schnelle Weiterleitung vor einer Seite ersetzt nie die verbindliche
+              Prüfung von Sitzung, Rolle und Firmenkontext im Servercode.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="grid gap-3 text-sm text-muted-foreground">
-              <li className="flex gap-3">
-                <BlocksIcon className="mt-0.5 size-4 shrink-0 text-primary" />
-                App-Shell, UI-Primitives und klare Fehlerzustände
-              </li>
-              <li className="flex gap-3">
-                <DatabaseIcon className="mt-0.5 size-4 shrink-0 text-primary" />
-                PostgreSQL-, Prisma- und Test-Harness
-              </li>
-              <li className="flex gap-3">
-                <ShieldCheckIcon className="mt-0.5 size-4 shrink-0 text-primary" />
-                Env-Gates, Sicherheitsheader und redigierte Logs
-              </li>
+            <ul className="grid gap-3 text-sm leading-6 text-muted-foreground">
+              <li>Generische Antworten schützen vor Konto-Ausspähung.</li>
+              <li>Passwörter und Sitzungstoken werden nie im Klartext gespeichert.</li>
+              <li>Firmenabgleiche vergeben keinen automatischen Eigentümerzugriff.</li>
             </ul>
           </CardContent>
         </Card>
       </section>
 
-      <section id="foundation" className="border-y bg-muted/35 py-16 sm:py-20">
+      <section id="zugang" className="border-y bg-muted/35 py-16 sm:py-20">
         <div className="page-shell">
-          <p className="eyebrow">Was Phase 01 liefert</p>
+          <p className="eyebrow">Dein Einstieg</p>
           <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
-            Weniger Show, mehr überprüfbare Basis.
+            Ein Konto, ein klar geschützter Bereich.
           </h2>
           <div className="mt-9 grid gap-5 md:grid-cols-3">
-            {foundations.map(({ title, description, icon: Icon }) => (
-              <Card key={title} className="h-full">
+            {entrances.map(({ title, description, href, action, icon: Icon }) => (
+              <Card key={href} className="h-full">
                 <CardHeader>
                   <span className="mb-3 grid size-10 place-items-center rounded-lg bg-accent text-accent-foreground">
                     <Icon className="size-5" aria-hidden="true" />
                   </span>
                   <CardTitle as="h3">{title}</CardTitle>
+                  <CardDescription className="leading-6">{description}</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <p className="leading-6 text-muted-foreground">{description}</p>
+                <CardContent className="mt-auto">
+                  <Link href={href} className={buttonVariants({ variant: "outline", className: "w-full" })}>
+                    {action}
+                  </Link>
                 </CardContent>
               </Card>
             ))}

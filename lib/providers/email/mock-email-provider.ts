@@ -229,7 +229,7 @@ function parseSensitiveAction(
   templateKey: SensitiveAction["templateKey"],
   data: Readonly<Record<string, unknown>>,
   dataKey: "resetUrl" | "invitationUrl",
-  requireQueryToken: boolean,
+  requireFragmentToken: boolean,
 ): SensitiveAction {
   const value = actionUrl(data, dataKey);
   if (value === undefined) {
@@ -237,16 +237,29 @@ function parseSensitiveAction(
   }
 
   const url = new URL(value);
-  if (url.hash !== "") {
-    throw new MockEmailInputError([`data.${dataKey}:invalid`]);
-  }
   const pathSegments = url.pathname
     .split("/")
     .filter(Boolean)
     .map(safeDecodeURIComponent);
   const queryToken = url.searchParams.get("token") ?? undefined;
+  const fragment = new URLSearchParams(url.hash.replace(/^#/u, ""));
+  const fragmentToken = fragment.get("token") ?? undefined;
+  const fragmentKeys = [...fragment.keys()];
   const pathToken = pathSegments.at(-1);
-  const rawToken = requireQueryToken ? queryToken : queryToken ?? pathToken;
+  if (
+    requireFragmentToken
+      ? url.pathname !== "/reset-password" ||
+        url.search !== "" ||
+        queryToken !== undefined ||
+        fragmentKeys.length !== 1 ||
+        fragmentKeys[0] !== "token"
+      : url.hash !== ""
+  ) {
+    throw new MockEmailInputError([`data.${dataKey}:invalid`]);
+  }
+  const rawToken = requireFragmentToken
+    ? fragmentToken
+    : queryToken ?? pathToken;
   if (!isPlausibleRawToken(rawToken)) {
     throw new MockEmailInputError([`data.${dataKey}:token_invalid`]);
   }
@@ -258,6 +271,7 @@ function parseSensitiveAction(
     encodeURIComponent(rawToken),
     ...pathSegments,
     ...queryValues,
+    ...fragment.values(),
   ]);
   return Object.freeze({ templateKey, url: value, taints });
 }

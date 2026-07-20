@@ -1,5 +1,5 @@
 import { createSeededRandom, type SeededRandom } from "@/lib/utils/random";
-import { SEED_DATASET_VERSION } from "@/prisma/seed/contract";
+import { SEED_COMPATIBILITY_BASE_VERSION } from "@/prisma/seed/contract";
 
 const SCOPE_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,127}$/;
 
@@ -10,7 +10,7 @@ export function createSeedRandom(scope: string): SeededRandom {
       "A seed random scope must be a stable lowercase semantic label.",
     );
   }
-  return createSeededRandom(`${SEED_DATASET_VERSION}:${scope}`);
+  return createSeededRandom(`${SEED_COMPATIBILITY_BASE_VERSION}:${scope}`);
 }
 
 /** Fisher-Yates over a copy; the caller's fixture array is never mutated. */

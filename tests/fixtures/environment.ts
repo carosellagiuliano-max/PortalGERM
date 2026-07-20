@@ -22,6 +22,7 @@ export function createValidEnvironment(
     REVEAL_CONFIRMATION_KEYS: `confirm-v1:${keyMaterial(5)}`,
     PII_REVEAL_KEYS: `reveal-v1:${keyMaterial(6)}`,
     RATE_LIMIT_BACKEND: "postgres",
+    TRUSTED_PROXY_HOPS: "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",
     LOG_LEVEL: "info",
     ...overrides,

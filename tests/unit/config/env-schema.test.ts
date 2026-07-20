@@ -19,6 +19,7 @@ describe("parseEnvironment", () => {
       APP_ENV: "local",
       NODE_ENV: "test",
       RATE_LIMIT_BACKEND: "postgres",
+      TRUSTED_PROXY_HOPS: 0,
       ENABLE_LOCAL_MOCK_MAILBOX: false,
     });
     const auditKeyring = environment.secrets.keyrings.AUDIT_IP_HASH_KEYS;
@@ -131,6 +132,29 @@ describe("parseEnvironment", () => {
         },
         "RATE_LIMIT_BACKEND",
       );
+    },
+  );
+
+  it.each(["production", "staging"] as const)(
+    "requires an explicit trusted proxy topology in %s",
+    (appEnvironment: "production" | "staging") => {
+      expectValidationFailure(
+        {
+          APP_ENV: appEnvironment,
+          APP_URL: "https://swisstalenthub.test",
+          TRUSTED_PROXY_HOPS: "0",
+        },
+        "TRUSTED_PROXY_HOPS",
+      );
+      const environment = parseEnvironment(
+        createValidEnvironment({
+          APP_ENV: appEnvironment,
+          APP_URL: "https://swisstalenthub.test",
+          TRUSTED_PROXY_HOPS: "2",
+          TEST_DATABASE_URL: undefined,
+        }),
+      );
+      expect(environment.TRUSTED_PROXY_HOPS).toBe(2);
     },
   );
 

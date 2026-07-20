@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import {
-  SEED_DATASET_VERSION,
+  SEED_COMPATIBILITY_BASE_VERSION,
   type SeedIdentityRecord,
 } from "@/prisma/seed/contract";
 
@@ -199,7 +199,7 @@ function validateId(id: string): string {
 }
 
 function encodeSemanticIdentity(entity: string, naturalKey: string): string {
-  return [SEED_DATASET_VERSION, entity, naturalKey]
+  return [SEED_COMPATIBILITY_BASE_VERSION, entity, naturalKey]
     .map((part) => `${Buffer.byteLength(part, "utf8")}:${part}`)
     .join("");
 }

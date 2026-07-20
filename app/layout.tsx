@@ -9,16 +9,16 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "SwissTalentHub · Foundation",
+    default: "SwissTalentHub",
     template: "%s · SwissTalentHub",
   },
   description:
-    "Technische Grundlage für das geplante SwissTalentHub MVP. Produktfunktionen folgen in späteren Phasen.",
+    "Sicherer Schweizer Talent- und Arbeitgeberzugang mit klar getrennten Rollen.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="de-CH" suppressHydrationWarning>
+    <html lang="de-CH" suppressHydrationWarning data-scroll-behavior="smooth">
       <body>
         <AppProviders>
           <a

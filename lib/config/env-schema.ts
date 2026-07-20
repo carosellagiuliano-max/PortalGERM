@@ -72,6 +72,7 @@ const rawEnvironmentSchema = z
     REVEAL_CONFIRMATION_KEYS: z.string({ error: "is required" }),
     PII_REVEAL_KEYS: z.string({ error: "is required" }),
     RATE_LIMIT_BACKEND: z.enum(["postgres", "memory"]).default("postgres"),
+    TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(8).default(0),
     ENABLE_LOCAL_MOCK_MAILBOX: z
       .enum(["true", "false"])
       .default("false")
@@ -123,11 +124,22 @@ const rawEnvironmentSchema = z
 
     validateTestDatabaseIsolation(environment, context, productionLike);
 
-    if (productionLike && environment.RATE_LIMIT_BACKEND !== "postgres") {
+    if (
+      environment.RATE_LIMIT_BACKEND !== "postgres" &&
+      environment.APP_ENV !== "local"
+    ) {
       context.addIssue({
         code: "custom",
         path: ["RATE_LIMIT_BACKEND"],
-        message: "must be postgres in staging and production",
+        message: "must be postgres outside local and test runtimes",
+      });
+    }
+
+    if (productionLike && environment.TRUSTED_PROXY_HOPS < 1) {
+      context.addIssue({
+        code: "custom",
+        path: ["TRUSTED_PROXY_HOPS"],
+        message: "must be at least 1 in staging and production",
       });
     }
 
@@ -315,6 +327,7 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     appName: environment.NEXT_PUBLIC_APP_NAME,
     logLevel: environment.LOG_LEVEL,
     rateLimitBackend: environment.RATE_LIMIT_BACKEND,
+    trustedProxyHops: environment.TRUSTED_PROXY_HOPS,
     mailboxEnabled: environment.ENABLE_LOCAL_MOCK_MAILBOX,
     keyringWriterVersions: Object.fromEntries(
       Object.entries(environment.secrets.keyrings).map(([name, entries]) => [

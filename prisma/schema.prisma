@@ -1198,21 +1198,22 @@ model RateLimitBucket {
 }
 
 model Canton {
-  id                 String                    @id @default(uuid()) @db.Uuid
-  code               String                    @unique @db.Char(2)
-  name               String                    @db.VarChar(120)
-  slug               String                    @unique @db.VarChar(120)
-  language           Language
-  cities             City[]
-  companies          CompanyLocation[]
-  candidates         CandidateProfile[]
-  jobRevisions       JobRevision[]
-  jobsPublished      Job[]                     @relation("PublishedCanton")
-  salaryBands        SalaryBand[]
-  clusterAssessments ClusterLaunchAssessment[]
-  metricDailyRows    MetricDaily[]
-  createdAt          DateTime                  @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime                  @updatedAt @db.Timestamptz(3)
+  id                    String                    @id @default(uuid()) @db.Uuid
+  code                  String                    @unique @db.Char(2)
+  name                  String                    @db.VarChar(120)
+  slug                  String                    @unique @db.VarChar(120)
+  language              Language
+  cities                City[]
+  companies             CompanyLocation[]
+  companyRegistrations  Company[]                 @relation("CompanyRegistrationCanton")
+  candidates            CandidateProfile[]
+  jobRevisions          JobRevision[]
+  jobsPublished         Job[]                     @relation("PublishedCanton")
+  salaryBands           SalaryBand[]
+  clusterAssessments    ClusterLaunchAssessment[]
+  metricDailyRows       MetricDaily[]
+  createdAt             DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                  @updatedAt @db.Timestamptz(3)
 
   @@index([slug])
 }
@@ -1399,6 +1400,9 @@ model Company {
   name                        String                       @db.VarChar(200)
   slug                        String                       @unique @db.VarChar(200)
   uid                         String?                      @unique @db.VarChar(32)
+  registrationEmailDomainNormalized String?               @db.VarChar(253)
+  registrationNameNormalized String?                      @db.VarChar(200)
+  registrationCantonId       String?                      @db.Uuid
   industry                    String?                      @db.VarChar(160)
   size                        String?                      @db.VarChar(64)
   website                     String?                      @db.VarChar(512)
@@ -1414,6 +1418,7 @@ model Company {
   dataProvenance              DataProvenance               @default(LIVE)
   createdAt                   DateTime                     @default(now()) @db.Timestamptz(3)
   updatedAt                   DateTime                     @updatedAt @db.Timestamptz(3)
+  registrationCanton          Canton?                      @relation("CompanyRegistrationCanton", fields: [registrationCantonId], references: [id], onDelete: Restrict)
   statusEvents                CompanyStatusEvent[]
   memberships                 CompanyMembership[]
   locations                   CompanyLocation[]
@@ -1452,6 +1457,9 @@ model Company {
   auditLogs                   AuditLog[]
 
   @@index([status, dataProvenance])
+  @@index([registrationEmailDomainNormalized])
+  @@index([registrationNameNormalized, registrationCantonId])
+  @@index([registrationCantonId])
 }
 
 model CompanyStatusEvent {

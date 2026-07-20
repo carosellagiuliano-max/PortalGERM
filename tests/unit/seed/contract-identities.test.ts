@@ -4,7 +4,7 @@ import { SEED_DATASET_VERSION } from "@/prisma/seed/contract";
 import { buildSeedPlanningGraph } from "@/prisma/seed/contract-identities";
 import { buildSeedContractHeader } from "@/prisma/seed/manifest";
 
-describe("complete Phase-05 identity contract", () => {
+describe("complete Phase-06 identity contract", () => {
   it("builds every dependency before the first database write", () => {
     const graph = buildSeedPlanningGraph();
 

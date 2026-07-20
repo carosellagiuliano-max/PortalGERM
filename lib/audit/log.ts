@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import {
+  COMPANY_CLAIM_SIGNAL_CODES_V1,
+} from "@/lib/auth/employer-registration-signals";
 import { RATE_LIMIT_PRESET_NAMES_V1 } from "@/lib/auth/rate-limit";
 import type { KeyringEntry } from "@/lib/config/env-schema";
 import {
@@ -69,6 +72,30 @@ const RATE_LIMITED_AUDIT_METADATA_SCHEMA = z.strictObject({
     "UNKNOWN",
   ]),
 });
+const VERSIONED_IDENTIFIER_HASH_PATTERN =
+  /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}:[a-f0-9]{64}$/u;
+const USER_REGISTERED_AUDIT_METADATA_SCHEMA = z.strictObject({
+  role: z.enum(["CANDIDATE", "EMPLOYER"]),
+});
+const USER_LOGIN_FAILED_AUDIT_METADATA_SCHEMA = z.strictObject({
+  identifierHash: z.string().regex(VERSIONED_IDENTIFIER_HASH_PATTERN),
+});
+const COMPANY_REGISTRATION_AUDIT_METADATA_SCHEMA = z
+  .strictObject({
+    signalCodes: z
+      .array(z.enum(COMPANY_CLAIM_SIGNAL_CODES_V1))
+      .min(1)
+      .max(COMPANY_CLAIM_SIGNAL_CODES_V1.length),
+  })
+  .superRefine((metadata, context) => {
+    if (new Set(metadata.signalCodes).size !== metadata.signalCodes.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["signalCodes"],
+        message: "Company registration signal codes must be unique.",
+      });
+    }
+  });
 
 /**
  * Phase 03 starts with a deny-by-default metadata contract. A domain owner may
@@ -82,6 +109,12 @@ const auditMetadataSchemas = Object.fromEntries(
   z.ZodType<Readonly<Record<string, unknown>>>
 >;
 auditMetadataSchemas.RATE_LIMITED = RATE_LIMITED_AUDIT_METADATA_SCHEMA;
+auditMetadataSchemas.USER_REGISTERED = USER_REGISTERED_AUDIT_METADATA_SCHEMA;
+auditMetadataSchemas.USER_LOGIN_FAILED = USER_LOGIN_FAILED_AUDIT_METADATA_SCHEMA;
+auditMetadataSchemas.COMPANY_CREATED_WITH_OWNER =
+  COMPANY_REGISTRATION_AUDIT_METADATA_SCHEMA;
+auditMetadataSchemas.COMPANY_CLAIM_REQUESTED =
+  COMPANY_REGISTRATION_AUDIT_METADATA_SCHEMA;
 
 export const AUDIT_METADATA_SCHEMAS_V1 = Object.freeze(auditMetadataSchemas);
 

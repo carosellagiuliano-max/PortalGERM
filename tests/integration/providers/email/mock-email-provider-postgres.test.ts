@@ -60,7 +60,7 @@ describe("PostgreSQL MockEmailProvider contract", () => {
   it("atomically dedupes concurrent reset retries and persists no token or URL", async () => {
     const rawToken = "postgres-reset-token-canary-never-persist";
     const resetUrl =
-      `http://127.0.0.1:3000/reset-password?token=${rawToken}`;
+      `http://127.0.0.1:3000/reset-password#token=${rawToken}`;
     const secret = Buffer.alloc(40, 31).toString("base64");
     const mailbox = new LocalMockMailbox({
       allowedOrigin: "http://127.0.0.1:3000",
@@ -115,7 +115,7 @@ describe("PostgreSQL MockEmailProvider contract", () => {
         data: {
           ...input.data,
           resetUrl:
-            "http://127.0.0.1:3000/reset-password?token=different-token-that-is-at-least-thirty-two-bytes",
+            "http://127.0.0.1:3000/reset-password#token=different-token-that-is-at-least-thirty-two-bytes",
         },
       }),
     ).rejects.toThrow(EmailLogIdempotencyConflictError);

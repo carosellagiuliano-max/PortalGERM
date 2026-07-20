@@ -45,7 +45,7 @@ describe("non-production reset/invitation mailbox route flow", () => {
     const invitationToken =
       "route-invitation-token-that-is-at-least-thirty-two-bytes";
     const resetUrl =
-      `http://127.0.0.1:3000/reset-password?token=${resetToken}`;
+      `http://127.0.0.1:3000/reset-password#token=${resetToken}`;
     const invitationUrl =
       `http://127.0.0.1:3000/invitations/${invitationToken}`;
     const { repository, rows } = createMemoryRepository();

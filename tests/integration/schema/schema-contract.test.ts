@@ -512,6 +512,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260719230000_phase_03_privacy_atomicity",
       "20260719231500_phase_03_remote_job_projection",
       "20260720120000_phase_05_seed_manifest_contract",
+      "20260720180000_phase_06_auth_company_registration_signals",
     ]);
     expect(
       migrations.rows.every(

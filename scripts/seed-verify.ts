@@ -12,7 +12,7 @@ try {
   });
 
   console.info(
-    `Phase-05 sealed demo seed verified read-only in ${result.guard.mode}.`,
+    `Phase-06 sealed demo seed verified read-only in ${result.guard.mode}.`,
   );
   console.info(formatSeedManifestLog(result.envelope));
 } catch (error) {
@@ -23,7 +23,7 @@ try {
 function formatSafeSeedFailure(error: unknown): string {
   const name = error instanceof Error ? error.name : "UnknownError";
   const code = readSafeErrorCode(error);
-  return `Phase-05 read-only seed verification failed: ${name}${
+  return `Phase-06 read-only seed verification failed: ${name}${
     code === undefined ? "" : ` (${code})`
   }.`;
 }

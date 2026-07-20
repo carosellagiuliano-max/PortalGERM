@@ -61,7 +61,7 @@ const TEMPLATE_DATA = Object.freeze({
   reason: "Bitte ergänze die Angaben.",
   remainingCredits: 2,
   renewalDate: "01.08.2026",
-  resetUrl: "http://127.0.0.1:3000/reset-password?token=secret",
+  resetUrl: "http://127.0.0.1:3000/reset-password#token=secret",
   statusLabel: "freigegeben",
   used: 4,
 });

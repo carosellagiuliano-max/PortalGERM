@@ -96,7 +96,7 @@ describe("MockEmailProvider", () => {
   it("redacts reset URL/token, dedupes its EmailLog and captures one raw envelope", async () => {
     const token = "reset-token-canary-that-must-never-persist";
     const resetUrl =
-      `http://127.0.0.1:3000/reset-password?token=${token}`;
+      `http://127.0.0.1:3000/reset-password#token=${token}`;
     const { repository, rows } = createMemoryRepository();
     const mailbox = createMailbox();
     const provider = new MockEmailProvider(repository, {
@@ -175,7 +175,7 @@ describe("MockEmailProvider", () => {
       templateKey: "password_reset_mock",
       data: {
         idempotencyKey: "password-reset-version-conflict",
-        resetUrl: `http://127.0.0.1:3000/reset-password?token=${token}`,
+        resetUrl: `http://127.0.0.1:3000/reset-password#token=${token}`,
       },
       subject: "Passwort für SwissTalentHub zurücksetzen",
     });
@@ -210,7 +210,7 @@ describe("MockEmailProvider", () => {
       data: {
         idempotencyKey: "password-reset-invalid-envelope",
         resetUrl:
-          "https://evil.example/reset-password?token=valid-token-that-is-at-least-thirty-two-bytes",
+          "https://evil.example/reset-password#token=valid-token-that-is-at-least-thirty-two-bytes",
       },
       subject: "Passwort für SwissTalentHub zurücksetzen",
     })).rejects.toThrow("action_url_invalid");
@@ -234,7 +234,7 @@ describe("MockEmailProvider", () => {
       data: {
         idempotencyKey: "password-reset-capture-retry",
         resetUrl:
-          "http://127.0.0.1:3000/reset-password?token=retry-token-that-is-at-least-thirty-two-bytes",
+          "http://127.0.0.1:3000/reset-password#token=retry-token-that-is-at-least-thirty-two-bytes",
       },
       subject: "Passwort für SwissTalentHub zurücksetzen",
     };
@@ -270,7 +270,7 @@ describe("MockEmailProvider", () => {
       data: {
         idempotencyKey: "password-reset-no-revival",
         resetUrl:
-          "http://127.0.0.1:3000/reset-password?token=one-time-token-that-is-at-least-thirty-two-bytes",
+          "http://127.0.0.1:3000/reset-password#token=one-time-token-that-is-at-least-thirty-two-bytes",
       },
       subject: "Passwort für SwissTalentHub zurücksetzen",
     };
@@ -326,7 +326,7 @@ describe("MockEmailProvider", () => {
         templateKey: "password_reset_mock",
         data: {
           resetUrl:
-            "http://127.0.0.1:3000/reset-password?token=valid-token-that-is-at-least-thirty-two-bytes",
+            "http://127.0.0.1:3000/reset-password#token=valid-token-that-is-at-least-thirty-two-bytes",
         },
         subject: "Passwort für SwissTalentHub zurücksetzen",
       }),

@@ -205,7 +205,7 @@ flowchart LR
 
 **Funktionen:** registerCandidate and registerEmployer with explicit versioned Terms. Employer uses collision-locked atomic branch: new Draft Company+Owner **or** pending Claim with no Company/Membership; never auto-trust domain or create Free Billing row. Login/logout, forgot/reset through guarded local mailbox, rotate/revoke sessions and Company context. Team mutations belong to 10.
 
-**Routen:** `/login`, `/register`, `/register/candidate`, `/register/employer`, `/forgot-password`, `/reset-password?token=<raw-single-use>`; Schutz für `/candidate|employer|admin`; Team-UI vollständig in 10. Raw token is never persisted/logged and the page/action has invalid/expired/used states.
+**Routen:** `/login`, `/register`, `/register/candidate`, `/register/employer`, `/forgot-password`, `/reset-password#token=<raw-single-use>`; Schutz für `/candidate|employer|admin`; Team-UI vollständig in 10. Das Fragment wird nicht an Server/Proxy gesendet, im Browser sofort entfernt und nur per POST an die Action übergeben; der Raw-Token wird nie persistiert/protokolliert und die Seite/Action besitzt identische invalid/expired/used states.
 
 **Berechtigung/Validierung/Audit:** normalisierte E-Mail, Token-Hashes, Safe Next, password policy, generic errors, rate limit, CSRF/origin, session revocation, no self-escalation/last owner; Audit für Auth-Security und Rollenänderung.
 

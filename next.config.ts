@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 
-const securityHeaders = [
+const baseSecurityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -16,6 +16,23 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=()",
   },
+];
+
+const noStorePrivateHeaders = [
+  { key: "Cache-Control", value: "private, no-store, max-age=0" },
+  {
+    key: "X-Robots-Tag",
+    value: "noindex, nofollow, noarchive, nosnippet",
+  },
+];
+
+const resetPasswordHeaders = [
+  { key: "Cache-Control", value: "no-store, max-age=0" },
+  {
+    key: "X-Robots-Tag",
+    value: "noindex, nofollow, noarchive, nosnippet",
+  },
+  { key: "Referrer-Policy", value: "no-referrer" },
 ];
 
 const localMailboxHeaders = [
@@ -40,8 +57,22 @@ const nextConfig = (phase: string): NextConfig => {
     );
   }
 
+  const securityHeaders =
+    process.env.APP_ENV === "production"
+      ? [
+          ...baseSecurityHeaders,
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
+        ]
+      : baseSecurityHeaders;
+
   return {
     outputFileTracingRoot: projectRoot,
+    experimental: {
+      authInterrupts: true,
+    },
     turbopack: {
       root: projectRoot,
     },
@@ -57,6 +88,18 @@ const nextConfig = (phase: string): NextConfig => {
         {
           source: "/dev/mailbox",
           headers: localMailboxHeaders,
+        },
+        {
+          source: "/reset-password",
+          headers: resetPasswordHeaders,
+        },
+        ...["candidate", "employer", "admin"].map((area) => ({
+          source: `/${area}/:path*`,
+          headers: noStorePrivateHeaders,
+        })),
+        {
+          source: "/forbidden",
+          headers: noStorePrivateHeaders,
         },
       ];
     },

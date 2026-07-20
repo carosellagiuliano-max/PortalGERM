@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ActivityIcon, MenuIcon } from "lucide-react";
+import { useState } from "react";
+import { ActivityIcon, LogInIcon, MenuIcon } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
-  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -15,12 +15,13 @@ import {
 } from "@/components/ui/sheet";
 
 const navigation = [
-  { href: "/#foundation", label: "Grundlage" },
-  { href: "/#status", label: "Projektstatus" },
-  { href: "/health/live", label: "Live-Status" },
+  { href: "/register/candidate", label: "Für Kandidat:innen" },
+  { href: "/register/employer", label: "Für Arbeitgeber" },
 ] as const;
 
 export function AppHeader() {
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+
   return (
     <header className="border-b bg-background/95 backdrop-blur">
       <div className="page-shell flex min-h-16 items-center justify-between gap-4 py-3">
@@ -40,13 +41,27 @@ export function AppHeader() {
 
         <nav aria-label="Hauptnavigation" className="hidden items-center gap-1 md:flex">
           {navigation.map((item) => (
-            <Button key={item.href} variant="ghost" render={<Link href={item.href} />}>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={buttonVariants({ variant: "ghost" })}
+            >
               {item.label}
-            </Button>
+            </Link>
           ))}
+          <Link
+            href="/login"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            <LogInIcon data-icon="inline-start" />
+            Anmelden
+          </Link>
         </nav>
 
-        <Sheet>
+        <Sheet
+          open={mobileNavigationOpen}
+          onOpenChange={setMobileNavigationOpen}
+        >
           <SheetTrigger
             render={
               <Button
@@ -63,26 +78,34 @@ export function AppHeader() {
             <SheetHeader>
               <SheetTitle>Navigation</SheetTitle>
               <SheetDescription>
-                Aktuell sind nur die Foundation und technischen Statuspfade aktiv.
+                Registrieren, anmelden oder direkt den passenden sicheren Einstieg wählen.
               </SheetDescription>
             </SheetHeader>
             <nav aria-label="Mobile Navigation" className="grid gap-2 px-4">
               {navigation.map((item) => (
-                <SheetClose
+                <Link
                   key={item.href}
-                  render={
-                    <Link
-                      href={item.href}
-                      className={buttonVariants({
-                        variant: "ghost",
-                        className: "justify-start",
-                      })}
-                    />
-                  }
+                  href={item.href}
+                  onClick={() => setMobileNavigationOpen(false)}
+                  className={buttonVariants({
+                    variant: "ghost",
+                    className: "justify-start",
+                  })}
                 >
                   {item.label}
-                </SheetClose>
+                </Link>
               ))}
+              <Link
+                href="/login"
+                onClick={() => setMobileNavigationOpen(false)}
+                className={buttonVariants({
+                  variant: "outline",
+                  className: "justify-start",
+                })}
+              >
+                <LogInIcon data-icon="inline-start" />
+                Anmelden
+              </Link>
             </nav>
           </SheetContent>
         </Sheet>

@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DatabaseClient } from "@/lib/db/factory";
 import {
+  buildAuthRbacSeedBlockDigest,
+} from "@/prisma/seed/blocks/auth-rbac";
+import {
   buildBillingOpsSeedBlockDigest,
   buildBillingOpsSeedIdentities,
 } from "@/prisma/seed/blocks/billing-ops";
@@ -13,6 +16,7 @@ import {
 } from "@/prisma/seed/contract";
 import { buildSeedPlanningGraph } from "@/prisma/seed/contract-identities";
 import {
+  AUTH_RBAC_SEED_IDENTITIES,
   CANDIDATE_FIXTURES,
   CANDIDATE_WORKFLOW_BLOCK_DIGEST,
   COMPANIES_JOBS_SEED_IDENTITIES,
@@ -38,7 +42,7 @@ const ANCHOR = new Date("2026-07-20T10:00:00.000Z");
 const LOCAL_DATABASE =
   "postgresql://seed:local-only@127.0.0.1:5434/swisstalenthub?schema=public";
 
-describe("Phase-05 seed orchestrator", () => {
+describe("Phase-06 seed orchestrator", () => {
   it("guards production before constructing a client or reaching a write port", async () => {
     const write = vi.fn();
     const factory = vi.fn(() =>
@@ -78,6 +82,7 @@ describe("Phase-05 seed orchestrator", () => {
       "begin",
       "reference-catalog",
       "companies-jobs",
+      "auth-rbac",
       "candidate-workflows",
       "billing-ops",
       "database-verification",
@@ -86,6 +91,7 @@ describe("Phase-05 seed orchestrator", () => {
     expect(result.previouslyCompleted).toBe(false);
     expect(result.envelope.manifest.counts).toEqual(SEED_GOLDEN_COUNTS);
     expect(result.envelope.manifest.blocks.map(({ name }) => name)).toEqual([
+      "auth-rbac",
       "billing-ops-content",
       "candidate-workflows",
       "companies-jobs",
@@ -120,6 +126,7 @@ describe("Phase-05 seed orchestrator", () => {
       "begin",
       "reference-catalog",
       "companies-jobs",
+      "auth-rbac",
       "candidate-workflows",
       "billing-ops",
       "database-verification",
@@ -199,6 +206,7 @@ function createSuccessfulPorts(
   const calls: string[] = [];
   const planning = buildSeedPlanningGraph();
   const staticDigests = buildStaticSeedBlockDigests(planning);
+  const authRbacDigest = buildAuthRbacSeedBlockDigest();
   const companyDigest = requireDigest(staticDigests, "companies-jobs");
   const billingIdentities = buildBillingOpsSeedIdentities(planning);
   const billingDigest = buildBillingOpsSeedBlockDigest(planning);
@@ -230,6 +238,13 @@ function createSuccessfulPorts(
         demoAccounts: DEMO_ACCOUNT_FIXTURES,
         identities: COMPANIES_JOBS_SEED_IDENTITIES,
         jobs: planning.jobs,
+      };
+    }),
+    seedAuthRbac: vi.fn(async () => {
+      calls.push("auth-rbac");
+      return {
+        blockDigest: authRbacDigest,
+        identities: AUTH_RBAC_SEED_IDENTITIES,
       };
     }),
     seedCandidateWorkflows: vi.fn(async () => {

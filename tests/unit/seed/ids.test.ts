@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SEED_COMPATIBILITY_BASE_VERSION,
+  SEED_DATASET_VERSION,
+} from "@/prisma/seed/contract";
+import {
   SeedIdentityError,
   SeedIdentityRegistry,
   assertSeedIdentityIntegrity,
@@ -8,7 +12,18 @@ import {
   stableSeedId,
 } from "@/prisma/seed/ids";
 
-describe("stable Phase-05 seed identities", () => {
+describe("stable Phase-06 seed identities", () => {
+  it("rotates the manifest version without changing Phase-05 semantic IDs", () => {
+    expect(SEED_DATASET_VERSION).toBe("phase-06-demo-v2");
+    expect(SEED_COMPATIBILITY_BASE_VERSION).toBe("phase-05-demo-v1");
+    expect(stableSeedId("user", "candidate@demo.ch")).toBe(
+      "b05d30e2-ade6-57f2-b376-12cef27a86e4",
+    );
+    expect(
+      stableSeedId("company", "novarigi-digital"),
+    ).toBe("3faaae32-cdfd-50e3-aebd-abe989d28209");
+  });
+
   it("derives the same RFC UUID from the same canonical semantic key", () => {
     const expected = stableSeedId("company", "demo-pro-company");
 

@@ -1,5 +1,6 @@
 import type { DatabaseClient } from "@/lib/db/factory";
 import {
+  SEED_COMPATIBILITY_BASE_VERSION,
   SEED_DATASET_VERSION,
   SEED_MANIFEST_SCHEMA_VERSION,
   SEED_NAMESPACE,
@@ -43,7 +44,7 @@ export async function beginSeedRun(
     return verifyPersistedLifecycle(existing, identities);
   }
 
-  const anchorAt = canonicalClockInstant(clock());
+  const anchorAt = await resolveInitialAnchor(database, clock);
   const header = buildSeedContractHeader({
     anchorAt: anchorAt.toISOString(),
     identities,
@@ -74,6 +75,45 @@ export async function beginSeedRun(
     }
     return verifyPersistedLifecycle(raced, identities);
   }
+}
+
+/**
+ * An additive release must evaluate the already-published fixture rows against
+ * the same clock that created them. A sealed compatibility manifest is the
+ * authoritative source; on a genuinely fresh database the regular clock is
+ * used instead.
+ */
+async function resolveInitialAnchor(
+  database: DatabaseClient,
+  clock: () => Date,
+): Promise<Date> {
+  const compatibilityManifest = await database.demoSeedManifest.findUnique({
+    where: {
+      namespace_seedVersion: {
+        namespace: SEED_NAMESPACE,
+        seedVersion: SEED_COMPATIBILITY_BASE_VERSION,
+      },
+    },
+  });
+  if (compatibilityManifest === null) {
+    return canonicalClockInstant(clock());
+  }
+
+  if (
+    compatibilityManifest.namespace !== SEED_NAMESPACE ||
+    compatibilityManifest.seedVersion !== SEED_COMPATIBILITY_BASE_VERSION ||
+    compatibilityManifest.schemaVersion !== SEED_MANIFEST_SCHEMA_VERSION ||
+    compatibilityManifest.completedAt === null ||
+    compatibilityManifest.manifestHash === null ||
+    !isSha256(compatibilityManifest.contractHash) ||
+    !isSha256(compatibilityManifest.manifestHash)
+  ) {
+    throw new SeedLifecycleError(
+      "The Phase-05 compatibility manifest must be valid and sealed before Phase-06 can inherit its anchor.",
+    );
+  }
+
+  return canonicalClockInstant(compatibilityManifest.anchorAt);
 }
 
 /** Seals an incomplete run exactly once, or verifies a concurrent completion. */
@@ -192,4 +232,8 @@ function isUniqueConstraintError(error: unknown): boolean {
   }
   const candidate = error as Readonly<{ code?: unknown }>;
   return candidate.code === "P2002" || candidate.code === "23505";
+}
+
+function isSha256(value: string): boolean {
+  return /^[0-9a-f]{64}$/u.test(value);
 }
