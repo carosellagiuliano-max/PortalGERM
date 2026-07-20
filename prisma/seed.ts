@@ -1,37 +1,48 @@
 import { parseEnvironment } from "@/lib/config/env-schema";
-import { createDatabaseClient } from "@/lib/db/factory";
+import { candidateWorkflowSeedCryptoFromEnvironment } from "@/prisma/seed/blocks/candidate-workflows";
+import { runDemoSeed } from "@/prisma/seed/orchestrator";
+import { formatSeedManifestLog } from "@/prisma/seed/manifest";
 import { loadLocalEnvironment } from "@/scripts/load-local-environment";
 
 loadLocalEnvironment();
 
-const environment = parseEnvironment(process.env);
-const database = environment.secrets.database.withValue(createDatabaseClient);
-
 try {
-  const result = await database.$queryRaw<
-    Array<{
-      user_table: string | null;
-      plan_version_table: string | null;
-      audit_log_table: string | null;
-    }>
-  >`
-    SELECT
-      to_regclass('public."User"')::text AS user_table,
-      to_regclass('public."PlanVersion"')::text AS plan_version_table,
-      to_regclass('public."AuditLog"')::text AS audit_log_table
-  `;
-
-  if (
-    !result[0]?.user_table ||
-    !result[0]?.plan_version_table ||
-    !result[0]?.audit_log_table
-  ) {
-    throw new Error("Phase-02 domain tables are not fully migrated.");
-  }
+  const environment = parseEnvironment(process.env);
+  const result = await environment.secrets.database.withValue((databaseUrl) =>
+    runDemoSeed(
+      {
+        APP_ENV: environment.APP_ENV,
+        DATABASE_URL: databaseUrl,
+        ENABLE_DEMO_SEED: process.env.ENABLE_DEMO_SEED,
+      },
+      {
+        candidateWorkflowCrypto:
+          candidateWorkflowSeedCryptoFromEnvironment(environment),
+      },
+    ),
+  );
 
   console.info(
-    "Phase-02 technical seed completed: schema reachable; catalog and demo fixtures remain owned by Phase 05.",
+    `Phase-05 demo seed ${result.previouslyCompleted ? "verified" : "completed"} in ${result.guard.mode}.`,
   );
-} finally {
-  await database.$disconnect();
+  console.info(formatSeedManifestLog(result.envelope));
+} catch (error) {
+  console.error(formatSafeSeedFailure("Phase-05 demo seed failed", error));
+  process.exitCode = 1;
+}
+
+function formatSafeSeedFailure(prefix: string, error: unknown): string {
+  const name = error instanceof Error ? error.name : "UnknownError";
+  const code = readSafeErrorCode(error);
+  return `${prefix}: ${name}${code === undefined ? "" : ` (${code})`}.`;
+}
+
+function readSafeErrorCode(error: unknown): string | undefined {
+  if (error === null || typeof error !== "object") {
+    return undefined;
+  }
+  const code = (error as Readonly<{ code?: unknown }>).code;
+  return typeof code === "string" && /^[A-Z0-9_]{2,64}$/.test(code)
+    ? code
+    : undefined;
 }

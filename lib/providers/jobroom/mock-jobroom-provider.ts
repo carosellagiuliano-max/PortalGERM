@@ -1,5 +1,6 @@
 import {
   JOBROOM_LEGAL_DISCLAIMER,
+  JOBROOM_MOCK_SOURCE,
   OCCUPATION_CODES_2026_FIXTURE,
   type OccupationCodeDatasetFixture,
   type OccupationCodeFixtureEntry,
@@ -19,7 +20,9 @@ const DATASET_KEYS = Object.freeze([
   "datasetKey",
   "datasetVersion",
   "dataYear",
+  "source",
   "sourceUrl",
+  "disclaimer",
   "validFrom",
   "validTo",
   "occupationCodes",
@@ -37,6 +40,7 @@ const DEFAULT_RESPONSE_METADATA = Object.freeze({
   datasetVersion: OCCUPATION_CODES_2026_FIXTURE.datasetVersion,
   dataYear: OCCUPATION_CODES_2026_FIXTURE.dataYear,
   sourceUrl: OCCUPATION_CODES_2026_FIXTURE.sourceUrl,
+  disclaimer: OCCUPATION_CODES_2026_FIXTURE.disclaimer,
 });
 
 export type JobroomReasonCode =
@@ -181,7 +185,7 @@ export class MockJobroomProvider implements JobroomProvider {
     return Object.freeze({
       result,
       reasonCode,
-      disclaimer: JOBROOM_LEGAL_DISCLAIMER,
+      disclaimer: metadata.disclaimer,
       datasetVersion: metadata.datasetVersion,
       dataYear: metadata.dataYear,
       sourceUrl: metadata.sourceUrl,
@@ -198,6 +202,7 @@ interface ResponseMetadata {
   readonly datasetVersion: string;
   readonly dataYear: number;
   readonly sourceUrl: string;
+  readonly disclaimer: string;
 }
 
 interface ValidatedFixture extends OccupationCodeDatasetFixture, ResponseMetadata {
@@ -224,7 +229,9 @@ function validateFixture(value: unknown): ValidatedFixture | null {
       /^[A-Za-z0-9][A-Za-z0-9._-]*$/u,
     );
     const dataYear = record.dataYear;
+    const source = boundedString(record.source, 1, 500);
     const sourceUrl = parseOfficialSourceUrl(record.sourceUrl, dataYear);
+    const disclaimer = boundedString(record.disclaimer, 1, 500);
     const validFrom = parseCanonicalTimestamp(record.validFrom);
     const validTo = parseCanonicalTimestamp(record.validTo);
     if (
@@ -233,7 +240,9 @@ function validateFixture(value: unknown): ValidatedFixture | null {
       !Number.isSafeInteger(dataYear) ||
       (dataYear as number) < 2_000 ||
       (dataYear as number) > 2_100 ||
+      source !== JOBROOM_MOCK_SOURCE ||
       sourceUrl === null ||
+      disclaimer !== JOBROOM_LEGAL_DISCLAIMER ||
       validFrom === null ||
       validTo === null ||
       validFrom.time !== Date.UTC(dataYear as number, 0, 1) ||
@@ -271,7 +280,9 @@ function validateFixture(value: unknown): ValidatedFixture | null {
       datasetKey,
       datasetVersion,
       dataYear: dataYear as number,
+      source,
       sourceUrl,
+      disclaimer,
       validFrom: validFrom.value,
       validTo: validTo.value,
       occupationCodes: Object.freeze(occupationCodes),

@@ -156,6 +156,8 @@ describe("MockJobroomProvider", () => {
     ["oversized version", () => fixture({ datasetVersion: "v".repeat(33) })],
     ["non-integer year", () => fixture({ dataYear: 2026.5 })],
     ["out-of-range year", () => fixture({ dataYear: 2200 })],
+    ["unreviewed source", () => fixture({ source: "Unreviewed fixture" })],
+    ["changed legal disclaimer", () => fixture({ disclaimer: "Keine Gewähr." })],
     ["HTTP source", () => fixture({
       sourceUrl: "http://www.arbeit.swiss/de/arbeitgebende/stellenmeldepflicht-2026",
     })],

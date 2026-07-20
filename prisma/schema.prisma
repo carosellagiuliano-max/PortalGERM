@@ -1687,6 +1687,7 @@ model JobRevision {
   id                      String                          @id @default(uuid()) @db.Uuid
   jobId                   String                          @db.Uuid
   revisionNumber          Int
+  contentLanguage         Language                        @default(DE)
   title                   String                          @db.VarChar(200)
   description             String                          @db.Text
   tasks                   String[]
@@ -2607,6 +2608,7 @@ model OccupationCodeVersion {
   version         String              @db.VarChar(32)
   source          String              @db.VarChar(500)
   referenceUrl    String?             @db.VarChar(1000)
+  disclaimer      String              @db.VarChar(1000)
   validFrom       DateTime            @db.Timestamptz(3)
   validTo         DateTime?           @db.Timestamptz(3)
   createdAt       DateTime            @default(now()) @db.Timestamptz(3)
@@ -2615,6 +2617,21 @@ model OccupationCodeVersion {
 
   @@unique([datasetKey, version])
   @@index([datasetKey, validFrom, validTo])
+}
+
+/// A seed run creates or verifies exactly one row per namespace and seedVersion.
+/// A changed seed contract rotates seedVersion and preserves prior evidence.
+model DemoSeedManifest {
+  namespace     String    @db.VarChar(64)
+  seedVersion   String    @db.VarChar(64)
+  schemaVersion String    @db.VarChar(64)
+  contractHash  String    @db.VarChar(64)
+  manifestHash  String?   @db.VarChar(64)
+  anchorAt      DateTime  @db.Timestamptz(3)
+  completedAt   DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@id([namespace, seedVersion])
 }
 
 model OccupationCode {

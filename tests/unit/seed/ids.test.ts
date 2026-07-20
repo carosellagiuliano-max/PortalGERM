@@ -1,0 +1,103 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  SeedIdentityError,
+  SeedIdentityRegistry,
+  assertSeedIdentityIntegrity,
+  createSeedIdentity,
+  stableSeedId,
+} from "@/prisma/seed/ids";
+
+describe("stable Phase-05 seed identities", () => {
+  it("derives the same RFC UUID from the same canonical semantic key", () => {
+    const expected = stableSeedId("company", "demo-pro-company");
+
+    expect(stableSeedId("company", "  DEMO-PRO-COMPANY ")).toBe(expected);
+    expect(expected).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(stableSeedId("job", "demo-pro-company")).not.toBe(expected);
+  });
+
+  it("sorts integrity snapshots independently of registration order", () => {
+    const company = createSeedIdentity("company", "alpenblick-digital-ag");
+    const job = createSeedIdentity("job", "backend-engineer-zuerich");
+
+    expect(assertSeedIdentityIntegrity([company, job])).toEqual(
+      assertSeedIdentityIntegrity([job, company]),
+    );
+  });
+
+  it("rejects canonical duplicate natural keys", () => {
+    const first = createSeedIdentity("company", "demo-company");
+    const duplicate = {
+      ...first,
+      naturalKey: "  DEMO-COMPANY ",
+    };
+
+    expectIdentityError(
+      () => assertSeedIdentityIntegrity([first, duplicate]),
+      "DUPLICATE_NATURAL_KEY",
+    );
+  });
+
+  it("rejects duplicate IDs across distinct semantic identities", () => {
+    const first = createSeedIdentity("company", "first-company");
+    const second = createSeedIdentity("company", "second-company");
+
+    expectIdentityError(
+      () =>
+        assertSeedIdentityIntegrity([
+          first,
+          { ...second, id: first.id },
+        ]),
+      "DUPLICATE_ID",
+    );
+  });
+
+  it("rejects ID drift even when the UUID is otherwise well formed", () => {
+    const first = createSeedIdentity("company", "first-company");
+    const unrelated = createSeedIdentity("company", "unrelated-company");
+
+    expectIdentityError(
+      () =>
+        assertSeedIdentityIntegrity([
+          { ...first, id: unrelated.id },
+        ]),
+      "ID_DRIFT",
+    );
+  });
+
+  it("offers a registry that rejects the second conflicting registration", () => {
+    const registry = new SeedIdentityRegistry();
+    registry.register("skill", "typescript");
+
+    expectIdentityError(
+      () => registry.register("skill", "TypeScript"),
+      "DUPLICATE_NATURAL_KEY",
+    );
+    expect(registry.snapshot()).toHaveLength(1);
+  });
+
+  it.each([
+    ["Company", "valid-key"],
+    ["company", ""],
+    ["company", "contains\u0000control"],
+  ])("rejects a non-canonical semantic identity (%s, %s)", (entity, key) => {
+    expect(() => stableSeedId(entity, key)).toThrow(SeedIdentityError);
+  });
+});
+
+function expectIdentityError(
+  action: () => unknown,
+  code: SeedIdentityError["code"],
+): void {
+  try {
+    action();
+  } catch (error) {
+    expect(error).toBeInstanceOf(SeedIdentityError);
+    expect(error).toMatchObject({ code });
+    return;
+  }
+  throw new Error(`Expected SeedIdentityError ${code}.`);
+}
