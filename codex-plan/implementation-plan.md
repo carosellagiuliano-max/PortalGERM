@@ -219,7 +219,7 @@ flowchart LR
 
 **Definition of Done / erwartetes Ergebnis:** jeder private Layoutzugriff wird serverseitig validiert; direkte Actions sind ebenso geschützt; Employer-Onboarding erzeugt keine partiellen Datensätze.
 
-**Risiken/Limitierungen:** Middleware ist niemals alleinige Sicherheitsgrenze; Admin-Capabilities werden später feiner getrennt.
+**Risiken/Limitierungen:** Proxy ist niemals alleinige Sicherheitsgrenze. Auth Server Actions bilden eine Rate-Limit-Entscheidung als typisierten `rate_limited`-State ab; ihr HTTP-Transportstatus bleibt frameworkgesteuert, während Route Handler physisches 429 liefern müssen. Forwarded-IP-Auswertung setzt eine bestätigte Edge-/Hop-Topologie voraus. Der aktive `phase-06-demo-v2`-Seed übernimmt nur den Anchor eines gültig versiegelten Phase-05-Manifests und lehnt unversiegelte Vorgänger fail-closed ab. Admin-Capabilities werden später feiner getrennt. Nachweis: [Phase-06-Evidence](./evidence/2026-07-20-phase-06.md).
 
 ---
 
@@ -573,4 +573,4 @@ flowchart LR
 
 ## Startentscheidung
 
-Schritt 01 ist gemäss [Phase-01-Evidence](./evidence/2026-07-19-phase-01.md) abgeschlossen. Der nächste zulässige Schritt ist **Schritt 02** im Zielrepository. Quellcode bleibt reine Vergleichsbasis und darf auch in späteren Schritten nicht blind kopiert oder als Ziel-Evidence behandelt werden.
+Schritte 01 bis 06 sind gemäss ihren Evidence-Records abgeschlossen. Der nächste zulässige Schritt ist **Schritt 07 — Öffentliche Discovery und Karriere-Entscheidung** im Zielrepository. Quellcode aus Referenzprojekten bleibt reine Vergleichsbasis und darf auch in späteren Schritten nicht blind kopiert oder als Ziel-Evidence behandelt werden.

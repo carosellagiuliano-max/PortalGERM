@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 20. Juli 2026. **Phasen 01 bis 05 sind im Zielrepository implementiert und verifiziert; Phasen 06–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks und deterministische Demo-Seeds sind kein fertiges Produkt: End-to-End-Auth, Produktportale und Billing-Use-Cases folgen in den nächsten Phasen.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 20. Juli 2026. **Phasen 01 bis 06 sind im Zielrepository implementiert und verifiziert; Phasen 07–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds und End-to-End-Auth sind noch kein fertiges Produkt: öffentliche Discovery, vollständige Produktportale und Billing-Use-Cases folgen in den nächsten Phasen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -85,7 +85,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 [`05-seed-data.md`](./05-seed-data.md) · deterministische positive/negative Fixtures, Prod-Guard, Idempotenz, manifestierte Counts.
 
-### [ ] 06 — Auth, Tenant und Onboarding
+### [x] 06 — Auth, Tenant und Onboarding
 
 [`06-auth-rbac.md`](./06-auth-rbac.md) · Auth-End-to-End, Sessions, Firmenkontext, Einladungsgrundlage, vollständige RBAC-/IDOR-Tests.
 
@@ -218,4 +218,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 05 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 06 — Auth, Tenant und Onboarding; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 06 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 07 — Öffentliche Discovery und Karriere-Entscheidung; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
