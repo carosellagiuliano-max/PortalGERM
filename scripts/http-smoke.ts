@@ -202,6 +202,23 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   expectJson(ready, { status: "ready" });
   expectNoStore(ready);
 
+  const productionMailbox = await request(
+    baseUrl,
+    "/dev/mailbox",
+    secretCanary,
+    { authorization: `Bearer ${secretCanary}` },
+  );
+  expectStatus(productionMailbox, 404);
+  expectNoStore(productionMailbox);
+  if (
+    productionMailbox.response.headers.get("x-robots-tag") !==
+    "noindex, nofollow, noarchive, nosnippet"
+  ) {
+    throw new Error(
+      "/dev/mailbox must remain noindex when it fails closed in Production.",
+    );
+  }
+
   const missing = await request(
     baseUrl,
     `/not-found-smoke-${Date.now().toString(36)}`,
@@ -249,7 +266,9 @@ function assertSecurityHeaders(path: string, headers: Headers) {
   const expected = {
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
-    "referrer-policy": "strict-origin-when-cross-origin",
+    "referrer-policy": path === "/dev/mailbox"
+      ? "no-referrer"
+      : "strict-origin-when-cross-origin",
     "permissions-policy": "camera=(), microphone=(), geolocation=()",
   } as const;
 
