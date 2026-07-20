@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 20. Juli 2026. **Phasen 01 bis 08 sind im Zielrepository implementiert und verifiziert; Phasen 09–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth, öffentliche Discovery sowie Pricing und Arbeitgeberakquise sind noch kein fertiges Produkt: vollständige Candidate-/Employer-Portale und Billing-Use-Cases folgen in den nächsten Phasen.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 20. Juli 2026. **Phasen 01 bis 09 sind im Zielrepository implementiert und verifiziert. Phasen 10–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth, öffentliche Discovery, Pricing und Arbeitgeberakquise sowie der Candidate-Core ergeben noch kein fertiges Produkt: Employer-Portal, Billing, Radar Contact/Reveal, Cross-role-E2E und Release-Härtung folgen in späteren Phasen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -36,7 +36,7 @@ Die wichtigsten Differenzierungen sind:
 
 Der vollständige Ausgangs-`codex-plan` mit 24 Dateien wurde in das leere Ziel übertragen und vor Überarbeitung per SHA-256 bytegenau verglichen. Das verlinkte Root-`AGENTS.md` wurde zusätzlich übernommen. Der Ziel-Baseline-Commit enthielt nur `README.md`.
 
-Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag, die reproduzierbar verifizierten Phase-03-Core-Policies, die netzwerkfreien Phase-04-Provider-Mocks, den deterministischen Phase-05-Demo-Seed mit Produktionssperre, End-to-End-Auth aus Phase 06, die sicher projizierte öffentliche Discovery aus Phase 07 sowie fail-closed Pricing und Arbeitgeberakquise aus Phase 08. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md), [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md), [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md), [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md), [`evidence/2026-07-20-phase-06.md`](./evidence/2026-07-20-phase-06.md), [`evidence/2026-07-20-phase-07.md`](./evidence/2026-07-20-phase-07.md) und [`evidence/2026-07-20-phase-08.md`](./evidence/2026-07-20-phase-08.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
+Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag, die reproduzierbar verifizierten Phase-03-Core-Policies, die netzwerkfreien Phase-04-Provider-Mocks, den deterministischen Phase-05-Demo-Seed mit Produktionssperre, End-to-End-Auth aus Phase 06, die sicher projizierte öffentliche Discovery aus Phase 07, fail-closed Pricing und Arbeitgeberakquise aus Phase 08 sowie den vollständig geprüften Candidate-Core aus Phase 09. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md), [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md), [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md), [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md), [`evidence/2026-07-20-phase-06.md`](./evidence/2026-07-20-phase-06.md), [`evidence/2026-07-20-phase-07.md`](./evidence/2026-07-20-phase-07.md), [`evidence/2026-07-20-phase-08.md`](./evidence/2026-07-20-phase-08.md) und [`evidence/2026-07-20-phase-09.md`](./evidence/2026-07-20-phase-09.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
 
 ## 4. Unverhandelbare Invarianten
 
@@ -53,13 +53,13 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 ## 5. Priorisierung
 
-| Stufe | Bedeutung | Beispiele |
-|---|---|---|
-| P0 | kontrolliertes MVP funktioniert end-to-end | Auth/Tenant, öffentliche Suche, JobPass, Bewerbung, Company/Job/Moderation, Billing Mock, Boost, Radar Contact/Reveal, Adminqueues, Security-/DB-Tests |
-| P1 | überzeugender Pilot/Marktstart | Jahrespläne, Agenturmandate, erweiterte Analytics/Cockpit, Growth-Gates, Worker/Outbox, Deployment/Backup/Monitoring |
-| P2 | nach erstem Marktfeedback | zusätzliche Sponsored-Produkte, breitere Mehrsprachigkeit, fortgeschrittene Suche, Visual Regression, Refund-Automation |
-| später | explizites Folgeprojekt | reale Provider, ATS/API/SSO, Enterprise Billing, employerseitige Match-Sortierung nach Prüfung, Success Fee nach Legal Review |
-| verworfen | nicht bauen | Scraping, globale Reveals, bezahlte Fairness, Fake-Aktivität, automatische Ablehnung, dünne SEO-Massenpages |
+| Stufe     | Bedeutung                                  | Beispiele                                                                                                                                              |
+| --------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P0        | kontrolliertes MVP funktioniert end-to-end | Auth/Tenant, öffentliche Suche, JobPass, Bewerbung, Company/Job/Moderation, Billing Mock, Boost, Radar Contact/Reveal, Adminqueues, Security-/DB-Tests |
+| P1        | überzeugender Pilot/Marktstart             | Jahrespläne, Agenturmandate, erweiterte Analytics/Cockpit, Growth-Gates, Worker/Outbox, Deployment/Backup/Monitoring                                   |
+| P2        | nach erstem Marktfeedback                  | zusätzliche Sponsored-Produkte, breitere Mehrsprachigkeit, fortgeschrittene Suche, Visual Regression, Refund-Automation                                |
+| später    | explizites Folgeprojekt                    | reale Provider, ATS/API/SSO, Enterprise Billing, employerseitige Match-Sortierung nach Prüfung, Success Fee nach Legal Review                          |
+| verworfen | nicht bauen                                | Scraping, globale Reveals, bezahlte Fairness, Fake-Aktivität, automatische Ablehnung, dünne SEO-Massenpages                                            |
 
 ## 6. Phasen und Verantwortungsgrenzen
 
@@ -97,9 +97,9 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 [`08-pricing-employer-marketing.md`](./08-pricing-employer-marketing.md) · klare Pakete, ehrliche Marketingpages, persistierter/geschützter Demo-Lead.
 
-### [ ] 09 — Kandidaten-Core
+### [x] 09 — Kandidaten-Core
 
-[`09-candidate-portal.md`](./09-candidate-portal.md) · JobPass, Saved Jobs, Apply/Withdraw/Status, Alerts, Messaging, Privacy-Basics.
+[`09-candidate-portal.md`](./09-candidate-portal.md) · JobPass, Saved Jobs, Apply/Withdraw/Status, Alerts, Messaging und Privacy-Basics sind implementiert und gegen den unveränderlichen Code-Commit verifiziert. Phase 10 bleibt Eigentümer der Employer-Pipeline-Mutationen, Phase 14 von Radar Contact/Reveal und Phase 17 der vollständigen Cross-role-E2E-Journey.
 
 ### [ ] 10 — Arbeitgeber- und Recruiter-Core
 
@@ -141,19 +141,19 @@ Die genaue Abhängigkeitsgrafik und jedes ausführbare Arbeitspaket stehen in [`
 
 ## 7. Verantwortungsauflösung alter Konflikte
 
-| Konflikt | Verbindliche Auflösung |
-|---|---|
-| Admin vs Billing | Phase 12 besitzt Pricing, Payment Confirmation, Invoice und Fulfillment. Phase 11 baut nur Shell/Queues ohne parallelen Service. |
-| Boost-Checkout ohne Ziel | OrderLine/FulfillmentContext speichert serverseitig geprüftes `jobId`; Phase 13 registriert Handler. |
-| zwei Upgrade-Modals | eine gemeinsame Billing-Komponente und ein `LIMIT`-Resultat. |
-| Limit bei Submit/Publish | Draft/Submit erlaubt; jede Transition nach `PUBLISHED`/Reaktivierung prüft Kontingent atomar. |
-| Radar-ID | opaque, serverseitig gemappte ID; nie Handle oder PK als Autorisierungsgrenze. |
-| Reveal global vs Thread | Grant für Candidate + Company + ContactRequest/Conversation; kein globales Reveal. |
-| Allowance vs Pack | Ledger mit `fundingSource`, Periode, Grant und Idempotenz; gekaufte Credits zählen nicht als Planverbrauch. |
-| Boost vs Sort/Pagination | Relevanz zuerst; klar begrenzte Sponsored-Zone; stabiles Sortiertupel global vor Pagination. |
-| 403 vs 404 IDOR | fremde/nicht existente Tenant-Ressource liefert sichere 404; echter Rollenfehler ohne Objektbezug kann 403 sein. |
-| Noindex vs Cache | private Seiten brauchen sowohl `noindex` als auch dynamische/no-store Semantik. |
-| Tests nur Phase 17 | jede Phase liefert Unit/Integration; Phase 17 liefert Cross-role E2E-01–07/Regression, Phase 18 den release-/restoreabhängigen E2E-08. |
+| Konflikt                 | Verbindliche Auflösung                                                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin vs Billing         | Phase 12 besitzt Pricing, Payment Confirmation, Invoice und Fulfillment. Phase 11 baut nur Shell/Queues ohne parallelen Service.       |
+| Boost-Checkout ohne Ziel | OrderLine/FulfillmentContext speichert serverseitig geprüftes `jobId`; Phase 13 registriert Handler.                                   |
+| zwei Upgrade-Modals      | eine gemeinsame Billing-Komponente und ein `LIMIT`-Resultat.                                                                           |
+| Limit bei Submit/Publish | Draft/Submit erlaubt; jede Transition nach `PUBLISHED`/Reaktivierung prüft Kontingent atomar.                                          |
+| Radar-ID                 | opaque, serverseitig gemappte ID; nie Handle oder PK als Autorisierungsgrenze.                                                         |
+| Reveal global vs Thread  | Grant für Candidate + Company + ContactRequest/Conversation; kein globales Reveal.                                                     |
+| Allowance vs Pack        | Ledger mit `fundingSource`, Periode, Grant und Idempotenz; gekaufte Credits zählen nicht als Planverbrauch.                            |
+| Boost vs Sort/Pagination | Relevanz zuerst; klar begrenzte Sponsored-Zone; stabiles Sortiertupel global vor Pagination.                                           |
+| 403 vs 404 IDOR          | fremde/nicht existente Tenant-Ressource liefert sichere 404; echter Rollenfehler ohne Objektbezug kann 403 sein.                       |
+| Noindex vs Cache         | private Seiten brauchen sowohl `noindex` als auch dynamische/no-store Semantik.                                                        |
+| Tests nur Phase 17       | jede Phase liefert Unit/Integration; Phase 17 liefert Cross-role E2E-01–07/Regression, Phase 18 den release-/restoreabhängigen E2E-08. |
 
 ## 8. Informationsarchitektur und Routen
 
@@ -218,4 +218,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 08 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Der nächste zulässige Implementierungsschritt ist Phase 09 — Kandidaten-Core; die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 09 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Als nächster Implementierungsschritt folgt Phase 10 — Arbeitgeber- und Recruiter-Core. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
