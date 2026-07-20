@@ -38,7 +38,7 @@ const PERSISTED_TEMPLATE_DATA_KEYS = {
   company_verification_status: ["companyName", "statusLabel"],
   credits_expiring: ["creditCount", "expiryDate"],
   credits_granted: ["creditCount", "creditTypeLabel"],
-  demo_request_received: ["companyName"],
+  demo_request_received: [],
   employer_message_received: ["companyName", "jobTitle"],
   identity_revealed: ["companyName"],
   invoice_issued: ["invoiceNumber"],

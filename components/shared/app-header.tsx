@@ -10,7 +10,8 @@ const navigation = [
   { href: "/companies", label: "Unternehmen" },
   { href: "/salary-radar", label: "Lohn-Radar" },
   { href: "/guide", label: "Ratgeber" },
-  { href: "/register/employer", label: "Für Arbeitgeber" },
+  { href: "/pricing", label: "Preise" },
+  { href: "/employers", label: "Für Arbeitgeber" },
 ] as const;
 
 export function AppHeader() {
@@ -19,7 +20,7 @@ export function AppHeader() {
       <div className="page-shell flex min-h-16 items-center justify-between gap-4 py-2">
         <BrandLink />
 
-        <nav aria-label="Hauptnavigation" className="hidden items-center gap-0.5 lg:flex">
+        <nav aria-label="Hauptnavigation" className="hidden items-center gap-0.5 xl:flex">
           {navigation.map((item) => (
             <Link
               key={item.href}

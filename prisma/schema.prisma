@@ -457,6 +457,7 @@ enum LeadStatus {
 }
 
 enum SalesActivityKind {
+  INTAKE_RECEIVED
   NOTE
   CONTACT_ATTEMPT
   STATUS_CHANGE
@@ -963,6 +964,7 @@ enum AuditAction {
   CONTENT_PUBLISHED
   CONTENT_UNPUBLISHED
   TAXONOMY_CHANGED
+  LEAD_SUBMITTED
   LEAD_STATUS_CHANGED
   SYSTEM_TASK_ASSIGNED
   SYSTEM_TASK_OUTCOME_RECORDED
@@ -2880,6 +2882,8 @@ model PlanVersion {
   subscriptions           EmployerSubscription[]
   orderLines              OrderLine[]
   creditLedgerEntries     CreditLedgerEntry[]
+  interestedSalesLeads    SalesLead[]             @relation("InterestedPlanVersion")
+  interestedSalesLeadIntakes SalesLeadIntake[]     @relation("InterestedPlanVersionIntake")
 
   @@unique([planId, version])
   @@index([planId, status, validFrom, validTo])
@@ -3332,9 +3336,22 @@ model SalesLead {
   companyId              String?         @db.Uuid
   emailNormalized        String          @db.VarChar(320)
   organizationNormalized String?         @db.VarChar(200)
+  organizationName       String?         @db.VarChar(200)
+  contactName            String?         @db.VarChar(160)
+  phoneNormalized        String?         @db.VarChar(32)
+  companySizeCode        String?         @db.VarChar(64)
+  hiringNeedCode         String?         @db.VarChar(64)
+  interestCode           String?         @db.VarChar(64)
+  callbackWindowCode     String?         @db.VarChar(64)
   purpose                String          @db.VarChar(128)
   consentSource          String          @db.VarChar(128)
   needSummary            String?         @db.VarChar(2000)
+  message                String?         @db.VarChar(2000)
+  noticeVersion          String?         @db.VarChar(32)
+  noticeHash             String?         @db.Char(64)
+  slaPolicyVersion       String?         @db.VarChar(32)
+  dueAt                  DateTime?       @db.Timestamptz(3)
+  interestedPlanVersionId String?        @db.Uuid
   status                 LeadStatus      @default(NEW)
   ownerUserId            String?         @db.Uuid
   nextAt                 DateTime?       @db.Timestamptz(3)
@@ -3343,10 +3360,14 @@ model SalesLead {
   updatedAt              DateTime        @updatedAt @db.Timestamptz(3)
   company                Company?        @relation(fields: [companyId], references: [id], onDelete: Restrict)
   owner                  User?           @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  interestedPlanVersion  PlanVersion?    @relation("InterestedPlanVersion", fields: [interestedPlanVersionId], references: [id], onDelete: Restrict)
   activities             SalesActivity[]
+  intakes                SalesLeadIntake[]
 
   @@unique([emailNormalized, purpose])
   @@index([status, nextAt])
+  @@index([status, dueAt])
+  @@index([interestedPlanVersionId])
   @@index([ownerUserId, status, nextAt])
 }
 
@@ -3357,10 +3378,42 @@ model SalesActivity {
   actorUserId String?           @db.Uuid
   safeNote    String?           @db.VarChar(1000)
   outcomeCode String?           @db.VarChar(64)
+  idempotencyKey String?        @unique @db.VarChar(128)
+  payloadHash    String?        @db.Char(64)
+  correlationId  String?        @db.VarChar(128)
   createdAt   DateTime          @default(now()) @db.Timestamptz(3)
   salesLead   SalesLead         @relation(fields: [salesLeadId], references: [id], onDelete: Restrict)
+  intake      SalesLeadIntake?
 
   @@index([salesLeadId, createdAt])
+}
+
+model SalesLeadIntake {
+  id                      String        @id @default(uuid()) @db.Uuid
+  salesLeadId             String        @db.Uuid
+  salesActivityId         String        @unique @db.Uuid
+  organizationName        String        @db.VarChar(200)
+  contactName             String        @db.VarChar(160)
+  phoneNormalized         String?       @db.VarChar(32)
+  companySizeCode         String        @db.VarChar(64)
+  hiringNeedCode          String        @db.VarChar(64)
+  interestCode            String        @db.VarChar(64)
+  callbackWindowCode      String?       @db.VarChar(64)
+  message                 String        @db.VarChar(2000)
+  noticeVersion           String        @db.VarChar(32)
+  noticeHash              String        @db.Char(64)
+  slaPolicyVersion        String        @db.VarChar(32)
+  dueAt                   DateTime      @db.Timestamptz(3)
+  retainUntil             DateTime      @db.Timestamptz(3)
+  interestedPlanVersionId String?       @db.Uuid
+  createdAt               DateTime      @default(now()) @db.Timestamptz(3)
+  salesLead               SalesLead     @relation(fields: [salesLeadId], references: [id], onDelete: Restrict)
+  salesActivity           SalesActivity @relation(fields: [salesActivityId], references: [id], onDelete: Restrict)
+  interestedPlanVersion   PlanVersion?  @relation("InterestedPlanVersionIntake", fields: [interestedPlanVersionId], references: [id], onDelete: Restrict)
+
+  @@index([salesLeadId, createdAt])
+  @@index([interestedPlanVersionId])
+  @@index([retainUntil])
 }
 
 model SystemTask {

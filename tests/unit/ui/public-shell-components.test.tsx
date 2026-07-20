@@ -22,10 +22,9 @@ describe("public shell components", () => {
       name: "Hauptnavigation",
     });
     const menuButton = screen.getByRole("button", { name: "Navigation öffnen" });
-    expect(desktopNavigation).toHaveClass("lg:flex");
-    expect(menuButton).toHaveClass("size-11");
+    expect(desktopNavigation).toHaveClass("xl:flex");
+    expect(menuButton).toHaveClass("size-11", "xl:hidden");
     expectNavigationTargets(desktopNavigation);
-    expect(screen.queryByRole("link", { name: "Preise" })).not.toBeInTheDocument();
 
     menuButton.focus();
     await user.keyboard("{Enter}");
@@ -68,18 +67,20 @@ describe("public shell components", () => {
     });
   });
 
-  it("renders a comprehensive footer without future-route links", () => {
+  it("renders a comprehensive footer with the released Phase-08 routes", () => {
     render(<AppFooter />);
 
     expect(screen.getByRole("navigation", { name: "Entdecken" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Konto" })).toBeInTheDocument();
+    const employerNavigation = screen.getByRole("navigation", { name: "Arbeitgeber" });
     expect(screen.getByRole("link", { name: "Jobs entdecken" })).toHaveAttribute(
       "href",
       "/jobs",
     );
     expect(screen.getByText(/DE-CH · Schweizer Franken/)).toBeInTheDocument();
     expect(screen.getByText(/keine Rechts-, Finanz- oder Lohnberatung/)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Preise" })).not.toBeInTheDocument();
+    expect(within(employerNavigation).getByRole("link", { name: "Preise" })).toHaveAttribute("href", "/pricing");
+    expect(within(employerNavigation).getByRole("link", { name: "Demo anfragen" })).toHaveAttribute("href", "/employers/demo");
   });
 });
 
@@ -89,7 +90,8 @@ function expectNavigationTargets(navigation: HTMLElement) {
     ["Unternehmen", "/companies"],
     ["Lohn-Radar", "/salary-radar"],
     ["Ratgeber", "/guide"],
-    ["Für Arbeitgeber", "/register/employer"],
+    ["Preise", "/pricing"],
+    ["Für Arbeitgeber", "/employers"],
     ["Kostenlos starten", "/register/candidate"],
     ["Login", "/login"],
   ] as const;

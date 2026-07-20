@@ -251,7 +251,7 @@ export function resolveEffectiveEntitlements(
   if (!isNonEmpty(selectedPlan.id) || !isNonEmpty(selectedPlan.planSlug)) {
     return failure("INVALID_INPUT");
   }
-  const decodedPlan = decodeCompletePlanEntitlements(selectedPlan.entitlements);
+  const decodedPlan = decodePlanEntitlementsV1(selectedPlan.entitlements);
   if (!decodedPlan.ok) {
     return decodedPlan;
   }
@@ -304,7 +304,7 @@ export function resolveEffectiveEntitlements(
   };
 }
 
-function decodeCompletePlanEntitlements(
+export function decodePlanEntitlementsV1(
   rows: readonly PlanEntitlementRecord[],
 ):
   | Readonly<{ ok: true; value: EntitlementRights }>

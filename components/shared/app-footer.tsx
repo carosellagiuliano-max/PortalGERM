@@ -13,11 +13,21 @@ const accountLinks = [
   { href: "/login", label: "Login" },
 ] as const;
 
+const employerLinks = [
+  { href: "/employers", label: "Für Arbeitgeber" },
+  { href: "/pricing", label: "Preise" },
+  { href: "/employers/post-job", label: "Inserat erklären" },
+  { href: "/employers/talent-radar", label: "Talent Radar" },
+  { href: "/employers/employer-branding", label: "Arbeitgeberprofil" },
+  { href: "/employers/xml-import", label: "Import" },
+  { href: "/employers/demo", label: "Demo anfragen" },
+] as const;
+
 export function AppFooter() {
   return (
     <footer className="mt-auto border-t bg-muted/35">
       <div className="page-shell py-10 sm:py-12">
-        <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1fr_1.25fr]">
+        <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_1fr_1.15fr]">
           <div>
             <Link
               href="/"
@@ -40,6 +50,11 @@ export function AppFooter() {
             id="footer-account"
             title="Konto"
             links={accountLinks}
+          />
+          <FooterNavigation
+            id="footer-employers"
+            title="Arbeitgeber"
+            links={employerLinks}
           />
 
           <div>

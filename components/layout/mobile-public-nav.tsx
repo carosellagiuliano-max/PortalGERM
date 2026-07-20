@@ -29,7 +29,7 @@ export function MobilePublicNav({
           <Button
             variant="outline"
             size="icon"
-            className="size-11 lg:hidden"
+            className="size-11 xl:hidden"
             aria-label="Navigation öffnen"
           />
         }

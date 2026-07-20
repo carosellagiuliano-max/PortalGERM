@@ -44,11 +44,11 @@ const BASE_INPUT = Object.freeze({
 } satisfies RequiredAuditInput);
 
 describe("audit log contract", () => {
-  it("keeps actions as one 116-member source and other enums Prisma-synchronized", () => {
+  it("keeps actions as one 117-member source and other enums Prisma-synchronized", () => {
     expect(Object.keys(AUDIT_METADATA_SCHEMAS_V1)).toEqual([
       ...AUDIT_ACTIONS_V1,
     ]);
-    expect(Object.keys(AUDIT_METADATA_SCHEMAS_V1)).toHaveLength(116);
+    expect(Object.keys(AUDIT_METADATA_SCHEMAS_V1)).toHaveLength(117);
     expect(AUDIT_ACTOR_KINDS_V1).toEqual(Object.values(AuditActorKind));
     expect(AUDIT_RESULTS_V1).toEqual(Object.values(AuditResult));
     expect(AUDIT_TARGET_TYPES_V1).toEqual(Object.values(AuditTargetType));

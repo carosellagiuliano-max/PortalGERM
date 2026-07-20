@@ -338,10 +338,16 @@ describe("billing and admin validation", () => {
         email: "sales@example.ch",
         companyName: "Talent AG",
         contactName: "Ada Example",
-        purpose: "SALES",
+        phone: "+41 79 123 45 67",
+        companySizeCode: "10_49",
+        hiringNeedCode: "TWO_TO_FIVE",
+        interestCode: "GENERAL",
         message:
           "Wir interessieren uns für das transparente Arbeitgeberangebot.",
-        acceptedPrivacyNoticeVersion: "v1",
+        callbackWindowCode: "AFTERNOON",
+        acceptedContactPurpose: "yes",
+        idempotencyKey: "lead-intake-123",
+        websiteConfirmation: "",
       }).success,
     ).toBe(true);
   });

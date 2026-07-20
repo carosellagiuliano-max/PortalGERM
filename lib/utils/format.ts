@@ -25,6 +25,13 @@ export function formatChf(amountChf: number): string {
   return CHF_FORMATTER.format(amountChf);
 }
 
+export function formatChfFromRappen(amountRappen: number): string {
+  if (!Number.isSafeInteger(amountRappen) || amountRappen < 0) {
+    throw new RangeError("amountRappen must be a non-negative safe integer.");
+  }
+  return formatChf(amountRappen / 100);
+}
+
 export function formatWorkload(minPercent: number, maxPercent: number): string {
   if (
     !Number.isInteger(minPercent) ||

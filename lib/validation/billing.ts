@@ -3,10 +3,40 @@ import { z } from "zod";
 import { BillingInterval } from "@/lib/generated/prisma/enums";
 import {
   normalizedEmailSchema,
-  swissCantonCodeSchema,
   trimmedString,
   uuidSchema,
 } from "@/lib/validation/common";
+
+export const LEAD_COMPANY_SIZE_CODES = [
+  "1_9",
+  "10_49",
+  "50_249",
+  "250_999",
+  "1000_PLUS",
+] as const;
+
+export const LEAD_HIRING_NEED_CODES = [
+  "ONE_ROLE",
+  "TWO_TO_FIVE",
+  "SIX_TO_TWENTY",
+  "TWENTY_PLUS",
+  "EXPLORING",
+] as const;
+
+export const LEAD_INTEREST_CODES = [
+  "GENERAL",
+  "STARTER",
+  "PRO",
+  "BUSINESS",
+  "ENTERPRISE",
+  "IMPORT",
+] as const;
+
+export const LEAD_CALLBACK_WINDOW_CODES = [
+  "MORNING",
+  "AFTERNOON",
+  "ANYTIME",
+] as const;
 
 export const billingAddressSchema = z
   .object({
@@ -48,10 +78,26 @@ export const leadFormSchema = z
     email: normalizedEmailSchema,
     companyName: trimmedString(2, 200),
     contactName: trimmedString(2, 160),
-    cantonCode: swissCantonCodeSchema.optional(),
-    purpose: z.enum(["SALES", "ENTERPRISE", "IMPORT", "PARTNERSHIP"]),
+    phone: z.preprocess(
+      (value) => {
+        if (typeof value !== "string" || value.trim() === "") return undefined;
+        return value.replace(/[\s().-]/gu, "");
+      },
+      z.string().regex(/^\+[1-9]\d{7,14}$/u, "Bitte internationale Telefonnummer prüfen.").optional(),
+    ),
+    companySizeCode: z.enum(LEAD_COMPANY_SIZE_CODES),
+    hiringNeedCode: z.enum(LEAD_HIRING_NEED_CODES),
+    interestCode: z.enum(LEAD_INTEREST_CODES),
     message: trimmedString(20, 2_000),
-    acceptedPrivacyNoticeVersion: trimmedString(1, 32),
+    callbackWindowCode: z.preprocess(
+      (value) => value === "" ? undefined : value,
+      z.enum(LEAD_CALLBACK_WINDOW_CODES).optional(),
+    ),
+    acceptedContactPurpose: z.literal("yes", {
+      error: "Bitte bestätige den Kontaktzweck.",
+    }),
+    idempotencyKey: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/u),
+    websiteConfirmation: z.string().max(200),
   })
   .strict();
 

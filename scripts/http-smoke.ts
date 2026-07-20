@@ -36,7 +36,7 @@ async function main() {
   try {
     const result = await runSmoke();
     console.info(
-      `HTTP smoke passed on ${result.baseUrl}: Phase-07 public routes, health, anonymous auth redirects and protected response headers verified.`,
+      `HTTP smoke passed on ${result.baseUrl}: Phase-07/08 public routes, health, anonymous auth redirects and protected response headers verified.`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "HTTP smoke failed.";
@@ -214,6 +214,7 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
     "Finde nicht irgendeinen Job. Finde den Job, der wirklich passt.",
   );
   await verifyPhase07PublicRoutes(baseUrl, secretCanary, home);
+  await verifyPhase08PublicRoutes(baseUrl, secretCanary);
 
   const anonymousPrivateRoutes = [
     {
@@ -291,6 +292,31 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   );
   expectStatus(missing, 404);
   expectContent(missing, "text/html", "Diese Seite ist nicht verfügbar");
+}
+
+async function verifyPhase08PublicRoutes(baseUrl: string, secretCanary: string) {
+  const pages = [
+    { path: "/pricing", expectedText: "Wähle den Plan, der dein Recruiting wachsen lässt" },
+    { path: "/employers", expectedText: "Bessere Bewerbungen. Faires Recruiting." },
+    { path: "/employers/post-job", expectedText: "Ein klarer Ablauf für ein transparentes Stelleninserat." },
+    { path: "/employers/talent-radar", expectedText: "Anonyme Talente entdecken" },
+    { path: "/employers/employer-branding", expectedText: "Zeige Arbeitsumfeld und Benefits" },
+    { path: "/employers/xml-import", expectedText: "Wiederkehrende Stellen strukturiert vorbereiten" },
+    { path: "/employers/demo", expectedText: "Lass uns deinen Recruiting-Bedarf einordnen." },
+  ] as const;
+
+  for (const page of pages) {
+    const response = await request(baseUrl, page.path, secretCanary);
+    expectStatus(response, 200);
+    expectContent(response, "text/html", page.expectedText);
+    expectHtmlNoIndex(response);
+  }
+  const pricing = await request(baseUrl, "/pricing", secretCanary);
+  expectContent(pricing, "text/html", "CHF 149.00");
+  expectContent(pricing, "text/html", "Erfolgsbasierte Vermittlungsmodelle werden erst nach rechtlicher Prüfung aktiviert.");
+  if (pricing.body.includes("Preise momentan nicht verfügbar")) {
+    throw new Error("/pricing failed closed despite a complete seeded catalog.");
+  }
 }
 
 async function verifyPhase07PublicRoutes(
