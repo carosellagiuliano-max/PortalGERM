@@ -106,6 +106,35 @@ describe("Phase 06 authentication forms", () => {
     expect(screen.getByText(/verleihen nicht automatisch Eigentum oder Zugriff/)).toBeInTheDocument();
   });
 
+  it("carries a verified company intent only in hidden POST fields and shows canonical defaults", () => {
+    render(
+      <EmployerRegistrationForm
+        claimContext={{
+          claim: "musterfirma-ag",
+          intent: "signed-navigation-intent",
+          companyName: "Musterfirma AG",
+          cantonCode: "ZH",
+        }}
+      />,
+    );
+
+    expect(document.querySelector('input[name="claim"]')).toHaveAttribute(
+      "type",
+      "hidden",
+    );
+    expect(document.querySelector('input[name="claim"]')).toHaveValue(
+      "musterfirma-ag",
+    );
+    expect(document.querySelector('input[name="intent"]')).toHaveValue(
+      "signed-navigation-intent",
+    );
+    expect(screen.getByLabelText("Unternehmensname")).toHaveValue(
+      "Musterfirma AG",
+    );
+    expect(screen.getByLabelText("Kanton")).toHaveValue("ZH");
+    expect(screen.getByText(/erzeugt nur einen Prüfauftrag/u)).toBeInTheDocument();
+  });
+
   it("uses an indistinguishable forgot-password explanation", () => {
     render(<ForgotPasswordForm />);
 

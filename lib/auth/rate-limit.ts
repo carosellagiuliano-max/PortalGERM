@@ -15,6 +15,7 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
   "PRIVACY_REQUEST",
   "PRIVACY_IDENTITY_CHALLENGE",
   "LEAD",
+  "ABUSE_INTAKE_PRECHECK",
   "ABUSE_INTAKE",
   "CONTACT_REQUEST",
   "RADAR_LIST",
@@ -49,12 +50,14 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
     ],
   },
   LEAD: { buckets: [{ scope: "IP", limit: 10, windowMs: HOUR }] },
-  ABUSE_INTAKE: {
+  ABUSE_INTAKE_PRECHECK: {
     buckets: [
       { scope: "ACTOR_OR_IP", limit: 10, windowMs: DAY },
       { scope: "IP", limit: 20, windowMs: DAY },
-      { scope: "TARGET", limit: 3, windowMs: DAY },
     ],
+  },
+  ABUSE_INTAKE: {
+    buckets: [{ scope: "ACTOR_OR_IP_TARGET", limit: 3, windowMs: DAY }],
   },
   CONTACT_REQUEST: {
     buckets: [
@@ -116,6 +119,7 @@ export type RateLimitScope =
   | "IP"
   | "USER"
   | "ACTOR_OR_IP"
+  | "ACTOR_OR_IP_TARGET"
   | "TARGET"
   | "COMPANY"
   | "CANDIDATE"
@@ -209,6 +213,16 @@ function identityValue(
       return ["user", identity.userId ?? ""];
     case "ACTOR_OR_IP":
       return identity.actorId ? ["actor", identity.actorId] : ["ip", ip ?? ""];
+    case "ACTOR_OR_IP_TARGET": {
+      const target = identity.targetId?.trim();
+      if (!target) throw new TypeError("Target identifier is required.");
+      if (!identity.actorId && ip === undefined) {
+        throw new TypeError("Actor or IP identifier is required.");
+      }
+      return identity.actorId
+        ? ["actor-target", `${identity.actorId}\0${target}`]
+        : ["ip-target", `${ip ?? ""}\0${target}`];
+    }
     case "TARGET":
       return ["target", identity.targetId ?? ""];
     case "COMPANY":

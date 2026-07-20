@@ -39,7 +39,16 @@ const companySizes = [
   ["1000+", "1'000 oder mehr Mitarbeitende"],
 ] as const;
 
-export function EmployerRegistrationForm() {
+export type EmployerRegistrationClaimContext = Readonly<{
+  claim: string;
+  intent: string;
+  companyName: string;
+  cantonCode: string;
+}>;
+
+export function EmployerRegistrationForm({
+  claimContext,
+}: Readonly<{ claimContext?: EmployerRegistrationClaimContext }>) {
   const [state, formAction, pending] = useActionState(
     registerEmployerAction,
     INITIAL_AUTH_ACTION_STATE,
@@ -47,6 +56,12 @@ export function EmployerRegistrationForm() {
 
   return (
     <form action={formAction} className="grid gap-5" noValidate>
+      {claimContext === undefined ? null : (
+        <>
+          <input type="hidden" name="claim" value={claimContext.claim} />
+          <input type="hidden" name="intent" value={claimContext.intent} />
+        </>
+      )}
       <FormFeedback state={state} />
       <div className="grid gap-5 sm:grid-cols-2">
         <EmployerTextField
@@ -82,6 +97,7 @@ export function EmployerRegistrationForm() {
         autoComplete="organization"
         state={state}
         maxLength={200}
+        defaultValue={claimContext?.companyName}
       />
       <div className="grid gap-5 sm:grid-cols-2">
         <EmployerTextField
@@ -100,6 +116,7 @@ export function EmployerRegistrationForm() {
           state={state}
           options={cantons}
           placeholder="Kanton wählen"
+          defaultValue={claimContext?.cantonCode}
         />
       </div>
       <NativeSelectField
@@ -111,9 +128,9 @@ export function EmployerRegistrationForm() {
         placeholder="Grösse wählen"
       />
       <div className="rounded-lg border border-primary/15 bg-secondary/45 p-3 text-sm leading-6 text-secondary-foreground">
-        Name, UID und E-Mail-Domain dienen ausschliesslich als Abgleichsignale. Sie
-        verleihen nicht automatisch Eigentum oder Zugriff. Bei einem möglichen Treffer
-        prüft das SwissTalentHub-Team den Anspruch, bevor eine Rolle vergeben wird.
+        {claimContext === undefined
+          ? "Name, UID und E-Mail-Domain dienen ausschliesslich als Abgleichsignale. Sie verleihen nicht automatisch Eigentum oder Zugriff. Bei einem möglichen Treffer prüft das SwissTalentHub-Team den Anspruch, bevor eine Rolle vergeben wird."
+          : "Die ausgewählte Firma wurde sicher vorausgefüllt. Deine Registrierung erzeugt nur einen Prüfauftrag. Eigentum, Mitgliedschaft oder Zugriff werden nicht automatisch vergeben."}
       </div>
       <NativeCheckboxField
         id="employer-terms"
@@ -154,6 +171,7 @@ function EmployerTextField({
   state: typeof INITIAL_AUTH_ACTION_STATE;
   type?: React.HTMLInputTypeAttribute;
   required?: boolean;
+  defaultValue?: string;
 }> &
   Pick<
     React.ComponentProps<"input">,
@@ -171,7 +189,7 @@ function EmployerTextField({
         type={type}
         required={required}
         className="h-11"
-        defaultValue={valueFromState(state, name)}
+        defaultValue={valueFromState(state, name) ?? inputProps.defaultValue}
         aria-invalid={hasError || undefined}
         aria-describedby={hasError ? `${name}-error` : undefined}
       />
@@ -187,6 +205,7 @@ function NativeSelectField({
   state,
   options,
   placeholder,
+  defaultValue,
 }: Readonly<{
   id: string;
   name: string;
@@ -194,6 +213,7 @@ function NativeSelectField({
   state: typeof INITIAL_AUTH_ACTION_STATE;
   options: readonly (readonly [string, string])[];
   placeholder: string;
+  defaultValue?: string;
 }>) {
   const hasError = Boolean(state.fieldErrors?.[name]?.length);
   return (
@@ -203,7 +223,7 @@ function NativeSelectField({
         id={id}
         name={name}
         required
-        defaultValue={valueFromState(state, name) ?? ""}
+        defaultValue={valueFromState(state, name) ?? defaultValue ?? ""}
         className={formControlClassName(hasError)}
         aria-invalid={hasError || undefined}
         aria-describedby={hasError ? `${name}-error` : undefined}

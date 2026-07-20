@@ -1,101 +1,83 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const homePageData = vi.hoisted(() => ({
+  getPublicCatalog: vi.fn(),
+  listHomepageJobs: vi.fn(),
+  listPublicClusterLinks: vi.fn(),
+  listPublicGuides: vi.fn(),
+  listPublicCompanies: vi.fn(),
+  loadPublicOpenJobCounts: vi.fn(),
+}));
+
+vi.mock("@/lib/jobs/public-read-model", () => ({
+  getPublicCatalog: homePageData.getPublicCatalog,
+  listHomepageJobs: homePageData.listHomepageJobs,
+  listPublicClusterLinks: homePageData.listPublicClusterLinks,
+  loadPublicOpenJobCounts: homePageData.loadPublicOpenJobCounts,
+}));
+
+vi.mock("@/lib/content/public-guides", () => ({
+  listPublicGuides: homePageData.listPublicGuides,
+}));
+
+vi.mock("@/lib/companies/public-read-model", () => ({
+  listPublicCompanies: homePageData.listPublicCompanies,
+}));
 
 import HomePage from "@/app/(public)/page";
 import NotFound from "@/app/not-found";
-import { AppHeader } from "@/components/shared/app-header";
 
-describe("public account entry UI", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+describe("public discovery entry UI", () => {
+  beforeEach(() => {
+    homePageData.getPublicCatalog.mockResolvedValue({
+      cantons: [],
+      cities: [],
+      categories: [],
+    });
+    homePageData.listHomepageJobs.mockResolvedValue([]);
+    homePageData.listPublicClusterLinks.mockResolvedValue([]);
+    homePageData.listPublicGuides.mockResolvedValue([]);
+    homePageData.listPublicCompanies.mockResolvedValue([]);
   });
 
-  it("offers the implemented authentication entrances without stale Foundation copy", () => {
-    render(<HomePage />);
+  it("renders the async discovery homepage with honest empty-state copy", async () => {
+    render(await HomePage());
 
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "Sicher starten – als Talent oder Arbeitgeber.",
+        name: "Finde nicht irgendeinen Job. Finde den Job, der wirklich passt.",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Registrierung, Anmeldung und geschützte Portale/),
+      screen.getByText(/Öffentliche Stellen stammen ausschliesslich aus geprüften Publikationsständen/),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", {
-        level: 2,
-        name: "Zugriff wird serverseitig entschieden",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { level: 3, name: "Für Kandidat:innen" }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Kandidatenkonto erstellen" })[0]).toHaveAttribute(
+    expect(screen.getByRole("textbox", { name: "Stichwort suchen" })).toHaveAttribute(
+      "name",
+      "keyword",
+    );
+    expect(screen.getByRole("button", { name: "Jobs suchen" })).toBeInTheDocument();
+    expect(screen.getByText("Aktuell sind keine publizierten Stellen verfügbar.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Lohn einschätzen" })).toHaveAttribute(
+      "href",
+      "/salary-radar",
+    );
+    expect(screen.getByRole("link", { name: "SwissJobPass erstellen" })).toHaveAttribute(
       "href",
       "/register/candidate",
     );
-    expect(screen.getByRole("link", { name: "Arbeitgeberkonto erstellen" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Arbeitgeberkonto erstellen/ })).toHaveAttribute(
       "href",
       "/register/employer",
     );
-    expect(screen.queryByText(/noch nicht verfügbar/)).not.toBeInTheDocument();
-  });
+    expect(screen.queryByText(/Foundation|noch nicht verfügbar/)).not.toBeInTheDocument();
 
-  it("offers real desktop and mobile navigation targets", async () => {
-    const user = userEvent.setup();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    render(<AppHeader />);
-
-    expect(
-      screen.getByRole("link", { name: "SwissTalentHub Startseite" }),
-    ).toHaveAttribute("href", "/");
-    const desktopNavigation = screen.getByRole("navigation", {
-      name: "Hauptnavigation",
-    });
-    const menuButton = screen.getByRole("button", { name: "Navigation öffnen" });
-    expect(desktopNavigation).toBeInTheDocument();
-    expect(menuButton).toBeInTheDocument();
-    expectNavigationTargets(desktopNavigation);
-
-    menuButton.focus();
-    await user.keyboard("{Enter}");
-    let mobileNavigation = await screen.findByRole("navigation", {
-      name: "Mobile Navigation",
-    });
-    expectNavigationTargets(mobileNavigation);
-    expect(
-      consoleError.mock.calls.some(([message]) =>
-        String(message).includes("expected a native <button>"),
-      ),
-    ).toBe(false);
-
-    await user.keyboard("{Escape}");
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("navigation", { name: "Mobile Navigation" }),
-      ).not.toBeInTheDocument();
-    });
-    expect(menuButton).toHaveFocus();
-
-    await user.keyboard("{Enter}");
-    mobileNavigation = await screen.findByRole("navigation", {
-      name: "Mobile Navigation",
-    });
-
-    const candidateLink = within(mobileNavigation).getByRole("link", {
-      name: "Für Kandidat:innen",
-    });
-    candidateLink.addEventListener("click", (event) => event.preventDefault(), {
-      once: true,
-    });
-    await user.click(candidateLink);
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("navigation", { name: "Mobile Navigation" }),
-      ).not.toBeInTheDocument();
-    });
+    expect(homePageData.listHomepageJobs).toHaveBeenCalledWith({ limit: 6 });
+    expect(homePageData.listPublicCompanies).toHaveBeenCalledWith(
+      { limit: 8, verifiedOnly: true },
+      homePageData.loadPublicOpenJobCounts,
+    );
   });
 
   it("provides a useful 404 recovery link", () => {
@@ -108,24 +90,11 @@ describe("public account entry UI", () => {
       "href",
       "/",
     );
-    expect(screen.getByRole("link", { name: /Zur Anmeldung/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Jobs durchsuchen/ })).toHaveAttribute(
       "href",
-      "/login",
+      "/jobs",
     );
-    expect(screen.getByText(/öffentliche Jobsuche folgt/)).toBeInTheDocument();
+    expect(screen.getByText(/öffentlichen Jobsuche/)).toBeInTheDocument();
+    expect(screen.queryByText(/Jobsuche folgt/)).not.toBeInTheDocument();
   });
 });
-
-function expectNavigationTargets(navigation: HTMLElement) {
-  expect(
-    within(navigation).getByRole("link", { name: "Für Kandidat:innen" }),
-  ).toHaveAttribute("href", "/register/candidate");
-  expect(within(navigation).getByRole("link", { name: "Für Arbeitgeber" })).toHaveAttribute(
-    "href",
-    "/register/employer",
-  );
-  expect(within(navigation).getByRole("link", { name: "Anmelden" })).toHaveAttribute(
-    "href",
-    "/login",
-  );
-}

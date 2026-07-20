@@ -55,6 +55,9 @@ export type AuthServiceDependencies = Readonly<{
   now?: Date;
 }>;
 
+export type EmployerRegistrationDependencies = AuthServiceDependencies &
+  Readonly<{ claimedCompanyId?: string }>;
+
 export type LoginResult =
   | Readonly<{
       ok: true;
@@ -260,9 +263,17 @@ export async function registerCandidate(
 
 export async function registerEmployer(
   input: EmployerRegistrationInput,
-  dependencies: AuthServiceDependencies,
+  dependencies: EmployerRegistrationDependencies,
 ): Promise<RegistrationResult> {
   if (!hasExplicitTermsAcceptance(input)) {
+    return Object.freeze({ ok: false, code: "REGISTRATION_FAILED" });
+  }
+  if (
+    dependencies.claimedCompanyId !== undefined &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+      dependencies.claimedCompanyId,
+    )
+  ) {
     return Object.freeze({ ok: false, code: "REGISTRATION_FAILED" });
   }
   const now = dependencies.now ?? new Date();
@@ -292,22 +303,26 @@ export async function registerEmployer(
 
         await lockEmployerRegistrationSignals(transaction, persistedSignals);
         const candidates = await transaction.company.findMany({
-          where: {
-            OR: [
-              ...(persistedSignals.uid === null
-                ? []
-                : [{ uid: persistedSignals.uid }]),
-              {
-                registrationEmailDomainNormalized:
-                  persistedSignals.registrationEmailDomainNormalized,
-              },
-              {
-                registrationNameNormalized:
-                  persistedSignals.registrationNameNormalized,
-                registrationCantonId: persistedSignals.registrationCantonId,
-              },
-            ],
-          },
+          where:
+            dependencies.claimedCompanyId === undefined
+              ? {
+                  OR: [
+                ...(persistedSignals.uid === null
+                  ? []
+                  : [{ uid: persistedSignals.uid }]),
+                    {
+                      registrationEmailDomainNormalized:
+                        persistedSignals.registrationEmailDomainNormalized,
+                    },
+                    {
+                      registrationNameNormalized:
+                        persistedSignals.registrationNameNormalized,
+                      registrationCantonId:
+                        persistedSignals.registrationCantonId,
+                    },
+                  ],
+                }
+              : { id: dependencies.claimedCompanyId, status: "ACTIVE" },
           orderBy: { id: "asc" },
           take: 2,
           select: {
@@ -318,6 +333,12 @@ export async function registerEmployer(
             registrationCantonId: true,
           },
         });
+        if (
+          dependencies.claimedCompanyId !== undefined &&
+          candidates.length !== 1
+        ) {
+          throw new Error("CLAIMED_COMPANY_NOT_AVAILABLE");
+        }
         if (candidates.length > 1) {
           throw new Error("AMBIGUOUS_COMPANY_REGISTRATION_SIGNALS");
         }

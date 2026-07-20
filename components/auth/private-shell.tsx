@@ -3,6 +3,7 @@ import { LogOutIcon } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SessionRefresh } from "@/components/auth/session-refresh";
+import { SkipLink } from "@/components/layout/skip-link";
 import { cn } from "@/lib/utils";
 
 export type PrivateNavigationItem = Readonly<{ href: string; label: string }>;
@@ -17,8 +18,10 @@ export function PrivateShell({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="page-shell py-6 sm:py-9">
-      <SessionRefresh />
+    <>
+      <SkipLink />
+      <main id="main-content" tabIndex={-1} className="page-shell py-6 sm:py-9">
+        <SessionRefresh />
       <div className="mb-7 flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="eyebrow">Geschützter Bereich</p>
@@ -45,7 +48,8 @@ export function PrivateShell({
           </Link>
         ))}
       </nav>
-      {children}
-    </div>
+        {children}
+      </main>
+    </>
   );
 }

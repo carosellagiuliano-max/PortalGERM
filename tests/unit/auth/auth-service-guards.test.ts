@@ -94,4 +94,29 @@ describe("Phase 06 auth service guards", () => {
     expect(employer).toEqual({ ok: false, code: "REGISTRATION_FAILED" });
     expect(password.hashPassword).not.toHaveBeenCalled();
   });
+
+  it("rejects an invalid claimed company id before rate limiting or hashing", async () => {
+    const result = await registerEmployer(
+      {
+        email: "owner@example.test",
+        name: "Example Owner",
+        companyName: "Example AG",
+        cantonCode: "ZH",
+        companySize: "1-9",
+        password: "StrongPassword1!",
+        passwordConfirmation: "StrongPassword1!",
+        acceptedTerms: true,
+        marketingConsent: false,
+      } as never,
+      {
+        database: {} as never,
+        environment: {} as never,
+        request,
+        claimedCompanyId: "not-a-company-id",
+      },
+    );
+
+    expect(result).toEqual({ ok: false, code: "REGISTRATION_FAILED" });
+    expect(password.hashPassword).not.toHaveBeenCalled();
+  });
 });

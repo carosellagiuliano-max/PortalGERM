@@ -449,6 +449,34 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
     if (!claimant.ok) throw new Error("Employer claim registration failed.");
     expect(await client().company.count()).toBe(companyCountBeforeClaim);
 
+    const missingTargetEmail = "missing-target@phase07-claim.test";
+    const missingTarget = await registerEmployer(
+      {
+        ...ownerInput,
+        email: missingTargetEmail,
+        name: "Missing Target Claimant",
+        companyName: "Missing Target Phase 07 AG",
+        uid: "CHE-107.070.099",
+        password: "Phase07!MissingTarget42",
+        passwordConfirmation: "Phase07!MissingTarget42",
+      },
+      {
+        ...dependencies(requestContext("192.0.2.22")),
+        claimedCompanyId: randomUUID(),
+      },
+    );
+    expect(missingTarget).toEqual({
+      ok: false,
+      code: "REGISTRATION_FAILED",
+    });
+    expect(await client().company.count()).toBe(companyCountBeforeClaim);
+    expect(
+      await client().user.findUnique({
+        where: { emailNormalized: missingTargetEmail },
+        select: { id: true },
+      }),
+    ).toBeNull();
+
     const claimantUser = await client().user.findUniqueOrThrow({
       where: { emailNormalized: claimInput.email },
       include: {

@@ -95,6 +95,14 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  .prose-safe {
+    @apply text-base leading-8 text-foreground;
+  }
+
+  .prose-safe p + p {
+    @apply mt-6;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -30,6 +30,25 @@ export async function consumeAuthRateLimit(
     database: DatabaseClient;
   }>,
 ): Promise<RateLimitDecision> {
+  return consumeRequestRateLimit(
+    preset,
+    identity,
+    context,
+    now,
+    runtime,
+  );
+}
+
+export async function consumeRequestRateLimit(
+  preset: RateLimitPresetName,
+  identity: Omit<ServerRateLimitIdentity, "sourceIp">,
+  context: Pick<AuthRequestContext, "sourceIp">,
+  now = new Date(),
+  runtime?: Readonly<{
+    environment: ServerEnvironment;
+    database: DatabaseClient;
+  }>,
+): Promise<RateLimitDecision> {
   const environment = runtime?.environment ?? getServerEnvironment();
   const store = runtime === undefined
     ? getRateLimitStore(environment)

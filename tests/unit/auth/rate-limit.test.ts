@@ -36,6 +36,13 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
       { scope: "USER", limit: 30 },
       { scope: "CANDIDATE", limit: 3 },
     ]);
+    expect(RATE_LIMIT_PRESETS_V1.ABUSE_INTAKE_PRECHECK.buckets.map(({ scope, limit }) => ({ scope, limit }))).toEqual([
+      { scope: "ACTOR_OR_IP", limit: 10 },
+      { scope: "IP", limit: 20 },
+    ]);
+    expect(RATE_LIMIT_PRESETS_V1.ABUSE_INTAKE.buckets).toEqual([
+      { scope: "ACTOR_OR_IP_TARGET", limit: 3, windowMs: 24 * 60 * 60_000 },
+    ]);
     expect(RATE_LIMIT_PRESETS_V1.RADAR_LIST.buckets[0]).toMatchObject({ limit: 10, windowMs: 60_000 });
     expect(RADAR_DISTINCT_FILTER_BUDGET_V1).toEqual({ limit: 30, calendarTimeZone: "Europe/Zurich" });
   });
@@ -46,6 +53,16 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
     expect(serialized).not.toContain(IDENTITY.normalizedEmail);
     expect(serialized).toContain("2026-07:");
     expect(() => buildRateLimitChecks("LOGIN", { sourceIp: IDENTITY.sourceIp }, KEY)).toThrow(TypeError);
+    const abuse = JSON.stringify(buildRateLimitChecks("ABUSE_INTAKE", IDENTITY, KEY));
+    expect(abuse).not.toContain(IDENTITY.actorId);
+    expect(abuse).not.toContain(IDENTITY.targetId);
+    expect(() =>
+      buildRateLimitChecks(
+        "ABUSE_INTAKE",
+        { targetId: IDENTITY.targetId },
+        KEY,
+      )
+    ).toThrow(TypeError);
   });
 
   it("allows N, blocks N+1, and reopens at the half-open boundary", async () => {

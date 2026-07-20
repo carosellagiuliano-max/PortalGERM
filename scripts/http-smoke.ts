@@ -5,7 +5,15 @@ import { resolve } from "node:path";
 import type { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { getIsolatedTestDatabaseConfiguration } from "@/tests/fixtures/test-database";
+import { CANTON_FIXTURES } from "@/prisma/seed/fixtures/cantons";
+import { CATEGORY_FIXTURES } from "@/prisma/seed/fixtures/categories";
+import {
+  buildJobFixtures,
+  COMPANY_FIXTURES,
+} from "@/prisma/seed/fixtures/companies-jobs";
+import { DEMO_GUIDE_FIXTURES } from "@/prisma/seed/fixtures/content";
+import { runDemoSeed } from "@/prisma/seed/orchestrator";
+import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
 const HOST = "127.0.0.1";
 const DEFAULT_START_TIMEOUT_MS = 30_000;
@@ -28,7 +36,7 @@ async function main() {
   try {
     const result = await runSmoke();
     console.info(
-      `HTTP smoke passed on ${result.baseUrl}: public, health, anonymous auth redirects and protected response headers verified.`,
+      `HTTP smoke passed on ${result.baseUrl}: Phase-07 public routes, health, anonymous auth redirects and protected response headers verified.`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "HTTP smoke failed.";
@@ -45,7 +53,20 @@ async function runSmoke() {
     );
   }
 
-  const database = getIsolatedTestDatabaseConfiguration();
+  const database = await createMigratedTestDatabase("phase07_http_smoke");
+  try {
+    await runDemoSeed({
+      APP_ENV: "local",
+      DATABASE_URL: database.connectionString,
+      ENABLE_DEMO_SEED: "true",
+    });
+    return await runHttpSmoke(database.connectionString);
+  } finally {
+    await database.dispose();
+  }
+}
+
+async function runHttpSmoke(databaseUrl: string) {
   const port = await resolvePort();
   const baseUrl = `http://${HOST}:${port}`;
   const secretCanary =
@@ -74,7 +95,7 @@ async function runSmoke() {
     APP_ENV: "local",
     NODE_ENV: "production",
     APP_URL: baseUrl,
-    DATABASE_URL: database.connectionString,
+    DATABASE_URL: databaseUrl,
     TEST_DATABASE_URL: "",
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "0",
@@ -187,7 +208,12 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
 
   const home = await request(baseUrl, "/", secretCanary);
   expectStatus(home, 200);
-  expectContent(home, "text/html", "Sicher starten");
+  expectContent(
+    home,
+    "text/html",
+    "Finde nicht irgendeinen Job. Finde den Job, der wirklich passt.",
+  );
+  await verifyPhase07PublicRoutes(baseUrl, secretCanary, home);
 
   const anonymousPrivateRoutes = [
     {
@@ -267,6 +293,112 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   expectContent(missing, "text/html", "Diese Seite ist nicht verfügbar");
 }
 
+async function verifyPhase07PublicRoutes(
+  baseUrl: string,
+  secretCanary: string,
+  home: SmokeResponse,
+) {
+  const fixtures = phase07RouteFixtures();
+  expectContent(
+    home,
+    "text/html",
+    "Demo-Daten – keine reale Marktaktivität.",
+  );
+
+  const publicPages = [
+    { path: "/jobs", expectedText: "Finde deinen nächsten fairen Job." },
+    {
+      path: `/jobs/${fixtures.job.slug}`,
+      expectedText: fixtures.job.title,
+      key: "job" as const,
+    },
+    {
+      path: `/jobs/kanton/${fixtures.canton.slug}`,
+      expectedText: `Jobs in ${fixtures.canton.name}`,
+      key: "cluster" as const,
+    },
+    {
+      path: `/jobs/kategorie/${fixtures.category.slug}`,
+      expectedText: `Jobs in ${fixtures.category.name}`,
+      key: "cluster" as const,
+    },
+    {
+      path: "/companies",
+      expectedText: "Lerne Arbeitgeber kennen, bevor du dich bewirbst.",
+    },
+    {
+      path: `/companies/${fixtures.company.slug}`,
+      expectedText: fixtures.company.name,
+    },
+    {
+      path: "/salary-radar",
+      expectedText: "Ordne deinen Lohn nachvollziehbar ein.",
+    },
+    {
+      path: "/guide",
+      expectedText: "Orientierung, die dich weiterbringt.",
+      key: "guide" as const,
+    },
+    {
+      path: `/guide/${fixtures.guide.slug}`,
+      expectedText: fixtures.guide.title,
+      key: "guide" as const,
+    },
+  ] as const;
+
+  for (const page of publicPages) {
+    const response = await request(baseUrl, page.path, secretCanary);
+    expectStatus(response, 200);
+    expectContent(response, "text/html", page.expectedText);
+    expectNoPrivatePublicMarkers(response, fixtures.privateMarkers);
+    if (
+      "key" in page &&
+      (page.key === "job" || page.key === "cluster" || page.key === "guide")
+    ) {
+      expectHtmlNoIndex(response);
+    }
+    if ("key" in page && page.key === "job") {
+      expectNoJobPostingJsonLd(response);
+    }
+  }
+  expectNoPrivatePublicMarkers(home, fixtures.privateMarkers);
+
+  // Metadata files are deliberately excluded from the request proxy alongside
+  // static assets, so they do not carry an application correlation ID.
+  const sitemap = await request(
+    baseUrl,
+    "/sitemap.xml",
+    secretCanary,
+    undefined,
+    false,
+  );
+  expectStatus(sitemap, 200);
+  expectContent(sitemap, "application/xml", "<urlset");
+  if (/<url>/iu.test(sitemap.body)) {
+    throw new Error(
+      "/sitemap.xml exposed DEMO URLs in the local Phase-07 smoke runtime.",
+    );
+  }
+
+  const invalidPublicPaths = [
+    "/jobs/http-smoke-job-does-not-exist",
+    "/jobs/kanton/http-smoke-canton-does-not-exist",
+    "/jobs/kategorie/http-smoke-category-does-not-exist",
+    "/companies/http-smoke-company-does-not-exist",
+    "/guide/http-smoke-guide-does-not-exist",
+  ] as const;
+  for (const path of invalidPublicPaths) {
+    const response = await request(baseUrl, path, secretCanary);
+    // Next App Router deliberately returns 200 for a streamed notFound()
+    // response and 404 for a non-streamed one. In both cases the safe UI and
+    // injected noindex directive are the binding public contract.
+    expectStatusOneOf(response, [200, 404]);
+    expectContent(response, "text/html", "Diese Seite ist nicht verfügbar");
+    expectHtmlNoIndex(response);
+    expectNoPrivatePublicMarkers(response, fixtures.privateMarkers);
+  }
+}
+
 type SmokeResponse = Readonly<{
   path: string;
   response: Response;
@@ -278,6 +410,7 @@ async function request(
   path: string,
   secretCanary: string,
   headers?: Record<string, string>,
+  requireCorrelationId = true,
 ): Promise<SmokeResponse> {
   const response = await fetch(`${baseUrl}${path}`, {
     cache: "no-store",
@@ -294,7 +427,10 @@ async function request(
 
   assertSecurityHeaders(path, response.headers);
   const correlationId = response.headers.get("x-correlation-id");
-  if (!correlationId || !UUID_PATTERN.test(correlationId)) {
+  if (
+    requireCorrelationId &&
+    (!correlationId || !UUID_PATTERN.test(correlationId))
+  ) {
     throw new Error(`${path} returned no valid x-correlation-id header.`);
   }
 
@@ -322,6 +458,17 @@ function expectStatus(result: SmokeResponse, expectedStatus: number) {
   if (result.response.status !== expectedStatus) {
     throw new Error(
       `${result.path} returned HTTP ${result.response.status}; expected ${expectedStatus}.`,
+    );
+  }
+}
+
+function expectStatusOneOf(
+  result: SmokeResponse,
+  expectedStatuses: readonly number[],
+) {
+  if (!expectedStatuses.includes(result.response.status)) {
+    throw new Error(
+      `${result.path} returned HTTP ${result.response.status}; expected one of ${expectedStatuses.join(", ")}.`,
     );
   }
 }
@@ -381,6 +528,119 @@ function expectNoIndex(result: SmokeResponse) {
   if (result.response.headers.get("x-robots-tag") !== NOINDEX_POLICY) {
     throw new Error(`${result.path} must remain noindex.`);
   }
+}
+
+function expectHtmlNoIndex(result: SmokeResponse) {
+  const robotsHeader = result.response.headers.get("x-robots-tag") ?? "";
+  if (hasRobotsDirective(robotsHeader, "noindex")) return;
+
+  const metaTags = result.body.match(/<meta\b[^>]*>/giu) ?? [];
+  const robotsTag = metaTags.find(
+    (tag) => htmlAttribute(tag, "name")?.toLowerCase() === "robots",
+  );
+  const directives = robotsTag === undefined
+    ? ""
+    : htmlAttribute(robotsTag, "content") ?? "";
+  if (!hasRobotsDirective(directives, "noindex")) {
+    throw new Error(`${result.path} did not expose its required noindex policy.`);
+  }
+}
+
+function expectNoJobPostingJsonLd(result: SmokeResponse) {
+  const scriptTags =
+    result.body.match(/<script\b[^>]*>[\s\S]*?<\/script>/giu) ?? [];
+  const jsonLdTag = scriptTags.find((tag) => {
+    const openingTag = tag.slice(0, tag.indexOf(">") + 1);
+    return htmlAttribute(openingTag, "type") === "application/ld+json";
+  });
+  if (jsonLdTag !== undefined) {
+    throw new Error(
+      `${result.path} exposed JobPosting JSON-LD for local DEMO data.`,
+    );
+  }
+}
+
+function expectNoPrivatePublicMarkers(
+  result: SmokeResponse,
+  privateMarkers: readonly string[],
+) {
+  for (const [index, marker] of privateMarkers.entries()) {
+    const encoded = encodeURIComponent(marker);
+    if (result.body.includes(marker) || result.body.includes(encoded)) {
+      throw new Error(
+        `${result.path} exposed private public-read marker ${index + 1}.`,
+      );
+    }
+  }
+}
+
+function hasRobotsDirective(value: string, expected: string) {
+  return value
+    .split(",")
+    .some((directive) => directive.trim().toLowerCase() === expected);
+}
+
+function htmlAttribute(tag: string, name: string): string | undefined {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const match = tag.match(
+    new RegExp(
+      `\\b${escapedName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+      "iu",
+    ),
+  );
+  return match?.[1] ?? match?.[2] ?? match?.[3];
+}
+
+function phase07RouteFixtures() {
+  // Slugs are deterministic fixture identities; the anchor affects dates only.
+  const jobs = buildJobFixtures(new Date("2026-01-15T12:00:00.000Z"));
+  const job = jobs.find(
+    (candidate) =>
+      candidate.status === "PUBLISHED" &&
+      candidate.cantonCode === "ZH" &&
+      candidate.categorySlug === "engineering-technik",
+  );
+  if (job === undefined) {
+    throw new Error("No stable public Job fixture exists for the HTTP smoke.");
+  }
+
+  const canton = CANTON_FIXTURES.find(
+    (candidate) => candidate.code === job.cantonCode,
+  );
+  const category = CATEGORY_FIXTURES.find(
+    (candidate) => candidate.slug === job.categorySlug,
+  );
+  const company = COMPANY_FIXTURES.find(
+    (candidate) => candidate.slug === job.companySlug,
+  );
+  const guide = DEMO_GUIDE_FIXTURES[0];
+  if (
+    canton === undefined ||
+    category === undefined ||
+    company === undefined ||
+    guide === undefined
+  ) {
+    throw new Error("The Phase-07 HTTP smoke fixture contract is incomplete.");
+  }
+
+  const privateMarkers = Object.freeze(
+    [
+      job.revisionId,
+      company.ownerUserId,
+      company.ownerMembershipId,
+      company.ownerEmail,
+      company.locationId,
+      company.billingProfileId,
+      "mock-storage/",
+      "logoStorageKey",
+      "coverStorageKey",
+      "registrationEmailDomainNormalized",
+      "PRIVATE_EMPLOYER_NOTE_CANARY",
+      "cvStorageKey",
+    ].filter((marker): marker is string => marker !== null && marker.length > 0),
+  );
+
+  return Object.freeze({ job, canton, category, company, guide, privateMarkers });
 }
 
 function expectLoginRedirect(

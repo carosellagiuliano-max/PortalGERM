@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeftIcon, LogInIcon } from "lucide-react";
+import { ArrowLeftIcon, SearchIcon } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 
@@ -16,8 +16,8 @@ export default function NotFound() {
           vorgesehen. Über die Startseite findest du den passenden Bereich.
         </p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Die öffentliche Jobsuche folgt als nächster Produktschritt; bis dahin führen wir
-          dich nicht auf einen leeren oder toten Suchpfad.
+          Mit der öffentlichen Jobsuche findest du aktuelle Stellen nach Beruf, Region und
+          Pensum.
         </p>
         <div className="mt-7 flex flex-col justify-center gap-3 min-[420px]:flex-row">
           <Link href="/" className={buttonVariants()}>
@@ -25,11 +25,11 @@ export default function NotFound() {
             Zur Startseite
           </Link>
           <Link
-            href="/login"
+            href="/jobs"
             className={buttonVariants({ variant: "outline" })}
           >
-            <LogInIcon data-icon="inline-start" />
-            Zur Anmeldung
+            <SearchIcon data-icon="inline-start" />
+            Jobs durchsuchen
           </Link>
         </div>
       </div>
