@@ -575,4 +575,4 @@ flowchart LR
 
 ## Startentscheidung
 
-Schritte 01 bis 10 sind gemäss ihren Evidence-Records abgeschlossen. Der nächste zulässige Schritt ist **Schritt 11 — Adminportal, Moderation, Import und Betriebsqueues** im Zielrepository. Quellcode aus Referenzprojekten bleibt reine Vergleichsbasis und darf auch in späteren Schritten nicht blind kopiert oder als Ziel-Evidence behandelt werden.
+Schritte 01 bis 11 sind gemäss ihren Evidence-Records abgeschlossen. Der nächste zulässige Schritt ist **Schritt 12 — Entitlements und Billing** im Zielrepository. Quellcode aus Referenzprojekten bleibt reine Vergleichsbasis und darf auch in späteren Schritten nicht blind kopiert oder als Ziel-Evidence behandelt werden.
