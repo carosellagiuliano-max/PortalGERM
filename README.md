@@ -1,8 +1,10 @@
 # SwissTalentHub / PortalGERM
 
-**Phasen 01 und 02 sind implementiert und verifiziert; Phase 03 wurde noch nicht begonnen.** Vorhanden sind die reproduzierbare Next.js-/TypeScript-Foundation sowie der persistente Prisma/PostgreSQL-Domänenvertrag für Identity, Kandidaten, Firmen, Jobs, Bewerbungen, Talent Radar/Privacy, Billing und Operations.
+**Phasen 01 bis 10 sind implementiert und verifiziert; als nächster Schritt folgt Phase 11.** Auf der reproduzierbaren Next.js-/TypeScript-Foundation und dem Prisma/PostgreSQL-Domänenvertrag stehen inzwischen Core-Policies, netzwerkfreie lokale Provider-Mocks mit persistierten Logs/Effekten, ein deterministischer Demo-Datensatz, End-to-End-Authentifizierung und rollen-/mandantenbasierte Autorisierung.
 
-Noch **nicht** implementiert sind Authentifizierungs- und Produkt-Use-Cases, Jobsuche, Kandidaten-, Arbeitgeber- und Adminportale, Katalog-/Demo-Fixtures, Billing-Abläufe sowie Mock- oder Real-Provider. Phase 02 liefert Persistenz und Datenintegrität, aber noch keine Nutzerfunktion. Die Startseite weist diesen Umfang ausdrücklich aus; es gibt keine Fake-Logins, Fake-Jobs oder funktionslosen Produkt-CTAs.
+Der aktuelle Produktumfang umfasst öffentliche Job- und Firmen-Discovery, Jobdetails und sichere Save-/Apply-Intents, Pricing sowie persistierte Arbeitgeber-Leads. Kandidaten erhalten SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Nachrichten und Privacy-/Talent-Radar-Basics. Arbeitgeber und Recruiter erhalten Firmenprofil und Verifizierungsanträge, Team/Einladungen/Zuweisungen, Jobliste und 5-Schritt-Wizard, Bewerberpipeline sowie ehrliche Analytics- und Radar-Locked-States.
+
+Bewusst **noch nicht** enthalten sind das Admin-Moderationsportal und damit die Freigabe/Veröffentlichung neuer Inserate (Phase 11), Billing und Checkout (Phase 12), Job-Boosts (Phase 13) sowie Talent-Radar-Suche, Contact/Reveal (Phase 14). Alle Provider bleiben lokale Mocks; echte Provider, Produktionsbetrieb und eine abschliessende Produktions-/DSG-Freigabe sind nicht behauptet.
 
 ## Verbindliche Runtime
 
@@ -44,7 +46,14 @@ npm run db:smoke
 npm run dev
 ```
 
-Danach ist die technische App-Shell unter [http://127.0.0.1:3000](http://127.0.0.1:3000) erreichbar.
+Danach ist die lokale Anwendung unter [http://127.0.0.1:3000](http://127.0.0.1:3000) erreichbar.
+
+Der lokale Demo-Seed stellt unter anderem folgende bereits dokumentierte Konten bereit (Passwort jeweils `Demo12345!`):
+
+- `candidate@demo.ch` — Candidate-Portal
+- `employer@demo.ch` — Arbeitgeber-Portal, Owner einer Pro-Demofirma
+- `recruiter@demo.ch` — Recruiter mit mandanten- und jobgebundenen Zuweisungen
+- `admin@demo.ch` — Admin-Rolle; das fachliche Admin-Portal folgt erst in Phase 11
 
 `npm ci` verwendet ausschliesslich das committed Lockfile und eine versionsgenaue Allowlist für geprüfte Dependency-Install-Scripts. `npm run env:init` erzeugt einmalig eine ignorierte `.env.local` mit lokal gültigen, voneinander verschiedenen Zufallsschlüsseln. Der Befehl überschreibt keine vorhandene Datei, läuft nur lokal, übernimmt keine URL aus dem Shell-Environment und setzt auf unterstützenden Dateisystemen Modus `0600`. `.env.example` ist absichtlich nicht direkt lauffähig und enthält nur erkennbare Platzhalter.
 
@@ -103,13 +112,14 @@ npm run db:smoke
 - `db:validate` prüft Schema und Konfiguration ohne Datenbankmutation.
 - `db:migrate` verwendet `prisma migrate deploy` gegen die explizite `DATABASE_URL`.
 - `db:migrate:status` bestätigt, dass alle committed Migrationen angewandt sind.
-- Auf die leere Phase-01-Baseline folgt die Phase-02-Domänenmigration. Sie enthält zusätzlich zu Prisma-SQL benannte Checks, Composite-FKs, Partial-/Exclusion-Indizes sowie Lifecycle-, Append-only- und Concurrency-Trigger.
-- `db:seed` prüft die Erreichbarkeit repräsentativer Phase-02-Tabellen und schreibt keine Katalog-, Demo- oder Domainzeilen.
-- `db:smoke` führt ebenfalls nur einen read-only `SELECT 1` aus; bei `APP_ENV=ci` verwendet es `TEST_DATABASE_URL`.
+- Die **28 committed Migrationen** reichen von der leeren Baseline über den Domänenvertrag bis zu den Phase-10-Arbeitgeber-/Recruiter-Erweiterungen. Zusätzlich zu Prisma-SQL enthalten sie benannte Checks, Composite-FKs, Partial-/Exclusion-Indizes sowie Lifecycle-, Append-only- und Concurrency-Trigger.
+- `db:seed` erzeugt beziehungsweise verifiziert den deterministischen, wiederholbaren Demo-Vertrag `phase-10-demo-v7` mit Katalogen, Demo-Identitäten, Firmen, Jobs, Bewerbungen und den belegten Candidate-/Employer-Workflows. Staging und Production sind fail-closed gesperrt; es gibt keinen Production-Seed.
+- `npm run seed:verify` prüft den vollständigen Seed-Vertrag und liefert einen stabilen Manifest-Hash.
+- `db:smoke` führt einen read-only Datenbank-Smoke aus; bei `APP_ENV=ci` verwendet er `TEST_DATABASE_URL`.
 
 Die interaktiven Befehle `npm run db:migrate:dev` und `npm run db:studio` besitzen zusätzlich einen Fail-closed-Guard: Sie akzeptieren nur `APP_ENV=local`, einen Loopback-Host und keine production-/staging-bezeichnete Datenbank. `db:migrate` bleibt der nicht-interaktive Deploy-Pfad für eine ausdrücklich vollständig konfigurierte Zielumgebung.
 
-Vollständige positive und negative fachliche Fixtures gehören in Phase 05. Es gibt keinen automatischen Reset und keinen Production-Seed. Die Gruppierung der Modelle und der Umgang mit dem strengeren SQL-Vertrag sind in [`prisma/README.md`](./prisma/README.md) dokumentiert.
+Der Demo-Seed ist ausschliesslich für lokale Entwicklung, CI und explizit freigegebene Preview-Umgebungen gedacht. Es gibt keinen automatischen Reset. Die Gruppierung der Modelle und der Umgang mit dem strengeren SQL-Vertrag sind in [`prisma/README.md`](./prisma/README.md) dokumentiert.
 
 ## Qualitätsbefehle
 
@@ -120,6 +130,7 @@ npm test
 npm run test:integration
 npm run build
 npm run test:e2e
+npm run seed:verify
 ```
 
 `test:integration` und `test:e2e` verlangen `APP_ENV=local|ci` sowie eine
@@ -140,7 +151,7 @@ npm run db:validate
 docker compose config --quiet
 ```
 
-Die Linux-CI führt Clean Install, Env-Validierung, Prisma Generate/Validate, Lint, Typecheck, Unit-Tests, alle committed Migrationen samt Statusprüfung, technischen Phase-02-Seed, DB-Smoke, PostgreSQL-Integrationstests, Production Build und einen HTTP-Smoke aus. Ein separater `windows-latest`-Job wiederholt ohne Docker mindestens Install, Env-, Prisma-, Lint-, Typecheck-, Unit- und Build-Prüfung und belegt damit die npm-cmd-Portabilität.
+Die Linux-CI führt Clean Install, Env-Validierung, Prisma Generate/Validate, Lint, Typecheck, Unit-Tests, alle committed Migrationen samt Statusprüfung, Demo-Seed, DB-Smoke, PostgreSQL-Integrationstests, Production Build und einen HTTP-Smoke aus. Ein separater `windows-latest`-Job wiederholt ohne Docker mindestens Install, Env-, Prisma-, Lint-, Typecheck-, Unit- und Build-Prüfung und belegt damit die npm-cmd-Portabilität.
 
 ## Health-Routen
 
@@ -153,21 +164,21 @@ Health-Routen sind Betriebschecks, keine Produktfeatures und keine Autorisierung
 
 - Keine echten Secrets, Provider-Keys, persönlichen Daten oder Produktionsdaten in Repository, Fixtures oder CI.
 - Keine automatische oder unbeabsichtigte Verbindung zu einer unbekannten oder Production-Datenbank; Tests verwenden immer die isolierte Testdatenbank. Der Deploy-Migrationspfad benötigt eine ausdrücklich konfigurierte Zielumgebung.
-- Keine Real-Provider werden durch Env-Keys automatisch aktiviert; deren Variablen müssen leer bleiben.
-- Der Foundation-Logger redigiert sensitive Werte; Stacktraces und Konfiguration gehören nicht in Nutzerantworten.
-- Basisheader sind vorbereitet. Vollständige CSP/HSTS-, Auth-, Rate-Limit- und Autorisierungshärtung folgen in ihren besitzenden Phasen.
-- Das technische Fundament und Schema sind weder ein demo-fertiges Produkt noch produktionsbereit oder vollständig DSG-konform.
+- Keine Real-Provider werden durch Env-Keys automatisch aktiviert; deren Variablen müssen leer bleiben. Mail, AI, Payment, Storage, Jobroom und weitere Integrationen bleiben kontrollierte lokale Mocks.
+- Der Logger redigiert sensitive Werte; Stacktraces und Konfiguration gehören nicht in Nutzerantworten.
+- Security-Header, Auth, Rate-Limits und rollen-/ressourcenbasierte Autorisierung sind implementiert und regressionsgetestet. Die abschliessende phasenübergreifende Security-/Release-Härtung folgt dennoch erst in den dafür vorgesehenen späteren Phasen.
+- Der belegte Phase-10-MVP-Stand ist weder produktionsbereit noch eine vollständige rechtliche oder DSG-Konformitätszusage.
 
 ## Plan und Evidence
 
 1. [`AGENTS.md`](./AGENTS.md) — Implementierungs- und Evidence-Regeln.
 2. [`codex-plan/00-PLAN.md`](./codex-plan/00-PLAN.md) — Masterplan und Status.
-3. [`codex-plan/01-setup-foundation.md`](./codex-plan/01-setup-foundation.md) — verbindlicher Phase-01-Vertrag.
-4. [`codex-plan/02-prisma-schema.md`](./codex-plan/02-prisma-schema.md) — verbindlicher Phase-02-Schema- und Migrationsvertrag.
+3. [`codex-plan/01-setup-foundation.md`](./codex-plan/01-setup-foundation.md) bis [`codex-plan/10-employer-portal.md`](./codex-plan/10-employer-portal.md) — verbindliche Verträge der implementierten Phasen 01–10.
+4. [`codex-plan/11-admin-portal.md`](./codex-plan/11-admin-portal.md) — nächster Implementierungsschritt.
 5. [`codex-plan/decisions.md`](./codex-plan/decisions.md) — Architekturentscheidungen.
 6. [`codex-plan/requirements-matrix.md`](./codex-plan/requirements-matrix.md) — Traceability.
 7. [`codex-plan/implementation-plan.md`](./codex-plan/implementation-plan.md) — Ausführungsschritte 01–18.
-8. [`codex-plan/evidence/2026-07-19-phase-01.md`](./codex-plan/evidence/2026-07-19-phase-01.md) — reproduzierbarer Phase-01-Abnahmenachweis.
-9. [`codex-plan/evidence/2026-07-19-phase-02.md`](./codex-plan/evidence/2026-07-19-phase-02.md) — reproduzierbarer Phase-02-Abnahmenachweis.
+8. [`codex-plan/evidence/README.md`](./codex-plan/evidence/README.md) — Evidence-Index der abgeschlossenen Phasen.
+9. [`codex-plan/evidence/2026-07-19-phase-01.md`](./codex-plan/evidence/2026-07-19-phase-01.md) bis [`codex-plan/evidence/2026-07-21-phase-10.md`](./codex-plan/evidence/2026-07-21-phase-10.md) — reproduzierbare Abnahmenachweise für Phasen 01–10.
 
 Ein Checkbox-Häkchen bedeutet „im Zielrepository implementiert und verifiziert“. Evidence nennt mindestens Datum, Zielcommit, Umgebung, OS, Node/npm-Version, Befehl beziehungsweise manuellen Check, Exit-Code/Ergebnis und bekannte Limitation. Zuerst wird die Detailphase aktualisiert, danach gegebenenfalls der Masterplan.

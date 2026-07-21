@@ -315,6 +315,8 @@ flowchart LR
 
 ## 10 — Employer- und Recruiter-Core: Firma, Team, Jobs und Pipeline
 
+**Status:** [x] Abgeschlossen und gegen Code-Commit `b7afb617876624118cd8c5ea41d4942dfe6c88f1` verifiziert; siehe [Phase-10-Evidence](./evidence/2026-07-21-phase-10.md). Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) ist nicht Bestandteil dieses Abschlusses und bleibt deferred/offen.
+
 **Ziel und Begründung:** Arbeitgeber können von Onboarding bis Bewerbungsbearbeitung arbeiten; Recruiterzugriff ist tenant- und jobgebunden.
 
 **Abhängigkeiten:** 03–06; Phase-05 Applications provide fixtures. Full Candidate/Employer interoperability is proven after Phase 09 and again in Phase 17. The separate P1 external-Mandate package additionally depends on Phase 07/10 P0 acceptance.
@@ -323,7 +325,7 @@ flowchart LR
 
 **Datenmodelle:** Company/Verification Request, Membership/Invitation/Assignment, Job/Revision/ReportingCheck, Application/Event, Analytics read basis.
 
-**Funktionen:** Company/Claim/Verification; team invite/reinvite-existing Membership/remove; exact CompanyRole×AssignmentRole matrix and Recruiter create+self-EDITOR transaction; Job autosave/submit plus immutable PUBLISHED edit policy (`pauseAndCreateRevision`, paused/rejected clone, stale-version guard); closed Application actor×edge matrix. Publish remains Admin-owned in 11. P1 adds concrete `/employer/mandates` grant/revoke/expiry work package, not a P0 placeholder.
+**Funktionen:** Company/Claim/Verification; team invite/reinvite-existing Membership/remove with token-free `/invite/resume` after the original invitation link, backed by a 30-minute AES-256-GCM-protected HttpOnly cookie; exact CompanyRole×AssignmentRole matrix and Recruiter create+self-EDITOR transaction; Job autosave/submit plus immutable PUBLISHED edit policy (`pauseAndCreateRevision`, paused/rejected clone, stale-version guard); closed Application actor×edge matrix. Publish remains Admin-owned in 11. P1 adds concrete `/employer/mandates` grant/revoke/expiry work package, not a P0 placeholder.
 
 **Routen:** Employer routes from Blueprint, excluding actual billing; billing links show safe unavailable/coming state until 12, no 404 navigation.
 
@@ -339,7 +341,7 @@ flowchart LR
 
 **Definition of Done / erwartetes Ergebnis:** Employer creates quality-assessed draft and handles authorized applications; no publish/foreign access bypass.
 
-**Risiken/Limitierungen:** external multi-client agency Mandate has an owned P1 package but no route before its migration/privacy gate; analytics remains basic until 14/15.
+**Risiken/Limitierungen:** Das externe Multi-Client-Agenturmandat REQ-REC-002 hat ein eigenes P1-Paket, aber vor Migration, Privacy/Legal Review und role×tenant E2E bewusst keine Route/CTA. Phase 10 liefert belegte Basis-Analytics und ehrliche Locked States; Phase 12 besitzt erweiterte Entitlements/Billing und Phase 14 das reale Radar.
 
 ---
 
@@ -573,4 +575,4 @@ flowchart LR
 
 ## Startentscheidung
 
-Schritte 01 bis 06 sind gemäss ihren Evidence-Records abgeschlossen. Der nächste zulässige Schritt ist **Schritt 07 — Öffentliche Discovery und Karriere-Entscheidung** im Zielrepository. Quellcode aus Referenzprojekten bleibt reine Vergleichsbasis und darf auch in späteren Schritten nicht blind kopiert oder als Ziel-Evidence behandelt werden.
+Schritte 01 bis 10 sind gemäss ihren Evidence-Records abgeschlossen. Der nächste zulässige Schritt ist **Schritt 11 — Adminportal, Moderation, Import und Betriebsqueues** im Zielrepository. Quellcode aus Referenzprojekten bleibt reine Vergleichsbasis und darf auch in späteren Schritten nicht blind kopiert oder als Ziel-Evidence behandelt werden.

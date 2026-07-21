@@ -25,6 +25,7 @@ gelten nicht als Nachweis.
 - [`2026-07-20-phase-07.md`](./2026-07-20-phase-07.md) — Öffentliche Jobsuche, Firmen, Lohn-Radar, Ratgeber und Auth-Polish.
 - [`2026-07-20-phase-08.md`](./2026-07-20-phase-08.md) — Fail-closed Pricing, Arbeitgeber-Marketing und idempotente Demo-/Sales-Lead-Erfassung.
 - [`2026-07-20-phase-09.md`](./2026-07-20-phase-09.md) — Candidate-Core mit SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Messaging, Talent-Radar-Consent und Privacy-Cases.
+- [`2026-07-21-phase-10.md`](./2026-07-21-phase-10.md) — Arbeitgeber- und Recruiter-Core mit Firma, Team, Einladungen, Job-Wizard, Bewerber:innen-Pipeline und ehrlichen Radar-/Analytics-Grenzen.
 
 ## Pflichtfelder eines Records
 

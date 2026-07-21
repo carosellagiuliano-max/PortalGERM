@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 20. Juli 2026. **Phasen 01 bis 09 sind im Zielrepository implementiert und verifiziert. Phasen 10–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth, öffentliche Discovery, Pricing und Arbeitgeberakquise sowie der Candidate-Core ergeben noch kein fertiges Produkt: Employer-Portal, Billing, Radar Contact/Reveal, Cross-role-E2E und Release-Härtung folgen in späteren Phasen.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 21. Juli 2026. **Phasen 01 bis 10 sind im Zielrepository implementiert und verifiziert. Phasen 11–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth, öffentliche Discovery, Pricing und Arbeitgeberakquise sowie Candidate- und Employer/Recruiter-Core ergeben noch kein fertiges Produkt: Admin-Moderation/Publish, Billing, Boosts, Radar Contact/Reveal, Cross-role-E2E und Release-Härtung folgen in späteren Phasen. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -36,7 +36,7 @@ Die wichtigsten Differenzierungen sind:
 
 Der vollständige Ausgangs-`codex-plan` mit 24 Dateien wurde in das leere Ziel übertragen und vor Überarbeitung per SHA-256 bytegenau verglichen. Das verlinkte Root-`AGENTS.md` wurde zusätzlich übernommen. Der Ziel-Baseline-Commit enthielt nur `README.md`.
 
-Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag, die reproduzierbar verifizierten Phase-03-Core-Policies, die netzwerkfreien Phase-04-Provider-Mocks, den deterministischen Phase-05-Demo-Seed mit Produktionssperre, End-to-End-Auth aus Phase 06, die sicher projizierte öffentliche Discovery aus Phase 07, fail-closed Pricing und Arbeitgeberakquise aus Phase 08 sowie den vollständig geprüften Candidate-Core aus Phase 09. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md), [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md), [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md), [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md), [`evidence/2026-07-20-phase-06.md`](./evidence/2026-07-20-phase-06.md), [`evidence/2026-07-20-phase-07.md`](./evidence/2026-07-20-phase-07.md), [`evidence/2026-07-20-phase-08.md`](./evidence/2026-07-20-phase-08.md) und [`evidence/2026-07-20-phase-09.md`](./evidence/2026-07-20-phase-09.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
+Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag, die reproduzierbar verifizierten Phase-03-Core-Policies, die netzwerkfreien Phase-04-Provider-Mocks, den deterministischen Phase-05-Demo-Seed mit Produktionssperre, End-to-End-Auth aus Phase 06, die sicher projizierte öffentliche Discovery aus Phase 07, fail-closed Pricing und Arbeitgeberakquise aus Phase 08, den vollständig geprüften Candidate-Core aus Phase 09 sowie den tenant- und assignment-gesicherten Employer/Recruiter-Core aus Phase 10. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md), [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md), [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md), [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md), [`evidence/2026-07-20-phase-06.md`](./evidence/2026-07-20-phase-06.md), [`evidence/2026-07-20-phase-07.md`](./evidence/2026-07-20-phase-07.md), [`evidence/2026-07-20-phase-08.md`](./evidence/2026-07-20-phase-08.md), [`evidence/2026-07-20-phase-09.md`](./evidence/2026-07-20-phase-09.md) und [`evidence/2026-07-21-phase-10.md`](./evidence/2026-07-21-phase-10.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
 
 ## 4. Unverhandelbare Invarianten
 
@@ -99,11 +99,11 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 ### [x] 09 — Kandidaten-Core
 
-[`09-candidate-portal.md`](./09-candidate-portal.md) · JobPass, Saved Jobs, Apply/Withdraw/Status, Alerts, Messaging und Privacy-Basics sind implementiert und gegen den unveränderlichen Code-Commit verifiziert. Phase 10 bleibt Eigentümer der Employer-Pipeline-Mutationen, Phase 14 von Radar Contact/Reveal und Phase 17 der vollständigen Cross-role-E2E-Journey.
+[`09-candidate-portal.md`](./09-candidate-portal.md) · JobPass, Saved Jobs, Apply/Withdraw/Status, Alerts, Messaging und Privacy-Basics sind implementiert und gegen den unveränderlichen Code-Commit verifiziert. Die Employer-Pipeline-Mutationen sind seit Phase 10 umgesetzt; Phase 14 besitzt weiterhin Radar Contact/Reveal und Phase 17 die vollständige Cross-role-E2E-Journey.
 
-### [ ] 10 — Arbeitgeber- und Recruiter-Core
+### [x] 10 — Arbeitgeber- und Recruiter-Core
 
-[`10-employer-portal.md`](./10-employer-portal.md) · Company/Verification Request, Team, Jobs/Wizard, Assignments, Pipeline. Billing/Radar nur ehrliche Locked States.
+[`10-employer-portal.md`](./10-employer-portal.md) · Company/Verification Request, Team, tokenfreie Einladungsfortsetzung, Jobs/Wizard, Assignments, Pipeline und evidenzbasierte Basis-Analytics sind im Code-Commit `b7afb617876624118cd8c5ea41d4942dfe6c88f1` verifiziert; Billing/Radar bleiben ehrliche Locked States. Das separat gegatete REQ-REC-002-Paket ist deferred und bleibt `[ ]`.
 
 ### [ ] 11 — Admin und Moderation
 
@@ -218,4 +218,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 09 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Als nächster Implementierungsschritt folgt Phase 10 — Arbeitgeber- und Recruiter-Core. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 10 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Als nächster Implementierungsschritt folgt Phase 11 — Admin und Moderation. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

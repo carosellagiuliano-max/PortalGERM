@@ -60,6 +60,8 @@
 | REQ-REC-001 | Multi-company Recruiter wechselt Kontext ohne Cross-Tenant-Leak. | Recruiter · P0 · 06/10 | memberships, active context server-side | every query company-scoped; context picker; IDOR tests | Context A liefert 0 IDs/Daten aus B |
 | REQ-REC-002 | Externe Agenturmandate sind je Kunde/Job befristet und widerrufbar. | External recruiter/Owner · P1 · Phase-10 gated work package after P0 | `RecruiterMandate/Event` + JobAssignment | `/employer/mandates`; Owner grant/revoke; explicit jobs/[validFrom,validTo); no P0 route/global export | current Mandate+Assignment rechecked; expiry/revoke blocks next query; audit/history remains |
 
+> **Phase-10-Status (21. Juli 2026):** Die Phase-10-Anteile von REQ-EMP-002 bis REQ-EMP-007 sowie REQ-REC-001 sind im Code-Commit `b7afb617876624118cd8c5ea41d4942dfe6c88f1` implementiert und durch die [Phase-10-Evidence](./evidence/2026-07-21-phase-10.md) belegt. Offen bleiben die ausdrücklich den Phasen 11/12 zugeordneten Anteile, insbesondere Admin-Claim-/Moderations-/Publish-Entscheide und Billing-/erweiterte Entitlement-Effekte. REQ-REC-002 bleibt als separat gegatetes P1-Paket `[ ]`/deferred; es existiert bewusst keine Mandate-Route oder -CTA.
+
 ## 5. Talent Radar, Privacy und Fairness
 
 | ID | Anforderung / Quelle | Rolle · Priorität · Phase | Daten / Serverlogik | Policy, UX und Test | Messbare Abnahme |
