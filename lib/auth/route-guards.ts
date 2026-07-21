@@ -19,6 +19,10 @@ export function requireAdminPage(): Promise<CurrentUser> {
   return requirePageRole(["ADMIN"]);
 }
 
+export function requireAuthenticatedPage(): Promise<CurrentUser> {
+  return requirePageRole(["CANDIDATE", "EMPLOYER", "RECRUITER", "ADMIN"]);
+}
+
 export async function requirePendingCompanyClaimPage(): Promise<CurrentUser> {
   const user = await requireEmployerPage();
   const pending = await getDatabase().companyClaimRequest.findFirst({
@@ -65,7 +69,7 @@ export function sanitizePrivateRequestPath(value: string | null): string | null 
   }
   try {
     const parsed = new URL(value, "https://private-route.invalid");
-    const privatePath = ["/candidate", "/employer", "/admin"].some(
+    const privatePath = ["/candidate", "/employer", "/admin", "/support"].some(
       (prefix) =>
         parsed.pathname === prefix || parsed.pathname.startsWith(`${prefix}/`),
     );

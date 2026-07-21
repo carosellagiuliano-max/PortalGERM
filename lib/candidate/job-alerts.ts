@@ -152,7 +152,8 @@ export async function getCandidateJobAlertPageData(
   const [consent, cantons, categories, cities] = await Promise.all([
     latestDeliveryConsent(database, actorUserId, now),
     database.canton.findMany({
-      orderBy: { name: "asc" },
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: { id: true, code: true, name: true },
     }),
     database.category.findMany({
@@ -161,7 +162,8 @@ export async function getCandidateJobAlertPageData(
       select: { id: true, name: true, slug: true },
     }),
     database.city.findMany({
-      orderBy: [{ canton: { code: "asc" } }, { name: "asc" }],
+      where: { isActive: true, canton: { isActive: true } },
+      orderBy: [{ canton: { code: "asc" } }, { sortOrder: "asc" }, { name: "asc" }],
       select: {
         id: true,
         cantonId: true,
@@ -1229,8 +1231,8 @@ async function assertQueryReferences(
   const [canton, category, city] = await Promise.all([
     query.cantonId === null
       ? null
-      : transaction.canton.findUnique({
-          where: { id: query.cantonId },
+      : transaction.canton.findFirst({
+          where: { id: query.cantonId, isActive: true },
           select: { id: true },
         }),
     query.categoryId === null
@@ -1242,7 +1244,7 @@ async function assertQueryReferences(
     query.cityId === null
       ? null
       : transaction.city.findFirst({
-          where: { id: query.cityId, cantonId: query.cantonId ?? undefined },
+          where: { id: query.cityId, cantonId: query.cantonId ?? undefined, isActive: true, canton: { isActive: true } },
           select: { id: true },
         }),
   ]);
@@ -1364,8 +1366,8 @@ async function resolveStoredQuery(
         }),
     parsed.query.cantonCode === null
       ? null
-      : transaction.canton.findUnique({
-          where: { code: parsed.query.cantonCode },
+      : transaction.canton.findFirst({
+          where: { code: parsed.query.cantonCode, isActive: true },
           select: { id: true },
         }),
   ]);
@@ -1485,8 +1487,8 @@ async function loadQueryLocation(
   query: JobAlertQuery,
 ) {
   if (query.cityId === null || query.radiusKm <= 0) return null;
-  const city = await transaction.city.findUnique({
-    where: { id: query.cityId },
+  const city = await transaction.city.findFirst({
+    where: { id: query.cityId, isActive: true, canton: { isActive: true } },
     select: { latitude: true, longitude: true },
   });
   if (city?.latitude === null || city?.longitude === null || city === null)

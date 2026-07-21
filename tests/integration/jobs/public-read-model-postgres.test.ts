@@ -788,8 +788,8 @@ async function restoreRestriction(target: Pool) {
       'INSERT INTO "ModerationRestriction" (',
       '  "id", "abuseReportId", "targetType", "targetId", "status",',
       '  "reason", "appliedByUserId", "startsAt", "endsAt", "liftedAt",',
-      '  "correlationId"',
-      ") VALUES ($1, $2, 'HIDE_JOB', $3, 'ACTIVE', $4, $5, $6, $7, NULL, $8)",
+      '  "correlationId", "idempotencyKey"',
+      ") VALUES ($1, $2, 'HIDE_JOB', $3, 'ACTIVE', $4, $5, $6, $7, NULL, $8, $9)",
       'ON CONFLICT ("id") DO UPDATE SET',
       '  "status" = EXCLUDED."status", "startsAt" = EXCLUDED."startsAt",',
       '  "endsAt" = EXCLUDED."endsAt", "liftedAt" = NULL',
@@ -803,6 +803,7 @@ async function restoreRestriction(target: Pool) {
       atDay(-1),
       atDay(2),
       "07000000-0000-4000-8000-000000000041",
+      "phase07-public-read-model-hide-job",
     ],
   );
 }

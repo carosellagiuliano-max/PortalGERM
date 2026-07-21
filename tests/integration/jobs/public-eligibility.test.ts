@@ -493,8 +493,8 @@ describe.sequential("PostgreSQL public job eligibility", () => {
         [
           'INSERT INTO "ModerationRestriction" (',
           '  "id", "abuseReportId", "targetType", "targetId", "status",',
-          '  "reason", "appliedByUserId", "startsAt", "correlationId"',
-          ") VALUES ($1, $2, $3, $4, 'ACTIVE', $5, $6, $7, $8)",
+          '  "reason", "appliedByUserId", "startsAt", "correlationId", "idempotencyKey"',
+          ") VALUES ($1, $2, $3, $4, 'ACTIVE', $5, $6, $7, $8, $9)",
         ].join("\n"),
         [
           IDS.restriction,
@@ -505,6 +505,7 @@ describe.sequential("PostgreSQL public job eligibility", () => {
           IDS.user,
           addDays(contractNow, -1),
           `eligibility-${restrictionType.toLowerCase()}`,
+          `eligibility-restriction:${restrictionType.toLowerCase()}`,
         ],
       );
 

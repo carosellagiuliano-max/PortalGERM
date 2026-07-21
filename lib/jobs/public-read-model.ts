@@ -450,11 +450,13 @@ export async function getPublicCatalog(): Promise<PublicCatalog> {
   const database = getDatabase();
   const [cantons, cities, categories] = await Promise.all([
     database.canton.findMany({
-      orderBy: { name: "asc" },
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: { id: true, code: true, name: true, slug: true },
     }),
     database.city.findMany({
-      orderBy: [{ name: "asc" }, { id: "asc" }],
+      where: { isActive: true, canton: { isActive: true } },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }, { id: "asc" }],
       select: { id: true, name: true, slug: true, cantonId: true },
     }),
     database.category.findMany({

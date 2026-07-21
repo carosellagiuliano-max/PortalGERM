@@ -1,0 +1,2 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+export function MetricCard({ label, value, detail }: Readonly<{ label: string; value: number | string; detail?: string }>) { return <Card size="sm"><CardHeader><CardTitle as="h3" className="text-sm text-muted-foreground">{label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-semibold tabular-nums">{value}</p>{detail === undefined ? null : <p className="mt-1 text-xs text-muted-foreground">{detail}</p>}</CardContent></Card>; }

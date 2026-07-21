@@ -176,10 +176,10 @@ export async function loadPublicSalaryRadar(
     }),
     database.canton.findUnique({
       where: { slug: query.cantonSlug },
-      select: { id: true },
+      select: { id: true, isActive: true },
     }),
   ]);
-  if (category === null || !category.isActive || canton === null) {
+  if (category === null || !category.isActive || canton === null || !canton.isActive) {
     return noResult("INVALID_QUERY", false);
   }
 

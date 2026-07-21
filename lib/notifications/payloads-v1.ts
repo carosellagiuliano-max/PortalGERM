@@ -217,6 +217,11 @@ export const NOTIFICATION_PAYLOADS_V1 = Object.freeze({
     ]),
     reasonCode: z.enum(SUPPORT_CASE_REASON_CODES_V1).optional(),
   }),
+  [NotificationKinds.MODERATION_CHANGED]: z.strictObject({
+    reportId: routeId,
+    restrictionId: routeId,
+    status: z.enum(["APPLIED", "LIFTED", "EXPIRED"]),
+  }),
   [NotificationKinds.PRIVACY_REQUEST_CHANGED]: z.strictObject({
     requestId: routeId,
     type: z.enum(["EXPORT", "DELETE", "CORRECT"]),

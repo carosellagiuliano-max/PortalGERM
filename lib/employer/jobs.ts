@@ -374,9 +374,9 @@ export async function getEmployerJobCatalog(
   if (membership === null) return null;
   const [categories, cantons, cities, skills, occupations] = await Promise.all([
     database.category.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } }),
-    database.canton.findMany({ orderBy: { name: "asc" }, select: { id: true, code: true, name: true } }),
-    database.city.findMany({ orderBy: { name: "asc" }, select: { id: true, cantonId: true, name: true } }),
-    database.skill.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    database.canton.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, code: true, name: true } }),
+    database.city.findMany({ where: { isActive: true, canton: { isActive: true } }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, cantonId: true, name: true } }),
+    database.skill.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } }),
     database.occupationCode.findMany({
       where: {
         occupationCodeVersion: {
@@ -1796,8 +1796,8 @@ function stableSerialize(value: unknown): string {
 async function validateStepOneCatalog(transaction: Prisma.TransactionClient, step: JobWizardStepOne) {
   const [category, canton, city] = await Promise.all([
     transaction.category.findFirst({ where: { id: step.categoryId, isActive: true }, select: { id: true } }),
-    step.cantonId === null ? Promise.resolve(null) : transaction.canton.findUnique({ where: { id: step.cantonId }, select: { id: true } }),
-    step.cityId === null ? Promise.resolve(null) : transaction.city.findFirst({ where: { id: step.cityId, cantonId: step.cantonId ?? undefined }, select: { id: true } }),
+    step.cantonId === null ? Promise.resolve(null) : transaction.canton.findFirst({ where: { id: step.cantonId, isActive: true }, select: { id: true } }),
+    step.cityId === null ? Promise.resolve(null) : transaction.city.findFirst({ where: { id: step.cityId, cantonId: step.cantonId ?? undefined, isActive: true, canton: { isActive: true } }, select: { id: true } }),
   ]);
   return category !== null && (step.cantonId === null || canton !== null) && (step.cityId === null || city !== null);
 }

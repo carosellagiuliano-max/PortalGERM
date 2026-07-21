@@ -337,11 +337,13 @@ export async function getEmployerCompanyWorkspace(
   assertValidDate(now);
   const [cantons, cities, verificationDetails, enhancedProfileAllowed] = await Promise.all([
     database.canton.findMany({
-      orderBy: [{ name: "asc" }, { id: "asc" }],
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }, { id: "asc" }],
       select: { id: true, code: true, name: true },
     }),
     database.city.findMany({
-      orderBy: [{ name: "asc" }, { id: "asc" }],
+      where: { isActive: true, canton: { isActive: true } },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }, { id: "asc" }],
       select: { id: true, cantonId: true, name: true },
     }),
     canManage && requestIds.length > 0
@@ -992,7 +994,7 @@ async function verifyLocationReferences(
   if (locations.length === 0) return;
   const cityIds = locations.map(({ cityId }) => cityId);
   const rows = await transaction.city.findMany({
-    where: { id: { in: cityIds } },
+    where: { id: { in: cityIds }, isActive: true, canton: { isActive: true } },
     select: { id: true, cantonId: true },
   });
   const cantonByCity = new Map(rows.map((row) => [row.id, row.cantonId]));

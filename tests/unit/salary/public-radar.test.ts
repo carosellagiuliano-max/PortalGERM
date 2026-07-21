@@ -217,7 +217,7 @@ describe("public Salary Radar adapter", () => {
       category: {
         findUnique: vi.fn().mockResolvedValue({ id: "category-1", isActive: true }),
       },
-      canton: { findUnique: vi.fn().mockResolvedValue({ id: "canton-1" }) },
+      canton: { findUnique: vi.fn().mockResolvedValue({ id: "canton-1", isActive: true }) },
       salaryDatasetVersion: { findMany },
     };
     const query = parsePublicSalaryRadarQuery(PUBLIC_INPUT);

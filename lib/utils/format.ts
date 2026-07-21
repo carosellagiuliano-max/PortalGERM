@@ -10,6 +10,16 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("de-CH", {
   timeZone: "Europe/Zurich",
 });
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("de-CH", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Europe/Zurich",
+  timeZoneName: "short",
+});
+
 const INTEGER_FORMATTER = new Intl.NumberFormat("de-CH", {
   maximumFractionDigits: 0,
 });
@@ -75,4 +85,11 @@ export function formatDate(value: Date): string {
     throw new TypeError("Date must be valid.");
   }
   return DATE_FORMATTER.format(value);
+}
+
+export function formatDateTime(value: Date): string {
+  if (Number.isNaN(value.getTime())) {
+    throw new TypeError("Date must be valid.");
+  }
+  return DATE_TIME_FORMATTER.format(value);
 }

@@ -70,8 +70,8 @@ describe("Phase-05 reference, Billing/Ops and content contract", () => {
     const jobs = jobHandles(companies);
     const identities = buildBillingOpsSeedIdentities({ companies, jobs });
 
-    expect(BILLING_OPS_SEED_IDENTITIES).toHaveLength(465);
-    expect(identities).toHaveLength(601);
+    expect(BILLING_OPS_SEED_IDENTITIES).toHaveLength(466);
+    expect(identities).toHaveLength(603);
     expect(new Set(identities.map(({ id }) => id)).size).toBe(identities.length);
     expect(
       new Set(

@@ -10,6 +10,7 @@ import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { buildNotificationPersistenceRecord } from "@/lib/notifications/writer";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import { isConversationMessageBlocked } from "@/lib/admin/moderation";
 
 const UUID = z.string().uuid();
 export const CANDIDATE_CONVERSATION_PAGE_SIZE = 25;
@@ -286,6 +287,10 @@ export async function sendCandidateMessage(
           existing.senderUserId === userId && existing.body === body
           ? Object.freeze({ ok: true as const, messageId: existing.id, duplicate: true })
           : Object.freeze({ ok: false as const, code: "CONFLICT" as const });
+      }
+
+      if (await isConversationMessageBlocked(transaction, conversation.id, now)) {
+        return Object.freeze({ ok: false as const, code: "CONFLICT" as const });
       }
 
       const created = await transaction.message.create({

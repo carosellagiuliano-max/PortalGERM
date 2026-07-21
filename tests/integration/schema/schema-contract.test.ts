@@ -525,6 +525,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260721114500_phase_10_employer_core_hardening",
       "20260721121500_phase_10_job_revision_defaults_compat",
       "20260721123000_phase_10_verification_supersession_lock",
+      "20260721160000_phase_11_admin_operations",
     ]);
     expect(
       migrations.rows.every(
@@ -536,6 +537,14 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       ...HALF_OPEN_EXCLUSION_CONSTRAINTS,
       ...Object.keys(CROSS_SCOPE_CONSTRAINTS),
       "credit_ledger_sign_check",
+      "Canton_sortOrder_nonnegative",
+      "City_sortOrder_nonnegative",
+      "Skill_sortOrder_nonnegative",
+      "AbuseReport_version_positive",
+      "ContentRevision_version_positive",
+      "SupportCase_version_positive",
+      "SupportCase_contactPreference_allowed",
+      "SalesActivity_intake_identity_check",
       "job_origin_import_source_check",
       "job_reporting_code_snapshot_check",
       "job_reporting_code_version_scope_fkey",

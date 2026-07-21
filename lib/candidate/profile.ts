@@ -261,11 +261,13 @@ export async function getOwnedCandidateProfileWorkspace(
       select: candidateWorkspaceSelect(now),
     }),
     database.canton.findMany({
-      orderBy: [{ name: "asc" }, { id: "asc" }],
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }, { id: "asc" }],
       select: { id: true, code: true, name: true },
     }),
     database.skill.findMany({
-      orderBy: [{ name: "asc" }, { id: "asc" }],
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }, { id: "asc" }],
       select: { id: true, name: true, slug: true },
     }),
     database.category.findMany({
@@ -807,8 +809,8 @@ async function assertProfileReferences(
   profile: SwissJobPassInput,
 ) {
   if (profile.cantonId !== undefined) {
-    const canton = await transaction.canton.findUnique({
-      where: { id: profile.cantonId },
+    const canton = await transaction.canton.findFirst({
+      where: { id: profile.cantonId, isActive: true },
       select: { id: true },
     });
     if (canton === null) throw new CandidateProfileReferenceError("cantonId");

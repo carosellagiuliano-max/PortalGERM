@@ -19,6 +19,7 @@ import {
   writeNotificationExactlyOnce,
 } from "@/lib/notifications/writer";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
+import { isConversationMessageBlocked } from "@/lib/admin/moderation";
 import {
   decideApplicationTransition,
   type ApplicationActorCapability,
@@ -246,6 +247,9 @@ export async function sendEmployerApplicationMessage(access: EmployerApplication
           }
         : { ok: false as const, code: "IDEMPOTENCY_CONFLICT" };
       let conversationId = application.conversationId;
+      if (conversationId !== null && await isConversationMessageBlocked(tx, conversationId, now)) {
+        return { ok: false as const, code: "CONFLICT" };
+      }
       if (conversationId === null) {
         const created = await tx.conversation.create({ data: { companyId: access.companyId, kind: "APPLICATION", applicationId: application.id, subject: `Bewerbung: ${application.jobTitle}`.slice(0, 200), createdAt: now, participants: { create: [{ kind: "USER", userId: application.candidateUserId, joinedAt: now }, { kind: "COMPANY_PRINCIPAL", companyId: access.companyId, joinedAt: now }] } }, select: { id: true } });
         conversationId = created.id;

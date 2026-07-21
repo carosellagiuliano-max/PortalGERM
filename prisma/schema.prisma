@@ -504,6 +504,7 @@ enum AbuseEventKind {
   ASSIGNED
   RESTRICTION_APPLIED
   RESTRICTION_LIFTED
+  RESTRICTION_EXPIRED
   RESOLVED
   DISMISSED
   NOTE_ADDED
@@ -563,6 +564,12 @@ enum ImportSetupApprovalStatus {
   USED
   EXPIRED
   REVOKED
+}
+
+enum ImportSetupApprovalEventKind {
+  APPROVED
+  REVOKED
+  EXPIRED
 }
 
 enum ImportAccessGrantStatus {
@@ -819,6 +826,7 @@ enum NotificationKind {
   USAGE_WARNING
   SYSTEM_TASK_ASSIGNED
   SUPPORT_CASE_CHANGED
+  MODERATION_CHANGED
   PRIVACY_REQUEST_CHANGED
 }
 
@@ -863,6 +871,7 @@ enum AuditTargetType {
   JOB_BOOST
   IMPORT_SOURCE
   IMPORT_RUN
+  TAXONOMY
   SUPPORT_CASE
   CONTENT_REVISION
   SALES_LEAD
@@ -1224,6 +1233,8 @@ model Canton {
   name                 String                    @db.VarChar(120)
   slug                 String                    @unique @db.VarChar(120)
   language             Language
+  isActive             Boolean                   @default(true)
+  sortOrder            Int                       @default(0)
   cities               City[]
   companies            CompanyLocation[]
   companyRegistrations Company[]                 @relation("CompanyRegistrationCanton")
@@ -1237,6 +1248,7 @@ model Canton {
   updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
 
   @@index([slug])
+  @@index([isActive, sortOrder])
 }
 
 model City {
@@ -1246,6 +1258,8 @@ model City {
   slug             String            @db.VarChar(160)
   latitude         Decimal?          @db.Decimal(9, 6)
   longitude        Decimal?          @db.Decimal(9, 6)
+  isActive         Boolean           @default(true)
+  sortOrder        Int               @default(0)
   createdAt        DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
   canton           Canton            @relation(fields: [cantonId], references: [id], onDelete: Restrict)
@@ -1256,6 +1270,7 @@ model City {
   @@unique([cantonId, slug])
   @@unique([id, cantonId])
   @@index([cantonId])
+  @@index([cantonId, isActive, sortOrder])
 }
 
 model Category {
@@ -1283,9 +1298,13 @@ model Skill {
   id                String             @id @default(uuid()) @db.Uuid
   name              String             @unique @db.VarChar(160)
   slug              String             @unique @db.VarChar(160)
+  isActive          Boolean            @default(true)
+  sortOrder         Int                @default(0)
   createdAt         DateTime           @default(now()) @db.Timestamptz(3)
   candidateSkills   CandidateSkill[]
   jobRevisionSkills JobRevisionSkill[]
+
+  @@index([isActive, sortOrder])
 }
 
 model CandidateProfile {
@@ -1430,9 +1449,9 @@ model Company {
   website                           String?                      @db.VarChar(512)
   logoStorageKey                    String?                      @db.VarChar(512)
   coverStorageKey                   String?                      @db.VarChar(512)
-  linkedinUrl                      String?                      @db.VarChar(512)
-  facebookUrl                      String?                      @db.VarChar(512)
-  instagramUrl                     String?                      @db.VarChar(512)
+  linkedinUrl                       String?                      @db.VarChar(512)
+  facebookUrl                       String?                      @db.VarChar(512)
+  instagramUrl                      String?                      @db.VarChar(512)
   about                             String?                      @db.VarChar(5000)
   values                            String[]
   benefits                          String[]
@@ -1646,9 +1665,9 @@ model CompanyVerificationRequest {
   supersededBy        CompanyVerificationRequest? @relation("VerificationSupersession")
   events              CompanyVerificationEvent[]
 
-  @@index([companyId, status, createdAt])
   @@unique([id, companyId])
   @@unique([supersedesRequestId, companyId])
+  @@index([companyId, status, createdAt])
 }
 
 model CompanyVerificationEvent {
@@ -2544,24 +2563,26 @@ model PrivacyIdentityChallenge {
 }
 
 model AbuseReport {
-  id             String                  @id @default(uuid()) @db.Uuid
-  targetType     AbuseTargetType
-  targetId       String                  @db.Uuid
-  reporterUserId String?                 @db.Uuid
-  reasonCode     String                  @db.VarChar(64)
-  description    String                  @db.VarChar(2000)
-  severity       AbuseSeverity           @default(MEDIUM)
-  status         AbuseStatus             @default(OPEN)
-  assigneeUserId String?                 @db.Uuid
-  dueAt          DateTime                @db.Timestamptz(3)
-  resolutionCode String?                 @db.VarChar(64)
-  resolvedAt     DateTime?               @db.Timestamptz(3)
-  createdAt      DateTime                @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime                @updatedAt @db.Timestamptz(3)
-  events         AbuseReportEvent[]
-  restrictions   ModerationRestriction[]
-  reporter       User?                   @relation("AbuseReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
-  assignee       User?                   @relation("AbuseAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
+  id               String                  @id @default(uuid()) @db.Uuid
+  targetType       AbuseTargetType
+  targetId         String                  @db.Uuid
+  reporterUserId   String?                 @db.Uuid
+  reasonCode       String                  @db.VarChar(64)
+  description      String                  @db.VarChar(2000)
+  severity         AbuseSeverity           @default(MEDIUM)
+  status           AbuseStatus             @default(OPEN)
+  assigneeUserId   String?                 @db.Uuid
+  dueAt            DateTime                @db.Timestamptz(3)
+  slaPolicyVersion String                  @default("OPS_CASE_SLA_POLICY_V1") @db.VarChar(32)
+  version          Int                     @default(1)
+  resolutionCode   String?                 @db.VarChar(64)
+  resolvedAt       DateTime?               @db.Timestamptz(3)
+  createdAt        DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                @updatedAt @db.Timestamptz(3)
+  events           AbuseReportEvent[]
+  restrictions     ModerationRestriction[]
+  reporter         User?                   @relation("AbuseReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+  assignee         User?                   @relation("AbuseAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
 
   @@index([status, severity, dueAt])
   @@index([assigneeUserId, status, dueAt])
@@ -2569,15 +2590,16 @@ model AbuseReport {
 }
 
 model AbuseReportEvent {
-  id            String         @id @default(uuid()) @db.Uuid
-  abuseReportId String         @db.Uuid
-  kind          AbuseEventKind
-  actorUserId   String?        @db.Uuid
-  reasonCode    String?        @db.VarChar(64)
-  safeNote      String?        @db.VarChar(500)
-  correlationId String         @db.VarChar(128)
-  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
-  abuseReport   AbuseReport    @relation(fields: [abuseReportId], references: [id], onDelete: Restrict)
+  id             String         @id @default(uuid()) @db.Uuid
+  abuseReportId  String         @db.Uuid
+  kind           AbuseEventKind
+  actorUserId    String?        @db.Uuid
+  reasonCode     String?        @db.VarChar(64)
+  safeNote       String?        @db.VarChar(500)
+  correlationId  String         @db.VarChar(128)
+  idempotencyKey String?        @unique @db.VarChar(128)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  abuseReport    AbuseReport    @relation(fields: [abuseReportId], references: [id], onDelete: Restrict)
 
   @@index([abuseReportId, createdAt])
 }
@@ -2593,6 +2615,10 @@ model ModerationRestriction {
   startsAt        DateTime                    @default(now()) @db.Timestamptz(3)
   endsAt          DateTime?                   @db.Timestamptz(3)
   liftedAt        DateTime?                   @db.Timestamptz(3)
+  liftedByUserId  String?                     @db.Uuid
+  liftReason      String?                     @db.VarChar(500)
+  expiredAt       DateTime?                   @db.Timestamptz(3)
+  idempotencyKey  String                      @unique @db.VarChar(128)
   correlationId   String                      @db.VarChar(128)
   abuseReport     AbuseReport                 @relation(fields: [abuseReportId], references: [id], onDelete: Restrict)
 
@@ -2764,6 +2790,8 @@ model ImportRun {
   checksum             String            @db.VarChar(64)
   status               ImportRunStatus   @default(PENDING)
   redactedErrorSummary String?           @db.VarChar(1000)
+  slaPolicyVersion     String            @default("OPS_CASE_SLA_POLICY_V1") @db.VarChar(32)
+  dueAt                DateTime?         @db.Timestamptz(3)
   startedAt            DateTime?         @db.Timestamptz(3)
   completedAt          DateTime?         @db.Timestamptz(3)
   createdAt            DateTime          @default(now()) @db.Timestamptz(3)
@@ -2773,6 +2801,7 @@ model ImportRun {
 
   @@unique([importSourceId, checksum])
   @@index([importSourceId, status, createdAt])
+  @@index([status, dueAt])
 }
 
 model ImportItem {
@@ -3347,25 +3376,40 @@ model AdditionalJobPermit {
 }
 
 model ImportSetupApproval {
-  id                   String                    @id @default(uuid()) @db.Uuid
-  companyId            String                    @db.Uuid
-  importSourceId       String                    @db.Uuid
-  orderLineId          String?                   @unique @db.Uuid
-  sourceRightsEvidence String                    @db.VarChar(1000)
-  mappingEvidence      String                    @db.VarChar(1000)
-  approvedByUserId     String?                   @db.Uuid
-  approvalReason       String?                   @db.VarChar(500)
-  validUntil           DateTime                  @db.Timestamptz(3)
-  status               ImportSetupApprovalStatus @default(DRAFT)
-  idempotencyKey       String                    @unique @db.VarChar(128)
-  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
-  company              Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  importSource         ImportSource              @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
-  orderLine            OrderLine?                @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+  id                   String                     @id @default(uuid()) @db.Uuid
+  companyId            String                     @db.Uuid
+  importSourceId       String                     @db.Uuid
+  orderLineId          String?                    @unique @db.Uuid
+  sourceRightsEvidence String                     @db.VarChar(1000)
+  mappingEvidence      String                     @db.VarChar(1000)
+  approvedByUserId     String?                    @db.Uuid
+  approvalReason       String?                    @db.VarChar(500)
+  validUntil           DateTime                   @db.Timestamptz(3)
+  status               ImportSetupApprovalStatus  @default(DRAFT)
+  idempotencyKey       String                     @unique @db.VarChar(128)
+  createdAt            DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                   @updatedAt @db.Timestamptz(3)
+  company              Company                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  importSource         ImportSource               @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  orderLine            OrderLine?                 @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
   accessGrant          ImportAccessGrant?
+  events               ImportSetupApprovalEvent[]
 
   @@index([companyId, status, validUntil])
+}
+
+model ImportSetupApprovalEvent {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  importSetupApprovalId String                       @db.Uuid
+  kind                  ImportSetupApprovalEventKind
+  actorUserId           String?                      @db.Uuid
+  reasonCode            String?                      @db.VarChar(64)
+  correlationId         String                       @db.VarChar(128)
+  idempotencyKey        String                       @unique @db.VarChar(128)
+  createdAt             DateTime                     @default(now()) @db.Timestamptz(3)
+  importSetupApproval   ImportSetupApproval          @relation(fields: [importSetupApprovalId], references: [id], onDelete: Restrict)
+
+  @@index([importSetupApprovalId, createdAt])
 }
 
 model ImportAccessGrant {
@@ -3478,6 +3522,8 @@ model SystemTask {
   companyId           String?          @db.Uuid
   kind                SystemTaskKind
   reasonCode          String           @db.VarChar(64)
+  policyVersion       String?          @db.VarChar(32)
+  thresholdCode       String?          @db.VarChar(32)
   evidenceWindowStart DateTime?        @db.Timestamptz(3)
   evidenceWindowEnd   DateTime?        @db.Timestamptz(3)
   evidenceReference   String?          @db.VarChar(255)
@@ -3602,6 +3648,7 @@ model ContentRevision {
   heroMetadata     Json?
   authoredByUserId String                @db.Uuid
   contentHash      String                @db.VarChar(64)
+  version          Int                   @default(1)
   reviewedAt       DateTime?             @db.Timestamptz(3)
   publishedAt      DateTime?             @db.Timestamptz(3)
   createdAt        DateTime              @default(now()) @db.Timestamptz(3)
@@ -3623,6 +3670,7 @@ model ContentEvent {
   actorUserId       String           @db.Uuid
   reasonCode        String?          @db.VarChar(64)
   correlationId     String           @db.VarChar(128)
+  idempotencyKey    String?          @unique @db.VarChar(128)
   createdAt         DateTime         @default(now()) @db.Timestamptz(3)
   contentPage       ContentPage      @relation(fields: [contentPageId], references: [id], onDelete: Restrict)
   contentRevision   ContentRevision  @relation(fields: [contentRevisionId, contentPageId], references: [id, contentPageId], onDelete: Restrict)
@@ -3632,23 +3680,26 @@ model ContentEvent {
 }
 
 model SupportCase {
-  id              String             @id @default(uuid()) @db.Uuid
-  requesterUserId String             @db.Uuid
-  companyId       String?            @db.Uuid
-  category        SupportCategory
-  priority        SupportPriority    @default(NORMAL)
-  status          SupportCaseStatus  @default(OPEN)
-  subject         String             @db.VarChar(200)
-  description     String             @db.VarChar(3000)
-  assigneeUserId  String?            @db.Uuid
-  dueAt           DateTime           @db.Timestamptz(3)
-  correlationId   String             @db.VarChar(128)
-  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime           @updatedAt @db.Timestamptz(3)
-  requester       User               @relation("SupportRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
-  assignee        User?              @relation("SupportAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
-  company         Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  events          SupportCaseEvent[]
+  id                String             @id @default(uuid()) @db.Uuid
+  requesterUserId   String             @db.Uuid
+  companyId         String?            @db.Uuid
+  category          SupportCategory
+  priority          SupportPriority    @default(NORMAL)
+  status            SupportCaseStatus  @default(OPEN)
+  subject           String             @db.VarChar(200)
+  description       String             @db.VarChar(3000)
+  contactPreference String             @default("EMAIL") @db.VarChar(32)
+  assigneeUserId    String?            @db.Uuid
+  dueAt             DateTime           @db.Timestamptz(3)
+  slaPolicyVersion  String             @default("OPS_CASE_SLA_POLICY_V1") @db.VarChar(32)
+  version           Int                @default(1)
+  correlationId     String             @db.VarChar(128)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
+  requester         User               @relation("SupportRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  assignee          User?              @relation("SupportAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
+  company           Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  events            SupportCaseEvent[]
 
   @@index([status, priority, dueAt])
   @@index([assigneeUserId, status, dueAt])
@@ -3656,15 +3707,16 @@ model SupportCase {
 }
 
 model SupportCaseEvent {
-  id            String               @id @default(uuid()) @db.Uuid
-  supportCaseId String               @db.Uuid
-  kind          SupportCaseEventKind
-  actorUserId   String               @db.Uuid
-  safeBody      String?              @db.VarChar(3000)
-  reasonCode    String?              @db.VarChar(64)
-  correlationId String               @db.VarChar(128)
-  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
-  supportCase   SupportCase          @relation(fields: [supportCaseId], references: [id], onDelete: Restrict)
+  id             String               @id @default(uuid()) @db.Uuid
+  supportCaseId  String               @db.Uuid
+  kind           SupportCaseEventKind
+  actorUserId    String               @db.Uuid
+  safeBody       String?              @db.VarChar(3000)
+  reasonCode     String?              @db.VarChar(64)
+  correlationId  String               @db.VarChar(128)
+  idempotencyKey String?              @unique @db.VarChar(128)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  supportCase    SupportCase          @relation(fields: [supportCaseId], references: [id], onDelete: Restrict)
 
   @@index([supportCaseId, createdAt])
 }

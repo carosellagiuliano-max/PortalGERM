@@ -294,8 +294,8 @@ export async function registerEmployer(
   try {
     const registration = await dependencies.database.$transaction(
       async (transaction) => {
-        const canton = await transaction.canton.findUnique({
-          where: { code: signals.cantonCode },
+        const canton = await transaction.canton.findFirst({
+          where: { code: signals.cantonCode, isActive: true },
           select: { id: true },
         });
         if (canton === null) throw new Error("REGISTRATION_CANTON_MISSING");

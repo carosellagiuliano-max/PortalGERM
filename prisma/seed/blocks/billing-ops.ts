@@ -49,6 +49,7 @@ const INVOICE_COUNT = 7;
 const JOB_BOOST_COUNT = 10;
 const AUDIT_COUNT = 30;
 const ANALYTICS_COUNT = 300;
+const PHASE_11_IMPORT_SOURCE_KEY = "phase-11:licensed-supply-demo-json";
 
 export const ANALYTICS_SEED_COHORT_CONTRACT = Object.freeze({
   candidateActivation: Object.freeze({ registered: 20, completed: 18, timely: 17 }),
@@ -246,6 +247,7 @@ export const BILLING_OPS_SEED_IDENTITIES: readonly SeedIdentityRecord[] =
     ...Array.from({ length: 3 }, (_, index) =>
       createSeedIdentity("system-task", `phase-05:${index + 1}`),
     ),
+    createSeedIdentity("import-source", PHASE_11_IMPORT_SOURCE_KEY),
   ]);
 
 /**
@@ -261,6 +263,17 @@ export function buildBillingOpsSeedIdentities(
     ["PRO", "BUSINESS", "ENTERPRISE_CONTRACT"].includes(company.planCode),
   );
   const identities: SeedIdentityRecord[] = [...BILLING_OPS_SEED_IDENTITIES];
+  const importCompany = requireAt(
+    [...input.companies].sort(compareBySlug),
+    0,
+    "licensed import Company",
+  );
+  identities.push(
+    createSeedIdentity(
+      "import-source-company-right",
+      `${PHASE_11_IMPORT_SOURCE_KEY}:${importCompany.slug}`,
+    ),
+  );
 
   for (const company of paidCompanies) {
     identities.push(createSeedIdentity("company-billing-profile", company.slug));
@@ -425,6 +438,12 @@ export async function seedBillingOpsContent(
     input.companies,
     adminUserId,
   );
+  await seedPhase11LicensedImportSource(
+    db,
+    anchorAt,
+    input.companies,
+    adminUserId,
+  );
 
   const blockDigest = buildBillingOpsSeedBlockDigest(input);
 
@@ -559,6 +578,87 @@ function validateBillingInput(input: BillingOpsSeedInput): void {
     throw new Error("Duplicate Job handles are not allowed in Billing/Ops seed input.");
   }
   buildBillingOpsSeedIdentities(input);
+}
+
+async function seedPhase11LicensedImportSource(
+  db: PrismaClient,
+  anchorAt: Date,
+  companies: readonly BillingCompanyHandle[],
+  adminUserId: string,
+): Promise<void> {
+  const company = requireAt(
+    [...companies].sort(compareBySlug),
+    0,
+    "licensed import Company",
+  );
+  const importSourceId = stableSeedId("import-source", PHASE_11_IMPORT_SOURCE_KEY);
+  const sourceExpected = {
+    id: importSourceId,
+    name: "Lizenzierter Demo-Supply-Feed",
+    sourceReference: "local-demo-feed-v1",
+    licenseReference: "demo-license-evidence:phase-11",
+    provenance: "DEMO",
+    format: "JSON",
+    isActive: true,
+  } as const;
+  await createOrVerifySeedRecord({
+    entity: "ImportSource",
+    naturalKey: PHASE_11_IMPORT_SOURCE_KEY,
+    findExisting: () => db.importSource.findUnique({ where: { id: importSourceId } }),
+    create: () => db.importSource.create({ data: { ...sourceExpected, createdAt: anchorAt, updatedAt: anchorAt } }),
+    project: (record) => ({
+      id: record.id,
+      name: record.name,
+      sourceReference: record.sourceReference,
+      licenseReference: record.licenseReference,
+      provenance: record.provenance,
+      format: record.format,
+      isActive: record.isActive,
+    }),
+    expected: sourceExpected,
+  });
+
+  const rightNaturalKey = `${PHASE_11_IMPORT_SOURCE_KEY}:${company.slug}`;
+  const rightId = stableSeedId("import-source-company-right", rightNaturalKey);
+  const validFrom = addDays(anchorAt, -30);
+  const validTo = addDays(anchorAt, 3650);
+  const rightExpected = {
+    id: rightId,
+    importSourceId,
+    companyId: company.id,
+    rightsEvidence: "Demo-Lizenz: lokale Phase-11-Importprüfung für genau diese Firma.",
+    grantedByUserId: adminUserId,
+    validFrom: validFrom.toISOString(),
+    validTo: validTo.toISOString(),
+    revokedAt: null,
+  } as const;
+  await createOrVerifySeedRecord({
+    entity: "ImportSourceCompanyRight",
+    naturalKey: rightNaturalKey,
+    findExisting: () => db.importSourceCompanyRight.findUnique({ where: { id: rightId } }),
+    create: () => db.importSourceCompanyRight.create({ data: {
+      id: rightId,
+      importSourceId,
+      companyId: company.id,
+      rightsEvidence: rightExpected.rightsEvidence,
+      grantedByUserId: adminUserId,
+      validFrom,
+      validTo,
+      revokedAt: null,
+      createdAt: anchorAt,
+    } }),
+    project: (record) => ({
+      id: record.id,
+      importSourceId: record.importSourceId,
+      companyId: record.companyId,
+      rightsEvidence: record.rightsEvidence,
+      grantedByUserId: record.grantedByUserId,
+      validFrom: record.validFrom.toISOString(),
+      validTo: record.validTo?.toISOString() ?? null,
+      revokedAt: record.revokedAt?.toISOString() ?? null,
+    }),
+    expected: rightExpected,
+  });
 }
 
 async function seedBillingProfiles(
@@ -2592,21 +2692,21 @@ async function seedContentPages(
     if (revision.status === "DRAFT") {
       revision = await db.contentRevision.update({
         where: { id: revisionId },
-        data: { status: "IN_REVIEW" },
+        data: { status: "IN_REVIEW", version: { increment: 1 } },
       });
     }
     const reviewedAt = addMinutes(createdAt, 20);
     if (revision.status === "IN_REVIEW") {
       revision = await db.contentRevision.update({
         where: { id: revisionId },
-        data: { status: "APPROVED", reviewedAt },
+        data: { status: "APPROVED", reviewedAt, version: { increment: 1 } },
       });
     }
     const publishedAt = addMinutes(createdAt, 30);
     if (revision.status === "APPROVED") {
       revision = await db.contentRevision.update({
         where: { id: revisionId },
-        data: { status: "PUBLISHED", publishedAt },
+        data: { status: "PUBLISHED", publishedAt, version: { increment: 1 } },
       });
     }
     if (
