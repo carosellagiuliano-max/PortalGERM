@@ -166,8 +166,11 @@ const PUBLIC_JOB_CLUSTER_SELECT = {
 
 const PUBLIC_JOB_DETAIL_EXTRAS_SELECT = {
   id: true,
+  companyIntro: true,
   tasks: true,
   requirements: true,
+  niceToHave: true,
+  offer: true,
   applicationProcessSteps: true,
   requiredDocumentKinds: true,
   remoteCountryCode: true,
@@ -1015,8 +1018,11 @@ function toDetailModel(
   const card = toCardModel(row, now, false);
   return Object.freeze({
     ...card,
+    companyIntro: cleanOptional(revision.companyIntro),
     tasks: cleanList(revision.tasks),
     requirements: cleanList(revision.requirements),
+    niceToHave: cleanList(revision.niceToHave),
+    offer: cleanOptional(revision.offer),
     benefits: Object.freeze(revision.benefits.map((benefit) => Object.freeze({
       code: benefit.benefitCode,
       description: stripUnsafeHtml(benefit.description),

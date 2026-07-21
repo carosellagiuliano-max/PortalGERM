@@ -70,8 +70,11 @@ const COMPANY_ID = "22222222-2222-4222-8222-222222222222";
 const REVISION_ID = "33333333-3333-4333-8333-333333333333";
 
 const DETAIL_ONLY_REVISION_FIELDS = [
+  "companyIntro",
   "tasks",
   "requirements",
+  "niceToHave",
+  "offer",
   "applicationProcessSteps",
   "requiredDocumentKinds",
   "remoteCountryCode",
@@ -404,7 +407,10 @@ describe("public Job query data minimization", () => {
 
     expect(result).toMatchObject({
       id: JOB_ID,
+      companyIntro: "Wir bauen sichere Plattformen",
       tasks: ["Sichere Systeme bauen"],
+      niceToHave: ["PostgreSQL"],
+      offer: "Lernbudget & Weiterbildung",
       applicationContactValue: "jobs@example.test",
       fairScoreVersion: "v2",
     });
@@ -419,8 +425,11 @@ describe("public Job query data minimization", () => {
       select: expect.objectContaining({
         publishedRevision: {
           select: expect.objectContaining({
+            companyIntro: true,
             tasks: true,
             requirements: true,
+            niceToHave: true,
+            offer: true,
             applicationContactValue: true,
             benefits: expect.any(Object),
             skills: expect.any(Object),
@@ -636,8 +645,11 @@ function installKeysetRows(
 function detailExtras() {
   return {
     id: REVISION_ID,
+    companyIntro: "<p>Wir bauen sichere Plattformen</p>",
     tasks: ["Sichere Systeme bauen"],
     requirements: ["TypeScript"],
+    niceToHave: ["<strong>PostgreSQL</strong>"],
+    offer: "<p>Lernbudget &amp; Weiterbildung</p><script>private()</script>",
     applicationProcessSteps: ["Gespräch"],
     requiredDocumentKinds: ["CV"],
     remoteCountryCode: "CH",

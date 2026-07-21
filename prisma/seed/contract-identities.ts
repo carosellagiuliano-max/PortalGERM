@@ -11,6 +11,7 @@ import {
   COMPANY_FIXTURES,
   COMPANIES_JOBS_SEED_IDENTITIES,
   DEMO_ACCOUNT_FIXTURES,
+  EMPLOYER_CORE_SEED_IDENTITIES,
   buildJobFixtures,
 } from "@/prisma/seed/fixtures";
 import { mergeSeedIdentitySets } from "@/prisma/seed/identity-catalog";
@@ -54,15 +55,20 @@ export function buildSeedPlanningGraph(): SeedPlanningGraph {
       }),
     ),
   );
-  const admin = DEMO_ACCOUNT_FIXTURES.find((account) => account.role === "ADMIN");
+  const admin = DEMO_ACCOUNT_FIXTURES.find(
+    (account) => account.role === "ADMIN",
+  );
   if (admin === undefined) {
-    throw new Error("The Phase-05 identity contract requires one admin account.");
+    throw new Error(
+      "The Phase-05 identity contract requires one admin account.",
+    );
   }
 
   const identities = mergeSeedIdentitySets(
     REFERENCE_CATALOG_SEED_IDENTITIES,
     COMPANIES_JOBS_SEED_IDENTITIES,
     AUTH_RBAC_SEED_IDENTITIES,
+    EMPLOYER_CORE_SEED_IDENTITIES,
     CANDIDATE_WORKFLOW_SEED_IDENTITIES,
     buildBillingOpsSeedIdentities({ companies, jobs }),
   );

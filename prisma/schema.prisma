@@ -884,6 +884,8 @@ enum AuditAction {
   COMPANY_CREATED_WITH_OWNER
   COMPANY_CLAIM_REQUESTED
   COMPANY_CLAIM_EVIDENCE_REQUESTED
+  COMPANY_CLAIM_EVIDENCE_ADDED
+  COMPANY_CLAIM_CANCELLED
   COMPANY_CLAIM_APPROVED
   COMPANY_CLAIM_REJECTED
   COMPANY_PROFILE_UPDATED
@@ -1125,6 +1127,8 @@ model User {
   companyMemberships       CompanyMembership[]
   claimRequests            CompanyClaimRequest[]        @relation("ClaimRequester")
   verificationRequests     CompanyVerificationRequest[] @relation("VerificationRequester")
+  invitationsSent          CompanyInvitation[]          @relation("InvitationInviter")
+  invitationsAccepted      CompanyInvitation[]          @relation("InvitationAcceptor")
   notifications            Notification[]
   userConsents             UserConsentEvent[]           @relation("ConsentOwner")
   userConsentsActed        UserConsentEvent[]           @relation("UserConsentActor")
@@ -1426,6 +1430,9 @@ model Company {
   website                           String?                      @db.VarChar(512)
   logoStorageKey                    String?                      @db.VarChar(512)
   coverStorageKey                   String?                      @db.VarChar(512)
+  linkedinUrl                      String?                      @db.VarChar(512)
+  facebookUrl                      String?                      @db.VarChar(512)
+  instagramUrl                     String?                      @db.VarChar(512)
   about                             String?                      @db.VarChar(5000)
   values                            String[]
   benefits                          String[]
@@ -1560,6 +1567,7 @@ model CompanyInvitation {
   inviteeEmailNormalized String                   @db.VarChar(320)
   intendedRole           CompanyMembershipRole
   tokenHash              String                   @unique @db.VarChar(64)
+  tokenVersion           Int                      @default(1)
   status                 CompanyInvitationStatus  @default(PENDING)
   expiresAt              DateTime                 @db.Timestamptz(3)
   acceptedAt             DateTime?                @db.Timestamptz(3)
@@ -1567,6 +1575,8 @@ model CompanyInvitation {
   createdAt              DateTime                 @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime                 @updatedAt @db.Timestamptz(3)
   company                Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  inviter                User                     @relation("InvitationInviter", fields: [inviterUserId], references: [id], onDelete: Restrict)
+  acceptedBy             User?                    @relation("InvitationAcceptor", fields: [acceptedByUserId], references: [id], onDelete: Restrict)
   events                 CompanyInvitationEvent[]
 
   @@index([companyId, status, expiresAt])
@@ -1632,11 +1642,13 @@ model CompanyVerificationRequest {
   updatedAt           DateTime                    @updatedAt @db.Timestamptz(3)
   company             Company                     @relation(fields: [companyId], references: [id], onDelete: Restrict)
   requestedBy         User                        @relation("VerificationRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  supersedes          CompanyVerificationRequest? @relation("VerificationSupersession", fields: [supersedesRequestId], references: [id], onDelete: Restrict)
+  supersedes          CompanyVerificationRequest? @relation("VerificationSupersession", fields: [supersedesRequestId, companyId], references: [id, companyId], onDelete: Restrict)
   supersededBy        CompanyVerificationRequest? @relation("VerificationSupersession")
   events              CompanyVerificationEvent[]
 
   @@index([companyId, status, createdAt])
+  @@unique([id, companyId])
+  @@unique([supersedesRequestId, companyId])
 }
 
 model CompanyVerificationEvent {
@@ -1663,6 +1675,7 @@ model Job {
   status                JobStatus             @default(DRAFT)
   origin                JobOrigin             @default(MANUAL)
   sourceReference       String                @default("platform-manual") @db.VarChar(255)
+  version               Int                   @default(1)
   importSourceId        String?               @db.Uuid
   currentRevisionId     String?               @unique @db.Uuid
   publishedRevisionId   String?               @unique @db.Uuid
@@ -1715,9 +1728,12 @@ model JobRevision {
   revisionNumber          Int
   contentLanguage         Language                        @default(DE)
   title                   String                          @db.VarChar(200)
+  companyIntro            String?                         @db.VarChar(1200)
   description             String                          @db.Text
   tasks                   String[]
   requirements            String[]
+  niceToHave              String[]                        @default([])
+  offer                   String?                         @db.Text
   applicationProcessSteps String[]
   requiredDocumentKinds   RequiredDocumentKind[]
   jobType                 JobType
@@ -1742,10 +1758,12 @@ model JobRevision {
   applicationContactValue String                          @db.VarChar(512)
   authoredByUserId        String                          @db.Uuid
   contentChecksum         String                          @db.VarChar(64)
+  version                 Int                             @default(1)
   submittedAt             DateTime?                       @db.Timestamptz(3)
   approvedAt              DateTime?                       @db.Timestamptz(3)
   rejectedAt              DateTime?                       @db.Timestamptz(3)
   createdAt               DateTime                        @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                        @default(now()) @updatedAt @db.Timestamptz(3)
   job                     Job                             @relation("JobRevisions", fields: [jobId], references: [id], onDelete: Restrict)
   currentForJob           Job?                            @relation("CurrentJobRevision")
   publishedForJob         Job?                            @relation("PublishedJobRevision")
@@ -1893,6 +1911,9 @@ model JobReportingCheck {
   reasonSnapshot          String                @db.VarChar(1000)
   disclaimerSnapshot      String                @db.VarChar(1000)
   sourceSnapshot          String                @db.VarChar(500)
+  datasetVersionSnapshot  String                @db.VarChar(64)
+  dataYearSnapshot        Int
+  referenceUrlSnapshot    String?               @db.VarChar(1000)
   checkedByUserId         String?               @db.Uuid
   checkedAt               DateTime              @db.Timestamptz(3)
   jobRevision             JobRevision           @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)

@@ -275,6 +275,10 @@ describe("PostgreSQL locked Reveal authorization", () => {
     const clients = requireClients();
     const fixture = await createRevealFixture(clients.first, "verification");
     const port = createPostgresRevealConfirmationPort(clients.first);
+    await clients.first.companyVerificationRequest.update({
+      where: { id: fixture.verificationRequestId },
+      data: { status: "REVOKED" },
+    });
     const currentVerification = await clients.first.companyVerificationRequest.create({
       data: {
         companyId: fixture.companyId,

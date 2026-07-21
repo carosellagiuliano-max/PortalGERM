@@ -14,12 +14,14 @@ export function PrivateShell({
   navigation,
   navigationVariant = "top",
   identity,
+  contextControl,
   children,
 }: Readonly<{
   area: string;
   navigation: readonly PrivateNavigationItem[];
   navigationVariant?: "top" | "sidebar";
   identity?: Readonly<{ displayName: string; secondaryLabel?: string }>;
+  contextControl?: React.ReactNode;
   children: React.ReactNode;
 }>) {
   const initials = identity?.displayName
@@ -40,6 +42,7 @@ export function PrivateShell({
             <p className="mt-1 text-lg font-semibold">{area}</p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {contextControl}
             {identity === undefined ? null : (
               <div className="flex min-w-0 items-center gap-3 rounded-lg border bg-card px-3 py-2">
                 <Avatar size="lg">

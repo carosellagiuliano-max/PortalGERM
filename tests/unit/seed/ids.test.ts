@@ -12,9 +12,9 @@ import {
   stableSeedId,
 } from "@/prisma/seed/ids";
 
-describe("stable Phase-09 seed identities", () => {
+describe("stable Phase-10 seed identities", () => {
   it("rotates the manifest version without changing Phase-05 semantic IDs", () => {
-    expect(SEED_DATASET_VERSION).toBe("phase-09-demo-v6");
+    expect(SEED_DATASET_VERSION).toBe("phase-10-demo-v7");
     expect(SEED_COMPATIBILITY_BASE_VERSION).toBe("phase-05-demo-v1");
     expect(stableSeedId("user", "candidate@demo.ch")).toBe(
       "b05d30e2-ade6-57f2-b376-12cef27a86e4",

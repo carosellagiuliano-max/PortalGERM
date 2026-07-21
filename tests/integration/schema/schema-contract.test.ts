@@ -521,6 +521,10 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260720231000_phase_09_demo_application_event_reconciliation",
       "20260720231100_phase_09_demo_job_alert_reconciliation",
       "20260720231200_phase_09_job_alert_delivery_snapshots",
+      "20260721101500_phase_10_employer_core",
+      "20260721114500_phase_10_employer_core_hardening",
+      "20260721121500_phase_10_job_revision_defaults_compat",
+      "20260721123000_phase_10_verification_supersession_lock",
     ]);
     expect(
       migrations.rows.every(

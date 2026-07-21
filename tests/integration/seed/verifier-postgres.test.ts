@@ -27,6 +27,7 @@ type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
 let isolated: MigratedDatabase | undefined;
 let database: DatabaseClient | undefined;
+let parallelDatabase: DatabaseClient | undefined;
 
 function client(): DatabaseClient {
   if (database === undefined) {
@@ -35,12 +36,22 @@ function client(): DatabaseClient {
   return database;
 }
 
+function parallelClient(): DatabaseClient {
+  if (parallelDatabase === undefined) {
+    throw new Error("The parallel seed test database is not initialized.");
+  }
+  return parallelDatabase;
+}
+
 beforeAll(async () => {
   isolated = await createMigratedTestDatabase("phase_06_database_verifier");
   database = createDatabaseClient(isolated.connectionString);
+  parallelDatabase = createDatabaseClient(isolated.connectionString);
 }, 120_000);
 
 afterAll(async () => {
+  await parallelDatabase?.$disconnect().catch(() => undefined);
+  parallelDatabase = undefined;
   await database?.$disconnect().catch(() => undefined);
   database = undefined;
   await isolated?.dispose();
@@ -48,7 +59,7 @@ afterAll(async () => {
 });
 
 describe.sequential("Phase-06 independent PostgreSQL verifier", () => {
-  it("derives the exact golden contract from rows and is read-only on a sealed seed", async () => {
+  it("serializes two real parallel seed runs and verifies the sealed golden contract", async () => {
     const legacyManifest = await client().demoSeedManifest.create({
       data: {
         anchorAt: new Date("2026-07-19T10:00:00.000Z"),
@@ -60,7 +71,12 @@ describe.sequential("Phase-06 independent PostgreSQL verifier", () => {
         seedVersion: SEED_COMPATIBILITY_BASE_VERSION,
       },
     });
-    const seeded = await orchestrateDemoSeed(client());
+    const [firstRun, secondRun] = await Promise.all([
+      orchestrateDemoSeed(client()),
+      orchestrateDemoSeed(parallelClient()),
+    ]);
+    const seeded = firstRun.previouslyCompleted ? secondRun : firstRun;
+    const concurrentRerun = firstRun.previouslyCompleted ? firstRun : secondRun;
     const persisted = await client().demoSeedManifest.findFirstOrThrow({
       where: {
         completedAt: { not: null },
@@ -70,18 +86,15 @@ describe.sequential("Phase-06 independent PostgreSQL verifier", () => {
       },
     });
     await verifyPhase06AuthRbacMatrix(client(), persisted.anchorAt);
-    const before = await loadObservedVersions(client());
-
-    const rerun = await orchestrateDemoSeed(client());
-    const afterRerun = await loadObservedVersions(client());
+    const afterConcurrentRuns = await loadObservedVersions(client());
     const direct = await verifyDemoSeedDatabase(client(), persisted.anchorAt);
     const sealed = await verifyPersistedDemoSeed(client());
     const after = await loadObservedVersions(client());
 
-    expect(seeded.previouslyCompleted).toBe(false);
-    expect(rerun.previouslyCompleted).toBe(true);
-    expect(rerun.envelope).toEqual(seeded.envelope);
-    expect(afterRerun).toEqual(before);
+    expect(
+      [firstRun.previouslyCompleted, secondRun.previouslyCompleted].sort(),
+    ).toEqual([false, true]);
+    expect(concurrentRerun.envelope).toEqual(seeded.envelope);
     expect(direct.counts).toEqual(SEED_GOLDEN_COUNTS);
     expect(direct.report.checkCount).toBeGreaterThan(350);
     expect(direct.blockDigest).toEqual(
@@ -91,7 +104,7 @@ describe.sequential("Phase-06 independent PostgreSQL verifier", () => {
     );
     expect(sealed.envelope).toEqual(seeded.envelope);
     expect(sealed.verificationCheckCount).toBe(direct.report.checkCount);
-    expect(after).toEqual(afterRerun);
+    expect(after).toEqual(afterConcurrentRuns);
     expect(
       await client().demoSeedManifest.findUniqueOrThrow({
         where: {

@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Building2Icon, ShieldCheckIcon } from "lucide-react";
-
-import { CompanyContextSwitcher } from "@/components/auth/company-context-switcher";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { notFound } from "next/navigation";
+import { Dashboard } from "@/components/employer/dashboard";
 import { getEmployerContext } from "@/lib/auth/employer-context";
+import { getDatabase } from "@/lib/db/client";
+import { getEmployerDashboardData } from "@/lib/employer/dashboard";
 
 export const metadata: Metadata = { title: "Arbeitgeberübersicht" };
 
@@ -13,6 +11,17 @@ export default async function EmployerDashboardPage() {
   const context = await getEmployerContext();
   const memberships = context?.memberships ?? [];
   const current = context?.current ?? null;
+
+  if (current !== null) {
+    const data = await getEmployerDashboardData({
+      companyId: current.companyId,
+      membershipId: current.membershipId,
+      membershipRole: current.membershipRole,
+      userId: context!.user.id,
+    }, getDatabase());
+    if (data === null) notFound();
+    return <Dashboard data={data} />;
+  }
 
   return (
     <section aria-labelledby="employer-dashboard-title">
@@ -24,61 +33,11 @@ export default async function EmployerDashboardPage() {
         Dein persönlicher Zugang ist aktiv. Firmenkontext und Mitgliedschaft werden bei
         jedem Aufruf serverseitig erneut geprüft.
       </p>
-      <div className="mt-8 grid gap-5 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle as="h2" className="flex items-center gap-2">
-              <Building2Icon className="size-5 text-primary" aria-hidden="true" />
-              Unternehmensbereich
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {memberships.length === 0 ? (
-              <div className="grid gap-4">
-                <p className="leading-6 text-muted-foreground">
-                  Für dein Konto ist noch kein aktiver Firmenzugang verfügbar. Wenn du
-                  nach der Registrierung zu einer Prüfung weitergeleitet wurdest, kannst
-                  du dort den aktuellen sicheren Status sehen.
-                </p>
-                <Link
-                  href="/employer/company/claim-pending"
-                  className={buttonVariants({ variant: "outline", className: "w-fit" })}
-                >
-                  Firmenzugang prüfen
-                </Link>
-              </div>
-            ) : memberships.length > 1 ? (
-              <CompanyContextSwitcher
-                companies={memberships}
-                currentCompanyId={current?.companyId}
-              />
-            ) : (
-              <div className="grid gap-2">
-                <p className="font-medium">{current?.companyName}</p>
-                <p className="leading-6 text-muted-foreground">
-                  {current?.companyStatus === "DRAFT"
-                    ? "Das Unternehmensprofil befindet sich im sicheren Onboarding."
-                    : "Dieser Firmenkontext wurde aus deiner aktiven Mitgliedschaft geladen."}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle as="h2" className="flex items-center gap-2">
-              <ShieldCheckIcon className="size-5 text-primary" aria-hidden="true" />
-              Sicher getrennte Mandanten
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="leading-6 text-muted-foreground">
-              Ein globaler Arbeitgeber- oder Recruiter-Status gewährt keinen Zugriff auf
-              fremde Unternehmen. Die operativen Funktionen folgen in späteren Phasen.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <p className="mt-8 rounded-xl border bg-card p-5 text-muted-foreground">
+        {memberships.length === 0
+          ? "Noch kein aktiver Firmenzugang. Den Status findest du unter Firmenzugang prüfen."
+          : "Wähle oben einen Firmenkontext, um die echten Kennzahlen zu laden."}
+      </p>
     </section>
   );
 }

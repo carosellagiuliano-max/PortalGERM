@@ -349,6 +349,7 @@ async function createApprovedJob(
       applicationContactValue: "jobs@example.ch",
       authoredByUserId: IDS.user,
       contentChecksum: checksumCharacter.repeat(64),
+      submittedAt: NOW,
       approvedAt: NOW,
     },
   });

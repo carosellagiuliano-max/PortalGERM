@@ -55,22 +55,23 @@ describe("create-or-verify seed records", () => {
     ).rejects.toBeInstanceOf(SeedDataDriftError);
   });
 
-  it("re-reads and verifies a concurrent unique-insert winner", async () => {
+  it("propagates a unique violation so the transaction boundary can retry", async () => {
     const findExisting = vi
       .fn<() => Promise<Fixture | null>>()
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: "stable-id", name: "Demo" });
     const uniqueError = Object.assign(new Error("unique"), { code: "P2002" });
 
-    const result = await createOrVerifySeedRecord(
-      input({
-        create: vi.fn(async () => Promise.reject(uniqueError)),
-        findExisting,
-      }),
-    );
+    await expect(
+      createOrVerifySeedRecord(
+        input({
+          create: vi.fn(async () => Promise.reject(uniqueError)),
+          findExisting,
+        }),
+      ),
+    ).rejects.toBe(uniqueError);
 
-    expect(result.created).toBe(false);
-    expect(findExisting).toHaveBeenCalledTimes(2);
+    expect(findExisting).toHaveBeenCalledOnce();
   });
 
   it("does not hide non-unique database errors", async () => {

@@ -75,7 +75,7 @@ const RATE_LIMITED_AUDIT_METADATA_SCHEMA = z.strictObject({
 const VERSIONED_IDENTIFIER_HASH_PATTERN =
   /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}:[a-f0-9]{64}$/u;
 const USER_REGISTERED_AUDIT_METADATA_SCHEMA = z.strictObject({
-  role: z.enum(["CANDIDATE", "EMPLOYER"]),
+  role: z.enum(["CANDIDATE", "EMPLOYER", "RECRUITER"]),
 });
 const USER_LOGIN_FAILED_AUDIT_METADATA_SCHEMA = z.strictObject({
   identifierHash: z.string().regex(VERSIONED_IDENTIFIER_HASH_PATTERN),

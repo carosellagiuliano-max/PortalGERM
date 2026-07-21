@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { DatabaseClient } from "@/lib/db/factory";
-import {
-  buildAuthRbacSeedBlockDigest,
-} from "@/prisma/seed/blocks/auth-rbac";
+import { buildAuthRbacSeedBlockDigest } from "@/prisma/seed/blocks/auth-rbac";
 import {
   buildBillingOpsSeedBlockDigest,
   buildBillingOpsSeedIdentities,
 } from "@/prisma/seed/blocks/billing-ops";
+import { buildEmployerCoreSeedBlockDigest } from "@/prisma/seed/blocks/employer-core";
 import {
   SEED_DATASET_VERSION,
   SEED_GOLDEN_COUNTS,
@@ -21,6 +20,7 @@ import {
   CANDIDATE_WORKFLOW_BLOCK_DIGEST,
   COMPANIES_JOBS_SEED_IDENTITIES,
   DEMO_ACCOUNT_FIXTURES,
+  EMPLOYER_CORE_SEED_IDENTITIES,
 } from "@/prisma/seed/fixtures";
 import { DemoSeedGuardError } from "@/prisma/seed/guard";
 import { stableSeedId } from "@/prisma/seed/ids";
@@ -45,11 +45,12 @@ const LOCAL_DATABASE =
 describe("Phase-06 seed orchestrator", () => {
   it("guards production before constructing a client or reaching a write port", async () => {
     const write = vi.fn();
-    const factory = vi.fn(() =>
-      ({
-        demoSeedManifest: { create: write },
-        $disconnect: vi.fn(),
-      }) as unknown as DatabaseClient,
+    const factory = vi.fn(
+      () =>
+        ({
+          demoSeedManifest: { create: write },
+          $disconnect: vi.fn(),
+        }) as unknown as DatabaseClient,
     );
 
     await expect(
@@ -73,16 +74,19 @@ describe("Phase-06 seed orchestrator", () => {
     const fixture = createSuccessfulPorts();
 
     const result = await orchestrateDemoSeed(
-      {} as DatabaseClient,
+      createLockingDatabase(fixture.calls).database,
       fixture.ports,
     );
 
     expect(fixture.calls).toEqual([
       "planning",
       "begin",
+      "lock",
+      "begin",
       "reference-catalog",
       "companies-jobs",
       "auth-rbac",
+      "employer-core",
       "candidate-workflows",
       "billing-ops",
       "database-verification",
@@ -96,15 +100,15 @@ describe("Phase-06 seed orchestrator", () => {
       "candidate-workflows",
       "companies-jobs",
       "database-verification",
+      "employer-core",
       "reference-catalog",
     ]);
     expect(result.envelope.manifest.identityCount).toBe(
       fixture.planning.identities.length,
     );
 
-    const verificationExpectations = vi.mocked(
-      fixture.ports.verifyDatabase,
-    ).mock.calls[0]?.[2];
+    const verificationExpectations = vi.mocked(fixture.ports.verifyDatabase)
+      .mock.calls[0]?.[2];
     expect(verificationExpectations?.expectedIdentityIds).toEqual(
       fixture.planning.identities.map(({ id }) => id),
     );
@@ -118,20 +122,44 @@ describe("Phase-06 seed orchestrator", () => {
     });
 
     await expect(
-      orchestrateDemoSeed({} as DatabaseClient, fixture.ports),
+      orchestrateDemoSeed(
+        createLockingDatabase(fixture.calls).database,
+        fixture.ports,
+      ),
     ).rejects.toThrow("no longer matches its sealed manifest hash");
 
     expect(fixture.calls).toEqual([
       "planning",
       "begin",
+      "lock",
+      "begin",
       "reference-catalog",
       "companies-jobs",
       "auth-rbac",
+      "employer-core",
       "candidate-workflows",
       "billing-ops",
       "database-verification",
     ]);
     expect(fixture.ports.completeSeedRun).not.toHaveBeenCalled();
+  });
+
+  it("retries a busy versioned run lock before invoking any seed block", async () => {
+    const fixture = createSuccessfulPorts();
+    const locking = createLockingDatabase(fixture.calls, [false, true]);
+
+    const result = await orchestrateDemoSeed(locking.database, fixture.ports);
+
+    expect(result.previouslyCompleted).toBe(false);
+    expect(locking.transaction).toHaveBeenCalledTimes(2);
+    expect(fixture.calls.slice(0, 5)).toEqual([
+      "planning",
+      "begin",
+      "lock",
+      "lock",
+      "begin",
+    ]);
+    expect(fixture.calls.filter((call) => call === "reference-catalog")).toHaveLength(1);
   });
 
   it("reconstructs a sealed manifest read-only without invoking write methods", async () => {
@@ -208,13 +236,12 @@ function createSuccessfulPorts(
   const staticDigests = buildStaticSeedBlockDigests(planning);
   const authRbacDigest = buildAuthRbacSeedBlockDigest();
   const companyDigest = requireDigest(staticDigests, "companies-jobs");
+  const employerCoreDigest = buildEmployerCoreSeedBlockDigest();
   const billingIdentities = buildBillingOpsSeedIdentities(planning);
   const billingDigest = buildBillingOpsSeedBlockDigest(planning);
-  const verificationDigest = createSeedBlockDigest(
-    "database-verification",
-    1,
-    { verified: true },
-  );
+  const verificationDigest = createSeedBlockDigest("database-verification", 1, {
+    verified: true,
+  });
   let completedEnvelope: unknown;
 
   const ports = {
@@ -247,6 +274,13 @@ function createSuccessfulPorts(
         identities: AUTH_RBAC_SEED_IDENTITIES,
       };
     }),
+    seedEmployerCore: vi.fn(async () => {
+      calls.push("employer-core");
+      return {
+        blockDigest: employerCoreDigest,
+        identities: EMPLOYER_CORE_SEED_IDENTITIES,
+      };
+    }),
     seedCandidateWorkflows: vi.fn(async () => {
       calls.push("candidate-workflows");
       return {
@@ -275,7 +309,10 @@ function createSuccessfulPorts(
         orderIds: [],
         salesLeadIds: [],
         subscriptionIds: [],
-        taxRateVersionId: stableSeedId("tax-rate-version", "CH:VAT:810:phase-05"),
+        taxRateVersionId: stableSeedId(
+          "tax-rate-version",
+          "CH:VAT:810:phase-05",
+        ),
       };
     }),
     verifyDatabase: vi.fn(async () => {
@@ -304,6 +341,35 @@ function createSuccessfulPorts(
     },
     planning,
     ports,
+  };
+}
+
+function createLockingDatabase(
+  calls: string[],
+  acquisitions: readonly boolean[] = [true],
+) {
+  let attempt = 0;
+  const transaction = vi.fn(
+    async (
+      operation: (transactionClient: {
+        $executeRaw: () => Promise<number>;
+        $queryRaw: () => Promise<readonly Readonly<{ acquired: boolean }>[]>;
+      }) => Promise<unknown>,
+    ) =>
+      operation({
+        $executeRaw: async () => 0,
+        $queryRaw: async () => {
+          calls.push("lock");
+          const acquired = acquisitions[attempt] ?? true;
+          attempt += 1;
+          return [{ acquired }];
+        },
+      }),
+  );
+
+  return {
+    database: { $transaction: transaction } as unknown as DatabaseClient,
+    transaction,
   };
 }
 

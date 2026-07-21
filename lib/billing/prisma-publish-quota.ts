@@ -39,7 +39,7 @@ export function createPrismaPublishQuotaPort<TPublication>(
       return database.$transaction(
         async (transaction) => {
           const entitlementRepository =
-            createTransactionEntitlementRepository(transaction);
+            createPrismaEntitlementRepository(transaction);
           const quotaTransaction: PublishQuotaTransaction<TPublication> =
             Object.freeze({
               async acquireCompanyQuotaAdvisoryLock(namespace, companyId) {
@@ -100,8 +100,8 @@ export function createPrismaPublishQuotaPort<TPublication>(
   });
 }
 
-function createTransactionEntitlementRepository(
-  transaction: Prisma.TransactionClient,
+export function createPrismaEntitlementRepository(
+  transaction: Prisma.TransactionClient | DatabaseClient,
 ): EntitlementRepository {
   return Object.freeze({
     async listDefaultFreePlanVersions(at) {
@@ -243,6 +243,18 @@ function createTransactionEntitlementRepository(
       return accounts.map(toFundableCreditRecord);
     },
   });
+}
+
+export function getPrismaEffectiveEntitlements(
+  companyId: string,
+  now: Date,
+  database: DatabaseClient,
+) {
+  return getEffectiveEntitlements(
+    companyId,
+    now,
+    createPrismaEntitlementRepository(database),
+  );
 }
 
 function toFundableCreditRecord(

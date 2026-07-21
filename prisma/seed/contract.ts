@@ -1,8 +1,8 @@
 export const SEED_MANIFEST_SCHEMA_VERSION =
   "20260720120000_phase_05_seed_manifest_contract" as const;
-export const SEED_DATASET_VERSION = "phase-09-demo-v6" as const;
+export const SEED_DATASET_VERSION = "phase-10-demo-v7" as const;
 /**
- * Phase 09 is an additive release over the sealed Phase-05 dataset. Existing
+ * Phase 10 is an additive release over the sealed Phase-05 dataset. Existing
  * semantic UUIDs and deterministic fixture streams must therefore keep their
  * published derivation input while the active manifest version rotates.
  */
@@ -11,7 +11,7 @@ export const SEED_DATA_PROVENANCE = "DEMO" as const;
 export const SEED_NAMESPACE = "swisstalenthub-demo" as const;
 
 /**
- * Exact Phase-09 fixture contract. The Phase-05 golden business counts stay
+ * Exact Phase-10 fixture contract. The Phase-05 golden business counts stay
  * unchanged; additive workflow evidence is verified in closed seed blocks.
  */
 export const SEED_GOLDEN_COUNTS = Object.freeze({

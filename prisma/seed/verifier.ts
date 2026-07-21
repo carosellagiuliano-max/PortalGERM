@@ -52,6 +52,7 @@ import {
   DEMO_COMPANY_SLUG,
   DEMO_GUIDE_FIXTURES,
   DEMO_LOGIN_PASSWORD,
+  EMPLOYER_CORE_SEED_IDENTITIES,
   ENTITLEMENT_KEYS,
   JOB_CONTENT_LANGUAGE_DISTRIBUTION,
   JOB_EFFORT_DISTRIBUTION,
@@ -70,6 +71,7 @@ import {
   SKILL_FIXTURES,
   buildJobFixtures,
   buildAuthRbacSeedFixtures,
+  buildEmployerCoreSeedFixtures,
   countGuideWords,
 } from "@/prisma/seed/fixtures";
 import { BILLING_OPS_SEED_IDENTITIES } from "@/prisma/seed/blocks/billing-ops";
@@ -332,6 +334,7 @@ export async function verifyDemoSeedDatabase(
   await verifyDemoCredentials(context, observed.demoAccounts);
   verifyCompanies(context, observed, expected, anchorAt);
   await verifyAuthRbac(context, observed, anchorAt);
+  verifyEmployerCore(context, observed, anchorAt);
   verifyJobs(context, observed, expected, anchorAt);
   verifyCandidateWorkflows(context, observed, expected, anchorAt);
   verifyBilling(context, observed, expected, anchorAt);
@@ -415,6 +418,7 @@ function buildExpectedScope(anchorAt: Date) {
     ...contentPages.map((handle) => handle.id),
     ...BILLING_OPS_SEED_IDENTITIES.map((identity) => identity.id),
     ...AUTH_RBAC_SEED_IDENTITIES.map((identity) => identity.id),
+    ...EMPLOYER_CORE_SEED_IDENTITIES.map((identity) => identity.id),
     ...CANDIDATE_WORKFLOW_SEED_IDENTITIES.map((identity) => identity.id),
   ]);
 
@@ -606,6 +610,54 @@ async function loadObservedSeedState(
     },
     orderBy: { id: "asc" },
   });
+  const employerCoreFixtures = buildEmployerCoreSeedFixtures(anchorAt);
+  const employerCorePrincipals = await db.user.findMany({
+    where: {
+      id: { in: employerCoreFixtures.principals.map((fixture) => fixture.id) },
+    },
+    include: { employerProfile: true },
+    orderBy: { id: "asc" },
+  });
+  const employerCoreMemberships = await db.companyMembership.findMany({
+    where: {
+      id: { in: employerCoreFixtures.memberships.map((fixture) => fixture.id) },
+    },
+    include: {
+      events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+    },
+    orderBy: { id: "asc" },
+  });
+  const employerCoreInvitations = await db.companyInvitation.findMany({
+    where: { id: employerCoreFixtures.invitation.id },
+    include: {
+      events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+    },
+    orderBy: { id: "asc" },
+  });
+  const employerCoreAssignments = await db.jobAssignment.findMany({
+    where: {
+      id: { in: employerCoreFixtures.assignments.map((fixture) => fixture.id) },
+    },
+    include: {
+      events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+    },
+    orderBy: { id: "asc" },
+  });
+  const employerCoreVerifications =
+    await db.companyVerificationRequest.findMany({
+      where: {
+        id: {
+          in: [
+            employerCoreFixtures.verificationScenario.rejectedRequestId,
+            employerCoreFixtures.verificationScenario.currentRequestId,
+          ],
+        },
+      },
+      include: {
+        events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      },
+      orderBy: { id: "asc" },
+    });
   const companies = await db.company.findMany({
     where: { dataProvenance: "DEMO" },
     include: {
@@ -829,6 +881,11 @@ async function loadObservedSeedState(
     conversations,
     creditAccounts,
     demoAccounts,
+    employerCoreAssignments,
+    employerCoreInvitations,
+    employerCoreMemberships,
+    employerCorePrincipals,
+    employerCoreVerifications,
     expiredAuthSession,
     invoices,
     jobAlertDeliveryConsents,
@@ -1581,6 +1638,329 @@ function verifyCompanies(
     expected.companies.length,
     SEED_GOLDEN_COUNTS.companies,
   );
+}
+
+function verifyEmployerCore(
+  context: VerificationContext,
+  observed: Awaited<ReturnType<typeof loadObservedSeedState>>,
+  anchorAt: Date,
+): void {
+  const fixtures = buildEmployerCoreSeedFixtures(anchorAt);
+  const byId = <T extends Readonly<{ id: string }>>(values: readonly T[]) =>
+    [...values].sort((left, right) => left.id.localeCompare(right.id));
+
+  const actual = {
+    principals: observed.employerCorePrincipals.map((principal) => ({
+      id: principal.id,
+      email: principal.emailNormalized,
+      role: principal.role,
+      status: principal.status,
+      dataProvenance: principal.dataProvenance,
+      emailVerifiedAt: principal.emailVerifiedAt?.toISOString() ?? null,
+      createdAt: principal.createdAt.toISOString(),
+      profile:
+        principal.employerProfile === null
+          ? null
+          : {
+              id: principal.employerProfile.id,
+              userId: principal.employerProfile.userId,
+              displayName: principal.employerProfile.displayName,
+              phone: principal.employerProfile.phone,
+              createdAt: principal.employerProfile.createdAt.toISOString(),
+            },
+    })),
+    memberships: observed.employerCoreMemberships.map((membership) => ({
+      id: membership.id,
+      companyId: membership.companyId,
+      userId: membership.userId,
+      role: membership.role,
+      status: membership.status,
+      joinedAt: membership.joinedAt.toISOString(),
+      removedAt: membership.removedAt?.toISOString() ?? null,
+      createdAt: membership.createdAt.toISOString(),
+      events: membership.events.map((event) => ({
+        id: event.id,
+        membershipId: event.membershipId,
+        kind: event.kind,
+        fromRole: event.fromRole,
+        toRole: event.toRole,
+        actorUserId: event.actorUserId,
+        reasonCode: event.reasonCode,
+        correlationId: event.correlationId,
+        createdAt: event.createdAt.toISOString(),
+      })),
+    })),
+    invitations: observed.employerCoreInvitations.map((invitation) => ({
+      id: invitation.id,
+      companyId: invitation.companyId,
+      inviterUserId: invitation.inviterUserId,
+      acceptedByUserId: invitation.acceptedByUserId,
+      inviteeEmailNormalized: invitation.inviteeEmailNormalized,
+      intendedRole: invitation.intendedRole,
+      digestMatches: invitation.tokenHash === fixtures.invitation.tokenHash,
+      generation: invitation.tokenVersion,
+      status: invitation.status,
+      expiresAt: invitation.expiresAt.toISOString(),
+      acceptedAt: invitation.acceptedAt?.toISOString() ?? null,
+      revokedAt: invitation.revokedAt?.toISOString() ?? null,
+      createdAt: invitation.createdAt.toISOString(),
+      events: invitation.events.map((event) => ({
+        id: event.id,
+        invitationId: event.invitationId,
+        kind: event.kind,
+        actorUserId: event.actorUserId,
+        reasonCode: event.reasonCode,
+        correlationId: event.correlationId,
+        createdAt: event.createdAt.toISOString(),
+      })),
+    })),
+    assignments: observed.employerCoreAssignments.map((assignment) => ({
+      id: assignment.id,
+      membershipId: assignment.membershipId,
+      companyId: assignment.companyId,
+      jobId: assignment.jobId,
+      userId: assignment.userId,
+      role: assignment.role,
+      status: assignment.status,
+      assignedByUserId: assignment.assignedByUserId,
+      validFrom: assignment.validFrom.toISOString(),
+      expiresAt: assignment.expiresAt?.toISOString() ?? null,
+      revokedAt: assignment.revokedAt?.toISOString() ?? null,
+      createdAt: assignment.createdAt.toISOString(),
+      events: assignment.events.map((event) => ({
+        id: event.id,
+        jobAssignmentId: event.jobAssignmentId,
+        kind: event.kind,
+        fromRole: event.fromRole,
+        toRole: event.toRole,
+        actorUserId: event.actorUserId,
+        reasonCode: event.reasonCode,
+        correlationId: event.correlationId,
+        createdAt: event.createdAt.toISOString(),
+      })),
+    })),
+    verificationCycles: observed.employerCoreVerifications.map((request) => ({
+      id: request.id,
+      companyId: request.companyId,
+      requestedByUserId: request.requestedByUserId,
+      supersedesRequestId: request.supersedesRequestId,
+      status: request.status,
+      events: request.events.map((event) => ({
+        id: event.id,
+        kind: event.kind,
+        fromStatus: event.fromStatus,
+        toStatus: event.toStatus,
+      })),
+    })),
+    overLimitScenario: observedEmployerOverLimitProjection(observed, fixtures),
+  };
+
+  const expected = {
+    principals: byId(fixtures.principals).map((principal) => ({
+      id: principal.id,
+      email: principal.email,
+      role: principal.role,
+      status: principal.status,
+      dataProvenance: "DEMO",
+      emailVerifiedAt: principal.emailVerifiedAt.toISOString(),
+      createdAt: principal.createdAt.toISOString(),
+      profile: {
+        id: principal.profileId,
+        userId: principal.id,
+        displayName: principal.name,
+        phone: null,
+        createdAt: principal.createdAt.toISOString(),
+      },
+    })),
+    memberships: byId(fixtures.memberships).map((membership) => ({
+      id: membership.id,
+      companyId: membership.companyId,
+      userId: membership.userId,
+      role: membership.role,
+      status: membership.status,
+      joinedAt: membership.joinedAt.toISOString(),
+      removedAt: null,
+      createdAt: membership.joinedAt.toISOString(),
+      events: [
+        {
+          id: membership.event.id,
+          membershipId: membership.id,
+          kind: membership.event.kind,
+          fromRole: null,
+          toRole: membership.role,
+          actorUserId: membership.event.actorUserId,
+          reasonCode: membership.event.reasonCode,
+          correlationId: membership.event.correlationId,
+          createdAt: membership.event.createdAt.toISOString(),
+        },
+      ],
+    })),
+    invitations: [
+      {
+        id: fixtures.invitation.id,
+        companyId: fixtures.invitation.companyId,
+        inviterUserId: fixtures.invitation.inviterUserId,
+        acceptedByUserId: null,
+        inviteeEmailNormalized: fixtures.invitation.inviteeEmailNormalized,
+        intendedRole: fixtures.invitation.intendedRole,
+        digestMatches: true,
+        generation: fixtures.invitation.tokenVersion,
+        status: fixtures.invitation.status,
+        expiresAt: fixtures.invitation.expiresAt.toISOString(),
+        acceptedAt: null,
+        revokedAt: null,
+        createdAt: fixtures.invitation.createdAt.toISOString(),
+        events: [
+          {
+            id: fixtures.invitation.event.id,
+            invitationId: fixtures.invitation.id,
+            kind: fixtures.invitation.event.kind,
+            actorUserId: fixtures.invitation.event.actorUserId,
+            reasonCode: fixtures.invitation.event.reasonCode,
+            correlationId: fixtures.invitation.event.correlationId,
+            createdAt: fixtures.invitation.event.createdAt.toISOString(),
+          },
+        ],
+      },
+    ],
+    assignments: byId(fixtures.assignments).map((assignment) => ({
+      id: assignment.id,
+      membershipId: assignment.membershipId,
+      companyId: assignment.companyId,
+      jobId: assignment.jobId,
+      userId: assignment.userId,
+      role: assignment.role,
+      status: assignment.status,
+      assignedByUserId: assignment.assignedByUserId,
+      validFrom: assignment.validFrom.toISOString(),
+      expiresAt: null,
+      revokedAt: null,
+      createdAt: assignment.validFrom.toISOString(),
+      events: [
+        {
+          id: assignment.event.id,
+          jobAssignmentId: assignment.id,
+          kind: assignment.event.kind,
+          fromRole: null,
+          toRole: assignment.role,
+          actorUserId: assignment.event.actorUserId,
+          reasonCode: assignment.event.reasonCode,
+          correlationId: assignment.event.correlationId,
+          createdAt: assignment.event.createdAt.toISOString(),
+        },
+      ],
+    })),
+    verificationCycles: expectedEmployerVerificationCycles(fixtures),
+    overLimitScenario: {
+      companyId: fixtures.overLimitScenario.companyId,
+      scheduleId: fixtures.overLimitScenario.scheduleId,
+      scheduleKind: "DOWNGRADE",
+      scheduleStatus: "PENDING",
+      successorSubscriptionId:
+        fixtures.overLimitScenario.successorSubscriptionId,
+      targetPlanCode: fixtures.overLimitScenario.targetPlanCode,
+      targetActiveJobLimit: fixtures.overLimitScenario.targetActiveJobLimit,
+      publishedJobCount: fixtures.overLimitScenario.publishedJobCount,
+      exceedsTarget: true,
+    },
+  };
+
+  check(
+    context,
+    "Phase-10 employer-core deterministic fixtures",
+    actual as CanonicalJsonValue,
+    expected as CanonicalJsonValue,
+  );
+}
+
+function expectedEmployerVerificationCycles(
+  fixtures: ReturnType<typeof buildEmployerCoreSeedFixtures>,
+) {
+  const companyId = fixtures.invitation.companyId;
+  const ownerUserId = fixtures.invitation.inviterUserId;
+  const cycle = (
+    key: "rejected-v1" | "current",
+    requestId: string,
+    supersedesRequestId: string | null,
+    finalStatus: "REJECTED" | "VERIFIED",
+  ) => ({
+    id: requestId,
+    companyId,
+    requestedByUserId: ownerUserId,
+    supersedesRequestId,
+    status: finalStatus,
+    events: [
+      {
+        id: stableSeedId(
+          "company-verification-event",
+          `${DEMO_COMPANY_SLUG}:${key}:draft`,
+        ),
+        kind: "DRAFT_CREATED",
+        fromStatus: null,
+        toStatus: "DRAFT",
+      },
+      {
+        id: stableSeedId(
+          "company-verification-event",
+          `${DEMO_COMPANY_SLUG}:${key}:submitted`,
+        ),
+        kind: "SUBMITTED",
+        fromStatus: "DRAFT",
+        toStatus: "PENDING",
+      },
+      {
+        id: stableSeedId(
+          "company-verification-event",
+          `${DEMO_COMPANY_SLUG}:${key}:${finalStatus.toLowerCase()}`,
+        ),
+        kind: finalStatus,
+        fromStatus: "PENDING",
+        toStatus: finalStatus,
+      },
+    ],
+  });
+  return [
+    cycle(
+      "rejected-v1",
+      fixtures.verificationScenario.rejectedRequestId,
+      null,
+      "REJECTED",
+    ),
+    cycle(
+      "current",
+      fixtures.verificationScenario.currentRequestId,
+      fixtures.verificationScenario.rejectedRequestId,
+      "VERIFIED",
+    ),
+  ].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function observedEmployerOverLimitProjection(
+  observed: Awaited<ReturnType<typeof loadObservedSeedState>>,
+  fixtures: ReturnType<typeof buildEmployerCoreSeedFixtures>,
+) {
+  const scenario = fixtures.overLimitScenario;
+  const schedule = observed.subscriptionSchedules.find(
+    (candidate) => candidate.id === scenario.scheduleId,
+  );
+  const successor = observed.subscriptions.find(
+    (candidate) => candidate.id === scenario.successorSubscriptionId,
+  );
+  const publishedJobCount = observed.jobs.filter(
+    (job) => job.companyId === scenario.companyId && job.status === "PUBLISHED",
+  ).length;
+
+  return {
+    companyId: scenario.companyId,
+    scheduleId: schedule?.id ?? null,
+    scheduleKind: schedule?.kind ?? null,
+    scheduleStatus: schedule?.status ?? null,
+    successorSubscriptionId: schedule?.successorSubscriptionId ?? null,
+    targetPlanCode: successor?.planVersion.plan.code ?? null,
+    targetActiveJobLimit: scenario.targetActiveJobLimit,
+    publishedJobCount,
+    exceedsTarget: publishedJobCount > scenario.targetActiveJobLimit,
+  };
 }
 
 function verifyJobs(

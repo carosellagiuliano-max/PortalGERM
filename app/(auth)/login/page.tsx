@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { AuthCard, AuthTextLink } from "@/components/auth/auth-card";
 import { LoginForm } from "@/components/auth/login-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { INVITE_RESUME_PATH } from "@/lib/auth/invite-resume";
 
 export const metadata: Metadata = {
   title: "Anmelden",
@@ -33,12 +34,16 @@ export default async function LoginPage({
           Noch kein Konto?{" "}
           <AuthTextLink
             href={
-              next === undefined
+              next === INVITE_RESUME_PATH
+                ? INVITE_RESUME_PATH
+                : next === undefined
                 ? "/register/candidate"
                 : `/register/candidate?next=${encodeURIComponent(next)}`
             }
           >
-            Jetzt registrieren
+            {next === INVITE_RESUME_PATH
+              ? "Einladung ohne bestehendes Konto annehmen"
+              : "Jetzt registrieren"}
           </AuthTextLink>
         </>
       }

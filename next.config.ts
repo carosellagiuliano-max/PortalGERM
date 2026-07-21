@@ -35,6 +35,15 @@ const resetPasswordHeaders = [
   { key: "Referrer-Policy", value: "no-referrer" },
 ];
 
+const secretLinkHeaders = [
+  { key: "Cache-Control", value: "private, no-store, max-age=0" },
+  {
+    key: "X-Robots-Tag",
+    value: "noindex, nofollow, noarchive, nosnippet",
+  },
+  { key: "Referrer-Policy", value: "no-referrer" },
+];
+
 const oneClickUnsubscribeHeaders = [
   { key: "Cache-Control", value: "no-store, max-age=0" },
   {
@@ -101,6 +110,10 @@ const nextConfig = (phase: string): NextConfig => {
         {
           source: "/reset-password",
           headers: resetPasswordHeaders,
+        },
+        {
+          source: "/invite/:path*",
+          headers: secretLinkHeaders,
         },
         {
           source: "/alerts/unsubscribe/:path*",

@@ -290,7 +290,7 @@ beforeAll(async () => {
     [
       'INSERT INTO "CompanyVerificationRequest" (',
       '  "id", "companyId", "requestedByUserId", "status", "evidenceMetadata", "updatedAt"',
-      ") VALUES ($1, $2, $3, 'VERIFIED', '{\"cycle\":1}'::jsonb, $4)",
+      ") VALUES ($1, $2, $3, 'REVOKED', '{\"cycle\":1}'::jsonb, $4)",
     ].join("\n"),
     [IDS.oldVerification, IDS.company, IDS.user, contractNow],
   );
@@ -411,7 +411,7 @@ describe.sequential("PostgreSQL public job eligibility", () => {
     );
     try {
       await target().query(
-        'UPDATE "JobRevision" SET "rejectedAt" = $2 WHERE "id" = $1',
+        'UPDATE "JobRevision" SET "approvedAt" = NULL, "rejectedAt" = $2 WHERE "id" = $1',
         [IDS.revision, contractNow],
       );
       await expect(
@@ -419,8 +419,8 @@ describe.sequential("PostgreSQL public job eligibility", () => {
       ).resolves.toEqual({ eligible: false });
     } finally {
       await target().query(
-        'UPDATE "JobRevision" SET "rejectedAt" = NULL WHERE "id" = $1',
-        [IDS.revision],
+        'UPDATE "JobRevision" SET "approvedAt" = $2, "rejectedAt" = NULL WHERE "id" = $1',
+        [IDS.revision, publishedAt],
       );
       await target().query(
         'ALTER TABLE "JobRevision" ENABLE TRIGGER job_revision_released_immutable_trigger',

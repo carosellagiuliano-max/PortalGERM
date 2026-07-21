@@ -7,11 +7,6 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeftIcon,
   BadgeCheckIcon,
-  BanknoteIcon,
-  BriefcaseBusinessIcon,
-  CalendarDaysIcon,
-  LanguagesIcon,
-  MapPinIcon,
 } from "lucide-react";
 
 import { CandidateMatch } from "@/components/public/candidate-match";
@@ -22,10 +17,15 @@ import {
   SaveIntentConfirmation,
 } from "@/components/public/apply-save-actions";
 import { FairScoreBreakdown } from "@/components/public/fair-score";
-import { JobCard, JOB_TYPE_LABELS, REMOTE_LABELS, SALARY_PERIOD_LABELS } from "@/components/public/job-card";
+import { JobCard } from "@/components/public/job-card";
 import { ReportForm } from "@/components/public/report-form";
 import { ResponseSignal } from "@/components/public/response-signal";
 import { ShareButton } from "@/components/public/share-button";
+import {
+  JobContentSections,
+  JobFacts,
+  JobTypeBadge,
+} from "@/components/shared/job-content-sections";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,16 +40,10 @@ import { getApplicationConfirmationView } from "@/lib/applications/confirmation"
 import { getDatabase } from "@/lib/db/client";
 import { buildPublicJobPostingJsonLd, serializeJsonLd } from "@/lib/jobs/job-json-ld";
 import { getPublicJobBySlug, listRelatedPublicJobs } from "@/lib/jobs/public-read-model";
-import type { PublicJobDetailModel } from "@/lib/public/types";
 import { getPublicDataContext } from "@/lib/public/environment";
-import { formatDate, formatSalaryRange, formatWorkload } from "@/lib/utils/format";
+import { formatDate } from "@/lib/utils/format";
 
 const getJob = cache((slug: string) => getPublicJobBySlug(slug));
-const APPLICATION_EFFORT_LABELS: Readonly<Record<PublicJobDetailModel["applicationEffort"], string>> = {
-  SIMPLE: "Kurz",
-  MEDIUM: "Mittel",
-  LONG: "Umfangreich",
-};
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -78,9 +72,6 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
   const appUrl = getServerEnvironment().APP_URL;
   const jsonLd = buildPublicJobPostingJsonLd(job, appUrl);
   const emitJsonLd = getPublicDataContext().publicIndexingAllowed && job.dataProvenance === "LIVE";
-  const salary = job.salaryMin !== null && job.salaryMax !== null && job.salaryPeriod !== null
-    ? formatSalaryRange(job.salaryMin, job.salaryMax, SALARY_PERIOD_LABELS[job.salaryPeriod])
-    : null;
   const intentValue = firstValue(query.intent);
   const environment = getServerEnvironment();
   const intent = verifyJobIntent(
@@ -116,18 +107,29 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
             <div className="flex flex-wrap gap-2">
               {job.activeBoost ? <Badge>Geboostet</Badge> : null}
               <Badge variant="secondary">Fair-Job-Score {job.fairScore ?? "–"}/100</Badge>
-              <Badge variant="outline">{JOB_TYPE_LABELS[job.jobType]}</Badge>
+              <JobTypeBadge jobType={job.jobType} />
             </div>
             <h1 className="mt-5 text-balance text-4xl leading-tight font-semibold tracking-tight sm:text-5xl">{job.title}</h1>
             <Link href={`/companies/${job.company.slug}`} className="mt-4 inline-flex items-center gap-2 text-lg font-medium underline-offset-4 hover:text-primary hover:underline">{job.company.name}<BadgeCheckIcon className="size-5 text-primary" aria-label="Verifiziertes Unternehmen" /></Link>
-            <dl className="mt-7 grid gap-3 text-sm sm:grid-cols-2">
-              <Fact icon={MapPinIcon} label="Arbeitsort" value={`${job.city?.name ?? job.canton?.name ?? job.locationLabel ?? "Schweiz"} · ${REMOTE_LABELS[job.remoteType]}`} />
-              <Fact icon={BriefcaseBusinessIcon} label="Pensum" value={formatWorkload(job.workloadMin, job.workloadMax)} />
-              <Fact icon={BanknoteIcon} label="Lohn" value={salary ?? "Nicht transparent ausgewiesen"} />
-              <Fact icon={CalendarDaysIcon} label="Publiziert" value={formatDate(job.publishedAt)} />
-              <Fact icon={CalendarDaysIcon} label="Start" value={job.startByArrangement ? "Nach Vereinbarung" : job.startDate === null ? "Nicht angegeben" : formatDate(job.startDate)} />
-              <Fact icon={BriefcaseBusinessIcon} label="Bewerbungsaufwand" value={APPLICATION_EFFORT_LABELS[job.applicationEffort]} />
-            </dl>
+            <JobFacts
+              facts={{
+                locationLabel: job.city?.name ?? job.canton?.name ?? job.locationLabel ?? "Schweiz",
+                remoteType: job.remoteType,
+                workloadMin: job.workloadMin,
+                workloadMax: job.workloadMax,
+                salaryMin: job.salaryMin,
+                salaryMax: job.salaryMax,
+                salaryPeriod: job.salaryPeriod,
+                startDate: job.startDate,
+                startByArrangement: job.startByArrangement,
+                applicationEffort: job.applicationEffort,
+                dateFact: {
+                  label: "Publiziert",
+                  value: job.publishedAt,
+                  missingValue: "Nicht publiziert",
+                },
+              }}
+            />
           </div>
 
           <aside className="rounded-xl border bg-card p-5 shadow-sm lg:sticky lg:top-24">
@@ -161,15 +163,30 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
           <article className="grid gap-8">
-            <ContentSection title="Die Stelle"><p className="whitespace-pre-line leading-7 text-muted-foreground">{job.description}</p></ContentSection>
-            <TwoColumnLists job={job} />
-            {job.inclusionStatement === null ? null : <ContentSection title="Zusammenarbeit & Inklusion"><p className="leading-7 text-muted-foreground">{job.inclusionStatement}</p></ContentSection>}
+            <JobContentSections
+              content={{
+                description: job.companyIntro ?? job.description,
+                additionalDescription:
+                  job.companyIntro !== null && job.description !== "" && job.description !== job.companyIntro
+                    ? job.description
+                    : null,
+                tasks: job.tasks,
+                requirements: job.requirements,
+                niceToHave: job.niceToHave,
+                offer: job.offer,
+                benefits: job.benefits,
+                skills: job.skills,
+                languages: job.languages,
+                inclusionStatement: job.inclusionStatement,
+                applicationProcessSteps: job.applicationProcessSteps,
+                requiredDocumentKinds: job.requiredDocumentKinds,
+              }}
+            />
             <FairScoreBreakdown
               score={job.fairScore}
               version={job.fairScoreVersion}
               factors={job.fairBreakdown}
             />
-            <ApplicationProcess job={job} />
           </article>
           <aside className="grid gap-5">
             <Suspense fallback={<div className="h-48 animate-pulse rounded-xl border bg-muted/35" aria-label="Profilabgleich wird geladen" />}><CandidateMatch job={job} /></Suspense>
@@ -282,40 +299,5 @@ function IntentResumePanel({
       </h2>
       <div className="mt-4">{content}</div>
     </section>
-  );
-}
-
-function Fact({ icon: Icon, label, value }: Readonly<{ icon: typeof MapPinIcon; label: string; value: string }>) {
-  return <div className="flex gap-3 rounded-lg bg-muted/35 p-3"><Icon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" /><div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-0.5 font-medium">{value}</dd></div></div>;
-}
-
-function ContentSection({ title, children }: Readonly<{ title: string; children: React.ReactNode }>) {
-  return <section><h2 className="text-2xl font-semibold">{title}</h2><div className="mt-4">{children}</div></section>;
-}
-
-function TwoColumnLists({ job }: Readonly<{ job: PublicJobDetailModel }>) {
-  return (
-    <div className="grid gap-8 md:grid-cols-2">
-      <ContentSection title="Deine Aufgaben"><BulletList values={job.tasks} /></ContentSection>
-      <ContentSection title="Das bringst du mit"><BulletList values={job.requirements} /></ContentSection>
-      {job.benefits.length === 0 ? null : <ContentSection title="Das wird geboten"><BulletList values={job.benefits.map((benefit) => benefit.description)} /></ContentSection>}
-      {job.skills.length === 0 ? null : <ContentSection title="Fähigkeiten"><div className="flex flex-wrap gap-2">{job.skills.map((skill) => <Badge key={skill.id} variant={skill.required ? "secondary" : "outline"}>{skill.name}{skill.required ? " · erforderlich" : ""}</Badge>)}</div></ContentSection>}
-      {job.languages.length === 0 ? null : <ContentSection title="Sprachen"><div className="flex flex-wrap gap-2">{job.languages.map((language) => <Badge key={`${language.code}-${language.minLevel}`} variant="outline"><LanguagesIcon aria-hidden="true" /> {language.code.toUpperCase()} ab {language.minLevel}</Badge>)}</div></ContentSection>}
-    </div>
-  );
-}
-
-function BulletList({ values }: Readonly<{ values: readonly string[] }>) {
-  return values.length === 0 ? <p className="text-muted-foreground">Keine zusätzlichen Angaben.</p> : <ul className="grid gap-2 leading-7 text-muted-foreground">{values.map((value, index) => <li key={`${index}-${value}`} className="flex gap-2"><span className="text-primary" aria-hidden="true">•</span><span>{value}</span></li>)}</ul>;
-}
-
-function ApplicationProcess({ job }: Readonly<{ job: PublicJobDetailModel }>) {
-  const documentLabels: Readonly<Record<string, string>> = { CV: "Lebenslauf", COVER_LETTER: "Motivationsschreiben", CERTIFICATES: "Zeugnisse", REFERENCES: "Referenzen", PORTFOLIO: "Portfolio", OTHER: "Weitere Unterlagen" };
-  const documents = job.requiredDocumentKinds.filter((kind) => kind !== "NONE").map((kind) => documentLabels[kind] ?? kind);
-  return (
-    <ContentSection title="Bewerbungsprozess">
-      {job.applicationProcessSteps.length > 0 ? <ol className="grid gap-3">{job.applicationProcessSteps.map((step, index) => <li key={`${index}-${step}`} className="flex gap-3"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">{index + 1}</span><span className="pt-0.5 leading-6 text-muted-foreground">{step}</span></li>)}</ol> : <p className="text-muted-foreground">Der genaue Ablauf wird direkt mit dem Unternehmen abgestimmt.</p>}
-      <p className="mt-4 text-sm text-muted-foreground"><strong className="text-foreground">Benötigte Unterlagen:</strong> {documents.length === 0 ? "Keine Pflichtunterlagen angegeben" : documents.join(", ")}</p>
-    </ContentSection>
   );
 }

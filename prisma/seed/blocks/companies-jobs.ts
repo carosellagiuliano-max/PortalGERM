@@ -728,6 +728,9 @@ async function ensureClaim(
 
 type OccupationContract = Readonly<{
   versionId: string;
+  datasetVersionSnapshot: string;
+  dataYearSnapshot: number;
+  referenceUrlSnapshot: string | null;
   sourceSnapshot: string;
   disclaimer: string;
   codes: ReadonlyMap<string, Readonly<{ id: string; code: string; label: string; result: "REQUIRES_REPORTING" | "NOT_REQUIRED" | "UNKNOWN" }>>;
@@ -743,6 +746,9 @@ async function loadOccupationContract(database: PrismaClient): Promise<Occupatio
   }
   return Object.freeze({
     versionId: version.id,
+    datasetVersionSnapshot: version.version,
+    dataYearSnapshot: version.datasetYear,
+    referenceUrlSnapshot: version.referenceUrl,
     sourceSnapshot: `${version.source} | ${version.referenceUrl ?? "no-reference-url"}`,
     disclaimer: version.disclaimer,
     codes: new Map(version.codes.map((code) => [code.code, Object.freeze({ id: code.id, code: code.code, label: code.label, result: code.result })])),
@@ -861,14 +867,22 @@ async function ensureJobRevisionLifecycle(
     if (JSON.stringify(projectRevisionLifecycle(revision)) !== JSON.stringify(draft)) {
       throw new SeedDataDriftError("JobRevision", `${fixture.slug}:1`);
     }
-    revision = await transaction.jobRevision.update({
-      where: { id: fixture.revisionId },
-      data: {
-        submittedAt: dateOrNull(fixture.submittedAt),
-        approvedAt: dateOrNull(fixture.approvedAt),
-        rejectedAt: dateOrNull(fixture.rejectedAt),
-      },
-    });
+    const submittedAt = dateOrNull(fixture.submittedAt);
+    if (submittedAt !== null) {
+      revision = await transaction.jobRevision.update({
+        where: { id: fixture.revisionId },
+        data: { submittedAt },
+      });
+    }
+
+    const approvedAt = dateOrNull(fixture.approvedAt);
+    const rejectedAt = dateOrNull(fixture.rejectedAt);
+    if (approvedAt !== null || rejectedAt !== null) {
+      revision = await transaction.jobRevision.update({
+        where: { id: fixture.revisionId },
+        data: { approvedAt, rejectedAt },
+      });
+    }
   }
   if (JSON.stringify(projectRevisionLifecycle(revision)) !== JSON.stringify(expected)) {
     throw new SeedDataDriftError("JobRevision", `${fixture.slug}:1`);
@@ -934,8 +948,8 @@ async function ensureJobReporting(
   const id = stableSeedId("job-reporting-check", `${fixture.slug}:jobroom-2026`);
   const checkedAt = addDays(anchorAt, -5);
   const reasonSnapshot = code.result === "REQUIRES_REPORTING" ? "Die fiktive Mock-Klassifikation markiert diese Berufsart als meldepflichtig." : code.result === "NOT_REQUIRED" ? "Die fiktive Mock-Klassifikation markiert diese Berufsart als nicht meldepflichtig." : "Die fiktive Mock-Klassifikation liefert bewusst kein eindeutiges Ergebnis; eine offizielle Prüfung bleibt nötig.";
-  const expected = { id, jobRevisionId: fixture.revisionId, occupationCodeVersionId: contract.versionId, occupationCodeId: code.id, occupationCodeSnapshot: code.code, occupationLabelSnapshot: code.label, result: code.result, reasonSnapshot, disclaimerSnapshot: contract.disclaimer, sourceSnapshot: contract.sourceSnapshot, checkedByUserId: adminUserId, checkedAt: checkedAt.toISOString() };
-  await createOrVerifySeedRecord({ entity: "JobReportingCheck", naturalKey: `${fixture.slug}:jobroom-2026`, findExisting: () => transaction.jobReportingCheck.findUnique({ where: { id } }), create: () => transaction.jobReportingCheck.create({ data: { ...expected, checkedAt } }), project: (row) => ({ id: row.id, jobRevisionId: row.jobRevisionId, occupationCodeVersionId: row.occupationCodeVersionId, occupationCodeId: row.occupationCodeId, occupationCodeSnapshot: row.occupationCodeSnapshot, occupationLabelSnapshot: row.occupationLabelSnapshot, result: row.result, reasonSnapshot: row.reasonSnapshot, disclaimerSnapshot: row.disclaimerSnapshot, sourceSnapshot: row.sourceSnapshot, checkedByUserId: row.checkedByUserId, checkedAt: row.checkedAt.toISOString() }), expected });
+  const expected = { id, jobRevisionId: fixture.revisionId, occupationCodeVersionId: contract.versionId, occupationCodeId: code.id, occupationCodeSnapshot: code.code, occupationLabelSnapshot: code.label, result: code.result, reasonSnapshot, disclaimerSnapshot: contract.disclaimer, sourceSnapshot: contract.sourceSnapshot, datasetVersionSnapshot: contract.datasetVersionSnapshot, dataYearSnapshot: contract.dataYearSnapshot, referenceUrlSnapshot: contract.referenceUrlSnapshot, checkedByUserId: adminUserId, checkedAt: checkedAt.toISOString() };
+  await createOrVerifySeedRecord({ entity: "JobReportingCheck", naturalKey: `${fixture.slug}:jobroom-2026`, findExisting: () => transaction.jobReportingCheck.findUnique({ where: { id } }), create: () => transaction.jobReportingCheck.create({ data: { ...expected, checkedAt } }), project: (row) => ({ id: row.id, jobRevisionId: row.jobRevisionId, occupationCodeVersionId: row.occupationCodeVersionId, occupationCodeId: row.occupationCodeId, occupationCodeSnapshot: row.occupationCodeSnapshot, occupationLabelSnapshot: row.occupationLabelSnapshot, result: row.result, reasonSnapshot: row.reasonSnapshot, disclaimerSnapshot: row.disclaimerSnapshot, sourceSnapshot: row.sourceSnapshot, datasetVersionSnapshot: row.datasetVersionSnapshot, dataYearSnapshot: row.dataYearSnapshot, referenceUrlSnapshot: row.referenceUrlSnapshot, checkedByUserId: row.checkedByUserId, checkedAt: row.checkedAt.toISOString() }), expected });
 }
 
 async function ensureJobEvents(

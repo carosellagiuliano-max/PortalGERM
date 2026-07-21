@@ -45,24 +45,13 @@ export async function createOrVerifySeedRecord<TRecord>(
     return Object.freeze({ created: false, record: existing });
   }
 
-  try {
-    const created = await input.create();
-    assertSeedProjection(input, created);
-    return Object.freeze({ created: true, record: created });
-  } catch (error) {
-    if (!isUniqueConstraintError(error)) {
-      throw error;
-    }
-
-    // A concurrent seed runner may have won the insert race. Re-read and apply
-    // the exact same drift check rather than treating every unique error as OK.
-    const raced = await input.findExisting();
-    if (raced === null) {
-      throw error;
-    }
-    assertSeedProjection(input, raced);
-    return Object.freeze({ created: false, record: raced });
-  }
+  // Do not catch a unique violation and issue another query here. Most callers
+  // run inside an interactive PostgreSQL transaction, where a failed INSERT
+  // aborts the transaction until it is rolled back. Concurrency recovery must
+  // therefore serialize or retry the complete run at its orchestration boundary.
+  const created = await input.create();
+  assertSeedProjection(input, created);
+  return Object.freeze({ created: true, record: created });
 }
 
 export function assertSeedProjection<TRecord>(
@@ -75,13 +64,4 @@ export function assertSeedProjection<TRecord>(
   if (canonicalJson(input.project(record)) !== canonicalJson(input.expected)) {
     throw new SeedDataDriftError(input.entity, input.naturalKey);
   }
-}
-
-function isUniqueConstraintError(error: unknown): boolean {
-  if (error === null || typeof error !== "object") {
-    return false;
-  }
-
-  const candidate = error as Readonly<{ code?: unknown }>;
-  return candidate.code === "P2002" || candidate.code === "23505";
 }

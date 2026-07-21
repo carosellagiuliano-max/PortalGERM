@@ -52,8 +52,11 @@ export type PublicJobCardModel = Readonly<{
 }>;
 
 export type PublicJobDetailModel = PublicJobCardModel & Readonly<{
+  companyIntro: string | null;
   tasks: readonly string[];
   requirements: readonly string[];
+  niceToHave: readonly string[];
+  offer: string | null;
   benefits: readonly Readonly<{ code: string; description: string }>[];
   skills: readonly Readonly<{ id: string; name: string; slug: string; required: boolean }>[];
   languages: readonly Readonly<{ code: string; minLevel: LanguageLevel }>[];

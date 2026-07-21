@@ -9,6 +9,10 @@ import {
   seedAuthRbacFixtures,
 } from "@/prisma/seed/blocks/auth-rbac";
 import {
+  buildEmployerCoreSeedBlockDigest,
+  seedEmployerCoreFixtures,
+} from "@/prisma/seed/blocks/employer-core";
+import {
   DEMO_ONLY_CANDIDATE_WORKFLOW_CRYPTO,
   seedCandidateWorkflows,
   type CandidateWorkflowSeedCryptoConfig,
@@ -18,7 +22,10 @@ import {
   REFERENCE_CATALOG_SEED_IDENTITIES,
   seedReferenceCatalog,
 } from "@/prisma/seed/blocks/reference-catalog";
-import { canonicalJson, type CanonicalJsonValue } from "@/prisma/seed/canonical-json";
+import {
+  canonicalJson,
+  type CanonicalJsonValue,
+} from "@/prisma/seed/canonical-json";
 import {
   SEED_DATASET_VERSION,
   SEED_MANIFEST_SCHEMA_VERSION,
@@ -75,6 +82,7 @@ export type SeedOrchestrationPorts = Readonly<{
   seedAuthRbac: typeof seedAuthRbacFixtures;
   seedCandidateWorkflows: typeof seedCandidateWorkflows;
   seedCompaniesJobs: typeof seedDemoAccountsCompaniesAndJobs;
+  seedEmployerCore: typeof seedEmployerCoreFixtures;
   seedReferenceCatalog: typeof seedReferenceCatalog;
   verifyDatabase: typeof verifyDemoSeedDatabase;
 }>;
@@ -120,6 +128,7 @@ const DEFAULT_ORCHESTRATION_PORTS: SeedOrchestrationPorts = Object.freeze({
   seedAuthRbac: seedAuthRbacFixtures,
   seedCandidateWorkflows,
   seedCompaniesJobs: seedDemoAccountsCompaniesAndJobs,
+  seedEmployerCore: seedEmployerCoreFixtures,
   seedReferenceCatalog,
   verifyDatabase: verifyDemoSeedDatabase,
 });
@@ -128,6 +137,16 @@ const DEFAULT_VERIFICATION_PORTS: SeedVerificationPorts = Object.freeze({
   buildPlanningGraph: buildSeedPlanningGraph,
   verifyDatabase: verifyDemoSeedDatabase,
 });
+
+const SEED_RUN_LOCK_KEY = `${SEED_NAMESPACE}:${SEED_DATASET_VERSION}`;
+const SEED_RUN_LOCK_WAIT_MS = 600_000;
+const SEED_RUN_LOCK_RETRY_BASE_MS = 50;
+const SEED_RUN_LOCK_RETRY_MAX_MS = 500;
+const SEED_RUN_TRANSACTION_TIMEOUT_MS = 600_000;
+
+type SeedRunLockAttempt<T> =
+  | Readonly<{ acquired: false }>
+  | Readonly<{ acquired: true; value: T }>;
 
 /**
  * Runs the environment guard before the client factory can observe a database
@@ -162,16 +181,45 @@ export async function runDemoSeed(
 export async function orchestrateDemoSeed(
   database: DatabaseClient,
   ports: SeedOrchestrationPorts = DEFAULT_ORCHESTRATION_PORTS,
-  candidateWorkflowCrypto: CandidateWorkflowSeedCryptoConfig =
-    DEMO_ONLY_CANDIDATE_WORKFLOW_CRYPTO,
+  candidateWorkflowCrypto: CandidateWorkflowSeedCryptoConfig = DEMO_ONLY_CANDIDATE_WORKFLOW_CRYPTO,
 ): Promise<SeedOrchestrationResult> {
   const planning = ports.buildPlanningGraph();
-  const lifecycle = await ports.beginSeedRun(database, planning.identities);
+
+  // Persist the first run's anchor outside the serialized write transaction so
+  // a failed attempt can resume against the same deterministic clock.
+  await ports.beginSeedRun(database, planning.identities);
+
+  return withSerializedSeedRun(database, async (serializedDatabase) => {
+    // Re-read after acquiring the lock: another runner may have completed while
+    // this runner was waiting, and that state controls hash verification and the
+    // previouslyCompleted result.
+    const lifecycle = await ports.beginSeedRun(
+      serializedDatabase,
+      planning.identities,
+    );
+    return executeSeedRun(
+      serializedDatabase,
+      planning,
+      lifecycle,
+      ports,
+      candidateWorkflowCrypto,
+    );
+  });
+}
+
+async function executeSeedRun(
+  database: DatabaseClient,
+  planning: SeedPlanningGraph,
+  lifecycle: Awaited<ReturnType<typeof beginSeedRun>>,
+  ports: SeedOrchestrationPorts,
+  candidateWorkflowCrypto: CandidateWorkflowSeedCryptoConfig,
+): Promise<SeedOrchestrationResult> {
   const anchorAt = lifecycle.anchorAt;
 
   const referenceCatalog = await ports.seedReferenceCatalog(database);
   const companiesJobs = await ports.seedCompaniesJobs(database, anchorAt);
   const authRbac = await ports.seedAuthRbac(database, anchorAt);
+  const employerCore = await ports.seedEmployerCore(database, anchorAt);
   const candidateWorkflows = await ports.seedCandidateWorkflows(
     database,
     anchorAt,
@@ -194,6 +242,7 @@ export async function orchestrateDemoSeed(
     REFERENCE_CATALOG_SEED_IDENTITIES,
     companiesJobs.identities,
     authRbac.identities,
+    employerCore.identities,
     CANDIDATE_WORKFLOW_SEED_IDENTITIES,
     billingOps.identities,
   ]);
@@ -206,6 +255,10 @@ export async function orchestrateDemoSeed(
   assertBlockDigest(
     companiesJobs.blockDigest,
     requireBlockDigest(expectedStaticDigests, "companies-jobs"),
+  );
+  assertBlockDigest(
+    employerCore.blockDigest,
+    requireBlockDigest(expectedStaticDigests, "employer-core"),
   );
   assertBlockDigest(
     candidateWorkflows.blockDigest,
@@ -243,6 +296,73 @@ export async function orchestrateDemoSeed(
     previouslyCompleted: lifecycle.completed,
     verificationCheckCount: verification.report.checkCount,
   });
+}
+
+/**
+ * Serializes the complete versioned seed run with a PostgreSQL transaction
+ * advisory lock. `pg_try_advisory_xact_lock` avoids exceeding the database
+ * client's short statement timeout while another (potentially long) seed run
+ * owns the lock; each miss closes its transaction before a bounded retry.
+ */
+async function withSerializedSeedRun<T>(
+  database: DatabaseClient,
+  operation: (serializedDatabase: DatabaseClient) => Promise<T>,
+): Promise<T> {
+  const deadline = Date.now() + SEED_RUN_LOCK_WAIT_MS;
+  let retry = 0;
+
+  while (true) {
+    const attempt = await database.$transaction(
+      async (transaction): Promise<SeedRunLockAttempt<T>> => {
+        // The regular client is configured with a short idle-in-transaction
+        // timeout. This dedicated lock transaction intentionally remains open
+        // while seed blocks use their existing transaction boundaries.
+        await transaction.$executeRaw`
+          SET LOCAL idle_in_transaction_session_timeout = 0
+        `;
+        const rows = await transaction.$queryRaw<
+          Array<Readonly<{ acquired: boolean }>>
+        >`
+          SELECT pg_try_advisory_xact_lock(
+            hashtextextended(${SEED_RUN_LOCK_KEY}, 0)
+          ) AS acquired
+        `;
+        if (rows[0]?.acquired !== true) {
+          return Object.freeze({ acquired: false });
+        }
+
+        return Object.freeze({
+          acquired: true,
+          value: await operation(database),
+        });
+      },
+      {
+        isolationLevel: "ReadCommitted",
+        maxWait: 5_000,
+        timeout: SEED_RUN_TRANSACTION_TIMEOUT_MS,
+      },
+    );
+
+    if (attempt.acquired) {
+      return attempt.value;
+    }
+    if (Date.now() >= deadline) {
+      throw new SeedOrchestrationError(
+        `Timed out waiting for the versioned demo seed run lock after ${SEED_RUN_LOCK_WAIT_MS}ms.`,
+      );
+    }
+
+    const retryDelay = Math.min(
+      SEED_RUN_LOCK_RETRY_BASE_MS * 2 ** Math.min(retry, 4),
+      SEED_RUN_LOCK_RETRY_MAX_MS,
+    );
+    retry += 1;
+    await wait(retryDelay);
+  }
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 /**
@@ -344,7 +464,9 @@ export function buildStaticSeedBlockDigests(
   );
   const companiesJobs = createSeedBlockDigest(
     "companies-jobs",
-    DEMO_ACCOUNT_FIXTURES.length + planning.companies.length + planning.jobs.length,
+    DEMO_ACCOUNT_FIXTURES.length +
+      planning.companies.length +
+      planning.jobs.length,
     {
       accounts: DEMO_ACCOUNT_FIXTURES.map(({ id, email, role }) => ({
         id,
@@ -369,6 +491,7 @@ export function buildStaticSeedBlockDigests(
     referenceCatalog,
     buildAuthRbacSeedBlockDigest(),
     companiesJobs,
+    buildEmployerCoreSeedBlockDigest(),
     CANDIDATE_WORKFLOW_BLOCK_DIGEST,
     buildBillingOpsSeedBlockDigest({
       companies: planning.companies,
@@ -396,14 +519,18 @@ function buildVerifiedEnvelope(
 
 function buildVerificationExpectations(
   planning: SeedPlanningGraph,
-  companies: readonly Readonly<{ id: string; slug: string }>[] =
-    planning.companies,
+  companies: readonly Readonly<{
+    id: string;
+    slug: string;
+  }>[] = planning.companies,
   jobs: readonly Readonly<{ id: string; slug: string }>[] = planning.jobs,
-  candidates: readonly Readonly<{ id: string; key: string }>[] =
-    CANDIDATE_FIXTURES.map((fixture) => ({
-      id: stableSeedId("candidate-profile", fixture.email),
-      key: fixture.email,
-    })),
+  candidates: readonly Readonly<{
+    id: string;
+    key: string;
+  }>[] = CANDIDATE_FIXTURES.map((fixture) => ({
+    id: stableSeedId("candidate-profile", fixture.email),
+    key: fixture.email,
+  })),
 ) {
   return Object.freeze({
     candidateHandles: candidates.map(({ id, key }) => ({ id, key })),

@@ -47,6 +47,16 @@ describe("role-bound safe next", () => {
     expect(parseSafeNext(`/jobs/pflege-zuerich?intent=${intent}`, "EMPLOYER")).toBeNull();
   });
 
+  it("allows only the token-free invitation resume for employer accounts", () => {
+    const token = "a".repeat(43);
+    expect(parseSafeNext("/invite/resume", "EMPLOYER")).toBe("/invite/resume");
+    expect(parseSafeNext("/invite/resume", "RECRUITER")).toBe("/invite/resume");
+    expect(parseSafeNext("/invite/resume", "CANDIDATE")).toBeNull();
+    expect(parseSafeNext(`/invite/${token}`, "EMPLOYER")).toBeNull();
+    expect(parseSafeNext("/invite/resume?company=private", "EMPLOYER")).toBeNull();
+    expect(parseSafeNext("/invite/resume#private", "RECRUITER")).toBeNull();
+  });
+
   it.each([
     "/jobs/pflege-zuerich",
     "/jobs/pflege-zuerich?intent=a.b&next=/admin",

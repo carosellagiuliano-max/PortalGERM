@@ -53,7 +53,12 @@ export function parseSafeNext(
       role === "CANDIDATE" &&
       url.hash === "" &&
       isStructurallySafeCandidateJobIntentPath(url.pathname, url.searchParams);
-    return allowedPrivatePath || allowedJobIntentPath
+    const allowedInvitationPath =
+      (role === "EMPLOYER" || role === "RECRUITER") &&
+      url.search === "" &&
+      url.hash === "" &&
+      url.pathname === "/invite/resume";
+    return allowedPrivatePath || allowedJobIntentPath || allowedInvitationPath
       ? `${url.pathname}${url.search}${url.hash}`
       : null;
   } catch {

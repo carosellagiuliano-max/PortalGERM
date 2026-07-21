@@ -5,6 +5,7 @@ export * from "./cities";
 export * from "./candidate-workflows";
 export * from "./companies-jobs";
 export * from "./content";
+export * from "./employer-core";
 export * from "./occupation-codes";
 export * from "./plans";
 export * from "./products";

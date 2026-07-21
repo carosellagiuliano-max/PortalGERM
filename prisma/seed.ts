@@ -23,11 +23,11 @@ try {
   );
 
   console.info(
-    `Phase-06 demo seed ${result.previouslyCompleted ? "verified" : "completed"} in ${result.guard.mode}.`,
+    `Demo seed ${result.previouslyCompleted ? "verified" : "completed"} in ${result.guard.mode}.`,
   );
   console.info(formatSeedManifestLog(result.envelope));
 } catch (error) {
-  console.error(formatSafeSeedFailure("Phase-06 demo seed failed", error));
+  console.error(formatSafeSeedFailure("Demo seed failed", error));
   process.exitCode = 1;
 }
 
