@@ -1,6 +1,6 @@
 # Phase 14 — Talent Radar & Privacy
 
-> **PortalGERM status: IMPLEMENTED AND VERIFIED.** Der vollständige Phase-14-Vertrag ist im Code-Commit `980be3dc5435f1295263d8c911eedcc97efc55a6` umgesetzt und durch [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md) belegt. P0 bleibt ein datenschutzrechtlich zu prüfender lokaler Mock, keine Produktions- oder Rechtsfreigabe.
+> **PortalGERM status: IMPLEMENTED AND VERIFIED.** Der vollständige Phase-14-Vertrag ist im final verifizierten Code-Commit `fadf54e6b896350ef8488c7b2361a8f91666e638` umgesetzt und durch [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md) belegt. P0 bleibt ein datenschutzrechtlich zu prüfender lokaler Mock, keine Produktions- oder Rechtsfreigabe.
 
 > Detail file for [00-PLAN.md](./00-PLAN.md) Phase 14. Read [99-rules-quickref.md](./99-rules-quickref.md) §9, §17 before starting. **This is the most privacy-sensitive feature in the project — apply maximal care.**
 
@@ -139,15 +139,15 @@ Every status change writes Audit `PRIVACY_REQUEST_STATUS_CHANGED`; export manife
 ### Disclaimers (German UI)
 
 - [x] Employer view: "Identitäten der Kandidat:innen bleiben anonym, bis sie freigegeben werden." *(list + detail: "Identität bleibt anonym bis zur Freigabe")*
-- [x] Candidate view: privacy page shows "DSG-freundliches MVP — Orientierung, keine Rechtsberatung. Identität bleibt anonym, bis du sie freigibst."
+- [x] Candidate view: privacy page shows "DSG-freundliches MVP — Orientierung, keine Rechtsberatung. Identität bleibt anonym, bis du sie ausdrücklich freigibst."
 
 ## Files to create / modify
 
-- `lib/talentradar/{privacy-policy-v1.ts, eligibility.ts, opaque-id.ts, list-candidates.ts, can-see-identity.ts, request-contact.ts, reveal.ts, reject.ts, expire-requests.ts, eligibility-loss-effects.ts}`
-- `app/employer/talent-radar/{page.tsx,[candidateAnonymousId]/page.tsx,requests/[id]/page.tsx,actions.ts}`; request detail is Company-scoped and shows state/funding/reveal timeline without PII before the scoped grant
+- `lib/talentradar/{privacy-policy-v1.ts, eligibility.ts, opaque-id.ts, list-candidates.ts, can-see-identity.ts, request-contact.ts, reveal.ts, contact-requests.ts, eligibility-loss-effects.ts}`
+- `app/employer/talent-radar/{page.tsx,requests/page.tsx,requests/[id]/page.tsx,actions.ts}`; the request-bound detail route is Company-scoped and shows state/funding/reveal timeline without PII before the scoped grant
 - `components/employer/TalentRadar/{CandidateCard.tsx, FilterBar.tsx, ContactDialog.tsx, LockedPreview.tsx, RevealedBadge.tsx}`
-- `app/candidate/talent-radar/requests/{page.tsx,[id]/page.tsx,actions.ts}` for accept/decline before Conversation; `app/candidate/messages/[threadId]/RevealActions.tsx` only for the separate post-accept add-fields/revoke flow; `app/candidate/privacy/requests/[id]/verify/{page.tsx,actions.ts}` for the owner-only recent-password Mock identity challenge
-- `lib/privacy/{reveal-snapshot-codecs.ts,reveal-keyring.ts,requests.ts,export-mock.ts,privacy-case-policy.ts}` and `app/candidate/privacy/{page.tsx,actions.ts}` populated lists/intake/cancel; `app/admin/privacy-requests/{page.tsx,[id]/page.tsx,actions.ts}` for capability-scoped verified export/delete/correction case handling
+- `app/candidate/talent-radar/requests/{page.tsx,[id]/page.tsx,actions.ts}` for accept/decline before Conversation; `components/candidate/TalentRadar/RevealActions.tsx` only for the separate post-accept add-fields/revoke flow; `app/candidate/privacy/requests/[id]/verify/{page.tsx,actions.ts}` for the owner-only recent-password Mock identity challenge
+- `lib/privacy/{reveal-dto.ts,requests.ts,export-mock.ts,postgres-export-adapter.ts,privacy-case-service.ts}` and `app/candidate/privacy/{page.tsx,actions.ts}` populated lists/intake/cancel; `app/admin/privacy-requests/{page.tsx,[id]/page.tsx,actions.ts}` for capability-scoped verified export/delete/correction case handling
 - `lib/privacy/anonymize-candidate.ts` reviewed once more for any new leak vectors
 
 ## Rules to respect (from `99-rules-quickref.md`)
@@ -160,7 +160,7 @@ Every status change writes Audit `PRIVACY_REQUEST_STATUS_CHANGED`; export manife
 
 ## Verification
 
-> **Verification status:** Implemented and verified against code commit `980be3dc5435f1295263d8c911eedcc97efc55a6`; exact commands and limitations are recorded in [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md).
+> **Verification status:** Implemented and verified against final code commit `fadf54e6b896350ef8488c7b2361a8f91666e638`; exact commands and limitations are recorded in [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md).
 
 - [x] Without Talent Radar access (Free Basic seeded employer), the page shows locked preview only — **no** data-layer call to the candidate list
 - [x] With Pro plan the list returns anonymous cards; payload contains no `firstName`/`lastName`/`email`/`phone`/`cvFileName` *(10 cards; payload scan clean; select omits identity columns)*
@@ -172,7 +172,7 @@ Every status change writes Audit `PRIVACY_REQUEST_STATUS_CHANGED`; export manife
 - [x] Without reveal, the employer view shows only the anonymous label
 - [x] Privacy dashboard lists this contact request for the candidate
 - [x] Candidate pending request detail works before any Conversation; Accept creates one Conversation but zero RevealGrants, Decline creates neither; employer request detail remains anonymous until the separately scoped Reveal
-- [x] Candidate opt-out/onboarding reopen/User suspension and Company suspension/verification revoke immediately invalidate listing ids and block the defined discovery/contact/accept/reveal paths; pending requests become read-only `CANCELLED` (report remains, Decline absent), no automatic refund occurs, and reactivation does not auto-publish Radar
+- [x] Candidate opt-out/onboarding reopen/User suspension and Company suspension/verification revoke immediately invalidate listing ids and block the defined discovery/contact/accept/reveal paths; effective pending requests become read-only `CANCELLED` (report remains, Decline absent), no automatic refund occurs, and reactivation does not auto-publish Radar *(`talent-radar-candidate-eligibility-loss-postgres.test.ts`; `talent-radar-eligibility-admin-triggers-postgres.test.ts`; all eight trigger paths plus the `expiresAt` boundary)*
 - [x] 14-day exact expiry, one pending duplicate, 30-day recontact cooldown, employer-only pending cancel and no automatic refund are DB/clock tested; an Admin reversal references the exact consumption and cannot double-credit
 - [x] Reveal DTO/snapshot tests cover every `RevealField` and combination, stale preview rejection, add-field confirmation, one-grant uniqueness, unchecked/duplicate/unknown/free-string/revoked grants, AES-GCM round-trip/AAD-tamper/key-version failures, exact mapping and absence of address/CV bytes/private notes. Editing live name/email/phone/CV after Reveal leaves the employer DTO byte-for-byte unchanged; a newly added field snapshots only its then-current value. Explicit Candidate revocation is idempotent, blocks the very next read, cannot be reversed by Employer/Admin and leaves anonymous thread/history plus truthful "already seen" copy.
 - [x] Privacy-case integration tests cover bounded EXPORT/DELETE/CORRECT intake, duplicate/rate/ownership controls, every actor × status transition and terminal/stale-version rejection, challenge expiry, capability denial, 7-day Mock manifest metadata, deletion with zero erased rows/User-status changes, correction only through referenced domain commands, notification/audit redaction and cross-user/admin-safe reads

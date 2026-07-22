@@ -119,7 +119,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 ### [x] 14 — Talent Radar und Privacy
 
-[`14-talent-radar-privacy.md`](./14-talent-radar-privacy.md) · kanonisches Opt-in, Safe DTO/opaque ID, bounded Cohort/Enumeration, atomarer Contact Ledger, Accept/Decline, verschlüsselte request-scoped Reveal-Snapshots und capability-gebundene Privacy Cases sind im Code-Commit `980be3dc5435f1295263d8c911eedcc97efc55a6` verifiziert; siehe [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md).
+[`14-talent-radar-privacy.md`](./14-talent-radar-privacy.md) · kanonisches Opt-in, Safe DTO/opaque ID, bounded Cohort/Enumeration, atomarer Contact Ledger, Accept/Decline, verschlüsselte request-scoped Reveal-Snapshots und capability-gebundene Privacy Cases sind im finalen Code-Commit `fadf54e6b896350ef8488c7b2361a8f91666e638` verifiziert; siehe [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md).
 
 ### [ ] 15 — Search, SEO und Growth
 
