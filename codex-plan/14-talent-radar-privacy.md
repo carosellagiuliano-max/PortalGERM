@@ -1,6 +1,6 @@
 # Phase 14 — Talent Radar & Privacy
 
-> **PortalGERM target status: NOT IMPLEMENTED.** Any concrete payload/test result below is a target. Canonical consent, opaque IDs, ledger funding and request-scoped Reveal follow ADR-019/022.
+> **PortalGERM status: IMPLEMENTED AND VERIFIED.** Der vollständige Phase-14-Vertrag ist im Code-Commit `980be3dc5435f1295263d8c911eedcc97efc55a6` umgesetzt und durch [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md) belegt. P0 bleibt ein datenschutzrechtlich zu prüfender lokaler Mock, keine Produktions- oder Rechtsfreigabe.
 
 > Detail file for [00-PLAN.md](./00-PLAN.md) Phase 14. Read [99-rules-quickref.md](./99-rules-quickref.md) §9, §17 before starting. **This is the most privacy-sensitive feature in the project — apply maximal care.**
 
@@ -10,25 +10,25 @@ Build the full anonymous Talent Radar flow: anonymous candidate browsing for emp
 
 ## Prerequisites
 
-- [ ] Phase 02 canonical Candidate Consent/RadarProfile, opaque mapping, ContactRequest/Event, scoped RevealGrant, PrivacyRequest, AbuseReport and Credit Ledger models
-- [ ] Phase 03 helpers (`lib/privacy/anonymize-candidate`, separate Radar/User consent APIs, `lib/privacy/requests`, `lib/privacy/export-mock`, `lib/audit`)
-- [ ] Phase 06 auth + ownership
-- [ ] Phase 09 candidate Consent/Privacy/Message shells; pending requests deliberately have no Conversation
-- [ ] Phase 10 employer `/employer/talent-radar` UI shell
-- [ ] Phase 12 mock checkout and Entitlement/Credit Ledger (Contact Pack grants a typed ledger balance)
+- [x] Phase 02 canonical Candidate Consent/RadarProfile, opaque mapping, ContactRequest/Event, scoped RevealGrant, PrivacyRequest, AbuseReport and Credit Ledger models
+- [x] Phase 03 helpers (`lib/privacy/anonymize-candidate`, separate Radar/User consent APIs, `lib/privacy/requests`, `lib/privacy/export-mock`, `lib/audit`)
+- [x] Phase 06 auth + ownership
+- [x] Phase 09 candidate Consent/Privacy/Message shells; pending requests deliberately have no Conversation
+- [x] Phase 10 employer `/employer/talent-radar` UI shell
+- [x] Phase 12 mock checkout and Entitlement/Credit Ledger (Contact Pack grants a typed ledger balance)
 
 ## Deliverables (checklist)
 
 ### Anonymized candidate browsing (employer side)
 
-- [ ] Server-side query helper `lib/talentradar/list-candidates.ts`:
+- [x] Server-side query helper `lib/talentradar/list-candidates.ts`:
   - Before any Candidate query, requires an active Membership role Owner/Admin/Recruiter, Company `ACTIVE`, current verified Company evidence and `TALENT_RADAR_ACCESS=true`; suspended/unverified/closed/draft Companies get locked/denied even if a stale Subscription exists
   - Uses the one canonical eligibility predicate `isRadarCandidateEligible(candidateId, now, environment)`: underlying `User.status=ACTIVE`, `CandidateProfile.onboardingStatus=COMPLETE`, latest effective `CandidateConsent{kind=TALENT_RADAR_VISIBILITY}` is `granted=true` under an accepted notice version, and the derived `RadarProfile` has `publishedAt <= now` and `withdrawnAt IS NULL`; Production additionally requires canonical Candidate/Radar provenance `LIVE`, while Demo provenance is allowed only in Development/Test. Every list/contact resolution reuses this predicate.
   - Maps every record through a Safe DTO using an opaque server-mapped Radar id, never PK/handle as authorization (ADR-006/022)
   - Applies only the filters and buckets in `RADAR_PRIVACY_POLICY_V1` below; clients cannot send raw predicates or extra Prisma fields
   - Returns a privacy-bounded, signed-cursor sample rather than an enumerable full result set
-- [ ] The response **never** contains `firstName`/`lastName`/`email`/`phone`/`cvFileName`/`cvStorageKey`/full city/address — the Prisma `select` omits those columns and the anonymizer output has none
-- [ ] If employer has **no** Talent Radar access: render blurred/locked preview with CTA "Talent Radar freischalten"; **do not call the data layer at all**
+- [x] The response **never** contains `firstName`/`lastName`/`email`/`phone`/`cvFileName`/`cvStorageKey`/full city/address — the Prisma `select` omits those columns and the anonymizer output has none
+- [x] If employer has **no** Talent Radar access: render blurred/locked preview with CTA "Talent Radar freischalten"; **do not call the data layer at all**
 
 #### `RADAR_PRIVACY_POLICY_V1` — frozen P0 contract
 
@@ -50,8 +50,8 @@ Build the full anonymous Talent Radar flow: anonymous candidate browsing for emp
 
 ### Contact request flow
 
-- [ ] Modal on a candidate card: form `subject`, `messagePreview` (max 500 chars), sanitised; no field for candidate data *(`components/employer/TalentRadar/ContactDialog.tsx`)*
-- [ ] Server action `sendContactRequestAction` → `lib/talentradar/request-contact.ts`:
+- [x] Modal on a candidate card: form `subject`, `messagePreview` (max 500 chars), sanitised; no field for candidate data *(`components/employer/TalentRadar/ContactDialog.tsx`)*
+- [x] Server action `sendContactRequestAction` → `lib/talentradar/request-contact.ts`:
   1. `getEmployerContext` (EMPLOYER/RECRUITER + company membership); VIEWER blocked
   2. Rechecks Company `ACTIVE` plus current Verification and Talent-Radar entitlement before any Candidate query
   3. Resolves the internal Candidate only from the current Company-scoped opaque mapping; under lock it rechecks token epoch/revocation and `isRadarCandidateEligible`
@@ -61,7 +61,7 @@ Build the full anonymous Talent Radar flow: anonymous candidate browsing for emp
   7. Creates `EmployerContactRequest{ PENDING, expiresAt: now + 14 days, fundingSource, … }` in the same transaction. P0 validity is half-open `createdAt <= now < expiresAt`.
   8. Records candidate `CONTACT_REQUEST_RECEIVED` Notification + mock email `talent_contact_request_received`; it does **not** create a Conversation or Message while pending and never asks the employer to request identity
   9. Audit `CONTACT_REQUEST_SENT`
-- [ ] On failure (no credits) → typed error → shared `<UpgradeDialog>` with `suggestedProductSlug = 'contact-pack-10'`
+- [x] On failure (no credits) → typed error → shared `<UpgradeDialog>` with `suggestedProductSlug = 'contact-pack-10'`
 
 #### Canonical eligibility-loss effects
 
@@ -72,28 +72,28 @@ Build the full anonymous Talent Radar flow: anonymous candidate browsing for emp
 
 ### Reveal flow (candidate side)
 
-- [ ] `/candidate/talent-radar/requests` and `/candidate/talent-radar/requests/[id]` list/read only the current Candidate's ContactRequests. The pending detail shows verified Company, bounded message, purpose, expiry and buttons **„Kontaktanfrage annehmen“** / „Ablehnen“; it is reachable without a Conversation.
-- [ ] Candidate detail rechecks current Company state/verification. If trust was revoked/suspended, it shows „Firma derzeit nicht verifiziert“, disables Accept/new Reveal and new Radar-thread messages, keeps minimal historical evidence and permits reporting. The canonical trust-loss transaction has already moved effective PENDING requests to `CANCELLED`, so a cancelled request deliberately has no contradictory Decline button.
-- [ ] Candidate Accept transitions only a currently effective `PENDING → ACCEPTED`, appends event, and then creates/reuses the scoped anonymous Conversation. Identity remains anonymous until a separate **„Identität für [Firma] freigeben“** dialog lists unchecked `RevealField` choices (`DISPLAY_NAME`, `EMAIL`, `PHONE`, `CV_METADATA`), exact preview and notice/recipient.
-- [ ] Exactly one `IdentityRevealGrant` may exist per accepted request (`contactRequestId @unique`). `buildRevealPreview({contactRequestId, fields, noticeVersion})` returns the exact displayed values plus a server-signed, one-use, 10-minute confirmation token containing no plaintext PII. `grantRevealFields({contactRequestId, fields, noticeVersion, confirmationToken, idempotencyKey})` locks request/grant, validates token scope/expiry/use and rereads the Candidate's current selected values: the first non-empty confirmation creates the grant; a later confirmation may append only previously absent closed field rows to that same unrevoked grant. The token and stored confirmation bind the active Phase-01 `REVEAL_CONFIRMATION_KEYS` version via HMAC-SHA-256 of the canonical values—not a plain guessable hash. Every confirmation appends immutable evidence containing recipient Company, request/conversation, complete resulting field set, newly added set, notice/version/key version and preview HMAC. If the server-reread HMAC differs, the command returns `STALE_REVEAL_PREVIEW` and requires reconfirmation; it never overwrites prior evidence, removes a field, accepts a duplicate/unknown/free-string value or reopens a revoked grant.
-- [ ] Each `IdentityRevealGrantField` is an immutable **value snapshot**, not permission to reread the live profile: store `field`, `valueSchemaVersion`, `keyVersion`, AES-256-GCM `ciphertext`, 12-byte random `nonce`, 16-byte `authTag`, keyed `valueIntegrityHmac`, `capturedAt` and no plaintext value. AAD binds `grantId|candidateProfileId|companyId|contactRequestId|field|valueSchemaVersion`. Closed v1 codecs are: normalized UTF-8 `DISPLAY_NAME` `1..120` chars; canonical email `3..254` chars; E.164 phone `8..16` chars; and a fixed typed binary `CV_METADATA` tuple `(safeFileName<=255, mime=application/pdf|image/png|image/jpeg|image/webp, sizeBytes<=5 MiB)`—never generic JSON, storage key or file bytes. The dedicated Phase-01 `PII_REVEAL_KEYS` keyring encrypts/decrypts these rows; Reveal confirmation, Radar, Session and Audit secrets are not reused, raw values never enter logs/audit/analytics, and rotation retains controlled old-version reads while referenced rows exist.
-- [ ] The confirmation dialog's server-built preview displays precisely the values that will be encrypted. Later profile/email/phone/CV changes never alter an existing Reveal snapshot; adding a new field captures its then-current value in a new encrypted row and confirmation event on the same grant. Existing field rows cannot be refreshed in place; sharing a changed value requires a later separately consented relationship after revocation/new request policy.
-- [ ] `revokeIdentityReveal({grantId, reasonCode?, confirmationVersion})` is an authenticated Candidate-only command scoped through the Candidate owner; optional reason is closed to `PRIVACY_CHOICE|TRUST_CONCERN|OTHER`. It is idempotent, locks a currently unrevoked grant, writes `revokedAt/revokedBy/reason`, `IDENTITY_REVEAL_REVOKED` audit/domain evidence and an employer `IDENTITY_REVEAL_REVOKED` Notification. From commit onward every Radar DTO omits all grant fields; the Conversation may continue anonymously if both parties remain allowed. Employer/Admin cannot clear `revokedAt`, append fields or re-enable the grant. UI confirmation states truthfully that data already seen or copied cannot technically be made unseen; a revoked request cannot be revealed again.
-- [ ] Decline transitions `PENDING → DECLINED`, never creates a RevealGrant and discloses no identity. Requesting Company may cancel only PENDING. An explicit idempotent expiry command writes `EXPIRED`; public GET only treats the half-open boundary as expired. Decline/expiry/cancel does not refund automatically; Admin may append an exact referenced Ledger `REVERSAL` with reason/audit. Recontact waits 30 days after terminal event; after ACCEPTED the existing Conversation is reused.
+- [x] `/candidate/talent-radar/requests` and `/candidate/talent-radar/requests/[id]` list/read only the current Candidate's ContactRequests. The pending detail shows verified Company, bounded message, purpose, expiry and buttons **„Kontaktanfrage annehmen“** / „Ablehnen“; it is reachable without a Conversation.
+- [x] Candidate detail rechecks current Company state/verification. If trust was revoked/suspended, it shows „Firma derzeit nicht verifiziert“, disables Accept/new Reveal and new Radar-thread messages, keeps minimal historical evidence and permits reporting. The canonical trust-loss transaction has already moved effective PENDING requests to `CANCELLED`, so a cancelled request deliberately has no contradictory Decline button.
+- [x] Candidate Accept transitions only a currently effective `PENDING → ACCEPTED`, appends event, and then creates/reuses the scoped anonymous Conversation. Identity remains anonymous until a separate **„Identität für [Firma] freigeben“** dialog lists unchecked `RevealField` choices (`DISPLAY_NAME`, `EMAIL`, `PHONE`, `CV_METADATA`), exact preview and notice/recipient.
+- [x] Exactly one `IdentityRevealGrant` may exist per accepted request (`contactRequestId @unique`). `buildRevealPreview({contactRequestId, fields, noticeVersion})` returns the exact displayed values plus a server-signed, one-use, 10-minute confirmation token containing no plaintext PII. `grantRevealFields({contactRequestId, fields, noticeVersion, confirmationToken, idempotencyKey})` locks request/grant, validates token scope/expiry/use and rereads the Candidate's current selected values: the first non-empty confirmation creates the grant; a later confirmation may append only previously absent closed field rows to that same unrevoked grant. The token and stored confirmation bind the active Phase-01 `REVEAL_CONFIRMATION_KEYS` version via HMAC-SHA-256 of the canonical values—not a plain guessable hash. Every confirmation appends immutable evidence containing recipient Company, request/conversation, complete resulting field set, newly added set, notice/version/key version and preview HMAC. If the server-reread HMAC differs, the command returns `STALE_REVEAL_PREVIEW` and requires reconfirmation; it never overwrites prior evidence, removes a field, accepts a duplicate/unknown/free-string value or reopens a revoked grant.
+- [x] Each `IdentityRevealGrantField` is an immutable **value snapshot**, not permission to reread the live profile: store `field`, `valueSchemaVersion`, `keyVersion`, AES-256-GCM `ciphertext`, 12-byte random `nonce`, 16-byte `authTag`, keyed `valueIntegrityHmac`, `capturedAt` and no plaintext value. AAD binds `grantId|candidateProfileId|companyId|contactRequestId|field|valueSchemaVersion`. Closed v1 codecs are: normalized UTF-8 `DISPLAY_NAME` `1..120` chars; canonical email `3..254` chars; E.164 phone `8..16` chars; and a fixed typed binary `CV_METADATA` tuple `(safeFileName<=255, mime=application/pdf|image/png|image/jpeg|image/webp, sizeBytes<=5 MiB)`—never generic JSON, storage key or file bytes. The dedicated Phase-01 `PII_REVEAL_KEYS` keyring encrypts/decrypts these rows; Reveal confirmation, Radar, Session and Audit secrets are not reused, raw values never enter logs/audit/analytics, and rotation retains controlled old-version reads while referenced rows exist.
+- [x] The confirmation dialog's server-built preview displays precisely the values that will be encrypted. Later profile/email/phone/CV changes never alter an existing Reveal snapshot; adding a new field captures its then-current value in a new encrypted row and confirmation event on the same grant. Existing field rows cannot be refreshed in place; sharing a changed value requires a later separately consented relationship after revocation/new request policy.
+- [x] `revokeIdentityReveal({grantId, reasonCode?, confirmationVersion})` is an authenticated Candidate-only command scoped through the Candidate owner; optional reason is closed to `PRIVACY_CHOICE|TRUST_CONCERN|OTHER`. It is idempotent, locks a currently unrevoked grant, writes `revokedAt/revokedBy/reason`, `IDENTITY_REVEAL_REVOKED` audit/domain evidence and an employer `IDENTITY_REVEAL_REVOKED` Notification. From commit onward every Radar DTO omits all grant fields; the Conversation may continue anonymously if both parties remain allowed. Employer/Admin cannot clear `revokedAt`, append fields or re-enable the grant. UI confirmation states truthfully that data already seen or copied cannot technically be made unseen; a revoked request cannot be revealed again.
+- [x] Decline transitions `PENDING → DECLINED`, never creates a RevealGrant and discloses no identity. Requesting Company may cancel only PENDING. An explicit idempotent expiry command writes `EXPIRED`; public GET only treats the half-open boundary as expired. Decline/expiry/cancel does not refund automatically; Admin may append an exact referenced Ledger `REVERSAL` with reason/audit. Recontact waits 30 days after terminal event; after ACCEPTED the existing Conversation is reused.
 
 ### Employer view of candidate after reveal
 
-- [ ] Helper `lib/talentradar/can-see-identity.ts`: direct Application context follows its own policy. Radar identity is selected field-by-field only when Candidate User is currently `ACTIVE`, Company is currently `ACTIVE` and verified, the request remains `ACCEPTED`, request/conversation/candidate/company all match, and the single grant has `revokedAt IS NULL`; never a global company-wide reveal. Radar opt-out does not retroactively destroy an accepted relationship, but Company/User suspension and verification loss fail this read guard. Existing grant/audit history remains and Candidate may revoke the grant.
-- [ ] Used on the talent-radar candidate detail; `/employer/applicants` shows identity only through the application context
-- [ ] **Server-side enforcement**: first query only scope/status and encrypted grant rows; after `canSeeIdentity` succeeds, decrypt each allowlisted field through its exact typed codec and construct the DTO from those immutable snapshots. Radar reads never refetch live Candidate/User identity columns and never deserialize generic JSON. Every request repeats the current guard—there is no cached plaintext PII DTO. A newly appended field appears only after its confirmation commits; later profile edits do not change disclosed values, while revocation or trust loss removes all Reveal-derived fields from the next read and preserves non-PII history.
+- [x] Helper `lib/talentradar/can-see-identity.ts`: direct Application context follows its own policy. Radar identity is selected field-by-field only when Candidate User is currently `ACTIVE`, Company is currently `ACTIVE` and verified, the request remains `ACCEPTED`, request/conversation/candidate/company all match, and the single grant has `revokedAt IS NULL`; never a global company-wide reveal. Radar opt-out does not retroactively destroy an accepted relationship, but Company/User suspension and verification loss fail this read guard. Existing grant/audit history remains and Candidate may revoke the grant.
+- [x] Used on the talent-radar candidate detail; `/employer/applicants` shows identity only through the application context
+- [x] **Server-side enforcement**: first query only scope/status and encrypted grant rows; after `canSeeIdentity` succeeds, decrypt each allowlisted field through its exact typed codec and construct the DTO from those immutable snapshots. Radar reads never refetch live Candidate/User identity columns and never deserialize generic JSON. Every request repeats the current guard—there is no cached plaintext PII DTO. A newly appended field appears only after its confirmation commits; later profile edits do not change disclosed values, while revocation or trust loss removes all Reveal-derived fields from the next read and preserves non-PII history.
 
 ### Candidate privacy dashboard wiring
 
-- [ ] (Phase 09) "Wer hat dich kontaktiert" lists `EmployerContactRequest` for the candidate with company + status + date + abuse-report action
-- [ ] (Phase 09) Data export action creates only an authenticated/rate-limited `PrivacyRequest{EXPORT}`. The later verified Admin workflow creates a local manifest/status Mock; the intake never returns an immediate dump.
-- [ ] (Phase 09) Deletion action creates a pending `PrivacyRequest{DELETE}` with dependencies/limitations visible; P0 completes only a documented assessment Mock and performs no erasure/anonymization before retention/legal approval.
-- [ ] (Phase 14) Correction action creates a bounded `PrivacyRequest{CORRECT}` case and shows its exact status/outcome; it is not a generic Admin database-edit endpoint.
-- [ ] (Phase 09) Abuse reporting form files an `AbuseReport` — admin handles it in `/admin/reports`
+- [x] (Phase 09) "Wer hat dich kontaktiert" lists `EmployerContactRequest` for the candidate with company + status + date + abuse-report action
+- [x] (Phase 09) Data export action creates only an authenticated/rate-limited `PrivacyRequest{EXPORT}`. The later verified Admin workflow creates a local manifest/status Mock; the intake never returns an immediate dump.
+- [x] (Phase 09) Deletion action creates a pending `PrivacyRequest{DELETE}` with dependencies/limitations visible; P0 completes only a documented assessment Mock and performs no erasure/anonymization before retention/legal approval.
+- [x] (Phase 14) Correction action creates a bounded `PrivacyRequest{CORRECT}` case and shows its exact status/outcome; it is not a generic Admin database-edit endpoint.
+- [x] (Phase 09) Abuse reporting form files an `AbuseReport` — admin handles it in `/admin/reports`
 
 #### Privacy request intake — exact P0 Mock contract
 
@@ -105,9 +105,9 @@ Build the full anonymous Talent Radar flow: anonymous candidate browsing for emp
 
 ### Admin oversight
 
-- [ ] `/admin/reports` lists abuse (COMPANY targets link to the company); Talent Radar reports are filed against the company
-- [ ] `/admin/companies/[id]` shows privacy-safe Talent Radar usage with included-period, purchased-pack and admin-grant consumption/balances separately, contacts/reveals and abuse reports
-- [ ] `/admin/privacy-requests` is a bounded queue containing id/type/status/age/due bucket only; `/admin/privacy-requests/[id]` is the need-to-know case detail. Both routes and every action independently enforce the capabilities below and write access/mutation audit evidence.
+- [x] `/admin/reports` lists abuse (COMPANY targets link to the company); Talent Radar reports are filed against the company
+- [x] `/admin/companies/[id]` shows privacy-safe Talent Radar usage with included-period, purchased-pack and admin-grant consumption/balances separately, contacts/reveals and abuse reports
+- [x] `/admin/privacy-requests` is a bounded queue containing id/type/status/age/due bucket only; `/admin/privacy-requests/[id]` is the need-to-know case detail. Both routes and every action independently enforce the capabilities below and write access/mutation audit evidence.
 
 #### Admin privacy case workflow — exact P0 Mock contract
 
@@ -138,8 +138,8 @@ Every status change writes Audit `PRIVACY_REQUEST_STATUS_CHANGED`; export manife
 
 ### Disclaimers (German UI)
 
-- [ ] Employer view: "Identitäten der Kandidat:innen bleiben anonym, bis sie freigegeben werden." *(list + detail: "Identität bleibt anonym bis zur Freigabe")*
-- [ ] Candidate view: privacy page shows "DSG-freundliches MVP — Orientierung, keine Rechtsberatung. Identität bleibt anonym, bis du sie freigibst."
+- [x] Employer view: "Identitäten der Kandidat:innen bleiben anonym, bis sie freigegeben werden." *(list + detail: "Identität bleibt anonym bis zur Freigabe")*
+- [x] Candidate view: privacy page shows "DSG-freundliches MVP — Orientierung, keine Rechtsberatung. Identität bleibt anonym, bis du sie freigibst."
 
 ## Files to create / modify
 
@@ -160,23 +160,23 @@ Every status change writes Audit `PRIVACY_REQUEST_STATUS_CHANGED`; export manife
 
 ## Verification
 
-> **Plan status:** Not implemented in this repository yet. Treat the checks below as target verification steps. Do not mark any checkbox until code exists and the command/output has been verified.
+> **Verification status:** Implemented and verified against code commit `980be3dc5435f1295263d8c911eedcc97efc55a6`; exact commands and limitations are recorded in [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md).
 
-- [ ] Without Talent Radar access (Free Basic seeded employer), the page shows locked preview only — **no** data-layer call to the candidate list
-- [ ] With Pro plan the list returns anonymous cards; payload contains no `firstName`/`lastName`/`email`/`phone`/`cvFileName` *(10 cards; payload scan clean; select omits identity columns)*
-- [ ] `RADAR_PRIVACY_POLICY_V1` golden tests prove normalization/hash equivalence, final cohort `0/9 → INSUFFICIENT_COHORT`, `10/24/25/50/100` bucket boundaries, stable same-day max-20 sample/two-page cursor, cursor expiry/tamper, 10-per-minute and 30-distinct-hashes-per-day limits, and no extra filter/sort/total endpoint
-- [ ] Opaque-id tests prove 128-bit random Company-scoped values, cross-company non-correlation, current epoch lookup, no-overlap rotation, immediate invalidation on opt-out/reopen/suspension, fresh id after re-opt-in and indistinguishable expired/revoked/replayed/cross-company failure
-- [ ] Sending a contact request decrements credit atomically — concurrent attempts cannot go negative *(two simultaneous requests on 1 credit → exactly one ok, `used=1/1`)*
-- [ ] Without credits, employer receives the upgrade modal pointing to `contact-pack-10`
-- [ ] After separate explicit Reveal, exactly one request-scoped `IdentityRevealGrant` and `AuditLog (IDENTITY_REVEALED)` exist; Accept alone still returns no identity. A second confirmation appends only new field rows plus immutable confirmation evidence and cannot create another grant.
-- [ ] Without reveal, the employer view shows only the anonymous label
-- [ ] Privacy dashboard lists this contact request for the candidate
-- [ ] Candidate pending request detail works before any Conversation; Accept creates one Conversation but zero RevealGrants, Decline creates neither; employer request detail remains anonymous until the separately scoped Reveal
-- [ ] Candidate opt-out/onboarding reopen/User suspension and Company suspension/verification revoke immediately invalidate listing ids and block the defined discovery/contact/accept/reveal paths; pending requests become read-only `CANCELLED` (report remains, Decline absent), no automatic refund occurs, and reactivation does not auto-publish Radar
-- [ ] 14-day exact expiry, one pending duplicate, 30-day recontact cooldown, employer-only pending cancel and no automatic refund are DB/clock tested; an Admin reversal references the exact consumption and cannot double-credit
-- [ ] Reveal DTO/snapshot tests cover every `RevealField` and combination, stale preview rejection, add-field confirmation, one-grant uniqueness, unchecked/duplicate/unknown/free-string/revoked grants, AES-GCM round-trip/AAD-tamper/key-version failures, exact mapping and absence of address/CV bytes/private notes. Editing live name/email/phone/CV after Reveal leaves the employer DTO byte-for-byte unchanged; a newly added field snapshots only its then-current value. Explicit Candidate revocation is idempotent, blocks the very next read, cannot be reversed by Employer/Admin and leaves anonymous thread/history plus truthful "already seen" copy.
-- [ ] Privacy-case integration tests cover bounded EXPORT/DELETE/CORRECT intake, duplicate/rate/ownership controls, every actor × status transition and terminal/stale-version rejection, challenge expiry, capability denial, 7-day Mock manifest metadata, deletion with zero erased rows/User-status changes, correction only through referenced domain commands, notification/audit redaction and cross-user/admin-safe reads
-- [ ] `lib/privacy/anonymize-candidate` strips every forbidden field *(`tests/privacy.test.ts`; Phase 17 will fold into the full suite)*
+- [x] Without Talent Radar access (Free Basic seeded employer), the page shows locked preview only — **no** data-layer call to the candidate list
+- [x] With Pro plan the list returns anonymous cards; payload contains no `firstName`/`lastName`/`email`/`phone`/`cvFileName` *(10 cards; payload scan clean; select omits identity columns)*
+- [x] `RADAR_PRIVACY_POLICY_V1` golden tests prove normalization/hash equivalence, final cohort `0/9 → INSUFFICIENT_COHORT`, `10/24/25/50/100` bucket boundaries, stable same-day max-20 sample/two-page cursor, cursor expiry/tamper, 10-per-minute and 30-distinct-hashes-per-day limits, and no extra filter/sort/total endpoint
+- [x] Opaque-id tests prove 128-bit random Company-scoped values, cross-company non-correlation, current epoch lookup, no-overlap rotation, immediate invalidation on opt-out/reopen/suspension, fresh id after re-opt-in and indistinguishable expired/revoked/replayed/cross-company failure
+- [x] Sending a contact request decrements credit atomically — concurrent attempts cannot go negative *(two simultaneous requests on 1 credit → exactly one ok, `used=1/1`)*
+- [x] Without credits, employer receives the upgrade modal pointing to `contact-pack-10`
+- [x] After separate explicit Reveal, exactly one request-scoped `IdentityRevealGrant` and `AuditLog (IDENTITY_REVEALED)` exist; Accept alone still returns no identity. A second confirmation appends only new field rows plus immutable confirmation evidence and cannot create another grant.
+- [x] Without reveal, the employer view shows only the anonymous label
+- [x] Privacy dashboard lists this contact request for the candidate
+- [x] Candidate pending request detail works before any Conversation; Accept creates one Conversation but zero RevealGrants, Decline creates neither; employer request detail remains anonymous until the separately scoped Reveal
+- [x] Candidate opt-out/onboarding reopen/User suspension and Company suspension/verification revoke immediately invalidate listing ids and block the defined discovery/contact/accept/reveal paths; pending requests become read-only `CANCELLED` (report remains, Decline absent), no automatic refund occurs, and reactivation does not auto-publish Radar
+- [x] 14-day exact expiry, one pending duplicate, 30-day recontact cooldown, employer-only pending cancel and no automatic refund are DB/clock tested; an Admin reversal references the exact consumption and cannot double-credit
+- [x] Reveal DTO/snapshot tests cover every `RevealField` and combination, stale preview rejection, add-field confirmation, one-grant uniqueness, unchecked/duplicate/unknown/free-string/revoked grants, AES-GCM round-trip/AAD-tamper/key-version failures, exact mapping and absence of address/CV bytes/private notes. Editing live name/email/phone/CV after Reveal leaves the employer DTO byte-for-byte unchanged; a newly added field snapshots only its then-current value. Explicit Candidate revocation is idempotent, blocks the very next read, cannot be reversed by Employer/Admin and leaves anonymous thread/history plus truthful "already seen" copy.
+- [x] Privacy-case integration tests cover bounded EXPORT/DELETE/CORRECT intake, duplicate/rate/ownership controls, every actor × status transition and terminal/stale-version rejection, challenge expiry, capability denial, 7-day Mock manifest metadata, deletion with zero erased rows/User-status changes, correction only through referenced domain commands, notification/audit redaction and cross-user/admin-safe reads
+- [x] `lib/privacy/anonymize-candidate` strips every forbidden field *(`tests/privacy.test.ts`; Phase 17 will fold into the full suite)*
 
 ## Common pitfalls
 

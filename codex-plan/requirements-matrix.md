@@ -75,6 +75,8 @@
 | REQ-SCORE-001 | Fair-Job-Score ist deterministisch, versioniert, erklärbar und zahlungsunabhängig. | alle · P0 · 03/10 | JobScoreSnapshot | structured evidence; company verification separate; no boost/plan input | golden tests 0/partial/100; compile/type test excludes paid inputs |
 | REQ-SCORE-002 | Match-Score nutzt keine sensiblen Merkmale und entscheidet nicht automatisch. | Candidate · P0 · 03/09 | profile/job inputs + version/confidence | candidate-facing; missing data affects confidence; explainability | protected fields absent from input type; no reject transition calls score |
 
+> **Phase-14-Status (22. Juli 2026):** REQ-TR-001–006 sowie der Phase-14-Anteil von REQ-BIL-006 sind im Code-Commit `980be3dc5435f1295263d8c911eedcc97efc55a6` implementiert und durch die [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md) belegt. Der Nachweis umfasst fail-closed Employer-Gates vor Candidate-Zugriff, die versionierte Cohort-/Enumeration-Policy, Company-/Epoch-scoped Opaque-IDs, atomare und source-geordnete Contact-Credits, den vollständigen Accept/Decline/Cancel/Expiry/Trust-Loss-Vertrag, kandidateninitiierte verschlüsselte Reveal-Snapshots mit sofortigem Read-Guard sowie bounded Privacy-Cases für EXPORT/DELETE/CORRECT. Cross-role-Browserreisen bleiben Phase 17; produktive Rechtsgrundlage, Retention, reale Exportbereitstellung und Erasure benötigen eine separate Privacy-/Legal-Freigabe.
+
 ## 6. Monetarisierung, Billing und Boosts
 
 | ID | Anforderung / Quelle | Rolle · Priorität · Phase | Daten / Serverlogik | Policy, UX und Test | Messbare Abnahme |

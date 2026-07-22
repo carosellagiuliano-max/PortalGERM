@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 22. Juli 2026. **Phasen 01 bis 12 sind im Zielrepository implementiert und verifiziert. Phasen 13–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth, öffentliche Discovery, Pricing und Arbeitgeberakquise, Candidate-/Employer-/Recruiter-Core, Admin-Operations/Moderation sowie Katalog, Entitlements, Credits und idempotentes Mock-Billing ergeben noch kein fertiges Produkt: Boosts, Radar Contact/Reveal, Cross-role-E2E und Release-Härtung folgen in späteren Phasen. Mock Payment umfasst weder Stripe noch echte Webhooks; ein autonomer Renewal-Worker ist nicht vorhanden. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 22. Juli 2026. **Phasen 01 bis 14 sind im Zielrepository implementiert und verifiziert. Phasen 15–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth, öffentliche Discovery, Pricing und Arbeitgeberakquise, Candidate-/Employer-/Recruiter-Core, Admin-Operations/Moderation, Katalog/Billing, Job-Boosts sowie Talent-Radar Contact/Reveal und Privacy-Cases ergeben noch kein fertiges Produkt: Search/SEO, abschliessende Security-Härtung, Cross-role-E2E und Release-Audit folgen. Mock Payment umfasst weder Stripe noch echte Webhooks; ein autonomer Renewal-Worker ist nicht vorhanden. Export/Löschung bleiben P0-Mocks ohne automatische Datenbereitstellung oder Erasure. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -99,7 +99,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 ### [x] 09 — Kandidaten-Core
 
-[`09-candidate-portal.md`](./09-candidate-portal.md) · JobPass, Saved Jobs, Apply/Withdraw/Status, Alerts, Messaging und Privacy-Basics sind implementiert und gegen den unveränderlichen Code-Commit verifiziert. Die Employer-Pipeline-Mutationen sind seit Phase 10 umgesetzt; Phase 14 besitzt weiterhin Radar Contact/Reveal und Phase 17 die vollständige Cross-role-E2E-Journey.
+[`09-candidate-portal.md`](./09-candidate-portal.md) · JobPass, Saved Jobs, Apply/Withdraw/Status, Alerts, Messaging und Privacy-Basics sind implementiert und gegen den unveränderlichen Code-Commit verifiziert. Die Employer-Pipeline-Mutationen sind seit Phase 10 und Radar Contact/Reveal seit Phase 14 umgesetzt; Phase 17 besitzt weiterhin die vollständige Cross-role-E2E-Journey.
 
 ### [x] 10 — Arbeitgeber- und Recruiter-Core
 
@@ -117,9 +117,9 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 [`13-job-boosts.md`](./13-job-boosts.md) · validiertes Jobziel, atomarer Credit-/Paid-Lifecycle, non-overlap, Kündigung, vollständige Kennzeichnung und transparenter relevanzgebundener Rang sind im Code-Commit `45926f9d15606c6e209a2b7cb8937048636816bd` verifiziert; siehe [Phase-13-Evidence](./evidence/2026-07-22-phase-13.md).
 
-### [ ] 14 — Talent Radar und Privacy
+### [x] 14 — Talent Radar und Privacy
 
-[`14-talent-radar-privacy.md`](./14-talent-radar-privacy.md) · kanonisches Opt-in, Safe DTO/opaque ID, Contact Ledger, Accept/Decline, scoped Reveal, Privacy Cases.
+[`14-talent-radar-privacy.md`](./14-talent-radar-privacy.md) · kanonisches Opt-in, Safe DTO/opaque ID, bounded Cohort/Enumeration, atomarer Contact Ledger, Accept/Decline, verschlüsselte request-scoped Reveal-Snapshots und capability-gebundene Privacy Cases sind im Code-Commit `980be3dc5435f1295263d8c911eedcc97efc55a6` verifiziert; siehe [Phase-14-Evidence](./evidence/2026-07-22-phase-14.md).
 
 ### [ ] 15 — Search, SEO und Growth
 
@@ -218,4 +218,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 13 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Als nächster Implementierungsschritt folgt Phase 14 — Talent Radar und Privacy. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 14 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Als nächster Implementierungsschritt folgt Phase 15 — Search, SEO und Growth. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
