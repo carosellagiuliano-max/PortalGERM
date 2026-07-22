@@ -42,6 +42,13 @@ export type CandidateConversationPage = Readonly<{
   to: number;
 }>;
 
+export type CandidateMessageSendAvailability =
+  | Readonly<{ allowed: true; reason: null }>
+  | Readonly<{
+      allowed: false;
+      reason: "RADAR_COMPANY_INACTIVE" | "RADAR_COMPANY_UNVERIFIED";
+    }>;
+
 export async function listCandidateConversations(
   database: DatabaseClient,
   userId: string,
@@ -176,7 +183,19 @@ export async function getCandidateConversation(
           subject: true,
           applicationId: true,
           contactRequestId: true,
-          company: { select: { id: true, name: true, slug: true } },
+          company: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              status: true,
+              verificationRequests: {
+                where: { status: "VERIFIED", supersededBy: null },
+                take: 2,
+                select: { id: true },
+              },
+            },
+          },
           participants: {
             where: { kind: "USER", userId, leftAt: null },
             take: 1,
@@ -226,8 +245,20 @@ export async function getCandidateConversation(
         ? pageMessages.at(-1)?.id ?? null
         : null;
 
+      const messageSendAvailability = deriveCandidateMessageSendAvailability({
+        kind: conversation.kind,
+        companyStatus: conversation.company.status,
+        currentVerifiedCycles: conversation.company.verificationRequests.length,
+      });
+
       return Object.freeze({
         ...conversation,
+        company: Object.freeze({
+          id: conversation.company.id,
+          name: conversation.company.name,
+          slug: conversation.company.slug,
+        }),
+        messageSendAvailability,
         messages: Object.freeze(
           [...pageMessages]
             .reverse()
@@ -245,7 +276,10 @@ export async function getCandidateConversation(
 
 export type SendCandidateMessageResult =
   | Readonly<{ ok: true; messageId: string; duplicate: boolean }>
-  | Readonly<{ ok: false; code: "INVALID" | "NOT_FOUND" | "CONFLICT" }>;
+  | Readonly<{
+      ok: false;
+      code: "INVALID" | "NOT_FOUND" | "CONFLICT" | "TRUST_BLOCKED";
+    }>;
 
 export async function sendCandidateMessage(
   database: DatabaseClient,
@@ -271,9 +305,20 @@ export async function sendCandidateMessage(
         },
         select: {
           id: true,
+          kind: true,
           companyId: true,
           applicationId: true,
           application: { select: { jobId: true } },
+          company: {
+            select: {
+              status: true,
+              verificationRequests: {
+                where: { status: "VERIFIED", supersededBy: null },
+                take: 2,
+                select: { id: true },
+              },
+            },
+          },
         },
       });
       if (conversation === null) return Object.freeze({ ok: false as const, code: "NOT_FOUND" as const });
@@ -287,6 +332,17 @@ export async function sendCandidateMessage(
           existing.senderUserId === userId && existing.body === body
           ? Object.freeze({ ok: true as const, messageId: existing.id, duplicate: true })
           : Object.freeze({ ok: false as const, code: "CONFLICT" as const });
+      }
+
+      if (!deriveCandidateMessageSendAvailability({
+        kind: conversation.kind,
+        companyStatus: conversation.company.status,
+        currentVerifiedCycles: conversation.company.verificationRequests.length,
+      }).allowed) {
+        return Object.freeze({
+          ok: false as const,
+          code: "TRUST_BLOCKED" as const,
+        });
       }
 
       if (await isConversationMessageBlocked(transaction, conversation.id, now)) {
@@ -470,4 +526,27 @@ function candidateConversationWhere(userId: string): Prisma.ConversationWhereInp
       },
     ],
   };
+}
+
+export function deriveCandidateMessageSendAvailability(input: Readonly<{
+  kind: "APPLICATION" | "TALENT_RADAR";
+  companyStatus: "DRAFT" | "ACTIVE" | "SUSPENDED" | "CLOSED";
+  currentVerifiedCycles: number;
+}>): CandidateMessageSendAvailability {
+  if (input.kind !== "TALENT_RADAR") {
+    return Object.freeze({ allowed: true, reason: null });
+  }
+  if (input.companyStatus !== "ACTIVE") {
+    return Object.freeze({
+      allowed: false,
+      reason: "RADAR_COMPANY_INACTIVE",
+    });
+  }
+  if (input.currentVerifiedCycles !== 1) {
+    return Object.freeze({
+      allowed: false,
+      reason: "RADAR_COMPANY_UNVERIFIED",
+    });
+  }
+  return Object.freeze({ allowed: true, reason: null });
 }

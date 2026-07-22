@@ -1,8 +1,8 @@
 export const SEED_MANIFEST_SCHEMA_VERSION =
   "20260720120000_phase_05_seed_manifest_contract" as const;
-export const SEED_DATASET_VERSION = "phase-13-demo-v12" as const;
+export const SEED_DATASET_VERSION = "phase-14-demo-v13" as const;
 /**
- * Phase 10 is an additive release over the sealed Phase-05 dataset. Existing
+ * Phase 14 is an additive release over the sealed Phase-05 dataset. Existing
  * semantic UUIDs and deterministic fixture streams must therefore keep their
  * published derivation input while the active manifest version rotates.
  */
@@ -11,8 +11,8 @@ export const SEED_DATA_PROVENANCE = "DEMO" as const;
 export const SEED_NAMESPACE = "swisstalenthub-demo" as const;
 
 /**
- * Exact Phase-10 fixture contract. The Phase-05 golden business counts stay
- * unchanged; additive workflow evidence is verified in closed seed blocks.
+ * Exact active fixture contract. Phase-14 adds two terminal Talent Radar
+ * request examples; all other published business counts remain sealed.
  */
 export const SEED_GOLDEN_COUNTS = Object.freeze({
   cantons: 26,
@@ -30,7 +30,7 @@ export const SEED_GOLDEN_COUNTS = Object.freeze({
   applications: 80,
   savedJobs: 41,
   jobAlerts: 15,
-  employerContactRequests: 6,
+  employerContactRequests: 8,
   identityRevealGrants: 2,
   privacyRequests: 3,
   conversations: 82,

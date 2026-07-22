@@ -42,7 +42,7 @@ describe("Phase-05 seed manifest", () => {
       applications: 80,
       savedJobs: 41,
       jobAlerts: 15,
-      employerContactRequests: 6,
+      employerContactRequests: 8,
       identityRevealGrants: 2,
       privacyRequests: 3,
       conversations: 82,

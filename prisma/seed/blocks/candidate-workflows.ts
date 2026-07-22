@@ -40,6 +40,7 @@ import {
   buildApplicationConfirmationProjection,
 } from "@/lib/applications/integrity";
 import { RADAR_CONSENT_NOTICE_V1 } from "@/lib/privacy/radar-consent";
+import { PRIVACY_REQUEST_POLICY_V1 } from "@/lib/privacy/requests";
 import {
   createJobAlertUnsubscribeToken,
   defaultJobAlertQuery,
@@ -56,6 +57,12 @@ import {
   encryptRadarOpaqueToken,
   type RadarOpaqueKey,
 } from "@/lib/privacy/radar-opaque";
+import { getRadarOpaqueEpoch } from "@/lib/talentradar/opaque-id";
+import {
+  getRadarZurichCalendarDateV1,
+  normalizeRadarFiltersV1,
+  RADAR_PRIVACY_POLICY_V1,
+} from "@/lib/talentradar/privacy-policy-v1";
 import {
   buildRevealPreview,
   decryptRevealValue,
@@ -78,8 +85,10 @@ import {
   applicationTransitionFixtures,
   CANDIDATE_FIXTURES,
   CANDIDATE_WORKFLOW_BLOCK_DIGEST,
+  CONTACT_REQUEST_COUNT,
   CONTACT_REQUEST_FIXTURES,
   JOB_ALERT_FIXTURES,
+  PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
   PRIVACY_REQUEST_FIXTURES,
   RADAR_COMPANY_SLOTS,
   SAVED_JOB_FIXTURES,
@@ -895,6 +904,179 @@ async function seedRadarMappingsAndSearchEvidence(
             db.radarSearchSessionCandidate.create({ data: expected }),
         });
       }
+    }
+  }
+}
+
+/**
+ * Phase 14 adds evidence that follows the frozen Zurich 30-day epoch policy.
+ * The preceding `previous/current` rows are retained as sealed compatibility
+ * fixtures; these additive rows are the canonical current discovery cohort.
+ */
+async function seedPhase14RadarEvidence(
+  db: DatabaseClient,
+  anchorAt: Date,
+  candidates: readonly CandidateWorkflowCandidateHandle[],
+  companies: readonly CandidateWorkflowCompanyHandle[],
+  crypto: CandidateWorkflowSeedCryptoConfig,
+): Promise<void> {
+  const epoch = getRadarOpaqueEpoch(anchorAt);
+  const calendarDate = new Date(
+    `${getRadarZurichCalendarDateV1(anchorAt)}T00:00:00.000Z`,
+  );
+  const normalized = normalizeRadarFiltersV1({});
+  const eligibleCandidates = candidates.slice(
+    0,
+    PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
+  );
+
+  if (
+    eligibleCandidates.length !== PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT
+  ) {
+    throw new Error("Phase-14 Radar evidence requires ten eligible candidates.");
+  }
+
+  for (const company of companies) {
+    for (const candidate of eligibleCandidates) {
+      const naturalKey = `phase14:${company.slug}:current:${candidate.key}`;
+      const id = stableSeedId("radar-opaque-mapping", naturalKey);
+      const binding = {
+        mappingId: id,
+        candidateProfileId: candidate.id,
+        companyId: company.id,
+        epoch: epoch.epoch,
+      };
+      const expected = {
+        id,
+        candidateProfileId: candidate.id,
+        companyId: company.id,
+        epoch: epoch.epoch,
+        validFrom: new Date(
+          Math.max(anchorAt.getTime(), epoch.validFrom.getTime()),
+        ),
+        validTo: epoch.validTo,
+        revokedAt: null,
+        revocationReason: null,
+      };
+      const mapping = await ensureRow({
+        entity: "RadarOpaqueMapping",
+        naturalKey,
+        expected,
+        findExisting: () =>
+          db.radarOpaqueMapping.findUnique({ where: { id } }),
+        create: () => {
+          const { envelope } = encryptRadarOpaqueToken(
+            crypto.radarLookupKeys,
+            crypto.radarEncryptionKeys,
+            binding,
+          );
+          return db.radarOpaqueMapping.create({
+            data: {
+              ...expected,
+              ...envelope,
+              encryptedToken: Uint8Array.from(envelope.encryptedToken),
+              nonce: Uint8Array.from(envelope.nonce),
+              authTag: Uint8Array.from(envelope.authTag),
+            },
+          });
+        },
+      });
+      const token = decryptRadarOpaqueToken(
+        {
+          lookupHmac: mapping.lookupHmac,
+          encryptedToken: mapping.encryptedToken,
+          nonce: mapping.nonce,
+          authTag: mapping.authTag,
+          lookupKeyVersion: mapping.lookupKeyVersion,
+          encryptionKeyVersion: mapping.encryptionKeyVersion,
+        },
+        crypto.radarLookupKeys,
+        crypto.radarEncryptionKeys,
+        binding,
+      );
+      const lookupKey = crypto.radarLookupKeys.find(
+        ({ version }) => version === mapping.lookupKeyVersion,
+      );
+      if (
+        lookupKey === undefined ||
+        buildRadarOpaqueLookup(token, [lookupKey], binding).lookupHmac !==
+          mapping.lookupHmac
+      ) {
+        throw new Error(
+          `Phase-14 RadarOpaqueMapping ${naturalKey} failed verification.`,
+        );
+      }
+    }
+
+    const naturalKey = `phase14:${company.slug}:eligible-default`;
+    // A fixture-only scoped hash avoids hijacking a live default-filter
+    // session while preserving the exact normalized closed filter object.
+    const filterHash = sha256Utf8(
+      `${normalized.filterHash}:phase14-seed:${company.slug}`,
+    );
+    const budgetId = stableSeedId("radar-search-budget", naturalKey);
+    const budgetExpected = {
+      id: budgetId,
+      companyId: company.id,
+      calendarDate,
+      filterHash,
+      firstUsedAt: anchorAt,
+      lastUsedAt: anchorAt,
+    };
+    await ensureRow({
+      entity: "RadarSearchBudget",
+      naturalKey,
+      expected: budgetExpected,
+      findExisting: () =>
+        db.radarSearchBudget.findUnique({ where: { id: budgetId } }),
+      create: () => db.radarSearchBudget.create({ data: budgetExpected }),
+    });
+
+    const sessionId = stableSeedId("radar-search-session", naturalKey);
+    const sessionExpected = {
+      id: sessionId,
+      companyId: company.id,
+      membershipId: company.ownerMembershipId,
+      requestingUserId: company.ownerUserId,
+      filterHash,
+      calendarDate,
+      policyVersion: RADAR_PRIVACY_POLICY_V1.version,
+      normalizedFilters: normalized.filters,
+      resultCount: PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
+      expiresAt: dateAt(anchorAt, 15 * 60 * 1_000),
+      createdAt: anchorAt,
+    };
+    await ensureRow({
+      entity: "RadarSearchSession",
+      naturalKey,
+      expected: sessionExpected,
+      findExisting: () =>
+        db.radarSearchSession.findUnique({ where: { id: sessionId } }),
+      create: () =>
+        db.radarSearchSession.create({ data: sessionExpected }),
+    });
+
+    for (const [position, candidate] of eligibleCandidates.entries()) {
+      const candidateNaturalKey = `${naturalKey}:${position}`;
+      const id = stableSeedId(
+        "radar-search-session-candidate",
+        candidateNaturalKey,
+      );
+      const expected = {
+        id,
+        radarSearchSessionId: sessionId,
+        candidateProfileId: candidate.id,
+        position,
+      };
+      await ensureRow({
+        entity: "RadarSearchSessionCandidate",
+        naturalKey: candidateNaturalKey,
+        expected,
+        findExisting: () =>
+          db.radarSearchSessionCandidate.findUnique({ where: { id } }),
+        create: () =>
+          db.radarSearchSessionCandidate.create({ data: expected }),
+      });
     }
   }
 }
@@ -1789,6 +1971,14 @@ function contactTiming(anchorAt: Date, key: string) {
       createdAt: dateAt(anchorAt, -44 * DAY_MS),
       terminalAt: dateAt(anchorAt, -34 * DAY_MS),
     },
+    "contact-expired-a": {
+      createdAt: dateAt(anchorAt, -20 * DAY_MS),
+      terminalAt: dateAt(anchorAt, -6 * DAY_MS),
+    },
+    "contact-cancelled-a": {
+      createdAt: dateAt(anchorAt, -5 * DAY_MS),
+      terminalAt: dateAt(anchorAt, -4 * DAY_MS),
+    },
   };
   const timing = values[key];
   if (timing === undefined) {
@@ -1859,6 +2049,42 @@ async function seedContactCreditFunding(
     });
   }
 
+  const phase14Company = companies[0] as CandidateWorkflowCompanyHandle;
+  const phase14AccountId = accountIds.get(0) as string;
+  const phase14GrantNaturalKey =
+    `candidate-workflows:${phase14Company.slug}:phase14-grant`;
+  const phase14GrantId = stableSeedId(
+    "credit-ledger-entry",
+    phase14GrantNaturalKey,
+  );
+  const phase14GrantExpected = {
+    id: phase14GrantId,
+    accountId: phase14AccountId,
+    fundingSource: CreditFundingSource.ADMIN_GRANT,
+    kind: CreditLedgerKind.GRANT,
+    amount: 3,
+    sourcePlanVersionId: null,
+    sourceSubscriptionId: null,
+    sourceOrderLineId: null,
+    consumedGrantEntryId: null,
+    reversalOfEntryId: null,
+    validFrom: periodStart,
+    validTo: periodEnd,
+    idempotencyKey: `seed:${phase14GrantNaturalKey}`,
+    reasonCode: "PHASE_14_ZERO_ONE_CREDIT_EVIDENCE",
+    actorUserId: phase14Company.ownerUserId,
+    createdAt: dateAt(periodStart, 2 * HOUR_MS),
+  };
+  await ensureRow({
+    entity: "CreditLedgerEntry",
+    naturalKey: phase14GrantNaturalKey,
+    expected: phase14GrantExpected,
+    findExisting: () =>
+      db.creditLedgerEntry.findUnique({ where: { id: phase14GrantId } }),
+    create: () =>
+      db.creditLedgerEntry.create({ data: phase14GrantExpected }),
+  });
+
   for (const request of CONTACT_REQUEST_FIXTURES) {
     const company = companies[
       request.companySlot
@@ -1878,7 +2104,9 @@ async function seedContactCreditFunding(
       sourceOrderLineId: null,
       consumedGrantEntryId: stableSeedId(
         "credit-ledger-entry",
-        `candidate-workflows:${company.slug}:grant`,
+        request.fundingGrant === "PHASE_14"
+          ? phase14GrantNaturalKey
+          : `candidate-workflows:${company.slug}:grant`,
       ),
       reversalOfEntryId: null,
       validFrom: periodStart,
@@ -1907,6 +2135,21 @@ type AcceptedContactScope = Readonly<{
   fixtureKey: string;
   revealedAt: Date;
 }>;
+
+function contactTerminalReasonCode(status: string): string {
+  switch (status) {
+    case "ACCEPTED":
+      return "DEMO_ACCEPTED";
+    case "DECLINED":
+      return "DEMO_NOT_AVAILABLE";
+    case "EXPIRED":
+      return "REQUEST_EXPIRED";
+    case "CANCELLED":
+      return "EMPLOYER_CANCELLED";
+    default:
+      throw new Error(`Missing terminal ContactRequest reason for ${status}.`);
+  }
+}
 
 async function seedContactRequestsAndConversations(
   db: DatabaseClient,
@@ -1940,6 +2183,59 @@ async function seedContactRequestsAndConversations(
       `candidate-workflows:${request.key}:consume`,
     );
     const timing = contactTiming(anchorAt, request.key);
+    const contactSessionNaturalKey = `phase14-contact:${request.key}`;
+    const contactSessionId = stableSeedId(
+      "radar-search-session",
+      contactSessionNaturalKey,
+    );
+    const contactFilterHash = sha256Utf8(
+      `radar-filter:${contactSessionNaturalKey}`,
+    );
+    const contactSessionExpected = {
+      id: contactSessionId,
+      companyId: company.id,
+      membershipId: company.ownerMembershipId,
+      requestingUserId: company.ownerUserId,
+      filterHash: contactFilterHash,
+      calendarDate: utcDateOnly(timing.createdAt),
+      policyVersion: "radar-privacy-v1",
+      normalizedFilters: { historicalContactEvidence: true },
+      resultCount: 1,
+      expiresAt: dateAt(timing.createdAt, 15 * 60 * 1_000),
+      createdAt: timing.createdAt,
+    };
+    await ensureRow({
+      entity: "RadarSearchSession",
+      naturalKey: contactSessionNaturalKey,
+      expected: contactSessionExpected,
+      findExisting: () =>
+        db.radarSearchSession.findUnique({ where: { id: contactSessionId } }),
+      create: () =>
+        db.radarSearchSession.create({ data: contactSessionExpected }),
+    });
+    const contactSessionCandidateId = stableSeedId(
+      "radar-search-session-candidate",
+      contactSessionNaturalKey,
+    );
+    const contactSessionCandidateExpected = {
+      id: contactSessionCandidateId,
+      radarSearchSessionId: contactSessionId,
+      candidateProfileId: candidate.id,
+      position: 0,
+    };
+    await ensureRow({
+      entity: "RadarSearchSessionCandidate",
+      naturalKey: contactSessionNaturalKey,
+      expected: contactSessionCandidateExpected,
+      findExisting: () =>
+        db.radarSearchSessionCandidate.findUnique({
+          where: { id: contactSessionCandidateId },
+        }),
+      create: () =>
+        db.radarSearchSessionCandidate.create({
+          data: contactSessionCandidateExpected,
+        }),
+    });
     const status = enumValue(ContactRequestStatus, request.status);
     const expected = {
       id,
@@ -1950,6 +2246,9 @@ async function seedContactRequestsAndConversations(
       messagePreview:
         "Fiktive Kontaktanfrage: Wir würden gerne über eine passende Demo-Rolle sprechen.",
       idempotencyKey: `seed:${request.key}`,
+      commandFingerprint: sha256Utf8(
+        `phase14-legacy-contact-command:${id}`,
+      ),
       status,
       fundingSource: CreditFundingSource.ADMIN_GRANT,
       clusterPolicyVersion: "radar-cluster-v1",
@@ -1965,7 +2264,13 @@ async function seedContactRequestsAndConversations(
       expected,
       findExisting: () =>
         db.employerContactRequest.findUnique({ where: { id } }),
-      create: () => db.employerContactRequest.create({ data: expected }),
+      create: () => db.employerContactRequest.create({
+        data: {
+          ...expected,
+          radarSearchSessionId: contactSessionId,
+          subject: "Talent Radar Kontaktanfrage",
+        },
+      }),
     });
     requests.push(Object.freeze({ id, status: request.status }));
 
@@ -1990,7 +2295,12 @@ async function seedContactRequestsAndConversations(
       findExisting: () =>
         db.contactRequestEvent.findUnique({ where: { id: createdEventId } }),
       create: () =>
-        db.contactRequestEvent.create({ data: createdEventExpected }),
+        db.contactRequestEvent.create({
+          data: {
+            ...createdEventExpected,
+            idempotencyKey: `seed:contact-event:${createdEventNaturalKey}`,
+          },
+        }),
     });
 
     if (request.status !== "PENDING") {
@@ -2003,11 +2313,13 @@ async function seedContactRequestsAndConversations(
         id: terminalEventId,
         contactRequestId: id,
         kind: enumValue(ContactRequestEventKind, request.status),
-        actorUserId: candidate.userId,
-        reasonCode:
-          request.status === "DECLINED"
-            ? "DEMO_NOT_AVAILABLE"
-            : "DEMO_ACCEPTED",
+        actorUserId:
+          request.status === "EXPIRED"
+            ? null
+            : request.status === "CANCELLED"
+              ? company.ownerUserId
+              : candidate.userId,
+        reasonCode: contactTerminalReasonCode(request.status),
         correlationId: `seed:contact:${request.key}:terminal`,
         createdAt: timing.terminalAt as Date,
       };
@@ -2018,7 +2330,12 @@ async function seedContactRequestsAndConversations(
         findExisting: () =>
           db.contactRequestEvent.findUnique({ where: { id: terminalEventId } }),
         create: () =>
-          db.contactRequestEvent.create({ data: terminalEventExpected }),
+          db.contactRequestEvent.create({
+            data: {
+              ...terminalEventExpected,
+              idempotencyKey: `seed:contact-event:${terminalEventNaturalKey}`,
+            },
+          }),
       });
     }
 
@@ -2153,7 +2470,12 @@ async function seedContactRequestsAndConversations(
       findExisting: () =>
         db.contactRequestEvent.findUnique({ where: { id: revealEventId } }),
       create: () =>
-        db.contactRequestEvent.create({ data: revealEventExpected }),
+        db.contactRequestEvent.create({
+          data: {
+            ...revealEventExpected,
+            idempotencyKey: `seed:contact-event:${revealEventNaturalKey}`,
+          },
+        }),
     });
 
     acceptedScopes.push(
@@ -2362,7 +2684,15 @@ async function seedIdentityRevealGrant(
             tx.identityRevealConfirmation.findUnique({ where: { id } }),
           create: () =>
             tx.identityRevealConfirmation.create({
-              data: { ...expected, previewHmac: preview.evidence.previewHmac },
+              data: {
+                ...expected,
+                previewHmac: preview.evidence.previewHmac,
+                confirmationKeyVersion:
+                  preview.evidence.confirmationKeyVersion,
+                confirmationTokenDigest: sha256Utf8(
+                  `seed:reveal-token:${naturalKey}`,
+                ),
+              },
             }),
         });
         const validPreviewHmac = crypto.revealConfirmationKeys.some(
@@ -2465,7 +2795,13 @@ async function seedPrivacyRequests(
         findExisting: () =>
           transaction.privacyRequest.findUnique({ where: { id: requestId } }),
         create: () =>
-          transaction.privacyRequest.create({ data: requestExpected }),
+          transaction.privacyRequest.create({
+            data: {
+              ...requestExpected,
+              noticeVersion: PRIVACY_REQUEST_POLICY_V1.noticeVersion,
+              domainEventRefs: [],
+            },
+          }),
       });
 
       const eventExpected = {
@@ -2557,6 +2893,13 @@ export async function seedCandidateWorkflows(
     companies,
     crypto,
   );
+  await seedPhase14RadarEvidence(
+    db,
+    anchorAt,
+    candidates,
+    companies,
+    crypto,
+  );
 
   const applications: Array<
     Readonly<{
@@ -2609,7 +2952,7 @@ export async function seedCandidateWorkflows(
     candidates.length !== 30 ||
     applications.length !== 80 ||
     conversations.length !== 82 ||
-    contactResult.requests.length !== 6
+    contactResult.requests.length !== CONTACT_REQUEST_COUNT
   ) {
     throw new Error(
       "Candidate workflow seed result violates its exact count contract.",

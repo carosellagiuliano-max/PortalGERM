@@ -70,6 +70,7 @@ describe("Phase 11 admin policy boundary", () => {
       "/admin/users",
       "/admin/taxonomy",
       "/admin/reports",
+      "/admin/privacy-requests",
       "/admin/imports",
       "/admin/support",
       "/admin/content",

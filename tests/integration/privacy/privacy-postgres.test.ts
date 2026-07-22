@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
@@ -130,6 +132,8 @@ describe("PostgreSQL atomic Privacy intake", () => {
         status: "CANCELLED" as const,
         dueAt: new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1_000),
         idempotencyKey: `historic-export-${index}`,
+        noticeVersion: "privacy-request-v1",
+        domainEventRefs: [],
         deletionDependencies: [],
         createdAt: new Date(NOW.getTime() - (index + 1) * 24 * 60 * 60 * 1_000),
         updatedAt: NOW,
@@ -399,7 +403,7 @@ async function createRevealFixture(client: DatabaseClient, suffix = "lock") {
       isPrimary: true,
     },
   });
-  await client.companyMembership.create({
+  const membership = await client.companyMembership.create({
     data: {
       companyId: company.id,
       userId: employer.id,
@@ -452,14 +456,38 @@ async function createRevealFixture(client: DatabaseClient, suffix = "lock") {
       consumedGrantEntryId: contactCreditGrant.id,
     },
   });
+  const radarSession = await client.radarSearchSession.create({
+    data: {
+      companyId: company.id,
+      membershipId: membership.id,
+      requestingUserId: employer.id,
+      filterHash: "d".repeat(64),
+      calendarDate: new Date("2026-07-22T00:00:00.000Z"),
+      policyVersion: "radar-privacy-v1",
+      normalizedFilters: {},
+      resultCount: 1,
+      expiresAt: new Date(NOW.getTime() + 15 * 60_000),
+      createdAt: NOW,
+    },
+  });
+  await client.radarSearchSessionCandidate.create({
+    data: {
+      radarSearchSessionId: radarSession.id,
+      candidateProfileId: candidateProfile.id,
+      position: 0,
+    },
+  });
   const contactRequest = await client.employerContactRequest.create({
     data: {
       companyId: company.id,
       candidateProfileId: candidateProfile.id,
+      radarSearchSessionId: radarSession.id,
       requestingUserId: employer.id,
       creditLedgerEntryId: ledger.id,
+      subject: "Privacy-safe contact",
       messagePreview: "Privacy-safe contact request",
       idempotencyKey: `reveal-${suffix}-contact-request`,
+      commandFingerprint: "a".repeat(64),
       status: "ACCEPTED",
       fundingSource: "ADMIN_GRANT",
       clusterPolicyVersion: "v1",
@@ -513,6 +541,10 @@ async function createRevealFixture(client: DatabaseClient, suffix = "lock") {
         newlyAddedFields: ["DISPLAY_NAME"],
         noticeVersion: "identity-reveal-v1",
         previewHmac: "a".repeat(64),
+        confirmationKeyVersion: "test-confirm-v1",
+        confirmationTokenDigest: createHash("sha256")
+          .update(`phase14-confirmation-token:${suffix}`, "utf8")
+          .digest("hex"),
         idempotencyKey: `reveal-${suffix}-confirmation`,
         createdAt: NOW,
       },

@@ -9,7 +9,10 @@ import { CandidateMessageComposeForm } from "@/components/candidate/message-comp
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
-import { getCandidateConversation } from "@/lib/candidate/messages";
+import {
+  getCandidateConversation,
+  type CandidateMessageSendAvailability,
+} from "@/lib/candidate/messages";
 import { getDatabase } from "@/lib/db/client";
 import { formatDate } from "@/lib/utils/format";
 import { markCandidateConversationReadAction } from "../actions";
@@ -87,6 +90,9 @@ export default async function CandidateConversationPage({ params, searchParams }
             <CandidateMessageComposeForm
               conversationId={conversation.id}
               initialIdempotencyKey={randomUUID()}
+              blockedReason={messageSendBlockedCopy(
+                conversation.messageSendAvailability,
+              )}
             />
             <form action={markCandidateConversationReadAction} className="mt-3">
               <input type="hidden" name="conversationId" value={conversation.id} />
@@ -110,3 +116,12 @@ type PageProps = Readonly<{
   params: Promise<{ threadId: string }>;
   searchParams: Promise<{ before?: string | string[] }>;
 }>;
+
+function messageSendBlockedCopy(
+  availability: CandidateMessageSendAvailability,
+): string | null {
+  if (availability.allowed) return null;
+  return availability.reason === "RADAR_COMPANY_INACTIVE"
+    ? "Diese Firma ist derzeit nicht aktiv. Neue Nachrichten in diesem Talent-Radar-Gespräch sind gesperrt."
+    : "Diese Firma ist derzeit nicht aktuell verifiziert. Neue Nachrichten in diesem Talent-Radar-Gespräch sind gesperrt.";
+}

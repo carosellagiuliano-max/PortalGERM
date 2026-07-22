@@ -70,9 +70,11 @@ export async function sendCandidateMessageAction(
   return errorState(
     result.code === "NOT_FOUND"
       ? "Dieses Gespräch ist nicht mehr verfügbar."
-      : result.code === "CONFLICT"
-        ? "Die Anfrage steht im Konflikt mit einer früheren Übermittlung. Bitte lade neu."
-        : "Die Nachricht konnte nicht gesendet werden.",
+      : result.code === "TRUST_BLOCKED"
+        ? "Neue Nachrichten sind gesperrt, weil die Firma nicht aktiv und aktuell verifiziert ist. Bitte lade neu."
+        : result.code === "CONFLICT"
+          ? "Die Anfrage steht im Konflikt mit einer früheren Übermittlung. Bitte lade neu."
+          : "Die Nachricht konnte nicht gesendet werden.",
   );
 }
 

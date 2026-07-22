@@ -116,6 +116,34 @@ export default async function AdminCompanyDetailPage({
 
           <Card>
             <CardHeader>
+              <CardTitle as="h2">Talent-Radar-Nutzung</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 text-sm">
+              <p>
+                <strong>Kontakte nach Finanzierung:</strong>{" "}
+                inkludiert {detail.talentRadarUsage.contactsByFunding.PLAN_ALLOWANCE ?? 0} ·
+                gekauft {detail.talentRadarUsage.contactsByFunding.PURCHASED_PACK ?? 0} ·
+                Admin {detail.talentRadarUsage.contactsByFunding.ADMIN_GRANT ?? 0}
+              </p>
+              <p>
+                <strong>Status:</strong>{" "}
+                offen {detail.talentRadarUsage.contactsByStatus.PENDING ?? 0} ·
+                akzeptiert {detail.talentRadarUsage.contactsByStatus.ACCEPTED ?? 0} ·
+                abgelehnt {detail.talentRadarUsage.contactsByStatus.DECLINED ?? 0} ·
+                beendet {(detail.talentRadarUsage.contactsByStatus.EXPIRED ?? 0) + (detail.talentRadarUsage.contactsByStatus.CANCELLED ?? 0)}
+              </p>
+              <p>
+                <strong>Identitätsfreigaben:</strong>{" "}
+                aktiv {detail.talentRadarUsage.reveals.active} · widerrufen {detail.talentRadarUsage.reveals.revoked}
+              </p>
+              <p className="text-muted-foreground">
+                Ausschliesslich aggregierte Betriebsdaten; keine Kandidatenidentität wird hier offengelegt.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle as="h2">Abuse Reports</CardTitle>
             </CardHeader>
             <CardContent>

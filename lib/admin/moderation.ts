@@ -9,6 +9,10 @@ import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import { tightenSlaDueAt, type OpsCaseSlaKey } from "@/lib/admin/sla";
 import {
+  applyCandidateRadarEligibilityLoss,
+  applyCompanyRadarEligibilityLoss,
+} from "@/lib/talentradar/eligibility-loss-effects";
+import {
   adminErrorResult,
   AdminDomainError,
   adminFailure,
@@ -284,6 +288,13 @@ async function applyRestrictionEffect(transaction: Prisma.TransactionClient, typ
       if (changed.count !== 1) throw new Error("CONFLICT");
       await transaction.jobStatusEvent.create({ data: { id: randomUUID(), jobId: job.id, jobRevisionId: job.currentRevisionId, kind: "PAUSED", fromStatus: "PUBLISHED", toStatus: "PAUSED", actorUserId: dependencies.actor.userId, reasonCode: "MODERATION_RESTRICTION", idempotencyKey: `moderation:${dependencies.correlationId}:${job.id}`, correlationId: dependencies.correlationId, createdAt: now } });
     }
+    await applyCompanyRadarEligibilityLoss(transaction, {
+      companyId: target.companyId,
+      reason: "COMPANY_INACTIVE",
+      actor: { kind: "USER", userId: dependencies.actor.userId },
+      correlationId: dependencies.correlationId,
+      now,
+    });
   }
   if (type === "SUSPEND_USER" && target.userId !== null) {
     await transaction.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${target.userId}::uuid FOR UPDATE`;
@@ -292,13 +303,14 @@ async function applyRestrictionEffect(transaction: Prisma.TransactionClient, typ
     if (user.status === "ACTIVE") await transaction.user.update({ where: { id: target.userId }, data: { status: "SUSPENDED", updatedAt: now } });
     await transaction.session.deleteMany({ where: { userId: target.userId } });
     if (user.candidateProfile !== null) {
-      await transaction.radarProfile.updateMany({ where: { candidateProfileId: user.candidateProfile.id, withdrawnAt: null }, data: { withdrawnAt: now, updatedAt: now } });
-      await transaction.radarOpaqueMapping.updateMany({ where: { candidateProfileId: user.candidateProfile.id, revokedAt: null }, data: { revokedAt: now, revocationReason: "USER_SUSPENDED" } });
-      const contacts = await transaction.employerContactRequest.findMany({ where: { candidateProfileId: user.candidateProfile.id, status: "PENDING" }, select: { id: true } });
-      for (const contact of contacts) {
-        await transaction.employerContactRequest.update({ where: { id: contact.id }, data: { status: "CANCELLED", terminalAt: now, updatedAt: now } });
-        await transaction.contactRequestEvent.create({ data: { id: randomUUID(), contactRequestId: contact.id, kind: "CANCELLED", actorUserId: null, reasonCode: "CANDIDATE_USER_UNAVAILABLE", correlationId: dependencies.correlationId, createdAt: now } });
-      }
+      await applyCandidateRadarEligibilityLoss(transaction, {
+        candidateProfileId: user.candidateProfile.id,
+        candidateUserId: target.userId,
+        reason: "CANDIDATE_USER_UNAVAILABLE",
+        actor: { kind: "USER", userId: dependencies.actor.userId },
+        correlationId: dependencies.correlationId,
+        now,
+      });
     }
   }
   // HIDE_JOB and BLOCK_MESSAGE_THREAD are enforced by eligibility/send guards.

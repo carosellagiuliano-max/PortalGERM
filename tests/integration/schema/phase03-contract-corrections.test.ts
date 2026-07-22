@@ -152,8 +152,10 @@ describe("Phase 03 corrective schema contracts", () => {
     ) =>
       pool().query(
         `INSERT INTO "PrivacyRequest"
-          ("id","requesterUserId","type","status","dueAt","idempotencyKey","updatedAt")
-         VALUES ($1,$2,$3,$4,now() + interval '30 days',$5,now())`,
+          ("id","requesterUserId","type","status","dueAt","idempotencyKey",
+           "noticeVersion","domainEventRefs","updatedAt")
+         VALUES ($1,$2,$3,$4,now() + interval '30 days',$5,
+           'privacy-request-v1',ARRAY[]::text[],now())`,
         [id, requesterUserId, type, status, idempotencyKey],
       );
 

@@ -429,6 +429,8 @@ async function createInProgressExportRequest(
       verifiedAt: new Date(NOW.getTime() - DAY),
       processingStartedAt: new Date(NOW.getTime() - 1_000),
       idempotencyKey: `privacy-export-case-v${version}`,
+      noticeVersion: "privacy-request-v1",
+      domainEventRefs: [],
       deletionDependencies: [],
     },
   });

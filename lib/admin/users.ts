@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { applyCandidateRadarEligibilityLoss } from "@/lib/talentradar/eligibility-loss-effects";
 
 import {
   adminErrorResult,
@@ -100,8 +101,14 @@ export async function suspendUser(raw: unknown, dependencies: AdminDependencies)
       if (changed.count !== 1) return adminFailure("CONFLICT");
       const sessions = await transaction.session.deleteMany({ where: { userId: user.id } });
       if (user.candidateProfile !== null) {
-        await transaction.radarProfile.updateMany({ where: { candidateProfileId: user.candidateProfile.id, withdrawnAt: null }, data: { withdrawnAt: now, updatedAt: now } });
-        await transaction.radarOpaqueMapping.updateMany({ where: { candidateProfileId: user.candidateProfile.id, revokedAt: null }, data: { revokedAt: now, revocationReason: "USER_SUSPENDED" } });
+        await applyCandidateRadarEligibilityLoss(transaction, {
+          candidateProfileId: user.candidateProfile.id,
+          candidateUserId: user.id,
+          reason: "CANDIDATE_USER_UNAVAILABLE",
+          actor: { kind: "USER", userId: dependencies.actor.userId },
+          correlationId: auditCorrelation,
+          now,
+        });
       }
       const auditDependencies = { ...dependencies, correlationId: auditCorrelation };
       await writeAdminAudit(transaction, auditDependencies, now, { action: "USER_SUSPENDED", capability: "ADMIN_USER_MODERATE", targetType: "USER", targetId: user.id, reasonCode: parsed.data.reasonCode });

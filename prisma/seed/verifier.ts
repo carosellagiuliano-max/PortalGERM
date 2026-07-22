@@ -5,6 +5,12 @@ import {
   getAnalyticsRetainUntilV1,
 } from "@/lib/analytics/event-contracts";
 import { verifyPassword } from "@/lib/auth/password";
+import { PRIVACY_REQUEST_POLICY_V1 } from "@/lib/privacy/requests";
+import { getRadarOpaqueEpoch } from "@/lib/talentradar/opaque-id";
+import {
+  normalizeRadarFiltersV1,
+  RADAR_PRIVACY_POLICY_V1,
+} from "@/lib/talentradar/privacy-policy-v1";
 import {
   firstJobAlertDueAt,
   jobAlertConsentNoticeHash,
@@ -77,7 +83,13 @@ import {
   countGuideWords,
 } from "@/prisma/seed/fixtures";
 import { BILLING_OPS_SEED_IDENTITIES } from "@/prisma/seed/blocks/billing-ops";
-import { CANDIDATE_WORKFLOW_SEED_IDENTITIES } from "@/prisma/seed/fixtures/candidate-workflows";
+import {
+  CANDIDATE_WORKFLOW_SEED_IDENTITIES,
+  CONTACT_REQUEST_FIXTURES,
+  PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
+  PRIVACY_REQUEST_FIXTURES,
+  RADAR_COMPANY_SLOTS,
+} from "@/prisma/seed/fixtures/candidate-workflows";
 import { stableSeedId } from "@/prisma/seed/ids";
 
 const EXPECTED_REMOTE_OR_HYBRID_JOBS = 29;
@@ -94,7 +106,7 @@ const EXPECTED_EFFECTIVE_PAID_SUBSCRIPTIONS =
 const EXPECTED_SUBSCRIPTION_SCHEDULES = 2;
 const EXPECTED_TAX_RATE_BASIS_POINTS = 810;
 const EXPECTED_CREDIT_ACCOUNTS = 31;
-const EXPECTED_CREDIT_LEDGER_ENTRIES = 45;
+const EXPECTED_CREDIT_LEDGER_ENTRIES = 48;
 const EXPECTED_SALARY_BANDS = 12;
 
 export type DemoSeedEntityHandle = Readonly<{
@@ -240,6 +252,10 @@ const CONVERSATION_INCLUDE = {
 const CONTACT_REQUEST_INCLUDE = {
   conversation: true,
   creditLedgerEntry: { include: { account: true } },
+  events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+  radarSearchSession: {
+    include: { candidates: { orderBy: { position: "asc" } } },
+  },
   revealGrant: true,
 } satisfies Prisma.EmployerContactRequestInclude;
 const REVEAL_GRANT_INCLUDE = {
@@ -2303,6 +2319,184 @@ function verifyCandidateWorkflows(
     }),
     true,
   );
+  const phase14CandidateFixtures = CANDIDATE_FIXTURES.slice(
+    0,
+    PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
+  );
+  const canonicalRadarEpoch = getRadarOpaqueEpoch(anchorAt);
+  const phase14Mappings = observed.radarMappings.filter((mapping) =>
+    RADAR_COMPANY_SLOTS.some((companySlug) =>
+      phase14CandidateFixtures.some(
+        (candidate) =>
+          mapping.id ===
+          stableSeedId(
+            "radar-opaque-mapping",
+            `phase14:${companySlug}:current:${candidate.key}`,
+          ),
+      ),
+    ),
+  );
+  check(
+    context,
+    "Phase-14 current-epoch Radar mappings",
+    {
+      count: phase14Mappings.length,
+      canonicalWindow: phase14Mappings.every(
+        (mapping) =>
+          mapping.epoch.getTime() === canonicalRadarEpoch.epoch.getTime() &&
+          mapping.validFrom.getTime() >= canonicalRadarEpoch.validFrom.getTime() &&
+          mapping.validFrom.getTime() <= anchorAt.getTime() &&
+          mapping.validTo.getTime() === canonicalRadarEpoch.validTo.getTime() &&
+          mapping.revokedAt === null,
+      ),
+    },
+    {
+      count:
+        RADAR_COMPANY_SLOTS.length *
+        PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
+      canonicalWindow: true,
+    },
+  );
+  check(
+    context,
+    "Phase-14 Radar opaque ids are Company-scoped",
+    phase14CandidateFixtures.every((candidate) => {
+      const candidateProfileId = stableSeedId(
+        "candidate-profile",
+        candidate.email,
+      );
+      const mappings = phase14Mappings.filter(
+        (mapping) => mapping.candidateProfileId === candidateProfileId,
+      );
+      return (
+        mappings.length === RADAR_COMPANY_SLOTS.length &&
+        new Set(mappings.map(({ companyId }) => companyId)).size ===
+          RADAR_COMPANY_SLOTS.length &&
+        new Set(mappings.map(({ lookupHmac }) => lookupHmac)).size ===
+          RADAR_COMPANY_SLOTS.length &&
+        new Set(
+          mappings.map(({ encryptedToken }) =>
+            Buffer.from(encryptedToken).toString("hex"),
+          ),
+        ).size === RADAR_COMPANY_SLOTS.length
+      );
+    }),
+    true,
+  );
+  const phase14SearchSessions = RADAR_COMPANY_SLOTS.map((companySlug) =>
+    observed.radarSearchSessions.find(
+      (session) =>
+        session.id ===
+        stableSeedId(
+          "radar-search-session",
+          `phase14:${companySlug}:eligible-default`,
+        ),
+    ),
+  );
+  check(
+    context,
+    "Phase-14 qualifying Radar sessions expose exactly ten candidates",
+    phase14SearchSessions.every(
+      (session) =>
+        session !== undefined &&
+        session.policyVersion === RADAR_PRIVACY_POLICY_V1.version &&
+        session.resultCount === PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT &&
+        session.candidates.length ===
+          PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT &&
+        new Set(
+          session.candidates.map(({ candidateProfileId }) =>
+            candidateProfileId,
+          ),
+        ).size === PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT &&
+        canonicalJson(
+          session.normalizedFilters as unknown as CanonicalJsonValue,
+        ) ===
+          canonicalJson(
+            normalizeRadarFiltersV1({})
+              .filters as unknown as CanonicalJsonValue,
+          ),
+    ),
+    true,
+  );
+  const radarCantonCohorts = countBy(
+    radarProfiles,
+    (profile) => profile.cantonBucket,
+  );
+  check(
+    context,
+    "Phase-14 rare cohort fixture remains below the privacy floor",
+    Object.values(radarCantonCohorts).some(
+      (count) =>
+        count > 0 && count < RADAR_PRIVACY_POLICY_V1.cohort.minimumSize,
+    ),
+    true,
+  );
+  const activeRadarAccessByPlan = new Map(
+    observed.planVersions
+      .filter((version) => version.status === "ACTIVE")
+      .map((version) => [
+        version.plan.code,
+        version.entitlements.find(
+          (entitlement) => entitlement.key === "TALENT_RADAR_ACCESS",
+        )?.booleanValue ?? null,
+      ]),
+  );
+  check(
+    context,
+    "Phase-14 seeded Radar access contrast",
+    {
+      freeBasic: activeRadarAccessByPlan.get("FREE_BASIC") ?? null,
+      mappedCompanies: RADAR_COMPANY_SLOTS.map((slug) => {
+        const company = COMPANY_FIXTURES.find(
+          (candidate) => candidate.slug === slug,
+        );
+        return company === undefined
+          ? null
+          : (activeRadarAccessByPlan.get(company.planCode) ?? null);
+      }),
+    },
+    { freeBasic: false, mappedCompanies: [true, true] },
+  );
+  const piiCanaryFixture = CANDIDATE_FIXTURES[0];
+  if (piiCanaryFixture === undefined) {
+    throw new DemoSeedVerificationError(
+      "Phase-14 PII canary fixture",
+      false,
+      true,
+    );
+  }
+  const piiCanaries = [
+    piiCanaryFixture.firstName,
+    piiCanaryFixture.lastName,
+    piiCanaryFixture.email,
+    "+41 79 000 00 00",
+    "lebenslauf.pdf",
+  ].filter((value): value is string => value !== null);
+  const radarSafeProjection = JSON.stringify({
+    profiles: radarProfiles.map((profile) => ({
+      displayLabel: profile.displayLabel,
+      cantonBucket: profile.cantonBucket,
+      categoryBucket: profile.categoryBucket,
+      languageCodes: profile.languageCodes,
+      skillSlugs: profile.skillSlugs,
+    })),
+    sessions: phase14SearchSessions.map((session) =>
+      session === undefined ? null : session.normalizedFilters,
+    ),
+    contacts: observed.contactRequests.map((request) => ({
+      subject: request.subject,
+      messagePreview: request.messagePreview,
+    })),
+  }).toLocaleLowerCase("en-US");
+  check(
+    context,
+    "Phase-14 Radar safe projections exclude every PII canary",
+    piiCanaries.every(
+      (canary) =>
+        !radarSafeProjection.includes(canary.toLocaleLowerCase("en-US")),
+    ),
+    true,
+  );
   check(
     context,
     "Candidate CV metadata boundary",
@@ -2885,7 +3079,53 @@ function verifyCandidateWorkflows(
     sortedNumberRecord(
       countBy(observed.contactRequests, (request) => request.status),
     ),
-    sortedNumberRecord({ ACCEPTED: 2, DECLINED: 2, PENDING: 2 }),
+    sortedNumberRecord({
+      ACCEPTED: 2,
+      CANCELLED: 1,
+      DECLINED: 2,
+      EXPIRED: 1,
+      PENDING: 2,
+    }),
+  );
+  check(
+    context,
+    "Phase-14 Contact requests are search-scoped and have exact lifecycles",
+    CONTACT_REQUEST_FIXTURES.every((fixture) => {
+      const request = observed.contactRequests.find(
+        (candidate) =>
+          candidate.id ===
+          stableSeedId("employer-contact-request", fixture.key),
+      );
+      if (request === undefined) return false;
+      const createdEvent = request.events.find(
+        (event) => event.kind === "CREATED",
+      );
+      const terminalEvent = request.events.find(
+        (event) => event.kind === fixture.status,
+      );
+      const sessionCandidate = request.radarSearchSession.candidates.find(
+        (candidate) =>
+          candidate.candidateProfileId === request.candidateProfileId,
+      );
+      return (
+        request.status === fixture.status &&
+        request.subject === "Talent Radar Kontaktanfrage" &&
+        request.messagePreview.length <= 500 &&
+        request.radarSearchSession.companyId === request.companyId &&
+        request.radarSearchSession.requestingUserId ===
+          request.requestingUserId &&
+        sessionCandidate !== undefined &&
+        createdEvent?.createdAt.getTime() === request.createdAt.getTime() &&
+        request.expiresAt.getTime() - request.createdAt.getTime() ===
+          14 * 86_400_000 &&
+        (fixture.status === "PENDING"
+          ? request.terminalAt === null && terminalEvent === undefined
+          : request.terminalAt !== null &&
+            terminalEvent?.createdAt.getTime() ===
+              request.terminalAt.getTime())
+      );
+    }),
+    true,
   );
   check(
     context,
@@ -2936,6 +3176,91 @@ function verifyCandidateWorkflows(
         .length,
     },
     { active: 1, revoked: 1 },
+  );
+  check(
+    context,
+    "Phase-14 Reveal confirmations bind key version and one-use digest",
+    observed.revealGrants.every(
+      (grant) =>
+        grant.confirmations.length >= 1 &&
+        grant.confirmations.every(
+          (confirmation) =>
+            confirmation.confirmationKeyVersion.length > 0 &&
+            /^[a-f0-9]{64}$/u.test(
+              confirmation.confirmationTokenDigest,
+            ) &&
+            confirmation.contactRequestId === grant.contactRequestId &&
+            confirmation.grantId === grant.id,
+        ),
+    ),
+    true,
+  );
+  const phase14CreditBalanceByCompany = RADAR_COMPANY_SLOTS.map(
+    (companySlug) => {
+      const accountId = stableSeedId(
+        "credit-account",
+        `candidate-workflows:${companySlug}:talent-contact`,
+      );
+      const account = observed.creditAccounts.find(
+        (candidate) => candidate.id === accountId,
+      );
+      return (
+        account?.entries.reduce((total, entry) => total + entry.amount, 0) ??
+        null
+      );
+    },
+  );
+  check(
+    context,
+    "Phase-14 Contact-credit boundary fixtures",
+    phase14CreditBalanceByCompany,
+    [1, 0],
+  );
+  check(
+    context,
+    "Phase-14 Privacy intake cases are owner-scoped and redacted",
+    {
+      statuses: sortedNumberRecord(
+        countBy(observed.privacyRequests, (request) => request.status),
+      ),
+      types: sortedNumberRecord(
+        countBy(observed.privacyRequests, (request) => request.type),
+      ),
+      valid: PRIVACY_REQUEST_FIXTURES.every((fixture) => {
+        const request = observed.privacyRequests.find(
+          (candidate) =>
+            candidate.id === stableSeedId("privacy-request", fixture.key),
+        );
+        if (request === undefined) return false;
+        const owner = CANDIDATE_FIXTURES[fixture.candidateIndex];
+        return (
+          owner !== undefined &&
+          request.requesterUserId === stableSeedId("user", owner.email) &&
+          request.noticeVersion ===
+            PRIVACY_REQUEST_POLICY_V1.noticeVersion &&
+          request.domainEventRefs.length === 0 &&
+          request.events.length === 1 &&
+          request.events[0]?.kind === "CREATED" &&
+          request.events[0]?.toStatus === "PENDING" &&
+          request.correctionFields.length ===
+            fixture.correctionFields.length &&
+          request.events.every(
+            (event) =>
+              event.safeNote === null &&
+              !piiCanaries.some((canary) =>
+                (event.reasonCode ?? "")
+                  .toLocaleLowerCase("en-US")
+                  .includes(canary.toLocaleLowerCase("en-US")),
+              ),
+          )
+        );
+      }),
+    },
+    {
+      statuses: { PENDING: PRIVACY_REQUEST_FIXTURES.length },
+      types: { CORRECT: 1, DELETE: 1, EXPORT: 1 },
+      valid: true,
+    },
   );
   check(
     context,
@@ -3778,6 +4103,28 @@ function buildObservedDigest(
       submittedJobRevisionId: application.submittedJobRevisionId,
       updatedAt: application.updatedAt.toISOString(),
     })),
+    contactRequests: observed.contactRequests.map((request) => ({
+      candidateProfileId: request.candidateProfileId,
+      companyId: request.companyId,
+      createdAt: request.createdAt.toISOString(),
+      creditLedgerEntryId: request.creditLedgerEntryId,
+      events: request.events.map((event) => ({
+        actorUserId: event.actorUserId,
+        createdAt: event.createdAt.toISOString(),
+        id: event.id,
+        kind: event.kind,
+        reasonCode: event.reasonCode,
+      })),
+      expiresAt: request.expiresAt.toISOString(),
+      fundingSource: request.fundingSource,
+      id: request.id,
+      messagePreviewHash: sha256Utf8(request.messagePreview),
+      radarSearchSessionId: request.radarSearchSessionId,
+      requestingUserId: request.requestingUserId,
+      status: request.status,
+      subjectHash: sha256Utf8(request.subject),
+      terminalAt: request.terminalAt?.toISOString() ?? null,
+    })),
     jobAlertDeliveryConsents: observed.jobAlertDeliveryConsents.map(
       (consent) => ({
         actorUserId: consent.actorUserId,
@@ -3868,9 +4215,12 @@ function buildObservedDigest(
         toStatus: event.toStatus,
       })),
       id: request.id,
+      domainEventRefs: [...request.domainEventRefs].sort(),
+      noticeVersion: request.noticeVersion,
       requesterUserId: request.requesterUserId,
       status: request.status,
       type: request.type,
+      version: request.version,
     })),
     authRbac: {
       expiredSession:
@@ -4121,6 +4471,8 @@ function buildObservedDigest(
       confirmations: grant.confirmations.map((confirmation) => ({
         actorUserId: confirmation.actorUserId,
         completeFieldSet: sortedStrings(confirmation.completeFieldSet),
+        confirmationDigest: confirmation.confirmationTokenDigest,
+        confirmationKeyVersion: confirmation.confirmationKeyVersion,
         contactRequestId: confirmation.contactRequestId,
         conversationId: confirmation.conversationId,
         createdAt: confirmation.createdAt.toISOString(),

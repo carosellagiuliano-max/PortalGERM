@@ -75,6 +75,8 @@ describe("Phase 12 Company-claim seat enforcement", () => {
         tokenHash: randomUUID().replaceAll("-", "").padEnd(64, "0"),
         status: "PENDING",
         expiresAt: new Date(NOW.getTime() + 86_400_000),
+        createdAt: NOW,
+        updatedAt: NOW,
       },
     });
     const claim = await client.companyClaimRequest.create({

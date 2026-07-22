@@ -80,6 +80,129 @@ describe.sequential("Phase 09 candidate messages and privacy", () => {
     }, ANCHOR)).resolves.toEqual({ ok: false, code: "NOT_FOUND" });
   });
 
+  it("blocks only new Radar messages when the company loses current trust", async () => {
+    const owner = candidateUsers[0]!;
+    const radarConversation = await client().conversation.findFirstOrThrow({
+      where: {
+        kind: "TALENT_RADAR",
+        participants: {
+          some: { kind: "USER", userId: owner.userId, leftAt: null },
+        },
+        contactRequest: { status: "ACCEPTED", candidateProfileId: owner.id },
+      },
+      select: {
+        id: true,
+        companyId: true,
+        company: { select: { status: true } },
+      },
+    });
+    const verification = await client().companyVerificationRequest.findFirstOrThrow({
+      where: {
+        companyId: radarConversation.companyId,
+        status: "VERIFIED",
+        supersededBy: null,
+      },
+      select: { id: true },
+    });
+    await expect(client().companyVerificationRequest.count({
+      where: {
+        companyId: radarConversation.companyId,
+        status: "VERIFIED",
+        supersededBy: null,
+      },
+    })).resolves.toBe(1);
+
+    const acceptedKey = `radar-message-trust-accepted-${randomUUID()}`;
+    const acceptedInput = {
+      conversationId: radarConversation.id,
+      body: "Antwort vor der Vertrauensänderung.",
+      idempotencyKey: acceptedKey,
+    };
+    await expect(
+      sendCandidateMessage(client(), owner.userId, acceptedInput, ANCHOR),
+    ).resolves.toMatchObject({ ok: true, duplicate: false });
+
+    try {
+      await client().company.update({
+        where: { id: radarConversation.companyId },
+        data: { status: "SUSPENDED" },
+      });
+
+      await expect(
+        sendCandidateMessage(client(), owner.userId, acceptedInput, ANCHOR),
+      ).resolves.toMatchObject({ ok: true, duplicate: true });
+      await expect(sendCandidateMessage(client(), owner.userId, {
+        conversationId: radarConversation.id,
+        body: "Diese neue Nachricht muss bei inaktiver Firma scheitern.",
+        idempotencyKey: `radar-message-inactive-${randomUUID()}`,
+      }, ANCHOR)).resolves.toEqual({ ok: false, code: "TRUST_BLOCKED" });
+      await expect(
+        getCandidateConversation(client(), owner.userId, radarConversation.id),
+      ).resolves.toMatchObject({
+        messageSendAvailability: {
+          allowed: false,
+          reason: "RADAR_COMPANY_INACTIVE",
+        },
+      });
+    } finally {
+      await client().company.update({
+        where: { id: radarConversation.companyId },
+        data: { status: radarConversation.company.status },
+      });
+    }
+
+    try {
+      await client().companyVerificationRequest.update({
+        where: { id: verification.id },
+        data: { status: "REVOKED" },
+      });
+
+      await expect(sendCandidateMessage(client(), owner.userId, {
+        conversationId: radarConversation.id,
+        body: "Diese neue Nachricht muss ohne aktuelle Verifikation scheitern.",
+        idempotencyKey: `radar-message-unverified-${randomUUID()}`,
+      }, ANCHOR)).resolves.toEqual({ ok: false, code: "TRUST_BLOCKED" });
+      await expect(
+        getCandidateConversation(client(), owner.userId, radarConversation.id),
+      ).resolves.toMatchObject({
+        messageSendAvailability: {
+          allowed: false,
+          reason: "RADAR_COMPANY_UNVERIFIED",
+        },
+      });
+    } finally {
+      await client().companyVerificationRequest.update({
+        where: { id: verification.id },
+        data: { status: "VERIFIED" },
+      });
+    }
+
+    const applicationConversation = await client().conversation.findFirstOrThrow({
+      where: { kind: "APPLICATION", application: { candidateProfileId: owner.id } },
+      select: {
+        id: true,
+        companyId: true,
+        company: { select: { status: true } },
+      },
+    });
+    try {
+      await client().company.update({
+        where: { id: applicationConversation.companyId },
+        data: { status: "SUSPENDED" },
+      });
+      await expect(sendCandidateMessage(client(), owner.userId, {
+        conversationId: applicationConversation.id,
+        body: "Bewerbungsgespräche behalten ihre bestehende Semantik.",
+        idempotencyKey: `application-message-company-inactive-${randomUUID()}`,
+      }, ANCHOR)).resolves.toMatchObject({ ok: true, duplicate: false });
+    } finally {
+      await client().company.update({
+        where: { id: applicationConversation.companyId },
+        data: { status: applicationConversation.company.status },
+      });
+    }
+  });
+
   it("notifies the active application pipeline assignee but excludes inactive recipients", async () => {
     const owner = candidateUsers[0]!;
     const conversation = await client().conversation.findFirstOrThrow({

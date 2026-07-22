@@ -71,6 +71,10 @@ const IDS = {
   assignmentEditorA: id(108),
   assignmentPipelineA: id(109),
   assignmentReviewerA: id(110),
+  radarSessionA: id(111),
+  radarSessionB: id(112),
+  radarCandidateA: id(113),
+  radarCandidateB: id(114),
 };
 
 const ACCESS_A: CompanyAccess = {
@@ -443,16 +447,49 @@ async function seed() {
     "consume-b",
     IDS.userB,
   ]);
+  const radarSessionSql = `INSERT INTO "RadarSearchSession" (
+      "id","companyId","membershipId","requestingUserId","filterHash","calendarDate",
+      "policyVersion","normalizedFilters","resultCount","expiresAt","createdAt"
+    ) VALUES ($1,$2,$3,$4,$5,'2026-07-19','radar-privacy-v1','{}'::jsonb,1,
+      '2026-07-19T12:15:00Z','2026-07-19T12:00:00Z')`;
+  await pool.query(radarSessionSql, [
+    IDS.radarSessionA,
+    IDS.companyA,
+    IDS.membershipOwnerA,
+    IDS.userA,
+    "a".repeat(64),
+  ]);
+  await pool.query(radarSessionSql, [
+    IDS.radarSessionB,
+    IDS.companyB,
+    IDS.membershipOwnerB,
+    IDS.userB,
+    "b".repeat(64),
+  ]);
+  const radarCandidateSql = `INSERT INTO "RadarSearchSessionCandidate" (
+      "id","radarSearchSessionId","candidateProfileId","position"
+    ) VALUES ($1,$2,$3,0)`;
+  await pool.query(radarCandidateSql, [
+    IDS.radarCandidateA,
+    IDS.radarSessionA,
+    IDS.candidateProfile,
+  ]);
+  await pool.query(radarCandidateSql, [
+    IDS.radarCandidateB,
+    IDS.radarSessionB,
+    IDS.candidateProfile,
+  ]);
   const requestSql = `INSERT INTO "EmployerContactRequest" (
-      "id","companyId","candidateProfileId","requestingUserId","creditLedgerEntryId","messagePreview",
-      "idempotencyKey","fundingSource","clusterPolicyVersion","cantonBucketSnapshot",
+      "id","companyId","candidateProfileId","radarSearchSessionId","requestingUserId",
+      "creditLedgerEntryId","subject","messagePreview","idempotencyKey","commandFingerprint","fundingSource","clusterPolicyVersion","cantonBucketSnapshot",
       "categoryBucketSnapshot","expiresAt","createdAt","updatedAt"
-    ) VALUES ($1,$2,$3,$4,$5,'Bounded introduction',$6,'ADMIN_GRANT','v1','ZH','engineering',
+    ) VALUES ($1,$2,$3,$4,$5,$6,'Authorized contact','Bounded introduction',$7,repeat('a',64),'ADMIN_GRANT','v1','ZH','engineering',
       '2026-08-02T12:00:00Z','2026-07-19T12:00:00Z','2026-07-19T12:00:00Z')`;
   await pool.query(requestSql, [
     IDS.requestA,
     IDS.companyA,
     IDS.candidateProfile,
+    IDS.radarSessionA,
     IDS.userA,
     IDS.ledgerA,
     "request-a",
@@ -461,6 +498,7 @@ async function seed() {
     IDS.requestB,
     IDS.companyB,
     IDS.candidateProfile,
+    IDS.radarSessionB,
     IDS.userB,
     IDS.ledgerB,
     "request-b",

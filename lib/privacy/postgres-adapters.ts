@@ -133,6 +133,8 @@ async function runAtomicPrivacyIntake(
           status: PrivacyRequestStatus.PENDING,
           dueAt: input.dueAt,
           idempotencyKey: input.request.idempotencyKey,
+          noticeVersion: input.request.noticeVersion,
+          domainEventRefs: [],
           deletionDependencies: [],
           createdAt: input.createdAt,
           updatedAt: input.createdAt,

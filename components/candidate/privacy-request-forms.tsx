@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 
 import {
   INITIAL_CANDIDATE_PRIVACY_ACTION_STATE,
@@ -181,7 +182,14 @@ function PrivacyActionFeedback({
       <AlertTitle>
         {state.status === "success" ? "Anfrage erfasst" : "Anfrage nicht möglich"}
       </AlertTitle>
-      <AlertDescription>{state.message}</AlertDescription>
+      <AlertDescription>
+        {state.message}
+        {state.supportPath === undefined ? null : (
+          <Link href={state.supportPath} className="mt-2 block font-medium underline">
+            Datenschutzanliegen an den Support senden
+          </Link>
+        )}
+      </AlertDescription>
     </Alert>
   );
 }

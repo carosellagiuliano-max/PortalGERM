@@ -119,6 +119,25 @@ describe("candidate message action", () => {
     expect(state).toMatchObject({ status: "error" });
     expect(mocks.sendCandidateMessage).not.toHaveBeenCalled();
   });
+
+  it("reports the server-side Radar trust block without revalidating the thread", async () => {
+    mocks.sendCandidateMessage.mockResolvedValue({
+      ok: false,
+      code: "TRUST_BLOCKED",
+    });
+
+    const state = await sendCandidateMessageAction(
+      INITIAL_CANDIDATE_MESSAGE_ACTION_STATE,
+      messageForm(),
+    );
+
+    expect(state).toEqual({
+      status: "error",
+      message:
+        "Neue Nachrichten sind gesperrt, weil die Firma nicht aktiv und aktuell verifiziert ist. Bitte lade neu.",
+    });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
 });
 
 function messageForm(overrides: Readonly<{ body?: string }> = {}): FormData {

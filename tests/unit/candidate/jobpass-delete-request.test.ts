@@ -5,16 +5,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const intakeAtomically = vi.fn();
   const notificationUpsert = vi.fn();
+  const privacyRequestFindFirst = vi.fn();
   return {
     buildNotificationPersistenceRecord: vi.fn(),
     consumeRequestRateLimit: vi.fn(),
-    database: { notification: { upsert: notificationUpsert } },
+    database: {
+      notification: { upsert: notificationUpsert },
+      privacyRequest: { findFirst: privacyRequestFindFirst },
+    },
     getAuthRequestContext: vi.fn(),
     getDatabase: vi.fn(),
     getServerEnvironment: vi.fn(),
     intakeAtomically,
     isValidAuthMutationOrigin: vi.fn(),
     notificationUpsert,
+    privacyRequestFindFirst,
     repository: { intakeAtomically, findOwned: vi.fn() },
     revalidatePath: vi.fn(),
     requireCandidatePage: vi.fn(),
@@ -86,6 +91,7 @@ describe("Phase-09 JobPass deletion request", () => {
       createdAt: new Date(),
     }));
     mocks.notificationUpsert.mockResolvedValue({ id: REQUEST_ID });
+    mocks.privacyRequestFindFirst.mockResolvedValue(null);
   });
 
   it("creates the typed DELETE case from the exact confirmation phrase", async () => {

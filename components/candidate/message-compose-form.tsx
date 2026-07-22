@@ -10,6 +10,31 @@ import { INITIAL_CANDIDATE_MESSAGE_ACTION_STATE } from "@/lib/candidate/message-
 export function CandidateMessageComposeForm({
   conversationId,
   initialIdempotencyKey,
+  blockedReason = null,
+}: Readonly<{
+  conversationId: string;
+  initialIdempotencyKey: string;
+  blockedReason?: string | null;
+}>) {
+  if (blockedReason !== null) {
+    return (
+      <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+        {blockedReason} Der bisherige Verlauf bleibt sichtbar.
+      </p>
+    );
+  }
+
+  return (
+    <ActiveCandidateMessageComposeForm
+      conversationId={conversationId}
+      initialIdempotencyKey={initialIdempotencyKey}
+    />
+  );
+}
+
+function ActiveCandidateMessageComposeForm({
+  conversationId,
+  initialIdempotencyKey,
 }: Readonly<{
   conversationId: string;
   initialIdempotencyKey: string;

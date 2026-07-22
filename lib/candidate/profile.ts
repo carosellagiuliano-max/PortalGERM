@@ -31,6 +31,7 @@ import {
   CANDIDATE_LANGUAGE_CODE_PATTERN,
   type SwissJobPassInput,
 } from "@/lib/validation/candidate";
+import { applyCandidateRadarEligibilityLoss } from "@/lib/talentradar/eligibility-loss-effects";
 
 const DAY_MILLISECONDS = 86_400_000;
 const PROFILE_TRANSACTION_TIMEOUT_MILLISECONDS = 15_000;
@@ -468,6 +469,19 @@ export async function saveOwnedCandidateProfile(
         requirementsComplete: requirements.complete,
         now: command.now,
       });
+      if (reopened || (previousConsent && !command.profile.radarVisible)) {
+        await applyCandidateRadarEligibilityLoss(transaction, {
+          candidateProfileId: updated.id,
+          candidateUserId: command.actorUserId,
+          reason:
+            previousConsent && !command.profile.radarVisible
+              ? "CANDIDATE_OPTED_OUT"
+              : "CANDIDATE_PROFILE_INCOMPLETE",
+          actor: { kind: "USER", userId: command.actorUserId },
+          correlationId: command.correlationId,
+          now: command.now,
+        });
+      }
 
       return Object.freeze({
         outcome: "SAVED" as const,
@@ -647,6 +661,16 @@ export async function setOwnedTalentRadarVisibility(
       requirementsComplete: requirements.complete,
       now: command.now,
     });
+    if (previous && !command.granted) {
+      await applyCandidateRadarEligibilityLoss(transaction, {
+        candidateProfileId: current.id,
+        candidateUserId: command.actorUserId,
+        reason: "CANDIDATE_OPTED_OUT",
+        actor: { kind: "USER", userId: command.actorUserId },
+        correlationId: command.correlationId,
+        now: command.now,
+      });
+    }
     return Object.freeze({
       outcome:
         previous === command.granted

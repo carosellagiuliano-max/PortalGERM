@@ -582,6 +582,8 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260721224000_phase_12_credit_expiry_boundary",
       "20260721225000_phase_12_release_permit_hardening",
       "20260722130000_phase_13_job_boosts",
+      "20260722200000_phase_14_talent_radar_privacy",
+      "20260722201500_phase_14_radar_cohort_and_replay_hardening",
     ]);
     expect(
       migrations.rows.every(
@@ -1644,6 +1646,9 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     const firstConfirmationId = explicitUuid(1_110);
     const secondFieldId = explicitUuid(1_111);
     const secondConfirmationId = explicitUuid(1_112);
+    const membershipId = explicitUuid(1_190);
+    const radarSearchSessionId = explicitUuid(1_191);
+    const radarSearchCandidateId = explicitUuid(1_192);
 
     await target.query(
       [
@@ -1663,6 +1668,42 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     );
     await insertUser(target, employerUserId, "reveal-employer@example.test");
     await insertCompany(target, companyId, "reveal-contract");
+    await target.query(
+      [
+        'INSERT INTO "CompanyMembership" (',
+        '  "id", "companyId", "userId", "role", "status", "updatedAt"',
+        ") VALUES ($1, $2, $3, 'OWNER', 'ACTIVE', $4::timestamptz)",
+      ].join("\n"),
+      [membershipId, companyId, employerUserId, "2043-01-01T00:00:00.000Z"],
+    );
+    await target.query(
+      [
+        'INSERT INTO "RadarSearchSession" (',
+        '  "id", "companyId", "membershipId", "requestingUserId",',
+        '  "filterHash", "calendarDate", "policyVersion", "normalizedFilters",',
+        '  "resultCount", "expiresAt", "createdAt"',
+        ") VALUES ($1, $2, $3, $4, $5, $6::date, 'radar-privacy-v1',",
+        "  '{}'::jsonb, 1, $7::timestamptz, $8::timestamptz)",
+      ].join("\n"),
+      [
+        radarSearchSessionId,
+        companyId,
+        membershipId,
+        employerUserId,
+        "9".repeat(64),
+        "2043-01-03",
+        "2043-01-03T00:15:00.000Z",
+        "2043-01-03T00:00:00.000Z",
+      ],
+    );
+    await target.query(
+      [
+        'INSERT INTO "RadarSearchSessionCandidate" (',
+        '  "id", "radarSearchSessionId", "candidateProfileId", "position"',
+        ") VALUES ($1, $2, $3, 0)",
+      ].join("\n"),
+      [radarSearchCandidateId, radarSearchSessionId, candidateProfileId],
+    );
     await target.query(
       [
         'INSERT INTO "CreditAccount" (',
@@ -1715,23 +1756,26 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     await target.query(
       [
         'INSERT INTO "EmployerContactRequest" (',
-        '  "id", "companyId", "candidateProfileId", "requestingUserId",',
-        '  "creditLedgerEntryId", "messagePreview", "idempotencyKey",',
+        '  "id", "companyId", "candidateProfileId", "radarSearchSessionId",',
+        '  "requestingUserId", "creditLedgerEntryId", "subject",',
+        '  "messagePreview", "idempotencyKey", "commandFingerprint",',
         '  "status", "fundingSource", "clusterPolicyVersion",',
         '  "cantonBucketSnapshot", "categoryBucketSnapshot",',
-        '  "expiresAt", "createdAt", "updatedAt"',
+        '  "expiresAt", "terminalAt", "createdAt", "updatedAt"',
         ") VALUES (",
         "  $1, $2, $3, $4,",
-        "  $5, 'Schema contact preview', 'reveal-contact-request',",
+        "  $5, $6, 'Schema contact subject',",
+        "  'Schema contact preview', 'reveal-contact-request', repeat('c', 64),",
         "  'ACCEPTED', 'ADMIN_GRANT', 'cluster-v1',",
         "  'ZH', 'technology',",
-        "  $6::timestamptz, $7::timestamptz, $7::timestamptz",
+        "  $7::timestamptz, $8::timestamptz, $8::timestamptz, $8::timestamptz",
         ")",
       ].join("\n"),
       [
         contactRequestId,
         companyId,
         candidateProfileId,
+        radarSearchSessionId,
         employerUserId,
         creditConsumeId,
         "2043-01-17T00:00:00.000Z",
@@ -1776,12 +1820,14 @@ describe("Phase 02 PostgreSQL schema contract", () => {
           'INSERT INTO "IdentityRevealConfirmation" (',
           '  "id", "grantId", "actorUserId", "contactRequestId",',
           '  "completeFieldSet", "newlyAddedFields", "noticeVersion",',
-          '  "previewHmac", "idempotencyKey", "createdAt"',
+          '  "previewHmac", "confirmationKeyVersion",',
+          '  "confirmationTokenDigest", "idempotencyKey", "createdAt"',
           ") VALUES (",
           "  $1, $2, $3, $4,",
           "  ARRAY['DISPLAY_NAME']::\"RevealField\"[],",
           "  ARRAY['DISPLAY_NAME']::\"RevealField\"[],",
-          "  'notice-v1', $5, 'reveal-confirm-first', $6::timestamptz",
+          "  'notice-v1', $5, 'confirm-v1', $6,",
+          "  'reveal-confirm-first', $7::timestamptz",
           ")",
         ].join("\n"),
         [
@@ -1790,6 +1836,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
           candidateUserId,
           contactRequestId,
           "c".repeat(64),
+          "1".repeat(64),
           "2043-01-04T00:00:00.000Z",
         ],
       );
@@ -1846,12 +1893,14 @@ describe("Phase 02 PostgreSQL schema contract", () => {
           'INSERT INTO "IdentityRevealConfirmation" (',
           '  "id", "grantId", "actorUserId", "contactRequestId",',
           '  "completeFieldSet", "newlyAddedFields", "noticeVersion",',
-          '  "previewHmac", "idempotencyKey", "createdAt"',
+          '  "previewHmac", "confirmationKeyVersion",',
+          '  "confirmationTokenDigest", "idempotencyKey", "createdAt"',
           ") VALUES (",
           "  $1, $2, $3, $4,",
           "  ARRAY['DISPLAY_NAME', 'EMAIL']::\"RevealField\"[],",
           "  ARRAY['EMAIL']::\"RevealField\"[],",
-          "  'notice-v1', $5, 'reveal-confirm-second', $6::timestamptz",
+          "  'notice-v1', $5, 'confirm-v1', $6,",
+          "  'reveal-confirm-second', $7::timestamptz",
           ")",
         ].join("\n"),
         [
@@ -1860,6 +1909,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
           candidateUserId,
           contactRequestId,
           "e".repeat(64),
+          "2".repeat(64),
           "2043-01-05T00:00:00.000Z",
         ],
       );
@@ -2039,10 +2089,12 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       [
         'INSERT INTO "PrivacyRequest" (',
         '  "id", "requesterUserId", "type", "status", "dueAt",',
-        '  "idempotencyKey", "deletionDependencies", "updatedAt"',
+        '  "idempotencyKey", "noticeVersion", "domainEventRefs",',
+        '  "deletionDependencies", "updatedAt"',
         ") VALUES (",
         "  $1, $2, 'CORRECT', 'PENDING', $3::timestamptz,",
-        "  'privacy-correction-contract', ARRAY[]::\"PrivacyDeletionDependencyCode\"[], $4::timestamptz",
+        "  'privacy-correction-contract', 'privacy-request-v1', ARRAY[]::text[],",
+        "  ARRAY[]::\"PrivacyDeletionDependencyCode\"[], $4::timestamptz",
         ")",
       ].join("\n"),
       [

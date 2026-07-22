@@ -14,7 +14,7 @@ import {
 
 describe("stable Phase-10 seed identities", () => {
   it("rotates the manifest version without changing Phase-05 semantic IDs", () => {
-    expect(SEED_DATASET_VERSION).toBe("phase-13-demo-v12");
+    expect(SEED_DATASET_VERSION).toBe("phase-14-demo-v13");
     expect(SEED_COMPATIBILITY_BASE_VERSION).toBe("phase-05-demo-v1");
     expect(stableSeedId("user", "candidate@demo.ch")).toBe(
       "b05d30e2-ade6-57f2-b376-12cef27a86e4",

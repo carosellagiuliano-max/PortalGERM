@@ -13,6 +13,7 @@ import {
 } from "@/lib/candidate/profile";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
+import { listCandidateRadarRequests } from "@/lib/talentradar/candidate-request-view";
 
 export const metadata: Metadata = {
   title: "Talent Radar",
@@ -23,10 +24,11 @@ export const runtime = "nodejs";
 
 export default async function CandidateTalentRadarPage() {
   const user = await requireCandidatePage();
-  const workspace = await getOwnedCandidateProfileWorkspace(
-    getDatabase(),
-    user.id,
-  );
+  const database = getDatabase();
+  const [workspace, contactRequests] = await Promise.all([
+    getOwnedCandidateProfileWorkspace(database, user.id),
+    listCandidateRadarRequests(database, user.id),
+  ]);
   const status = radarStatusContent(workspace.radarState);
   const StatusIcon = status.icon;
 
@@ -88,13 +90,26 @@ export default async function CandidateTalentRadarPage() {
         <CardContent className="grid gap-3 text-sm leading-6 text-muted-foreground">
           <p>
             Arbeitgeber sehen hier nie automatisch deine Identität. Kandidateneigene
-            Kontaktanfragen mit Annehmen, Ablehnen und späterer Feldfreigabe werden
-            erst in Phase 14 ergänzt.
+            Kontaktanfragen kannst du einzeln annehmen oder ablehnen. Auch nach dem
+            Annehmen bleibt der Nachrichtenverlauf anonym.
           </p>
           <p>
-            Bis dahin erzeugt diese Seite weder eine erfundene Anfrage noch einen
-            Nachrichtenverlauf.
+            Eine Identitätsfreigabe erfolgt separat, feldweise und erst nach deiner
+            exakten Vorschau und Bestätigung.
           </p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background p-4">
+            <span className="font-medium text-foreground">
+              {contactRequests.length === 0
+                ? "Keine Kontaktanfragen"
+                : `${contactRequests.length} Kontaktanfrage${contactRequests.length === 1 ? "" : "n"}`}
+            </span>
+            <Link
+              href="/candidate/talent-radar/requests"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              Kontaktanfragen ansehen
+            </Link>
+          </div>
         </CardContent>
       </Card>
 
@@ -104,8 +119,9 @@ export default async function CandidateTalentRadarPage() {
           Datenschutzfreundlich vorbereitet
         </p>
         <p className="mt-1 text-muted-foreground">
-          DSG-freundliches MVP — Orientierung, keine Rechtsberatung. Du kannst die
-          Sichtbarkeit jederzeit deaktivieren.
+          DSG-freundliches MVP — Orientierung, keine Rechtsberatung. Identität
+          bleibt anonym, bis du sie freigibst. Du kannst die Sichtbarkeit jederzeit
+          deaktivieren.
         </p>
       </div>
     </section>

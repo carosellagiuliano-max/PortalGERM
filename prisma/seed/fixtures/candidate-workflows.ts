@@ -8,8 +8,9 @@ export const CANDIDATE_COUNT = 30 as const;
 export const APPLICATION_COUNT = 80 as const;
 export const SAVED_JOB_COUNT = 41 as const;
 export const JOB_ALERT_COUNT = 15 as const;
-export const CONTACT_REQUEST_COUNT = 6 as const;
+export const CONTACT_REQUEST_COUNT = 8 as const;
 export const RADAR_PROFILE_COUNT = 10 as const;
+export const PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT = 10 as const;
 export const RADAR_CONVERSATION_COUNT = 2 as const;
 export const APPLICATION_CONVERSATION_COUNT = 80 as const;
 export const PRIVACY_REQUEST_COUNT = 3 as const;
@@ -509,6 +510,7 @@ export const CONTACT_REQUEST_FIXTURES = Object.freeze([
     candidateIndex: 0,
     status: "ACCEPTED",
     timing: "cooldown-a",
+    fundingGrant: "BASE",
   }),
   Object.freeze({
     key: "contact-accepted-b",
@@ -516,6 +518,7 @@ export const CONTACT_REQUEST_FIXTURES = Object.freeze([
     candidateIndex: 1,
     status: "ACCEPTED",
     timing: "cooldown-b",
+    fundingGrant: "BASE",
   }),
   Object.freeze({
     key: "contact-pending-a",
@@ -523,6 +526,7 @@ export const CONTACT_REQUEST_FIXTURES = Object.freeze([
     candidateIndex: 2,
     status: "PENDING",
     timing: "current",
+    fundingGrant: "BASE",
   }),
   Object.freeze({
     key: "contact-pending-b",
@@ -530,6 +534,7 @@ export const CONTACT_REQUEST_FIXTURES = Object.freeze([
     candidateIndex: 3,
     status: "PENDING",
     timing: "current",
+    fundingGrant: "BASE",
   }),
   Object.freeze({
     key: "contact-declined-a",
@@ -537,6 +542,7 @@ export const CONTACT_REQUEST_FIXTURES = Object.freeze([
     candidateIndex: 0,
     status: "DECLINED",
     timing: "historic-a",
+    fundingGrant: "BASE",
   }),
   Object.freeze({
     key: "contact-declined-b",
@@ -544,6 +550,23 @@ export const CONTACT_REQUEST_FIXTURES = Object.freeze([
     candidateIndex: 1,
     status: "DECLINED",
     timing: "historic-b",
+    fundingGrant: "BASE",
+  }),
+  Object.freeze({
+    key: "contact-expired-a",
+    companySlot: 0,
+    candidateIndex: 4,
+    status: "EXPIRED",
+    timing: "phase14-expired",
+    fundingGrant: "PHASE_14",
+  }),
+  Object.freeze({
+    key: "contact-cancelled-a",
+    companySlot: 0,
+    candidateIndex: 5,
+    status: "CANCELLED",
+    timing: "phase14-cancelled",
+    fundingGrant: "PHASE_14",
   }),
 ] as const);
 
@@ -586,6 +609,17 @@ export const CANDIDATE_WORKFLOW_FIXTURE_CONTRACT = Object.freeze({
   contactRequests: CONTACT_REQUEST_FIXTURES,
   privacyRequests: PRIVACY_REQUEST_FIXTURES,
   radarCompanySlots: RADAR_COMPANY_SLOTS,
+  phase14: Object.freeze({
+    eligibleRadarCandidateKeys: CANDIDATE_FIXTURES.slice(
+      0,
+      PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
+    ).map(({ key }) => key),
+    contactCreditBalances: Object.freeze([
+      Object.freeze({ companySlot: 0, balance: 1 }),
+      Object.freeze({ companySlot: 1, balance: 0 }),
+    ]),
+    piiCanaryCandidateKey: CANDIDATE_FIXTURES[0]?.key ?? "missing-canary",
+  }),
 });
 
 function buildIdentitySpecs() {
@@ -629,6 +663,10 @@ function buildIdentitySpecs() {
             "radar-opaque-mapping",
             `${companySlug}:${epoch}:${candidate.key}`,
           ),
+        );
+        add(
+          "radar-opaque-mapping",
+          `phase14:${companySlug}:current:${candidate.key}`,
         );
       });
     }
@@ -683,9 +721,31 @@ function buildIdentitySpecs() {
         );
       }
     });
+    add("radar-search-budget", `phase14:${companySlug}:eligible-default`);
+    add("radar-search-session", `phase14:${companySlug}:eligible-default`);
+    for (
+      let position = 0;
+      position < PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT;
+      position += 1
+    ) {
+      add(
+        "radar-search-session-candidate",
+        `phase14:${companySlug}:eligible-default:${position}`,
+      );
+    }
   });
 
+  add(
+    "credit-ledger-entry",
+    `candidate-workflows:${RADAR_COMPANY_SLOTS[0]}:phase14-grant`,
+  );
+
   CONTACT_REQUEST_FIXTURES.forEach((request) => {
+    add("radar-search-session", `phase14-contact:${request.key}`);
+    add(
+      "radar-search-session-candidate",
+      `phase14-contact:${request.key}`,
+    );
     add("credit-ledger-entry", `candidate-workflows:${request.key}:consume`);
     add("employer-contact-request", request.key);
     add("contact-request-event", `${request.key}:created`);

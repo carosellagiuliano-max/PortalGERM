@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
+import { applyCompanyRadarEligibilityLoss } from "@/lib/talentradar/eligibility-loss-effects";
 
 import { getEffectiveEntitlements } from "@/lib/billing/entitlements";
 import { canAddRecruiterSeat } from "@/lib/billing/feature-gates";
@@ -110,17 +111,34 @@ export async function getAdminCompanyDetail(dependencies: AdminDependencies, com
     getEffectiveEntitlements(companyId, now, createPrismaEntitlementRepository(dependencies.database)),
   ]);
   if (company === null) return null;
-  const abuseReports = await dependencies.database.abuseReport.findMany({
-    where: {
-      OR: [
-        { targetType: "COMPANY", targetId: company.id },
-        { targetType: "JOB", targetId: { in: company.jobs.map((job) => job.id) } },
-      ],
-    },
-    orderBy: [{ dueAt: "asc" }, { severity: "desc" }, { id: "asc" }],
-    take: 50,
-    select: { id: true, targetType: true, targetId: true, reasonCode: true, severity: true, status: true, dueAt: true, assignee: { select: { name: true, email: true } } },
-  });
+  const [abuseReports, contactsByStatus, contactsByFunding, revealCounts] = await Promise.all([
+    dependencies.database.abuseReport.findMany({
+      where: {
+        OR: [
+          { targetType: "COMPANY", targetId: company.id },
+          { targetType: "JOB", targetId: { in: company.jobs.map((job) => job.id) } },
+        ],
+      },
+      orderBy: [{ dueAt: "asc" }, { severity: "desc" }, { id: "asc" }],
+      take: 50,
+      select: { id: true, targetType: true, targetId: true, reasonCode: true, severity: true, status: true, dueAt: true, assignee: { select: { name: true, email: true } } },
+    }),
+    dependencies.database.employerContactRequest.groupBy({
+      by: ["status"],
+      where: { companyId: company.id },
+      _count: { _all: true },
+    }),
+    dependencies.database.employerContactRequest.groupBy({
+      by: ["fundingSource"],
+      where: { companyId: company.id },
+      _count: { _all: true },
+    }),
+    dependencies.database.identityRevealGrant.groupBy({
+      by: ["companyId", "revokedAt"],
+      where: { companyId: company.id },
+      _count: { _all: true },
+    }),
+  ]);
   const latestSubscription = company.subscriptions[0];
   const renewalPeriod = latestSubscription === undefined
     ? null
@@ -147,7 +165,23 @@ export async function getAdminCompanyDetail(dependencies: AdminDependencies, com
           planName: latestSubscription.planVersion.plan.name,
         })
       : null;
-  return Object.freeze({ company, entitlements, renewalCandidate, abuseReports });
+  const talentRadarUsage = Object.freeze({
+    contactsByStatus: Object.freeze(Object.fromEntries(
+      contactsByStatus.map((row) => [row.status, row._count._all]),
+    )),
+    contactsByFunding: Object.freeze(Object.fromEntries(
+      contactsByFunding.map((row) => [row.fundingSource, row._count._all]),
+    )),
+    reveals: Object.freeze({
+      active: revealCounts
+        .filter((row) => row.revokedAt === null)
+        .reduce((sum, row) => sum + row._count._all, 0),
+      revoked: revealCounts
+        .filter((row) => row.revokedAt !== null)
+        .reduce((sum, row) => sum + row._count._all, 0),
+    }),
+  });
+  return Object.freeze({ company, entitlements, renewalCandidate, abuseReports, talentRadarUsage });
 }
 
 const verificationCommandSchema = z.strictObject({
@@ -225,6 +259,15 @@ async function transitionVerification(
         correlationId: dependencies.correlationId,
         createdAt: now,
       } });
+      if (action === "REVOKE") {
+        await applyCompanyRadarEligibilityLoss(transaction, {
+          companyId: request.companyId,
+          reason: "COMPANY_VERIFICATION_LOST",
+          actor: { kind: "USER", userId: dependencies.actor.userId },
+          correlationId: dependencies.correlationId,
+          now,
+        });
+      }
       await notifyCompanyManagers(transaction, request.companyId, request.id, target.status, target.reason, eventKey);
       await writeAdminAudit(transaction, dependencies, now, { action: target.audit, capability: "ADMIN_COMPANY_REVIEW", targetType: "VERIFICATION_REQUEST", targetId: request.id, companyId: request.companyId, reasonCode: parsed.data.reasonCode ?? target.reason });
       return adminSuccess({ requestId: request.id, companyId: request.companyId, status: target.status });
@@ -279,6 +322,13 @@ async function transitionCompanyLifecycle(raw: unknown, dependencies: AdminDepen
           await transaction.jobStatusEvent.create({ data: { id: randomUUID(), jobId: job.id, jobRevisionId: job.currentRevisionId, kind: "PAUSED", fromStatus: "PUBLISHED", toStatus: "PAUSED", actorUserId: dependencies.actor.userId, reasonCode: "COMPANY_SUSPENDED", idempotencyKey: `${eventKey}:job:${job.id}`, correlationId: dependencies.correlationId, createdAt: now } });
           pausedJobs += 1;
         }
+        await applyCompanyRadarEligibilityLoss(transaction, {
+          companyId: company.id,
+          reason: "COMPANY_INACTIVE",
+          actor: { kind: "USER", userId: dependencies.actor.userId },
+          correlationId: dependencies.correlationId,
+          now,
+        });
       }
       await transaction.companyStatusEvent.create({ data: { id: randomUUID(), companyId: company.id, kind: action === "SUSPEND" ? "SUSPENDED" : "REACTIVATED", fromStatus: company.status, toStatus, actorUserId: dependencies.actor.userId, reasonCode: parsed.data.reasonCode, correlationId: eventKey, createdAt: now } });
       await writeAdminAudit(transaction, dependencies, now, { action: action === "SUSPEND" ? "COMPANY_SUSPENDED" : "COMPANY_REACTIVATED", capability: "ADMIN_COMPANY_MODERATE", targetType: "COMPANY", targetId: company.id, companyId: company.id, reasonCode: parsed.data.reasonCode });

@@ -100,6 +100,15 @@ export type CreditExpiryProjectionResult = Readonly<{
   projectedGrantCount: number;
 }>;
 
+export type LockedSingleCreditConsumptionResult =
+  | Readonly<{
+      ok: true;
+      entryId: string;
+      fundingSource: CreditFundingSource;
+      replay: boolean;
+    }>
+  | Readonly<{ ok: false; code: "INSUFFICIENT_CREDITS" | "IDEMPOTENCY_MISMATCH" }>;
+
 /**
  * Admin-triggerable mock worker boundary. Expiry remains a SYSTEM-derived
  * ledger transition; the Admin merely starts the deterministic projection.
@@ -280,6 +289,136 @@ async function projectCreditAccountExpiries(
       projectedGrantCount: expiryPlan.value.allocations.length,
     });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+}
+
+/**
+ * Billing-owned primitive for a domain transaction that must append one
+ * concrete consumption and its audit atomically with the owning projection.
+ * The caller must already hold its domain/company locks and keep this exact
+ * Prisma transaction open until its projection and required evidence commit.
+ */
+export async function consumeOneCompanyCreditInLockedTransaction(
+  transaction: Prisma.TransactionClient,
+  input: Readonly<{
+    actorUserId: string;
+    capability: string;
+    companyId: string;
+    correlationId: string;
+    creditType: CreditType;
+    idempotencyKey: string;
+    now: Date;
+    reasonCode: string;
+  }>,
+): Promise<LockedSingleCreditConsumptionResult> {
+  const parsed = z
+    .strictObject({
+      actorUserId: z.uuid(),
+      capability: capabilitySchema,
+      companyId: z.uuid(),
+      correlationId: z.uuid(),
+      creditType: creditTypeSchema,
+      idempotencyKey: billingIdempotencyKeySchema,
+      now: z.date(),
+      reasonCode: reasonCodeSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success || !Number.isFinite(parsed.data.now.getTime())) {
+    throw new TypeError("Locked Credit consumption input is invalid.");
+  }
+  const command = parsed.data;
+  const ledgerKey = `talent-contact:${createHash("sha256")
+    .update(command.idempotencyKey, "utf8")
+    .digest("hex")}`;
+  const replay = await transaction.creditLedgerEntry.findFirst({
+    where: {
+      idempotencyKey: ledgerKey,
+      account: {
+        companyId: command.companyId,
+        creditType: command.creditType,
+      },
+    },
+    select: {
+      id: true,
+      actorUserId: true,
+      fundingSource: true,
+      kind: true,
+      amount: true,
+      account: { select: { companyId: true, creditType: true } },
+    },
+  });
+  if (replay !== null) {
+    return replay.actorUserId === command.actorUserId &&
+      replay.kind === "CONSUME" &&
+      replay.amount === -1 &&
+      replay.account.companyId === command.companyId &&
+      replay.account.creditType === command.creditType
+      ? Object.freeze({
+          ok: true as const,
+          entryId: replay.id,
+          fundingSource: replay.fundingSource,
+          replay: true,
+        })
+      : Object.freeze({
+          ok: false as const,
+          code: "IDEMPOTENCY_MISMATCH" as const,
+        });
+  }
+
+  const grants = await loadLockedAvailableGrants(
+    transaction,
+    command.companyId,
+    command.creditType,
+    command.now,
+  );
+  const allocation = allocateCreditConsumptionV1({
+    grants,
+    creditType: command.creditType,
+    amount: 1,
+    at: command.now,
+  });
+  if (!allocation.ok || allocation.value.allocations.length !== 1) {
+    return Object.freeze({
+      ok: false as const,
+      code: "INSUFFICIENT_CREDITS" as const,
+    });
+  }
+  const source = allocation.value.allocations[0]!;
+  const entry = await transaction.creditLedgerEntry.create({
+    data: {
+      id: randomUUID(),
+      accountId: source.accountId,
+      fundingSource: source.fundingSource,
+      kind: "CONSUME",
+      amount: -1,
+      consumedGrantEntryId: source.sourceGrantEntryId,
+      validFrom: source.validFrom,
+      validTo: source.validTo,
+      idempotencyKey: ledgerKey,
+      reasonCode: command.reasonCode,
+      actorUserId: command.actorUserId,
+      createdAt: command.now,
+    },
+    select: { id: true, fundingSource: true },
+  });
+  await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
+    action: "CREDITS_CONSUMED",
+    actorKind: "USER",
+    actorUserId: command.actorUserId,
+    capability: command.capability,
+    companyId: command.companyId,
+    correlationId: command.correlationId,
+    reasonCode: command.reasonCode,
+    result: "SUCCEEDED",
+    retainUntil: new Date(command.now.getTime() + BILLING_AUDIT_RETENTION_MS),
+    targetId: entry.id,
+    targetType: "CREDIT_LEDGER_ENTRY",
+  });
+  return Object.freeze({
+    ok: true as const,
+    entryId: entry.id,
+    fundingSource: entry.fundingSource,
+    replay: false,
+  });
 }
 
 /**

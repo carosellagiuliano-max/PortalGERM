@@ -29,6 +29,9 @@ export const ADMIN_CAPABILITIES_V1 = [
   "ADMIN_CREDITS_GRANT",
   "ADMIN_CREDIT_REVERSE",
   "ADMIN_SLA_PROJECT",
+  "PRIVACY_CASE_READ",
+  "PRIVACY_CASE_VERIFY",
+  "PRIVACY_CASE_PROCESS",
 ] as const;
 
 export type AdminCapability = (typeof ADMIN_CAPABILITIES_V1)[number];
@@ -73,6 +76,12 @@ export const PHASE_12_BILLING_ADMIN_CAPABILITIES = Object.freeze([
   "ADMIN_ANALYTICS_READ",
   "ADMIN_CREDITS_GRANT",
   "ADMIN_CREDIT_REVERSE",
+] as const satisfies readonly AdminCapability[]);
+
+export const PHASE_14_PRIVACY_ADMIN_CAPABILITIES = Object.freeze([
+  "PRIVACY_CASE_READ",
+  "PRIVACY_CASE_VERIFY",
+  "PRIVACY_CASE_PROCESS",
 ] as const satisfies readonly AdminCapability[]);
 
 export function canRunLicensedSupplyImport(actor: AdminCapabilityActor): boolean {

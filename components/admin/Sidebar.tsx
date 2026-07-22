@@ -1,7 +1,7 @@
 import type { PrivateNavigationItem } from "@/components/auth/private-shell";
 
 export const ADMIN_NAVIGATION: readonly PrivateNavigationItem[] = Object.freeze([
-  { href: "/admin", label: "Übersicht" }, { href: "/admin/jobs", label: "Jobs" }, { href: "/admin/companies", label: "Unternehmen" }, { href: "/admin/users", label: "Benutzer" }, { href: "/admin/taxonomy", label: "Taxonomie" }, { href: "/admin/reports", label: "Reports" }, { href: "/admin/imports", label: "Importe" }, { href: "/admin/support", label: "Support" }, { href: "/admin/content", label: "Content" }, { href: "/admin/leads", label: "Leads" }, { href: "/admin/billing", label: "Billing" }, { href: "/admin/plans", label: "Pläne" }, { href: "/admin/products", label: "Produkte" }, { href: "/admin/analytics", label: "Analytics" }, { href: "/admin/business-cockpit", label: "Business Cockpit" },
+  { href: "/admin", label: "Übersicht" }, { href: "/admin/jobs", label: "Jobs" }, { href: "/admin/companies", label: "Unternehmen" }, { href: "/admin/users", label: "Benutzer" }, { href: "/admin/taxonomy", label: "Taxonomie" }, { href: "/admin/reports", label: "Reports" }, { href: "/admin/privacy-requests", label: "Datenschutzfälle" }, { href: "/admin/imports", label: "Importe" }, { href: "/admin/support", label: "Support" }, { href: "/admin/content", label: "Content" }, { href: "/admin/leads", label: "Leads" }, { href: "/admin/billing", label: "Billing" }, { href: "/admin/plans", label: "Pläne" }, { href: "/admin/products", label: "Produkte" }, { href: "/admin/analytics", label: "Analytics" }, { href: "/admin/business-cockpit", label: "Business Cockpit" },
 ]);
 
 export function AdminGlobalSearch() {

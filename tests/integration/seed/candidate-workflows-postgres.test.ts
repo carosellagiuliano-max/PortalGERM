@@ -350,9 +350,9 @@ describe.sequential(
         languages: 75,
         grantedConsents: 11,
         radarProfiles: 10,
-        mappings: 40,
-        budgets: 4,
-        sessions: 4,
+        mappings: 60,
+        budgets: 6,
+        sessions: 14,
         applications: 80,
         snapshots: 80,
         savedJobs: 41,
@@ -363,7 +363,7 @@ describe.sequential(
         radarConversations: 2,
         revealFields: 5,
         confirmations: 3,
-        contactConsumes: 6,
+        contactConsumes: 8,
         suspendedCandidates: 1,
         privacyRequests: 3,
         privacyCorrectionFields: 2,
@@ -372,7 +372,13 @@ describe.sequential(
         Object.fromEntries(
           requests.map((row) => [row.status, row._count._all]),
         ),
-      ).toEqual({ ACCEPTED: 2, DECLINED: 2, PENDING: 2 });
+      ).toEqual({
+        ACCEPTED: 2,
+        CANCELLED: 1,
+        DECLINED: 2,
+        EXPIRED: 1,
+        PENDING: 2,
+      });
       expect(reveals).toHaveLength(2);
       expect(reveals.filter((grant) => grant.revokedAt !== null)).toHaveLength(
         1,
@@ -416,7 +422,7 @@ describe.sequential(
         expect(mapping.authTag).toHaveLength(16);
         return token;
       });
-      expect(new Set(opaqueTokens).size).toBe(40);
+      expect(new Set(opaqueTokens).size).toBe(60);
 
       const valueFor = (
         grant: (typeof reveals)[number],

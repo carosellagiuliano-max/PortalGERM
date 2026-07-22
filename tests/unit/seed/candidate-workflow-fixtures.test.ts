@@ -13,7 +13,7 @@ import {
   SAVED_JOB_FIXTURES,
 } from "@/prisma/seed/fixtures/candidate-workflows";
 
-describe("Phase 05 candidate-workflow fixtures", () => {
+describe("Phase 14 candidate-workflow fixtures", () => {
   it("contains the exact candidate, skill and language cardinalities", () => {
     expect(CANDIDATE_FIXTURES).toHaveLength(30);
     expect(
@@ -86,7 +86,7 @@ describe("Phase 05 candidate-workflow fixtures", () => {
     expect(new Set(JOB_ALERT_FIXTURES.map((alert) => alert.status))).toEqual(
       new Set(["ACTIVE", "PAUSED", "UNSUBSCRIBED", "DELETED"]),
     );
-    expect(CONTACT_REQUEST_FIXTURES).toHaveLength(6);
+    expect(CONTACT_REQUEST_FIXTURES).toHaveLength(8);
     expect(PRIVACY_REQUEST_FIXTURES.map(({ type }) => type).sort()).toEqual([
       "CORRECT",
       "DELETE",
@@ -101,6 +101,15 @@ describe("Phase 05 candidate-workflow fixtures", () => {
     expect(
       CONTACT_REQUEST_FIXTURES.filter((request) => request.status === "DECLINED"),
     ).toHaveLength(2);
+    expect(
+      CONTACT_REQUEST_FIXTURES.filter((request) => request.status === "EXPIRED"),
+    ).toHaveLength(1);
+    expect(
+      CONTACT_REQUEST_FIXTURES.filter((request) => request.status === "CANCELLED"),
+    ).toHaveLength(1);
+    expect(new Set(CONTACT_REQUEST_FIXTURES.map(({ status }) => status))).toEqual(
+      new Set(["PENDING", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"]),
+    );
     expect(RADAR_COMPANY_SLOTS).toHaveLength(2);
     expect(CANDIDATE_FIXTURES.filter(({ userStatus }) => userStatus === "SUSPENDED")).toHaveLength(1);
   });

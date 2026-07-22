@@ -1153,6 +1153,7 @@ model User {
   userConsentsActed        UserConsentEvent[]           @relation("UserConsentActor")
   candidateConsentsActed   CandidateConsent[]           @relation("CandidateConsentActor")
   privacyRequests          PrivacyRequest[]             @relation("PrivacyRequester")
+  privacyRequestsAssigned  PrivacyRequest[]             @relation("PrivacyAssignee")
   privacyChallenges        PrivacyIdentityChallenge[]
   conversationParticipants ConversationParticipant[]
   revealConfirmations      IdentityRevealConfirmation[]
@@ -2372,19 +2373,22 @@ model RadarSearchSession {
   company           Company                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
   membership        CompanyMembership             @relation(fields: [membershipId, companyId, requestingUserId], references: [id, companyId, userId], onDelete: Restrict)
   candidates        RadarSearchSessionCandidate[]
+  contactRequests   EmployerContactRequest[]
 
-  @@unique([companyId, filterHash, calendarDate, policyVersion])
+  @@unique([id, companyId, requestingUserId])
+  @@unique([companyId, membershipId, filterHash, calendarDate, policyVersion])
   @@index([membershipId, createdAt])
   @@index([expiresAt])
 }
 
 model RadarSearchSessionCandidate {
-  id                   String             @id @default(uuid()) @db.Uuid
-  radarSearchSessionId String             @db.Uuid
-  candidateProfileId   String             @db.Uuid
+  id                   String                   @id @default(uuid()) @db.Uuid
+  radarSearchSessionId String                   @db.Uuid
+  candidateProfileId   String                   @db.Uuid
   position             Int
-  radarSearchSession   RadarSearchSession @relation(fields: [radarSearchSessionId], references: [id], onDelete: Restrict)
-  candidateProfile     CandidateProfile   @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  radarSearchSession   RadarSearchSession       @relation(fields: [radarSearchSessionId], references: [id], onDelete: Restrict)
+  candidateProfile     CandidateProfile         @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  contactRequests      EmployerContactRequest[]
 
   @@unique([radarSearchSessionId, candidateProfileId])
   @@unique([radarSearchSessionId, position])
@@ -2394,10 +2398,13 @@ model EmployerContactRequest {
   id                     String                       @id @default(uuid()) @db.Uuid
   companyId              String                       @db.Uuid
   candidateProfileId     String                       @db.Uuid
+  radarSearchSessionId   String                       @db.Uuid
   requestingUserId       String                       @db.Uuid
   creditLedgerEntryId    String                       @unique @db.Uuid
-  messagePreview         String                       @db.VarChar(1000)
+  subject                String                       @db.VarChar(200)
+  messagePreview         String                       @db.VarChar(500)
   idempotencyKey         String                       @db.VarChar(128)
+  commandFingerprint     String                       @db.Char(64)
   status                 ContactRequestStatus         @default(PENDING)
   fundingSource          CreditFundingSource
   clusterPolicyVersion   String                       @db.VarChar(32)
@@ -2409,6 +2416,8 @@ model EmployerContactRequest {
   updatedAt              DateTime                     @updatedAt @db.Timestamptz(3)
   company                Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
   candidateProfile       CandidateProfile             @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  radarSearchSession     RadarSearchSession           @relation(fields: [radarSearchSessionId, companyId, requestingUserId], references: [id, companyId, requestingUserId], onDelete: Restrict)
+  radarSearchCandidate   RadarSearchSessionCandidate  @relation(fields: [radarSearchSessionId, candidateProfileId], references: [radarSearchSessionId, candidateProfileId], onDelete: Restrict)
   requestingUser         User                         @relation(fields: [requestingUserId], references: [id], onDelete: Restrict)
   creditLedgerEntry      CreditLedgerEntry            @relation(fields: [creditLedgerEntryId], references: [id], onDelete: Restrict)
   events                 ContactRequestEvent[]
@@ -2428,6 +2437,7 @@ model ContactRequestEvent {
   actorUserId      String?                 @db.Uuid
   reasonCode       String?                 @db.VarChar(64)
   correlationId    String                  @db.VarChar(128)
+  idempotencyKey   String                  @unique @db.VarChar(128)
   createdAt        DateTime                @default(now()) @db.Timestamptz(3)
   contactRequest   EmployerContactRequest  @relation(fields: [contactRequestId], references: [id], onDelete: Restrict)
 
@@ -2475,21 +2485,23 @@ model IdentityRevealGrantField {
 }
 
 model IdentityRevealConfirmation {
-  id               String                 @id @default(uuid()) @db.Uuid
-  grantId          String                 @db.Uuid
-  actorUserId      String                 @db.Uuid
-  contactRequestId String                 @db.Uuid
-  conversationId   String?                @db.Uuid
-  completeFieldSet RevealField[]
-  newlyAddedFields RevealField[]
-  noticeVersion    String                 @db.VarChar(32)
-  previewHmac      String                 @db.VarChar(128)
-  idempotencyKey   String                 @unique @db.VarChar(128)
-  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
-  grant            IdentityRevealGrant    @relation(fields: [grantId], references: [id], onDelete: Restrict)
-  actor            User                   @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
-  contactRequest   EmployerContactRequest @relation(fields: [contactRequestId], references: [id], onDelete: Restrict)
-  conversation     Conversation?          @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  id                      String                 @id @default(uuid()) @db.Uuid
+  grantId                 String                 @db.Uuid
+  actorUserId             String                 @db.Uuid
+  contactRequestId        String                 @db.Uuid
+  conversationId          String?                @db.Uuid
+  completeFieldSet        RevealField[]
+  newlyAddedFields        RevealField[]
+  noticeVersion           String                 @db.VarChar(32)
+  previewHmac             String                 @db.VarChar(128)
+  confirmationKeyVersion  String                 @db.VarChar(32)
+  confirmationTokenDigest String                 @unique @db.VarChar(128)
+  idempotencyKey          String                 @unique @db.VarChar(128)
+  createdAt               DateTime               @default(now()) @db.Timestamptz(3)
+  grant                   IdentityRevealGrant    @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  actor                   User                   @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  contactRequest          EmployerContactRequest @relation(fields: [contactRequestId], references: [id], onDelete: Restrict)
+  conversation            Conversation?          @relation(fields: [conversationId], references: [id], onDelete: Restrict)
 
   @@index([grantId, createdAt])
 }
@@ -2507,6 +2519,8 @@ model PrivacyRequest {
   processingStartedAt    DateTime?                       @db.Timestamptz(3)
   completedAt            DateTime?                       @db.Timestamptz(3)
   idempotencyKey         String                          @db.VarChar(128)
+  noticeVersion          String                          @db.VarChar(32)
+  domainEventRefs        String[]
   correctionOutcome      PrivacyCorrectionOutcomeCode?
   deletionDependencies   PrivacyDeletionDependencyCode[]
   deletionOutcome        PrivacyDeletionOutcomeCode?
@@ -2518,6 +2532,7 @@ model PrivacyRequest {
   createdAt              DateTime                        @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime                        @updatedAt @db.Timestamptz(3)
   requester              User                            @relation("PrivacyRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  assignedAdmin          User?                           @relation("PrivacyAssignee", fields: [assignedAdminUserId], references: [id], onDelete: Restrict)
   correctionFields       PrivacyRequestCorrectionField[]
   events                 PrivacyRequestEvent[]
   challenges             PrivacyIdentityChallenge[]
@@ -2548,7 +2563,7 @@ model PrivacyRequestEvent {
   toStatus         PrivacyRequestStatus
   actorUserId      String?                 @db.Uuid
   reasonCode       String?                 @db.VarChar(64)
-  safeNote         String?                 @db.VarChar(500)
+  safeNote         String?                 @db.VarChar(1000)
   idempotencyKey   String                  @unique @db.VarChar(128)
   correlationId    String                  @db.VarChar(128)
   createdAt        DateTime                @default(now()) @db.Timestamptz(3)
@@ -3071,35 +3086,35 @@ model SubscriptionChangeSchedule {
 }
 
 model Product {
-  id        String           @id @default(uuid()) @db.Uuid
-  code      String           @unique @db.VarChar(64)
-  name      String           @db.VarChar(160)
-  type      ProductType
-  createdAt DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
-  versions  ProductVersion[]
+  id               String                   @id @default(uuid()) @db.Uuid
+  code             String                   @unique @db.VarChar(64)
+  name             String                   @db.VarChar(160)
+  type             ProductType
+  createdAt        DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                 @updatedAt @db.Timestamptz(3)
+  versions         ProductVersion[]
   releaseDecisions ProductReleaseDecision[]
 }
 
 model ProductVersion {
-  id                  String               @id @default(uuid()) @db.Uuid
-  productId           String               @db.Uuid
+  id                  String                  @id @default(uuid()) @db.Uuid
+  productId           String                  @db.Uuid
   version             Int
-  status              CatalogVersionStatus @default(DRAFT)
+  status              CatalogVersionStatus    @default(DRAFT)
   netPriceRappen      Int
-  currency            String               @default("CHF") @db.Char(3)
+  currency            String                  @default("CHF") @db.Char(3)
   durationDays        Int?
   creditType          CreditType?
   creditAmount        Int?
-  isPublic            Boolean              @default(false)
-  isSelfService       Boolean              @default(false)
-  priority            Int                  @default(0)
-  requiresLegalReview Boolean              @default(false)
-  releaseDecisionId   String?              @unique @db.Uuid
-  validFrom           DateTime             @db.Timestamptz(3)
-  validTo             DateTime?            @db.Timestamptz(3)
-  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
-  product             Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
+  isPublic            Boolean                 @default(false)
+  isSelfService       Boolean                 @default(false)
+  priority            Int                     @default(0)
+  requiresLegalReview Boolean                 @default(false)
+  releaseDecisionId   String?                 @unique @db.Uuid
+  validFrom           DateTime                @db.Timestamptz(3)
+  validTo             DateTime?               @db.Timestamptz(3)
+  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
+  product             Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
   releaseDecision     ProductReleaseDecision? @relation(fields: [releaseDecisionId], references: [id], onDelete: Restrict)
   orderLines          OrderLine[]
 
@@ -3186,39 +3201,39 @@ model Order {
 }
 
 model OrderLine {
-  id                   String                     @id @default(uuid()) @db.Uuid
-  orderId              String                     @db.Uuid
-  planVersionId        String?                    @db.Uuid
-  productVersionId     String?                    @db.Uuid
-  taxRateVersionId     String                     @db.Uuid
-  quantity             Int                        @default(1)
-  unitNetRappen        Int
-  netRappen            Int
-  taxRateBasisPoints   Int
-  vatRappen            Int
-  totalRappen          Int
-  currency             String                     @db.Char(3)
-  descriptionSnapshot  String                     @db.VarChar(255)
-  fulfillmentContext   FulfillmentContextType
-  targetJobId          String?                    @db.Uuid
-  targetImportSourceId String?                    @db.Uuid
-  targetImportSetupApprovalId String?             @db.Uuid
-  targetCreditType     CreditType?
-  createdAt            DateTime                   @default(now()) @db.Timestamptz(3)
-  order                Order                      @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  planVersion          PlanVersion?               @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
-  productVersion       ProductVersion?            @relation(fields: [productVersionId], references: [id], onDelete: Restrict)
-  taxRateVersion       TaxRateVersion             @relation(fields: [taxRateVersionId], references: [id], onDelete: Restrict)
-  targetJob            Job?                       @relation(fields: [targetJobId], references: [id], onDelete: Restrict)
-  targetImportSource   ImportSource?              @relation(fields: [targetImportSourceId], references: [id], onDelete: Restrict)
-  targetImportSetupApproval ImportSetupApproval?  @relation("OrderLineImportSetupApprovalTarget", fields: [targetImportSetupApprovalId], references: [id], onDelete: Restrict)
-  invoiceLine          InvoiceLine?
-  jobBoost             JobBoost?
-  additionalJobPermit  AdditionalJobPermit?
-  importSetupApproval  ImportSetupApproval?
-  importAccessGrant    ImportAccessGrant?
-  creditLedgerEntries  CreditLedgerEntry[]
-  subscriptionSnapshot SubscriptionOrderSnapshot?
+  id                          String                     @id @default(uuid()) @db.Uuid
+  orderId                     String                     @db.Uuid
+  planVersionId               String?                    @db.Uuid
+  productVersionId            String?                    @db.Uuid
+  taxRateVersionId            String                     @db.Uuid
+  quantity                    Int                        @default(1)
+  unitNetRappen               Int
+  netRappen                   Int
+  taxRateBasisPoints          Int
+  vatRappen                   Int
+  totalRappen                 Int
+  currency                    String                     @db.Char(3)
+  descriptionSnapshot         String                     @db.VarChar(255)
+  fulfillmentContext          FulfillmentContextType
+  targetJobId                 String?                    @db.Uuid
+  targetImportSourceId        String?                    @db.Uuid
+  targetImportSetupApprovalId String?                    @db.Uuid
+  targetCreditType            CreditType?
+  createdAt                   DateTime                   @default(now()) @db.Timestamptz(3)
+  order                       Order                      @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  planVersion                 PlanVersion?               @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  productVersion              ProductVersion?            @relation(fields: [productVersionId], references: [id], onDelete: Restrict)
+  taxRateVersion              TaxRateVersion             @relation(fields: [taxRateVersionId], references: [id], onDelete: Restrict)
+  targetJob                   Job?                       @relation(fields: [targetJobId], references: [id], onDelete: Restrict)
+  targetImportSource          ImportSource?              @relation(fields: [targetImportSourceId], references: [id], onDelete: Restrict)
+  targetImportSetupApproval   ImportSetupApproval?       @relation("OrderLineImportSetupApprovalTarget", fields: [targetImportSetupApprovalId], references: [id], onDelete: Restrict)
+  invoiceLine                 InvoiceLine?
+  jobBoost                    JobBoost?
+  additionalJobPermit         AdditionalJobPermit?
+  importSetupApproval         ImportSetupApproval?
+  importAccessGrant           ImportAccessGrant?
+  creditLedgerEntries         CreditLedgerEntry[]
+  subscriptionSnapshot        SubscriptionOrderSnapshot?
 
   @@index([orderId])
   @@index([planVersionId])
