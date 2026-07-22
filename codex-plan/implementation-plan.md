@@ -409,6 +409,8 @@ flowchart LR
 
 ## 13 — Job Boosts und transparente Sponsored-Reichweite
 
+**Status:** [x] Abgeschlossen und gegen Code-Commit `45926f9d15606c6e209a2b7cb8937048636816bd` verifiziert; siehe [Phase-13-Evidence](./evidence/2026-07-22-phase-13.md). Payment bleibt ein lokaler Mock, geplante Aktivierung ist nur ein Seed-/Read-Zustand und ein autonomer Lifecycle-Worker bleibt ausserhalb des MVP.
+
 **Ziel und Begründung:** Verkaufbare Reichweite implementieren, ohne Relevanz oder Fairness vorzutäuschen.
 
 **Abhängigkeiten:** 12, 07, 10.

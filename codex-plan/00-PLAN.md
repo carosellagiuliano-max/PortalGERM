@@ -113,9 +113,9 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 [`12-monetization-billing.md`](./12-monetization-billing.md) · alleinige Catalog-/Plan-/Order-/Invoice-/Subscription-/Credit-/Fulfillment-Domain sowie Employer-/Admin-Billing-Routen sind im Code-Commit `b28245e6ba1c2fce29c5b05f2383410da0d7410e` verifiziert; siehe [Phase-12-Evidence](./evidence/2026-07-22-phase-12.md). Payment bleibt ein lokaler Mock ohne Stripe/Webhooks, und ein echter autonomer Renewal-Worker bleibt offen.
 
-### [ ] 13 — Job Boosts
+### [x] 13 — Job Boosts
 
-[`13-job-boosts.md`](./13-job-boosts.md) · validiertes Jobziel, Lifecycle, non-overlap, transparenter relevanzgebundener Rang.
+[`13-job-boosts.md`](./13-job-boosts.md) · validiertes Jobziel, atomarer Credit-/Paid-Lifecycle, non-overlap, Kündigung, vollständige Kennzeichnung und transparenter relevanzgebundener Rang sind im Code-Commit `45926f9d15606c6e209a2b7cb8937048636816bd` verifiziert; siehe [Phase-13-Evidence](./evidence/2026-07-22-phase-13.md).
 
 ### [ ] 14 — Talent Radar und Privacy
 
@@ -218,4 +218,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 12 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Als nächster Implementierungsschritt folgt Phase 13 — Job Boosts. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 13 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Als nächster Implementierungsschritt folgt Phase 14 — Talent Radar und Privacy. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
