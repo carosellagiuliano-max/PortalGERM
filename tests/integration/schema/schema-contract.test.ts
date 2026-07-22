@@ -581,6 +581,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260721223000_phase_12_checkout_settlement_hardening",
       "20260721224000_phase_12_credit_expiry_boundary",
       "20260721225000_phase_12_release_permit_hardening",
+      "20260722130000_phase_13_job_boosts",
     ]);
     expect(
       migrations.rows.every(

@@ -9,6 +9,7 @@ import {
   BadgeCheckIcon,
 } from "lucide-react";
 
+import { BoostedBadge } from "@/components/billing/boosted-badge";
 import { CandidateMatch } from "@/components/public/candidate-match";
 import {
   ApplyIntentConfirmation,
@@ -107,7 +108,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
         <section className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
           <div>
             <div className="flex flex-wrap gap-2">
-              {job.activeBoost ? <Badge>Geboostet</Badge> : null}
+              {job.activeBoost ? <BoostedBadge /> : null}
               <Badge variant="secondary">Fair-Job-Score {job.fairScore ?? "–"}/100</Badge>
               <JobTypeBadge jobType={job.jobType} />
             </div>

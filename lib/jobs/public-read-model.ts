@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { ANALYTICS_MINIMUM_COHORT_SIZE_V1 } from "@/lib/analytics/metric-contracts";
 import { EMPLOYER_RESPONSE_POLICY_V1 } from "@/lib/analytics/response-policy-v1";
+import { jobHasActiveBoost } from "@/lib/billing/boosts";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -135,8 +136,7 @@ function buildPublicJobCardSelect(now: Date) {
     ...PUBLIC_JOB_CARD_BASE_SELECT,
     boosts: {
       where: {
-        status: "ACTIVE" as const,
-        cancelledAt: null,
+        status: { not: "CANCELLED" as const },
         startsAt: { lte: now },
         endsAt: { gt: now },
       },
@@ -1083,12 +1083,9 @@ function responseEvidence(company: Readonly<{
 }
 
 function hasActiveBoost(row: PublicJobRow, now: Date): boolean {
-  return row.boosts.some((boost) =>
-    boost.companyId === row.companyId &&
-    boost.status === "ACTIVE" &&
-    boost.cancelledAt === null &&
-    boost.startsAt.getTime() <= now.getTime() &&
-    now.getTime() < boost.endsAt.getTime(),
+  return jobHasActiveBoost(
+    row.boosts.filter((boost) => boost.companyId === row.companyId),
+    now,
   );
 }
 

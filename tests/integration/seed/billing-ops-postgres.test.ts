@@ -111,14 +111,16 @@ describe.sequential("Phase-05 Billing/Ops PostgreSQL seed", () => {
       expect(await client().invoice.count()).toBe(7);
       expect(await client().invoiceLine.count()).toBe(7);
       expect(await client().creditAccount.count()).toBe(29);
-      expect(await client().creditLedgerEntry.count()).toBe(35);
+      expect(await client().creditLedgerEntry.count()).toBe(37);
       expect(await client().jobBoost.groupBy({
         by: ["status"],
         _count: { _all: true },
         orderBy: { status: "asc" },
       })).toEqual([
+        { status: "SCHEDULED", _count: { _all: 1 } },
         { status: "ACTIVE", _count: { _all: 5 } },
         { status: "EXPIRED", _count: { _all: 5 } },
+        { status: "CANCELLED", _count: { _all: 1 } },
       ]);
       expect(await client().salesLead.count()).toBe(4);
       expect(await client().abuseReport.count({ where: { status: "OPEN" } })).toBe(

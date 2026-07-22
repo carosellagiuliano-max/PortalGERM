@@ -1,10 +1,10 @@
 # SwissTalentHub / PortalGERM
 
-**Phasen 01 bis 12 sind implementiert und verifiziert; als nächster Schritt folgt Phase 13.** Auf der reproduzierbaren Next.js-/TypeScript-Foundation und dem Prisma/PostgreSQL-Domänenvertrag stehen inzwischen Core-Policies, netzwerkfreie lokale Provider-Mocks mit persistierten Logs/Effekten, ein deterministischer Demo-Datensatz, End-to-End-Authentifizierung und rollen-/mandantenbasierte Autorisierung.
+**Phasen 01 bis 13 sind implementiert und verifiziert; als nächster Schritt folgt Phase 14.** Auf der reproduzierbaren Next.js-/TypeScript-Foundation und dem Prisma/PostgreSQL-Domänenvertrag stehen inzwischen Core-Policies, netzwerkfreie lokale Provider-Mocks mit persistierten Logs/Effekten, ein deterministischer Demo-Datensatz, End-to-End-Authentifizierung und rollen-/mandantenbasierte Autorisierung.
 
 Der aktuelle Produktumfang umfasst öffentliche Job- und Firmen-Discovery, Jobdetails und sichere Save-/Apply-Intents, Pricing sowie persistierte Arbeitgeber-Leads. Kandidaten erhalten SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Nachrichten und Privacy-/Talent-Radar-Basics. Arbeitgeber und Recruiter erhalten Firmenprofil und Verifizierungsanträge, Team/Einladungen/Zuweisungen, Jobliste und 5-Schritt-Wizard, Bewerberpipeline sowie ehrliche Analytics- und Radar-Locked-States. Arbeitgeber-Owner können ausserdem Billingprofile, Abonnemente, Credits, Kontingente, Rechnungen und den vollständig lokalen Mock-Checkout verwalten. Plattformadmins betreiben Job-/Company-/User-Moderation, Reports, lizenzierte Imports, Support, Content, Taxonomie, Leads, Billing/Katalog sowie evidenzbasierte Operations- und Finanzansichten.
 
-Bewusst **noch nicht** enthalten sind Job-Boosts (Phase 13) sowie Talent-Radar-Suche, Contact/Reveal (Phase 14). Der Phase-12-Zahlungsfluss bleibt ausdrücklich ein lokaler Mock: Es gibt weder Stripe noch echte Payment-Webhooks oder einen autonomen Renewal-Worker. Alle Provider bleiben lokale Mocks; echte Provider, Produktionsbetrieb und eine abschliessende Produktions-/DSG-Freigabe sind nicht behauptet.
+Job-Boosts besitzen einen vollständigen, zeitgebundenen Lebenszyklus mit Plan-/Admin-Credit oder lokalem Mock-Checkout, Arbeitgeber-/Admin-Kündigung, öffentlicher Kennzeichnung und begrenzter Sponsored-Zone. **Boosts beeinflussen die Sichtbarkeit, niemals den Fair-Job-Score.** Bewusst noch nicht enthalten sind Talent-Radar-Suche, Contact/Reveal (Phase 14). Der Zahlungsfluss bleibt ausdrücklich ein lokaler Mock: Es gibt weder Stripe noch echte Payment-Webhooks oder einen autonomen Renewal-Worker. Alle Provider bleiben lokale Mocks; echte Provider, Produktionsbetrieb und eine abschliessende Produktions-/DSG-Freigabe sind nicht behauptet.
 
 ## Verbindliche Runtime
 
@@ -112,8 +112,8 @@ npm run db:smoke
 - `db:validate` prüft Schema und Konfiguration ohne Datenbankmutation.
 - `db:migrate` verwendet `prisma migrate deploy` gegen die explizite `DATABASE_URL`.
 - `db:migrate:status` bestätigt, dass alle committed Migrationen angewandt sind.
-- Die **35 committed Migrationen** reichen von der leeren Baseline über den Domänenvertrag bis zu den Phase-12-Katalog-, Subscription-, Order-, Invoice-, Credit- und Entitlement-Erweiterungen. Zusätzlich zu Prisma-SQL enthalten sie benannte Checks, Composite-FKs, Partial-/Exclusion-Indizes sowie Lifecycle-, Append-only- und Concurrency-Trigger.
-- `db:seed` erzeugt beziehungsweise verifiziert den deterministischen, wiederholbaren Demo-Vertrag `phase-12-demo-v11` mit Katalogen und Preisversionen, Demo-Identitäten, Firmen, Jobs, Bewerbungen, Candidate-/Employer-Workflows, Billingprofilen, Abonnementperioden, Credits, Orders und Rechnungen sowie einer klar begrenzten lokalen Importquelle und einem nicht aktivierbaren DEMO-Cluster-Assessment. Staging und Production sind fail-closed gesperrt; es gibt keinen Production-Seed.
+- Die **36 committed Migrationen** reichen von der leeren Baseline über den Domänenvertrag bis zur Phase-13-Exclusion-Regel für alle nicht stornierten Boost-Zeitfenster. Zusätzlich zu Prisma-SQL enthalten sie benannte Checks, Composite-FKs, Partial-/Exclusion-Indizes sowie Lifecycle-, Append-only- und Concurrency-Trigger.
+- `db:seed` erzeugt beziehungsweise verifiziert den deterministischen, wiederholbaren Demo-Vertrag `phase-13-demo-v12` mit Katalogen und Preisversionen, Demo-Identitäten, Firmen, Jobs, Bewerbungen, Candidate-/Employer-Workflows, Billingprofilen, Abonnementperioden, Credits, Orders, Rechnungen sowie aktiven, geplanten, abgelaufenen und stornierten Boost-Belegen. Hinzu kommen eine klar begrenzte lokale Importquelle und ein nicht aktivierbares DEMO-Cluster-Assessment. Staging und Production sind fail-closed gesperrt; es gibt keinen Production-Seed.
 - `npm run seed:verify` prüft den vollständigen Seed-Vertrag und liefert einen stabilen Manifest-Hash.
 - `db:smoke` führt einen read-only Datenbank-Smoke aus; bei `APP_ENV=ci` verwendet er `TEST_DATABASE_URL`.
 
@@ -167,14 +167,14 @@ Health-Routen sind Betriebschecks, keine Produktfeatures und keine Autorisierung
 - Keine Real-Provider werden durch Env-Keys automatisch aktiviert; deren Variablen müssen leer bleiben. Mail, AI, Payment, Storage, Jobroom und weitere Integrationen bleiben kontrollierte lokale Mocks.
 - Der Logger redigiert sensitive Werte; Stacktraces und Konfiguration gehören nicht in Nutzerantworten.
 - Security-Header, Auth, Rate-Limits und rollen-/ressourcenbasierte Autorisierung sind implementiert und regressionsgetestet. Die abschliessende phasenübergreifende Security-/Release-Härtung folgt dennoch erst in den dafür vorgesehenen späteren Phasen.
-- Der belegte Phase-12-MVP-Stand ist weder produktionsbereit noch eine vollständige rechtliche, steuerliche oder DSG-Konformitätszusage. Mock Payment ersetzt insbesondere keine Stripe-/Webhook-Integration, und Renewal wird nicht von einem echten autonomen Worker ausgeführt.
+- Der belegte Phase-13-MVP-Stand ist weder produktionsbereit noch eine vollständige rechtliche, steuerliche oder DSG-Konformitätszusage. Mock Payment ersetzt insbesondere keine Stripe-/Webhook-Integration, und Renewal wird nicht von einem echten autonomen Worker ausgeführt.
 
 ## Plan und Evidence
 
 1. [`AGENTS.md`](./AGENTS.md) — Implementierungs- und Evidence-Regeln.
 2. [`codex-plan/00-PLAN.md`](./codex-plan/00-PLAN.md) — Masterplan und Status.
-3. [`codex-plan/01-setup-foundation.md`](./codex-plan/01-setup-foundation.md) bis [`codex-plan/12-monetization-billing.md`](./codex-plan/12-monetization-billing.md) — verbindliche Verträge der implementierten Phasen 01–12.
-4. [`codex-plan/13-job-boosts.md`](./codex-plan/13-job-boosts.md) — nächster Implementierungsschritt.
+3. [`codex-plan/01-setup-foundation.md`](./codex-plan/01-setup-foundation.md) bis [`codex-plan/13-job-boosts.md`](./codex-plan/13-job-boosts.md) — verbindliche Verträge der implementierten Phasen 01–13.
+4. [`codex-plan/14-talent-radar-privacy.md`](./codex-plan/14-talent-radar-privacy.md) — nächster Implementierungsschritt.
 5. [`codex-plan/decisions.md`](./codex-plan/decisions.md) — Architekturentscheidungen.
 6. [`codex-plan/requirements-matrix.md`](./codex-plan/requirements-matrix.md) — Traceability.
 7. [`codex-plan/implementation-plan.md`](./codex-plan/implementation-plan.md) — Ausführungsschritte 01–18.

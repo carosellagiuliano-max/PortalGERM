@@ -1,6 +1,6 @@
 export const SEED_MANIFEST_SCHEMA_VERSION =
   "20260720120000_phase_05_seed_manifest_contract" as const;
-export const SEED_DATASET_VERSION = "phase-12-demo-v11" as const;
+export const SEED_DATASET_VERSION = "phase-13-demo-v12" as const;
 /**
  * Phase 10 is an additive release over the sealed Phase-05 dataset. Existing
  * semantic UUIDs and deterministic fixture streams must therefore keep their
@@ -36,7 +36,7 @@ export const SEED_GOLDEN_COUNTS = Object.freeze({
   conversations: 82,
   orders: 12,
   invoices: 7,
-  jobBoosts: 10,
+  jobBoosts: 12,
   salesLeads: 4,
   auditLogs: 30,
   analyticsEvents: 300,

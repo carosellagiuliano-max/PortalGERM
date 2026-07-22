@@ -9,6 +9,11 @@ import {
   trackAnalyticsEventV1,
 } from "@/lib/analytics/track";
 import { createPrismaPublishQuotaPort } from "@/lib/billing/prisma-publish-quota";
+import {
+  cancelAdminBoost,
+  syncBoostStatusProjection,
+  type BoostProjectionResult,
+} from "@/lib/billing/boosts";
 import { publishWithQuota } from "@/lib/billing/usage";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
@@ -53,6 +58,7 @@ export type AdminJobCommandValue = Readonly<{
 export async function listAdminJobs(
   database: DatabaseClient,
   status: "PENDING" | JobStatus | "ALL" = "PENDING",
+  now = new Date(),
 ) {
   const statusWhere = status === "ALL"
     ? { not: "REMOVED" as const }
@@ -71,6 +77,16 @@ export async function listAdminJobs(
       createdAt: true,
       updatedAt: true,
       company: { select: { id: true, name: true, status: true } },
+      boosts: {
+        where: {
+          status: { not: "CANCELLED" },
+          startsAt: { lte: now },
+          endsAt: { gt: now },
+        },
+        orderBy: [{ endsAt: "asc" }, { id: "asc" }],
+        take: 1,
+        select: { id: true, endsAt: true },
+      },
       currentRevision: {
         select: {
           id: true,
@@ -146,8 +162,56 @@ export async function getAdminJobDetail(database: DatabaseClient, jobId: string)
         select: { kind: true, fromStatus: true, toStatus: true, reasonCode: true, createdAt: true },
       },
       applications: { select: { id: true }, take: 1 },
+      boosts: {
+        where: { status: { not: "CANCELLED" } },
+        orderBy: [{ startsAt: "desc" }, { id: "desc" }],
+        take: 1,
+        select: { id: true, status: true, startsAt: true, endsAt: true },
+      },
     },
   });
+}
+
+export async function cancelAdminJobBoost(
+  input: unknown,
+  dependencies: AdminDependencies,
+): Promise<AdminCommandResult<{ boostId: string; jobId: string }>> {
+  if (!requireCapability(dependencies, "ADMIN_JOB_BOOST_MANAGE")) {
+    return adminFailure("FORBIDDEN");
+  }
+  const result = await cancelAdminBoost(input, {
+    actorUserId: dependencies.actor.userId,
+    correlationId: dependencies.correlationId,
+    database: dependencies.database,
+    now: dependencies.now,
+  });
+  if (result.ok) return adminSuccess(result.value, result.replay === true);
+  return adminFailure(
+    result.code === "INVALID_INPUT" ||
+      result.code === "NOT_FOUND" ||
+      result.code === "CONFLICT" ||
+      result.code === "FORBIDDEN"
+      ? result.code
+      : "WRITE_FAILED",
+  );
+}
+
+export async function projectAdminBoostStatuses(
+  _input: unknown,
+  dependencies: AdminDependencies,
+): Promise<AdminCommandResult<BoostProjectionResult>> {
+  if (!requireCapability(dependencies, "ADMIN_JOB_BOOST_MANAGE")) {
+    return adminFailure("FORBIDDEN");
+  }
+  try {
+    return adminSuccess(await syncBoostStatusProjection({
+      database: dependencies.database,
+      correlationId: dependencies.correlationId,
+      now: dependencies.now,
+    }));
+  } catch {
+    return adminFailure("WRITE_FAILED");
+  }
 }
 
 export async function startAdminJobReview(

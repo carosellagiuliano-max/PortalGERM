@@ -48,7 +48,7 @@ describe("Phase-05 seed manifest", () => {
       conversations: 82,
       orders: 12,
       invoices: 7,
-      jobBoosts: 10,
+      jobBoosts: 12,
       salesLeads: 4,
       auditLogs: 30,
       analyticsEvents: 300,

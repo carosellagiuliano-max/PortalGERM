@@ -60,7 +60,7 @@ export async function getBusinessCockpit(dependencies: AdminDependencies) {
             publishedCanton: { select: { code: true, name: true } },
             applications: { where: { submittedAt: { gte: window30, lt: now } }, select: { id: true, submittedAt: true, submissionSnapshot: { select: { responseTargetDays: true } }, events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { actorUserId: true, kind: true, createdAt: true } } } },
             currentRevision: { select: { applicationEffort: true, applicationProcessSteps: true, applicationContactKind: true, applicationContactValue: true, salaryPeriod: true, salaryMin: true, salaryMax: true, scoreSnapshots: { orderBy: [{ calculatedAt: "desc" }, { id: "desc" }], take: 1, select: { scoreVersion: true, scorePoints: true, maxPoints: true } } } },
-            boosts: { where: { status: "ACTIVE", startsAt: { lte: now }, endsAt: { gt: now } }, take: 1, select: { id: true } },
+            boosts: { where: { status: { not: "CANCELLED" }, startsAt: { lte: now }, endsAt: { gt: now } }, take: 1, select: { id: true } },
           },
         },
         salesLeads: { where: { status: { in: ["NEW", "CONTACTED", "QUALIFIED"] } }, orderBy: [{ updatedAt: "desc" }, { id: "asc" }], select: { id: true, status: true } },
@@ -154,10 +154,18 @@ export async function getBusinessCockpit(dependencies: AdminDependencies) {
         signals.push({ reason: "JOB_CONTENT_DIAGNOSTIC", dataProvenance, companyId: company.id, companyName: company.name, jobId: job.id, title: "Job hat viele Views, aber wenig Bewerbungsstarts", evidence: `${sample.views30} organische Views, ${content.applyIntentRateBps} bp Apply-Intent`, suggestedAction: "Zuerst Text, Lohntransparenz und Bewerbungsweg prüfen.", ...leadAction });
         continue;
       }
+      if (
+        company.status !== "ACTIVE" ||
+        company.verificationRequests[0]?.status !== "VERIFIED" ||
+        job.expiresAt === null ||
+        job.expiresAt <= now
+      ) {
+        continue;
+      }
       if (job.publishedCantonId !== null && job.publishedCategoryId !== null) {
         const baselineBps = calculateClusterBaselineBpsV1(baselineRows, { cantonId: job.publishedCantonId, categoryId: job.publishedCategoryId, now });
         if (!dismissed.has("BOOST_TEST_CANDIDATE") && evaluateBoostTestCandidateV1({ content, hasActiveBoost: job.boosts.length > 0, baselineBps })) {
-          signals.push({ reason: "BOOST_TEST_CANDIDATE", dataProvenance, companyId: company.id, companyName: company.name, jobId: job.id, title: "Messbarer Boost-Test möglich", evidence: `${sample.views30} organische Views, Cluster-Baseline ${baselineBps} bp`, suggestedAction: "Nach bestandener Inhaltsdiagnose einen klar beschrifteten Boost-Test anbieten.", ...leadAction });
+          signals.push({ reason: "BOOST_TEST_CANDIDATE", dataProvenance, companyId: company.id, companyName: company.name, jobId: job.id, title: "Messbarer Boost-Test möglich", evidence: `${sample.views30} organische Views, Cluster-Baseline ${baselineBps} bp; Messgrösse: Apply-Intent je Detail-Session, Follow-up in 14 Tagen.`, suggestedAction: "Nach bestandener Inhaltsdiagnose einen Sponsored-gekennzeichneten 7-Tage-Boost ab CHF 79 testen; keine Bewerbungen versprechen.", ...leadAction });
         }
       }
     }

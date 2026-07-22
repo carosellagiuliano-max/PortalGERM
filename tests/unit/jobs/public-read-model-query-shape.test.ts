@@ -113,8 +113,7 @@ describe("public Job query data minimization", () => {
     expect(revisionSelect?.scoreSnapshots?.select).toEqual({ scorePoints: true });
     expect(query?.select?.boosts).toEqual({
       where: {
-        status: "ACTIVE",
-        cancelledAt: null,
+        status: { not: "CANCELLED" },
         startsAt: { lte: NOW },
         endsAt: { gt: NOW },
       },

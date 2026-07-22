@@ -6,7 +6,7 @@ import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/req
 import { requireAdminPage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
 import { emailProvider } from "@/lib/providers/email";
-import { startAdminJobReview, requestAdminJobChanges, approveAdminJob, rejectAdminJob, publishAdminJob } from "@/lib/admin/jobs";
+import { startAdminJobReview, requestAdminJobChanges, approveAdminJob, rejectAdminJob, publishAdminJob, cancelAdminJobBoost, projectAdminBoostStatuses } from "@/lib/admin/jobs";
 import { requestCompanyVerificationEvidence, verifyCompany, rejectCompanyVerification, revokeCompanyVerification, suspendCompany, reactivateCompany, requestCompanyClaimEvidence, rejectCompanyClaim, approveCompanyClaim } from "@/lib/admin/companies";
 import { suspendUser, reactivateUser, forceLogoutUser } from "@/lib/admin/users";
 import { mutateAdminTaxonomy } from "@/lib/admin/taxonomy";
@@ -40,6 +40,8 @@ export async function adminCommandAction(_previous: AdminActionState, formData: 
         : operation === "job-approve" ? await approveAdminJob(input as never, dependencies, emailProvider)
           : operation === "job-reject" ? await rejectAdminJob(input as never, dependencies, emailProvider)
             : operation === "job-publish" ? await publishAdminJob(input as never, dependencies)
+              : operation === "job-boost-cancel" ? await cancelAdminJobBoost(input, dependencies)
+                : operation === "boost-status-project" ? await projectAdminBoostStatuses(input, dependencies)
               : operation === "verification-evidence" ? await requestCompanyVerificationEvidence(input as never, dependencies)
                 : operation === "verification-verify" ? await verifyCompany(input as never, dependencies)
                   : operation === "verification-reject" ? await rejectCompanyVerification(input as never, dependencies)
@@ -99,6 +101,13 @@ export async function adminCommandAction(_previous: AdminActionState, formData: 
       return Object.freeze({
         status: "success",
         message: `Credit-Ablauf projiziert: ${projection.projectedGrantCount} Grant(s), ${projection.expiredCreditAmount} Credit(s).`,
+      });
+    }
+    if (operation === "boost-status-project") {
+      const projection = result.value as { activated: number; expired: number };
+      return Object.freeze({
+        status: "success",
+        message: `Boost-Projektion abgeschlossen: ${projection.activated} aktiviert, ${projection.expired} abgelaufen.`,
       });
     }
     if (operation === "subscription-renew-mock") {

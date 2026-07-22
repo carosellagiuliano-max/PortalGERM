@@ -16,6 +16,7 @@ describe("public discovery cards", () => {
     render(<JobCard job={jobFixture()} />);
 
     expect(screen.getByText("Geboostet")).toBeInTheDocument();
+    expect(screen.getByLabelText("Geboostet. Dieser Job wird vom Arbeitgeber für mehr Sichtbarkeit hervorgehoben.")).toBeInTheDocument();
     expect(screen.queryByText("Gesponsert")).not.toBeInTheDocument();
     expect(screen.getByText("Fair-Job-Score 88/100")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Senior Engineer" })).toHaveAttribute(

@@ -29,6 +29,12 @@ import {
   type BillingDependencies,
   type CheckoutIntent,
 } from "@/lib/billing/contracts";
+import {
+  BOOST_POLICY_V1,
+  hasOverlappingBoost,
+  validateBoostJobInTransaction,
+  writeBoostActivatedEvidence,
+} from "@/lib/billing/boosts";
 import { isContactPackPlanEligibleV1 } from "@/lib/billing/checkout-eligibility";
 import {
   decodePlanEntitlementsV1,
@@ -75,6 +81,7 @@ export type ConfirmedOrderResult = Readonly<{
   creditGrantEntryId: string | null;
   additionalJobPermitId: string | null;
   importAccessGrantId: string | null;
+  jobBoostId: string | null;
   emailsRecorded: boolean;
 }>;
 
@@ -100,6 +107,14 @@ type AdditionalJobQuote = Readonly<{
   targetJobId: string;
 }>;
 
+type BoostQuote = Readonly<{
+  kind: "JOB_BOOST";
+  productVersion: ProductVersionQuoteRow;
+  quantity: 1;
+  unitNetRappen: 7_900 | 19_900;
+  targetJobId: string;
+}>;
+
 type ImportSetupQuote = Readonly<{
   kind: "IMPORT_SETUP";
   productVersion: ProductVersionQuoteRow;
@@ -109,7 +124,7 @@ type ImportSetupQuote = Readonly<{
   targetImportSetupApprovalId: string;
 }>;
 
-type ProductQuote = ContactPackQuote | AdditionalJobQuote | ImportSetupQuote;
+type ProductQuote = ContactPackQuote | BoostQuote | AdditionalJobQuote | ImportSetupQuote;
 type ResolvedQuote = PlanQuote | ProductQuote;
 
 type PreparedCheckoutOrder = Readonly<{
@@ -285,7 +300,8 @@ export async function createCheckoutOrder(
                 fulfillmentContext:
                   quote.value.kind === "PLAN" ? "SUBSCRIPTION" : quote.value.kind,
                 targetJobId:
-                  quote.value.kind === "ADDITIONAL_JOB"
+                  quote.value.kind === "ADDITIONAL_JOB" ||
+                  quote.value.kind === "JOB_BOOST"
                     ? quote.value.targetJobId
                     : null,
                 targetImportSourceId:
@@ -577,6 +593,8 @@ export async function confirmMockPayment(
           creditGrantEntryId: fulfillment.value.creditGrantEntryId,
           additionalJobPermitId: fulfillment.value.additionalJobPermitId,
           importAccessGrantId: fulfillment.value.importAccessGrantId,
+          jobBoostId: fulfillment.value.jobBoostId ?? null,
+          jobTitle: fulfillment.value.jobTitle ?? null,
           recipientUserId: order.createdByUserId,
           subscriptionStatus: fulfillment.value.subscriptionStatus,
           subscriptionReason: fulfillment.value.subscriptionReason,
@@ -609,6 +627,7 @@ export async function confirmMockPayment(
       creditGrantEntryId: emailContext.creditGrantEntryId,
       additionalJobPermitId: emailContext.additionalJobPermitId,
       importAccessGrantId: emailContext.importAccessGrantId,
+      jobBoostId: emailContext.jobBoostId,
       emailsRecorded,
     },
     transactionResult.replay === true,
@@ -836,9 +855,6 @@ async function resolveCheckoutQuote(
     return billingFailure("PLAN_NOT_SELF_SERVICE");
   }
 
-  if (intent.productSlug === "boost-7d" || intent.productSlug === "boost-30d") {
-    return billingFailure("FULFILLMENT_HANDLER_MISSING");
-  }
   const product = await loadProductVersion(
     transaction,
     intent.productSlug,
@@ -846,6 +862,31 @@ async function resolveCheckoutQuote(
   );
   if (product === null || product.currency !== "CHF") {
     return billingFailure("PRODUCT_NOT_AVAILABLE");
+  }
+
+  if (intent.productSlug === "boost-7d" || intent.productSlug === "boost-30d") {
+    if (!isCashBoostProduct(product, intent.productSlug)) {
+      return billingFailure("PRODUCT_NOT_AVAILABLE");
+    }
+    const eligibility = await validateBoostJobInTransaction(
+      transaction,
+      dependencies.actor.companyId,
+      intent.targetJobId,
+      product.durationDays!,
+      now,
+    );
+    if (!eligibility.ok) return billingFailure("JOB_BOOST_NOT_ELIGIBLE");
+    const endsAt = new Date(now.getTime() + product.durationDays! * 86_400_000);
+    if (await hasOverlappingBoost(transaction, intent.targetJobId, now, endsAt)) {
+      return billingFailure("JOB_BOOST_NOT_ELIGIBLE");
+    }
+    return billingSuccess({
+      kind: "JOB_BOOST",
+      productVersion: product,
+      quantity: 1,
+      unitNetRappen: product.netPriceRappen as 7_900 | 19_900,
+      targetJobId: intent.targetJobId,
+    });
   }
 
   if (
@@ -1320,6 +1361,9 @@ async function fulfillProductOrder(
   if (line.fulfillmentContext === "CONTACT_PACK") {
     return fulfillContactPackOrder(transaction, order, line, dependencies, now);
   }
+  if (line.fulfillmentContext === "JOB_BOOST") {
+    return fulfillJobBoostOrder(transaction, order, line, dependencies, now);
+  }
   if (line.fulfillmentContext === "ADDITIONAL_JOB") {
     return fulfillAdditionalJobOrder(transaction, order, line, dependencies, now);
   }
@@ -1327,6 +1371,81 @@ async function fulfillProductOrder(
     return fulfillImportSetupOrder(transaction, order, line, dependencies, now);
   }
   return billingFailure("FULFILLMENT_HANDLER_MISSING");
+}
+
+async function fulfillJobBoostOrder(
+  transaction: Prisma.TransactionClient,
+  order: ConfirmOrderRow,
+  line: ConfirmOrderRow["lines"][number],
+  dependencies: BillingDependencies,
+  now: Date,
+): Promise<BillingCommandResult<FulfillmentResult>> {
+  const product = line.productVersion;
+  const slug = product?.product.code;
+  if (
+    product === null ||
+    product === undefined ||
+    (slug !== "boost-7d" && slug !== "boost-30d") ||
+    !isCashBoostProduct(product, slug) ||
+    line.targetJobId === null ||
+    line.targetImportSourceId !== null ||
+    line.targetImportSetupApprovalId !== null ||
+    line.targetCreditType !== null ||
+    line.quantity !== 1 ||
+    line.unitNetRappen !== product.netPriceRappen ||
+    line.netRappen !== product.netPriceRappen
+  ) {
+    return billingFailure("FULFILLMENT_HANDLER_MISSING");
+  }
+  const eligibility = await validateBoostJobInTransaction(
+    transaction,
+    order.companyId,
+    line.targetJobId,
+    product.durationDays!,
+    now,
+  );
+  if (!eligibility.ok) return billingFailure("JOB_BOOST_NOT_ELIGIBLE");
+  const endsAt = new Date(now.getTime() + product.durationDays! * 86_400_000);
+  if (await hasOverlappingBoost(transaction, line.targetJobId, now, endsAt)) {
+    return billingFailure("JOB_BOOST_NOT_ELIGIBLE");
+  }
+  const boost = await transaction.jobBoost.create({
+    data: {
+      id: randomUUID(),
+      jobId: line.targetJobId,
+      companyId: order.companyId,
+      orderLineId: line.id,
+      idempotencyKey: `paid-boost:${line.id}`,
+      startsAt: now,
+      endsAt,
+      status: "ACTIVE",
+      createdAt: now,
+    },
+    select: { id: true },
+  });
+  await writeBoostActivatedEvidence(transaction, {
+    actorUserId: order.createdByUserId,
+    actorProvenance: order.createdBy.dataProvenance,
+    boostId: boost.id,
+    companyId: order.companyId,
+    companyProvenance: order.company.dataProvenance,
+    correlationId: dependencies.correlationId,
+    fundingSource: "PURCHASED_PACK",
+    jobId: line.targetJobId,
+    jobProvenance: eligibility.jobProvenance,
+    now,
+    productSlug: slug,
+  });
+  return billingSuccess({
+    subscriptionId: null,
+    creditGrantEntryId: null,
+    additionalJobPermitId: null,
+    importAccessGrantId: null,
+    jobBoostId: boost.id,
+    jobTitle: eligibility.jobTitle,
+    subscriptionStatus: null,
+    subscriptionReason: null,
+  });
 }
 
 async function fulfillAdditionalJobOrder(
@@ -1779,6 +1898,14 @@ async function sendBillingEmails(
         idempotencyKey: `billing:${context.orderId}:credits`,
       },
     });
+  } else if (context.jobBoostId !== null) {
+    messages.push({
+      templateKey: "job_boost_activated",
+      data: {
+        jobTitle: context.jobTitle ?? "deine Stelle",
+        idempotencyKey: `billing:${context.orderId}:boost`,
+      },
+    });
   } else if (context.subscriptionStatus === "ACTIVE") {
     messages.push({
       templateKey: "subscription_activated",
@@ -1817,6 +1944,8 @@ function buildPaidReplay(order: ConfirmOrderRow): EmailContext | null {
     creditGrantEntryId: line.creditLedgerEntries[0]?.id ?? null,
     additionalJobPermitId: line.additionalJobPermit?.id ?? null,
     importAccessGrantId: line.importAccessGrant?.id ?? null,
+    jobBoostId: line.jobBoost?.id ?? null,
+    jobTitle: line.jobBoost?.job.publishedRevision?.title ?? null,
     recipientUserId: order.createdByUserId,
     subscriptionStatus: order.subscription?.status ?? null,
     subscriptionReason:
@@ -1935,6 +2064,23 @@ function isReleasedAdditionalJobProduct(product: ProductVersionQuoteRow) {
     product.releaseDecision.allowsPublic &&
     product.releaseDecision.allowsSelfService &&
     product.releaseDecision.reasonCode.trim().length > 0
+  );
+}
+
+function isCashBoostProduct(
+  product: ProductVersionQuoteRow,
+  slug: "boost-7d" | "boost-30d",
+) {
+  return (
+    product.product.code === slug &&
+    product.product.type === "JOB_BOOST" &&
+    product.netPriceRappen === BOOST_POLICY_V1.pricesRappen[slug] &&
+    product.durationDays === BOOST_POLICY_V1.durations[slug] &&
+    product.creditType === null &&
+    product.creditAmount === null &&
+    product.isPublic &&
+    product.isSelfService &&
+    product.releaseDecisionId === null
   );
 }
 
@@ -2251,6 +2397,16 @@ const confirmOrderInclude = {
       productVersion: { include: { product: true, releaseDecision: true } },
       additionalJobPermit: { select: { id: true } },
       importAccessGrant: { select: { id: true } },
+      jobBoost: {
+        select: {
+          id: true,
+          job: {
+            select: {
+              publishedRevision: { select: { title: true } },
+            },
+          },
+        },
+      },
       creditLedgerEntries: {
         where: { kind: "GRANT" },
         take: 1,
@@ -2353,6 +2509,36 @@ async function authorizeMockPaymentConfirmation(
           if (!(await hasContactPackEligiblePlan(transaction, order.companyId, now))) {
             return billingFailure("TALENT_RADAR_REQUIRED");
           }
+        } else if (line.fulfillmentContext === "JOB_BOOST") {
+          const slug = product.product.code;
+          if (
+            (slug !== "boost-7d" && slug !== "boost-30d") ||
+            !isCashBoostProduct(product, slug) ||
+            line.targetJobId === null
+          ) {
+            return billingFailure("JOB_BOOST_NOT_ELIGIBLE");
+          }
+          const eligibility = await validateBoostJobInTransaction(
+            transaction,
+            order.companyId,
+            line.targetJobId,
+            product.durationDays!,
+            now,
+          );
+          const endsAt = new Date(
+            now.getTime() + product.durationDays! * 86_400_000,
+          );
+          if (
+            !eligibility.ok ||
+            await hasOverlappingBoost(
+              transaction,
+              line.targetJobId,
+              now,
+              endsAt,
+            )
+          ) {
+            return billingFailure("JOB_BOOST_NOT_ELIGIBLE");
+          }
         } else if (line.fulfillmentContext === "ADDITIONAL_JOB") {
           if (
             !isReleasedAdditionalJobProduct(product) ||
@@ -2416,6 +2602,8 @@ type FulfillmentResult = Readonly<{
   creditGrantEntryId: string | null;
   additionalJobPermitId: string | null;
   importAccessGrantId: string | null;
+  jobBoostId?: string | null;
+  jobTitle?: string | null;
   subscriptionStatus: "SCHEDULED" | "ACTIVE" | null;
   subscriptionReason:
     | "DOWNGRADED"
@@ -2432,6 +2620,8 @@ type EmailContext = Readonly<{
     creditGrantEntryId: string | null;
     additionalJobPermitId: string | null;
     importAccessGrantId: string | null;
+    jobBoostId: string | null;
+    jobTitle: string | null;
     recipientUserId: string;
     subscriptionStatus: string | null;
     subscriptionReason: string | null;

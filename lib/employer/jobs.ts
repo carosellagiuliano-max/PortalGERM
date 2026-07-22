@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { writeRequiredAudit, type RequiredAuditInput } from "@/lib/audit/log";
+import { getEffectiveBoostStatus } from "@/lib/billing/boosts";
 import type { FeatureGateReason } from "@/lib/billing/feature-gates";
 import { createPrismaPublishQuotaPort } from "@/lib/billing/prisma-publish-quota";
 import { publishWithQuota } from "@/lib/billing/usage";
@@ -2034,8 +2035,7 @@ function effectiveBoostStatus(
   now: Date,
 ) {
   if (boost === undefined) return null;
-  if (boost.status === "ACTIVE" && (boost.startsAt.getTime() > now.getTime() || boost.endsAt.getTime() <= now.getTime())) return "EXPIRED" as const;
-  return boost.status;
+  return getEffectiveBoostStatus(boost, now);
 }
 
 function isFuturePublicationDate(value: Date | null, now: Date): value is Date {

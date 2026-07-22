@@ -62,7 +62,7 @@ export function Dashboard({ data }: Readonly<{ data: EmployerDashboardData }>) {
           value={data.averageResponseHours === null ? "Noch keine Evidenz" : `${data.averageResponseHours} Std.`}
         />
         <MetricCard icon={ZapIcon} label="Boost-Credits" value={String(data.boostCredits)}>
-          <p className="text-xs text-muted-foreground">Aktivierung folgt in Phase 13.</p>
+          <Link href="/employer/jobs" className="text-xs font-medium text-primary hover:underline">Öffentlich berechtigte Stelle auswählen</Link>
         </MetricCard>
       </div>
 
@@ -124,15 +124,18 @@ export function Dashboard({ data }: Readonly<{ data: EmployerDashboardData }>) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle as="h2">Funnel-Diagnostik</CardTitle></CardHeader>
+          <CardHeader><CardTitle as="h2">Evidenzbasierte nächste Schritte</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
-            {data.diagnosticJobs.length === 0 ? (
-              <p className="text-muted-foreground">Noch keine belastbare Auffälligkeit bei Views und Bewerbungen.</p>
-            ) : data.diagnosticJobs.map((job) => (
-              <div key={job.id} className="rounded-lg border p-3">
-                <p className="font-medium">{job.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{job.views} Views · {job.applications} Bewerbungen</p>
-                <p className="mt-2 text-sm">Zuerst Jobtext, Anforderungen und Bewerbungsformular prüfen.</p>
+            {data.recommendations.length === 0 ? (
+              <p className="text-muted-foreground">Keine belastbare Empfehlung: Ohne ausreichende organische Stichprobe und Cluster-Baseline wird kein Boost vorgeschlagen.</p>
+            ) : data.recommendations.map((recommendation) => (
+              <div key={`${recommendation.kind}-${recommendation.jobId}`} className="rounded-lg border p-3">
+                <div className="flex flex-wrap items-center gap-2"><Badge variant={recommendation.kind === "BOOST_TEST_CANDIDATE" ? "default" : "secondary"}>{recommendation.kind === "BOOST_TEST_CANDIDATE" ? "Sponsored Boost-Test" : "Inhaltsdiagnose zuerst"}</Badge></div>
+                <p className="mt-2 font-medium">{recommendation.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{recommendation.evidence}</p>
+                <p className="mt-2 text-sm">{recommendation.suggestedAction}</p>
+                <p className="mt-2 text-xs text-muted-foreground">Messgrösse: {recommendation.expectedMetric} · Follow-up {new Intl.DateTimeFormat("de-CH").format(recommendation.followUpAt)}</p>
+                <Link href={recommendation.kind === "BOOST_TEST_CANDIDATE" ? `/employer/jobs/${recommendation.jobId}/boost` : `/employer/jobs/${recommendation.jobId}`} className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">{recommendation.kind === "BOOST_TEST_CANDIDATE" ? "Boost-Test prüfen" : "Stelleninhalt verbessern"}</Link>
               </div>
             ))}
           </CardContent>

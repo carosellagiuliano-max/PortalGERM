@@ -94,7 +94,7 @@ const EXPECTED_EFFECTIVE_PAID_SUBSCRIPTIONS =
 const EXPECTED_SUBSCRIPTION_SCHEDULES = 2;
 const EXPECTED_TAX_RATE_BASIS_POINTS = 810;
 const EXPECTED_CREDIT_ACCOUNTS = 31;
-const EXPECTED_CREDIT_LEDGER_ENTRIES = 43;
+const EXPECTED_CREDIT_LEDGER_ENTRIES = 45;
 const EXPECTED_SALARY_BANDS = 12;
 
 export type DemoSeedEntityHandle = Readonly<{
@@ -3148,7 +3148,7 @@ function verifyBilling(
     context,
     "Job Boost status distribution",
     sortedNumberRecord(countBy(observed.boosts, (boost) => boost.status)),
-    sortedNumberRecord({ ACTIVE: 5, EXPIRED: 5 }),
+    sortedNumberRecord({ ACTIVE: 5, CANCELLED: 1, EXPIRED: 5, SCHEDULED: 1 }),
   );
   check(
     context,
@@ -3160,8 +3160,15 @@ function verifyBilling(
         boost.status === "ACTIVE"
           ? boost.startsAt.getTime() <= anchorAt.getTime() &&
             anchorAt.getTime() < boost.endsAt.getTime()
-          : boost.status === "EXPIRED" &&
-            boost.endsAt.getTime() <= anchorAt.getTime();
+          : boost.status === "EXPIRED"
+            ? boost.endsAt.getTime() <= anchorAt.getTime()
+            : boost.status === "SCHEDULED"
+              ? anchorAt.getTime() < boost.startsAt.getTime()
+              : boost.status === "CANCELLED" &&
+                boost.cancelledAt !== null &&
+                boost.cancelledAt.getTime() <= anchorAt.getTime() &&
+                boost.cancellationReason !== null &&
+                boost.cancelledByUserId !== null;
       const orderScope =
         !hasOrder ||
         (boost.orderLine !== null &&

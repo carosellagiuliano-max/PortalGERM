@@ -6,6 +6,7 @@ import {
   MapPinIcon,
 } from "lucide-react";
 
+import { BoostedBadge } from "@/components/billing/boosted-badge";
 import { FairScoreBadge } from "@/components/public/fair-score";
 import { PublicJobActions } from "@/components/public/apply-save-actions";
 import { ResponseSignal } from "@/components/public/response-signal";
@@ -44,7 +45,7 @@ export function JobCard({ job }: Readonly<{ job: PublicJobCardModel }>) {
     <Card className="h-full transition-shadow hover:shadow-md">
       <CardHeader>
         <div className="mb-2 flex flex-wrap gap-2">
-          {job.activeBoost ? <Badge>Geboostet</Badge> : null}
+          {job.activeBoost ? <BoostedBadge /> : null}
           <FairScoreBadge score={job.fairScore} />
           <Badge variant="outline">{JOB_TYPE_LABELS[job.jobType]}</Badge>
         </div>

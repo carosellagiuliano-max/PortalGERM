@@ -79,6 +79,9 @@ function JobRow({ job, actions, keys }: Readonly<{ job: EmployerJobListItem; act
       <td className="px-4 py-4">
         <div className="flex max-w-[24rem] flex-wrap gap-2">
           <Link href={`/employer/jobs/${job.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>Öffnen</Link>
+          {job.capabilities.manageLifecycle && job.status === "PUBLISHED" ? (
+            <Link href={`/employer/jobs/${job.id}/boost`} className={buttonVariants({ variant: "outline", size: "sm" })}>Job boosten</Link>
+          ) : null}
           {job.capabilities.mutateDraft && (job.status === "DRAFT" || job.status === "CHANGES_REQUESTED") ? <>
             <Link href={`/employer/jobs/${job.id}?step=1`} className={buttonVariants({ variant: "outline", size: "sm" })}>Bearbeiten</Link>
             <RowActionForm action={submitAction} job={job} keyValue={submitState.nextIdempotencyKey ?? keys.submit ?? job.id} label="Einreichen" pending={submitPending} />

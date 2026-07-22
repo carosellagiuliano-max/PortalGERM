@@ -20,11 +20,13 @@ export function EmployerSubmitButton({
   label,
   pendingLabel = "Wird gespeichert …",
   variant = "default",
+  disabled = false,
 }: Readonly<{
   pending: boolean;
   label: string;
   pendingLabel?: string;
   variant?: "default" | "outline" | "destructive" | "secondary" | "ghost" | "link";
+  disabled?: boolean;
 }>) {
-  return <Button type="submit" disabled={pending} variant={variant}>{pending ? pendingLabel : label}</Button>;
+  return <Button type="submit" disabled={pending || disabled} variant={variant}>{pending ? pendingLabel : label}</Button>;
 }

@@ -112,6 +112,7 @@ function checkoutError(code: string): BillingActionState {
     PRODUCT_RELEASE_REQUIRED: "Für dieses P1-Produkt fehlt ein gültiger aufgezeichneter Release-Entscheid.",
     PRODUCT_CONTEXT_INVALID: "Der serverseitig geprüfte Zielkontext ist nicht mehr gültig.",
     ADDITIONAL_JOB_NOT_ELIGIBLE: "Diese Stelle erfüllt die Voraussetzungen für eine Zusatzstelle nicht mehr.",
+    JOB_BOOST_NOT_ELIGIBLE: "Diese Stelle erfüllt die Voraussetzungen für den gewählten Boost nicht mehr.",
     IMPORT_SETUP_NOT_ELIGIBLE: "Die Import-Freigabe oder der zugehörige Vertrag ist nicht mehr gültig.",
     TALENT_RADAR_REQUIRED: "Contact Packs benötigen einen aktiven Talent-Radar-Zugang.",
     FULFILLMENT_HANDLER_MISSING: "Für dieses Produkt ist noch keine sichere Auslieferung registriert.",

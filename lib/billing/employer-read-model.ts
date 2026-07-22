@@ -12,7 +12,10 @@ import { decodePlanEntitlementsV1 } from "@/lib/billing/entitlements";
 import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quota";
 import { summarizeIncludedCreditUsage } from "@/lib/billing/usage";
 import { computeVat } from "@/lib/billing/vat";
+import { BOOST_POLICY_V1 } from "@/lib/billing/boosts";
+import { getServerEnvironment } from "@/lib/config/env";
 import type { DatabaseClient } from "@/lib/db/factory";
+import { isJobPubliclyEligible } from "@/lib/jobs/public-eligibility";
 import type { InvoiceStatus } from "@/lib/policies/status/invoice";
 
 const EXPIRING_SOON_MS = 30 * 86_400_000;
@@ -109,6 +112,8 @@ export type CheckoutPreview = Readonly<{
     | "contact-pack-10"
     | "contact-pack-50"
     | "additional-job-30d"
+    | "boost-7d"
+    | "boost-30d"
     | "import-setup";
   quantity: number;
   name: string;
@@ -651,6 +656,20 @@ export async function getCheckoutPreview(
   }
 
   if (
+    input.product === "boost-7d" ||
+    input.product === "boost-30d"
+  ) {
+    return getBoostCheckoutPreview(
+      database,
+      companyId,
+      input,
+      now,
+      profile,
+      rate.rateBasisPoints,
+    );
+  }
+
+  if (
     input.product === "additional-job-30d" ||
     input.product === "import-setup"
   ) {
@@ -720,6 +739,105 @@ export async function getCheckoutPreview(
       planLimits: null,
       retentionOptions: [],
       targetJobId: null,
+      importSetupApprovalId: null,
+    }),
+  };
+}
+
+async function getBoostCheckoutPreview(
+  database: DatabaseClient,
+  companyId: string,
+  input: Readonly<{
+    product?: string;
+    quantity?: number;
+    targetJobId?: string;
+  }>,
+  now: Date,
+  profile: BillingProfileReadModel | null,
+  taxRateBasisPoints: number,
+): Promise<CheckoutPreviewResult> {
+  const slug = input.product;
+  if (
+    (slug !== "boost-7d" && slug !== "boost-30d") ||
+    (input.quantity ?? 1) !== 1 ||
+    !z.uuid().safeParse(input.targetJobId).success
+  ) {
+    return { ok: false, code: "PRODUCT_CONTEXT_INVALID" };
+  }
+  const targetJobId = input.targetJobId!;
+  const durationDays = BOOST_POLICY_V1.durations[slug];
+  const endsAt = new Date(now.getTime() + durationDays * 86_400_000);
+  const appEnvironment = getServerEnvironment().APP_ENV;
+  const eligibilityEnvironment =
+    appEnvironment === "production" || appEnvironment === "staging"
+      ? "production"
+      : "non-production";
+  const [versions, job, overlap, eligibility] = await Promise.all([
+    database.productVersion.findMany({
+      where: {
+        status: "ACTIVE",
+        isPublic: true,
+        isSelfService: true,
+        requiresLegalReview: false,
+        releaseDecisionId: null,
+        netPriceRappen: BOOST_POLICY_V1.pricesRappen[slug],
+        durationDays,
+        creditType: null,
+        creditAmount: null,
+        validFrom: { lte: now },
+        OR: [{ validTo: null }, { validTo: { gt: now } }],
+        product: { code: slug, type: "JOB_BOOST" },
+      },
+      take: 2,
+      select: {
+        id: true,
+        netPriceRappen: true,
+        product: { select: { name: true } },
+      },
+    }),
+    database.job.findFirst({
+      where: { id: targetJobId, companyId, expiresAt: { gte: endsAt } },
+      select: {
+        id: true,
+        expiresAt: true,
+        publishedRevision: { select: { title: true } },
+      },
+    }),
+    database.jobBoost.findFirst({
+      where: {
+        jobId: targetJobId,
+        status: { not: "CANCELLED" },
+        startsAt: { lt: endsAt },
+        endsAt: { gt: now },
+      },
+      select: { id: true },
+    }),
+    isJobPubliclyEligible(targetJobId, now, eligibilityEnvironment, database),
+  ]);
+  const version = versions.length === 1 ? versions[0]! : null;
+  if (version === null) return { ok: false, code: "CATALOG_UNAVAILABLE" };
+  if (job?.publishedRevision === null || job === null || overlap !== null || !eligibility.eligible) {
+    return { ok: false, code: "PRODUCT_CONTEXT_INVALID" };
+  }
+  const totals = computeVat(version.netPriceRappen, taxRateBasisPoints);
+  return {
+    ok: true,
+    value: Object.freeze({
+      kind: "PRODUCT",
+      slug,
+      quantity: 1,
+      name: version.product.name,
+      description: `${durationDays} Tage Boost nur für «${job.publishedRevision.title}».`,
+      transitionLabel: `Start sofort · Ende ${formatIsoDate(endsAt)} · keine automatische Verlängerung`,
+      unitNetRappen: version.netPriceRappen,
+      netRappen: totals.net,
+      taxRateBasisPoints,
+      vatRappen: totals.vatAmount,
+      totalRappen: totals.total,
+      profile,
+      planLimits: null,
+      retentionOptions: [],
+      targetJobId: job.id,
       importSetupApprovalId: null,
     }),
   };

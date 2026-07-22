@@ -47,7 +47,7 @@ const DAY_MS = 86_400_000;
 const TAX_RATE_BASIS_POINTS = 810;
 const ORDER_COUNT = 12;
 const INVOICE_COUNT = 7;
-const JOB_BOOST_COUNT = 10;
+const JOB_BOOST_COUNT = 12;
 const AUDIT_COUNT = 30;
 const ANALYTICS_COUNT = 300;
 const PHASE_11_IMPORT_SOURCE_KEY = "phase-11:licensed-supply-demo-json";
@@ -500,11 +500,11 @@ function buildBillingScenario(
     publishedPaidJobs.filter(
       (job) => entitledCompanyIds.has(job.companyId) && !usedJobIds.has(job.id),
     ),
-    6,
+    8,
   );
   const boostJobs = [...directBoostJobs, ...ledgerBoostJobs];
   if (boostJobs.length !== JOB_BOOST_COUNT) {
-    throw new Error("Phase-05 billing requires ten distinct eligible Boost jobs.");
+    throw new Error("Phase-13 billing requires twelve distinct eligible Boost jobs.");
   }
 
   const orderCompanies = paidCompanies;
@@ -1608,11 +1608,25 @@ async function seedCreditsAndBoosts(
     const naturalKey = boostNaturalKey(index);
     const job = requireAt(scenario.boostJobs, index, "Boost Job");
     const company = requireCompanyById(scenario.paidCompanies, job.companyId);
-    const active = index === 2 || index === 3 || index >= 7;
-    const startsAt = active
-      ? addDays(anchorAt, -1 - (index % 3))
-      : addDays(anchorAt, index < 4 ? -20 + index : -14 + (index - 4));
+    const status =
+      index === 10
+        ? "SCHEDULED"
+        : index === 11
+          ? "CANCELLED"
+          : index === 2 || index === 3 || index >= 7
+            ? "ACTIVE"
+            : "EXPIRED";
+    const startsAt =
+      status === "SCHEDULED"
+        ? addDays(anchorAt, 2)
+        : status === "CANCELLED"
+          ? addDays(anchorAt, -2)
+          : status === "ACTIVE"
+            ? addDays(anchorAt, -1 - (index % 3))
+            : addDays(anchorAt, index < 4 ? -20 + index : -14 + (index - 4));
     const endsAt = addDays(startsAt, 7);
+    const createdAt = status === "SCHEDULED" ? anchorAt : startsAt;
+    const cancelledAt = status === "CANCELLED" ? addDays(startsAt, 1) : null;
     let orderLineId: string | null = null;
     let consumedCreditLedgerEntryId: string | null = null;
 
@@ -1641,7 +1655,7 @@ async function seedCreditsAndBoosts(
           "credit-ledger-entry",
           `${company.slug}:JOB_BOOST:plan-allowance:grant`,
         ),
-        createdAt: startsAt,
+        createdAt,
         fundingSource: "PLAN_ALLOWANCE",
         kind: "CONSUME",
         naturalKey: consumeKey,
@@ -1663,11 +1677,12 @@ async function seedCreditsAndBoosts(
       idempotencyKey: `seed:${naturalKey}`,
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
-      status: active ? "ACTIVE" : "EXPIRED",
-      cancellationReason: null,
-      cancelledByUserId: null,
-      cancelledAt: null,
-      createdAt: startsAt.toISOString(),
+      status,
+      cancellationReason:
+        status === "CANCELLED" ? "Demo: Boost durch Arbeitgeber beendet" : null,
+      cancelledByUserId: status === "CANCELLED" ? company.ownerUserId : null,
+      cancelledAt: cancelledAt?.toISOString() ?? null,
+      createdAt: createdAt.toISOString(),
     } as const;
     await createOrVerifySeedRecord({
       entity: "JobBoost",
@@ -1675,7 +1690,7 @@ async function seedCreditsAndBoosts(
       findExisting: () => db.jobBoost.findUnique({ where: { id } }),
       create: () =>
         db.jobBoost.create({
-          data: { ...expected, startsAt, endsAt, createdAt: startsAt },
+          data: { ...expected, startsAt, endsAt, cancelledAt, createdAt },
         }),
       project: (record) => ({
         id: record.id,
@@ -3108,8 +3123,8 @@ function billingOpsDigestProjection(
       invoices: 7,
       invoiceLines: 7,
       creditAccounts: 29,
-      creditLedgerEntries: 35,
-      jobBoosts: 10,
+      creditLedgerEntries: 37,
+      jobBoosts: 12,
       salesLeads: 4,
       abuseReports: 3,
       auditLogs: 30,
@@ -3134,7 +3149,7 @@ function invoiceNaturalKey(index: number): string {
 }
 
 function boostNaturalKey(index: number): string {
-  return `phase-05:${index + 1}`;
+  return index < 10 ? `phase-05:${index + 1}` : `phase-13:${index - 9}`;
 }
 
 function subscriptionIdentitySet(
