@@ -2,6 +2,8 @@
 
 > **PortalGERM target status: IMPLEMENTED AND VERIFIED.** The Phase-11 operations, moderation, support, content, import, lead and evidence-based cockpit scope is verified against code commit `b115b49d94297c94df0b85fb40e056d2024fc582`; see [`evidence/2026-07-21-phase-11.md`](./evidence/2026-07-21-phase-11.md). Phase 12 still owns Payment, Invoice, Subscription, Ledger and Admin Billing/Katalog mutations through one Billing domain (ADR-019).
 
+> **Follow-up audit:** The independently re-evaluated Phase-11 gaps and corrections are verified against code commit `ee57eecca4dcee70764fcd48aeebd7b413b5ad54`; see [`evidence/2026-07-22-phase-11-follow-up.md`](./evidence/2026-07-22-phase-11-follow-up.md).
+
 > Detail file for [00-PLAN.md](./00-PLAN.md) Phase 11. Read [99-rules-quickref.md](./99-rules-quickref.md) §18, §21 before starting.
 
 ## Goal
@@ -158,7 +160,7 @@ Phase 11 erstellt **keine** `/admin/billing|orders|invoices|plans|products`-Muta
 - [x] Import rollback tombstones only untouched import-owned Drafts as `REMOVED`; a manually edited/submitted/applied Job remains intact with conflict result, mixed Run is `PARTIALLY_ROLLED_BACK`, retry duplicates nothing, an injected DB error reverts the whole batch, and provenance/Audit remains queryable
 - [x] Support case and Content revision each complete their authorized lifecycle with notification/audit; unpublished or ungated content is absent from public/indexable output
 - [x] Candidate/employer can create and read only their own SupportCase; it then completes triage→assign→resolve/reopen in the Admin queue
-- [x] Business cockpit shows at least one suggested sales action from seeded data
+- [x] Business cockpit shows at least one suggested sales action from seeded data; actions persist a prefilled safe Lead note and expose the bounded Lead-status workflow, while the LIVE canton/category demand projection is rendered with an honest empty state
 - [x] No Phase-11 route can confirm payment, change Invoice/Katalog state or grant Credits; those acceptance paths belong to Phase 12
 
 ## Common pitfalls
@@ -182,8 +184,8 @@ Phase 11 erstellt **keine** `/admin/billing|orders|invoices|plans|products`-Muta
 | Authorization/privacy | Admin capability at layout and use case; sensitive Candidate identity shown only for justified case; no password/token/raw CV/message; every object/mutation server checked. |
 | Audit/notification/analytics | Every mutation has actor/target/result/reason/correlation; downstream users notified; queue age/action outcomes measured without content. |
 | UX/mobile | Action queues sorted by risk/age, detail before destructive action, stale/conflict, import line errors/preview, helpful empty tasks; cards on mobile. |
-| Seed | pending/old/high-risk items, duplicate/malicious feed, suspended actors, reports/leads/tasks. |
-| Tests | capability/RBAC, claim approval without auto-verification, job publish quota concurrency, company/user suspension downstream, Abuse severity/SLA/assignment + each restriction/lift downstream, XML/JSON attacks and conditional/idempotent import rollback, lead owner/due actions, full audit matrix, sensitive DTO. |
-| Verification | E2E Employer submit→Admin publish→Public; suspension and Import flows; audit DB assertions. |
+| Seed | pending/old/high-risk items, duplicate/malicious feed, suspended actors, reports/leads/tasks and one reachable DEMO Cluster assessment. DEMO evidence may receive separate Product/Ops review but can never activate a LIVE cluster. |
+| Tests | capability/RBAC including denied Support reads, claim approval without auto-verification, job publish quota concurrency, company/user suspension downstream, Abuse severity/SLA/assignment + each restriction/lift downstream, UTF-8 byte/depth/format import attacks and conditional/idempotent rollback, lead owner/due actions, Cluster dual approval/LIVE activate/revoke, full audit matrix and sensitive DTO. |
+| Verification | Owning-phase PostgreSQL integration proves Admin submit/review/publish, suspension, Import, Cluster and audit DB assertions. The continuous cross-role browser journey Employer submit→Admin publish→Public is E2E-02 and remains explicitly owned by Phase 17. |
 | Risks / limitations | MVP Admin is broad; Support/Moderator/Sales/Finance split P1. Cockpit revenue waits for 12/metrics. |
 | Definition of Done | Operator can act on every P0 queue safely with visible impact and audit; no table-only/fake action and no duplicate Billing logic. |

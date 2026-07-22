@@ -377,7 +377,7 @@ flowchart LR
 
 ## 12 — Katalog, Entitlements, Credits und idempotentes Mock-Billing
 
-**Status:** [x] Abgeschlossen und gegen Code-Commit `b28245e6ba1c2fce29c5b05f2383410da0d7410e` verifiziert; siehe [Phase-12-Evidence](./evidence/2026-07-22-phase-12.md). Der Nachweis umfasst 35 committed Migrationen und den deterministischen Seed-Vertrag `phase-12-demo-v10`. Payment bleibt ein lokaler Mock ohne Stripe oder echte Webhooks; ein autonomer Renewal-Worker ist nicht Bestandteil dieses Abschlusses. Die abhängigen Phasen 13–18 bleiben offen.
+**Status:** [x] Abgeschlossen und gegen Code-Commit `b28245e6ba1c2fce29c5b05f2383410da0d7410e` verifiziert; siehe [Phase-12-Evidence](./evidence/2026-07-22-phase-12.md). Der damalige Nachweis umfasste 35 committed Migrationen und den Seed-Vertrag `phase-12-demo-v10`; der additive Phase-11-Nachtrag rotiert den aktuellen Vertrag auf `phase-12-demo-v11`, ohne Billing-Semantik zu ändern. Payment bleibt ein lokaler Mock ohne Stripe oder echte Webhooks; ein autonomer Renewal-Worker ist nicht Bestandteil dieses Abschlusses. Die abhängigen Phasen 13–18 bleiben offen.
 
 **Ziel und Begründung:** Monetarisierung als konsistente Domain statt verstreuter UI-Gates; einziges Payment-/Fulfillment-Ownership.
 

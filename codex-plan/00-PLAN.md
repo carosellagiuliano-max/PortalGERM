@@ -107,7 +107,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 ### [x] 11 — Admin und Moderation
 
-[`11-admin-portal.md`](./11-admin-portal.md) · Job/Firma/User/Report/Import/Support/Content/Lead-Queues und evidenzbasiertes Business Cockpit sind im Code-Commit `b115b49d94297c94df0b85fb40e056d2024fc582` verifiziert. Keine konkurrierende Payment-/Katalog-Logik.
+[`11-admin-portal.md`](./11-admin-portal.md) · Job/Firma/User/Report/Import/Support/Content/Lead-Queues und evidenzbasiertes Business Cockpit sind im ursprünglichen Code-Commit `b115b49d94297c94df0b85fb40e056d2024fc582` verifiziert; der unabhängig bewertete Follow-up-Audit schließt die bestätigten UI-/Audit-/Seed-/Testlücken im Code-Commit `ee57eecca4dcee70764fcd48aeebd7b413b5ad54` ([Evidence](./evidence/2026-07-22-phase-11-follow-up.md)). Keine konkurrierende Payment-/Katalog-Logik.
 
 ### [x] 12 — Entitlements und Billing
 

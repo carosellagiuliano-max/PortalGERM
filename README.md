@@ -113,7 +113,7 @@ npm run db:smoke
 - `db:migrate` verwendet `prisma migrate deploy` gegen die explizite `DATABASE_URL`.
 - `db:migrate:status` bestätigt, dass alle committed Migrationen angewandt sind.
 - Die **35 committed Migrationen** reichen von der leeren Baseline über den Domänenvertrag bis zu den Phase-12-Katalog-, Subscription-, Order-, Invoice-, Credit- und Entitlement-Erweiterungen. Zusätzlich zu Prisma-SQL enthalten sie benannte Checks, Composite-FKs, Partial-/Exclusion-Indizes sowie Lifecycle-, Append-only- und Concurrency-Trigger.
-- `db:seed` erzeugt beziehungsweise verifiziert den deterministischen, wiederholbaren Demo-Vertrag `phase-12-demo-v10` mit Katalogen und Preisversionen, Demo-Identitäten, Firmen, Jobs, Bewerbungen, Candidate-/Employer-Workflows, Billingprofilen, Abonnementperioden, Credits, Orders und Rechnungen sowie einer klar begrenzten lokalen Importquelle. Staging und Production sind fail-closed gesperrt; es gibt keinen Production-Seed.
+- `db:seed` erzeugt beziehungsweise verifiziert den deterministischen, wiederholbaren Demo-Vertrag `phase-12-demo-v11` mit Katalogen und Preisversionen, Demo-Identitäten, Firmen, Jobs, Bewerbungen, Candidate-/Employer-Workflows, Billingprofilen, Abonnementperioden, Credits, Orders und Rechnungen sowie einer klar begrenzten lokalen Importquelle und einem nicht aktivierbaren DEMO-Cluster-Assessment. Staging und Production sind fail-closed gesperrt; es gibt keinen Production-Seed.
 - `npm run seed:verify` prüft den vollständigen Seed-Vertrag und liefert einen stabilen Manifest-Hash.
 - `db:smoke` führt einen read-only Datenbank-Smoke aus; bei `APP_ENV=ci` verwendet er `TEST_DATABASE_URL`.
 
