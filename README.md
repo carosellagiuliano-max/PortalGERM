@@ -1,10 +1,10 @@
 # SwissTalentHub / PortalGERM
 
-**Phasen 01 bis 11 sind implementiert und verifiziert; als nächster Schritt folgt Phase 12.** Auf der reproduzierbaren Next.js-/TypeScript-Foundation und dem Prisma/PostgreSQL-Domänenvertrag stehen inzwischen Core-Policies, netzwerkfreie lokale Provider-Mocks mit persistierten Logs/Effekten, ein deterministischer Demo-Datensatz, End-to-End-Authentifizierung und rollen-/mandantenbasierte Autorisierung.
+**Phasen 01 bis 12 sind implementiert und verifiziert; als nächster Schritt folgt Phase 13.** Auf der reproduzierbaren Next.js-/TypeScript-Foundation und dem Prisma/PostgreSQL-Domänenvertrag stehen inzwischen Core-Policies, netzwerkfreie lokale Provider-Mocks mit persistierten Logs/Effekten, ein deterministischer Demo-Datensatz, End-to-End-Authentifizierung und rollen-/mandantenbasierte Autorisierung.
 
-Der aktuelle Produktumfang umfasst öffentliche Job- und Firmen-Discovery, Jobdetails und sichere Save-/Apply-Intents, Pricing sowie persistierte Arbeitgeber-Leads. Kandidaten erhalten SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Nachrichten und Privacy-/Talent-Radar-Basics. Arbeitgeber und Recruiter erhalten Firmenprofil und Verifizierungsanträge, Team/Einladungen/Zuweisungen, Jobliste und 5-Schritt-Wizard, Bewerberpipeline sowie ehrliche Analytics- und Radar-Locked-States. Plattformadmins betreiben Job-/Company-/User-Moderation, Reports, lizenzierte Imports, Support, Content, Taxonomie, Leads und ein evidenzbasiertes Operations-Cockpit.
+Der aktuelle Produktumfang umfasst öffentliche Job- und Firmen-Discovery, Jobdetails und sichere Save-/Apply-Intents, Pricing sowie persistierte Arbeitgeber-Leads. Kandidaten erhalten SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Nachrichten und Privacy-/Talent-Radar-Basics. Arbeitgeber und Recruiter erhalten Firmenprofil und Verifizierungsanträge, Team/Einladungen/Zuweisungen, Jobliste und 5-Schritt-Wizard, Bewerberpipeline sowie ehrliche Analytics- und Radar-Locked-States. Arbeitgeber-Owner können ausserdem Billingprofile, Abonnemente, Credits, Kontingente, Rechnungen und den vollständig lokalen Mock-Checkout verwalten. Plattformadmins betreiben Job-/Company-/User-Moderation, Reports, lizenzierte Imports, Support, Content, Taxonomie, Leads, Billing/Katalog sowie evidenzbasierte Operations- und Finanzansichten.
 
-Bewusst **noch nicht** enthalten sind Billing und Checkout (Phase 12), Job-Boosts (Phase 13) sowie Talent-Radar-Suche, Contact/Reveal (Phase 14). Alle Provider bleiben lokale Mocks; echte Provider, Produktionsbetrieb und eine abschliessende Produktions-/DSG-Freigabe sind nicht behauptet.
+Bewusst **noch nicht** enthalten sind Job-Boosts (Phase 13) sowie Talent-Radar-Suche, Contact/Reveal (Phase 14). Der Phase-12-Zahlungsfluss bleibt ausdrücklich ein lokaler Mock: Es gibt weder Stripe noch echte Payment-Webhooks oder einen autonomen Renewal-Worker. Alle Provider bleiben lokale Mocks; echte Provider, Produktionsbetrieb und eine abschliessende Produktions-/DSG-Freigabe sind nicht behauptet.
 
 ## Verbindliche Runtime
 
@@ -53,7 +53,7 @@ Der lokale Demo-Seed stellt unter anderem folgende bereits dokumentierte Konten 
 - `candidate@demo.ch` — Candidate-Portal
 - `employer@demo.ch` — Arbeitgeber-Portal, Owner einer Pro-Demofirma
 - `recruiter@demo.ch` — Recruiter mit mandanten- und jobgebundenen Zuweisungen
-- `admin@demo.ch` — Phase-11-Adminportal für Operations, Moderation, Import, Support, Content und Leads
+- `admin@demo.ch` — Adminportal für Operations, Moderation, Import, Support, Content, Leads sowie Phase-12-Billing und -Katalog
 
 `npm ci` verwendet ausschliesslich das committed Lockfile und eine versionsgenaue Allowlist für geprüfte Dependency-Install-Scripts. `npm run env:init` erzeugt einmalig eine ignorierte `.env.local` mit lokal gültigen, voneinander verschiedenen Zufallsschlüsseln. Der Befehl überschreibt keine vorhandene Datei, läuft nur lokal, übernimmt keine URL aus dem Shell-Environment und setzt auf unterstützenden Dateisystemen Modus `0600`. `.env.example` ist absichtlich nicht direkt lauffähig und enthält nur erkennbare Platzhalter.
 
@@ -112,8 +112,8 @@ npm run db:smoke
 - `db:validate` prüft Schema und Konfiguration ohne Datenbankmutation.
 - `db:migrate` verwendet `prisma migrate deploy` gegen die explizite `DATABASE_URL`.
 - `db:migrate:status` bestätigt, dass alle committed Migrationen angewandt sind.
-- Die **29 committed Migrationen** reichen von der leeren Baseline über den Domänenvertrag bis zu den Phase-11-Admin-Operations-Erweiterungen. Zusätzlich zu Prisma-SQL enthalten sie benannte Checks, Composite-FKs, Partial-/Exclusion-Indizes sowie Lifecycle-, Append-only- und Concurrency-Trigger.
-- `db:seed` erzeugt beziehungsweise verifiziert den deterministischen, wiederholbaren Demo-Vertrag `phase-11-demo-v8` mit Katalogen, Demo-Identitäten, Firmen, Jobs, Bewerbungen, Candidate-/Employer-Workflows sowie einer klar begrenzten lokalen Importquelle für den Admin-Operations-Flow. Staging und Production sind fail-closed gesperrt; es gibt keinen Production-Seed.
+- Die **35 committed Migrationen** reichen von der leeren Baseline über den Domänenvertrag bis zu den Phase-12-Katalog-, Subscription-, Order-, Invoice-, Credit- und Entitlement-Erweiterungen. Zusätzlich zu Prisma-SQL enthalten sie benannte Checks, Composite-FKs, Partial-/Exclusion-Indizes sowie Lifecycle-, Append-only- und Concurrency-Trigger.
+- `db:seed` erzeugt beziehungsweise verifiziert den deterministischen, wiederholbaren Demo-Vertrag `phase-12-demo-v10` mit Katalogen und Preisversionen, Demo-Identitäten, Firmen, Jobs, Bewerbungen, Candidate-/Employer-Workflows, Billingprofilen, Abonnementperioden, Credits, Orders und Rechnungen sowie einer klar begrenzten lokalen Importquelle. Staging und Production sind fail-closed gesperrt; es gibt keinen Production-Seed.
 - `npm run seed:verify` prüft den vollständigen Seed-Vertrag und liefert einen stabilen Manifest-Hash.
 - `db:smoke` führt einen read-only Datenbank-Smoke aus; bei `APP_ENV=ci` verwendet er `TEST_DATABASE_URL`.
 
@@ -167,18 +167,18 @@ Health-Routen sind Betriebschecks, keine Produktfeatures und keine Autorisierung
 - Keine Real-Provider werden durch Env-Keys automatisch aktiviert; deren Variablen müssen leer bleiben. Mail, AI, Payment, Storage, Jobroom und weitere Integrationen bleiben kontrollierte lokale Mocks.
 - Der Logger redigiert sensitive Werte; Stacktraces und Konfiguration gehören nicht in Nutzerantworten.
 - Security-Header, Auth, Rate-Limits und rollen-/ressourcenbasierte Autorisierung sind implementiert und regressionsgetestet. Die abschliessende phasenübergreifende Security-/Release-Härtung folgt dennoch erst in den dafür vorgesehenen späteren Phasen.
-- Der belegte Phase-11-MVP-Stand ist weder produktionsbereit noch eine vollständige rechtliche oder DSG-Konformitätszusage.
+- Der belegte Phase-12-MVP-Stand ist weder produktionsbereit noch eine vollständige rechtliche, steuerliche oder DSG-Konformitätszusage. Mock Payment ersetzt insbesondere keine Stripe-/Webhook-Integration, und Renewal wird nicht von einem echten autonomen Worker ausgeführt.
 
 ## Plan und Evidence
 
 1. [`AGENTS.md`](./AGENTS.md) — Implementierungs- und Evidence-Regeln.
 2. [`codex-plan/00-PLAN.md`](./codex-plan/00-PLAN.md) — Masterplan und Status.
-3. [`codex-plan/01-setup-foundation.md`](./codex-plan/01-setup-foundation.md) bis [`codex-plan/11-admin-portal.md`](./codex-plan/11-admin-portal.md) — verbindliche Verträge der implementierten Phasen 01–11.
-4. [`codex-plan/12-monetization-billing.md`](./codex-plan/12-monetization-billing.md) — nächster Implementierungsschritt.
+3. [`codex-plan/01-setup-foundation.md`](./codex-plan/01-setup-foundation.md) bis [`codex-plan/12-monetization-billing.md`](./codex-plan/12-monetization-billing.md) — verbindliche Verträge der implementierten Phasen 01–12.
+4. [`codex-plan/13-job-boosts.md`](./codex-plan/13-job-boosts.md) — nächster Implementierungsschritt.
 5. [`codex-plan/decisions.md`](./codex-plan/decisions.md) — Architekturentscheidungen.
 6. [`codex-plan/requirements-matrix.md`](./codex-plan/requirements-matrix.md) — Traceability.
 7. [`codex-plan/implementation-plan.md`](./codex-plan/implementation-plan.md) — Ausführungsschritte 01–18.
 8. [`codex-plan/evidence/README.md`](./codex-plan/evidence/README.md) — Evidence-Index der abgeschlossenen Phasen.
-9. [`codex-plan/evidence/2026-07-19-phase-01.md`](./codex-plan/evidence/2026-07-19-phase-01.md) bis [`codex-plan/evidence/2026-07-21-phase-11.md`](./codex-plan/evidence/2026-07-21-phase-11.md) — reproduzierbare Abnahmenachweise für Phasen 01–11.
+9. [`codex-plan/evidence/2026-07-19-phase-01.md`](./codex-plan/evidence/2026-07-19-phase-01.md) bis [`codex-plan/evidence/2026-07-22-phase-12.md`](./codex-plan/evidence/2026-07-22-phase-12.md) — reproduzierbare Abnahmenachweise für Phasen 01–12.
 
 Ein Checkbox-Häkchen bedeutet „im Zielrepository implementiert und verifiziert“. Evidence nennt mindestens Datum, Zielcommit, Umgebung, OS, Node/npm-Version, Befehl beziehungsweise manuellen Check, Exit-Code/Ergebnis und bekannte Limitation. Zuerst wird die Detailphase aktualisiert, danach gegebenenfalls der Masterplan.

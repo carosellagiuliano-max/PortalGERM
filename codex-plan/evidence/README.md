@@ -27,6 +27,7 @@ gelten nicht als Nachweis.
 - [`2026-07-20-phase-09.md`](./2026-07-20-phase-09.md) — Candidate-Core mit SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Messaging, Talent-Radar-Consent und Privacy-Cases.
 - [`2026-07-21-phase-10.md`](./2026-07-21-phase-10.md) — Arbeitgeber- und Recruiter-Core mit Firma, Team, Einladungen, Job-Wizard, Bewerber:innen-Pipeline und ehrlichen Radar-/Analytics-Grenzen.
 - [`2026-07-21-phase-11.md`](./2026-07-21-phase-11.md) — Admin-Operations mit Moderation, Imports, Support, Content, Leads und evidenzbasiertem Business Cockpit.
+- [`2026-07-22-phase-12.md`](./2026-07-22-phase-12.md) — Entitlements, sicherer Mock-Checkout, Subscriptions, Rechnungen, Credits, Katalog und Finanzmetriken.
 
 ## Pflichtfelder eines Records
 
