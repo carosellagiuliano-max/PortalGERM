@@ -142,6 +142,31 @@ describe("PostgreSQL Privacy export adapter", () => {
           audit.correlationId === stored.events[0]?.correlationId,
       ),
     ).toBe(true);
+
+    const notifications = await client.notification.findMany({
+      where: {
+        recipientUserId: fixture.requester.id,
+        kind: "PRIVACY_REQUEST_CHANGED",
+      },
+    });
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({
+      recipientUserId: fixture.requester.id,
+      kind: "PRIVACY_REQUEST_CHANGED",
+      schemaVersion: "1",
+      payload: {
+        requestId: request.id,
+        type: "EXPORT",
+        status: "COMPLETED",
+        reasonCode: "COMPLETED",
+      },
+    });
+    expect(notifications[0]?.dedupeKey).toMatch(
+      /^notification-v1:[a-f0-9]{64}$/,
+    );
+    expect(JSON.stringify(notifications)).not.toMatch(
+      /PRIVATE_EMPLOYER_NOTE_CANARY|FOREIGN_PROFILE_PII_CANARY|OWN_PROFILE_PII_CANARY|@example\.test/,
+    );
   });
 
   it("serializes concurrent retries and writes one manifest evidence set", async () => {
@@ -177,6 +202,14 @@ describe("PostgreSQL Privacy export adapter", () => {
     await expect(
       clients.first.auditLog.count({ where: { targetId: request.id } }),
     ).resolves.toBe(2);
+    await expect(
+      clients.first.notification.count({
+        where: {
+          recipientUserId: fixture.requester.id,
+          kind: "PRIVACY_REQUEST_CHANGED",
+        },
+      }),
+    ).resolves.toBe(1);
 
     await expect(
       createPostgresPrivacyExportAdapter(
@@ -188,6 +221,14 @@ describe("PostgreSQL Privacy export adapter", () => {
         where: { privacyRequestId: request.id },
       }),
     ).resolves.toBe(2);
+    await expect(
+      clients.first.notification.count({
+        where: {
+          recipientUserId: fixture.requester.id,
+          kind: "PRIVACY_REQUEST_CHANGED",
+        },
+      }),
+    ).resolves.toBe(1);
   });
 
   it("rolls manifest, status, events and the first audit back if a required audit fails", async () => {
@@ -248,6 +289,14 @@ describe("PostgreSQL Privacy export adapter", () => {
       ).resolves.toBe(0);
       await expect(
         client.auditLog.count({ where: { targetId: request.id } }),
+      ).resolves.toBe(0);
+      await expect(
+        client.notification.count({
+          where: {
+            recipientUserId: fixture.requester.id,
+            kind: "PRIVACY_REQUEST_CHANGED",
+          },
+        }),
       ).resolves.toBe(0);
     } finally {
       await isolated.pool.query(

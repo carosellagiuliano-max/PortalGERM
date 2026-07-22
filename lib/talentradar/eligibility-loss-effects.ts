@@ -88,7 +88,13 @@ export async function applyCompanyRadarEligibilityLoss(
     },
   });
   const pending = await transaction.employerContactRequest.findMany({
-    where: { companyId: input.companyId, status: "PENDING" },
+    where: {
+      companyId: input.companyId,
+      status: "PENDING",
+      terminalAt: null,
+      createdAt: { lte: input.now },
+      expiresAt: { gt: input.now },
+    },
     select: {
       candidateProfile: { select: { userId: true } },
     },
@@ -126,7 +132,13 @@ async function cancelPendingRequests(
   }>,
 ) {
   const requests = await transaction.employerContactRequest.findMany({
-    where: { ...input.where, status: "PENDING" },
+    where: {
+      ...input.where,
+      status: "PENDING",
+      terminalAt: null,
+      createdAt: { lte: input.now },
+      expiresAt: { gt: input.now },
+    },
     orderBy: { id: "asc" },
     select: {
       id: true,
@@ -137,7 +149,13 @@ async function cancelPendingRequests(
   let count = 0;
   for (const request of requests) {
     const changed = await transaction.employerContactRequest.updateMany({
-      where: { id: request.id, status: "PENDING", terminalAt: null },
+      where: {
+        id: request.id,
+        status: "PENDING",
+        terminalAt: null,
+        createdAt: { lte: input.now },
+        expiresAt: { gt: input.now },
+      },
       data: { status: "CANCELLED", terminalAt: input.now, updatedAt: input.now },
     });
     if (changed.count !== 1) continue;

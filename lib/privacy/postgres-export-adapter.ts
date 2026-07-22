@@ -10,6 +10,8 @@ import {
   PrivacyRequestStatus,
   PrivacyRequestType,
 } from "@/lib/generated/prisma/enums";
+import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
+import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import {
   buildExportManifestForCase,
   checksumManifest,
@@ -53,8 +55,8 @@ export type PostgresPrivacyExportAdapter = Readonly<{
 
 /**
  * Production PostgreSQL boundary for the local Privacy export Mock. The case
- * lock, owner-scoped counts, manifest, two events, two required audits and the
- * status/version update all live in one transaction.
+ * lock, owner-scoped counts, manifest, two events, requester notification,
+ * two required audits and the status/version update all live in one transaction.
  */
 export function createPostgresPrivacyExportAdapter(
   database: DatabaseClient,
@@ -271,6 +273,21 @@ function createTransactionPort(
           createdAt: now,
         },
       });
+
+      await writeNotificationExactlyOnce(
+        createPrismaNotificationPort(transaction),
+        {
+          recipientUserId: input.requesterUserId,
+          kind: "PRIVACY_REQUEST_CHANGED",
+          dedupeKey: `privacy-export:${input.privacyRequestId}:completed`,
+          payload: {
+            requestId: input.privacyRequestId,
+            type: PrivacyRequestType.EXPORT,
+            status: PrivacyRequestStatus.COMPLETED,
+            reasonCode: "COMPLETED",
+          },
+        },
+      );
 
       const retainUntil = new Date(
         now.getTime() +
