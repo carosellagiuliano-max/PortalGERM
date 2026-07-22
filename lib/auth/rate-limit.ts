@@ -28,6 +28,19 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
 
 export type RateLimitPresetName = (typeof RATE_LIMIT_PRESET_NAMES_V1)[number];
 
+export const RATE_LIMIT_SCOPES_V1 = [
+  "IP_EMAIL",
+  "IP",
+  "USER",
+  "ACTOR_OR_IP",
+  "ACTOR_OR_IP_TARGET",
+  "COMPANY",
+  "CANDIDATE",
+  "MEMBERSHIP",
+] as const;
+
+export type RateLimitScope = (typeof RATE_LIMIT_SCOPES_V1)[number];
+
 export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
   LOGIN: {
     buckets: [
@@ -146,17 +159,6 @@ export interface RadarDistinctFilterBudget {
   ): Promise<RadarDistinctFilterBudgetDecision>;
 }
 
-export type RateLimitScope =
-  | "IP_EMAIL"
-  | "IP"
-  | "USER"
-  | "ACTOR_OR_IP"
-  | "ACTOR_OR_IP_TARGET"
-  | "TARGET"
-  | "COMPANY"
-  | "CANDIDATE"
-  | "MEMBERSHIP";
-
 export type RateLimitBucketPreset = Readonly<{
   scope: RateLimitScope;
   limit: number;
@@ -255,8 +257,6 @@ function identityValue(
         ? ["actor-target", `${identity.actorId}\0${target}`]
         : ["ip-target", `${ip ?? ""}\0${target}`];
     }
-    case "TARGET":
-      return ["target", identity.targetId ?? ""];
     case "COMPANY":
       return ["company", identity.companyId ?? ""];
     case "CANDIDATE":

@@ -2,8 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
-import { writeRequiredAudit } from "@/lib/audit/log";
-import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
+import { writeBestEffortAudit, writeRequiredAudit } from "@/lib/audit/log";
+import { createPrismaAuditPort, createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import type { CurrentUser } from "@/lib/auth/current-user";
@@ -77,7 +77,31 @@ export async function createPublicReport(
     now,
     { environment: dependencies.environment, database: dependencies.database },
   );
-  if (!rate.allowed) return Object.freeze({ ok: false, code: "RATE_LIMITED" });
+  if (!rate.allowed) {
+    await writeBestEffortAudit(
+      createPrismaAuditPort(dependencies.database),
+      {
+        action: "RATE_LIMITED",
+        actorKind: dependencies.currentUser === null ? "ANONYMOUS" : "USER",
+        actorUserId: dependencies.currentUser?.id,
+        capability: "PUBLIC_ABUSE_REPORT",
+        companyId: target.companyId,
+        correlationId: dependencies.request.correlationId,
+        metadata: { preset: "ABUSE_INTAKE", scope: rate.audit.scope },
+        reasonCode: "RATE_LIMITED",
+        result: "DENIED",
+        retainUntil: new Date(now.getTime() + 365 * 86_400_000),
+        targetId: target.id,
+        targetType: target.targetType,
+      },
+      undefined,
+      {
+        sourceIp: dependencies.request.sourceIp,
+        keyring: dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
+      },
+    );
+    return Object.freeze({ ok: false, code: "RATE_LIMITED" });
+  }
 
   try {
     const report = await dependencies.database.$transaction(async (transaction) => {

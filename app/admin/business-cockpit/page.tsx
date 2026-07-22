@@ -107,6 +107,14 @@ export default async function BusinessCockpitPage() {
         </div>
       </section>
 
+      <section>
+        <h2 className="text-xl font-semibold">Nachfrage nach Kanton und Kategorie</h2>
+        <p className="mt-2 text-sm text-muted-foreground">Eingereichte Bewerbungen im rollierenden 30-Tage-Fenster gegenüber aktuell aktiven LIVE-Stellen.</p>
+        <div className="mt-4 grid gap-2">
+          {cockpit.demandOverview.length === 0 ? <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Noch keine belastbare LIVE-Nachfrage pro Kanton und Kategorie.</p> : cockpit.demandOverview.map((row) => <div key={`${row.cantonCode}-${row.categoryName}`} className="grid gap-2 rounded-lg border bg-card p-3 sm:grid-cols-[1fr_auto_auto] sm:items-center"><span><strong>{row.cantonCode}</strong> · {row.categoryName}<span className="block text-xs text-muted-foreground">{row.cantonName}</span></span><span className="text-sm">{row.submittedApplicationCount30d} Bewerbungen / 30 Tage</span><Badge variant={row.submittedApplicationCount30d > row.activeJobCount ? "secondary" : "outline"}>{row.activeJobCount} aktive Jobs</Badge></div>)}
+        </div>
+      </section>
+
       <section className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
         Talent-Radar-Aggregate bleiben bis zur Phase-14-Privacy-Projektion leer.
       </section>

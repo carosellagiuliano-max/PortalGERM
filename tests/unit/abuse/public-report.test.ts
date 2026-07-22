@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   consumeRequestRateLimit: vi.fn(),
+  createPrismaAuditPort: vi.fn(),
   createPrismaTransactionAuditPort: vi.fn(),
+  writeBestEffortAudit: vi.fn(),
   writeRequiredAudit: vi.fn(),
 }));
 
@@ -13,9 +15,11 @@ vi.mock("@/lib/auth/rate-limit-runtime", () => ({
   consumeRequestRateLimit: mocks.consumeRequestRateLimit,
 }));
 vi.mock("@/lib/audit/log", () => ({
+  writeBestEffortAudit: mocks.writeBestEffortAudit,
   writeRequiredAudit: mocks.writeRequiredAudit,
 }));
 vi.mock("@/lib/audit/prisma-port", () => ({
+  createPrismaAuditPort: mocks.createPrismaAuditPort,
   createPrismaTransactionAuditPort: mocks.createPrismaTransactionAuditPort,
 }));
 
@@ -38,7 +42,9 @@ describe("public abuse report use case", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.consumeRequestRateLimit.mockResolvedValue({ allowed: true, status: 200 });
+    mocks.createPrismaAuditPort.mockReturnValue({ marker: "audit-port" });
     mocks.createPrismaTransactionAuditPort.mockReturnValue({ marker: "audit-port" });
+    mocks.writeBestEffortAudit.mockResolvedValue({ written: true });
     mocks.writeRequiredAudit.mockResolvedValue(undefined);
   });
 
@@ -54,6 +60,7 @@ describe("public abuse report use case", () => {
 
     expect(mocks.consumeRequestRateLimit).not.toHaveBeenCalled();
     expect(database.$transaction).not.toHaveBeenCalled();
+    expect(mocks.writeBestEffortAudit).not.toHaveBeenCalled();
   });
 
   it("applies the actor-or-IP per-target quota before opening a write transaction", async () => {
@@ -81,6 +88,16 @@ describe("public abuse report use case", () => {
       expect.objectContaining({ database }),
     );
     expect(database.$transaction).not.toHaveBeenCalled();
+    expect(mocks.writeBestEffortAudit).toHaveBeenCalledWith(
+      { marker: "audit-port" },
+      expect.objectContaining({
+        action: "RATE_LIMITED",
+        metadata: { preset: "ABUSE_INTAKE", scope: "ACTOR_OR_IP_TARGET" },
+        targetId: TARGET.id,
+      }),
+      undefined,
+      expect.objectContaining({ sourceIp: "192.0.2.33" }),
+    );
   });
 
   it("persists only sanitized intake fields, an immutable event and required audit", async () => {

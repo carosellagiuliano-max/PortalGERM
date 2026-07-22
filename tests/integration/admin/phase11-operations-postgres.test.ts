@@ -23,12 +23,15 @@ import {
 } from "@/lib/admin/imports";
 import {
   createSupportCase,
+  getAdminSupportCase,
   getRequesterSupportCase,
+  listAdminSupportCases,
   manageSupportCase,
   replyToSupportCase,
 } from "@/lib/admin/support";
 import {
   saveContentDraft,
+  transitionClusterLaunch,
   transitionContentRevision,
 } from "@/lib/admin/content";
 import {
@@ -293,6 +296,14 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     expect(detail?.events.find(({ kind }) => kind === "REPLIED")?.safeBody).not.toContain("<script>");
   });
 
+  it("denies every Support admin read and mutation without the capability", async () => {
+    const supportCase = await db().supportCase.findFirstOrThrow({ orderBy: { id: "asc" }, select: { id: true, version: true } });
+    const unauthorized = Object.freeze({ ...deps("support-denied"), actor: { userId: adminUserId, email: "employer@demo.ch", role: "EMPLOYER", status: "ACTIVE" } as const });
+    await expect(listAdminSupportCases(unauthorized)).resolves.toBeNull();
+    await expect(getAdminSupportCase(unauthorized, supportCase.id)).resolves.toBeNull();
+    await expect(manageSupportCase({ caseId: supportCase.id, expectedVersion: supportCase.version, action: "TRIAGE", priority: "HIGH", reasonCode: "FORGED_ADMIN_READ", idempotencyKey: randomUUID() }, unauthorized)).resolves.toEqual({ ok: false, code: "FORBIDDEN" });
+  });
+
   it("runs Content through draft, review, publish and unpublish with stale and XSS guards", async () => {
     const client = db();
     const rejected = await saveContentDraft({
@@ -377,6 +388,14 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     expect(await client.auditLog.count({ where: { targetId: parsed.value.runId, action: "IMPORT_ROLLED_BACK" } })).toBe(1);
   });
 
+  it("rejects a multibyte import payload whose UTF-8 byte size exceeds the bound", async () => {
+    const source = await db().importSource.findFirstOrThrow({ where: { sourceReference: "local-demo-feed-v1", isActive: true }, select: { id: true } });
+    const payload = JSON.stringify([{ id: "oversize-001", title: "ü".repeat(400_000) }]);
+    expect(payload.length).toBeLessThan(750_000);
+    expect(Buffer.byteLength(payload, "utf8")).toBeGreaterThan(750_000);
+    await expect(parseLicensedImport({ importSourceId: source.id, inputSource: "PASTE", format: "JSON", payload, idempotencyKey: randomUUID() }, deps("oversize-import"))).resolves.toEqual({ ok: false, code: "INVALID_INPUT" });
+  });
+
   it("keeps a manually edited imported Draft intact during a mixed, idempotent rollback", async () => {
     const client = db();
     const source = await client.importSource.findFirstOrThrow({
@@ -422,6 +441,7 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     const hideInput = { reportId: hideReportId, expectedReportVersion: 1, restrictionType: "HIDE_JOB", affectedResourceId: hiddenJob.id, impactConfirmed: true, reason: "Job wird bis zur Prüfung aus öffentlichen Ergebnissen verborgen.", idempotencyKey: randomUUID() } as const;
     const hidden = requireSuccess(await applyModerationRestriction(hideInput, deps("moderation-hide")));
     expect(await applyModerationRestriction(hideInput, deps("moderation-hide"))).toMatchObject({ ok: true, replay: true });
+    expect(await client.auditLog.count({ where: { action: "JOB_FLAGGED", targetId: hiddenJob.id } })).toBe(1);
     const liftHideInput = { restrictionId: hidden.value.restrictionId, reasonCode: "CONTENT_REVIEW_COMPLETED", idempotencyKey: randomUUID() };
     requireSuccess(await liftModerationRestriction(liftHideInput, deps("moderation-hide-lift")));
     expect(await liftModerationRestriction(liftHideInput, deps("moderation-hide-lift"))).toMatchObject({ ok: true, replay: true });
@@ -613,6 +633,26 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     expect(cockpit?.privacySafeRadarAggregates).toBeNull();
     expect(cockpit?.signals.length).toBeGreaterThan(0);
     expect(cockpit?.signals.every((signal) => signal.evidence.length > 0 && signal.suggestedAction.length > 0)).toBe(true);
+    expect(cockpit?.demandOverview).toBeDefined();
+  });
+
+  it("seeds a reachable Cluster assessment and proves dual approval, LIVE activation and revoke", async () => {
+    const client = db();
+    const seeded = await client.clusterLaunchAssessment.findFirstOrThrow({ where: { dataProvenance: "DEMO", policyVersion: "CLUSTER_LAUNCH_POLICY_V1" }, orderBy: { id: "asc" }, select: { cantonId: true, categoryId: true, status: true } });
+    expect(seeded.status).toBe("DRAFT");
+    const assessment = await client.clusterLaunchAssessment.create({ data: {
+      id: randomUUID(), cantonId: seeded.cantonId, categoryId: seeded.categoryId, policyVersion: "CLUSTER_LAUNCH_POLICY_V1", evaluatedAt: new Date(NOW.getTime() - 3_600_000), evidenceWindowStart: new Date(NOW.getTime() - 30 * 86_400_000), evidenceWindowEnd: NOW, liveJobCount: 50, activeCandidateCount: 200, activeEmployerCount: 15, responseRateBasisPoints: 7000, contentCoverageBasisPoints: 8000, medianApplicationsTimes2: 6, dataProvenance: "LIVE", evidenceHash: "a".repeat(64), validUntil: new Date(NOW.getTime() + 7 * 86_400_000), status: "DRAFT", createdAt: NOW,
+    } });
+    const product = requireSuccess(await transitionClusterLaunch({ assessmentId: assessment.id, action: "PRODUCT_APPROVE", reasonCode: "PRODUCT_EVIDENCE_APPROVED", idempotencyKey: randomUUID() }, deps("cluster-product")));
+    expect(product.value.status).toBe("DRAFT");
+    const ops = requireSuccess(await transitionClusterLaunch({ assessmentId: assessment.id, action: "OPS_APPROVE", reasonCode: "OPS_EVIDENCE_APPROVED", idempotencyKey: randomUUID() }, deps("cluster-ops", afterMilliseconds(1))));
+    expect(ops.value.status).toBe("READY");
+    const activated = requireSuccess(await transitionClusterLaunch({ assessmentId: assessment.id, action: "ACTIVATE", reasonCode: "DUAL_APPROVAL_COMPLETE", idempotencyKey: randomUUID() }, deps("cluster-activate", afterMilliseconds(2))));
+    expect(activated.value.status).toBe("ACTIVATED");
+    const revoked = requireSuccess(await transitionClusterLaunch({ assessmentId: assessment.id, action: "REVOKE", reasonCode: "CLUSTER_REVIEW_REQUIRED", idempotencyKey: randomUUID() }, deps("cluster-revoke", afterMilliseconds(3))));
+    expect(revoked.value.status).toBe("REVOKED");
+    await expect(client.clusterLaunchEvent.findMany({ where: { clusterLaunchAssessmentId: assessment.id }, orderBy: { createdAt: "asc" }, select: { kind: true } })).resolves.toEqual([{ kind: "PRODUCT_APPROVED" }, { kind: "OPS_APPROVED" }, { kind: "ACTIVATED" }, { kind: "REVOKED" }]);
+    expect(await client.auditLog.count({ where: { targetId: assessment.id, action: { in: ["CLUSTER_ASSESSMENT_APPROVED", "CLUSTER_ACTIVATED", "CLUSTER_REVOKED"] } } })).toBe(4);
   });
 });
 

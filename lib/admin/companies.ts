@@ -110,6 +110,17 @@ export async function getAdminCompanyDetail(dependencies: AdminDependencies, com
     getEffectiveEntitlements(companyId, now, createPrismaEntitlementRepository(dependencies.database)),
   ]);
   if (company === null) return null;
+  const abuseReports = await dependencies.database.abuseReport.findMany({
+    where: {
+      OR: [
+        { targetType: "COMPANY", targetId: company.id },
+        { targetType: "JOB", targetId: { in: company.jobs.map((job) => job.id) } },
+      ],
+    },
+    orderBy: [{ dueAt: "asc" }, { severity: "desc" }, { id: "asc" }],
+    take: 50,
+    select: { id: true, targetType: true, targetId: true, reasonCode: true, severity: true, status: true, dueAt: true, assignee: { select: { name: true, email: true } } },
+  });
   const latestSubscription = company.subscriptions[0];
   const renewalPeriod = latestSubscription === undefined
     ? null
@@ -136,7 +147,7 @@ export async function getAdminCompanyDetail(dependencies: AdminDependencies, com
           planName: latestSubscription.planVersion.plan.name,
         })
       : null;
-  return Object.freeze({ company, entitlements, renewalCandidate });
+  return Object.freeze({ company, entitlements, renewalCandidate, abuseReports });
 }
 
 const verificationCommandSchema = z.strictObject({

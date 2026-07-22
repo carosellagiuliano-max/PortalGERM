@@ -1,6 +1,6 @@
 export const SEED_MANIFEST_SCHEMA_VERSION =
   "20260720120000_phase_05_seed_manifest_contract" as const;
-export const SEED_DATASET_VERSION = "phase-12-demo-v10" as const;
+export const SEED_DATASET_VERSION = "phase-12-demo-v11" as const;
 /**
  * Phase 10 is an additive release over the sealed Phase-05 dataset. Existing
  * semantic UUIDs and deterministic fixture streams must therefore keep their

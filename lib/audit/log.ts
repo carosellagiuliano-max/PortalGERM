@@ -3,7 +3,10 @@ import { z } from "zod";
 import {
   COMPANY_CLAIM_SIGNAL_CODES_V1,
 } from "@/lib/auth/employer-registration-signals";
-import { RATE_LIMIT_PRESET_NAMES_V1 } from "@/lib/auth/rate-limit";
+import {
+  RATE_LIMIT_PRESET_NAMES_V1,
+  RATE_LIMIT_SCOPES_V1,
+} from "@/lib/auth/rate-limit";
 import type { KeyringEntry } from "@/lib/config/env-schema";
 import {
   AUDIT_ACTIONS_V1,
@@ -61,18 +64,7 @@ export type AuditTargetTypeV1 = (typeof AUDIT_TARGET_TYPES_V1)[number];
 const EMPTY_AUDIT_METADATA_SCHEMA = z.strictObject({});
 const RATE_LIMITED_AUDIT_METADATA_SCHEMA = z.strictObject({
   preset: z.enum(RATE_LIMIT_PRESET_NAMES_V1),
-  scope: z.enum([
-    "IP_EMAIL",
-    "IP",
-    "USER",
-    "ACTOR_OR_IP",
-    "TARGET",
-    "COMPANY",
-    "CANDIDATE",
-    "MEMBERSHIP",
-    "OPEN_TYPE",
-    "UNKNOWN",
-  ]),
+  scope: z.enum([...RATE_LIMIT_SCOPES_V1, "OPEN_TYPE", "UNKNOWN"]),
 });
 const VERSIONED_IDENTIFIER_HASH_PATTERN =
   /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}:[a-f0-9]{64}$/u;

@@ -24,6 +24,7 @@ import {
   type RequiredAuditInput,
 } from "@/lib/audit/log";
 import type { KeyringEntry } from "@/lib/config/env-schema";
+import { RATE_LIMIT_SCOPES_V1 } from "@/lib/auth/rate-limit";
 
 const actorUserId = "11111111-1111-4111-8111-111111111111";
 const companyId = "22222222-2222-4222-8222-222222222222";
@@ -136,6 +137,15 @@ describe("audit log contract", () => {
         metadata: { preset: "RADAR_LIST", scope: "COMPANY" },
       }),
     ).toMatchObject({ metadata: { preset: "RADAR_LIST", scope: "COMPANY" } });
+    for (const scope of RATE_LIMIT_SCOPES_V1) {
+      expect(
+        buildAuditPersistenceRecord({
+          ...BASE_INPUT,
+          action: "RATE_LIMITED",
+          metadata: { preset: "ABUSE_INTAKE", scope },
+        }),
+      ).toMatchObject({ metadata: { preset: "ABUSE_INTAKE", scope } });
+    }
     expect(() =>
       buildAuditPersistenceRecord({
         ...BASE_INPUT,

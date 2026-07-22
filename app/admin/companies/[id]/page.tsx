@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
@@ -112,6 +113,29 @@ export default async function AdminCompanyDetailPage({
           </Card>
 
           <BillingCredits companyId={company.id} />
+
+          <Card>
+            <CardHeader>
+              <CardTitle as="h2">Abuse Reports</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {detail.abuseReports.length === 0 ? (
+                <p className="text-muted-foreground">Keine Reports gegen diese Firma oder ihre Jobs.</p>
+              ) : (
+                <ol className="grid gap-2">
+                  {detail.abuseReports.map((report) => (
+                    <li key={report.id} className="rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Link href={`/admin/reports/${report.id}`} className="font-medium text-primary">{report.reasonCode} · {report.targetType}</Link>
+                        <div className="flex gap-2"><Badge variant="outline">{report.severity}</Badge><Badge>{report.status}</Badge></div>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">Zuständig: {report.assignee?.name ?? report.assignee?.email ?? "nicht zugewiesen"} · Ziel {formatDateTime(report.dueAt)}</p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

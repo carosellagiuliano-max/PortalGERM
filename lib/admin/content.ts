@@ -143,7 +143,7 @@ export async function transitionClusterLaunch(raw: unknown, dependencies: AdminD
   try {
     return await dependencies.database.$transaction(async (transaction) => {
       await transaction.$queryRaw`SELECT "id" FROM "ClusterLaunchAssessment" WHERE "id" = ${parsed.data.assessmentId}::uuid FOR UPDATE`;
-      const assessment = await transaction.clusterLaunchAssessment.findUnique({ where: { id: parsed.data.assessmentId }, select: { id: true, status: true, validUntil: true, productApprovedAt: true, opsApprovedAt: true, events: { where: { correlationId: eventKey }, take: 1, select: { id: true } } } });
+      const assessment = await transaction.clusterLaunchAssessment.findUnique({ where: { id: parsed.data.assessmentId }, select: { id: true, status: true, dataProvenance: true, validUntil: true, productApprovedAt: true, opsApprovedAt: true, events: { where: { correlationId: eventKey }, take: 1, select: { id: true } } } });
       if (assessment === null) return adminFailure("NOT_FOUND");
       if (assessment.events.length > 0) return adminSuccess({ assessmentId: assessment.id, status: assessment.status }, true);
       let status = assessment.status;
@@ -156,7 +156,7 @@ export async function transitionClusterLaunch(raw: unknown, dependencies: AdminD
         if (!["DRAFT", "READY"].includes(status) || assessment.opsApprovedAt !== null) return adminFailure("CONFLICT");
         kind = "OPS_APPROVED"; status = assessment.productApprovedAt === null ? status : "READY"; data = { opsApprovedByUserId: dependencies.actor.userId, opsApprovedAt: now, status };
       } else if (parsed.data.action === "ACTIVATE") {
-        if (status !== "READY" || assessment.validUntil <= now || assessment.productApprovedAt === null || assessment.opsApprovedAt === null) return adminFailure("CONFLICT");
+        if (status !== "READY" || assessment.dataProvenance !== "LIVE" || assessment.validUntil <= now || assessment.productApprovedAt === null || assessment.opsApprovedAt === null) return adminFailure("CONFLICT");
         kind = "ACTIVATED"; status = "ACTIVATED"; data = { status, activatedAt: now, activationReason: parsed.data.reasonCode };
       } else {
         if (status !== "ACTIVATED") return adminFailure("CONFLICT");

@@ -70,6 +70,8 @@ export async function manageSalesLead(raw: unknown, dependencies: AdminDependenc
         ? parsed.data.nextAt!
         : parsed.data.action === "STATUS" && ["WON", "LOST"].includes(nextStatus)
           ? null
+          : parsed.data.action === "STATUS" && parsed.data.nextAt !== undefined
+            ? parsed.data.nextAt
           : lead.nextAt;
       const ownerUserId = parsed.data.action === "ASSIGN" ? parsed.data.ownerUserId! : lead.ownerUserId;
       if (["CONTACTED", "QUALIFIED"].includes(nextStatus) && (nextAt === null || nextAt <= now)) return adminFailure("INVALID_INPUT");

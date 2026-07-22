@@ -51,6 +51,7 @@ const JOB_BOOST_COUNT = 10;
 const AUDIT_COUNT = 30;
 const ANALYTICS_COUNT = 300;
 const PHASE_11_IMPORT_SOURCE_KEY = "phase-11:licensed-supply-demo-json";
+const PHASE_11_CLUSTER_ASSESSMENT_KEY = "phase-11:zh:gesundheit-pflege:demo";
 
 export const ANALYTICS_SEED_COHORT_CONTRACT = Object.freeze({
   candidateActivation: Object.freeze({ registered: 20, completed: 18, timely: 17 }),
@@ -253,6 +254,7 @@ export const BILLING_OPS_SEED_IDENTITIES: readonly SeedIdentityRecord[] =
       createSeedIdentity("system-task", `phase-05:${index + 1}`),
     ),
     createSeedIdentity("import-source", PHASE_11_IMPORT_SOURCE_KEY),
+    createSeedIdentity("cluster-launch-assessment", PHASE_11_CLUSTER_ASSESSMENT_KEY),
   ]);
 
 /**
@@ -437,6 +439,7 @@ export async function seedBillingOpsContent(
     input.jobs,
   );
   const contentPageIds = await seedContentPages(db, anchorAt, adminUserId);
+  await seedClusterLaunchAssessment(db, anchorAt, referenceCatalog);
   await seedSupportAndSystemTasks(
     db,
     anchorAt,
@@ -2844,6 +2847,77 @@ async function seedContentEvents(
   }
 }
 
+async function seedClusterLaunchAssessment(
+  db: PrismaClient,
+  anchorAt: Date,
+  referenceCatalog: ReferenceCatalogSeedResult,
+): Promise<void> {
+  const id = stableSeedId("cluster-launch-assessment", PHASE_11_CLUSTER_ASSESSMENT_KEY);
+  const cantonId = referenceCatalog.cantonIdsByCode.ZH;
+  const categoryId = referenceCatalog.categoryIdsBySlug["gesundheit-pflege"];
+  if (cantonId === undefined || categoryId === undefined) {
+    throw new Error("Phase-11 Cluster demo requires the ZH and Gesundheit/Pflege catalog fixtures.");
+  }
+  const evidenceWindowStart = addDays(anchorAt, -30);
+  const evidenceHash = createHash("sha256").update(PHASE_11_CLUSTER_ASSESSMENT_KEY, "utf8").digest("hex");
+  const expected = {
+    id,
+    cantonId,
+    categoryId,
+    policyVersion: "CLUSTER_LAUNCH_POLICY_V1",
+    evaluatedAt: anchorAt.toISOString(),
+    evidenceWindowStart: evidenceWindowStart.toISOString(),
+    evidenceWindowEnd: anchorAt.toISOString(),
+    liveJobCount: 42,
+    activeCandidateCount: 160,
+    activeEmployerCount: 12,
+    responseRateBasisPoints: 6800,
+    contentCoverageBasisPoints: 7600,
+    medianApplicationsTimes2: 4,
+    dataProvenance: "DEMO" as const,
+    evidenceHash,
+    validUntil: addDays(anchorAt, 7).toISOString(),
+    status: "DRAFT" as const,
+    createdAt: anchorAt.toISOString(),
+  };
+  await createOrVerifySeedRecord({
+    entity: "ClusterLaunchAssessment",
+    naturalKey: PHASE_11_CLUSTER_ASSESSMENT_KEY,
+    findExisting: () => db.clusterLaunchAssessment.findUnique({ where: { id } }),
+    create: () => db.clusterLaunchAssessment.create({
+      data: {
+        ...expected,
+        evaluatedAt: anchorAt,
+        evidenceWindowStart,
+        evidenceWindowEnd: anchorAt,
+        validUntil: new Date(expected.validUntil),
+        createdAt: anchorAt,
+      },
+    }),
+    project: (record) => ({
+      id: record.id,
+      cantonId: record.cantonId,
+      categoryId: record.categoryId,
+      policyVersion: record.policyVersion,
+      evaluatedAt: record.evaluatedAt.toISOString(),
+      evidenceWindowStart: record.evidenceWindowStart.toISOString(),
+      evidenceWindowEnd: record.evidenceWindowEnd.toISOString(),
+      liveJobCount: record.liveJobCount,
+      activeCandidateCount: record.activeCandidateCount,
+      activeEmployerCount: record.activeEmployerCount,
+      responseRateBasisPoints: record.responseRateBasisPoints,
+      contentCoverageBasisPoints: record.contentCoverageBasisPoints,
+      medianApplicationsTimes2: record.medianApplicationsTimes2,
+      dataProvenance: record.dataProvenance,
+      evidenceHash: record.evidenceHash,
+      validUntil: record.validUntil.toISOString(),
+      status: record.status,
+      createdAt: record.createdAt.toISOString(),
+    }),
+    expected,
+  });
+}
+
 async function seedSupportAndSystemTasks(
   db: PrismaClient,
   anchorAt: Date,
@@ -3045,6 +3119,7 @@ function billingOpsDigestProjection(
       contentEvents: 28,
       supportCases: 2,
       systemTasks: 3,
+      clusterLaunchAssessments: 1,
     },
     identities: identities.map(({ entity, id, naturalKey }) => ({
       entity,

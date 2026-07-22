@@ -34,12 +34,12 @@ export async function listAdminReports(dependencies: AdminDependencies) {
       assignee: { select: { id: true, name: true, email: true } },
       _count: { select: { restrictions: true } },
     },
-  }).then((rows) => rows.sort((a, b) => Number(a.dueAt > now) - Number(b.dueAt > now) || a.dueAt.getTime() - b.dueAt.getTime() || a.id.localeCompare(b.id)));
+  }).then((rows) => rows.sort((a, b) => Number(a.dueAt > now) - Number(b.dueAt > now) || a.dueAt.getTime() - b.dueAt.getTime() || severityRank(b.severity) - severityRank(a.severity) || a.id.localeCompare(b.id)));
 }
 
 export async function getAdminReportDetail(dependencies: AdminDependencies, reportId: string) {
   if (!requireCapability(dependencies, "ADMIN_REPORT_REVIEW") || !z.uuid().safeParse(reportId).success) return null;
-  const report = await dependencies.database.abuseReport.findUnique({
+  const [report, assignableAdmins] = await Promise.all([dependencies.database.abuseReport.findUnique({
     where: { id: reportId },
     select: {
       id: true, targetType: true, targetId: true, reasonCode: true, description: true, severity: true, status: true, dueAt: true, slaPolicyVersion: true, resolutionCode: true, resolvedAt: true, createdAt: true, version: true,
@@ -48,10 +48,10 @@ export async function getAdminReportDetail(dependencies: AdminDependencies, repo
       events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { kind: true, reasonCode: true, safeNote: true, createdAt: true } },
       restrictions: { orderBy: [{ startsAt: "desc" }, { id: "desc" }], select: { id: true, targetType: true, targetId: true, status: true, reason: true, startsAt: true, endsAt: true, liftedAt: true, liftReason: true, expiredAt: true } },
     },
-  });
+  }), dependencies.database.user.findMany({ where: { role: "ADMIN", status: "ACTIVE" }, orderBy: [{ name: "asc" }, { email: "asc" }, { id: "asc" }], select: { id: true, name: true, email: true } })]);
   if (report === null) return null;
   const preview = await getLeastPrivilegeTargetPreview(dependencies.database, report.targetType, report.targetId);
-  return Object.freeze({ report, preview });
+  return Object.freeze({ report, preview, assignableAdmins });
 }
 
 const triageSchema = z.strictObject({
@@ -131,6 +131,9 @@ export async function applyModerationRestriction(raw: unknown, dependencies: Adm
       await transaction.abuseReportEvent.create({ data: { id: randomUUID(), abuseReportId: report.id, kind: "RESTRICTION_APPLIED", actorUserId: dependencies.actor.userId, reasonCode: parsed.data.restrictionType, safeNote: null, correlationId: dependencies.correlationId, idempotencyKey: eventKey, createdAt: now } });
       await notifyModerationChange(transaction, report, restriction.id, "APPLIED", mapped);
       await writeAdminAudit(transaction, dependencies, now, { action: "MODERATION_RESTRICTION_APPLIED", capability: "ADMIN_RESTRICTION_MANAGE", targetType: "MODERATION_RESTRICTION", targetId: restriction.id, companyId: mapped.companyId, reasonCode: parsed.data.restrictionType });
+      if (parsed.data.restrictionType === "HIDE_JOB") {
+        await writeAdminAudit(transaction, dependencies, now, { action: "JOB_FLAGGED", capability: "ADMIN_RESTRICTION_MANAGE", targetType: "JOB", targetId: mapped.affectedResourceId, companyId: mapped.companyId, reasonCode: "HIDE_JOB" });
+      }
       return adminSuccess({ restrictionId: restriction.id, type: parsed.data.restrictionType, affectedResourceId: mapped.affectedResourceId });
     }, { isolationLevel: "Serializable" });
   } catch (error) {
@@ -331,6 +334,10 @@ async function lockReport(transaction: Prisma.TransactionClient, reportId: strin
 
 function abuseSlaKey(severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"): OpsCaseSlaKey {
   return `ABUSE_${severity}`;
+}
+
+function severityRank(severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"): number {
+  return severity === "CRITICAL" ? 4 : severity === "HIGH" ? 3 : severity === "MEDIUM" ? 2 : 1;
 }
 
 export async function isConversationMessageBlocked(database: AdminDependencies["database"] | Prisma.TransactionClient, conversationId: string, now = new Date()) {

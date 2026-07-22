@@ -185,6 +185,11 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
 
     expect(results.slice(0, 3).every((result) => result.ok)).toBe(true);
     expect(results[3]).toEqual({ ok: false, code: "RATE_LIMITED" });
+    await expect(client().auditLog.findFirst({
+      where: { action: "RATE_LIMITED", targetId: LIMITED_COMPANY_ID },
+      orderBy: { createdAt: "desc" },
+      select: { result: true, metadata: true, targetType: true },
+    })).resolves.toEqual({ result: "DENIED", metadata: { preset: "ABUSE_INTAKE", scope: "ACTOR_OR_IP_TARGET" }, targetType: "COMPANY" });
     const independentReporter = await createPublicReport(
       {
         targetType: "COMPANY",

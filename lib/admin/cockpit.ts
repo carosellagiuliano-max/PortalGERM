@@ -25,6 +25,17 @@ export type AdminCockpitSignal = Readonly<{
   title: string;
   evidence: string;
   suggestedAction: string;
+  leadId?: string;
+  leadStatus?: "NEW" | "CONTACTED" | "QUALIFIED" | "WON" | "LOST";
+  suggestedNextAt?: string;
+}>;
+
+export type AdminDemandOverviewRow = Readonly<{
+  cantonCode: string;
+  cantonName: string;
+  categoryName: string;
+  activeJobCount: number;
+  submittedApplicationCount30d: number;
 }>;
 
 export async function getBusinessCockpit(dependencies: AdminDependencies) {
@@ -45,12 +56,14 @@ export async function getBusinessCockpit(dependencies: AdminDependencies) {
           where: { status: { in: ["PUBLISHED", "PAUSED", "CLOSED", "EXPIRED"] }, dataProvenance: "LIVE" },
           select: {
             id: true, status: true, publishedAt: true, expiresAt: true, publishedCategoryId: true, publishedCantonId: true, dataProvenance: true,
+            publishedCategory: { select: { name: true } },
+            publishedCanton: { select: { code: true, name: true } },
             applications: { where: { submittedAt: { gte: window30, lt: now } }, select: { id: true, submittedAt: true, submissionSnapshot: { select: { responseTargetDays: true } }, events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { actorUserId: true, kind: true, createdAt: true } } } },
             currentRevision: { select: { applicationEffort: true, applicationProcessSteps: true, applicationContactKind: true, applicationContactValue: true, salaryPeriod: true, salaryMin: true, salaryMax: true, scoreSnapshots: { orderBy: [{ calculatedAt: "desc" }, { id: "desc" }], take: 1, select: { scoreVersion: true, scorePoints: true, maxPoints: true } } } },
             boosts: { where: { status: "ACTIVE", startsAt: { lte: now }, endsAt: { gt: now } }, take: 1, select: { id: true } },
           },
         },
-        salesLeads: { where: { OR: [{ status: "QUALIFIED" }, { status: "CONTACTED" }] }, select: { id: true, status: true } },
+        salesLeads: { where: { status: { in: ["NEW", "CONTACTED", "QUALIFIED"] } }, orderBy: [{ updatedAt: "desc" }, { id: "asc" }], select: { id: true, status: true } },
         systemTasks: { where: { reasonCode: { in: ["FREE_UPGRADE_CANDIDATE", "NEAR_JOB_LIMIT", "SLOW_RESPONSE", "JOB_CONTENT_DIAGNOSTIC", "BOOST_TEST_CANDIDATE"] }, status: "DISMISSED", updatedAt: { gte: window30, lte: now } }, select: { reasonCode: true, updatedAt: true } },
       },
     }),
@@ -65,9 +78,26 @@ export async function getBusinessCockpit(dependencies: AdminDependencies) {
 
   const analyticsByJob = aggregateAnalytics(analytics, window30, window90, now);
   const baselineRows: ClusterBaselineJobV1[] = [];
+  const demandByPair = new Map<string, AdminDemandOverviewRow>();
   for (const company of companies) {
     for (const job of company.jobs) {
       if (job.publishedCantonId === null || job.publishedCategoryId === null) continue;
+      if (job.publishedCanton !== null && job.publishedCategory !== null) {
+        const key = `${job.publishedCantonId}:${job.publishedCategoryId}`;
+        const current = demandByPair.get(key) ?? {
+          cantonCode: job.publishedCanton.code,
+          cantonName: job.publishedCanton.name,
+          categoryName: job.publishedCategory.name,
+          activeJobCount: 0,
+          submittedApplicationCount30d: 0,
+        };
+        const active = job.status === "PUBLISHED" && job.publishedAt !== null && job.publishedAt <= now && job.expiresAt !== null && job.expiresAt > now;
+        demandByPair.set(key, Object.freeze({
+          ...current,
+          activeJobCount: current.activeJobCount + Number(active),
+          submittedApplicationCount30d: current.submittedApplicationCount30d + job.applications.length,
+        }));
+      }
       const sample = analyticsByJob.get(job.id);
       if (sample === undefined) continue;
       baselineRows.push({ jobId: job.id, cantonId: job.publishedCantonId, categoryId: job.publishedCategoryId, measuredFrom: window90, measuredTo: now, companyProvenance: "LIVE", jobProvenance: job.dataProvenance, organicDetailSessions: sample.views90, conversionBps: rateBps(sample.intents90, sample.views90) });
@@ -86,27 +116,32 @@ export async function getBusinessCockpit(dependencies: AdminDependencies) {
       title: `${lead.organizationName ?? lead.company.name} nachfassen`,
       evidence: `${lead.status} · ${targetAt === null ? "Termin offen" : targetAt <= now ? `überfällig seit ${targetAt.toISOString()}` : `fällig ${targetAt.toISOString()}`} · ${lead.owner?.name ?? "nicht zugewiesen"}`,
       suggestedAction: "Owner und nächsten Termin bestätigen; Kontaktversuch mit begrenztem Outcome dokumentieren.",
+      leadId: lead.id,
+      leadStatus: lead.status,
+      suggestedNextAt: new Date(now.getTime() + DAY).toISOString(),
     });
   }
   for (const company of companies) {
     const dataProvenance = company.dataProvenance === "DEMO" ? "DEMO" as const : "LIVE" as const;
+    const salesLead = company.salesLeads[0];
+    const leadAction = salesLead === undefined ? {} : { leadId: salesLead.id, leadStatus: salesLead.status, suggestedNextAt: new Date(now.getTime() + DAY).toISOString() };
     const entitlements = await getEffectiveEntitlements(company.id, now, createPrismaEntitlementRepository(dependencies.database));
     if (!entitlements.ok) continue;
     const activeJobs = company.jobs.filter((job) => job.status === "PUBLISHED" && job.publishedAt !== null && job.publishedAt <= now && job.expiresAt !== null && job.expiresAt > now).length;
     const submittedApplications = company.jobs.reduce((sum, job) => sum + job.applications.length, 0);
     const dismissed = new Set(company.systemTasks.map((task) => task.reasonCode));
     if (!dismissed.has("NEAR_JOB_LIMIT") && evaluateNearJobLimitV1({ activeJobs, jobLimit: entitlements.value.rights.ACTIVE_JOB_LIMIT, submittedApplications })) {
-      signals.push({ reason: "NEAR_JOB_LIMIT", dataProvenance, companyId: company.id, companyName: company.name, title: `${company.name} nutzt ${activeJobs} von ${entitlements.value.rights.ACTIVE_JOB_LIMIT} aktiven Jobs`, evidence: `${submittedApplications} Bewerbungen in 30 Tagen`, suggestedAction: "Plan-Fit prüfen und Upgrade auf Pro anbieten." });
+      signals.push({ reason: "NEAR_JOB_LIMIT", dataProvenance, companyId: company.id, companyName: company.name, title: `${company.name} nutzt ${activeJobs} von ${entitlements.value.rights.ACTIVE_JOB_LIMIT} aktiven Jobs`, evidence: `${submittedApplications} Bewerbungen in 30 Tagen`, suggestedAction: "Plan-Fit prüfen und Upgrade auf Pro anbieten.", ...leadAction });
     }
     const firstPublishedAt = company.jobs.map((job) => job.publishedAt).filter((value): value is Date => value !== null).sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
-    if (!dismissed.has("FREE_UPGRADE_CANDIDATE") && evaluateFreeUpgradeCandidateV1({ companyActive: company.status === "ACTIVE", companyVerified: company.verificationRequests[0]?.status === "VERIFIED", isFreePlan: company.subscriptions[0]?.planVersion.plan.isDefaultFree ?? true, firstPublishedAt, submittedApplications, hasOpenQualifiedLead: company.salesLeads.length > 0, dismissedAt: null, now })) {
-      signals.push({ reason: "FREE_UPGRADE_CANDIDATE", dataProvenance, companyId: company.id, companyName: company.name, title: `${company.name} zeigt organische Aktivierung`, evidence: `${submittedApplications} Bewerbungen in 30 Tagen`, suggestedAction: "Bedarf erfassen und einen passenden Pro-Plan besprechen." });
+    if (!dismissed.has("FREE_UPGRADE_CANDIDATE") && evaluateFreeUpgradeCandidateV1({ companyActive: company.status === "ACTIVE", companyVerified: company.verificationRequests[0]?.status === "VERIFIED", isFreePlan: company.subscriptions[0]?.planVersion.plan.isDefaultFree ?? true, firstPublishedAt, submittedApplications, hasOpenQualifiedLead: company.salesLeads.some((lead) => ["CONTACTED", "QUALIFIED"].includes(lead.status)), dismissedAt: null, now })) {
+      signals.push({ reason: "FREE_UPGRADE_CANDIDATE", dataProvenance, companyId: company.id, companyName: company.name, title: `${company.name} zeigt organische Aktivierung`, evidence: `${submittedApplications} Bewerbungen in 30 Tagen`, suggestedAction: "Bedarf erfassen und einen passenden Pro-Plan besprechen.", ...leadAction });
     }
     const dueApplications = company.jobs.flatMap((job) => job.applications).filter((application) => application.submissionSnapshot !== null && new Date(application.submittedAt.getTime() + application.submissionSnapshot.responseTargetDays * DAY) <= now);
     const onTime = dueApplications.filter((application) => application.events.some((event) => ["STATUS_CHANGE", "MESSAGE_SENT"].includes(event.kind) && event.actorUserId !== null && event.createdAt <= new Date(application.submittedAt.getTime() + (application.submissionSnapshot?.responseTargetDays ?? 0) * DAY))).length;
     const onTimeRateBps = rateBps(onTime, dueApplications.length);
     if (!dismissed.has("SLOW_RESPONSE") && evaluateSlowResponseV1({ dueApplications: dueApplications.length, onTimeRateBps })) {
-      signals.push({ reason: "SLOW_RESPONSE", dataProvenance, companyId: company.id, companyName: company.name, title: `${company.name} antwortet zu langsam`, evidence: `${onTime}/${dueApplications.length} fristgerechte Erstreaktionen (${onTimeRateBps} bp)`, suggestedAction: "Anti-Ghosting-Prozess empfehlen." });
+      signals.push({ reason: "SLOW_RESPONSE", dataProvenance, companyId: company.id, companyName: company.name, title: `${company.name} antwortet zu langsam`, evidence: `${onTime}/${dueApplications.length} fristgerechte Erstreaktionen (${onTimeRateBps} bp)`, suggestedAction: "Anti-Ghosting-Prozess empfehlen.", ...leadAction });
     }
     for (const job of company.jobs) {
       if (job.status !== "PUBLISHED" || job.publishedAt === null || job.currentRevision === null) continue;
@@ -116,19 +151,20 @@ export async function getBusinessCockpit(dependencies: AdminDependencies) {
       const score = revision.scoreSnapshots[0];
       const content = { organicDetailSessions: sample.views30, applyIntentRateBps: rateBps(sample.intents30, sample.views30), publishedAt: job.publishedAt, now, fairScoreV2: score?.scoreVersion.startsWith("fair-job-score-v2") === true ? Math.floor((score.scorePoints / score.maxPoints) * 100) : null, salaryEvidencePresent: revision.salaryPeriod !== null && revision.salaryMin !== null && revision.salaryMax !== null, processEvidencePresent: revision.applicationProcessSteps.length > 0, applicationEffort: revision.applicationEffort, applyPathBroken: revision.applicationContactValue.trim().length < 3 } as const;
       if (!dismissed.has("JOB_CONTENT_DIAGNOSTIC") && evaluateJobContentDiagnosticV1(content)) {
-        signals.push({ reason: "JOB_CONTENT_DIAGNOSTIC", dataProvenance, companyId: company.id, companyName: company.name, jobId: job.id, title: "Job hat viele Views, aber wenig Bewerbungsstarts", evidence: `${sample.views30} organische Views, ${content.applyIntentRateBps} bp Apply-Intent`, suggestedAction: "Zuerst Text, Lohntransparenz und Bewerbungsweg prüfen." });
+        signals.push({ reason: "JOB_CONTENT_DIAGNOSTIC", dataProvenance, companyId: company.id, companyName: company.name, jobId: job.id, title: "Job hat viele Views, aber wenig Bewerbungsstarts", evidence: `${sample.views30} organische Views, ${content.applyIntentRateBps} bp Apply-Intent`, suggestedAction: "Zuerst Text, Lohntransparenz und Bewerbungsweg prüfen.", ...leadAction });
         continue;
       }
       if (job.publishedCantonId !== null && job.publishedCategoryId !== null) {
         const baselineBps = calculateClusterBaselineBpsV1(baselineRows, { cantonId: job.publishedCantonId, categoryId: job.publishedCategoryId, now });
         if (!dismissed.has("BOOST_TEST_CANDIDATE") && evaluateBoostTestCandidateV1({ content, hasActiveBoost: job.boosts.length > 0, baselineBps })) {
-          signals.push({ reason: "BOOST_TEST_CANDIDATE", dataProvenance, companyId: company.id, companyName: company.name, jobId: job.id, title: "Messbarer Boost-Test möglich", evidence: `${sample.views30} organische Views, Cluster-Baseline ${baselineBps} bp`, suggestedAction: "Nach bestandener Inhaltsdiagnose einen klar beschrifteten Boost-Test anbieten." });
+          signals.push({ reason: "BOOST_TEST_CANDIDATE", dataProvenance, companyId: company.id, companyName: company.name, jobId: job.id, title: "Messbarer Boost-Test möglich", evidence: `${sample.views30} organische Views, Cluster-Baseline ${baselineBps} bp`, suggestedAction: "Nach bestandener Inhaltsdiagnose einen klar beschrifteten Boost-Test anbieten.", ...leadAction });
         }
       }
     }
   }
 
-  return Object.freeze({ policyVersion: "COCKPIT_SIGNAL_POLICY_V1", queues, signals: Object.freeze(signals), leads, supplyByCategory, slaBreaches: { support: breaches[0], moderation: breaches[1] }, privacySafeRadarAggregates: null });
+  const demandOverview = Object.freeze([...demandByPair.values()].sort((left, right) => right.submittedApplicationCount30d - left.submittedApplicationCount30d || left.activeJobCount - right.activeJobCount || left.cantonCode.localeCompare(right.cantonCode) || left.categoryName.localeCompare(right.categoryName)));
+  return Object.freeze({ policyVersion: "COCKPIT_SIGNAL_POLICY_V1", queues, signals: Object.freeze(signals), leads, supplyByCategory, demandOverview, slaBreaches: { support: breaches[0], moderation: breaches[1] }, privacySafeRadarAggregates: null });
 }
 
 type AnalyticsRow = Readonly<{ jobId: string | null; kind: string; occurredAt: Date; pseudonymousSessionId: string | null; dedupeKey: string; properties: unknown }>;
