@@ -427,7 +427,7 @@ async function createRevealFixture(client: DatabaseClient, suffix = "lock") {
       periodEnd: new Date(NOW.getTime() + 30 * DAY),
     },
   });
-  await client.creditLedgerEntry.create({
+  const contactCreditGrant = await client.creditLedgerEntry.create({
     data: {
       accountId: account.id,
       fundingSource: "ADMIN_GRANT",
@@ -449,6 +449,7 @@ async function createRevealFixture(client: DatabaseClient, suffix = "lock") {
       validTo: new Date(NOW.getTime() + 30 * DAY),
       idempotencyKey: `reveal-${suffix}-contact-consumption`,
       actorUserId: employer.id,
+      consumedGrantEntryId: contactCreditGrant.id,
     },
   });
   const contactRequest = await client.employerContactRequest.create({

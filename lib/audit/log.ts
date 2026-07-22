@@ -39,6 +39,7 @@ export const AUDIT_TARGET_TYPES_V1 = [
   "MODERATION_RESTRICTION",
   "PLAN_VERSION",
   "PRODUCT_VERSION",
+  "PRODUCT_RELEASE_DECISION",
   "SUBSCRIPTION",
   "ORDER",
   "INVOICE",
@@ -97,6 +98,9 @@ const COMPANY_REGISTRATION_AUDIT_METADATA_SCHEMA = z
       });
     }
   });
+const CATALOG_VERSION_SCHEDULED_AUDIT_METADATA_SCHEMA = z.strictObject({
+  sourceVersionId: z.uuid(),
+});
 
 /**
  * Phase 03 starts with a deny-by-default metadata contract. A domain owner may
@@ -116,6 +120,8 @@ auditMetadataSchemas.COMPANY_CREATED_WITH_OWNER =
   COMPANY_REGISTRATION_AUDIT_METADATA_SCHEMA;
 auditMetadataSchemas.COMPANY_CLAIM_REQUESTED =
   COMPANY_REGISTRATION_AUDIT_METADATA_SCHEMA;
+auditMetadataSchemas.CATALOG_VERSION_SCHEDULED =
+  CATALOG_VERSION_SCHEDULED_AUDIT_METADATA_SCHEMA;
 
 export const AUDIT_METADATA_SCHEMAS_V1 = Object.freeze(auditMetadataSchemas);
 

@@ -6,6 +6,7 @@ import { getEmployerContext } from "@/lib/auth/employer-context";
 import { requireEmployerPage } from "@/lib/auth/route-guards";
 import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quota";
 import { getDatabase } from "@/lib/db/client";
+import { planLabel as formatPlanLabel } from "@/lib/employer/dashboard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -22,6 +23,7 @@ const navigation = [
   { href: "/employer/applicants", label: "Bewerber:innen" },
   { href: "/employer/talent-radar", label: "Talent Radar" },
   { href: "/employer/analytics", label: "Analytics" },
+  { href: "/employer/billing", label: "Billing" },
 ] as const;
 
 export default async function EmployerLayout({
@@ -39,11 +41,14 @@ export default async function EmployerLayout({
     );
     if (result.ok) planLabel = formatPlanLabel(result.value.source.planSlug);
   }
-  const canSeeTeamNavigation =
+  const canSeeCompanyManagementNavigation =
     current?.membershipRole === "OWNER" || current?.membershipRole === "ADMIN";
-  const visibleNavigation = canSeeTeamNavigation
+  const visibleNavigation = canSeeCompanyManagementNavigation
     ? navigation
-    : navigation.filter((item) => item.href !== "/employer/team");
+    : navigation.filter(
+        (item) =>
+          item.href !== "/employer/team" && item.href !== "/employer/billing",
+      );
   return (
     <PrivateShell
       area="Arbeitgeberportal"
@@ -66,16 +71,4 @@ export default async function EmployerLayout({
       {children}
     </PrivateShell>
   );
-}
-
-function formatPlanLabel(slug: string) {
-  const normalized = slug.trim().toLowerCase();
-  return ({
-    free: "Free Basic",
-    "free-basic": "Free Basic",
-    starter: "Starter",
-    pro: "Pro",
-    business: "Business",
-    enterprise: "Enterprise",
-  } as const)[normalized as "free"] ?? slug;
 }

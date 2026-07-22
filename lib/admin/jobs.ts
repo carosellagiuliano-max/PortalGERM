@@ -4,6 +4,10 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
+import {
+  createPrismaTransactionAnalyticsWriter,
+  trackAnalyticsEventV1,
+} from "@/lib/analytics/track";
 import { createPrismaPublishQuotaPort } from "@/lib/billing/prisma-publish-quota";
 import { publishWithQuota } from "@/lib/billing/usage";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -256,8 +260,9 @@ export async function publishAdminJob(
         companyId: true,
         status: true,
         version: true,
+        dataProvenance: true,
         currentRevisionId: true,
-        company: { select: { status: true } },
+        company: { select: { status: true, dataProvenance: true } },
         currentRevision: {
           select: {
             id: true,
@@ -347,6 +352,26 @@ export async function publishAdminJob(
       correlationId: dependencies.correlationId,
       createdAt: now,
     } });
+    await trackAnalyticsEventV1(
+      {
+        schemaVersion: "1",
+        producerEventId: `JOB_PUBLISHED:${job.id}`,
+        occurredAt: now,
+        kind: "JOB_PUBLISHED",
+        companyId: job.companyId,
+        jobId: job.id,
+        properties: { fromStatus: "APPROVED", toStatus: "PUBLISHED" },
+      },
+      {
+        producer: "admin-job-publish",
+        productAnalyticsEnabled: false,
+        provenance: {
+          company: job.company.dataProvenance,
+          job: job.dataProvenance,
+        },
+      },
+      createPrismaTransactionAnalyticsWriter(transaction),
+    );
     await notifyJobManagers(transaction, job.companyId, job.id, "PUBLISHED", eventKey);
     await writeAdminAudit(transaction, dependencies, now, {
       action: "JOB_PUBLISHED",

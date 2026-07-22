@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { AlertTriangleIcon, CheckCircle2Icon, SparklesIcon } from "lucide-react";
 
+import { UpgradeDialog } from "@/components/billing/upgrade-dialog";
 import {
   applicationContactLabel,
   contentLanguageLabel,
@@ -14,7 +15,7 @@ import {
 } from "@/components/shared/job-content-sections";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,12 +100,14 @@ export function EmployerJobWizard({
   step,
   actions,
   idempotencyKeys,
+  additionalJobCheckoutHref,
 }: Readonly<{
   job: EmployerJobFullDetail;
   catalog: EmployerJobCatalog;
   step: number;
   actions: EmployerJobWizardActions;
   idempotencyKeys: EmployerJobWizardIdempotencyKeys;
+  additionalJobCheckoutHref: string | null;
 }>) {
   const revision = job.revision;
   const [saveState, saveAction, savePending] = useActionState(actions.saveStep, INITIAL_EMPLOYER_JOB_FORM_STATE);
@@ -240,6 +243,23 @@ export function EmployerJobWizard({
             </CardContent>
           </Card>
         ) : null}
+        {additionalJobCheckoutHref === null ? null : (
+          <Card className="border-primary/30">
+            <CardHeader>
+              <CardTitle as="h2">Zusatzstelle freischalten</CardTitle>
+              <CardDescription>
+                Für diese freigegebene, noch nicht veröffentlichte Stelle ist
+                ein zielgebundenes 30-Tage-Permit verfügbar. Der Kauf
+                veröffentlicht die Stelle nicht automatisch.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href={additionalJobCheckoutHref} className={buttonVariants()}>
+                Zusatzstelle für diesen Job ansehen
+              </Link>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardHeader><CardTitle as="h2">Letzte Ereignisse</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
@@ -408,7 +428,13 @@ function CommandFields({ job, idempotencyKey }: Readonly<{ job: EmployerJobFullD
 function WizardCard({ title, description, children }: Readonly<{ title: string; description: string; children: React.ReactNode }>) { return <Card><CardHeader><CardTitle as="h2">{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>{children}</CardContent></Card>; }
 function Field({ label, htmlFor, children }: Readonly<{ label: string; htmlFor: string; children: React.ReactNode }>) { return <div className="grid gap-1.5"><Label htmlFor={htmlFor}>{label}</Label>{children}</div>; }
 function SubmitButton({ pending, label }: Readonly<{ pending: boolean; label: string }>) { return <div className="flex justify-end"><Button type="submit" disabled={pending}>{pending ? "Wird gespeichert …" : label}</Button></div>; }
-function ActionFeedback({ state }: Readonly<{ state: EmployerJobFormState }>) { if (state.status === "idle" || state.message === undefined) return null; return <p role={state.status === "error" || state.status === "conflict" ? "alert" : "status"} className={state.status === "success" ? "text-sm text-emerald-700" : "text-sm text-destructive"}>{state.message}</p>; }
+function ActionFeedback({ state }: Readonly<{ state: EmployerJobFormState }>) {
+  if (state.status === "idle") return null;
+  return <>
+    {state.message === undefined ? null : <p role={state.status === "error" || state.status === "conflict" ? "alert" : "status"} className={state.status === "success" ? "text-sm text-emerald-700" : "text-sm text-destructive"}>{state.message}</p>}
+    {state.upgradePrompt === undefined ? null : <UpgradeDialog key={state.nextIdempotencyKey ?? state.upgradePrompt.reason} prompt={state.upgradePrompt} defaultOpen />}
+  </>;
+}
 function Metric({ value, label }: Readonly<{ value: number; label: string }>) { return <div className="rounded-lg bg-muted/50 p-2"><p className="font-semibold">{value}</p><p className="text-[0.65rem] text-muted-foreground">{label}</p></div>; }
 function toDateInput(value: Date | null | undefined) { return value === null || value === undefined ? "" : value.toISOString().slice(0, 10); }
 function formatDateTime(value: Date) { return new Intl.DateTimeFormat("de-CH", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Zurich" }).format(value); }

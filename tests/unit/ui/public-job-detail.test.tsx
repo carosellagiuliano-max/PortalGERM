@@ -27,6 +27,7 @@ vi.mock("@/lib/public/environment", () => ({
 
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: vi.fn() }));
 vi.mock("@/lib/auth/signed-intent", () => ({
+  JOB_INTENT_ACTIONS_V1: ["SAVE", "APPLY"],
   buildJobIntentNextPath: vi.fn(),
   verifyJobIntent: () => null,
 }));

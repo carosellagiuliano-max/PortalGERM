@@ -248,10 +248,12 @@ export function planLabel(slug: string) {
   const labels: Readonly<Record<string, string>> = {
     free: "Free Basic",
     "free-basic": "Free Basic",
+    free_basic: "Free Basic",
     starter: "Starter",
     pro: "Pro",
     business: "Business",
     enterprise: "Enterprise",
+    enterprise_contract: "Enterprise",
   };
   return labels[slug.trim().toLowerCase()] ?? slug;
 }

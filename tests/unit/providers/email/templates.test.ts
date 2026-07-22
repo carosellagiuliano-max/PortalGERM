@@ -12,6 +12,7 @@ const EXPECTED_SUBJECTS = {
   application_submitted: "Deine Bewerbung wurde erfasst",
   company_invitation: "Einladung zu einem Unternehmen auf SwissTalentHub",
   company_verification_status: "Status deiner Unternehmensprüfung",
+  commercial_lifecycle_signal: "Kommerzieller Hinweis zur Prüfung",
   credits_expiring: "Hinweis zu ablaufenden Credits",
   credits_granted: "Credits wurden gutgeschrieben",
   demo_request_received: "Neue Demo-Anfrage eingegangen",
@@ -44,6 +45,7 @@ const TEMPLATE_DATA = Object.freeze({
   alertName: "Software Zürich",
   categoryLabel: "Unzulässiger Inhalt",
   companyName: "Beispiel AG",
+  dueDate: "31.07.2026",
   creditCount: 3,
   creditTypeLabel: "Kontakt-Credits",
   expiryDate: "31.12.2026",
@@ -63,12 +65,13 @@ const TEMPLATE_DATA = Object.freeze({
   renewalDate: "01.08.2026",
   resetUrl: "http://127.0.0.1:3000/reset-password#token=secret",
   statusLabel: "freigegeben",
+  signalLabel: "Verlängerung prüfen",
   used: 4,
 });
 
 describe("German email template registry", () => {
   it("renders every declared key with its authoritative German subject", () => {
-    expect(EMAIL_TEMPLATE_KEYS).toHaveLength(28);
+    expect(EMAIL_TEMPLATE_KEYS).toHaveLength(29);
     expect(Object.keys(EXPECTED_SUBJECTS).sort()).toEqual(
       [...EMAIL_TEMPLATE_KEYS].sort(),
     );

@@ -33,6 +33,7 @@ export const P0_APPLICATION_DOCUMENT_KINDS = Object.freeze([
 export type ApplicationConfirmationView = Readonly<{
   profileId: string;
   userId: string;
+  candidateProvenance: DataProvenance;
   jobId: string;
   companyId: string;
   companyProvenance: DataProvenance;
@@ -91,7 +92,9 @@ export async function loadApplicationConfirmationInTransaction(
         userId: true,
         firstName: true,
         lastName: true,
-        user: { select: { email: true, status: true } },
+        user: {
+          select: { email: true, status: true, dataProvenance: true },
+        },
         documents: {
           where: { status: "ACTIVE", purpose: "CV" },
           orderBy: [{ createdAt: "desc" }, { id: "asc" }],
@@ -177,6 +180,7 @@ export async function loadApplicationConfirmationInTransaction(
     value: Object.freeze({
       profileId: profile.id,
       userId: profile.userId,
+      candidateProvenance: profile.user.dataProvenance,
       jobId: job.id,
       companyId: job.companyId,
       companyProvenance: job.company.dataProvenance,

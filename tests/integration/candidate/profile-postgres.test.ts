@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { candidateAnalyticsSubjectV1 } from "@/lib/analytics/pseudonyms";
 import {
   CandidateProfileConflictError,
   CandidateProfileUnavailableError,
@@ -264,6 +265,14 @@ describe("Phase-09 candidate profile PostgreSQL workflow", () => {
       "RADAR_OPTED_IN",
       "CANDIDATE_PROFILE_COMPLETED",
     ]);
+    const completion = analytics.find(
+      ({ kind }) => kind === "CANDIDATE_PROFILE_COMPLETED",
+    );
+    expect(completion).toMatchObject({
+      pseudonymousActorId: candidateAnalyticsSubjectV1(fixture.user.id),
+      actorProvenanceSnapshot: fixture.user.dataProvenance,
+    });
+    expect(completion?.pseudonymousActorId).not.toContain(fixture.user.id);
   });
 
   it("scopes every mutation to the actor-owned profile and keeps consent append-only", async () => {

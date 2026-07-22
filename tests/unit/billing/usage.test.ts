@@ -6,6 +6,7 @@ import {
   countUsedContacts,
   isQuotaConsumingJob,
   publishWithQuota,
+  summarizeIncludedCreditUsage,
   type CreditLedgerUsageEntry,
   type PublishQuotaPort,
   type PublishQuotaTransaction,
@@ -136,6 +137,16 @@ describe("read-only credit usage", () => {
     ];
     expect(countUsedContacts(entries, { start, end })).toBe(3);
   });
+
+  it("subtracts an exact reversal from included usage without changing the grant", () => {
+    expect(
+      summarizeIncludedCreditUsage([
+        { kind: "GRANT", amount: 10 },
+        { kind: "CONSUME", amount: -3 },
+        { kind: "REVERSAL", amount: 3 },
+      ]),
+    ).toEqual({ granted: 10, used: 0, remaining: 10 });
+  });
 });
 
 describe("publishWithQuota transaction algorithm", () => {
@@ -165,6 +176,10 @@ describe("publishWithQuota transaction algorithm", () => {
       findCurrentAdditionalJobPermit: vi.fn(async () => {
         events.push("permit");
         return options.permit ?? null;
+      }),
+      consumeCurrentAdditionalJobPermit: vi.fn(async () => {
+        events.push("consume-permit");
+        return true;
       }),
       commitPublication: vi.fn(async () => {
         events.push("commit");
@@ -241,7 +256,11 @@ describe("publishWithQuota transaction algorithm", () => {
     const { port, transaction } = makePort({ activeCount: 1, resolution });
     const result = await publishWithQuota(command, port);
 
-    expect(result).toMatchObject({ ok: false, reason: "ACTIVE_JOB_LIMIT_REACHED" });
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "ACTIVE_JOB_LIMIT_REACHED",
+    });
+    expect(result).not.toHaveProperty("suggestedPlanSlug");
     expect(transaction.findCurrentAdditionalJobPermit).toHaveBeenCalledWith(
       COMPANY_ID,
       "job-1",
@@ -259,10 +278,11 @@ describe("publishWithQuota transaction algorithm", () => {
         rights: oneJobRights,
       }),
     };
-    const { events, port } = makePort({
+    const { events, port, transaction } = makePort({
       activeCount: 1,
       resolution,
       permit: {
+        id: "permit-1",
         companyId: COMPANY_ID,
         targetJobId: "job-1",
         status: "ACTIVE",
@@ -278,8 +298,46 @@ describe("publishWithQuota transaction algorithm", () => {
       "count",
       "entitlements",
       "permit",
+      "consume-permit",
       "commit",
       "transaction:end",
     ]);
+    expect(transaction.consumeCurrentAdditionalJobPermit).toHaveBeenCalledWith(
+      "permit-1",
+      COMPANY_ID,
+      "job-1",
+      AT,
+    );
+  });
+
+  it("fails closed without committing when the targeted permit cannot be consumed", async () => {
+    const oneJobRights = { ...PRO_RIGHTS, ACTIVE_JOB_LIMIT: 1 };
+    const resolution: EntitlementResolutionResult = {
+      ok: true,
+      value: effectiveEntitlements({
+        planRights: oneJobRights,
+        rights: oneJobRights,
+      }),
+    };
+    const { port, transaction } = makePort({
+      activeCount: 1,
+      resolution,
+      permit: {
+        id: "permit-raced",
+        companyId: COMPANY_ID,
+        targetJobId: "job-1",
+        status: "ACTIVE",
+        validFrom: new Date(AT.getTime() - DAY),
+        validTo: new Date(AT.getTime() + 30 * DAY),
+        revokedAt: null,
+      },
+    });
+    vi.mocked(transaction.consumeCurrentAdditionalJobPermit).mockResolvedValue(false);
+
+    await expect(publishWithQuota(command, port)).resolves.toMatchObject({
+      ok: false,
+      reason: "ADDITIONAL_JOB_PERMIT_INVALID",
+    });
+    expect(transaction.commitPublication).not.toHaveBeenCalled();
   });
 });

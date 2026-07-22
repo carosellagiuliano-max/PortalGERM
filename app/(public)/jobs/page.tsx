@@ -4,6 +4,7 @@ import { ChevronRightIcon } from "lucide-react";
 
 import { JobGrid } from "@/components/public/job-grid";
 import { JobSearchForm } from "@/components/public/job-search-form";
+import { PublicSearchResultsAnalytics } from "@/components/analytics/public-job-analytics";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { getPublicCatalog, listPublicJobs } from "@/lib/jobs/public-read-model";
@@ -32,9 +33,23 @@ export default async function JobsPage({
 }: Readonly<{ searchParams: Promise<RawPublicSearchParams> }>) {
   const input = parsePublicJobSearchParams(await searchParams);
   const [result, catalog] = await Promise.all([listPublicJobs(input), getPublicCatalog()]);
+  const cantonCode = catalog.cantons.find(
+    (canton) => canton.slug === input.cantonSlugs[0],
+  )?.code;
+  const categorySlug = catalog.categories.some(
+    (category) => category.slug === input.categorySlugs[0],
+  )
+    ? input.categorySlugs[0]
+    : undefined;
 
   return (
     <div className="page-shell py-12 sm:py-16">
+      <PublicSearchResultsAnalytics
+        resultCountBucket={resultCountBucket(result.totalEligible)}
+        sort={input.sort}
+        cantonCode={cantonCode}
+        categorySlug={categorySlug}
+      />
       <p className="eyebrow">Stellensuche</p>
       <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">Finde deinen nächsten fairen Job.</h1>
       <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">Filtere nach überprüfbaren Merkmalen. Personenbezogene Profildaten werden für die öffentliche Suche nicht geladen.</p>
@@ -69,6 +84,16 @@ export default async function JobsPage({
       )}
     </div>
   );
+}
+
+function resultCountBucket(
+  count: number,
+): "0" | "1-9" | "10-24" | "25-49" | "50+" {
+  if (count === 0) return "0";
+  if (count < 10) return "1-9";
+  if (count < 25) return "10-24";
+  if (count < 50) return "25-49";
+  return "50+";
 }
 
 function hasActiveFilters(input: ReturnType<typeof parsePublicJobSearchParams>) {

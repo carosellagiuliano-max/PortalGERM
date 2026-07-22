@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import {
   writeRequiredAudit,
+  type AuditResultV1,
   type AuditTargetTypeV1,
 } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
@@ -104,7 +105,9 @@ export async function writeAdminAudit(
     targetType: AuditTargetTypeV1;
     targetId: string;
     companyId?: string | null;
+    metadata?: Readonly<Record<string, unknown>>;
     reasonCode?: string | null;
+    result?: AuditResultV1;
   }>,
 ) {
   return writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
@@ -114,8 +117,9 @@ export async function writeAdminAudit(
     capability: input.capability,
     companyId: input.companyId ?? null,
     correlationId: dependencies.correlationId,
+    ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
     reasonCode: input.reasonCode ?? null,
-    result: "SUCCEEDED",
+    result: input.result ?? "SUCCEEDED",
     retainUntil: new Date(now.getTime() + ADMIN_AUDIT_RETENTION_MILLISECONDS),
     targetId: input.targetId,
     targetType: input.targetType,

@@ -7,7 +7,11 @@ import { PricingCard } from "@/components/marketing/pricing-card";
 import { PricingFaq } from "@/components/marketing/pricing-faq";
 import { SuccessFeeCard } from "@/components/marketing/success-fee-card";
 import { buttonVariants } from "@/components/ui/button";
+import { canStartEmployerPlanChange } from "@/lib/billing/employer-read-model";
 import { getPublicPricingCatalog } from "@/lib/billing/public-catalog";
+import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quota";
+import { getEmployerContext } from "@/lib/auth/employer-context";
+import { getDatabase } from "@/lib/db/client";
 
 export const metadata: Metadata = {
   title: "Preise für Arbeitgeber",
@@ -18,7 +22,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function PricingPage() {
-  const catalog = await getPublicPricingCatalog();
+  const now = new Date();
+  const [catalog, employerContext] = await Promise.all([
+    getPublicPricingCatalog(now),
+    getEmployerContext(),
+  ]);
   if (!catalog.ok) {
     return (
       <section className="page-shell py-20 text-center" aria-labelledby="pricing-unavailable-title">
@@ -33,6 +41,39 @@ export default async function PricingPage() {
       </section>
     );
   }
+  const current = employerContext?.current;
+  const database = getDatabase();
+  const [effective, canStartPlanChange] =
+    current?.companyStatus === "ACTIVE"
+      ? await Promise.all([
+          getPrismaEffectiveEntitlements(current.companyId, now, database),
+          canStartEmployerPlanChange(database, current.companyId, now),
+        ])
+      : ([null, false] as const);
+  const signedIn =
+    current === null || current === undefined || effective?.ok !== true
+      ? employerContext === null
+        ? null
+        : {
+            canManagePlan: false,
+            canStartPlanChange: false,
+            currentPlanCode: null,
+          }
+      : {
+          canManagePlan: current.membershipRole === "OWNER",
+          canStartPlanChange,
+          currentPlanCode: effective.value.source.planSlug as
+            | "FREE_BASIC"
+            | "STARTER"
+            | "PRO"
+            | "BUSINESS"
+            | "ENTERPRISE_CONTRACT",
+        };
+  const canBuyContactPack =
+    current?.companyStatus === "ACTIVE" &&
+    (current.membershipRole === "OWNER" || current.membershipRole === "ADMIN") &&
+    effective?.ok === true &&
+    effective.value.rights.TALENT_RADAR_ACCESS;
 
   return (
     <>
@@ -47,13 +88,13 @@ export default async function PricingPage() {
         </p>
         <div className="mt-6 inline-flex items-center gap-2 rounded-full border bg-muted/25 px-4 py-2 text-sm">
           <ShieldCheckIcon className="size-4 text-primary" aria-hidden="true" />
-          Keine Bestellung und kein Checkout in Phase 8
+          Lokaler Mock-Checkout · keine echte Belastung oder automatische Verlängerung
         </div>
       </section>
 
       <section className="page-shell pb-16" aria-label="Arbeitgeberpläne">
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {catalog.value.plans.map((plan) => <PricingCard key={plan.code} plan={plan} />)}
+          {catalog.value.plans.map((plan) => <PricingCard key={plan.code} plan={plan} signedIn={signedIn} />)}
         </div>
         <p className="mt-6 rounded-xl border bg-muted/25 p-4 text-sm leading-6 text-muted-foreground">
           {catalog.value.taxNotice.text}
@@ -64,15 +105,21 @@ export default async function PricingPage() {
         <div className="page-shell">
           <p className="eyebrow">Einmalige Add-ons</p>
           <h2 id="products-title" className="mt-3 text-3xl font-semibold tracking-tight">
-            Vier aktive P0-Produktversionen – derzeit nur zur Information.
+            Transparente einmalige Produkte mit klaren Freigabegrenzen.
           </h2>
           <p className="mt-4 max-w-3xl leading-7 text-muted-foreground">
             Die Katalogwerte stammen aus aktuell wirksamen ProductVersion-Snapshots.
-            Phase 12 prüft Contact Packs, Phase 13 besitzt die jobgebundene Boost-Aktivierung.
+            Contact Packs sind bei bestehendem Talent-Radar-Zugang im lokalen Mock kaufbar.
+            Job-Boosts bleiben bis Phase 13 ausschliesslich an einer geeigneten eigenen Stelle auswählbar.
           </p>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {catalog.value.products.map((product) => (
-              <OneTimeProductCard key={product.code} product={product} />
+              <OneTimeProductCard
+                key={product.code}
+                product={product}
+                canBuyContactPack={canBuyContactPack}
+                signedInEmployer={employerContext !== null}
+              />
             ))}
             <SuccessFeeCard />
           </div>

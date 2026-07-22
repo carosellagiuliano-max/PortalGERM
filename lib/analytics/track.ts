@@ -111,3 +111,23 @@ export function createPrismaAnalyticsWriter(database: DatabaseClient): Analytics
     },
   };
 }
+
+export function createPrismaTransactionAnalyticsWriter(
+  transaction: Prisma.TransactionClient,
+): AnalyticsWriter {
+  return {
+    async create(record) {
+      const result = await transaction.analyticsEvent.createMany({
+        data: [record],
+        skipDuplicates: true,
+      });
+      return result.count === 0 ? "DUPLICATE" : "CREATED";
+    },
+    async expire(retainUntilInclusive) {
+      const result = await transaction.analyticsEvent.deleteMany({
+        where: { retainUntil: { lte: retainUntilInclusive } },
+      });
+      return result.count;
+    },
+  };
+}

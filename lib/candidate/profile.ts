@@ -6,6 +6,7 @@ import {
   getAnalyticsRetainUntilV1,
   type AnalyticsEventInputV1,
 } from "@/lib/analytics/event-contracts";
+import { candidateAnalyticsSubjectV1 } from "@/lib/analytics/pseudonyms";
 import { trackAnalyticsEventV1 } from "@/lib/analytics/track";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
@@ -575,6 +576,9 @@ export async function completeOwnedCandidateOnboarding(
         schemaVersion: "1",
         producerEventId: `candidate-profile-completed:${current.id}`,
         occurredAt: command.now,
+        pseudonymousActorId: candidateAnalyticsSubjectV1(
+          command.actorUserId,
+        ),
         properties: {
           onboardingRuleVersion: CANDIDATE_ONBOARDING_RULE_V1.version,
         },

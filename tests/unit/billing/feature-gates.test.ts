@@ -1,5 +1,6 @@
 import type { EntitlementRights, FundableBySource } from "@/lib/billing/entitlements";
 import {
+  canAddRecruiterSeat,
   canPublishJob,
   canRequestContact,
   canRunLicensedSupplyImport,
@@ -28,6 +29,7 @@ function permit(
   overrides: Partial<AdditionalJobPermitSummary> = {},
 ): AdditionalJobPermitSummary {
   return {
+    id: "permit-1",
     companyId: COMPANY_ID,
     targetJobId: "job-1",
     status: "ACTIVE",
@@ -37,6 +39,66 @@ function permit(
     ...overrides,
   };
 }
+
+describe("canAddRecruiterSeat", () => {
+  it("allows a seat below the effective limit and blocks the next seat at the limit", () => {
+    const entitlement = effectiveEntitlements({
+      rights: rights({ SEAT_LIMIT: 2 }),
+      source: {
+        kind: "SUBSCRIPTION",
+        planSlug: "STARTER",
+        planVersionId: "plan-version-starter-1",
+        subscriptionId: "subscription-starter-1",
+      },
+    });
+
+    expect(
+      canAddRecruiterSeat({
+        effectiveEntitlements: entitlement,
+        currentSeatCount: 1,
+      }),
+    ).toEqual({ allowed: true });
+    expect(
+      canAddRecruiterSeat({
+        effectiveEntitlements: entitlement,
+        currentSeatCount: 2,
+      }),
+    ).toEqual({
+      allowed: false,
+      reason: "SEAT_LIMIT_REACHED",
+      suggestedPlanSlug: "pro",
+    });
+  });
+
+  it("does not suggest a same-plan Pro checkout at the Pro seat limit", () => {
+    expect(
+      canAddRecruiterSeat({
+        effectiveEntitlements: effectiveEntitlements({
+          rights: rights({ SEAT_LIMIT: 5 }),
+          source: {
+            kind: "SUBSCRIPTION",
+            planSlug: "PRO",
+            planVersionId: "plan-version-pro-1",
+            subscriptionId: "subscription-pro-1",
+          },
+        }),
+        currentSeatCount: 5,
+      }),
+    ).toEqual({ allowed: false, reason: "SEAT_LIMIT_REACHED" });
+  });
+
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    "fails closed for invalid current seat count %s",
+    (currentSeatCount) => {
+      expect(
+        canAddRecruiterSeat({
+          effectiveEntitlements: effectiveEntitlements(),
+          currentSeatCount,
+        }),
+      ).toEqual({ allowed: false, reason: "INVALID_INPUT" });
+    },
+  );
+});
 
 describe("canPublishJob", () => {
   it("allows an ordinary publication below the global limit", () => {
@@ -69,11 +131,17 @@ describe("canPublishJob", () => {
     expect(result.reason).toBe(reason);
   });
 
-  it("returns a typed upgrade/product result at the limit", () => {
+  it("blocks the second active job on a Free limit of one with a typed upgrade result", () => {
     expect(
       canPublishJob({
         effectiveEntitlements: effectiveEntitlements({
           rights: rights({ ACTIVE_JOB_LIMIT: 1 }),
+          source: {
+            kind: "DEFAULT_FREE",
+            planSlug: "FREE_BASIC",
+            planVersionId: "plan-version-free-1",
+            subscriptionId: null,
+          },
         }),
         currentActiveCount: 1,
         jobId: "job-1",
@@ -82,8 +150,51 @@ describe("canPublishJob", () => {
     ).toEqual({
       allowed: false,
       reason: "ACTIVE_JOB_LIMIT_REACHED",
+      suggestedPlanSlug: "pro",
+    });
+  });
+
+  it("offers the targeted permit only to an effective Starter subscription", () => {
+    expect(
+      canPublishJob({
+        effectiveEntitlements: effectiveEntitlements({
+          source: {
+            kind: "SUBSCRIPTION",
+            planSlug: "starter",
+            planVersionId: "plan-version-starter-1",
+            subscriptionId: "subscription-starter-1",
+          },
+          rights: rights({ ACTIVE_JOB_LIMIT: 3 }),
+        }),
+        currentActiveCount: 3,
+        jobId: "job-1",
+        revisionValidThrough: new Date(AT.getTime() + 20 * DAY),
+      }),
+    ).toEqual({
+      allowed: false,
+      reason: "ACTIVE_JOB_LIMIT_REACHED",
       suggestedProductSlug: "additional-job-30d",
       suggestedPlanSlug: "pro",
+    });
+
+    expect(
+      canPublishJob({
+        effectiveEntitlements: effectiveEntitlements({
+          source: {
+            kind: "SUBSCRIPTION",
+            planSlug: "pro",
+            planVersionId: "plan-version-pro-1",
+            subscriptionId: "subscription-pro-1",
+          },
+          rights: rights({ ACTIVE_JOB_LIMIT: 10 }),
+        }),
+        currentActiveCount: 10,
+        jobId: "job-1",
+        revisionValidThrough: new Date(AT.getTime() + 20 * DAY),
+      }),
+    ).toEqual({
+      allowed: false,
+      reason: "ACTIVE_JOB_LIMIT_REACHED",
     });
   });
 
@@ -303,6 +414,44 @@ describe("licensed platform and employer import", () => {
         accessGrant,
       }),
     ).toEqual({ allowed: true });
+    const enterpriseContractEntitlement = effectiveEntitlements({
+      source: {
+        kind: "SUBSCRIPTION",
+        planSlug: "ENTERPRISE_CONTRACT",
+        planVersionId: "enterprise-contract-1",
+        subscriptionId: "subscription-enterprise-contract",
+      },
+      planRights: planWithImport,
+      rights: planWithImport,
+    });
+    expect(
+      canUseEmployerImport({
+        effectiveEntitlements: enterpriseContractEntitlement,
+        currentPlanSlug: "ENTERPRISE_CONTRACT",
+        companyId: COMPANY_ID,
+        sourceId: "source-1",
+        accessGrant,
+      }),
+    ).toEqual({ allowed: true });
+    const legacyAliasEntitlement = effectiveEntitlements({
+      source: {
+        kind: "SUBSCRIPTION",
+        planSlug: "enterprise",
+        planVersionId: "legacy-enterprise-1",
+        subscriptionId: "subscription-legacy-enterprise",
+      },
+      planRights: planWithImport,
+      rights: planWithImport,
+    });
+    expect(
+      canUseEmployerImport({
+        effectiveEntitlements: legacyAliasEntitlement,
+        currentPlanSlug: "enterprise",
+        companyId: COMPANY_ID,
+        sourceId: "source-1",
+        accessGrant,
+      }),
+    ).toMatchObject({ allowed: false, reason: "EMPLOYER_IMPORT_PLAN_REQUIRED" });
     expect(
       canUseEmployerImport({
         effectiveEntitlements: entitlement,

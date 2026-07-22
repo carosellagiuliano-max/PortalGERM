@@ -3,6 +3,11 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { writeBestEffortAudit, writeRequiredAudit } from "@/lib/audit/log";
+import { candidateAnalyticsSubjectV1 } from "@/lib/analytics/pseudonyms";
+import {
+  createPrismaTransactionAnalyticsWriter,
+  trackAnalyticsEventV1,
+} from "@/lib/analytics/track";
 import {
   createPrismaAuditPort,
   createPrismaTransactionAuditPort,
@@ -202,7 +207,7 @@ export async function registerCandidate(
               },
             },
           },
-          select: { id: true },
+          select: { id: true, dataProvenance: true },
         });
         const profile = await transaction.candidateProfile.create({
           data: { userId: user.id, onboardingStatus: "DRAFT" },
@@ -240,6 +245,24 @@ export async function registerCandidate(
             targetType: "USER",
           },
           auditIpContext(dependencies),
+        );
+        await trackAnalyticsEventV1(
+          {
+            schemaVersion: "1",
+            producerEventId: `candidate-registered:${user.id}`,
+            occurredAt: now,
+            kind: "CANDIDATE_REGISTERED",
+            pseudonymousActorId: candidateAnalyticsSubjectV1(user.id),
+            properties: {
+              onboardingRuleVersion: "candidate-registration-v1",
+            },
+          },
+          {
+            producer: "auth-registration",
+            productAnalyticsEnabled: false,
+            provenance: { actor: user.dataProvenance },
+          },
+          createPrismaTransactionAnalyticsWriter(transaction),
         );
         return issueSession(transaction, {
           userId: user.id,

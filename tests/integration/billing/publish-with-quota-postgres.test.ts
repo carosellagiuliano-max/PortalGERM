@@ -136,7 +136,11 @@ describe("PostgreSQL publication quota transaction", () => {
 
     expect(results.filter((result) => result.ok)).toHaveLength(1);
     expect(results.filter((result) => !result.ok)).toEqual([
-      { ok: false, reason: "ACTIVE_JOB_LIMIT_REACHED" },
+      {
+        ok: false,
+        reason: "ACTIVE_JOB_LIMIT_REACHED",
+        suggestedPlanSlug: "pro",
+      },
     ]);
     expect(committedJobIds).toHaveLength(1);
 

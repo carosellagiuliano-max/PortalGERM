@@ -36,6 +36,7 @@ const PERSISTED_TEMPLATE_DATA_KEYS = {
   application_submitted: ["jobTitle", "companyName"],
   company_invitation: ["companyName"],
   company_verification_status: ["companyName", "statusLabel"],
+  commercial_lifecycle_signal: ["companyName", "signalLabel", "dueDate"],
   credits_expiring: ["creditCount", "expiryDate"],
   credits_granted: ["creditCount", "creditTypeLabel"],
   demo_request_received: [],
@@ -128,7 +129,7 @@ export class MockEmailProvider implements EmailProvider {
     templateKey: EmailTemplateKey;
     data: Record<string, unknown>;
     subject: string;
-  }): Promise<{ logId: string }> {
+  }): Promise<{ logId: string; created: boolean }> {
     const parsed = emailInputSchema.safeParse(input);
     if (!parsed.success) {
       throw new MockEmailInputError(
@@ -209,7 +210,7 @@ export class MockEmailProvider implements EmailProvider {
       await this.#mailbox?.capture(mailboxEnvelope);
     }
 
-    return Object.freeze({ logId: row.id });
+    return Object.freeze({ logId: row.id, created: row.created });
   }
 }
 

@@ -5,6 +5,7 @@ import { applicationStatusChangedTemplate } from "./application-status-changed";
 import { applicationSubmittedTemplate } from "./application-submitted";
 import { companyInvitationTemplate } from "./company-invitation";
 import { companyVerificationStatusTemplate } from "./company-verification-status";
+import { commercialLifecycleSignalTemplate } from "./commercial-lifecycle-signal";
 import { creditsExpiringTemplate } from "./credits-expiring";
 import { creditsGrantedTemplate } from "./credits-granted";
 import { demoRequestReceivedTemplate } from "./demo-request-received";
@@ -39,6 +40,7 @@ const TEMPLATE_REGISTRY = assertTemplateRegistryComplete({
   application_submitted: applicationSubmittedTemplate,
   company_invitation: companyInvitationTemplate,
   company_verification_status: companyVerificationStatusTemplate,
+  commercial_lifecycle_signal: commercialLifecycleSignalTemplate,
   credits_expiring: creditsExpiringTemplate,
   credits_granted: creditsGrantedTemplate,
   demo_request_received: demoRequestReceivedTemplate,

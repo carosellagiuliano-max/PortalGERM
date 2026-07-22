@@ -7,8 +7,21 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import type { PublicPricingPlan } from "@/lib/billing/public-catalog-core";
 import { formatChfFromRappen } from "@/lib/utils/format";
 
-export function PricingCard({ plan }: Readonly<{ plan: PublicPricingPlan }>) {
+export type SignedInPlanPricingContext = Readonly<{
+  canManagePlan: boolean;
+  canStartPlanChange: boolean;
+  currentPlanCode: PublicPricingPlan["code"] | null;
+}>;
+
+export function PricingCard({
+  plan,
+  signedIn,
+}: Readonly<{
+  plan: PublicPricingPlan;
+  signedIn?: SignedInPlanPricingContext | null;
+}>) {
   const features = planFeatures(plan);
+  const cta = resolvePricingCta(plan, signedIn);
   return (
     <Card className="h-full">
       <article aria-labelledby={`plan-${plan.slug}`} className="contents">
@@ -55,16 +68,50 @@ export function PricingCard({ plan }: Readonly<{ plan: PublicPricingPlan }>) {
           ) : null}
         </CardContent>
         <CardFooter>
-          <Link href={plan.cta.href} className={buttonVariants({
+          <Link href={cta.href} className={buttonVariants({
             variant: plan.code === "PRO" ? "default" : "outline",
             className: "w-full bg-background",
           })}>
-            {plan.cta.label}
+            {cta.label}
           </Link>
         </CardFooter>
       </article>
     </Card>
   );
+}
+
+function resolvePricingCta(
+  plan: PublicPricingPlan,
+  signedIn: SignedInPlanPricingContext | null | undefined,
+) {
+  if (signedIn === null || signedIn === undefined) return plan.cta;
+  if (plan.code === "FREE_BASIC") {
+    return { href: "/employer/dashboard", label: "Zum Arbeitgeberbereich" };
+  }
+  if (plan.code !== "STARTER" && plan.code !== "PRO") return plan.cta;
+  if (signedIn.canManagePlan && !signedIn.canStartPlanChange) {
+    return {
+      href: "/employer/billing",
+      label:
+        signedIn.currentPlanCode === plan.code
+          ? "Aktueller Plan · Änderung ansehen"
+          : "Vorgemerkte Planänderung ansehen",
+    };
+  }
+  if (
+    !signedIn.canManagePlan ||
+    signedIn.currentPlanCode === "BUSINESS" ||
+    signedIn.currentPlanCode === "ENTERPRISE_CONTRACT"
+  ) {
+    return plan.cta;
+  }
+  if (signedIn.currentPlanCode === plan.code) {
+    return { href: "/employer/billing", label: "Aktueller Plan" };
+  }
+  return {
+    href: `/employer/billing/checkout?plan=${plan.slug}`,
+    label: `${plan.name} im Mock wählen`,
+  };
 }
 
 function planFeatures(plan: PublicPricingPlan) {

@@ -1,3 +1,5 @@
+import type { UpgradePrompt } from "@/lib/billing/upgrade-prompt";
+
 /** Client-safe constants and DTO shapes for the employer job UI. */
 export const JOB_TYPES = [
   "PERMANENT",
@@ -40,6 +42,7 @@ export type EmployerJobFormState = Readonly<{
   message?: string;
   nextIdempotencyKey?: string;
   suggestion?: string;
+  upgradePrompt?: UpgradePrompt;
 }>;
 
 export const INITIAL_EMPLOYER_JOB_FORM_STATE: EmployerJobFormState = Object.freeze({ status: "idle" });

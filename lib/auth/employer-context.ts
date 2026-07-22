@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth/company-context-cookie";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth/current-user";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/request-context";
+import { listBoundaryAccessibleMembershipIds } from "@/lib/billing/membership-access";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 
@@ -38,6 +39,7 @@ export async function getEmployerContext(): Promise<EmployerContext | null> {
     return null;
   }
   const database = getDatabase();
+  const now = new Date();
   const rows = await database.companyMembership.findMany({
     where: {
       userId: user.id,
@@ -53,17 +55,37 @@ export async function getEmployerContext(): Promise<EmployerContext | null> {
       },
     },
   });
-  const memberships = Object.freeze(
-    rows.map((row) =>
-      Object.freeze({
-        membershipId: row.id,
-        membershipRole: row.role,
-        companyId: row.company.id,
-        companyName: row.company.name,
-        companySlug: row.company.slug,
-        companyStatus: row.company.status as "DRAFT" | "ACTIVE",
+  const accessPolicies = new Map(
+    await Promise.all(
+      [...new Set(rows.map((row) => row.company.id))].map(async (companyId) => {
+        const membershipIds = await listBoundaryAccessibleMembershipIds(
+          database,
+          companyId,
+          now,
+        );
+        return [
+          companyId,
+          membershipIds === null ? null : new Set(membershipIds),
+        ] as const;
       }),
     ),
+  );
+  const memberships = Object.freeze(
+    rows
+      .filter((row) => {
+        const restrictedIds = accessPolicies.get(row.company.id);
+        return restrictedIds === null || restrictedIds?.has(row.id) === true;
+      })
+      .map((row) =>
+        Object.freeze({
+          membershipId: row.id,
+          membershipRole: row.role,
+          companyId: row.company.id,
+          companyName: row.company.name,
+          companySlug: row.company.slug,
+          companyStatus: row.company.status as "DRAFT" | "ACTIVE",
+        }),
+      ),
   );
   const cookieStore = await cookies();
   const environment = getServerEnvironment();
@@ -72,7 +94,7 @@ export async function getEmployerContext(): Promise<EmployerContext | null> {
   )?.value;
   const payload = verifyCompanyContextCookie(
     signed,
-    { userId: user.id, now: new Date() },
+    { userId: user.id, now },
     environment.secrets.session,
   );
   const current = resolveEmployerContextSelection(
@@ -110,7 +132,8 @@ export async function setEmployerCompanyContext(
   ) {
     return false;
   }
-  const membership = await getDatabase().companyMembership.findFirst({
+  const database = getDatabase();
+  const membership = await database.companyMembership.findFirst({
     where: {
       companyId,
       userId: user.id,
@@ -120,6 +143,17 @@ export async function setEmployerCompanyContext(
     select: { id: true },
   });
   if (membership === null) return false;
+  const accessibleMembershipIds = await listBoundaryAccessibleMembershipIds(
+    database,
+    companyId,
+    new Date(),
+  );
+  if (
+    accessibleMembershipIds !== null &&
+    !accessibleMembershipIds.includes(membership.id)
+  ) {
+    return false;
+  }
 
   const environment = getServerEnvironment();
   const value = createCompanyContextCookie(

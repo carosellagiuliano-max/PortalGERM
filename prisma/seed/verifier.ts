@@ -68,6 +68,8 @@ import {
   RADAR_DEMO_COMPANY_SLUG,
   SALARY_BAND_FIXTURES,
   SALARY_DATASET_FIXTURE,
+  SEED_BILLING_MRR_CONTRACT_V1,
+  SEED_EFFECTIVE_PAID_SUBSCRIPTION_COMMERCIAL_FIXTURES_V1,
   SKILL_FIXTURES,
   buildJobFixtures,
   buildAuthRbacSeedFixtures,
@@ -87,7 +89,8 @@ const EXPECTED_CANDIDATE_LANGUAGES = 75;
 const EXPECTED_GRANTED_RADAR_CONSENTS = 11;
 const EXPECTED_RADAR_PROFILES = 10;
 const EXPECTED_DEMO_SUBSCRIPTIONS = 23;
-const EXPECTED_EFFECTIVE_PAID_SUBSCRIPTIONS = 20;
+const EXPECTED_EFFECTIVE_PAID_SUBSCRIPTIONS =
+  SEED_BILLING_MRR_CONTRACT_V1.effectivePaidSubscriptions;
 const EXPECTED_SUBSCRIPTION_SCHEDULES = 2;
 const EXPECTED_TAX_RATE_BASIS_POINTS = 810;
 const EXPECTED_CREDIT_ACCOUNTS = 31;
@@ -3003,6 +3006,55 @@ function verifyBilling(
   );
   check(
     context,
+    "effective paid subscription plan distribution",
+    sortedNumberRecord(
+      countBy(effective, (subscription) => subscription.planVersion.plan.code),
+    ),
+    sortedNumberRecord(SEED_BILLING_MRR_CONTRACT_V1.paidPlanDistribution),
+  );
+  check(
+    context,
+    "effective paid subscription commercial fixture reconciliation",
+    effective
+      .map((subscription) => ({
+        billingIntervalSnapshot: subscription.billingIntervalSnapshot,
+        companyId: subscription.companyId,
+        currencySnapshot: subscription.currencySnapshot,
+        monthlyEquivalentRappenSnapshot:
+          subscription.monthlyEquivalentRappenSnapshot,
+        planVersionId: subscription.planVersionId,
+        recurringNetRappenSnapshot: subscription.recurringNetRappenSnapshot,
+        termMonthsSnapshot: subscription.termMonthsSnapshot,
+      }))
+      .sort(compareKey("companyId")),
+    SEED_EFFECTIVE_PAID_SUBSCRIPTION_COMMERCIAL_FIXTURES_V1.map(
+      (subscription) => ({
+        billingIntervalSnapshot: subscription.billingInterval,
+        companyId: subscription.companyId,
+        currencySnapshot: subscription.currency,
+        monthlyEquivalentRappenSnapshot:
+          subscription.monthlyEquivalentRappen,
+        planVersionId: stableSeedId(
+          "plan-version",
+          subscription.planVersionNaturalKey,
+        ),
+        recurringNetRappenSnapshot: subscription.recurringNetRappen,
+        termMonthsSnapshot: subscription.termMonths,
+      }),
+    ).sort(compareKey("companyId")),
+  );
+  check(
+    context,
+    "effective paid subscription MRR fixture target",
+    effective.reduce(
+      (total, subscription) =>
+        total + subscription.monthlyEquivalentRappenSnapshot,
+      0,
+    ),
+    SEED_BILLING_MRR_CONTRACT_V1.totalMonthlyEquivalentRappen,
+  );
+  check(
+    context,
     "pending Subscription schedules",
     observed.subscriptionSchedules.length,
     EXPECTED_SUBSCRIPTION_SCHEDULES,
@@ -3030,7 +3082,7 @@ function verifyBilling(
     context,
     "Order status distribution",
     sortedNumberRecord(countBy(observed.orders, (order) => order.status)),
-    sortedNumberRecord({ CANCELLED: 2, PAID: 7, PENDING: 3 }),
+    sortedNumberRecord({ CANCELLED: 2, FAILED: 1, PAID: 7, PENDING: 2 }),
   );
   check(
     context,

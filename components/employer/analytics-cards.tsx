@@ -1,11 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlanGate } from "@/components/employer/plan-gate";
+import type { UpgradePrompt } from "@/lib/billing/upgrade-prompt";
 
 type EmployerAnalyticsData = NonNullable<
   Awaited<ReturnType<typeof import("@/lib/employer/analytics").getEmployerAnalyticsData>>
 >;
 
-export function AnalyticsCards({ data }: Readonly<{ data: EmployerAnalyticsData }>) {
+export function AnalyticsCards({
+  data,
+  upgradePrompt,
+}: Readonly<{
+  data: EmployerAnalyticsData;
+  upgradePrompt: UpgradePrompt;
+}>) {
   const totals = data.metrics.allowed ? data.metrics.totals : null;
   const visible = totals?.status === "VALUE" ? totals : null;
   return (
@@ -63,6 +70,7 @@ export function AnalyticsCards({ data }: Readonly<{ data: EmployerAnalyticsData 
         allowed={data.advancedAllowed}
         title="Erweiterte Analytics"
         explanation="Vergleichs- und Detailauswertungen benötigen einen Plan mit Advanced Analytics. Die Entscheidung wurde serverseitig aus den wirksamen Entitlements getroffen."
+        upgradePrompt={upgradePrompt}
       >
         <Card>
           <CardHeader><CardTitle as="h2">Lohntransparenz und Funnel</CardTitle></CardHeader>

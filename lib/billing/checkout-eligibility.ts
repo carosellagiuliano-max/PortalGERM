@@ -20,6 +20,13 @@ export type CheckoutEligibility = Readonly<
     }
 >;
 
+export type ContactPackPlanContextV1 = Readonly<{
+  code: string;
+  isPublic: boolean;
+  isSelfService: boolean;
+  priceMode: string;
+}>;
+
 /** Phase 08 never creates Orders, even for later checkout candidates. */
 export function phase08CheckoutDecision(): CheckoutEligibility {
   return Object.freeze({ eligible: false, reason: "PHASE_08_NO_CHECKOUT" });
@@ -47,6 +54,7 @@ export function getProductCheckoutCandidateV1(
   row: PublicProductCatalogRow,
   at: Date,
   context: Readonly<{
+    currentPlan?: ContactPackPlanContextV1 | null;
     hasTalentRadarAccess: boolean;
     phase13BoostHandlerRegistered: boolean;
     hasEligibleOwnedJobTarget: boolean;
@@ -79,7 +87,8 @@ export function getProductCheckoutCandidateV1(
     ) {
       return Object.freeze({ eligible: false, reason: "PRODUCT_NOT_RELEASED" });
     }
-    return context.hasTalentRadarAccess
+    return context.hasTalentRadarAccess &&
+      isContactPackPlanEligibleV1(context.currentPlan ?? null)
       ? Object.freeze({ eligible: true, kind: "CONTACT_PACK" })
       : Object.freeze({
           eligible: false,
@@ -105,6 +114,20 @@ export function getProductCheckoutCandidateV1(
       : Object.freeze({ eligible: false, reason: "ELIGIBLE_OWNED_JOB_REQUIRED" });
   }
   return Object.freeze({ eligible: false, reason: "PRODUCT_NOT_RELEASED" });
+}
+
+/** Grants may add Radar access, but they never turn Free/Starter into a pack-buying plan. */
+export function isContactPackPlanEligibleV1(
+  plan: ContactPackPlanContextV1 | null,
+): boolean {
+  if (plan === null) return false;
+  if (plan.code === "PRO" || plan.code === "BUSINESS") return true;
+  return (
+    plan.code === "ENTERPRISE_CONTRACT" &&
+    plan.priceMode === "CONTRACT" &&
+    !plan.isPublic &&
+    !plan.isSelfService
+  );
 }
 
 function isEffective(

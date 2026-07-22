@@ -54,12 +54,12 @@ describe("Phase 11 admin policy boundary", () => {
     ]);
   });
 
-  it("keeps Phase 12 billing routes and global-role mutation out of Phase 11", () => {
+  it("preserves the global-role boundary after Phase 12 adds its owned billing routes", () => {
     const root = process.cwd();
     for (const route of ["billing", "orders", "invoices", "plans", "products"]) {
-      expect(existsSync(join(root, "app", "admin", route))).toBe(false);
-      expect(ADMIN_NAVIGATION.some(({ href }) => href === `/admin/${route}`)).toBe(false);
+      expect(existsSync(join(root, "app", "admin", route))).toBe(true);
     }
+    for (const route of ["billing", "plans", "products"]) expect(ADMIN_NAVIGATION.some(({ href }) => href === `/admin/${route}`)).toBe(true);
     const actions = readFileSync(join(root, "app", "admin", "actions.ts"), "utf8");
     expect(actions).not.toContain("global-role");
     expect(actions).not.toContain("ADMIN_GLOBAL_ROLE_MUTATE");
@@ -74,6 +74,10 @@ describe("Phase 11 admin policy boundary", () => {
       "/admin/support",
       "/admin/content",
       "/admin/leads",
+      "/admin/billing",
+      "/admin/plans",
+      "/admin/products",
+      "/admin/analytics",
       "/admin/business-cockpit",
     ]);
   });

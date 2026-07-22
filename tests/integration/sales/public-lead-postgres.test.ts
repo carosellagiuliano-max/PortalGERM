@@ -274,6 +274,9 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
       pseudonymousSessionId: salesLeadAnalyticsKeyV1(result.leadId),
       companyId: null,
       jobId: null,
+      actorProvenanceSnapshot: "DEMO",
+      companyProvenanceSnapshot: null,
+      jobProvenanceSnapshot: null,
       properties: { leadPurpose: "EMPLOYER_DEMO" },
     });
     expect(analytics?.occurredAt).toEqual(NOW);

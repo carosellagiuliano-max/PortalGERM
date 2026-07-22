@@ -19,6 +19,14 @@ export const ADMIN_CAPABILITIES_V1 = [
   "ADMIN_CLUSTER_ACTIVATE",
   "ADMIN_LEAD_MANAGE",
   "ADMIN_COCKPIT_READ",
+  "ADMIN_BILLING_READ",
+  "ADMIN_BILLING_MUTATE",
+  "ADMIN_CATALOG_READ",
+  "ADMIN_CATALOG_MUTATE",
+  "ADMIN_INVOICE_MUTATE",
+  "ADMIN_ANALYTICS_READ",
+  "ADMIN_CREDITS_GRANT",
+  "ADMIN_CREDIT_REVERSE",
   "ADMIN_SLA_PROJECT",
 ] as const;
 
@@ -53,6 +61,18 @@ export const PHASE_11_FORBIDDEN_ADMIN_CAPABILITIES = Object.freeze([
   "ADMIN_CREDITS_GRANT",
   "ADMIN_GLOBAL_ROLE_MUTATE",
 ] as const);
+
+/** Phase 12 additions remain explicit even while P0 uses one Platform-Admin role. */
+export const PHASE_12_BILLING_ADMIN_CAPABILITIES = Object.freeze([
+  "ADMIN_BILLING_READ",
+  "ADMIN_BILLING_MUTATE",
+  "ADMIN_CATALOG_READ",
+  "ADMIN_CATALOG_MUTATE",
+  "ADMIN_INVOICE_MUTATE",
+  "ADMIN_ANALYTICS_READ",
+  "ADMIN_CREDITS_GRANT",
+  "ADMIN_CREDIT_REVERSE",
+] as const satisfies readonly AdminCapability[]);
 
 export function canRunLicensedSupplyImport(actor: AdminCapabilityActor): boolean {
   return hasAdminCapability(actor, "ADMIN_LICENSED_IMPORT");

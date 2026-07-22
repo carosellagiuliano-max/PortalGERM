@@ -17,6 +17,7 @@ import { parseSafeNext } from "@/lib/auth/safe-next";
 
 const NOW = new Date("2026-07-20T12:00:00.000Z");
 const SLUG = "pflegefachperson-zuerich";
+const ANALYTICS_SESSION_ID = "12345678-1234-4234-8234-123456789abc";
 const KEY_BYTES = Buffer.alloc(32, 31);
 const KEY = signingKey(KEY_BYTES);
 
@@ -33,6 +34,66 @@ describe("signed SAVE/APPLY job intent", () => {
       expiresAt: NOW.getTime() + 30 * 60 * 1_000,
     });
     expect(buildJobIntentNextPath(SLUG, token)).toBe(`/jobs/${SLUG}?intent=${token}`);
+  });
+
+  it("round-trips an optional analytics session without adding authority", () => {
+    const token = signJobIntent(
+      {
+        action: "APPLY",
+        jobSlug: SLUG,
+        analyticsSessionId: ANALYTICS_SESSION_ID,
+        now: NOW,
+      },
+      KEY,
+    );
+
+    expect(
+      verifyJobIntent(token, { action: "APPLY", jobSlug: SLUG, now: NOW }, KEY),
+    ).toEqual({
+      version: 1,
+      action: "APPLY",
+      jobSlug: SLUG,
+      analyticsSessionId: ANALYTICS_SESSION_ID,
+      issuedAt: NOW.getTime(),
+      expiresAt: NOW.getTime() + SIGNED_JOB_INTENT_POLICY_V1.ttlMilliseconds,
+    });
+  });
+
+  it("rejects an invalid analytics session id when signing or verifying", () => {
+    expect(() =>
+      signJobIntent(
+        {
+          action: "APPLY",
+          jobSlug: SLUG,
+          analyticsSessionId: "not-a-uuid",
+          now: NOW,
+        },
+        KEY,
+      ),
+    ).toThrow();
+
+    const invalidPayload = Buffer.from(
+      JSON.stringify({
+        version: 1,
+        action: "APPLY",
+        jobSlug: SLUG,
+        analyticsSessionId: "not-a-uuid",
+        issuedAt: NOW.getTime(),
+        expiresAt:
+          NOW.getTime() + SIGNED_JOB_INTENT_POLICY_V1.ttlMilliseconds,
+      }),
+      "utf8",
+    ).toString("base64url");
+    const signature = createHmac("sha256", KEY_BYTES)
+      .update(
+        `${SIGNED_JOB_INTENT_POLICY_V1.context}\0${invalidPayload}`,
+        "utf8",
+      )
+      .digest("base64url");
+
+    expect(
+      verifyJobIntent(`${invalidPayload}.${signature}`, { now: NOW }, KEY),
+    ).toBeNull();
   });
 
   it("contains navigation intent only and grants no identity or authority", () => {

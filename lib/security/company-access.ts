@@ -2,6 +2,7 @@ import "server-only";
 
 import type { CompanyMembershipRole } from "@/lib/generated/prisma/enums";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth/current-user";
+import { listBoundaryAccessibleMembershipIds } from "@/lib/billing/membership-access";
 import { getDatabase } from "@/lib/db/client";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { AuthorizationDeniedError, SafeNotFoundError } from "@/lib/security/errors";
@@ -23,6 +24,7 @@ export interface CompanyAccessRepository {
 
 export function createCompanyAccessRepository(
   database: DatabaseClient,
+  now: () => Date = () => new Date(),
 ): CompanyAccessRepository {
   return {
     async findActiveMembership({ companyId, userId }) {
@@ -42,6 +44,17 @@ export function createCompanyAccessRepository(
         },
       });
       if (membership?.company.status !== "ACTIVE") return null;
+      const accessibleMembershipIds = await listBoundaryAccessibleMembershipIds(
+        database,
+        companyId,
+        now(),
+      );
+      if (
+        accessibleMembershipIds !== null &&
+        !accessibleMembershipIds.includes(membership.id)
+      ) {
+        return null;
+      }
       return Object.freeze({
         companyId: membership.companyId,
         userId: membership.userId,

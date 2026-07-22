@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCheckoutPreview } from "@/lib/billing/employer-read-model";
 import { getDatabase } from "@/lib/db/client";
 import { requireEmployerCompanyContext } from "@/lib/employer/context";
 import { getEmployerJobCatalog, getEmployerJobDetail, type EmployerJobActor } from "@/lib/employer/jobs";
@@ -52,8 +53,27 @@ export default async function EmployerJobDetailPage({ params, searchParams }: Pa
       </section>
     );
   }
-  const catalog = await getEmployerJobCatalog(actor, database);
+  const now = new Date();
+  const [catalog, additionalJobPreview] = await Promise.all([
+    getEmployerJobCatalog(actor, database),
+    detail.status === "APPROVED" &&
+      (context.membershipRole === "OWNER" || context.membershipRole === "ADMIN")
+      ? getCheckoutPreview(
+          database,
+          context.companyId,
+          {
+            product: "additional-job-30d",
+            quantity: 1,
+            targetJobId: detail.id,
+          },
+          now,
+        )
+      : Promise.resolve(null),
+  ]);
   if (catalog === null) notFound();
+  const additionalJobCheckoutHref = additionalJobPreview?.ok === true
+    ? `/employer/billing/checkout?product=additional-job-30d&job=${detail.id}`
+    : null;
   const step = parseStep(query.step);
   return (
     <section aria-labelledby="job-detail-title" className="grid gap-6">
@@ -65,6 +85,7 @@ export default async function EmployerJobDetailPage({ params, searchParams }: Pa
       <EmployerJobWizard
         job={detail}
         catalog={catalog}
+        additionalJobCheckoutHref={additionalJobCheckoutHref}
         step={step}
         actions={{ saveStep: saveEmployerJobStepAction, reportingCheck: runEmployerJobReportingCheckAction, aiSuggestion: employerJobAiSuggestionAction, submit: submitEmployerJobForReviewAction, pause: pauseEmployerJobAction, pauseAndRevise: pauseAndCreateEmployerJobRevisionAction, clonePaused: createEmployerJobRevisionFromPausedAction, cloneRejected: createEmployerJobRevisionFromRejectedAction, reactivate: reactivateEmployerJobAction, close: closeEmployerJobAction }}
         idempotencyKeys={{ step1: randomUUID(), step2: randomUUID(), step3: randomUUID(), reporting: randomUUID(), submit: randomUUID(), pause: randomUUID(), pauseEdit: randomUUID(), clonePaused: randomUUID(), cloneRejected: randomUUID(), reactivate: randomUUID(), close: randomUUID() }}

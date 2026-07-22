@@ -7,6 +7,10 @@ import { redirect } from "next/navigation";
 
 import { getEmployerContext } from "@/lib/auth/employer-context";
 import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
+import {
+  buildCatalogUpgradePrompt,
+  buildUpgradePrompt,
+} from "@/lib/billing/upgrade-prompt";
 import { getDatabase } from "@/lib/db/client";
 import {
   closeEmployerJob,
@@ -22,8 +26,10 @@ import {
   saveEmployerJobStep,
   submitEmployerJobForReview,
   type EmployerJobActor,
+  type EmployerJobCommandCode,
   type EmployerJobCommandDependencies,
   type EmployerJobFormState,
+  type EmployerJobQuotaReason,
 } from "@/lib/employer/jobs";
 import { aiProvider } from "@/lib/providers/ai";
 import { jobroomProvider } from "@/lib/providers/jobroom";
@@ -38,7 +44,15 @@ export async function saveEmployerJobStepAction(
   if (step !== 1 && step !== 2 && step !== 3) return errorState("Dieser Wizard-Schritt ist ungültig.");
   const data = step === 1 ? parseStepOne(formData) : step === 2 ? parseStepTwo(formData) : parseStepThree(formData);
   const result = await saveEmployerJobStep({ ...commandEnvelope(formData), step, data } as Parameters<typeof saveEmployerJobStep>[0], dependencies);
-  if (!result.ok) return commandError(result.code, result.issues);
+  if (!result.ok) {
+    return commandError(
+      result.code,
+      result.issues,
+      result.quotaReason,
+      dependencies,
+      result.suggestedPlanSlug,
+    );
+  }
   revalidateJob(result.value.jobId);
   redirect(`/employer/jobs/${result.value.jobId}?step=${step + 1}&saved=1`);
 }
@@ -160,7 +174,15 @@ async function lifecycleAction(
   const dependencies = await actionDependencies();
   if (dependencies === null) return genericError();
   const result = await command(commandEnvelope(formData), dependencies);
-  if (!result.ok) return commandError(result.code, result.issues);
+  if (!result.ok) {
+    return commandError(
+      result.code,
+      result.issues,
+      result.quotaReason,
+      dependencies,
+      result.suggestedPlanSlug,
+    );
+  }
   revalidateJob(result.value.jobId);
   if (redirectStep !== undefined) redirect(`/employer/jobs/${result.value.jobId}?step=${redirectStep}&revisionCreated=1`);
   return Object.freeze({ status: "success", message, nextIdempotencyKey: randomUUID() });
@@ -272,8 +294,14 @@ function revalidateJob(jobId: string) {
   revalidatePath("/employer/dashboard");
 }
 
-function commandError(code: string, issues?: readonly string[]): EmployerJobFormState {
-  const messages: Readonly<Record<string, string>> = {
+async function commandError(
+  code: EmployerJobCommandCode,
+  issues?: readonly string[],
+  quotaReason?: EmployerJobQuotaReason,
+  dependencies?: EmployerJobCommandDependencies,
+  suggestedPlanSlug?: string,
+): Promise<EmployerJobFormState> {
+  const messages: Readonly<Record<EmployerJobCommandCode, string>> = {
     INVALID_INPUT: "Bitte prüfe die Eingaben dieses Schritts.",
     NOT_FOUND: "Dieses Inserat ist in deinem aktuellen Firmen- oder Zuweisungskontext nicht verfügbar.",
     FORBIDDEN: "Diese Aktion ist mit deiner Rolle nicht erlaubt.",
@@ -286,7 +314,29 @@ function commandError(code: string, issues?: readonly string[]): EmployerJobForm
     WRITE_FAILED: "Die Aktion konnte nicht vollständig gespeichert werden.",
   };
   const suffix = issues === undefined || issues.length === 0 ? "" : ` Betroffen: ${issues.join(", ")}.`;
-  return Object.freeze({ status: code === "CONFLICT" ? "conflict" : "error", message: `${messages[code] ?? "Die Aktion ist fehlgeschlagen."}${suffix}`, nextIdempotencyKey: randomUUID() });
+  const upgradePrompt = code === "QUOTA_EXCEEDED"
+    ? dependencies === undefined
+      ? buildUpgradePrompt({
+          reason: quotaReason ?? "ACTIVE_JOB_LIMIT_REACHED",
+        })
+      : await buildCatalogUpgradePrompt(
+          {
+            reason: quotaReason ?? "ACTIVE_JOB_LIMIT_REACHED",
+            actorRole: dependencies.actor.membershipRole,
+            suggestedPlanSlug,
+          },
+          {
+            database: dependencies.database,
+            now: dependencies.now ?? new Date(),
+          },
+        )
+    : undefined;
+  return Object.freeze({
+    status: code === "CONFLICT" ? "conflict" : "error",
+    message: `${messages[code]}${suffix}`,
+    nextIdempotencyKey: randomUUID(),
+    ...(upgradePrompt === undefined ? {} : { upgradePrompt }),
+  });
 }
 
 function genericError() {

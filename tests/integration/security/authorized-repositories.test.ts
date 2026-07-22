@@ -54,6 +54,13 @@ const IDS = {
   editorUser: id(32),
   pipelineUser: id(33),
   reviewerUser: id(34),
+  product: id(35),
+  productVersion: id(36),
+  taxRateVersion: id(37),
+  orderLineA: id(38),
+  orderLineB: id(39),
+  invoiceLineA: id(40),
+  invoiceLineB: id(41),
   membershipOwnerA: id(101),
   membershipOwnerB: id(102),
   membershipAdminA: id(103),
@@ -285,49 +292,129 @@ async function seed() {
       "b".repeat(64),
     ],
   );
-  const orderSql = `INSERT INTO "Order" (
-      "id","companyId","createdByUserId","clientIdempotencyKey","billingLegalNameSnapshot",
-      "billingContactEmailSnapshot","billingStreetSnapshot","billingPostalCodeSnapshot",
-      "billingCitySnapshot","billingCountryCodeSnapshot","netTotalRappen","vatTotalRappen",
-      "totalRappen","updatedAt"
-    ) VALUES ($1,$2,$3,$4,$5,$6,'Street 1','8000','Zürich','CH',100,8,108,now())`;
-  await pool.query(orderSql, [
-    IDS.orderA,
-    IDS.companyA,
-    IDS.userA,
-    "order-a",
-    "Company A",
-    "a@example.ch",
-  ]);
-  await pool.query(orderSql, [
-    IDS.orderB,
-    IDS.companyB,
-    IDS.userB,
-    "order-b",
-    "Company B",
-    "b@example.ch",
-  ]);
-  const invoiceSql = `INSERT INTO "Invoice" (
-      "id","orderId","companyId","number","billingLegalNameSnapshot","billingContactEmailSnapshot",
-      "billingStreetSnapshot","billingPostalCodeSnapshot","billingCitySnapshot","billingCountryCodeSnapshot",
-      "currency","netTotalRappen","vatTotalRappen","totalRappen","dueAt"
-    ) VALUES ($1,$2,$3,$4,$5,$6,'Street 1','8000','Zürich','CH','CHF',100,8,108,'2026-08-01T00:00:00Z')`;
-  await pool.query(invoiceSql, [
-    IDS.invoiceA,
-    IDS.orderA,
-    IDS.companyA,
-    "STH-2026-00001",
-    "Company A",
-    "a@example.ch",
-  ]);
-  await pool.query(invoiceSql, [
-    IDS.invoiceB,
-    IDS.orderB,
-    IDS.companyB,
-    "STH-2026-00002",
-    "Company B",
-    "b@example.ch",
-  ]);
+  await pool.query(
+    `INSERT INTO "Product" ("id","code","name","type","updatedAt")
+      VALUES ($1,'authorized-contact-pack','Authorized Contact Pack','CONTACT_PACK',now())`,
+    [IDS.product],
+  );
+  await pool.query(
+    `INSERT INTO "ProductVersion" (
+      "id","productId","version","status","netPriceRappen","currency","creditType",
+      "creditAmount","isPublic","isSelfService","validFrom"
+    ) VALUES ($1,$2,1,'ACTIVE',100,'CHF','TALENT_CONTACT',1,true,true,'2026-07-01T00:00:00Z')`,
+    [IDS.productVersion, IDS.product],
+  );
+  await pool.query(
+    `INSERT INTO "TaxRateVersion" (
+      "id","jurisdiction","taxType","rateBasisPoints","validFrom","source","reviewStatus",
+      "reviewedByUserId","reviewedAt"
+    ) VALUES ($1,'CH','MWST_STANDARD',810,'2026-07-01T00:00:00Z','Authorized repository fixture',
+      'APPROVED',$2,'2026-07-01T00:00:00Z')`,
+    [IDS.taxRateVersion, IDS.userA],
+  );
+
+  const billingClient = await pool.connect();
+  try {
+    await billingClient.query("BEGIN");
+    const orderSql = `INSERT INTO "Order" (
+        "id","companyId","createdByUserId","clientIdempotencyKey","requestFingerprint",
+        "billingLegalNameSnapshot","billingContactEmailSnapshot","billingStreetSnapshot",
+        "billingPostalCodeSnapshot","billingCitySnapshot","billingCountryCodeSnapshot",
+        "netTotalRappen","vatTotalRappen","totalRappen","updatedAt"
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'Street 1','8000','Zürich','CH',100,8,108,now())`;
+    await billingClient.query(orderSql, [
+      IDS.orderA,
+      IDS.companyA,
+      IDS.userA,
+      "order-a",
+      "a".repeat(64),
+      "Company A",
+      "a@example.ch",
+    ]);
+    await billingClient.query(orderSql, [
+      IDS.orderB,
+      IDS.companyB,
+      IDS.userB,
+      "order-b",
+      "b".repeat(64),
+      "Company B",
+      "b@example.ch",
+    ]);
+
+    const orderLineSql = `INSERT INTO "OrderLine" (
+        "id","orderId","productVersionId","taxRateVersionId","quantity","unitNetRappen",
+        "netRappen","taxRateBasisPoints","vatRappen","totalRappen","currency",
+        "descriptionSnapshot","fulfillmentContext","targetCreditType"
+      ) VALUES ($1,$2,$3,$4,1,100,100,810,8,108,'CHF','Authorized Contact Pack',
+        'CONTACT_PACK','TALENT_CONTACT')`;
+    await billingClient.query(orderLineSql, [
+      IDS.orderLineA,
+      IDS.orderA,
+      IDS.productVersion,
+      IDS.taxRateVersion,
+    ]);
+    await billingClient.query(orderLineSql, [
+      IDS.orderLineB,
+      IDS.orderB,
+      IDS.productVersion,
+      IDS.taxRateVersion,
+    ]);
+
+    await billingClient.query(
+      `UPDATE "Order" SET "status"='PENDING', "updatedAt"=now()
+        WHERE "id" IN ($1,$2)`,
+      [IDS.orderA, IDS.orderB],
+    );
+    await billingClient.query(
+      `UPDATE "Order" SET "status"='PAID', "paidAt"='2026-07-19T12:00:00Z', "updatedAt"=now()
+        WHERE "id" IN ($1,$2)`,
+      [IDS.orderA, IDS.orderB],
+    );
+
+    const invoiceSql = `INSERT INTO "Invoice" (
+        "id","orderId","companyId","number","billingLegalNameSnapshot","billingContactEmailSnapshot",
+        "billingStreetSnapshot","billingPostalCodeSnapshot","billingCitySnapshot","billingCountryCodeSnapshot",
+        "currency","netTotalRappen","vatTotalRappen","totalRappen","dueAt"
+      ) VALUES ($1,$2,$3,$4,$5,$6,'Street 1','8000','Zürich','CH','CHF',100,8,108,
+        '2026-08-01T00:00:00Z')`;
+    await billingClient.query(invoiceSql, [
+      IDS.invoiceA,
+      IDS.orderA,
+      IDS.companyA,
+      "STH-2026-00001",
+      "Company A",
+      "a@example.ch",
+    ]);
+    await billingClient.query(invoiceSql, [
+      IDS.invoiceB,
+      IDS.orderB,
+      IDS.companyB,
+      "STH-2026-00002",
+      "Company B",
+      "b@example.ch",
+    ]);
+
+    const invoiceLineSql = `INSERT INTO "InvoiceLine" (
+        "id","invoiceId","orderLineId","sortOrder","descriptionSnapshot","quantity",
+        "unitNetRappen","netRappen","taxRateBasisPoints","vatRappen","totalRappen","currency"
+      ) VALUES ($1,$2,$3,1,'Authorized Contact Pack',1,100,100,810,8,108,'CHF')`;
+    await billingClient.query(invoiceLineSql, [
+      IDS.invoiceLineA,
+      IDS.invoiceA,
+      IDS.orderLineA,
+    ]);
+    await billingClient.query(invoiceLineSql, [
+      IDS.invoiceLineB,
+      IDS.invoiceB,
+      IDS.orderLineB,
+    ]);
+    await billingClient.query("COMMIT");
+  } catch (error) {
+    await billingClient.query("ROLLBACK");
+    throw error;
+  } finally {
+    billingClient.release();
+  }
   const accountSql = `INSERT INTO "CreditAccount" ("id","companyId","creditType","fundingSource","periodStart","periodEnd")
     VALUES ($1,$2,'TALENT_CONTACT','ADMIN_GRANT','2026-07-01T00:00:00Z','2026-08-01T00:00:00Z')`;
   await pool.query(accountSql, [IDS.accountA, IDS.companyA]);
@@ -338,17 +425,21 @@ async function seed() {
   await pool.query(grantSql, [IDS.grantA, IDS.accountA, "grant-a", IDS.userA]);
   await pool.query(grantSql, [IDS.grantB, IDS.accountB, "grant-b", IDS.userB]);
   const consumeSql = `INSERT INTO "CreditLedgerEntry" (
-      "id","accountId","fundingSource","kind","amount","validFrom","validTo","idempotencyKey","reasonCode","actorUserId"
-    ) VALUES ($1,$2,'ADMIN_GRANT','CONSUME',-1,'2026-07-01T00:00:00Z','2026-08-01T00:00:00Z',$3,'CONTACT_REQUEST',$4)`;
+      "id","accountId","fundingSource","kind","amount","consumedGrantEntryId","validFrom",
+      "validTo","idempotencyKey","reasonCode","actorUserId"
+    ) VALUES ($1,$2,'ADMIN_GRANT','CONSUME',-1,$3,'2026-07-01T00:00:00Z',
+      '2026-08-01T00:00:00Z',$4,'CONTACT_REQUEST',$5)`;
   await pool.query(consumeSql, [
     IDS.ledgerA,
     IDS.accountA,
+    IDS.grantA,
     "consume-a",
     IDS.userA,
   ]);
   await pool.query(consumeSql, [
     IDS.ledgerB,
     IDS.accountB,
+    IDS.grantB,
     "consume-b",
     IDS.userB,
   ]);

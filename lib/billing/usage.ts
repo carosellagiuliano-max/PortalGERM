@@ -59,6 +59,13 @@ export type PublishQuotaTransaction<TPublication> = Readonly<{
     jobId: string,
     now: Date,
   ): Promise<AdditionalJobPermitSummary | null>;
+  /** Consumes the exact paid permit under the same Company quota lock. */
+  consumeCurrentAdditionalJobPermit(
+    permitId: string,
+    companyId: string,
+    jobId: string,
+    now: Date,
+  ): Promise<boolean>;
   /** Must write Job status/projections, event, and required Audit atomically. */
   commitPublication(input: PublishQuotaCommitInput): Promise<TPublication>;
 }>;
@@ -76,6 +83,8 @@ export type PublishWithQuotaResult<TPublication> =
   | Readonly<{
       ok: false;
       reason: FeatureGateReason | "ENTITLEMENT_RESOLUTION_FAILED";
+      suggestedProductSlug?: string;
+      suggestedPlanSlug?: string;
     }>;
 
 export function isQuotaConsumingJob(job: QuotaJob, now: Date): boolean {
@@ -139,6 +148,26 @@ export function computeCreditsRemaining(
     }
   }
   return balances;
+}
+
+export function summarizeIncludedCreditUsage(
+  entries: readonly Readonly<{
+    kind: "GRANT" | "CONSUME" | "EXPIRE" | "REVERSAL";
+    amount: number;
+  }>[],
+) {
+  const granted = entries.reduce(
+    (total, entry) => total + (entry.kind === "GRANT" ? entry.amount : 0),
+    0,
+  );
+  const remaining = entries.reduce((total, entry) => total + entry.amount, 0);
+  const normalizedGranted = Math.max(0, granted);
+  const normalizedRemaining = Math.max(0, remaining);
+  return Object.freeze({
+    granted: normalizedGranted,
+    used: Math.max(0, normalizedGranted - normalizedRemaining),
+    remaining: normalizedRemaining,
+  });
 }
 
 export function countUsedContacts(
@@ -239,7 +268,34 @@ export async function publishWithQuota<TPublication>(
       additionalJobPermit,
     });
     if (!gate.allowed) {
-      return { ok: false, reason: gate.reason ?? "INVALID_INPUT" } as const;
+      return {
+        ok: false,
+        reason: gate.reason ?? "INVALID_INPUT",
+        ...(gate.suggestedProductSlug === undefined
+          ? {}
+          : { suggestedProductSlug: gate.suggestedProductSlug }),
+        ...(gate.suggestedPlanSlug === undefined
+          ? {}
+          : { suggestedPlanSlug: gate.suggestedPlanSlug }),
+      } as const;
+    }
+
+    if (needsPermit && additionalJobPermit !== null) {
+      const consumed = await transaction.consumeCurrentAdditionalJobPermit(
+        additionalJobPermit.id,
+        input.companyId,
+        input.jobId,
+        input.now,
+      );
+      if (!consumed) {
+        return {
+          ok: false,
+          reason: "ADDITIONAL_JOB_PERMIT_INVALID",
+          ...(gate.suggestedPlanSlug === undefined
+            ? {}
+            : { suggestedPlanSlug: gate.suggestedPlanSlug }),
+        } as const;
+      }
     }
 
     const publication = await transaction.commitPublication({

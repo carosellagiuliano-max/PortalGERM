@@ -78,6 +78,7 @@ export function createPrismaPublishQuotaPort<TPublication>(
                     validTo: { gt: now },
                   },
                   select: {
+                    id: true,
                     companyId: true,
                     targetJobId: true,
                     status: true,
@@ -86,6 +87,27 @@ export function createPrismaPublishQuotaPort<TPublication>(
                     revokedAt: true,
                   },
                 });
+              },
+              async consumeCurrentAdditionalJobPermit(
+                permitId,
+                companyId,
+                jobId,
+                now,
+              ) {
+                const consumed = await transaction.additionalJobPermit.updateMany({
+                  where: {
+                    id: permitId,
+                    companyId,
+                    targetJobId: jobId,
+                    status: "ACTIVE",
+                    consumedAt: null,
+                    revokedAt: null,
+                    validFrom: { lte: now },
+                    validTo: { gt: now },
+                  },
+                  data: { status: "CONSUMED", consumedAt: now },
+                });
+                return consumed.count === 1;
               },
               async commitPublication(input) {
                 return commitPublication(transaction, input);

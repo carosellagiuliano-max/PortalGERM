@@ -1,9 +1,18 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
+
+import { getAdminFinancialMetrics } from "@/lib/analytics/admin-metrics";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import { seedBillingOpsContent } from "@/prisma/seed/blocks/billing-ops";
 import { seedDemoAccountsCompaniesAndJobs } from "@/prisma/seed/blocks/companies-jobs";
 import { seedReferenceCatalog } from "@/prisma/seed/blocks/reference-catalog";
+import {
+  deriveSeedBillingMrrContractV1,
+  SEED_BILLING_MRR_CONTRACT_V1,
+  SEED_EFFECTIVE_PAID_SUBSCRIPTION_COMMERCIAL_FIXTURES_V1,
+} from "@/prisma/seed/fixtures";
+import { stableSeedId } from "@/prisma/seed/ids";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
 type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
@@ -98,7 +107,7 @@ describe.sequential("Phase-05 Billing/Ops PostgreSQL seed", () => {
       expect(await client().subscriptionChangeSchedule.count()).toBe(2);
       expect(await client().order.count()).toBe(12);
       expect(await client().orderLine.count()).toBe(12);
-      expect(await client().paymentEvent.count()).toBe(21);
+      expect(await client().paymentEvent.count()).toBe(22);
       expect(await client().invoice.count()).toBe(7);
       expect(await client().invoiceLine.count()).toBe(7);
       expect(await client().creditAccount.count()).toBe(29);
@@ -141,10 +150,53 @@ describe.sequential("Phase-05 Billing/Ops PostgreSQL seed", () => {
       expect(await client().supportCase.count()).toBe(2);
       expect(await client().systemTask.count()).toBe(3);
 
+      const expectedMrr = deriveSeedBillingMrrContractV1(
+        SEED_EFFECTIVE_PAID_SUBSCRIPTION_COMMERCIAL_FIXTURES_V1,
+      );
+      expect(expectedMrr).toEqual(SEED_BILLING_MRR_CONTRACT_V1);
+      expect(expectedMrr).toEqual({
+        currency: "CHF",
+        effectivePaidSubscriptions: 20,
+        paidPlanDistribution: {
+          STARTER: 6,
+          PRO: 6,
+          BUSINESS: 5,
+          ENTERPRISE_CONTRACT: 3,
+        },
+        totalMonthlyEquivalentRappen: 1_228_000,
+      });
+
+      const metrics = await getAdminFinancialMetrics({
+        actor: {
+          userId: admin.id,
+          email: admin.email,
+          role: "ADMIN",
+          status: "ACTIVE",
+        },
+        correlationId: "phase12-seed-mrr-reconciliation",
+        database: client(),
+        now: anchorAt,
+      });
+      expect(metrics).not.toBeNull();
+      if (metrics === null) {
+        throw new Error("Seed MRR metrics unexpectedly denied Admin access.");
+      }
+      expect(metrics.measuredAt).toEqual(anchorAt);
+      expect(metrics).toEqual(
+        expect.objectContaining({
+          activeSubscriptions: expectedMrr.effectivePaidSubscriptions,
+          customContractsWithoutValue: 0,
+          freeEmployers: 5,
+          mrrRappen: expectedMrr.totalMonthlyEquivalentRappen,
+          paidEmployers: expectedMrr.effectivePaidSubscriptions,
+        }),
+      );
+
       const effectiveByCompany = await client().employerSubscription.groupBy({
         by: ["companyId"],
         where: {
-          status: { in: ["SCHEDULED", "ACTIVE", "CANCELLING"] },
+          company: { status: "ACTIVE" },
+          status: { in: ["ACTIVE", "CANCELLING"] },
           currentPeriodStart: { lte: anchorAt },
           currentPeriodEnd: { gt: anchorAt },
         },
@@ -152,6 +204,71 @@ describe.sequential("Phase-05 Billing/Ops PostgreSQL seed", () => {
       });
       expect(effectiveByCompany).toHaveLength(20);
       expect(effectiveByCompany.every((row) => row._count._all === 1)).toBe(true);
+      const effectivePaidSubscriptions =
+        await client().employerSubscription.findMany({
+          where: {
+            company: { status: "ACTIVE" },
+            status: { in: ["ACTIVE", "CANCELLING"] },
+            currentPeriodStart: { lte: anchorAt },
+            currentPeriodEnd: { gt: anchorAt },
+          },
+          orderBy: { companyId: "asc" },
+          select: {
+            companyId: true,
+            currencySnapshot: true,
+            monthlyEquivalentRappenSnapshot: true,
+            planVersionId: true,
+            recurringNetRappenSnapshot: true,
+            planVersion: { select: { plan: { select: { code: true } } } },
+          },
+        });
+      const actualPaidDistribution = Object.fromEntries(
+        Object.keys(expectedMrr.paidPlanDistribution).map(
+          (planCode) => [
+            planCode,
+            effectivePaidSubscriptions.filter(
+              (subscription) => subscription.planVersion.plan.code === planCode,
+            ).length,
+          ],
+        ),
+      );
+      expect(actualPaidDistribution).toEqual(expectedMrr.paidPlanDistribution);
+      expect(effectivePaidSubscriptions).toHaveLength(
+        expectedMrr.effectivePaidSubscriptions,
+      );
+      expect(
+        effectivePaidSubscriptions.map((subscription) => ({
+          companyId: subscription.companyId,
+          currencySnapshot: subscription.currencySnapshot,
+          monthlyEquivalentRappenSnapshot:
+            subscription.monthlyEquivalentRappenSnapshot,
+          planVersionId: subscription.planVersionId,
+          recurringNetRappenSnapshot: subscription.recurringNetRappenSnapshot,
+        })),
+      ).toEqual(
+        SEED_EFFECTIVE_PAID_SUBSCRIPTION_COMMERCIAL_FIXTURES_V1.map(
+          (subscription) => ({
+            companyId: subscription.companyId,
+            currencySnapshot: subscription.currency,
+            monthlyEquivalentRappenSnapshot:
+              subscription.monthlyEquivalentRappen,
+            planVersionId: stableSeedId(
+              "plan-version",
+              subscription.planVersionNaturalKey,
+            ),
+            recurringNetRappenSnapshot: subscription.recurringNetRappen,
+          }),
+        ).sort((left, right) => left.companyId.localeCompare(right.companyId)),
+      );
+      const reconciledSnapshotMrr = effectivePaidSubscriptions.reduce(
+        (total, subscription) =>
+          total + subscription.monthlyEquivalentRappenSnapshot,
+        0,
+      );
+      expect(reconciledSnapshotMrr).toBe(
+        expectedMrr.totalMonthlyEquivalentRappen,
+      );
+      expect(reconciledSnapshotMrr).toBe(metrics.mrrRappen);
       expect(
         await client().taxRateVersion.count({
           where: { rateBasisPoints: 810, reviewStatus: "APPROVED" },

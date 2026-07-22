@@ -72,6 +72,7 @@ describe("MockEmailProvider", () => {
     });
 
     expect(result.logId).toMatch(/^22222222-/);
+    expect(result.created).toBe(true);
     expect(rows).toHaveLength(1);
     expect([...rows.values()][0]).toMatchObject({
       recipient: "user@example.test",
@@ -120,6 +121,7 @@ describe("MockEmailProvider", () => {
     ]);
 
     expect(retry.logId).toBe(first.logId);
+    expect([first.created, retry.created].sort()).toEqual([false, true]);
     expect(rows).toHaveLength(1);
     const serializedRows = JSON.stringify([...rows.values()]);
     expect(serializedRows).not.toContain(resetUrl);

@@ -11,6 +11,7 @@ import {
 
 vi.mock("server-only", () => ({}));
 
+import { candidateAnalyticsSubjectV1 } from "@/lib/analytics/pseudonyms";
 import {
   hashPasswordResetToken,
   loginWithPassword,
@@ -219,6 +220,14 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
       where: { actorUserId: user.id },
       orderBy: { createdAt: "asc" },
     });
+    const registrationAnalytics = await client().analyticsEvent.findUnique({
+      where: {
+        producer_dedupeKey: {
+          producer: "auth-registration",
+          dedupeKey: `candidate-registered:${user.id}`,
+        },
+      },
+    });
 
     expect(user).toMatchObject({
       role: "CANDIDATE",
@@ -283,6 +292,17 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
     });
     expect(registrationAudit[0]?.ipHash).toMatch(/^audit-v1:[a-f0-9]{64}$/u);
     expect(registrationAudit[0]?.ipHash).not.toContain(request.sourceIp);
+    expect(registrationAnalytics).toMatchObject({
+      kind: "CANDIDATE_REGISTERED",
+      purpose: "ESSENTIAL_OPERATIONAL",
+      occurredAt: NOW,
+      pseudonymousActorId: candidateAnalyticsSubjectV1(user.id),
+      actorProvenanceSnapshot: "LIVE",
+      properties: {
+        onboardingRuleVersion: "candidate-registration-v1",
+      },
+    });
+    expect(registrationAnalytics?.pseudonymousActorId).not.toContain(user.id);
     expect(JSON.stringify(registrationAudit)).not.toContain(CANDIDATE_EMAIL);
     expect(result.session.cookie).toMatchObject({
       name: "session",

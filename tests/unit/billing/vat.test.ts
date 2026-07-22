@@ -42,6 +42,14 @@ describe("computeVat", () => {
     );
   });
 
+  it("locks line-wise half-up VAT when aggregate rounding differs by one Rappen", () => {
+    const lines = [computeVat(1, 5_000), computeVat(1, 5_000)];
+
+    expect(lines.map(({ vatAmount }) => vatAmount)).toEqual([1, 1]);
+    expect(lines.reduce((sum, line) => sum + line.vatAmount, 0)).toBe(2);
+    expect(computeVat(2, 5_000).vatAmount).toBe(1);
+  });
+
   it("rejects a rate outside the versioned 0..10000 basis-point range", () => {
     expect(() => computeVat(100, 10_001)).toThrow("must not exceed 10000");
   });

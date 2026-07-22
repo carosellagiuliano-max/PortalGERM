@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { getEffectiveEntitlements } from "@/lib/billing/entitlements";
+import { canAddRecruiterSeat } from "@/lib/billing/feature-gates";
+import { deriveAdminMockRenewalPeriodV1 } from "@/lib/billing/admin-renewal-policy";
 import { createPrismaEntitlementRepository } from "@/lib/billing/prisma-publish-quota";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
@@ -78,8 +80,27 @@ export async function getAdminCompanyDetail(dependencies: AdminDependencies, com
           select: { id: true, status: true, requestedRole: true, matchSignals: true, evidenceSummary: true, requester: { select: { id: true, name: true, email: true } }, createdAt: true },
         },
         subscriptions: {
-          where: { status: { in: ["ACTIVE", "CANCELLING"] }, currentPeriodStart: { lte: now }, currentPeriodEnd: { gt: now } },
-          select: { id: true, status: true, currentPeriodEnd: true, planVersion: { select: { plan: { select: { name: true, code: true } } } } },
+          orderBy: [{ currentPeriodStart: "desc" }, { id: "desc" }],
+          take: 20,
+          select: {
+            id: true,
+            status: true,
+            currentPeriodStart: true,
+            currentPeriodEnd: true,
+            termMonthsSnapshot: true,
+            recurringNetRappenSnapshot: true,
+            endedAt: true,
+            currentChangeSchedules: {
+              where: { status: "PENDING" },
+              take: 1,
+              select: { id: true },
+            },
+            planVersion: {
+              select: {
+                plan: { select: { name: true, code: true, isDefaultFree: true } },
+              },
+            },
+          },
         },
         jobs: { select: { id: true, status: true } },
         supportCases: { where: { status: { notIn: ["RESOLVED", "CLOSED"] } }, select: { id: true, priority: true, status: true, dueAt: true } },
@@ -89,7 +110,33 @@ export async function getAdminCompanyDetail(dependencies: AdminDependencies, com
     getEffectiveEntitlements(companyId, now, createPrismaEntitlementRepository(dependencies.database)),
   ]);
   if (company === null) return null;
-  return Object.freeze({ company, entitlements });
+  const latestSubscription = company.subscriptions[0];
+  const renewalPeriod = latestSubscription === undefined
+    ? null
+    : deriveAdminMockRenewalPeriodV1({
+        currentPeriodEnd: latestSubscription.currentPeriodEnd,
+        termMonthsSnapshot: latestSubscription.termMonthsSnapshot,
+        now,
+      });
+  const renewalCandidate =
+    latestSubscription !== undefined &&
+    renewalPeriod?.ok === true &&
+    latestSubscription.currentChangeSchedules.length === 0 &&
+    latestSubscription.recurringNetRappenSnapshot > 0 &&
+    !latestSubscription.planVersion.plan.isDefaultFree &&
+    (latestSubscription.status === "ACTIVE" ||
+      (latestSubscription.status === "EXPIRED" &&
+        latestSubscription.endedAt?.getTime() ===
+          latestSubscription.currentPeriodEnd.getTime()))
+      ? Object.freeze({
+          subscriptionId: latestSubscription.id,
+          expectedPeriodEnd: latestSubscription.currentPeriodEnd,
+          nextPeriodEnd: renewalPeriod.value.periodEnd,
+          planCode: latestSubscription.planVersion.plan.code,
+          planName: latestSubscription.planVersion.plan.name,
+        })
+      : null;
+  return Object.freeze({ company, entitlements, renewalCandidate });
 }
 
 const verificationCommandSchema = z.strictObject({
@@ -269,7 +316,15 @@ async function reviewClaim(raw: unknown, dependencies: AdminDependencies, action
       const targetStatus = action === "EVIDENCE" ? "NEEDS_EVIDENCE" as const : action === "REJECT" ? "REJECTED" as const : "APPROVED" as const;
       if (claim.events.length > 0 && claim.status === targetStatus) return adminSuccess({ claimId: claim.id, status: targetStatus }, true);
       if (claim.status !== parsed.data.expectedStatus) return adminFailure("CONFLICT");
-      await transaction.$queryRaw`SELECT "id" FROM "Company" WHERE "id" = ${claim.candidateCompanyId}::uuid FOR UPDATE`;
+      if (action === "APPROVE") {
+        await lockCompanySeatScope(transaction, claim.candidateCompanyId);
+      } else {
+        await transaction.$queryRaw`
+          SELECT "id" FROM "Company"
+          WHERE "id" = ${claim.candidateCompanyId}::uuid
+          FOR UPDATE
+        `;
+      }
       await transaction.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${claim.requesterEmployerUserId}::uuid FOR UPDATE`;
       if (action === "APPROVE") {
         const user = await transaction.user.findUnique({ where: { id: claim.requesterEmployerUserId }, select: { status: true, role: true } });
@@ -278,8 +333,33 @@ async function reviewClaim(raw: unknown, dependencies: AdminDependencies, action
         if (existing !== null) return adminFailure("CONFLICT");
         const rights = await getEffectiveEntitlements(claim.candidateCompanyId, now, createPrismaEntitlementRepository(transaction));
         if (!rights.ok) return adminFailure("CONFLICT");
-        const activeSeats = await transaction.companyMembership.count({ where: { companyId: claim.candidateCompanyId, status: "ACTIVE", removedAt: null } });
-        if (activeSeats >= rights.value.rights.SEAT_LIMIT) return adminFailure("QUOTA_EXCEEDED");
+        const [activeMemberships, pendingInvitations] = await Promise.all([
+          transaction.companyMembership.count({
+            where: {
+              companyId: claim.candidateCompanyId,
+              status: "ACTIVE",
+              removedAt: null,
+            },
+          }),
+          transaction.companyInvitation.count({
+            where: {
+              companyId: claim.candidateCompanyId,
+              status: "PENDING",
+              expiresAt: { gt: now },
+            },
+          }),
+        ]);
+        const seatGate = canAddRecruiterSeat({
+          effectiveEntitlements: rights.value,
+          currentSeatCount: activeMemberships + pendingInvitations,
+        });
+        if (!seatGate.allowed) {
+          return adminFailure(
+            seatGate.reason === "SEAT_LIMIT_REACHED"
+              ? "QUOTA_EXCEEDED"
+              : "CONFLICT",
+          );
+        }
         const membership = await transaction.companyMembership.create({ data: { id: randomUUID(), companyId: claim.candidateCompanyId, userId: claim.requesterEmployerUserId, role: parsed.data.approvedRole!, status: "ACTIVE", joinedAt: now, createdAt: now, updatedAt: now } });
         await transaction.companyMembershipEvent.create({ data: { id: randomUUID(), membershipId: membership.id, kind: "CREATED", fromRole: null, toRole: parsed.data.approvedRole!, actorUserId: dependencies.actor.userId, reasonCode: parsed.data.reasonCode, correlationId: dependencies.correlationId, createdAt: now } });
       }
@@ -292,6 +372,21 @@ async function reviewClaim(raw: unknown, dependencies: AdminDependencies, action
   } catch (error) {
     return adminErrorResult(error);
   }
+}
+
+async function lockCompanySeatScope(
+  transaction: Prisma.TransactionClient,
+  companyId: string,
+) {
+  // This is the same Company-scoped quota lock used by Team invite/accept.
+  // It serializes every path that can reserve or consume a recruiter seat.
+  await transaction.$queryRaw`
+    SELECT pg_advisory_xact_lock(1010, hashtext(${companyId})::integer)
+      IS NULL AS "locked"
+  `;
+  await transaction.$queryRaw`
+    SELECT "id" FROM "Company" WHERE "id" = ${companyId}::uuid FOR UPDATE
+  `;
 }
 
 async function notifyCompanyManagers(

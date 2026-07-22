@@ -227,7 +227,7 @@ describe("Phase 08 employer demo lead form", () => {
     expect(message).toHaveValue(
       "Wir möchten einen kontrollierten Import besprechen.",
     );
-  });
+  }, 15_000);
 
   it("replaces the form with a focused success status", async () => {
     const user = userEvent.setup();

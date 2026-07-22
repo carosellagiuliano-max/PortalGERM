@@ -1,0 +1,23 @@
+import { randomUUID } from "node:crypto";
+
+import { AdminActionForm, adminInputClass } from "@/components/admin/action-form";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireAdminPage } from "@/lib/auth/route-guards";
+import { getAdminCompanyCreditReadModel } from "@/lib/billing/admin-billing";
+import { getDatabase } from "@/lib/db/client";
+import { formatDateTime } from "@/lib/utils/format";
+
+export async function BillingCredits({ companyId }: Readonly<{ companyId: string }>) {
+  const user = await requireAdminPage();
+  const now = new Date();
+  const model = await getAdminCompanyCreditReadModel({ actor: { userId: user.id, email: user.email, role: user.role, status: user.status }, correlationId: randomUUID(), database: getDatabase(), now }, companyId);
+  if (model === null) return null;
+  const future = new Date(now.getTime() + 365 * 86_400_000).toISOString().slice(0, 10);
+  const entries = model.accounts.flatMap((account) => account.entries.map((entry) => ({ ...entry, account }))).sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id));
+  return <Card><CardHeader><CardTitle as="h2">Credits und Ledger</CardTitle></CardHeader><CardContent className="grid gap-5"><div className="grid gap-3 sm:grid-cols-2"><CreditSummary title="Talent-Kontakte" values={model.totals.TALENT_CONTACT} /><CreditSummary title="Job-Boosts" values={model.totals.JOB_BOOST} /></div><AdminActionForm operation="credit-grant" label="Credits append-only gewähren" hidden={{ companyId, idempotencyKey: randomUUID() }}><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm">Credit-Typ<select name="creditType" className={adminInputClass} defaultValue="TALENT_CONTACT"><option value="TALENT_CONTACT">Talent-Kontakt</option><option value="JOB_BOOST">Job-Boost</option><option value="NEWSLETTER">Newsletter</option><option value="SOCIAL_PUSH">Social Push</option></select></label><label className="grid gap-1 text-sm">Menge<input name="amount" type="number" min="1" max="10000" defaultValue="10" required className={adminInputClass} /></label><label className="grid gap-1 text-sm">Gültig bis (UTC-Datum)<input name="validUntil" type="date" min={new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10)} defaultValue={future} required className={adminInputClass} /></label><label className="grid gap-1 text-sm">Pflichtgrund<input name="reasonCode" defaultValue="CUSTOMER_SUCCESS_GRANT" pattern="[A-Z][A-Z0-9_]{1,63}" required className={adminInputClass} /></label></div></AdminActionForm><div><h3 className="font-semibold">Ledger-Verlauf</h3>{entries.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">Noch keine Credit-Einträge.</p> : <ol className="mt-2 grid gap-2">{entries.slice(0, 30).map(({ account, ...entry }) => <li key={entry.id} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_auto]"><div><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{entry.kind}</Badge><span className={`font-semibold tabular-nums ${entry.amount < 0 ? "text-destructive" : "text-emerald-700"}`}>{entry.amount > 0 ? "+" : ""}{entry.amount}</span><span className="text-sm">{account.creditType} · {account.fundingSource}</span></div><p className="mt-1 text-xs text-muted-foreground">{formatDateTime(entry.createdAt)} · gültig bis {formatDateTime(entry.validTo)} · {entry.reasonCode ?? "ohne Reason-Code"}</p></div>{entry.kind === "CONSUME" && entry.reversedByEntry === null ? <AdminActionForm className="min-w-52" operation="credit-reverse" label="Consume umkehren" destructive hidden={{ entryId: entry.id, idempotencyKey: randomUUID() }}><label className="grid gap-1 text-xs">Pflichtgrund<input name="reasonCode" defaultValue="BUSINESS_STATE_RESTORED_SEPARATELY" pattern="[A-Z][A-Z0-9_]{1,63}" required className={adminInputClass} /></label></AdminActionForm> : entry.reversedByEntry === null ? null : <Badge>REVERSAL {entry.reversedByEntry.id.slice(0, 8)}</Badge>}</li>)}</ol>}</div></CardContent></Card>;
+}
+
+function CreditSummary({ title, values }: Readonly<{ title: string; values: Readonly<{ PLAN_ALLOWANCE: number; PURCHASED_PACK: number; ADMIN_GRANT: number; total: number }> }>) {
+  return <div className="rounded-lg border p-3"><p className="text-sm text-muted-foreground">{title}</p><p className="mt-1 text-3xl font-semibold tabular-nums">{values.total}</p><p className="mt-1 text-xs text-muted-foreground">inkludiert {values.PLAN_ALLOWANCE} · gekauft {values.PURCHASED_PACK} · Admin {values.ADMIN_GRANT}</p></div>;
+}

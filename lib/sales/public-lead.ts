@@ -6,6 +6,7 @@ import {
   trackAnalyticsEventV1,
   type AnalyticsWriter,
 } from "@/lib/analytics/track";
+import { getAnonymousOperationalRuntimeProvenanceV1 } from "@/lib/analytics/runtime-policy";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
@@ -216,7 +217,15 @@ export async function submitPublicEmployerLead(
           pseudonymousSessionId: salesLeadAnalyticsKeyV1(lead.id),
           properties: { leadPurpose: purpose },
         },
-        { producer: "employer-demo", productAnalyticsEnabled: false },
+        {
+          producer: "employer-demo",
+          productAnalyticsEnabled: false,
+          provenance: {
+            actor: getAnonymousOperationalRuntimeProvenanceV1(
+              dependencies.environment.APP_ENV,
+            ),
+          },
+        },
         createTransactionAnalyticsWriter(transaction),
       );
 

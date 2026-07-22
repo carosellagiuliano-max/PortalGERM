@@ -4,6 +4,7 @@ import { getDatabase } from "@/lib/db/client";
 import { getPublicDataContext } from "@/lib/public/environment";
 import {
   buildPublicPricingCatalogV1,
+  PUBLIC_PRODUCT_CODES_V1,
   type PublicPricingCatalogResult,
 } from "@/lib/billing/public-catalog-core";
 
@@ -94,6 +95,7 @@ async function loadCatalogSnapshots(
           where: {
             status: "ACTIVE",
             isPublic: true,
+            product: { code: { in: [...PUBLIC_PRODUCT_CODES_V1] } },
             ...effectiveAt(at),
           },
           select: productVersionSelect,

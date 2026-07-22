@@ -5,6 +5,7 @@ import type {
 
 export type FeatureGateReason =
   | "INVALID_INPUT"
+  | "SEAT_LIMIT_REACHED"
   | "ACTIVE_JOB_LIMIT_REACHED"
   | "ADDITIONAL_JOB_PERMIT_REQUIRED"
   | "ADDITIONAL_JOB_PERMIT_INVALID"
@@ -26,6 +27,7 @@ export type FeatureGateResult = Readonly<{
 }>;
 
 export type AdditionalJobPermitSummary = Readonly<{
+  id: string;
   companyId: string;
   targetJobId: string;
   status: "SCHEDULED" | "ACTIVE" | "CONSUMED" | "EXPIRED" | "REVOKED";
@@ -59,7 +61,35 @@ export type LicensedSourceRights = Readonly<{
 
 const MAXIMUM_PUBLICATION_DAYS = 90;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
-const EMPLOYER_IMPORT_PLAN_SLUGS = new Set(["business", "enterprise"]);
+const EMPLOYER_IMPORT_PLAN_SLUGS = new Set([
+  "business",
+  "enterprise_contract",
+]);
+
+export function canAddRecruiterSeat({
+  effectiveEntitlements,
+  currentSeatCount,
+}: Readonly<{
+  effectiveEntitlements: EffectiveEntitlements;
+  currentSeatCount: number;
+}>): FeatureGateResult {
+  const limit = effectiveEntitlements.rights.SEAT_LIMIT;
+  if (
+    !Number.isSafeInteger(currentSeatCount) ||
+    currentSeatCount < 0 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 0
+  ) {
+    return denied("INVALID_INPUT");
+  }
+
+  return currentSeatCount < limit
+    ? allowed()
+    : denied(
+        "SEAT_LIMIT_REACHED",
+        seatUpgradeSuggestions(effectiveEntitlements),
+      );
+}
 
 export function canPublishJob({
   effectiveEntitlements,
@@ -97,16 +127,17 @@ export function canPublishJob({
   }
 
   if (additionalJobPermit === undefined || additionalJobPermit === null) {
-    return denied("ACTIVE_JOB_LIMIT_REACHED", {
-      suggestedProductSlug: "additional-job-30d",
-      suggestedPlanSlug: "pro",
-    });
+    return denied(
+      "ACTIVE_JOB_LIMIT_REACHED",
+      publicationUpgradeSuggestions(effectiveEntitlements, true),
+    );
   }
 
   if (currentActiveCount > limit) {
-    return denied("ADDITIONAL_JOB_PERMIT_REQUIRED", {
-      suggestedPlanSlug: "pro",
-    });
+    return denied(
+      "ADDITIONAL_JOB_PERMIT_REQUIRED",
+      publicationUpgradeSuggestions(effectiveEntitlements, false),
+    );
   }
 
   const permitIsCurrent =
@@ -122,10 +153,10 @@ export function canPublishJob({
     revisionValidThrough.getTime() <= additionalJobPermit.validTo.getTime();
   return permitIsCurrent
     ? allowed()
-    : denied("ADDITIONAL_JOB_PERMIT_INVALID", {
-        suggestedProductSlug: "additional-job-30d",
-        suggestedPlanSlug: "pro",
-      });
+    : denied(
+        "ADDITIONAL_JOB_PERMIT_INVALID",
+        publicationUpgradeSuggestions(effectiveEntitlements, true),
+      );
 }
 
 export function canUseTalentRadar(
@@ -259,6 +290,36 @@ function denied(
   }> = {},
 ): FeatureGateResult {
   return { allowed: false, reason, ...suggestions };
+}
+
+function publicationUpgradeSuggestions(
+  effectiveEntitlements: EffectiveEntitlements,
+  includeTargetedPermit: boolean,
+) {
+  const planSlug = effectiveEntitlements.source.planSlug.trim().toLowerCase();
+  if (planSlug === "starter") {
+    return {
+      ...(includeTargetedPermit
+        ? { suggestedProductSlug: "additional-job-30d" }
+        : {}),
+      suggestedPlanSlug: "pro",
+    };
+  }
+  return planSlug === "free" || planSlug === "free-basic" || planSlug === "free_basic"
+    ? { suggestedPlanSlug: "pro" }
+    : {};
+}
+
+function seatUpgradeSuggestions(
+  effectiveEntitlements: EffectiveEntitlements,
+) {
+  const planSlug = effectiveEntitlements.source.planSlug.trim().toLowerCase();
+  return planSlug === "free" ||
+    planSlug === "free-basic" ||
+    planSlug === "free_basic" ||
+    planSlug === "starter"
+    ? { suggestedPlanSlug: "pro" }
+    : {};
 }
 
 function isValidHalfOpenRange(

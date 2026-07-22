@@ -105,6 +105,13 @@ const NO_PRODUCT_CAPABILITIES = {
   hasEligibleOwnedJobTarget: false,
 } as const;
 
+const PRO_PLAN_CONTEXT = {
+  code: "PRO",
+  priceMode: "FIXED",
+  isPublic: true,
+  isSelfService: true,
+} as const;
+
 describe("Phase 08 checkout eligibility", () => {
   it("globally denies checkout in Phase 08", () => {
     expect(phase08CheckoutDecision()).toEqual({
@@ -167,12 +174,13 @@ describe("Phase 08 checkout eligibility", () => {
     });
   });
 
-  it("allows a contact pack only with Talent Radar access", () => {
+  it("allows a contact pack only with Talent Radar access on an eligible plan", () => {
     const contactPack = productRow("CONTACT_PACK");
 
     expect(
       getProductCheckoutCandidateV1(contactPack, AT, {
         ...NO_PRODUCT_CAPABILITIES,
+        currentPlan: PRO_PLAN_CONTEXT,
         hasTalentRadarAccess: true,
       }),
     ).toEqual({ eligible: true, kind: "CONTACT_PACK" });
@@ -189,6 +197,68 @@ describe("Phase 08 checkout eligibility", () => {
       suggestedPlanSlug: "pro",
     });
   });
+
+  it.each([
+    {
+      label: "Starter despite a Radar grant",
+      currentPlan: {
+        code: "STARTER",
+        priceMode: "FIXED",
+        isPublic: true,
+        isSelfService: true,
+      },
+      eligible: false,
+    },
+    {
+      label: "Business",
+      currentPlan: {
+        code: "BUSINESS",
+        priceMode: "FIXED",
+        isPublic: true,
+        isSelfService: false,
+      },
+      eligible: true,
+    },
+    {
+      label: "private Enterprise contract",
+      currentPlan: {
+        code: "ENTERPRISE_CONTRACT",
+        priceMode: "CONTRACT",
+        isPublic: false,
+        isSelfService: false,
+      },
+      eligible: true,
+    },
+    {
+      label: "public Enterprise contract",
+      currentPlan: {
+        code: "ENTERPRISE_CONTRACT",
+        priceMode: "CONTRACT",
+        isPublic: true,
+        isSelfService: false,
+      },
+      eligible: false,
+    },
+  ] as const)(
+    "enforces the Contact Pack plan allowlist for $label",
+    ({ currentPlan, eligible }) => {
+      expect(
+        getProductCheckoutCandidateV1(productRow("CONTACT_PACK"), AT, {
+          ...NO_PRODUCT_CAPABILITIES,
+          currentPlan,
+          hasTalentRadarAccess: true,
+        }),
+      ).toEqual(
+        eligible
+          ? { eligible: true, kind: "CONTACT_PACK" }
+          : {
+              eligible: false,
+              reason: "TALENT_RADAR_PLAN_REQUIRED",
+              suggestedPlanSlug: "pro",
+            },
+      );
+    },
+  );
 
   it("rejects malformed and unknown contact packs before the Radar plan gate", () => {
     expect(

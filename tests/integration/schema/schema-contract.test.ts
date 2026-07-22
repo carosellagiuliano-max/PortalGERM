@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
@@ -21,13 +21,16 @@ const SQLSTATE = {
 } as const;
 
 const HALF_OPEN_EXCLUSION_CONSTRAINTS = [
-  "plan_version_active_range_excl",
-  "product_version_active_range_excl",
+  "plan_version_released_range_excl",
+  "product_version_released_range_excl",
   "tax_rate_approved_range_excl",
   "salary_dataset_approved_range_excl",
   "subscription_effective_range_excl",
   "job_boost_effective_range_excl",
   "entitlement_grant_effective_range_excl",
+  "additional_job_permit_company_range_excl",
+  "additional_job_permit_job_range_excl",
+  "import_access_grant_source_range_excl",
 ] as const;
 
 const CROSS_SCOPE_CONSTRAINTS = {
@@ -58,6 +61,10 @@ const CROSS_SCOPE_CONSTRAINTS = {
   job_revision_id_job_unique: "u",
   job_status_event_revision_scope_fkey: "f",
   order_id_company_unique: "u",
+  OrderLine_targetImportSetupApprovalId_fkey: "f",
+  ProductReleaseDecision_decidedByUserId_fkey: "f",
+  ProductReleaseDecision_productId_fkey: "f",
+  ProductVersion_releaseDecisionId_fkey: "f",
   radar_search_session_membership_scope_fkey: "f",
   subscription_change_current_scope_fkey: "f",
   subscription_change_successor_scope_fkey: "f",
@@ -66,8 +73,6 @@ const CROSS_SCOPE_CONSTRAINTS = {
 } as const;
 
 const PARTIAL_UNIQUE_INDEXES = [
-  "additional_job_permit_active_company_unique",
-  "additional_job_permit_active_job_unique",
   "cluster_single_activated_unique",
   "company_active_invitation_unique",
   "company_open_claim_unique",
@@ -76,7 +81,6 @@ const PARTIAL_UNIQUE_INDEXES = [
   "contact_request_pending_unique",
   "conversation_participant_company_unique",
   "conversation_participant_user_unique",
-  "import_access_grant_active_source_unique",
   "job_active_assignment_unique",
   "plan_single_default_free_unique",
   "privacy_active_challenge_unique",
@@ -130,14 +134,16 @@ const ORDER_LINE_INSERT = [
 const CREDIT_LEDGER_INSERT = [
   'INSERT INTO "CreditLedgerEntry" (',
   '  "id", "accountId", "fundingSource", "kind", "amount",',
-  '  "sourcePlanVersionId", "sourceOrderLineId", "reversalOfEntryId",',
+  '  "sourcePlanVersionId", "sourceOrderLineId", "consumedGrantEntryId",',
+  '  "reversalOfEntryId",',
   '  "validFrom", "validTo", "idempotencyKey", "reasonCode",',
   '  "actorUserId", "createdAt"',
   ") VALUES (",
   "  $1, $2, $3, $4, $5,",
   "  $6, $7, $8,",
-  "  $9::timestamptz, $10::timestamptz, $11, $12,",
-  "  $13, $14::timestamptz",
+  "  $9,",
+  "  $10::timestamptz, $11::timestamptz, $12, $13,",
+  "  $14, $15::timestamptz",
   ")",
 ].join("\n");
 
@@ -318,7 +324,7 @@ async function insertTaxRate(
       '  "validFrom", "validTo", "source", "reviewStatus",',
       '  "reviewedByUserId", "reviewedAt"',
       ") VALUES (",
-      "  $1, $2, 'VAT', 810,",
+      "  $1, $2, 'VAT', 0,",
       "  $3::timestamptz, $4::timestamptz, 'Schema contract', $5,",
       "  $6, $7::timestamptz",
       ")",
@@ -338,12 +344,15 @@ async function insertTaxRate(
 }
 
 async function insertOrder(
-  target: Pool,
+  target: Pool | PoolClient,
   input: Readonly<{
     companyId: string;
     id: string;
+    netTotalRappen: number;
     suffix: string;
+    totalRappen: number;
     userId: string;
+    vatTotalRappen: number;
   }>,
 ) {
   await target.query(
@@ -353,13 +362,14 @@ async function insertOrder(
       '  "billingLegalNameSnapshot", "billingContactEmailSnapshot",',
       '  "billingStreetSnapshot", "billingPostalCodeSnapshot",',
       '  "billingCitySnapshot", "billingCountryCodeSnapshot",',
-      '  "netTotalRappen", "vatTotalRappen", "totalRappen", "updatedAt"',
+      '  "netTotalRappen", "vatTotalRappen", "totalRappen",',
+      '  "requestFingerprint", "updatedAt"',
       ") VALUES (",
       "  $1, $2, $3, $4,",
       "  'Schema AG', 'billing@schema.test',",
       "  'Teststrasse 1', '8000',",
       "  'Zürich', 'CH',",
-      "  0, 0, 0, $5::timestamptz",
+      "  $5, $6, $7, $8, $9::timestamptz",
       ")",
     ].join("\n"),
     [
@@ -367,9 +377,48 @@ async function insertOrder(
       input.companyId,
       input.userId,
       "schema-order-" + input.suffix,
+      input.netTotalRappen,
+      input.vatTotalRappen,
+      input.totalRappen,
+      input.id.replaceAll("-", "").padEnd(64, "0").slice(0, 64),
       "2030-01-01T00:00:00.000Z",
     ],
   );
+}
+
+async function insertOrderWithLines(
+  target: Pool,
+  input: Readonly<{
+    companyId: string;
+    id: string;
+    suffix: string;
+    userId: string;
+  }>,
+  lines: Array<Array<unknown>>,
+) {
+  if (lines.length === 0) {
+    throw new Error("A schema-contract Order fixture requires at least one line");
+  }
+
+  const client = await target.connect();
+  try {
+    await client.query("BEGIN");
+    await insertOrder(client, {
+      ...input,
+      netTotalRappen: lines.length * 100,
+      vatTotalRappen: 0,
+      totalRappen: lines.length * 100,
+    });
+    for (const line of lines) {
+      await client.query(ORDER_LINE_INSERT, line);
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function waitUntilBlocked(
@@ -526,6 +575,12 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260721121500_phase_10_job_revision_defaults_compat",
       "20260721123000_phase_10_verification_supersession_lock",
       "20260721160000_phase_11_admin_operations",
+      "20260721203000_phase_12_billing_entitlements",
+      "20260721214500_phase_12_p1_product_release",
+      "20260721221500_phase_12_billing_contract_hardening",
+      "20260721223000_phase_12_checkout_settlement_hardening",
+      "20260721224000_phase_12_credit_expiry_boundary",
+      "20260721225000_phase_12_release_permit_hardening",
     ]);
     expect(
       migrations.rows.every(
@@ -549,11 +604,13 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "job_reporting_code_snapshot_check",
       "job_reporting_code_version_scope_fkey",
       "order_line_catalog_reference_xor_check",
+      "order_line_tax_rate_snapshot_fkey",
       "plan_entitlement_value_check",
       "privacy_challenge_request_user_scope_fkey",
       "privacy_correction_text_length_check",
       "privacy_request_type_outcome_check",
       "user_email_normalized_check",
+      "tax_rate_version_id_basis_points_unique",
     ];
     const constraints = await target.query<{
       constraint_name: string;
@@ -678,6 +735,11 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "job_identity_provenance_immutable_trigger",
       "subscription_change_boundary_trigger",
       "subscription_change_snapshot_immutable_trigger",
+      "phase12_credit_account_immutable_trigger",
+      "phase12_credit_expiry_boundary_trigger",
+      "phase12_invoice_order_snapshot_trigger",
+      "phase12_subscription_change_retained_owner_trigger",
+      "phase12_subscription_order_retained_owner_trigger",
     ];
     const triggers = await target.query<{ trigger_name: string }>(
       [
@@ -765,35 +827,34 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       validFrom: "2031-01-01T00:00:00.000Z",
       validTo: "2032-01-01T00:00:00.000Z",
     });
-    await insertOrder(target, {
-      companyId,
-      id: orderId,
-      suffix: "typed-context",
-      userId,
-    });
-
-    await target.query(ORDER_LINE_INSERT, [
-      explicitUuid(108),
-      orderId,
-      planVersionId,
-      null,
-      taxRateId,
-      "SUBSCRIPTION",
-      null,
-      null,
-      null,
-    ]);
-    await target.query(ORDER_LINE_INSERT, [
-      explicitUuid(109),
-      orderId,
-      null,
-      productVersionId,
-      taxRateId,
-      "CONTACT_PACK",
-      null,
-      null,
-      "TALENT_CONTACT",
-    ]);
+    await insertOrderWithLines(
+      target,
+      { companyId, id: orderId, suffix: "typed-context", userId },
+      [
+        [
+          explicitUuid(108),
+          orderId,
+          planVersionId,
+          null,
+          taxRateId,
+          "SUBSCRIPTION",
+          null,
+          null,
+          null,
+        ],
+        [
+          explicitUuid(109),
+          orderId,
+          null,
+          productVersionId,
+          taxRateId,
+          "CONTACT_PACK",
+          null,
+          null,
+          "TALENT_CONTACT",
+        ],
+      ],
+    );
 
     await expectConstraintViolation(
       target.query(ORDER_LINE_INSERT, [
@@ -903,23 +964,23 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       validFrom: "2031-01-01T00:00:00.000Z",
       validTo: "2032-01-01T00:00:00.000Z",
     });
-    await insertOrder(target, {
-      companyId,
-      id: orderId,
-      suffix: "boost-funding",
-      userId,
-    });
-    await target.query(ORDER_LINE_INSERT, [
-      orderLineId,
-      orderId,
-      null,
-      productVersionId,
-      taxRateId,
-      "JOB_BOOST",
-      jobId,
-      null,
-      null,
-    ]);
+    await insertOrderWithLines(
+      target,
+      { companyId, id: orderId, suffix: "boost-funding", userId },
+      [
+        [
+          orderLineId,
+          orderId,
+          null,
+          productVersionId,
+          taxRateId,
+          "JOB_BOOST",
+          jobId,
+          null,
+          null,
+        ],
+      ],
+    );
 
     const boostInsert = [
       'INSERT INTO "JobBoost" (',
@@ -1082,6 +1143,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       amount: number,
       idempotencyKey: string,
       createdAt: string,
+      consumedGrantEntryId: string | null = null,
       reversalOfEntryId: string | null = null,
     ) => [
       id,
@@ -1091,6 +1153,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       amount,
       null,
       null,
+      consumedGrantEntryId,
       reversalOfEntryId,
       periodStart,
       periodEnd,
@@ -1134,6 +1197,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
           -11,
           "ledger-overdraw",
           "2035-01-04T00:00:00.000Z",
+          explicitUuid(302),
         ),
       ),
       SQLSTATE.checkViolation,
@@ -1149,6 +1213,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         -4,
         "ledger-consume-4",
         "2035-01-05T00:00:00.000Z",
+        explicitUuid(302),
       ),
     );
 
@@ -1161,6 +1226,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
           3,
           "ledger-wrong-reversal",
           "2035-01-06T00:00:00.000Z",
+          null,
           consumeId,
         ),
       ),
@@ -1175,6 +1241,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         4,
         "ledger-exact-reversal",
         "2035-01-07T00:00:00.000Z",
+        null,
         consumeId,
       ),
     );
@@ -1228,7 +1295,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         version: 3,
       }),
       SQLSTATE.exclusionViolation,
-      "plan_version_active_range_excl",
+      "plan_version_released_range_excl",
     );
 
     const productId = explicitUuid(410);
@@ -1237,7 +1304,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     await insertProduct(target, {
       id: productId,
       suffix: "temporal",
-      type: "FEATURED_EMPLOYER",
+      type: "CONTACT_PACK",
     });
     await insertProductVersion(target, {
       id: firstProductVersionId,
@@ -1265,7 +1332,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         version: 3,
       }),
       SQLSTATE.exclusionViolation,
-      "product_version_active_range_excl",
+      "product_version_released_range_excl",
     );
 
     const firstTaxRateId = explicitUuid(420);
@@ -1360,7 +1427,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         ],
       },
       SQLSTATE.exclusionViolation,
-      "plan_version_active_range_excl",
+      "plan_version_released_range_excl",
     );
 
     const accepted = await target.query<{ count: string }>(
@@ -1619,6 +1686,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       null,
       null,
       null,
+      null,
       "2043-01-01T00:00:00.000Z",
       "2044-01-01T00:00:00.000Z",
       "reveal-credit-grant",
@@ -1634,6 +1702,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       -1,
       null,
       null,
+      creditGrantId,
       null,
       "2043-01-01T00:00:00.000Z",
       "2044-01-01T00:00:00.000Z",
@@ -1835,6 +1904,9 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     const companyId = explicitUuid(813);
     const orderId = explicitUuid(814);
     const invoiceId = explicitUuid(815);
+    const taxRateId = explicitUuid(816);
+    const orderLineId = explicitUuid(817);
+    const invoiceLineId = explicitUuid(818);
 
     await insertPlan(target, planId, "immutable-lifecycle");
     await insertPlanVersion(target, {
@@ -1860,12 +1932,29 @@ describe("Phase 02 PostgreSQL schema contract", () => {
 
     await insertUser(target, userId, "billing-lifecycle@example.test");
     await insertCompany(target, companyId, "billing-lifecycle");
-    await insertOrder(target, {
-      companyId,
-      id: orderId,
-      suffix: "billing-lifecycle",
-      userId,
+    await insertTaxRate(target, {
+      id: taxRateId,
+      jurisdiction: "CH-billing-lifecycle",
+      validFrom: "2042-01-01T00:00:00.000Z",
+      validTo: "2043-01-01T00:00:00.000Z",
     });
+    await insertOrderWithLines(
+      target,
+      { companyId, id: orderId, suffix: "billing-lifecycle", userId },
+      [
+        [
+          orderLineId,
+          orderId,
+          planVersionId,
+          null,
+          taxRateId,
+          "SUBSCRIPTION",
+          null,
+          null,
+          null,
+        ],
+      ],
+    );
     await target.query(
       'UPDATE "Order" SET "status" = \'PENDING\', "updatedAt" = $2 WHERE "id" = $1',
       [orderId, "2042-02-01T00:00:00.000Z"],
@@ -1883,22 +1972,44 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       [orderId, "2042-02-03T00:00:00.000Z"],
     );
 
-    await target.query(
-      [
-        'INSERT INTO "Invoice" (',
-        '  "id", "orderId", "companyId", "number",',
-        '  "billingLegalNameSnapshot", "billingContactEmailSnapshot",',
-        '  "billingStreetSnapshot", "billingPostalCodeSnapshot",',
-        '  "billingCitySnapshot", "billingCountryCodeSnapshot",',
-        '  "currency", "netTotalRappen", "vatTotalRappen", "totalRappen", "dueAt"',
-        ") VALUES (",
-        "  $1, $2, $3, 'SCHEMA-LIFECYCLE-1',",
-        "  'Schema AG', 'billing@schema.test', 'Teststrasse 1', '8000',",
-        "  'Zürich', 'CH', 'CHF', 0, 0, 0, $4::timestamptz",
-        ")",
-      ].join("\n"),
-      [invoiceId, orderId, companyId, "2042-03-01T00:00:00.000Z"],
-    );
+    const invoiceClient = await target.connect();
+    try {
+      await invoiceClient.query("BEGIN");
+      await invoiceClient.query(
+        [
+          'INSERT INTO "Invoice" (',
+          '  "id", "orderId", "companyId", "number",',
+          '  "billingLegalNameSnapshot", "billingContactEmailSnapshot",',
+          '  "billingStreetSnapshot", "billingPostalCodeSnapshot",',
+          '  "billingCitySnapshot", "billingCountryCodeSnapshot",',
+          '  "currency", "netTotalRappen", "vatTotalRappen", "totalRappen", "dueAt"',
+          ") VALUES (",
+          "  $1, $2, $3, 'SCHEMA-LIFECYCLE-1',",
+          "  'Schema AG', 'billing@schema.test', 'Teststrasse 1', '8000',",
+          "  'Zürich', 'CH', 'CHF', 100, 0, 100, $4::timestamptz",
+          ")",
+        ].join("\n"),
+        [invoiceId, orderId, companyId, "2042-03-01T00:00:00.000Z"],
+      );
+      await invoiceClient.query(
+        [
+          'INSERT INTO "InvoiceLine" (',
+          '  "id", "invoiceId", "orderLineId", "sortOrder",',
+          '  "descriptionSnapshot", "quantity", "unitNetRappen",',
+          '  "netRappen", "taxRateBasisPoints", "vatRappen",',
+          '  "totalRappen", "currency"',
+          ") VALUES ($1, $2, $3, 1, 'Schema contract line', 1, 100,",
+          "  100, 0, 0, 100, 'CHF')",
+        ].join("\n"),
+        [invoiceLineId, invoiceId, orderLineId],
+      );
+      await invoiceClient.query("COMMIT");
+    } catch (error) {
+      await invoiceClient.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      invoiceClient.release();
+    }
     await target.query(
       'UPDATE "Invoice" SET "status" = \'ISSUED\', "issuedAt" = $2 WHERE "id" = $1',
       [invoiceId, "2042-02-04T00:00:00.000Z"],
@@ -2137,16 +2248,50 @@ describe("Phase 02 PostgreSQL schema contract", () => {
     const orderCompanyId = explicitUuid(701);
     const foreignCompanyId = explicitUuid(702);
     const orderId = explicitUuid(703);
+    const planId = explicitUuid(720);
+    const planVersionId = explicitUuid(721);
+    const taxRateId = explicitUuid(722);
+    const orderLineId = explicitUuid(723);
 
     await insertUser(target, userId, "scope-owner@example.test");
     await insertCompany(target, orderCompanyId, "scope-order");
     await insertCompany(target, foreignCompanyId, "scope-foreign");
-    await insertOrder(target, {
-      companyId: orderCompanyId,
-      id: orderId,
-      suffix: "foreign-scope",
-      userId,
+    await insertPlan(target, planId, "foreign-scope");
+    await insertPlanVersion(target, {
+      id: planVersionId,
+      planId,
+      validFrom: "2040-01-01T00:00:00.000Z",
+      validTo: "2042-01-01T00:00:00.000Z",
+      version: 1,
     });
+    await insertTaxRate(target, {
+      id: taxRateId,
+      jurisdiction: "CH-foreign-scope",
+      validFrom: "2040-01-01T00:00:00.000Z",
+      validTo: "2042-01-01T00:00:00.000Z",
+    });
+    await insertOrderWithLines(
+      target,
+      {
+        companyId: orderCompanyId,
+        id: orderId,
+        suffix: "foreign-scope",
+        userId,
+      },
+      [
+        [
+          orderLineId,
+          orderId,
+          planVersionId,
+          null,
+          taxRateId,
+          "SUBSCRIPTION",
+          null,
+          null,
+          null,
+        ],
+      ],
+    );
 
     await expectConstraintViolation(
       target.query(

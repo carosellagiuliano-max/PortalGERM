@@ -241,47 +241,79 @@ describe.sequential("Phase-08 PostgreSQL public pricing catalog", () => {
     expect(result.value.taxNotice.kind).toBe("REVIEW_BEFORE_CONTRACT");
   });
 
-  it("fails closed for an unexpected effective active-public product", async () => {
+  it("keeps the P0 display catalog valid when the contextual Additional Job product is active and public", async () => {
+    const admin = await client().user.create({
+      data: {
+        email: "catalog-release-admin@example.test",
+        emailNormalized: "catalog-release-admin@example.test",
+        role: "ADMIN",
+        name: "Catalog Release Admin",
+        dataProvenance: "TEST",
+        emailVerifiedAt: new Date(HISTORY_FROM),
+      },
+    });
     const product = await client().product.create({
       data: {
-        code: "unexpected-public-addon",
-        name: "Unexpected public add-on",
-        type: "FEATURED_JOB",
-        versions: {
-          create: {
-            version: 1,
-            status: "ACTIVE",
-            netPriceRappen: 12_345,
-            currency: "CHF",
-            durationDays: 14,
-            creditType: null,
-            creditAmount: null,
-            isPublic: true,
-            isSelfService: true,
-            priority: 90,
-            requiresLegalReview: false,
-            validFrom: new Date(AT),
-            validTo: null,
-          },
-        },
+        code: "additional-job-30d",
+        name: "Zusatzstelle 30 Tage",
+        type: "ADDITIONAL_JOB",
       },
-      include: { versions: true },
     });
-    const version = product.versions[0];
-    if (version === undefined) {
-      throw new Error("Unexpected public product version was not persisted.");
-    }
-    try {
-      await expect(getPublicPricingCatalog(AT)).resolves.toEqual({
-        ok: false,
-        error: { code: "PRODUCT_SET_INVALID" },
-      });
-    } finally {
-      await client().productVersion.update({
-        where: { id: version.id },
-        data: { status: "INACTIVE" },
-      });
-    }
+    const decision = await client().productReleaseDecision.create({
+      data: {
+        productId: product.id,
+        releaseTier: "P1",
+        allowsPublic: true,
+        allowsSelfService: true,
+        reasonCode: "P1_FULFILLMENT_VERIFIED",
+        rationale: "Der kontextgebundene Checkout und die Freigabelogik sind vollständig geprüft.",
+        decidedByUserId: admin.id,
+        expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+        idempotencyKey: "public-catalog:additional-job-release",
+        createdAt: new Date(HISTORY_FROM),
+      },
+    });
+    const draft = await client().productVersion.create({
+      data: {
+        productId: product.id,
+        version: 1,
+        status: "DRAFT",
+        netPriceRappen: 12_900,
+        currency: "CHF",
+        durationDays: 30,
+        creditType: null,
+        creditAmount: null,
+        isPublic: true,
+        isSelfService: true,
+        priority: 90,
+        requiresLegalReview: false,
+        releaseDecisionId: decision.id,
+        validFrom: new Date(AT),
+        validTo: null,
+      },
+    });
+    await client().productVersion.update({
+      where: { id: draft.id },
+      data: { status: "ACTIVE" },
+    });
+
+    const result = await getPublicPricingCatalog(AT);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error.code);
+    expect(result.value.products.map(({ code }) => code)).toEqual([
+      ...PUBLIC_PRODUCT_CODES_V1,
+    ]);
+    await expect(
+      client().productVersion.count({
+        where: {
+          id: draft.id,
+          status: "ACTIVE",
+          isPublic: true,
+          product: { code: "additional-job-30d" },
+        },
+      }),
+    ).resolves.toBe(1);
   });
 
   it("fails closed when one required active-public product is missing", async () => {

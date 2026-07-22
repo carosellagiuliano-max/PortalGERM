@@ -46,6 +46,7 @@ import { projectAdminSlaAlerts } from "@/lib/admin/sla";
 import { mutateAdminTaxonomy } from "@/lib/admin/taxonomy";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import type { EmailProvider } from "@/lib/providers/email";
+import { salesLeadAnalyticsKeyV1 } from "@/lib/sales/lead-policy";
 import { ADMIN_IMPORT_DEMO_FIXTURES } from "@/prisma/seed/fixtures";
 import { orchestrateDemoSeed } from "@/prisma/seed/orchestrator";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
@@ -140,6 +141,27 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
       { kind: "APPROVED", fromStatus: "IN_REVIEW", toStatus: "APPROVED" },
       { kind: "PUBLISHED", fromStatus: "APPROVED", toStatus: "PUBLISHED" },
     ]);
+    await expect(
+      client.analyticsEvent.findUnique({
+        where: {
+          producer_dedupeKey: {
+            producer: "admin-job-publish",
+            dedupeKey: `JOB_PUBLISHED:${job.id}`,
+          },
+        },
+        select: {
+          kind: true,
+          companyId: true,
+          jobId: true,
+          properties: true,
+        },
+      }),
+    ).resolves.toEqual({
+      kind: "JOB_PUBLISHED",
+      companyId: job.companyId,
+      jobId: job.id,
+      properties: { fromStatus: "APPROVED", toStatus: "PUBLISHED" },
+    });
     expect(
       await client.auditLog.count({
         where: { targetId: job.id, action: { in: ["JOB_REVIEW_STARTED", "JOB_APPROVED", "JOB_PUBLISHED"] } },
@@ -513,16 +535,66 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     requireSuccess(await mutateAdminTaxonomy({ entityType: "SKILL", entityId: skill.value.entityId, action: "DEACTIVATE", reasonCode: "SKILL_DEACTIVATED", idempotencyKey: randomUUID() }, deps("taxonomy-deactivate")));
     expect(await client.skill.findUnique({ where: { id: skill.value.entityId }, select: { isActive: true, sortOrder: true } })).toEqual({ isActive: false, sortOrder: 911 });
 
-    const lead = await client.salesLead.findFirstOrThrow({ where: { status: "NEW" }, orderBy: { id: "asc" }, select: { id: true } });
+    const lead = await client.salesLead.findFirstOrThrow({ where: { status: "NEW" }, orderBy: { id: "asc" }, select: { id: true, purpose: true } });
+    await client.analyticsEvent.create({
+      data: {
+        producer: "employer-demo",
+        dedupeKey: `LEAD_SUBMITTED:${randomUUID()}`,
+        kind: "LEAD_SUBMITTED",
+        schemaVersion: "1",
+        purpose: "ESSENTIAL_OPERATIONAL",
+        occurredAt: afterMilliseconds(-3_600_000),
+        receivedAt: afterMilliseconds(-3_599_000),
+        pseudonymousSessionId: salesLeadAnalyticsKeyV1(lead.id),
+        actorProvenanceSnapshot: "DEMO",
+        properties: { leadPurpose: lead.purpose },
+        retainUntil: afterMilliseconds(400 * 86_400_000),
+      },
+    });
     requireSuccess(await manageSalesLead({ leadId: lead.id, action: "ASSIGN", ownerUserId: adminUserId, reasonCode: "OWNER_ASSIGNED", idempotencyKey: randomUUID() }, deps("lead-assign")));
     requireSuccess(await manageSalesLead({ leadId: lead.id, action: "SET_NEXT", nextAt: new Date(NOW.getTime() + 86_400_000), reasonCode: "FOLLOW_UP_SCHEDULED", idempotencyKey: randomUUID() }, deps("lead-next")));
     const statusKey = randomUUID();
     const statusInput = { leadId: lead.id, action: "STATUS" as const, status: "CONTACTED" as const, reasonCode: "FIRST_CONTACT_COMPLETED", idempotencyKey: statusKey };
     requireSuccess(await manageSalesLead(statusInput, deps("lead-contacted")));
     expect(await manageSalesLead(statusInput, deps("lead-contacted-replay"))).toMatchObject({ ok: true, replay: true });
+    requireSuccess(await manageSalesLead({ leadId: lead.id, action: "STATUS", status: "QUALIFIED", reasonCode: "LEAD_QUALIFIED", idempotencyKey: randomUUID() }, deps("lead-qualified", afterMilliseconds(21))));
+    requireSuccess(await manageSalesLead({ leadId: lead.id, action: "STATUS", status: "WON", reasonCode: "LEAD_WON", idempotencyKey: randomUUID() }, deps("lead-won", afterMilliseconds(22))));
     requireSuccess(await manageSalesLead({ leadId: lead.id, action: "NOTE", safeNote: "Sicherer Vermerk <script>ohne Ausführung</script>", reasonCode: "FOLLOW_UP_NOTE", idempotencyKey: randomUUID() }, deps("lead-note")));
     expect(await client.salesActivity.count({ where: { salesLeadId: lead.id } })).toBeGreaterThanOrEqual(4);
     expect((await client.salesActivity.findFirstOrThrow({ where: { salesLeadId: lead.id, kind: "NOTE" }, orderBy: { createdAt: "desc" }, select: { safeNote: true } })).safeNote).not.toContain("<script>");
+    await expect(client.salesLead.findUniqueOrThrow({
+      where: { id: lead.id },
+      select: { status: true, nextAt: true },
+    })).resolves.toEqual({ status: "WON", nextAt: null });
+    await expect(client.analyticsEvent.findMany({
+      where: {
+        producer: "admin-sales-lead",
+        pseudonymousSessionId: salesLeadAnalyticsKeyV1(lead.id),
+      },
+      orderBy: [{ occurredAt: "asc" }, { kind: "asc" }],
+      select: {
+        kind: true,
+        actorProvenanceSnapshot: true,
+        companyProvenanceSnapshot: true,
+        jobProvenanceSnapshot: true,
+        properties: true,
+      },
+    })).resolves.toEqual([
+      {
+        kind: "LEAD_QUALIFIED",
+        actorProvenanceSnapshot: "DEMO",
+        companyProvenanceSnapshot: "DEMO",
+        jobProvenanceSnapshot: null,
+        properties: { leadPurpose: lead.purpose },
+      },
+      {
+        kind: "LEAD_WON",
+        actorProvenanceSnapshot: "DEMO",
+        companyProvenanceSnapshot: "DEMO",
+        jobProvenanceSnapshot: null,
+        properties: { leadPurpose: lead.purpose },
+      },
+    ]);
   });
 
   it("projects each SLA threshold once and exposes a privacy-safe evidence cockpit", async () => {

@@ -8,6 +8,7 @@ import type {
   AnalyticsWriteRecord,
   AnalyticsWriter,
 } from "@/lib/analytics/track";
+import { candidateAnalyticsSubjectV1 } from "@/lib/analytics/pseudonyms";
 import { trackAnalyticsEventV1 } from "@/lib/analytics/track";
 import {
   applicationSubmissionPayloadHash,
@@ -260,6 +261,7 @@ export async function applyToJob(
             coverLetter ?? null,
             documents.selected,
             submissionPayloadHash,
+            intent.analyticsSessionId,
             dependencies,
             now,
           );
@@ -330,6 +332,7 @@ async function createApplicationTransaction(
   coverLetter: string | null,
   documents: readonly ApplicationDocumentSnapshot[],
   submissionPayloadHash: string,
+  analyticsSessionId: string | undefined,
   dependencies: Readonly<{
     environment: ServerEnvironment;
     request: AuthRequestContext;
@@ -469,6 +472,8 @@ async function createApplicationTransaction(
       producerEventId: `APPLICATION_SUBMITTED:${application.id}`,
       occurredAt: now,
       kind: "APPLICATION_SUBMITTED",
+      pseudonymousActorId: candidateAnalyticsSubjectV1(context.userId),
+      pseudonymousSessionId: analyticsSessionId,
       companyId: context.companyId,
       jobId: context.jobId,
       properties: {
@@ -480,6 +485,7 @@ async function createApplicationTransaction(
       producer: "candidate-application",
       productAnalyticsEnabled: false,
       provenance: {
+        actor: context.candidateProvenance,
         company: context.companyProvenance,
         job: context.jobProvenance,
       },

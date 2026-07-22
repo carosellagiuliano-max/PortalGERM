@@ -86,7 +86,11 @@ describe("role and company capability policies", () => {
       role: ACCESS.membershipRole,
       company: { status: "ACTIVE" as const },
     }));
-    const database = { companyMembership: { findFirst } } as never;
+    const database = {
+      companyMembership: { findFirst },
+      subscriptionChangeSchedule: { findMany: vi.fn(async () => []) },
+      employerSubscription: { findMany: vi.fn(async () => []) },
+    } as never;
     vi.mocked(getCurrentUser).mockResolvedValue(USER);
     vi.mocked(getDatabase).mockReturnValue(database);
 

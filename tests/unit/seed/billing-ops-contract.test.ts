@@ -21,8 +21,15 @@ import {
 } from "@/prisma/seed/blocks/billing-ops";
 import { REFERENCE_CATALOG_SEED_IDENTITIES } from "@/prisma/seed/blocks/reference-catalog";
 import {
+  COMPANY_FIXTURES,
   countGuideWords,
   DEMO_GUIDE_FIXTURES,
+  deriveSeedBillingMrrContractV1,
+  getSeedSubscriptionCommercialSnapshotV1,
+  PLAN_VERSION_FIXTURES,
+  SEED_BILLING_MRR_CONTRACT_V1,
+  SEED_CUSTOM_SUBSCRIPTION_COMMERCIAL_CONTRACTS_V1,
+  SEED_EFFECTIVE_PAID_SUBSCRIPTION_COMMERCIAL_FIXTURES_V1,
   type PlanCode,
 } from "@/prisma/seed/fixtures";
 import { stableSeedId } from "@/prisma/seed/ids";
@@ -70,8 +77,8 @@ describe("Phase-05 reference, Billing/Ops and content contract", () => {
     const jobs = jobHandles(companies);
     const identities = buildBillingOpsSeedIdentities({ companies, jobs });
 
-    expect(BILLING_OPS_SEED_IDENTITIES).toHaveLength(466);
-    expect(identities).toHaveLength(603);
+    expect(BILLING_OPS_SEED_IDENTITIES).toHaveLength(467);
+    expect(identities).toHaveLength(604);
     expect(new Set(identities.map(({ id }) => id)).size).toBe(identities.length);
     expect(
       new Set(
@@ -92,6 +99,56 @@ describe("Phase-05 reference, Billing/Ops and content contract", () => {
     expect(() => buildBillingOpsSeedIdentities({ companies, jobs })).toThrow(
       "exactly 20 paid Companies",
     );
+  });
+
+  it("derives the exact MRR target from Company, PlanVersion and custom-commercial contracts", () => {
+    const paidCompanies = COMPANY_FIXTURES.filter(
+      ({ planCode }) => planCode !== "FREE_BASIC",
+    );
+    expect(
+      SEED_EFFECTIVE_PAID_SUBSCRIPTION_COMMERCIAL_FIXTURES_V1.map(
+        ({ companyId }) => companyId,
+      ),
+    ).toEqual(paidCompanies.map(({ id }) => id));
+
+    for (const planCode of ["STARTER", "PRO", "BUSINESS"] as const) {
+      const commercial = getSeedSubscriptionCommercialSnapshotV1(planCode);
+      const planVersion = PLAN_VERSION_FIXTURES.find(
+        ({ naturalKey }) => naturalKey === commercial.planVersionNaturalKey,
+      );
+      expect(planVersion).toBeDefined();
+      expect(commercial).toEqual(
+        expect.objectContaining({
+          currency: planVersion?.currency,
+          monthlyEquivalentRappen: planVersion?.monthlyEquivalentRappen,
+          recurringNetRappen: planVersion?.netPriceRappen,
+        }),
+      );
+    }
+
+    expect(
+      getSeedSubscriptionCommercialSnapshotV1("ENTERPRISE_CONTRACT"),
+    ).toEqual(
+      expect.objectContaining(
+        SEED_CUSTOM_SUBSCRIPTION_COMMERCIAL_CONTRACTS_V1.ENTERPRISE_CONTRACT,
+      ),
+    );
+    expect(
+      deriveSeedBillingMrrContractV1(
+        SEED_EFFECTIVE_PAID_SUBSCRIPTION_COMMERCIAL_FIXTURES_V1,
+      ),
+    ).toEqual(SEED_BILLING_MRR_CONTRACT_V1);
+    expect(SEED_BILLING_MRR_CONTRACT_V1).toEqual({
+      currency: "CHF",
+      effectivePaidSubscriptions: 20,
+      paidPlanDistribution: {
+        STARTER: 6,
+        PRO: 6,
+        BUSINESS: 5,
+        ENTERPRISE_CONTRACT: 3,
+      },
+      totalMonthlyEquivalentRappen: 1_228_000,
+    });
   });
 
   it("builds ordered, correctly keyed analytics cohorts and a suppressed negative population", () => {

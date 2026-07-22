@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { UpgradePrompt } from "@/lib/billing/upgrade-prompt";
 import {
   type CompanyOnboardingRequirement,
   type EmployerCompanyActionState,
@@ -63,12 +64,14 @@ export function CompanyForm({
   initial,
   canManage,
   enhancedProfileAllowed,
+  enhancedProfileUpgradePrompt,
   cantons,
   cities,
 }: Readonly<{
   initial: CompanyFormInitialValues;
   canManage: boolean;
   enhancedProfileAllowed: boolean;
+  enhancedProfileUpgradePrompt: UpgradePrompt;
   cantons: readonly Readonly<{ id: string; code: string; name: string }>[];
   cities: readonly Readonly<{ id: string; cantonId: string; name: string }>[];
 }>) {
@@ -195,6 +198,7 @@ export function CompanyForm({
           allowed={enhancedProfileAllowed}
           title="Erweitertes Firmenprofil"
           explanation="Cover, Unternehmenswerte und Firmen-Benefits sind im aktuellen Plan schreibgeschützt. Bestehende Inhalte bleiben unverändert gespeichert; ein passender Plan schaltet ihre Bearbeitung serverseitig frei."
+          upgradePrompt={enhancedProfileUpgradePrompt}
         >
           <FieldGroup
             title="Erweitertes Firmenprofil"

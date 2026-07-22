@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { candidateAnalyticsSubjectV1 } from "@/lib/analytics/pseudonyms";
 import { getApplicationConfirmationView } from "@/lib/applications/confirmation";
 import {
   updateCandidateApplicationNote,
@@ -39,6 +40,8 @@ type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
 const NOW = new Date("2026-07-20T12:00:00.000Z");
 const EXPIRES_AT = new Date("2026-08-20T12:00:00.000Z");
+const APPLICATION_ANALYTICS_SESSION_ID =
+  "12345678-1234-4234-8234-123456789abc";
 const IDS = Object.freeze({
   candidateUser: randomUUID(),
   candidateProfile: randomUUID(),
@@ -359,7 +362,12 @@ describe.sequential(
       expect(confirmation.ok).toBe(true);
       if (!confirmation.ok) throw new Error("Expected confirmation view.");
       const intent = signJobIntent(
-        { action: "APPLY", jobSlug: "phase09-application-job", now: NOW },
+        {
+          action: "APPLY",
+          jobSlug: "phase09-application-job",
+          analyticsSessionId: APPLICATION_ANALYTICS_SESSION_ID,
+          now: NOW,
+        },
         runtimeEnvironment().secrets.session,
       );
       const input = {
@@ -422,8 +430,15 @@ describe.sequential(
         client().auditLog.count({
           where: { action: "APPLICATION_SUBMITTED", targetId: applicationId },
         }),
-        client().analyticsEvent.count({
+        client().analyticsEvent.findMany({
           where: { kind: "APPLICATION_SUBMITTED", jobId: IDS.job },
+          select: {
+            pseudonymousActorId: true,
+            pseudonymousSessionId: true,
+            actorProvenanceSnapshot: true,
+            companyProvenanceSnapshot: true,
+            jobProvenanceSnapshot: true,
+          },
         }),
         client().emailLog.count({
           where: {
@@ -450,7 +465,17 @@ describe.sequential(
         conversations: 1,
         participants: 2,
         audits: 1,
-        analytics: 1,
+        analytics: [
+          {
+            pseudonymousActorId: candidateAnalyticsSubjectV1(
+              IDS.candidateUser,
+            ),
+            pseudonymousSessionId: APPLICATION_ANALYTICS_SESSION_ID,
+            actorProvenanceSnapshot: "LIVE",
+            companyProvenanceSnapshot: "LIVE",
+            jobProvenanceSnapshot: "LIVE",
+          },
+        ],
         emails: 1,
       });
       await expect(

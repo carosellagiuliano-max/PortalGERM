@@ -16,6 +16,12 @@ import { manageSupportCase } from "@/lib/admin/support";
 import { saveContentDraft, transitionContentRevision, transitionClusterLaunch } from "@/lib/admin/content";
 import { manageSalesLead } from "@/lib/admin/leads";
 import { projectAdminSlaAlerts } from "@/lib/admin/sla";
+import { deactivatePlanVersion, deactivateProductVersion, grantAdminCredits, reverseCreditConsume, schedulePlanVersion, scheduleProductVersion } from "@/lib/billing/admin-billing";
+import { adminMockRenewSubscription, type AdminMockRenewalResult } from "@/lib/billing/admin-renewal";
+import { projectDueCatalogVersions } from "@/lib/billing/catalog-lifecycle";
+import { recordProductReleaseDecision } from "@/lib/billing/product-release";
+import { projectDueSubscriptionBoundaries, type SubscriptionBoundaryProjectionResult } from "@/lib/billing/subscriptions";
+import { projectDueCreditExpiries, type CreditExpiryProjectionResult } from "@/lib/billing/credits";
 
 export type AdminActionState = Readonly<{ status: "idle" | "success" | "error"; message: string; code?: string }>;
 export const INITIAL_ADMIN_ACTION_STATE: AdminActionState = Object.freeze({ status: "idle", message: "" });
@@ -65,11 +71,47 @@ export async function adminCommandAction(_previous: AdminActionState, formData: 
                                                                       : operation === "content-transition" ? await transitionContentRevision(input, dependencies)
                                                                         : operation === "cluster-transition" ? await transitionClusterLaunch(input, dependencies)
                                                                           : operation === "lead-manage" ? await manageSalesLead(input, dependencies)
-                                                                            : operation === "sla-project" ? await projectAdminSlaAlerts(input as never, dependencies)
-                                                                              : null;
+                                                                          : operation === "sla-project" ? await projectAdminSlaAlerts(input as never, dependencies)
+                                                                            : operation === "credit-grant" ? await grantAdminCredits(input, dependencies)
+                                                                              : operation === "credit-reverse" ? await reverseCreditConsume(input, dependencies)
+                                                                                : operation === "catalog-plan-schedule" ? await schedulePlanVersion(input, dependencies)
+                                                                                  : operation === "catalog-product-release-decide" ? await recordProductReleaseDecision(input, dependencies)
+                                                                                  : operation === "catalog-product-schedule" ? await scheduleProductVersion(input, dependencies)
+                                                                                    : operation === "catalog-plan-deactivate" ? await deactivatePlanVersion(input, dependencies)
+                                                                                      : operation === "catalog-product-deactivate" ? await deactivateProductVersion(input, dependencies)
+                                                                                        : operation === "catalog-project-due" ? await projectDueCatalogVersions(input, dependencies)
+                                                                                          : operation === "subscription-renew-mock" ? await adminMockRenewSubscription(input, dependencies)
+                                                                                            : operation === "subscription-boundaries-project" ? await projectDueSubscriptionBoundaries(input, dependencies)
+                                                                                              : operation === "credit-expiries-project" ? await projectDueCreditExpiries(input, dependencies)
+                                                                                          : null;
     if (result === null) return errorState("Unbekannte Admin-Aktion.", "INVALID_INPUT");
     if (!result.ok) return errorState(messageForCode(result.code), result.code);
     revalidateAdminPaths();
+    if (operation === "subscription-boundaries-project") {
+      revalidateSubscriptionBoundaryPaths();
+      return Object.freeze({
+        status: "success",
+        message: subscriptionProjectionMessage(result.value as SubscriptionBoundaryProjectionResult),
+      });
+    }
+    if (operation === "credit-expiries-project") {
+      const projection = result.value as CreditExpiryProjectionResult;
+      return Object.freeze({
+        status: "success",
+        message: `Credit-Ablauf projiziert: ${projection.projectedGrantCount} Grant(s), ${projection.expiredCreditAmount} Credit(s).`,
+      });
+    }
+    if (operation === "subscription-renew-mock") {
+      const renewal = result.value as AdminMockRenewalResult;
+      revalidatePath(`/admin/companies/${renewal.companyId}`);
+      revalidateSubscriptionBoundaryPaths();
+      return Object.freeze({
+        status: "success",
+        message: result.replay
+          ? "Mock-Verlängerung war bereits sicher verarbeitet. Es wurde keine Zahlung oder Rechnung erzeugt."
+          : "Mock-Verlängerung wurde aktiviert. Es wurde keine Zahlung oder Rechnung erzeugt.",
+      });
+    }
     return Object.freeze({ status: "success", message: result.replay ? "Aktion war bereits sicher verarbeitet." : "Aktion wurde sicher verarbeitet." });
   } catch {
     return errorState("Die Aktion konnte nicht vollständig ausgeführt werden.", "WRITE_FAILED");
@@ -89,4 +131,6 @@ function formObject(formData: FormData) {
 function singleValue(formData: FormData, key: string) { const values = formData.getAll(key); return values.length === 1 && typeof values[0] === "string" ? values[0].trim() : null; }
 function errorState(message: string, code: string): AdminActionState { return Object.freeze({ status: "error", message, code }); }
 function messageForCode(code: string) { return code === "CONFLICT" ? "Der Datensatz wurde inzwischen geändert. Bitte lade den aktuellen Stand neu." : code === "FORBIDDEN" ? "Für diese Aktion fehlt die Berechtigung." : code === "NOT_FOUND" ? "Der Datensatz ist nicht mehr verfügbar." : code === "QUOTA_EXCEEDED" ? "Das aktuelle Nutzungslimit verhindert diese Aktion." : code === "RESTRICTED" ? "Eine aktive Moderationssperre verhindert diese Aktion." : code === "VERIFICATION_REQUIRED" ? "Die Firma ist aktuell nicht gültig verifiziert." : code === "INCOMPLETE" ? "Die nötigen Entscheidungen oder Angaben sind noch nicht vollständig." : code === "INVALID_INPUT" ? "Bitte prüfe die Eingaben." : "Die Änderung konnte nicht gespeichert werden."; }
-function revalidateAdminPaths() { for (const path of ["/admin", "/admin/jobs", "/admin/companies", "/admin/users", "/admin/taxonomy", "/admin/reports", "/admin/imports", "/admin/support", "/admin/content", "/admin/leads", "/admin/business-cockpit", "/jobs", "/companies", "/guide", "/support"]) revalidatePath(path); }
+function revalidateAdminPaths() { for (const path of ["/admin", "/admin/jobs", "/admin/companies", "/admin/users", "/admin/taxonomy", "/admin/reports", "/admin/imports", "/admin/support", "/admin/content", "/admin/leads", "/admin/billing", "/admin/orders", "/admin/invoices", "/admin/plans", "/admin/products", "/admin/analytics", "/admin/business-cockpit", "/jobs", "/companies", "/guide", "/support"]) revalidatePath(path); }
+function revalidateSubscriptionBoundaryPaths() { for (const path of ["/employer/billing", "/employer/jobs", "/employer/team"]) revalidatePath(path); }
+function subscriptionProjectionMessage(result: SubscriptionBoundaryProjectionResult) { return `Projektion abgeschlossen: ${result.appliedCancellationCount} Kündigung(en), ${result.appliedDowngradeCount} Downgrade(s), ${result.expiredSubscriptionCount} natürliche Vertragsabläufe angewendet.`; }

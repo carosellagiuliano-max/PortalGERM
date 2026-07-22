@@ -7,12 +7,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PublicPricingProduct } from "@/lib/billing/public-catalog-core";
 import { formatChfFromRappen } from "@/lib/utils/format";
 
-export function OneTimeProductCard({ product }: Readonly<{ product: PublicPricingProduct }>) {
+export function OneTimeProductCard({
+  product,
+  canBuyContactPack = false,
+  signedInEmployer = false,
+}: Readonly<{
+  product: PublicPricingProduct;
+  canBuyContactPack?: boolean;
+  signedInEmployer?: boolean;
+}>) {
   const boost = product.kind === "JOB_BOOST";
+  const purchasable = !boost && canBuyContactPack;
   return (
     <Card className="h-full">
       <CardHeader>
-        <Badge variant="outline" className="mb-2 w-fit">Noch nicht direkt kaufbar</Badge>
+        <Badge variant="outline" className="mb-2 w-fit">
+          {purchasable ? "Im lokalen Mock kaufbar" : boost ? "Auf einer Stelle auswählen" : "Zugang erforderlich"}
+        </Badge>
         <CardTitle as="h3" className="text-xl">{product.name}</CardTitle>
         <p className="mt-2 text-2xl font-semibold">{formatChfFromRappen(product.netPriceRappen)} netto</p>
       </CardHeader>
@@ -23,10 +34,22 @@ export function OneTimeProductCard({ product }: Readonly<{ product: PublicPricin
             : `${product.creditAmount} zusätzliche Kontakte. Das Pack setzt einen bestehenden Talent-Radar-Zugang voraus und schaltet den Radar niemals selbst frei.`}
         </p>
         <Link
-          href={boost ? "/employers/post-job" : "/employers/talent-radar"}
+          href={
+            boost
+              ? signedInEmployer
+                ? "/employer/jobs"
+                : "/employers/post-job"
+              : purchasable
+                ? `/employer/billing/checkout?product=${product.code}`
+                : "/employers/talent-radar"
+          }
           className={buttonVariants({ variant: "outline", className: "mt-5 w-full" })}
         >
-          {boost ? "Inserat-Ablauf ansehen" : "Talent Radar verstehen"}
+          {boost
+            ? "Eigene Stellen ansehen"
+            : purchasable
+              ? "Contact Pack im Mock kaufen"
+              : "Talent Radar verstehen"}
           <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
         </Link>
       </CardContent>

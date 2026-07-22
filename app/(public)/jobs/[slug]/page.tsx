@@ -16,6 +16,7 @@ import {
   PublicJobActions,
   SaveIntentConfirmation,
 } from "@/components/public/apply-save-actions";
+import { PublicJobDetailAnalytics } from "@/components/analytics/public-job-analytics";
 import { FairScoreBreakdown } from "@/components/public/fair-score";
 import { JobCard } from "@/components/public/job-card";
 import { ReportForm } from "@/components/public/report-form";
@@ -98,6 +99,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
 
   return (
     <div>
+      <PublicJobDetailAnalytics jobSlug={job.slug} />
       {emitJsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} /> : null}
       <div className="page-shell py-10 sm:py-14">
         <Link href="/jobs" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"><ArrowLeftIcon className="size-4" aria-hidden="true" /> Zur Stellensuche</Link>

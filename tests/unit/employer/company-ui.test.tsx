@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/employer/company/actions", () => ({
@@ -16,6 +17,7 @@ import {
 } from "@/components/employer/company-form";
 import { VerificationPanel } from "@/components/employer/verification-panel";
 import type { EmployerVerificationView } from "@/lib/employer/company";
+import type { UpgradePrompt } from "@/lib/billing/upgrade-prompt";
 
 const INITIAL: CompanyFormInitialValues = Object.freeze({
   expectedUpdatedAt: "2026-07-20T10:00:00.000Z",
@@ -42,6 +44,17 @@ const INITIAL: CompanyFormInitialValues = Object.freeze({
       isPrimary: true,
     },
   ],
+});
+
+const ENHANCED_PROFILE_PROMPT: UpgradePrompt = Object.freeze({
+  reason: "ENHANCED_PROFILE_NOT_INCLUDED",
+  title: "Erweitertes Firmenprofil nicht enthalten",
+  description:
+    "Verfügbare Katalogoption: Pro Firmenprofil für CHF 249.00 netto pro Monat.",
+  cta: Object.freeze({
+    href: "/employer/billing/checkout?plan=pro",
+    label: "Pro Firmenprofil-Upgrade ansehen",
+  }),
 });
 
 const REQUEST: EmployerVerificationView = Object.freeze({
@@ -74,6 +87,7 @@ describe("Phase-10 company UI roles", () => {
         initial={INITIAL}
         canManage={false}
         enhancedProfileAllowed
+        enhancedProfileUpgradePrompt={ENHANCED_PROFILE_PROMPT}
         cantons={[
           {
             id: INITIAL.locations[0]?.cantonId ?? "",
@@ -101,12 +115,14 @@ describe("Phase-10 company UI roles", () => {
     30_000,
   );
 
-  it("shows a locked explanation and no editable premium fields without entitlement", () => {
+  it("receives the server-built prompt and uses the shared dialog when the premium fields are locked", async () => {
+    const user = userEvent.setup();
     render(
       <CompanyForm
         initial={INITIAL}
         canManage
         enhancedProfileAllowed={false}
+        enhancedProfileUpgradePrompt={ENHANCED_PROFILE_PROMPT}
         cantons={[]}
         cities={[]}
       />,
@@ -117,9 +133,13 @@ describe("Phase-10 company UI roles", () => {
     expect(screen.queryByLabelText("Cover Storage-Key (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Unternehmenswerte")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Firmen-Benefits")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Pläne vergleichen" })).toHaveAttribute(
+    await user.click(
+      screen.getByRole("button", { name: "Upgrade-Optionen anzeigen" }),
+    );
+    expect(await screen.findByText(/Pro Firmenprofil für CHF 249.00/u)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Pro Firmenprofil-Upgrade ansehen" })).toHaveAttribute(
       "href",
-      "/pricing",
+      "/employer/billing/checkout?plan=pro",
     );
   });
 

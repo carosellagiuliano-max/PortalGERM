@@ -6,8 +6,10 @@ import { z } from "zod";
 
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { writeRequiredAudit, type RequiredAuditInput } from "@/lib/audit/log";
+import type { FeatureGateReason } from "@/lib/billing/feature-gates";
 import { createPrismaPublishQuotaPort } from "@/lib/billing/prisma-publish-quota";
 import { publishWithQuota } from "@/lib/billing/usage";
+import type { UpgradePrompt } from "@/lib/billing/upgrade-prompt";
 import type { DatabaseClient } from "@/lib/db/factory";
 import {
   APPLICATION_CONTACT_KINDS,
@@ -587,9 +589,22 @@ export type EmployerJobCommandCode =
   | "RESTRICTED"
   | "WRITE_FAILED";
 
+export type EmployerJobQuotaReason = Extract<
+  FeatureGateReason,
+  | "ACTIVE_JOB_LIMIT_REACHED"
+  | "ADDITIONAL_JOB_PERMIT_REQUIRED"
+  | "ADDITIONAL_JOB_PERMIT_INVALID"
+>;
+
 export type EmployerJobCommandResult<TValue> =
   | Readonly<{ ok: true; value: TValue; replay?: boolean }>
-  | Readonly<{ ok: false; code: EmployerJobCommandCode; issues?: readonly string[] }>;
+  | Readonly<{
+      ok: false;
+      code: EmployerJobCommandCode;
+      issues?: readonly string[];
+      quotaReason?: EmployerJobQuotaReason;
+      suggestedPlanSlug?: string;
+    }>;
 
 export type EmployerJobCommandDependencies = Readonly<{
   actor: EmployerJobActor;
@@ -605,6 +620,7 @@ export type EmployerJobFormState = Readonly<{
   message?: string;
   nextIdempotencyKey?: string;
   suggestion?: string;
+  upgradePrompt?: UpgradePrompt;
 }>;
 
 export const INITIAL_EMPLOYER_JOB_FORM_STATE: EmployerJobFormState = Object.freeze({ status: "idle" });
@@ -1309,7 +1325,16 @@ export async function reactivateEmployerJob(
   });
   try {
     const result = await publishWithQuota({ companyId: dependencies.actor.companyId, jobId: preflight.id, revisionId: preflight.currentRevision.id, revisionValidThrough: preflight.currentRevision.validThrough, now }, port);
-    if (!result.ok) return failure(result.reason === "ACTIVE_JOB_LIMIT_REACHED" || result.reason.includes("PERMIT") ? "QUOTA_EXCEEDED" : "CONFLICT");
+    if (!result.ok) {
+      return isEmployerJobQuotaReason(result.reason)
+        ? failure(
+            "QUOTA_EXCEEDED",
+            undefined,
+            result.reason,
+            result.suggestedPlanSlug,
+          )
+        : failure("CONFLICT");
+    }
     return result.value;
   } catch (error) {
     return commandFailureFromError(error);
@@ -2073,6 +2098,27 @@ function commandFailureFromError<TValue>(error: unknown): EmployerJobCommandResu
   return error instanceof EmployerJobCommandError ? failure(error.code) : failure("WRITE_FAILED");
 }
 
-function failure<TValue = never>(code: EmployerJobCommandCode, issues?: readonly string[]): EmployerJobCommandResult<TValue> {
-  return Object.freeze({ ok: false, code, ...(issues === undefined ? {} : { issues: Object.freeze([...issues]) }) });
+function failure<TValue = never>(
+  code: EmployerJobCommandCode,
+  issues?: readonly string[],
+  quotaReason?: EmployerJobQuotaReason,
+  suggestedPlanSlug?: string,
+): EmployerJobCommandResult<TValue> {
+  return Object.freeze({
+    ok: false,
+    code,
+    ...(issues === undefined ? {} : { issues: Object.freeze([...issues]) }),
+    ...(quotaReason === undefined ? {} : { quotaReason }),
+    ...(suggestedPlanSlug === undefined ? {} : { suggestedPlanSlug }),
+  });
+}
+
+function isEmployerJobQuotaReason(
+  reason: FeatureGateReason | "ENTITLEMENT_RESOLUTION_FAILED",
+): reason is EmployerJobQuotaReason {
+  return (
+    reason === "ACTIVE_JOB_LIMIT_REACHED" ||
+    reason === "ADDITIONAL_JOB_PERMIT_REQUIRED" ||
+    reason === "ADDITIONAL_JOB_PERMIT_INVALID"
+  );
 }

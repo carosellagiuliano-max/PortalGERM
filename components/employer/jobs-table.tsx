@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { FilePlus2Icon } from "lucide-react";
 
+import { UpgradeDialog } from "@/components/billing/upgrade-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -95,6 +96,7 @@ function JobRow({ job, actions, keys }: Readonly<{ job: EmployerJobListItem; act
           {job.capabilities.manageLifecycle && (job.status === "PUBLISHED" || job.status === "PAUSED" || job.status === "EXPIRED") ? <RowActionForm action={closeAction} job={job} keyValue={closeState.nextIdempotencyKey ?? keys.close ?? job.id} label="Schliessen" pending={closePending} destructive /> : null}
         </div>
         {states.flatMap((state) => state.status === "idle" || state.message === undefined ? [] : [state.message]).map((message, index) => <p key={`${message}-${index}`} className="mt-2 max-w-sm text-xs text-muted-foreground" role="status">{message}</p>)}
+        {states.map((state, index) => state.upgradePrompt === undefined ? null : <div className="mt-2" key={`${state.nextIdempotencyKey ?? state.upgradePrompt.reason}-${index}`}><UpgradeDialog prompt={state.upgradePrompt} defaultOpen /></div>)}
       </td>
     </tr>
   );

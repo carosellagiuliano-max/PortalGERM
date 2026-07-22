@@ -94,6 +94,7 @@ describe("PostgreSQL MockEmailProvider contract", () => {
       Array.from({ length: 12 }, () => provider.send(input)),
     );
     expect(new Set(results.map(({ logId }) => logId))).toHaveLength(1);
+    expect(results.filter(({ created }) => created)).toHaveLength(1);
 
     const rows = await database.emailLog.findMany({
       where: { recipient: resetRecipient },

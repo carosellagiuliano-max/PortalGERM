@@ -13,6 +13,7 @@ import { issueSession } from "@/lib/auth/session-issuance";
 import {
   getEffectiveEntitlements,
 } from "@/lib/billing/entitlements";
+import { canAddRecruiterSeat } from "@/lib/billing/feature-gates";
 import { createPrismaEntitlementRepository } from "@/lib/billing/prisma-publish-quota";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -73,7 +74,7 @@ type CommandDependencies = Readonly<{
 }>;
 type CommandResult<T extends object | void = void> =
   | (T extends object ? Readonly<{ ok: true } & T> : Readonly<{ ok: true }>)
-  | Readonly<{ ok: false; code: string }>;
+  | Readonly<{ ok: false; code: string; suggestedPlanSlug?: string }>;
 type LockedInvitation = Readonly<{
   id: string;
   companyId: string;
@@ -201,7 +202,21 @@ export async function sendCompanyInvitation(
         const entitlements = await getEffectiveEntitlements(companyId, now, createPrismaEntitlementRepository(tx));
         if (!entitlements.ok) return { ok: false as const, code: "ENTITLEMENT_UNAVAILABLE" };
         const seats = await countReservedSeats(tx, companyId, now);
-        if (seats >= entitlements.value.rights.SEAT_LIMIT) return { ok: false as const, code: "SEAT_LIMIT" };
+        const seatGate = canAddRecruiterSeat({
+          effectiveEntitlements: entitlements.value,
+          currentSeatCount: seats,
+        });
+        if (!seatGate.allowed) {
+          return {
+            ok: false as const,
+            code: seatGate.reason === "SEAT_LIMIT_REACHED"
+              ? "SEAT_LIMIT"
+              : "ENTITLEMENT_UNAVAILABLE",
+            ...(seatGate.suggestedPlanSlug === undefined
+              ? {}
+              : { suggestedPlanSlug: seatGate.suggestedPlanSlug }),
+          };
+        }
         const invitation = await tx.companyInvitation.create({
           data: {
             companyId, inviterUserId: actor.userId,
@@ -262,8 +277,23 @@ export async function resendCompanyInvitation(
       }
       const entitlements = await getEffectiveEntitlements(companyId, now, createPrismaEntitlementRepository(tx));
       if (!entitlements.ok) return { ok: false as const, code: "ENTITLEMENT_UNAVAILABLE" };
-      if (await countReservedSeats(tx, companyId, now) > entitlements.value.rights.SEAT_LIMIT) {
-        return { ok: false as const, code: "SEAT_LIMIT" };
+      const seatGate = canAddRecruiterSeat({
+        effectiveEntitlements: entitlements.value,
+        currentSeatCount: Math.max(
+          0,
+          (await countReservedSeats(tx, companyId, now)) - 1,
+        ),
+      });
+      if (!seatGate.allowed) {
+        return {
+          ok: false as const,
+          code: seatGate.reason === "SEAT_LIMIT_REACHED"
+            ? "SEAT_LIMIT"
+            : "ENTITLEMENT_UNAVAILABLE",
+          ...(seatGate.suggestedPlanSlug === undefined
+            ? {}
+            : { suggestedPlanSlug: seatGate.suggestedPlanSlug }),
+        };
       }
       const updated = await tx.companyInvitation.update({
         where: { id: invitation.id },
@@ -330,6 +360,11 @@ export async function changeCompanyMemberRole(
       if (target === null) return { ok: false as const, code: "NOT_FOUND" };
       if ((target.role === "OWNER" || parsed.data.role === "OWNER") && manager.role !== "OWNER") return { ok: false as const, code: "OWNER_REQUIRED" };
       if (target.role === "OWNER" && parsed.data.role !== "OWNER" && await activeOwnerCount(tx, companyId) <= 1) return { ok: false as const, code: "LAST_OWNER" };
+      if (
+        target.role === "OWNER" &&
+        parsed.data.role !== "OWNER" &&
+        await isPendingBoundaryRetainedOwner(tx, companyId, target.id, target.userId)
+      ) return { ok: false as const, code: "RETAINED_OWNER_REQUIRED" };
       if (target.role === parsed.data.role) {
         const replayEvent = await tx.companyMembershipEvent.findFirst({
           where: {
@@ -418,6 +453,10 @@ export async function removeCompanyMember(
       if (target.status !== "ACTIVE") return { ok: false as const, code: "NOT_FOUND" };
       if (target.role === "OWNER" && manager.role !== "OWNER") return { ok: false as const, code: "OWNER_REQUIRED" };
       if (target.role === "OWNER" && await activeOwnerCount(tx, companyId) <= 1) return { ok: false as const, code: "LAST_OWNER" };
+      if (
+        target.role === "OWNER" &&
+        await isPendingBoundaryRetainedOwner(tx, companyId, target.id, target.userId)
+      ) return { ok: false as const, code: "RETAINED_OWNER_REQUIRED" };
       const assignments = await tx.jobAssignment.findMany({ where: { membershipId: target.id, companyId, status: "ACTIVE" }, select: { id: true, role: true } });
       for (const assignment of assignments) {
         await tx.jobAssignment.update({ where: { id: assignment.id }, data: { status: "REVOKED", revokedAt: now, updatedAt: now } });
@@ -676,7 +715,24 @@ async function acceptLockedInvitation(tx: Prisma.TransactionClient, invitation: 
   await expireCompanyInvitations(tx, invitation.companyId, now, dependencies.request.correlationId, invitation.id);
   const entitlements = await getEffectiveEntitlements(invitation.companyId, now, createPrismaEntitlementRepository(tx));
   if (!entitlements.ok) return { ok: false, code: "ENTITLEMENT_UNAVAILABLE" };
-  if (await countReservedSeats(tx, invitation.companyId, now) > entitlements.value.rights.SEAT_LIMIT) return { ok: false, code: "SEAT_LIMIT" };
+  const seatGate = canAddRecruiterSeat({
+    effectiveEntitlements: entitlements.value,
+    currentSeatCount: Math.max(
+      0,
+      (await countReservedSeats(tx, invitation.companyId, now)) - 1,
+    ),
+  });
+  if (!seatGate.allowed) {
+    return {
+      ok: false,
+      code: seatGate.reason === "SEAT_LIMIT_REACHED"
+        ? "SEAT_LIMIT"
+        : "ENTITLEMENT_UNAVAILABLE",
+      ...(seatGate.suggestedPlanSlug === undefined
+        ? {}
+        : { suggestedPlanSlug: seatGate.suggestedPlanSlug }),
+    };
+  }
   const intendedRole = z.enum(membershipRoles).safeParse(invitation.intendedRole);
   if (!intendedRole.success) return { ok: false, code: "INVALID" };
   const existing = await tx.companyMembership.findUnique({ where: { companyId_userId: { companyId: invitation.companyId, userId: user.id } }, select: { id: true, status: true, role: true } });
@@ -750,6 +806,22 @@ async function countReservedSeats(tx: Prisma.TransactionClient, companyId: strin
 }
 async function activeOwnerCount(tx: Prisma.TransactionClient, companyId: string) {
   return tx.companyMembership.count({ where: { companyId, status: "ACTIVE", role: "OWNER" } });
+}
+async function isPendingBoundaryRetainedOwner(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  membershipId: string,
+  userId: string,
+) {
+  return (await tx.subscriptionChangeSchedule.findFirst({
+    where: {
+      companyId,
+      status: "PENDING",
+      retainedDefaultOwnerId: userId,
+      retainedMembershipIds: { has: membershipId },
+    },
+    select: { id: true },
+  })) !== null;
 }
 async function expireCompanyInvitations(tx: Prisma.TransactionClient, companyId: string, now: Date, correlationId: string, exceptId?: string) {
   const expired = await tx.companyInvitation.findMany({ where: { companyId, status: "PENDING", expiresAt: { lte: now }, ...(exceptId === undefined ? {} : { id: { not: exceptId } }) }, select: { id: true } });

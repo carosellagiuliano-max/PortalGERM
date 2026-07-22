@@ -3,10 +3,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const pricingCatalog = vi.hoisted(() => ({
   getPublicPricingCatalog: vi.fn(),
+  getEmployerContext: vi.fn(),
+  getEffectiveEntitlements: vi.fn(),
+  findCurrentSubscriptions: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/billing/public-catalog", () => ({
   getPublicPricingCatalog: pricingCatalog.getPublicPricingCatalog,
+}));
+vi.mock("@/lib/auth/employer-context", () => ({
+  getEmployerContext: pricingCatalog.getEmployerContext,
+}));
+vi.mock("@/lib/billing/prisma-publish-quota", () => ({
+  getPrismaEffectiveEntitlements: pricingCatalog.getEffectiveEntitlements,
+}));
+vi.mock("@/lib/db/client", () => ({
+  getDatabase: () => ({
+    employerSubscription: {
+      findMany: pricingCatalog.findCurrentSubscriptions,
+    },
+  }),
 }));
 
 import PricingPage from "@/app/(public)/pricing/page";
@@ -189,6 +206,11 @@ describe("public pricing page", () => {
   beforeEach(() => {
     pricingCatalog.getPublicPricingCatalog.mockReset();
     pricingCatalog.getPublicPricingCatalog.mockResolvedValue(successfulCatalog());
+    pricingCatalog.getEmployerContext.mockReset();
+    pricingCatalog.getEmployerContext.mockResolvedValue(null);
+    pricingCatalog.getEffectiveEntitlements.mockReset();
+    pricingCatalog.findCurrentSubscriptions.mockReset();
+    pricingCatalog.findCurrentSubscriptions.mockResolvedValue([]);
   });
 
   it("renders the hero and exactly five ordered plan cards from catalog Rappen values", async () => {
@@ -200,7 +222,7 @@ describe("public pricing page", () => {
         name: "Wähle den Plan, der dein Recruiting wachsen lässt",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Keine Bestellung und kein Checkout in Phase 8")).toBeInTheDocument();
+    expect(screen.getByText(/Lokaler Mock-Checkout/)).toBeInTheDocument();
 
     const plans = screen.getByRole("region", { name: "Arbeitgeberpläne" });
     expect(within(plans).getAllByRole("article")).toHaveLength(5);
@@ -226,13 +248,14 @@ describe("public pricing page", () => {
 
     const productsHeading = screen.getByRole("heading", {
       level: 2,
-      name: "Vier aktive P0-Produktversionen – derzeit nur zur Information.",
+      name: "Transparente einmalige Produkte mit klaren Freigabegrenzen.",
     });
     const products = productsHeading.closest("section");
     expect(products).not.toBeNull();
     if (products === null) throw new Error("Product section is missing.");
 
-    expect(within(products).getAllByText("Noch nicht direkt kaufbar")).toHaveLength(4);
+    expect(within(products).getAllByText("Auf einer Stelle auswählen")).toHaveLength(2);
+    expect(within(products).getAllByText("Zugang erforderlich")).toHaveLength(2);
     for (const name of [
       "7-Tage Boost",
       "30-Tage Boost",
@@ -304,7 +327,7 @@ describe("public pricing page", () => {
     }
 
     for (const link of screen.getAllByRole("link", {
-      name: "Inserat-Ablauf ansehen",
+      name: "Eigene Stellen ansehen",
     })) {
       expect(link).toHaveAttribute("href", "/employers/post-job");
     }
@@ -317,6 +340,89 @@ describe("public pricing page", () => {
       "href",
       "/employers/demo",
     );
+  });
+
+  it("links an eligible signed-in owner only to working checkout or sales routes", async () => {
+    pricingCatalog.getEmployerContext.mockResolvedValue({
+      user: { id: "owner", role: "EMPLOYER" },
+      memberships: [],
+      needsSelection: false,
+      current: {
+        membershipId: "membership",
+        membershipRole: "OWNER",
+        companyId: "company",
+        companyName: "Demo AG",
+        companySlug: "demo-ag",
+        companyStatus: "ACTIVE",
+      },
+    });
+    pricingCatalog.getEffectiveEntitlements.mockResolvedValue({
+      ok: true,
+      value: {
+        source: { planSlug: "PRO" },
+        rights: { ...BASE_RIGHTS, TALENT_RADAR_ACCESS: true },
+      },
+    });
+
+    render(await PricingPage());
+
+    expect(
+      screen.getByRole("link", { name: "Starter im Mock wählen" }),
+    ).toHaveAttribute("href", "/employer/billing/checkout?plan=starter");
+    expect(screen.getByRole("link", { name: "Aktueller Plan" })).toHaveAttribute(
+      "href",
+      "/employer/billing",
+    );
+    for (const link of screen.getAllByRole("link", {
+      name: "Contact Pack im Mock kaufen",
+    })) {
+      expect(link.getAttribute("href")).toMatch(
+        /^\/employer\/billing\/checkout\?product=contact-pack-(10|50)$/u,
+      );
+    }
+    expect(screen.getByRole("link", { name: "Business besprechen" })).toHaveAttribute(
+      "href",
+      "/employers/demo?interest=business",
+    );
+  });
+
+  it("routes a cancelling owner to the existing Plan change instead of a new checkout", async () => {
+    pricingCatalog.getEmployerContext.mockResolvedValue({
+      user: { id: "owner", role: "EMPLOYER" },
+      memberships: [],
+      needsSelection: false,
+      current: {
+        membershipId: "membership",
+        membershipRole: "OWNER",
+        companyId: "company",
+        companyName: "Demo AG",
+        companySlug: "demo-ag",
+        companyStatus: "ACTIVE",
+      },
+    });
+    pricingCatalog.getEffectiveEntitlements.mockResolvedValue({
+      ok: true,
+      value: {
+        source: { planSlug: "STARTER" },
+        rights: BASE_RIGHTS,
+      },
+    });
+    pricingCatalog.findCurrentSubscriptions.mockResolvedValue([
+      {
+        status: "CANCELLING",
+        currentChangeSchedules: [{ id: "pending-cancel" }],
+      },
+    ]);
+
+    render(await PricingPage());
+
+    expect(
+      screen.getByRole("link", { name: "Aktueller Plan · Änderung ansehen" }),
+    ).toHaveAttribute("href", "/employer/billing");
+    expect(
+      screen.getByRole("link", { name: "Vorgemerkte Planänderung ansehen" }),
+    ).toHaveAttribute("href", "/employer/billing");
+    expect(screen.queryByText(/im Mock wählen/u)).not.toBeInTheDocument();
   });
 
   it("fails closed without rendering fallback plans, products, or prices", async () => {

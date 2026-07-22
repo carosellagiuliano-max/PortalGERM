@@ -26,6 +26,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   "job_rejected",
   "abuse_report_received",
   "credits_granted",
+  "commercial_lifecycle_signal",
   "privacy_request_changed",
 ] as const;
 
@@ -37,5 +38,5 @@ export interface EmailProvider {
     templateKey: EmailTemplateKey;
     data: Record<string, unknown>;
     subject: string;
-  }): Promise<{ logId: string }>;
+  }): Promise<{ logId: string; created?: boolean }>;
 }

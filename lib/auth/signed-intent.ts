@@ -24,6 +24,7 @@ const payloadSchema = z
     version: z.literal(SIGNED_JOB_INTENT_POLICY_V1.version),
     action: z.enum(JOB_INTENT_ACTIONS_V1),
     jobSlug: z.string().min(1).max(220).regex(JOB_SLUG_PATTERN),
+    analyticsSessionId: z.string().uuid().optional(),
     issuedAt: z.number().int().nonnegative(),
     expiresAt: z.number().int().positive(),
   });
@@ -38,6 +39,7 @@ export function signJobIntent(
   input: Readonly<{
     action: JobIntentActionV1;
     jobSlug: string;
+    analyticsSessionId?: string;
     now: Date;
   }>,
   key: SignedJobIntentKey,
@@ -48,6 +50,7 @@ export function signJobIntent(
     version: SIGNED_JOB_INTENT_POLICY_V1.version,
     action: input.action,
     jobSlug: input.jobSlug,
+    analyticsSessionId: input.analyticsSessionId,
     issuedAt,
     expiresAt: issuedAt + SIGNED_JOB_INTENT_POLICY_V1.ttlMilliseconds,
   });

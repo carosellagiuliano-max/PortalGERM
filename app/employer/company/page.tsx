@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireEmployerPage } from "@/lib/auth/route-guards";
+import { buildCatalogUpgradePrompt } from "@/lib/billing/upgrade-prompt";
 import { getDatabase } from "@/lib/db/client";
 import {
   EmployerCompanyDomainError,
@@ -36,6 +37,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function EmployerCompanyPage() {
+  const database = getDatabase();
+  const now = new Date();
   const [user, context] = await Promise.all([
     requireEmployerPage(),
     requireEmployerCompanyContext(),
@@ -44,7 +47,15 @@ export default async function EmployerCompanyPage() {
     companyId: context.companyId,
     membershipId: context.membershipId,
     actorUserId: user.id,
-  });
+  }, database);
+  const enhancedProfileUpgradePrompt = await buildCatalogUpgradePrompt(
+    {
+      reason: "ENHANCED_PROFILE_NOT_INCLUDED",
+      suggestedPlanSlug: "pro",
+      actorRole: workspace.membershipRole,
+    },
+    { database, now },
+  );
   const initial: CompanyFormInitialValues = Object.freeze({
     expectedUpdatedAt: workspace.company.updatedAt.toISOString(),
     name: workspace.company.name,
@@ -124,6 +135,7 @@ export default async function EmployerCompanyPage() {
             initial={initial}
             canManage={workspace.canManage}
             enhancedProfileAllowed={workspace.enhancedProfileAllowed}
+            enhancedProfileUpgradePrompt={enhancedProfileUpgradePrompt}
             cantons={workspace.cantons}
             cities={workspace.cities}
           />
@@ -181,9 +193,10 @@ async function loadCompanyWorkspace(
     membershipId: string;
     actorUserId: string;
   }>,
+  database: ReturnType<typeof getDatabase>,
 ) {
   try {
-    return await getEmployerCompanyWorkspace(getDatabase(), scope);
+    return await getEmployerCompanyWorkspace(database, scope);
   } catch (error) {
     if (
       error instanceof EmployerCompanyDomainError &&

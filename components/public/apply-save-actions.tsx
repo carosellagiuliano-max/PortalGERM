@@ -7,6 +7,7 @@ import { BookmarkIcon, SendIcon } from "lucide-react";
 import { startPublicJobIntentAction } from "@/app/(public)/jobs/actions";
 import { applyToJobAction } from "@/app/candidate/applications/actions";
 import { confirmSaveJobAction } from "@/app/candidate/saved-jobs/actions";
+import { useProductAnalyticsSessionId } from "@/components/analytics/public-job-analytics";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -16,11 +17,17 @@ import type { ApplicationConfirmationProjection } from "@/lib/applications/confi
 import { INITIAL_SAVED_JOB_ACTION_STATE } from "@/lib/candidate/saved-job-action-state";
 
 export function PublicJobActions({ jobSlug }: Readonly<{ jobSlug: string }>) {
+  const analyticsSessionId = useProductAnalyticsSessionId();
   return (
     <div className="grid grid-cols-2 gap-2">
       <form action={startPublicJobIntentAction}>
         <input type="hidden" name="action" value="SAVE" />
         <input type="hidden" name="jobSlug" value={jobSlug} />
+        <input
+          type="hidden"
+          name="analyticsSessionId"
+          value={analyticsSessionId}
+        />
         <Button type="submit" variant="outline" className="w-full">
           <BookmarkIcon aria-hidden="true" /> Speichern
         </Button>
@@ -28,6 +35,11 @@ export function PublicJobActions({ jobSlug }: Readonly<{ jobSlug: string }>) {
       <form action={startPublicJobIntentAction}>
         <input type="hidden" name="action" value="APPLY" />
         <input type="hidden" name="jobSlug" value={jobSlug} />
+        <input
+          type="hidden"
+          name="analyticsSessionId"
+          value={analyticsSessionId}
+        />
         <Button type="submit" className="w-full">
           <SendIcon aria-hidden="true" /> Bewerben
         </Button>

@@ -30,6 +30,7 @@ import { createSeedBlockDigest } from "@/prisma/seed/manifest";
 import {
   CANDIDATE_FIXTURES,
   DEMO_GUIDE_FIXTURES,
+  getSeedSubscriptionCommercialSnapshotV1,
   PLAN_ENTITLEMENT_FIXTURES,
   PLAN_VERSION_FIXTURES,
   PRODUCT_VERSION_FIXTURES,
@@ -134,7 +135,7 @@ export type BillingOpsSeedResult = Readonly<{
 
 type OrderScenario = Readonly<{
   company: BillingCompanyHandle;
-  finalStatus: "PAID" | "PENDING" | "CANCELLED";
+  finalStatus: "PAID" | "PENDING" | "FAILED" | "CANCELLED";
   index: number;
   line:
     | Readonly<{ kind: "PLAN"; planVersionNaturalKey: string }>
@@ -199,6 +200,10 @@ export const BILLING_OPS_SEED_IDENTITIES: readonly SeedIdentityRecord[] =
         "payment-event",
         `${orderNaturalKey(10 + offset)}:cancelled`,
       ),
+    ),
+    createSeedIdentity(
+      "payment-event",
+      `${orderNaturalKey(9)}:failed`,
     ),
     ...Array.from({ length: INVOICE_COUNT }, (_, index) =>
       createSeedIdentity("invoice", invoiceNaturalKey(index)),
@@ -529,7 +534,7 @@ function buildBillingScenario(
       job: requireAt(publishedPaidJobs, 10, "pending Boost job"),
       productVersionNaturalKey: "boost-7d:v1",
     }),
-    orderScenario(9, orderCompanies, "PENDING", {
+    orderScenario(9, orderCompanies, "FAILED", {
       kind: "CONTACT_PACK",
       productVersionNaturalKey: "contact-pack-10:v1",
     }),
@@ -788,6 +793,10 @@ async function seedOrders(
       status: scenario.finalStatus,
       provider: "MOCK",
       clientIdempotencyKey: `seed:${naturalKey}:client`,
+      requestFingerprint: historicalOrderRequestFingerprint(
+        orderId,
+        scenario.company.id,
+      ),
       providerIdempotencyKey: `seed:${naturalKey}:provider`,
       providerReference: `mock-${naturalKey}`,
       ...snapshot,
@@ -799,7 +808,10 @@ async function seedOrders(
         scenario.finalStatus === "PAID"
           ? addMinutes(createdAt, 30).toISOString()
           : null,
-      failedAt: null,
+      failedAt:
+        scenario.finalStatus === "FAILED"
+          ? addMinutes(createdAt, 40).toISOString()
+          : null,
       cancelledAt:
         scenario.finalStatus === "CANCELLED"
           ? addMinutes(createdAt, 45).toISOString()
@@ -810,24 +822,6 @@ async function seedOrders(
           : null,
       createdAt: createdAt.toISOString(),
     } as const;
-    let order = await db.order.findUnique({ where: { id: orderId } });
-    if (order === null) {
-      order = await db.order.create({
-        data: {
-          ...finalExpected,
-          status: "DRAFT",
-          paidAt: null,
-          cancelledAt: null,
-          createdAt,
-          expiresAt:
-            finalExpected.expiresAt === null
-              ? null
-              : new Date(finalExpected.expiresAt),
-        },
-      });
-    }
-    assertOrderDraftPendingOrFinal(order, naturalKey, finalExpected);
-
     const lineExpected = {
       id: lineId,
       orderId,
@@ -848,6 +842,30 @@ async function seedOrders(
       targetCreditType: line.targetCreditType,
       createdAt: createdAt.toISOString(),
     } as const;
+    let order = await db.order.findUnique({ where: { id: orderId } });
+    if (order === null) {
+      order = await db.$transaction(async (transaction) => {
+        const created = await transaction.order.create({
+          data: {
+            ...finalExpected,
+            status: "DRAFT",
+            paidAt: null,
+            failedAt: null,
+            cancelledAt: null,
+            createdAt,
+            expiresAt:
+              finalExpected.expiresAt === null
+                ? null
+                : new Date(finalExpected.expiresAt),
+          },
+        });
+        await transaction.orderLine.create({
+          data: { ...lineExpected, createdAt },
+        });
+        return created;
+      });
+    }
+    assertOrderDraftPendingOrFinal(order, naturalKey, finalExpected);
     const existingLine = await db.orderLine.findUnique({ where: { id: lineId } });
     if (existingLine === null && order.status !== "DRAFT") {
       throw new SeedDataDriftError("OrderLine", naturalKey);
@@ -875,8 +893,22 @@ async function seedOrders(
         where: { id: orderId },
         data:
           scenario.finalStatus === "PAID"
-            ? { status: "PAID", paidAt: addMinutes(createdAt, 30) }
-            : { status: "CANCELLED", cancelledAt: addMinutes(createdAt, 45) },
+            ? {
+                status: "PAID",
+                paidAt: addMinutes(createdAt, 30),
+                expiresAt: null,
+              }
+            : scenario.finalStatus === "FAILED"
+              ? {
+                  status: "FAILED",
+                  failedAt: addMinutes(createdAt, 40),
+                  expiresAt: null,
+                }
+              : {
+                  status: "CANCELLED",
+                  cancelledAt: addMinutes(createdAt, 45),
+                  expiresAt: null,
+                },
       });
     }
     assertProjection("Order", naturalKey, projectOrder(order), finalExpected);
@@ -892,11 +924,13 @@ async function seedPaymentEvents(
   orderId: string,
   createdAt: Date,
 ): Promise<void> {
-  const events: Array<Readonly<{ kind: "CHECKOUT_CREATED" | "PAID" | "CANCELLED"; suffix: string; at: Date }>> = [
+  const events: Array<Readonly<{ kind: "CHECKOUT_CREATED" | "PAID" | "FAILED" | "CANCELLED"; suffix: string; at: Date }>> = [
     { kind: "CHECKOUT_CREATED", suffix: "checkout-created", at: addMinutes(createdAt, 5) },
   ];
   if (scenario.finalStatus === "PAID") {
     events.push({ kind: "PAID", suffix: "paid", at: addMinutes(createdAt, 30) });
+  } else if (scenario.finalStatus === "FAILED") {
+    events.push({ kind: "FAILED", suffix: "failed", at: addMinutes(createdAt, 40) });
   } else if (scenario.finalStatus === "CANCELLED") {
     events.push({ kind: "CANCELLED", suffix: "cancelled", at: addMinutes(createdAt, 45) });
   }
@@ -966,17 +1000,6 @@ async function seedInvoices(
     const issuedAt = addDays(anchorAt, -20 + index);
     const dueAt =
       index === 3 ? addDays(anchorAt, -5) : addDays(issuedAt, 30);
-    let invoice = await db.invoice.findUnique({ where: { orderId: order.orderId } });
-    if (invoice === null) {
-      invoice = await allocateAndCreateInvoice(
-        db,
-        id,
-        orderRecord,
-        issuedAt,
-        dueAt,
-      );
-    }
-    assertInvoiceNumber(invoice.number, issuedAt);
     const lineId = stableSeedId("invoice-line", naturalKey);
     const invoiceLineExpected = {
       id: lineId,
@@ -992,6 +1015,18 @@ async function seedInvoices(
       totalRappen: orderLine.totalRappen,
       currency: orderLine.currency,
     } as const;
+    let invoice = await db.invoice.findUnique({ where: { orderId: order.orderId } });
+    if (invoice === null) {
+      invoice = await allocateAndCreateInvoice(
+        db,
+        id,
+        orderRecord,
+        issuedAt,
+        dueAt,
+        invoiceLineExpected,
+      );
+    }
+    assertInvoiceNumber(invoice.number, issuedAt);
     const existingLine = await db.invoiceLine.findUnique({ where: { id: lineId } });
     if (existingLine === null && invoice.status !== "DRAFT") {
       throw new SeedDataDriftError("InvoiceLine", naturalKey);
@@ -1046,6 +1081,7 @@ async function allocateAndCreateInvoice(
   order: Awaited<ReturnType<PrismaClient["order"]["findUniqueOrThrow"]>>,
   issuedAt: Date,
   dueAt: Date,
+  invoiceLine: Prisma.InvoiceLineUncheckedCreateInput,
 ) {
   const clients = new WeakMap<object, Prisma.TransactionClient>();
   const port: InvoiceNumberPort = {
@@ -1078,7 +1114,7 @@ async function allocateAndCreateInvoice(
       if (transaction === undefined) {
         throw new Error("Invoice allocator lost its transaction binding.");
       }
-      return transaction.invoice.create({
+      const invoice = await transaction.invoice.create({
         data: {
           id,
           orderId: order.id,
@@ -1100,6 +1136,8 @@ async function allocateAndCreateInvoice(
           dueAt,
         },
       });
+      await transaction.invoiceLine.create({ data: invoiceLine });
+      return invoice;
     },
   );
   return allocation.value;
@@ -1508,6 +1546,7 @@ async function seedCreditsAndBoosts(
         accountId,
         actorUserId: null,
         amount,
+        consumedGrantEntryId: null,
         createdAt: addMinutes(periodStart, 1),
         fundingSource: "PLAN_ALLOWANCE",
         kind: "GRANT",
@@ -1515,6 +1554,10 @@ async function seedCreditsAndBoosts(
         reasonCode: "PERIOD_ALLOWANCE",
         sourceOrderLineId: null,
         sourcePlanVersionId: planVersionId,
+        sourceSubscriptionId: stableSeedId(
+          "employer-subscription",
+          `${company.slug}:current`,
+        ),
         validFrom: periodStart,
         validTo: periodEnd,
       });
@@ -1538,6 +1581,7 @@ async function seedCreditsAndBoosts(
     accountId: purchasedAccountId,
     actorUserId: purchasedOrder.company.ownerUserId,
     amount: 10,
+    consumedGrantEntryId: null,
     createdAt: addDays(anchorAt, -10),
     fundingSource: "PURCHASED_PACK",
     kind: "GRANT",
@@ -1545,6 +1589,7 @@ async function seedCreditsAndBoosts(
     reasonCode: "CONTACT_PACK_PURCHASED",
     sourceOrderLineId: purchasedOrder.lineId,
     sourcePlanVersionId: null,
+    sourceSubscriptionId: null,
     validFrom: purchasedStart,
     validTo: purchasedEnd,
   });
@@ -1589,6 +1634,10 @@ async function seedCreditsAndBoosts(
         accountId,
         actorUserId: company.ownerUserId,
         amount: -1,
+        consumedGrantEntryId: stableSeedId(
+          "credit-ledger-entry",
+          `${company.slug}:JOB_BOOST:plan-allowance:grant`,
+        ),
         createdAt: startsAt,
         fundingSource: "PLAN_ALLOWANCE",
         kind: "CONSUME",
@@ -1596,6 +1645,7 @@ async function seedCreditsAndBoosts(
         reasonCode: "JOB_BOOST_ACTIVATED",
         sourceOrderLineId: null,
         sourcePlanVersionId: null,
+        sourceSubscriptionId: null,
         validFrom: periodStart,
         validTo: periodEnd,
       });
@@ -1700,6 +1750,7 @@ async function seedCreditLedgerEntry(
     accountId: string;
     actorUserId: string | null;
     amount: number;
+    consumedGrantEntryId: string | null;
     createdAt: Date;
     fundingSource: "PLAN_ALLOWANCE" | "PURCHASED_PACK";
     kind: "GRANT" | "CONSUME";
@@ -1707,6 +1758,7 @@ async function seedCreditLedgerEntry(
     reasonCode: string;
     sourceOrderLineId: string | null;
     sourcePlanVersionId: string | null;
+    sourceSubscriptionId: string | null;
     validFrom: Date;
     validTo: Date;
   }>,
@@ -1719,7 +1771,9 @@ async function seedCreditLedgerEntry(
     kind: input.kind,
     amount: input.amount,
     sourcePlanVersionId: input.sourcePlanVersionId,
+    sourceSubscriptionId: input.sourceSubscriptionId,
     sourceOrderLineId: input.sourceOrderLineId,
+    consumedGrantEntryId: input.consumedGrantEntryId,
     reversalOfEntryId: null,
     validFrom: input.validFrom.toISOString(),
     validTo: input.validTo.toISOString(),
@@ -1748,7 +1802,9 @@ async function seedCreditLedgerEntry(
       kind: record.kind,
       amount: record.amount,
       sourcePlanVersionId: record.sourcePlanVersionId,
+      sourceSubscriptionId: record.sourceSubscriptionId,
       sourceOrderLineId: record.sourceOrderLineId,
+      consumedGrantEntryId: record.consumedGrantEntryId,
       reversalOfEntryId: record.reversalOfEntryId,
       validFrom: record.validFrom.toISOString(),
       validTo: record.validTo.toISOString(),
@@ -2974,7 +3030,7 @@ function billingOpsDigestProjection(
       subscriptionSchedules: 2,
       orders: 12,
       orderLines: 12,
-      paymentEvents: 21,
+      paymentEvents: 22,
       invoices: 7,
       invoiceLines: 7,
       creditAccounts: 29,
@@ -3229,19 +3285,15 @@ function resolveOrderLine(
 }
 
 function subscriptionCommercialSnapshot(planCode: PlanCode) {
-  const values = {
-    FREE_BASIC: 0,
-    STARTER: 14_900,
-    PRO: 39_900,
-    BUSINESS: 89_900,
-    ENTERPRISE_CONTRACT: 149_900,
-  } as const;
-  const netRappen = values[planCode];
+  if (planCode === "FREE_BASIC") {
+    throw new Error("Free Basic does not create a paid subscription snapshot.");
+  }
+  const commercial = getSeedSubscriptionCommercialSnapshotV1(planCode);
   return Object.freeze({
-    billingInterval: "MONTHLY" as const,
-    termMonths: planCode === "ENTERPRISE_CONTRACT" ? 12 : 1,
-    netRappen,
-    monthlyEquivalentRappen: netRappen,
+    billingInterval: commercial.billingInterval,
+    termMonths: commercial.termMonths,
+    netRappen: commercial.recurringNetRappen,
+    monthlyEquivalentRappen: commercial.monthlyEquivalentRappen,
   });
 }
 
@@ -3310,6 +3362,7 @@ function projectOrder(record: {
   status: string;
   provider: string;
   clientIdempotencyKey: string;
+  requestFingerprint: string;
   providerIdempotencyKey: string | null;
   providerReference: string | null;
   billingLegalNameSnapshot: string;
@@ -3337,6 +3390,7 @@ function projectOrder(record: {
     status: record.status,
     provider: record.provider,
     clientIdempotencyKey: record.clientIdempotencyKey,
+    requestFingerprint: record.requestFingerprint,
     providerIdempotencyKey: record.providerIdempotencyKey,
     providerReference: record.providerReference,
     billingLegalNameSnapshot: record.billingLegalNameSnapshot,
@@ -3359,17 +3413,34 @@ function projectOrder(record: {
   };
 }
 
+function historicalOrderRequestFingerprint(orderId: string, companyId: string) {
+  return (
+    createHash("md5").update(`phase12-order:${orderId}`).digest("hex") +
+    createHash("md5").update(`phase12-company:${companyId}`).digest("hex")
+  );
+}
+
 function assertOrderDraftPendingOrFinal(
   record: Parameters<typeof projectOrder>[0],
   naturalKey: string,
   finalExpected: CanonicalJsonValue,
 ): void {
   if (record.status === "DRAFT" || record.status === "PENDING") {
+    const releasedStatus = (
+      finalExpected as Readonly<Record<string, CanonicalJsonValue>>
+    ).status;
     const expected = {
       ...(finalExpected as Readonly<Record<string, CanonicalJsonValue>>),
       status: record.status,
       paidAt: null,
+      failedAt: null,
       cancelledAt: null,
+      expiresAt:
+        record.status === "PENDING" && releasedStatus !== "PENDING"
+          ? addDays(record.createdAt, 2).toISOString()
+          : ((
+              finalExpected as Readonly<Record<string, CanonicalJsonValue>>
+            ).expiresAt ?? null),
     };
     assertProjection("Order", naturalKey, projectOrder(record), expected);
     return;

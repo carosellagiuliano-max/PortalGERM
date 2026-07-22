@@ -335,6 +335,12 @@ enum SubscriptionEventKind {
   CANCELLED
 }
 
+enum SubscriptionOrderChangeKind {
+  NEW
+  UPGRADE
+  DOWNGRADE
+}
+
 enum OrderStatus {
   DRAFT
   PENDING
@@ -864,6 +870,7 @@ enum AuditTargetType {
   MODERATION_RESTRICTION
   PLAN_VERSION
   PRODUCT_VERSION
+  PRODUCT_RELEASE_DECISION
   SUBSCRIPTION
   ORDER
   INVOICE
@@ -898,6 +905,7 @@ enum AuditAction {
   COMPANY_CLAIM_APPROVED
   COMPANY_CLAIM_REJECTED
   COMPANY_PROFILE_UPDATED
+  BILLING_PROFILE_UPDATED
   COMPANY_ONBOARDING_COMPLETED
   COMPANY_VERIFICATION_SUBMITTED
   COMPANY_VERIFICATION_CHANGES_REQUESTED
@@ -950,6 +958,7 @@ enum AuditAction {
   ORDER_PAID
   ORDER_FAILED
   ORDER_CANCELLED
+  ORDER_EXPIRED
   INVOICE_ISSUED
   INVOICE_PAID
   INVOICE_VOIDED
@@ -995,6 +1004,7 @@ enum AuditAction {
   CLUSTER_ACTIVATED
   CLUSTER_REVOKED
   CATALOG_VERSION_SCHEDULED
+  CATALOG_RELEASE_DECIDED
   CATALOG_VERSION_DEACTIVATED
   TAX_RATE_APPROVED
   RATE_LIMITED
@@ -1161,6 +1171,7 @@ model User {
   recruiterMandatesGranted RecruiterMandate[]           @relation("MandateGrantor")
   jobAssignmentsCreated    JobAssignment[]              @relation("JobAssignmentAssigner")
   taxRatesReviewed         TaxRateVersion[]             @relation("TaxRateReviewer")
+  productReleaseDecisions  ProductReleaseDecision[]
 
   @@index([status, role])
   @@index([dataProvenance, status])
@@ -3012,6 +3023,8 @@ model EmployerSubscription {
   events                          SubscriptionEvent[]
   currentChangeSchedules          SubscriptionChangeSchedule[] @relation("CurrentSubscriptionSchedule")
   successorChangeSchedule         SubscriptionChangeSchedule?  @relation("SuccessorSubscriptionSchedule")
+  quotedOrderSnapshots            SubscriptionOrderSnapshot[]  @relation("SubscriptionOrderSource")
+  planAllowanceEntries            CreditLedgerEntry[]          @relation("PlanAllowanceSubscriptionSource")
 
   @@unique([id, companyId])
   @@index([companyId, status, currentPeriodEnd])
@@ -3065,6 +3078,7 @@ model Product {
   createdAt DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt DateTime         @updatedAt @db.Timestamptz(3)
   versions  ProductVersion[]
+  releaseDecisions ProductReleaseDecision[]
 }
 
 model ProductVersion {
@@ -3081,14 +3095,38 @@ model ProductVersion {
   isSelfService       Boolean              @default(false)
   priority            Int                  @default(0)
   requiresLegalReview Boolean              @default(false)
+  releaseDecisionId   String?              @unique @db.Uuid
   validFrom           DateTime             @db.Timestamptz(3)
   validTo             DateTime?            @db.Timestamptz(3)
   createdAt           DateTime             @default(now()) @db.Timestamptz(3)
   product             Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
+  releaseDecision     ProductReleaseDecision? @relation(fields: [releaseDecisionId], references: [id], onDelete: Restrict)
   orderLines          OrderLine[]
 
   @@unique([productId, version])
   @@index([productId, status, validFrom, validTo])
+}
+
+/// Immutable, single-use approval for releasing a P1/P2 catalog version.
+/// It records the exact visibility/self-service scope and the Admin rationale;
+/// it is deliberately separate from ProductVersion lifecycle scheduling.
+model ProductReleaseDecision {
+  id                String          @id @default(uuid()) @db.Uuid
+  productId         String          @db.Uuid
+  releaseTier       String          @db.VarChar(2)
+  allowsPublic      Boolean
+  allowsSelfService Boolean
+  reasonCode        String          @db.VarChar(64)
+  rationale         String          @db.VarChar(1000)
+  decidedByUserId   String          @db.Uuid
+  expiresAt         DateTime        @db.Timestamptz(3)
+  idempotencyKey    String          @unique @db.VarChar(128)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  decidedBy         User            @relation(fields: [decidedByUserId], references: [id], onDelete: Restrict)
+  releasedVersion   ProductVersion?
+
+  @@index([productId, expiresAt])
 }
 
 model CompanyBillingProfile {
@@ -3117,6 +3155,7 @@ model Order {
   clientIdempotencyKey        String                @unique @db.VarChar(128)
   providerIdempotencyKey      String?               @unique @db.VarChar(128)
   providerReference           String?               @unique @db.VarChar(255)
+  requestFingerprint          String                @db.Char(64)
   billingLegalNameSnapshot    String                @db.VarChar(200)
   billingContactEmailSnapshot String                @db.VarChar(320)
   billingStreetSnapshot       String                @db.VarChar(200)
@@ -3147,41 +3186,74 @@ model Order {
 }
 
 model OrderLine {
-  id                   String                 @id @default(uuid()) @db.Uuid
-  orderId              String                 @db.Uuid
-  planVersionId        String?                @db.Uuid
-  productVersionId     String?                @db.Uuid
-  taxRateVersionId     String                 @db.Uuid
-  quantity             Int                    @default(1)
+  id                   String                     @id @default(uuid()) @db.Uuid
+  orderId              String                     @db.Uuid
+  planVersionId        String?                    @db.Uuid
+  productVersionId     String?                    @db.Uuid
+  taxRateVersionId     String                     @db.Uuid
+  quantity             Int                        @default(1)
   unitNetRappen        Int
   netRappen            Int
   taxRateBasisPoints   Int
   vatRappen            Int
   totalRappen          Int
-  currency             String                 @db.Char(3)
-  descriptionSnapshot  String                 @db.VarChar(255)
+  currency             String                     @db.Char(3)
+  descriptionSnapshot  String                     @db.VarChar(255)
   fulfillmentContext   FulfillmentContextType
-  targetJobId          String?                @db.Uuid
-  targetImportSourceId String?                @db.Uuid
+  targetJobId          String?                    @db.Uuid
+  targetImportSourceId String?                    @db.Uuid
+  targetImportSetupApprovalId String?             @db.Uuid
   targetCreditType     CreditType?
-  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
-  order                Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  planVersion          PlanVersion?           @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
-  productVersion       ProductVersion?        @relation(fields: [productVersionId], references: [id], onDelete: Restrict)
-  taxRateVersion       TaxRateVersion         @relation(fields: [taxRateVersionId], references: [id], onDelete: Restrict)
-  targetJob            Job?                   @relation(fields: [targetJobId], references: [id], onDelete: Restrict)
-  targetImportSource   ImportSource?          @relation(fields: [targetImportSourceId], references: [id], onDelete: Restrict)
+  createdAt            DateTime                   @default(now()) @db.Timestamptz(3)
+  order                Order                      @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  planVersion          PlanVersion?               @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  productVersion       ProductVersion?            @relation(fields: [productVersionId], references: [id], onDelete: Restrict)
+  taxRateVersion       TaxRateVersion             @relation(fields: [taxRateVersionId], references: [id], onDelete: Restrict)
+  targetJob            Job?                       @relation(fields: [targetJobId], references: [id], onDelete: Restrict)
+  targetImportSource   ImportSource?              @relation(fields: [targetImportSourceId], references: [id], onDelete: Restrict)
+  targetImportSetupApproval ImportSetupApproval?  @relation("OrderLineImportSetupApprovalTarget", fields: [targetImportSetupApprovalId], references: [id], onDelete: Restrict)
   invoiceLine          InvoiceLine?
   jobBoost             JobBoost?
   additionalJobPermit  AdditionalJobPermit?
   importSetupApproval  ImportSetupApproval?
   importAccessGrant    ImportAccessGrant?
   creditLedgerEntries  CreditLedgerEntry[]
+  subscriptionSnapshot SubscriptionOrderSnapshot?
 
   @@index([orderId])
   @@index([planVersionId])
   @@index([productVersionId])
   @@index([targetJobId])
+  @@index([targetImportSetupApprovalId])
+}
+
+model SubscriptionOrderSnapshot {
+  id                             String                      @id @default(uuid()) @db.Uuid
+  orderLineId                    String                      @unique @db.Uuid
+  policyVersion                  String                      @db.VarChar(32)
+  changeKind                     SubscriptionOrderChangeKind
+  sourceSubscriptionId           String?                     @db.Uuid
+  sourcePeriodStart              DateTime?                   @db.Timestamptz(3)
+  sourcePeriodEnd                DateTime?                   @db.Timestamptz(3)
+  fulfillmentPeriodStart         DateTime                    @db.Timestamptz(3)
+  fulfillmentPeriodEnd           DateTime                    @db.Timestamptz(3)
+  sourceRecurringNetRappen       Int?
+  targetRecurringNetRappen       Int
+  prorationNumeratorSeconds      Int?
+  prorationDenominatorSeconds    Int?
+  quotedNetRappen                Int
+  activeJobLimitSnapshot         Int
+  seatLimitSnapshot              Int
+  talentContactAllowanceSnapshot Int
+  jobBoostAllowanceSnapshot      Int
+  retainedMembershipIds          String[]
+  retainedDefaultOwnerId         String?                     @db.Uuid
+  createdAt                      DateTime                    @default(now()) @db.Timestamptz(3)
+  orderLine                      OrderLine                   @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+  sourceSubscription             EmployerSubscription?       @relation("SubscriptionOrderSource", fields: [sourceSubscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([sourceSubscriptionId])
+  @@index([changeKind, fulfillmentPeriodStart])
 }
 
 model Invoice {
@@ -3291,31 +3363,38 @@ model CreditAccount {
 }
 
 model CreditLedgerEntry {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  accountId           String                  @db.Uuid
-  fundingSource       CreditFundingSource
-  kind                CreditLedgerKind
-  amount              Int
-  sourcePlanVersionId String?                 @db.Uuid
-  sourceOrderLineId   String?                 @db.Uuid
-  reversalOfEntryId   String?                 @unique @db.Uuid
-  validFrom           DateTime                @db.Timestamptz(3)
-  validTo             DateTime                @db.Timestamptz(3)
-  idempotencyKey      String                  @db.VarChar(128)
-  reasonCode          String?                 @db.VarChar(64)
-  actorUserId         String?                 @db.Uuid
-  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
-  account             CreditAccount           @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  sourcePlanVersion   PlanVersion?            @relation(fields: [sourcePlanVersionId], references: [id], onDelete: Restrict)
-  sourceOrderLine     OrderLine?              @relation(fields: [sourceOrderLineId], references: [id], onDelete: Restrict)
-  reversalOfEntry     CreditLedgerEntry?      @relation("CreditLedgerReversal", fields: [reversalOfEntryId], references: [id], onDelete: Restrict)
-  reversedByEntry     CreditLedgerEntry?      @relation("CreditLedgerReversal")
-  contactRequest      EmployerContactRequest?
-  fundedJobBoost      JobBoost?               @relation("LedgerFundedJobBoost")
+  id                   String                  @id @default(uuid()) @db.Uuid
+  accountId            String                  @db.Uuid
+  fundingSource        CreditFundingSource
+  kind                 CreditLedgerKind
+  amount               Int
+  sourcePlanVersionId  String?                 @db.Uuid
+  sourceSubscriptionId String?                 @db.Uuid
+  sourceOrderLineId    String?                 @db.Uuid
+  consumedGrantEntryId String?                 @db.Uuid
+  reversalOfEntryId    String?                 @unique @db.Uuid
+  validFrom            DateTime                @db.Timestamptz(3)
+  validTo              DateTime                @db.Timestamptz(3)
+  idempotencyKey       String                  @db.VarChar(128)
+  reasonCode           String?                 @db.VarChar(64)
+  actorUserId          String?                 @db.Uuid
+  createdAt            DateTime                @default(now()) @db.Timestamptz(3)
+  account              CreditAccount           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  sourcePlanVersion    PlanVersion?            @relation(fields: [sourcePlanVersionId], references: [id], onDelete: Restrict)
+  sourceSubscription   EmployerSubscription?   @relation("PlanAllowanceSubscriptionSource", fields: [sourceSubscriptionId], references: [id], onDelete: Restrict)
+  sourceOrderLine      OrderLine?              @relation(fields: [sourceOrderLineId], references: [id], onDelete: Restrict)
+  consumedGrantEntry   CreditLedgerEntry?      @relation("CreditGrantConsumption", fields: [consumedGrantEntryId], references: [id], onDelete: Restrict)
+  grantConsumptions    CreditLedgerEntry[]     @relation("CreditGrantConsumption")
+  reversalOfEntry      CreditLedgerEntry?      @relation("CreditLedgerReversal", fields: [reversalOfEntryId], references: [id], onDelete: Restrict)
+  reversedByEntry      CreditLedgerEntry?      @relation("CreditLedgerReversal")
+  contactRequest       EmployerContactRequest?
+  fundedJobBoost       JobBoost?               @relation("LedgerFundedJobBoost")
 
   @@unique([accountId, idempotencyKey])
   @@index([accountId, createdAt])
   @@index([validTo, kind])
+  @@index([sourceSubscriptionId])
+  @@index([consumedGrantEntryId, createdAt])
 }
 
 model PaymentEvent {
@@ -3394,6 +3473,7 @@ model ImportSetupApproval {
   orderLine            OrderLine?                 @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
   accessGrant          ImportAccessGrant?
   events               ImportSetupApprovalEvent[]
+  targetedOrderLines   OrderLine[]                @relation("OrderLineImportSetupApprovalTarget")
 
   @@index([companyId, status, validUntil])
 }

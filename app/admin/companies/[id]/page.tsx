@@ -1,4 +1,342 @@
-import { randomUUID } from "node:crypto"; import type { Metadata } from "next"; import { notFound } from "next/navigation";
-import { AdminActionForm, adminInputClass } from "@/components/admin/action-form"; import { AuditFeed } from "@/components/admin/AuditFeed"; import { Badge } from "@/components/ui/badge"; import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; import { getAdminCompanyDetail } from "@/lib/admin/companies"; import { requireAdminPage } from "@/lib/auth/route-guards"; import { getDatabase } from "@/lib/db/client";
+import { randomUUID } from "node:crypto";
+
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+
+import {
+  AdminActionForm,
+  adminInputClass,
+} from "@/components/admin/action-form";
+import { AuditFeed } from "@/components/admin/AuditFeed";
+import { BillingCredits } from "@/components/admin/BillingCredits";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { getAdminCompanyDetail } from "@/lib/admin/companies";
+import { requireAdminPage } from "@/lib/auth/route-guards";
+import { getDatabase } from "@/lib/db/client";
+import { formatDateTime } from "@/lib/utils/format";
+
 export const metadata: Metadata = { title: "Unternehmen prüfen" };
-export default async function AdminCompanyDetailPage({ params }: Readonly<{ params: Promise<{ id: string }> }>) { const [{ id }, user] = await Promise.all([params, requireAdminPage()]); const dependencies = { actor: { userId: user.id, email: user.email, role: user.role, status: user.status }, correlationId: "admin-company-detail", database: getDatabase(), now: new Date() } as const; const detail = await getAdminCompanyDetail(dependencies, id); if (detail === null) notFound(); const company = detail.company; const currentVerification = company.verificationRequests.find((request) => !company.verificationRequests.some((candidate) => candidate.supersedesRequestId === request.id)); return <div className="grid gap-6"><header><div className="flex gap-2"><Badge>{company.status}</Badge><Badge variant="outline">{currentVerification?.status ?? "NICHT VERIFIZIERT"}</Badge></div><h1 className="mt-3 text-3xl font-semibold">{company.name}</h1><p className="mt-2 text-muted-foreground">{company.industry ?? "Branche offen"} · {company.uid ?? "UID offen"} · {company.slug}</p></header><div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]"><div className="grid gap-5"><Card><CardHeader><CardTitle as="h2">Profil und Nutzung</CardTitle></CardHeader><CardContent className="grid gap-2"><p>{company.about ?? "Keine Beschreibung"}</p><p><strong>Aktive Jobs:</strong> {company.jobs.filter((job) => job.status === "PUBLISHED").length}</p><p><strong>Planrechte:</strong> {detail.entitlements.ok ? `${detail.entitlements.value.source.planSlug} · Joblimit ${detail.entitlements.value.rights.ACTIVE_JOB_LIMIT} · Sitzlimit ${detail.entitlements.value.rights.SEAT_LIMIT}` : "nicht auflösbar"}</p></CardContent></Card><Card><CardHeader><CardTitle as="h2">Mitglieder</CardTitle></CardHeader><CardContent><ul className="divide-y">{company.memberships.map((membership) => <li key={membership.id} className="flex justify-between py-2"><span>{membership.user.name ?? membership.user.email}</span><span className="text-sm text-muted-foreground">{membership.role} · {membership.status}</span></li>)}</ul></CardContent></Card><Card><CardHeader><CardTitle as="h2">Claim-Queue</CardTitle></CardHeader><CardContent className="grid gap-3">{company.claimRequests.length === 0 ? <p className="text-muted-foreground">Keine offenen Claims.</p> : company.claimRequests.map((claim) => <div key={claim.id} className="grid gap-3 rounded-lg border p-3"><p className="font-medium">{claim.requester.name ?? claim.requester.email}</p><p className="text-xs text-muted-foreground">Nur Signale, keine Auto-Freigabe: {JSON.stringify(claim.matchSignals)}</p><div className="grid gap-2 sm:grid-cols-3"><AdminActionForm operation="claim-approve" label="Als Owner freigeben" hidden={{ claimId: claim.id, expectedStatus: claim.status, approvedRole: "OWNER", reasonCode: "EVIDENCE_REVIEWED", idempotencyKey: randomUUID() }} /><AdminActionForm operation="claim-evidence" label="Nachweise anfordern" hidden={{ claimId: claim.id, expectedStatus: claim.status, reasonCode: "MORE_EVIDENCE_REQUIRED", evidenceRef: "admin-review", idempotencyKey: randomUUID() }} /><AdminActionForm operation="claim-reject" label="Claim ablehnen" destructive hidden={{ claimId: claim.id, expectedStatus: claim.status, reasonCode: "EVIDENCE_INSUFFICIENT", idempotencyKey: randomUUID() }} /></div></div>)}</CardContent></Card><Card><CardHeader><CardTitle as="h2">Audit</CardTitle></CardHeader><CardContent><AuditFeed entries={company.auditLogs} /></CardContent></Card></div><aside className="grid content-start gap-3"><h2 className="text-lg font-semibold">Lifecycle</h2>{company.status === "ACTIVE" ? <AdminActionForm operation="company-suspend" label="Firma und veröffentlichte Jobs pausieren" destructive hidden={{ companyId: company.id, expectedStatus: "ACTIVE", idempotencyKey: randomUUID() }}><label className="grid gap-1 text-sm">Pflichtgrund<input name="reasonCode" defaultValue="PLATFORM_RISK_REVIEW" required className={adminInputClass} /></label></AdminActionForm> : company.status === "SUSPENDED" ? <AdminActionForm operation="company-reactivate" label="Firma reaktivieren (Jobs bleiben pausiert)" hidden={{ companyId: company.id, expectedStatus: "SUSPENDED", idempotencyKey: randomUUID() }}><label className="grid gap-1 text-sm">Pflichtgrund<input name="reasonCode" defaultValue="REVIEW_COMPLETED" required className={adminInputClass} /></label></AdminActionForm> : null}<h2 className="pt-3 text-lg font-semibold">Verifizierung</h2>{currentVerification?.status === "PENDING" ? <><AdminActionForm operation="verification-verify" label="Verifizieren" hidden={{ verificationRequestId: currentVerification.id, expectedStatus: "PENDING", reasonCode: "VERIFIED", idempotencyKey: randomUUID() }} /><AdminActionForm operation="verification-evidence" label="Nachweise anfordern" hidden={{ verificationRequestId: currentVerification.id, expectedStatus: "PENDING", reasonCode: "EVIDENCE_REQUIRED", evidenceRef: "admin-review", idempotencyKey: randomUUID() }} /><AdminActionForm operation="verification-reject" label="Verifizierung ablehnen" destructive hidden={{ verificationRequestId: currentVerification.id, expectedStatus: "PENDING", reasonCode: "EVIDENCE_REJECTED", idempotencyKey: randomUUID() }} /></> : currentVerification?.status === "VERIFIED" ? <AdminActionForm operation="verification-revoke" label="Verifizierung widerrufen" destructive hidden={{ verificationRequestId: currentVerification.id, expectedStatus: "VERIFIED", reasonCode: "VERIFICATION_REVOKED", idempotencyKey: randomUUID() }} /> : <p className="text-sm text-muted-foreground">Kein aktuell prüfbarer Request.</p>}</aside></div></div>; }
+
+export default async function AdminCompanyDetailPage({
+  params,
+}: Readonly<{ params: Promise<{ id: string }> }>) {
+  const [{ id }, user] = await Promise.all([params, requireAdminPage()]);
+  const dependencies = {
+    actor: {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+    },
+    correlationId: "admin-company-detail",
+    database: getDatabase(),
+    now: new Date(),
+  } as const;
+  const detail = await getAdminCompanyDetail(dependencies, id);
+  if (detail === null) notFound();
+
+  const company = detail.company;
+  const currentVerification = company.verificationRequests.find(
+    (request) =>
+      !company.verificationRequests.some(
+        (candidate) => candidate.supersedesRequestId === request.id,
+      ),
+  );
+
+  return (
+    <div className="grid gap-6">
+      <header>
+        <div className="flex gap-2">
+          <Badge>{company.status}</Badge>
+          <Badge variant="outline">
+            {currentVerification?.status ?? "NICHT VERIFIZIERT"}
+          </Badge>
+        </div>
+        <h1 className="mt-3 text-3xl font-semibold">{company.name}</h1>
+        <p className="mt-2 text-muted-foreground">
+          {company.industry ?? "Branche offen"} · {company.uid ?? "UID offen"} ·{" "}
+          {company.slug}
+        </p>
+      </header>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="grid gap-5">
+          <Card>
+            <CardHeader>
+              <CardTitle as="h2">Profil und Nutzung</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2">
+              <p>{company.about ?? "Keine Beschreibung"}</p>
+              <p>
+                <strong>Aktive Jobs:</strong>{" "}
+                {company.jobs.filter((job) => job.status === "PUBLISHED").length}
+              </p>
+              <p>
+                <strong>Planrechte:</strong>{" "}
+                {detail.entitlements.ok
+                  ? `${detail.entitlements.value.source.planSlug} · Joblimit ${detail.entitlements.value.rights.ACTIVE_JOB_LIMIT} · Sitzlimit ${detail.entitlements.value.rights.SEAT_LIMIT}`
+                  : "nicht auflösbar"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle as="h2">Abo-Verlauf</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {company.subscriptions.length === 0 ? (
+                <p className="text-muted-foreground">Keine bezahlte Subscription.</p>
+              ) : (
+                <ol className="grid gap-2">
+                  {company.subscriptions.slice(0, 5).map((subscription) => (
+                    <li key={subscription.id} className="rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <strong>{subscription.planVersion.plan.name}</strong>
+                        <Badge variant="outline">{subscription.status}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        [{formatDateTime(subscription.currentPeriodStart)}, {formatDateTime(subscription.currentPeriodEnd)})
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </CardContent>
+          </Card>
+
+          <BillingCredits companyId={company.id} />
+
+          <Card>
+            <CardHeader>
+              <CardTitle as="h2">Mitglieder</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="divide-y">
+                {company.memberships.map((membership) => (
+                  <li key={membership.id} className="flex justify-between py-2">
+                    <span>{membership.user.name ?? membership.user.email}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {membership.role} · {membership.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle as="h2">Claim-Queue</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {company.claimRequests.length === 0 ? (
+                <p className="text-muted-foreground">Keine offenen Claims.</p>
+              ) : (
+                company.claimRequests.map((claim) => (
+                  <div key={claim.id} className="grid gap-3 rounded-lg border p-3">
+                    <p className="font-medium">
+                      {claim.requester.name ?? claim.requester.email}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Nur Signale, keine Auto-Freigabe: {JSON.stringify(claim.matchSignals)}
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <AdminActionForm
+                        operation="claim-approve"
+                        label="Als Owner freigeben"
+                        hidden={{
+                          claimId: claim.id,
+                          expectedStatus: claim.status,
+                          approvedRole: "OWNER",
+                          reasonCode: "EVIDENCE_REVIEWED",
+                          idempotencyKey: randomUUID(),
+                        }}
+                      />
+                      <AdminActionForm
+                        operation="claim-evidence"
+                        label="Nachweise anfordern"
+                        hidden={{
+                          claimId: claim.id,
+                          expectedStatus: claim.status,
+                          reasonCode: "MORE_EVIDENCE_REQUIRED",
+                          evidenceRef: "admin-review",
+                          idempotencyKey: randomUUID(),
+                        }}
+                      />
+                      <AdminActionForm
+                        operation="claim-reject"
+                        label="Claim ablehnen"
+                        destructive
+                        hidden={{
+                          claimId: claim.id,
+                          expectedStatus: claim.status,
+                          reasonCode: "EVIDENCE_INSUFFICIENT",
+                          idempotencyKey: randomUUID(),
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle as="h2">Audit</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AuditFeed entries={company.auditLogs} />
+            </CardContent>
+          </Card>
+        </div>
+
+        <aside className="grid content-start gap-3">
+          <h2 className="text-lg font-semibold">Billing</h2>
+          {detail.renewalCandidate === null ? (
+            <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+              Keine fällige, manuell verlängerbare Subscription.
+            </p>
+          ) : (
+            <AdminActionForm
+              operation="subscription-renew-mock"
+              label="Mock-Verlängerung aktivieren"
+              className="border-amber-400/70 bg-amber-50/50 dark:bg-amber-950/10"
+              hidden={{
+                subscriptionId: detail.renewalCandidate.subscriptionId,
+                expectedPeriodEnd:
+                  detail.renewalCandidate.expectedPeriodEnd.toISOString(),
+                idempotencyKey: randomUUID(),
+              }}
+            >
+              <div>
+                <p className="font-medium">
+                  Mock-Verlängerung – keine Zahlung/Rechnung
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {detail.renewalCandidate.planName} ({detail.renewalCandidate.planCode}) bis{" "}
+                  {formatDateTime(detail.renewalCandidate.nextPeriodEnd)}. Es entstehen bewusst weder Order noch Payment Event oder Rechnung.
+                </p>
+              </div>
+              <label className="grid gap-1 text-sm">
+                Pflichtgrund
+                <input
+                  name="reasonCode"
+                  defaultValue="ADMIN_MOCK_RENEWAL"
+                  pattern="[A-Z][A-Z0-9_]{1,63}"
+                  required
+                  className={adminInputClass}
+                />
+              </label>
+            </AdminActionForm>
+          )}
+
+          <h2 className="pt-3 text-lg font-semibold">Lifecycle</h2>
+          {company.status === "ACTIVE" ? (
+            <AdminActionForm
+              operation="company-suspend"
+              label="Firma und veröffentlichte Jobs pausieren"
+              destructive
+              hidden={{
+                companyId: company.id,
+                expectedStatus: "ACTIVE",
+                idempotencyKey: randomUUID(),
+              }}
+            >
+              <label className="grid gap-1 text-sm">
+                Pflichtgrund
+                <input
+                  name="reasonCode"
+                  defaultValue="PLATFORM_RISK_REVIEW"
+                  required
+                  className={adminInputClass}
+                />
+              </label>
+            </AdminActionForm>
+          ) : company.status === "SUSPENDED" ? (
+            <AdminActionForm
+              operation="company-reactivate"
+              label="Firma reaktivieren (Jobs bleiben pausiert)"
+              hidden={{
+                companyId: company.id,
+                expectedStatus: "SUSPENDED",
+                idempotencyKey: randomUUID(),
+              }}
+            >
+              <label className="grid gap-1 text-sm">
+                Pflichtgrund
+                <input
+                  name="reasonCode"
+                  defaultValue="REVIEW_COMPLETED"
+                  required
+                  className={adminInputClass}
+                />
+              </label>
+            </AdminActionForm>
+          ) : null}
+
+          <h2 className="pt-3 text-lg font-semibold">Verifizierung</h2>
+          {currentVerification?.status === "PENDING" ? (
+            <>
+              <AdminActionForm
+                operation="verification-verify"
+                label="Verifizieren"
+                hidden={{
+                  verificationRequestId: currentVerification.id,
+                  expectedStatus: "PENDING",
+                  reasonCode: "VERIFIED",
+                  idempotencyKey: randomUUID(),
+                }}
+              />
+              <AdminActionForm
+                operation="verification-evidence"
+                label="Nachweise anfordern"
+                hidden={{
+                  verificationRequestId: currentVerification.id,
+                  expectedStatus: "PENDING",
+                  reasonCode: "EVIDENCE_REQUIRED",
+                  evidenceRef: "admin-review",
+                  idempotencyKey: randomUUID(),
+                }}
+              />
+              <AdminActionForm
+                operation="verification-reject"
+                label="Verifizierung ablehnen"
+                destructive
+                hidden={{
+                  verificationRequestId: currentVerification.id,
+                  expectedStatus: "PENDING",
+                  reasonCode: "EVIDENCE_REJECTED",
+                  idempotencyKey: randomUUID(),
+                }}
+              />
+            </>
+          ) : currentVerification?.status === "VERIFIED" ? (
+            <AdminActionForm
+              operation="verification-revoke"
+              label="Verifizierung widerrufen"
+              destructive
+              hidden={{
+                verificationRequestId: currentVerification.id,
+                expectedStatus: "VERIFIED",
+                reasonCode: "VERIFICATION_REVOKED",
+                idempotencyKey: randomUUID(),
+              }}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Kein aktuell prüfbarer Request.
+            </p>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
