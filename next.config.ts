@@ -71,6 +71,15 @@ const mockCheckoutHeaders = [
   { key: "Referrer-Policy", value: "no-referrer" },
 ];
 
+const supportCaseHeaders = [
+  { key: "Cache-Control", value: "private, no-store, max-age=0" },
+  {
+    key: "X-Robots-Tag",
+    value: "noindex, nofollow, noarchive, nosnippet",
+  },
+  { key: "Referrer-Policy", value: "no-referrer" },
+];
+
 const nextConfig = (phase: string): NextConfig => {
   if (
     process.env.ENABLE_LOCAL_MOCK_MAILBOX === "true" &&
@@ -119,6 +128,10 @@ const nextConfig = (phase: string): NextConfig => {
         {
           source: "/mock/checkout/:path*",
           headers: mockCheckoutHeaders,
+        },
+        {
+          source: "/support/:path*",
+          headers: supportCaseHeaders,
         },
         {
           source: "/reset-password",

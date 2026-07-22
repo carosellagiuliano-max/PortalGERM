@@ -18,6 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { listPublicGuides } from "@/lib/content/public-guides";
 import { listPublicCompanies } from "@/lib/companies/public-read-model";
 import { getPublicCatalog, listHomepageJobs, listPublicClusterLinks, loadPublicOpenJobCounts } from "@/lib/jobs/public-read-model";
+import { listIndexableClusterLandings } from "@/lib/seo/cluster-indexability";
 
 export const metadata: Metadata = {
   title: "Faire Jobs in der Schweiz",
@@ -28,13 +29,21 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function HomePage() {
-  const [jobs, clusters, guides, companies, catalog] = await Promise.all([
-    listHomepageJobs({ limit: 6 }),
-    listPublicClusterLinks({ limit: 8 }),
+  const now = new Date();
+  const [jobs, discoveredClusters, indexableLandings, guides, companies, catalog] = await Promise.all([
+    listHomepageJobs({ limit: 6, now }),
+    listPublicClusterLinks({ limit: 8, now }),
+    listIndexableClusterLandings(now),
     listPublicGuides({ limit: 3 }),
     listPublicCompanies({ limit: 8, verifiedOnly: true }, loadPublicOpenJobCounts),
     getPublicCatalog(),
   ]);
+  const acquisitionPaths = new Set(indexableLandings.map(({ path }) => path));
+  const clusters = discoveredClusters.filter((cluster) =>
+    acquisitionPaths.has(
+      `/jobs/${cluster.kind === "canton" ? "kanton" : "kategorie"}/${cluster.slug}`,
+    )
+  );
 
   return (
     <>
@@ -150,7 +159,7 @@ export default async function HomePage() {
               {guides.map((guide) => (
                 <Card key={guide.id}>
                   <CardHeader><CardTitle as="h3">{guide.title}</CardTitle><CardDescription className="leading-6">{guide.excerpt}</CardDescription></CardHeader>
-                  <CardContent className="mt-auto"><Link href={`/guide/${guide.slug}`} className={buttonVariants({ variant: "outline", className: "w-full" })}>Weiterlesen</Link></CardContent>
+                  <CardContent className="mt-auto"><Link href={`/guide/${guide.slug}`} className={buttonVariants({ variant: "outline", className: "w-full" })}>Artikel lesen: {guide.title}</Link></CardContent>
                 </Card>
               ))}
             </div>

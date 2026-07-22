@@ -24,6 +24,7 @@ import {
   type JobWizardStepThree,
   type JobWizardStepTwo,
 } from "@/lib/employer/jobs";
+import { createJobSlug } from "@/lib/jobs/slug";
 import { MockJobroomProvider } from "@/lib/providers/jobroom";
 import {
   JOBROOM_FIXTURE_IDS,
@@ -118,13 +119,23 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
     expect(replay).toEqual({ ok: true, value: first.value, replay: true });
 
     const [job, assignments, assignmentEvents, draftEvents, audits] = await Promise.all([
-      client.job.findUnique({ where: { id: first.value.jobId }, select: { companyId: true, status: true, version: true, currentRevisionId: true } }),
+      client.job.findUnique({ where: { id: first.value.jobId }, select: { companyId: true, slug: true, status: true, version: true, currentRevisionId: true } }),
       client.jobAssignment.findMany({ where: { jobId: first.value.jobId }, select: { membershipId: true, userId: true, role: true, status: true, revokedAt: true } }),
       client.jobAssignmentEvent.count({ where: { jobAssignment: { jobId: first.value.jobId }, kind: "ASSIGNED" } }),
       client.jobStatusEvent.count({ where: { jobId: first.value.jobId, kind: "DRAFT_CREATED" } }),
       client.auditLog.count({ where: { companyId: IDS.company, action: { in: ["JOB_DRAFT_UPDATED", "JOB_ASSIGNMENT_CREATED"] } } }),
     ]);
-    expect(job).toMatchObject({ companyId: IDS.company, status: "DRAFT", version: 1, currentRevisionId: first.value.revisionId });
+    expect(job).toMatchObject({
+      companyId: IDS.company,
+      slug: createJobSlug({
+        title: input.title,
+        companyShortRef: "job-test-ag",
+        jobId: first.value.jobId,
+      }),
+      status: "DRAFT",
+      version: 1,
+      currentRevisionId: first.value.revisionId,
+    });
     expect(assignments).toEqual([{ membershipId: IDS.recruiterMembership, userId: IDS.recruiter, role: "EDITOR", status: "ACTIVE", revokedAt: null }]);
     expect(assignmentEvents).toBe(1);
     expect(draftEvents).toBe(1);
@@ -141,9 +152,10 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
     if (!duplicated.ok) throw new Error(`Job duplication failed with ${duplicated.code}.`);
     expect(duplicated.value.jobId).not.toBe(first.value.jobId);
     expect(duplicatedReplay).toEqual({ ok: true, value: duplicated.value, replay: true });
-    const duplicatedJob = await client.job.findUnique({
+    const duplicatedJob = await client.job.findUniqueOrThrow({
       where: { id: duplicated.value.jobId },
       select: {
+        slug: true,
         status: true,
         version: true,
         sourceReference: true,
@@ -165,6 +177,11 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
       },
     });
     expect(duplicatedJob).toMatchObject({
+      slug: createJobSlug({
+        title: input.title,
+        companyShortRef: "job-test-ag",
+        jobId: duplicated.value.jobId,
+      }),
       status: "DRAFT",
       version: 1,
       sourceReference: `duplicate:${first.value.jobId}`,
@@ -183,6 +200,24 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
       _count: { additionalPermits: 0, boosts: 0 },
     });
     expect(await client.job.count({ where: { sourceReference: `duplicate:${first.value.jobId}` } })).toBe(1);
+
+    const stableSlug = duplicatedJob.slug;
+    const renamed = requireSuccess(
+      await saveEmployerJobStep(
+        {
+          ...jobEnvelope(duplicated.value, "phase10-duplicate-title-edit"),
+          step: 1,
+          data: validStepOne("Umbenannte sichere Plattform-Position"),
+        },
+        dependencies,
+      ),
+      "duplicate title edit",
+    );
+    expect(renamed.value.jobId).toBe(duplicated.value.jobId);
+    await expect(client.job.findUniqueOrThrow({
+      where: { id: duplicated.value.jobId },
+      select: { slug: true },
+    })).resolves.toEqual({ slug: stableSlug });
   });
 
   it("persists every wizard step, reporting evidence and one concurrent submission", async () => {

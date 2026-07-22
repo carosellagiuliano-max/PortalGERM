@@ -2,21 +2,6 @@ import type { JobType, RemoteType, SalaryPeriod } from "@/lib/generated/prisma/e
 
 export type JobSearchSort = "relevance" | "newest" | "fair-score" | "salary" | "response";
 
-export type JobSearchFilters = Readonly<{
-  query?: string;
-  categoryIds?: readonly string[];
-  cantonIds?: readonly string[];
-  jobTypes?: readonly JobType[];
-  remoteTypes?: readonly RemoteType[];
-  workloadMin?: number;
-  workloadMax?: number;
-  salaryMin?: number;
-  salaryPeriod?: SalaryPeriod;
-  sort: JobSearchSort;
-  pageSize: number;
-  after?: string;
-}>;
-
 export type PublicJobProjection = Readonly<{
   id: string;
   slug: string;

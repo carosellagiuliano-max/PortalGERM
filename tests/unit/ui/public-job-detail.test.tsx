@@ -7,6 +7,9 @@ const publicJobData = vi.hoisted(() => ({
   getPublicJobBySlug: vi.fn(),
   listRelatedPublicJobs: vi.fn(),
 }));
+const publicEnvironment = vi.hoisted(() => ({
+  getPublicDataContext: vi.fn(),
+}));
 
 vi.mock("@/lib/jobs/public-read-model", () => ({
   getPublicJobBySlug: publicJobData.getPublicJobBySlug,
@@ -22,7 +25,7 @@ vi.mock("@/lib/config/env", () => ({
 }));
 
 vi.mock("@/lib/public/environment", () => ({
-  getPublicDataContext: () => ({ publicIndexingAllowed: false }),
+  getPublicDataContext: publicEnvironment.getPublicDataContext,
 }));
 
 vi.mock("@/lib/auth/current-user", () => ({ getCurrentUser: vi.fn() }));
@@ -107,6 +110,9 @@ describe("public job detail applicant-facing content", () => {
   beforeEach(() => {
     publicJobData.getPublicJobBySlug.mockResolvedValue(job);
     publicJobData.listRelatedPublicJobs.mockResolvedValue([]);
+    publicEnvironment.getPublicDataContext.mockReturnValue({
+      publicIndexingAllowed: false,
+    });
   });
 
   it("renders the shared content groups with public heading semantics and document labels", async () => {
@@ -153,5 +159,34 @@ describe("public job detail applicant-facing content", () => {
     ]) {
       expect(screen.getByText(text, { exact: false })).toBeInTheDocument();
     }
+  });
+
+  it("renders JobPosting JSON-LD only for an indexable LIVE job", async () => {
+    publicEnvironment.getPublicDataContext.mockReturnValue({
+      publicIndexingAllowed: true,
+    });
+    const { container } = render(
+      await JobDetailPage({
+        params: Promise.resolve({ slug: job.slug }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+
+    const script = container.querySelector('script[type="application/ld+json"]');
+    expect(script).not.toBeNull();
+    expect(script?.textContent).toBe("{}");
+
+    publicEnvironment.getPublicDataContext.mockReturnValue({
+      publicIndexingAllowed: false,
+    });
+    const nonIndexable = render(
+      await JobDetailPage({
+        params: Promise.resolve({ slug: job.slug }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+    expect(
+      nonIndexable.container.querySelector('script[type="application/ld+json"]'),
+    ).toBeNull();
   });
 });

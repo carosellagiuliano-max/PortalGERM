@@ -2,13 +2,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const publicDataContext = vi.hoisted(() => ({ showDemoBanner: true }));
+const publicDataContext = vi.hoisted(() => ({
+  publicIndexingAllowed: false,
+  showDemoBanner: true,
+}));
 
 vi.mock("@/lib/public/environment", () => ({
   getPublicDataContext: () => ({
     eligibilityEnvironment: "non-production",
     liveOnly: false,
-    publicIndexingAllowed: false,
+    publicIndexingAllowed: publicDataContext.publicIndexingAllowed,
     showDemoBanner: publicDataContext.showDemoBanner,
   }),
 }));
@@ -20,11 +23,40 @@ vi.mock("@/components/shared/app-footer", () => ({
 }));
 
 import AuthLayout from "@/app/(auth)/layout";
-import PublicLayout from "@/app/(public)/layout";
+import PublicLayout, {
+  generateMetadata as generatePublicMetadata,
+} from "@/app/(public)/layout";
 
 describe("route group shells", () => {
   beforeEach(() => {
+    publicDataContext.publicIndexingAllowed = false;
     publicDataContext.showDemoBanner = true;
+  });
+
+  it("provides the public title, Open Graph and Twitter defaults", () => {
+    const metadata = generatePublicMetadata();
+
+    expect(metadata).toMatchObject({
+      title: {
+        default: "SwissTalentHub",
+        template: "%s | SwissTalentHub",
+      },
+      openGraph: {
+        type: "website",
+        locale: "de_CH",
+        siteName: "SwissTalentHub",
+      },
+      twitter: { card: "summary_large_image" },
+      robots: {
+        index: false,
+        follow: false,
+        noarchive: true,
+        nosnippet: true,
+      },
+    });
+
+    publicDataContext.publicIndexingAllowed = true;
+    expect(generatePublicMetadata().robots).toBeUndefined();
   });
 
   it("owns one public main landmark, skip target and persistent demo notice", () => {

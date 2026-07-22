@@ -641,10 +641,10 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     const seeded = await client.clusterLaunchAssessment.findFirstOrThrow({ where: { dataProvenance: "DEMO", policyVersion: "CLUSTER_LAUNCH_POLICY_V1" }, orderBy: { id: "asc" }, select: { cantonId: true, categoryId: true, status: true } });
     expect(seeded.status).toBe("DRAFT");
     const assessment = await client.clusterLaunchAssessment.create({ data: {
-      id: randomUUID(), cantonId: seeded.cantonId, categoryId: seeded.categoryId, policyVersion: "CLUSTER_LAUNCH_POLICY_V1", evaluatedAt: new Date(NOW.getTime() - 3_600_000), evidenceWindowStart: new Date(NOW.getTime() - 30 * 86_400_000), evidenceWindowEnd: NOW, liveJobCount: 50, activeCandidateCount: 200, activeEmployerCount: 15, responseRateBasisPoints: 7000, contentCoverageBasisPoints: 8000, medianApplicationsTimes2: 6, dataProvenance: "LIVE", evidenceHash: "a".repeat(64), validUntil: new Date(NOW.getTime() + 7 * 86_400_000), status: "DRAFT", createdAt: NOW,
+      id: randomUUID(), cantonId: seeded.cantonId, categoryId: seeded.categoryId, policyVersion: "CLUSTER_LAUNCH_POLICY_V1", evaluatedAt: new Date(NOW.getTime() - 3_600_000), evidenceWindowStart: new Date(NOW.getTime() - 30 * 86_400_000), evidenceWindowEnd: NOW, liveJobCount: 50, activeCandidateCount: 200, activeEmployerCount: 15, responseRateBasisPoints: 7000, contentCoverageBasisPoints: 8000, medianApplicationsTimes2: 6, dataProvenance: "LIVE", evidenceHash: "a".repeat(64), validUntil: new Date(NOW.getTime() + 7 * 86_400_000), status: "READY", createdAt: NOW,
     } });
     const product = requireSuccess(await transitionClusterLaunch({ assessmentId: assessment.id, action: "PRODUCT_APPROVE", reasonCode: "PRODUCT_EVIDENCE_APPROVED", idempotencyKey: randomUUID() }, deps("cluster-product")));
-    expect(product.value.status).toBe("DRAFT");
+    expect(product.value.status).toBe("READY");
     const ops = requireSuccess(await transitionClusterLaunch({ assessmentId: assessment.id, action: "OPS_APPROVE", reasonCode: "OPS_EVIDENCE_APPROVED", idempotencyKey: randomUUID() }, deps("cluster-ops", afterMilliseconds(1))));
     expect(ops.value.status).toBe("READY");
     const activated = requireSuccess(await transitionClusterLaunch({ assessmentId: assessment.id, action: "ACTIVATE", reasonCode: "DUAL_APPROVAL_COMPLETE", idempotencyKey: randomUUID() }, deps("cluster-activate", afterMilliseconds(2))));

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ChevronRightIcon } from "lucide-react";
 
 import { JobGrid } from "@/components/public/job-grid";
@@ -7,8 +8,19 @@ import { JobSearchForm } from "@/components/public/job-search-form";
 import { PublicSearchResultsAnalytics } from "@/components/analytics/public-job-analytics";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
-import { getPublicCatalog, listPublicJobs } from "@/lib/jobs/public-read-model";
-import { parsePublicJobSearchParams, publicJobSearchQuery, type RawPublicSearchParams } from "@/lib/public/query-params";
+import { getPublicCatalog } from "@/lib/jobs/public-read-model";
+import { getPublicDataContext } from "@/lib/public/environment";
+import {
+  parsePublicJobSearchParams,
+  publicJobSearchQuery,
+  type RawPublicSearchParams,
+} from "@/lib/public/query-params";
+import {
+  exactClusterFilterFromSearch,
+  hasRawPublicJobQueryState,
+} from "@/lib/seo/job-filter-landing";
+import { loadPublicClusterLanding } from "@/lib/seo/cluster-indexability";
+import { searchJobs } from "@/lib/search/query";
 
 const JOBS_METADATA = Object.freeze({
   title: "Jobs suchen",
@@ -18,11 +30,11 @@ const JOBS_METADATA = Object.freeze({
 export async function generateMetadata({
   searchParams,
 }: Readonly<{ searchParams: Promise<RawPublicSearchParams> }>): Promise<Metadata> {
-  const input = parsePublicJobSearchParams(await searchParams);
+  const raw = await searchParams;
   return {
     ...JOBS_METADATA,
     alternates: { canonical: "/jobs" },
-    ...(hasActiveFilters(input)
+    ...(hasRawPublicJobQueryState(raw)
       ? { robots: { index: false, follow: true, noarchive: true } }
       : {}),
   };
@@ -31,15 +43,29 @@ export async function generateMetadata({
 export default async function JobsPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<RawPublicSearchParams> }>) {
-  const input = parsePublicJobSearchParams(await searchParams);
-  const [result, catalog] = await Promise.all([listPublicJobs(input), getPublicCatalog()]);
+  const raw = await searchParams;
+  const input = parsePublicJobSearchParams(raw);
+  const exactCluster = exactClusterFilterFromSearch(raw, input);
+  if (exactCluster !== null && getPublicDataContext().publicIndexingAllowed) {
+    const landing = await loadPublicClusterLanding(exactCluster);
+    if (landing?.indexable) redirect(landing.canonicalPath);
+  }
+  const [result, catalog] = await Promise.all([searchJobs(input), getPublicCatalog()]);
+  const formInput = Object.freeze({
+    ...input,
+    cantonSlugs: normalizeCatalogReferences(input.cantonSlugs, catalog.cantons),
+    citySlugs: normalizeCatalogReferences(input.citySlugs, catalog.cities),
+    categorySlugs: normalizeCatalogReferences(input.categorySlugs, catalog.categories),
+  });
   const cantonCode = catalog.cantons.find(
-    (canton) => canton.slug === input.cantonSlugs[0],
+    (canton) =>
+      canton.slug === input.cantonSlugs[0] || canton.id === input.cantonSlugs[0],
   )?.code;
   const categorySlug = catalog.categories.some(
-    (category) => category.slug === input.categorySlugs[0],
+    (category) =>
+      category.slug === input.categorySlugs[0] || category.id === input.categorySlugs[0],
   )
-    ? input.categorySlugs[0]
+    ? formInput.categorySlugs[0]
     : undefined;
 
   return (
@@ -53,7 +79,7 @@ export default async function JobsPage({
       <p className="eyebrow">Stellensuche</p>
       <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">Finde deinen nächsten fairen Job.</h1>
       <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">Filtere nach überprüfbaren Merkmalen. Personenbezogene Profildaten werden für die öffentliche Suche nicht geladen.</p>
-      <div className="mt-8"><JobSearchForm input={input} catalog={catalog} /></div>
+      <div className="mt-8"><JobSearchForm input={formInput} catalog={catalog} /></div>
       {result.invalidCursor ? (
         <Alert className="mt-6"><AlertTitle>Der Seitenlink war nicht mehr gültig.</AlertTitle><AlertDescription>Wir zeigen dir sicherheitshalber wieder die erste Ergebnisseite.</AlertDescription></Alert>
       ) : null}
@@ -67,19 +93,10 @@ export default async function JobsPage({
           </h2>
         </div>
       </div>
-      {result.candidateSetTruncated ? (
-        <Alert className="mt-6">
-          <AlertTitle>Die gefilterte Vorauswahl umfasst mehr als 2.000 Stellen.</AlertTitle>
-          <AlertDescription>
-            Für Suche und Sortierung werden höchstens 2.000 davon ausgewertet.
-            Verfeinere die Filter, damit wir eine vollständige Trefferzahl anzeigen können.
-          </AlertDescription>
-        </Alert>
-      ) : null}
       <div className="mt-6"><JobGrid jobs={result.jobs} /></div>
       {result.nextCursor === null ? null : (
         <div className="mt-8 flex justify-center">
-          <Link href={`/jobs${publicJobSearchQuery(input, { cursor: result.nextCursor })}`} className={buttonVariants({ variant: "outline", size: "lg" })}>Nächste Ergebnisse <ChevronRightIcon data-icon="inline-end" /></Link>
+          <Link href={`/jobs${publicJobSearchQuery(input, { after: result.nextCursor })}`} className={buttonVariants({ variant: "outline", size: "lg" })}>Nächste Ergebnisse <ChevronRightIcon data-icon="inline-end" /></Link>
         </div>
       )}
     </div>
@@ -96,22 +113,11 @@ function resultCountBucket(
   return "50+";
 }
 
-function hasActiveFilters(input: ReturnType<typeof parsePublicJobSearchParams>) {
-  return Boolean(
-    input.keyword ||
-      input.cantonSlugs.length ||
-      input.citySlugs.length ||
-      input.categorySlugs.length ||
-      input.workloadMin !== undefined ||
-      input.jobTypes.length ||
-      input.remoteTypes.length ||
-      input.languages.length ||
-      input.efforts.length ||
-      input.salaryMin !== undefined ||
-      input.salaryDisclosedOnly ||
-      input.responseEvidenceOnly ||
-      input.companyVerifiedOnly ||
-      input.sort !== "relevance" ||
-      input.cursor,
-  );
+function normalizeCatalogReferences(
+  references: readonly string[],
+  entries: readonly Readonly<{ id: string; slug: string }>[],
+): readonly string[] {
+  return Object.freeze(references.map((reference) =>
+    entries.find(({ id, slug }) => id === reference || slug === reference)?.slug ?? reference
+  ));
 }

@@ -55,6 +55,9 @@ describe("invitation entry route", () => {
       "private, no-store, max-age=0",
     );
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("x-robots-tag")).toBe(
+      "noindex, nofollow, noarchive, nosnippet",
+    );
     expect(
       readInviteResumeToken(sealedValue, new Date(before), KEY),
     ).toBe(TOKEN);
@@ -79,6 +82,12 @@ describe("invitation entry route", () => {
     );
     expect(setCookie).toMatch(/Max-Age=0/iu);
     expect(setCookie).toMatch(/Path=\/invite/iu);
+    expect(response.headers.get("location")).not.toContain("short");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("x-robots-tag")).toBe(
+      "noindex, nofollow, noarchive, nosnippet",
+    );
   });
 });
 

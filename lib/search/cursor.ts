@@ -64,6 +64,7 @@ const cursorPayloadSchema = z.object({
   configVersion: z.literal("v1"),
   queryHash: z.string().regex(/^[a-f0-9]{64}$/),
   rankingAsOf: z.iso.datetime({ offset: true }),
+  responseProjectionFingerprint: z.string().regex(/^[a-f0-9]{32}$/).optional(),
   sponsoredIds: z.array(z.string().min(1)).max(3),
   organicTuple: organicTupleSchema.nullable(),
 }).strict().superRefine((payload, context) => {
@@ -81,6 +82,7 @@ export type SearchCursorPayload = Readonly<{
   configVersion: "v1";
   queryHash: string;
   rankingAsOf: string;
+  responseProjectionFingerprint?: string;
   sponsoredIds: readonly string[];
   organicTuple: OrganicCursorTuple | null;
 }>;

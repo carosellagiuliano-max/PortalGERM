@@ -32,6 +32,7 @@ const IDS = {
   oldVerification: "00000000-0000-4000-8000-000000003112",
   restriction: "00000000-0000-4000-8000-000000003113",
   revision: "00000000-0000-4000-8000-000000003114",
+  replacementRevision: "00000000-0000-4000-8000-000000003121",
   unapprovedJob: "00000000-0000-4000-8000-000000003115",
   unapprovedRevision: "00000000-0000-4000-8000-000000003116",
   user: "00000000-0000-4000-8000-000000003117",
@@ -189,6 +190,10 @@ async function restoreBaseline() {
       'WHERE "id" = $1',
     ].join("\n"),
     [IDS.company, contractNow],
+  );
+  await pool.query(
+    'UPDATE "Category" SET "isActive" = true, "updatedAt" = $2 WHERE "id" = $1',
+    [IDS.category, contractNow],
   );
   await pool.query(
     [
@@ -428,6 +433,50 @@ describe.sequential("PostgreSQL public job eligibility", () => {
     }
   });
 
+  it("fails closed when the current revision pointer drifts from the published revision", async () => {
+    await target().query(
+      [
+        'INSERT INTO "JobRevision" (',
+        '  "id", "jobId", "revisionNumber", "title", "description",',
+        '  "tasks", "requirements", "applicationProcessSteps",',
+        '  "requiredDocumentKinds", "jobType", "remoteType", "remoteCountryCode",',
+        '  "categoryId", "cantonId", "cityId", "locationLabel",',
+        '  "workloadMin", "workloadMax", "startByArrangement", "validThrough",',
+        '  "responseTargetDays", "applicationEffort", "inclusionStatement",',
+        '  "applicationContactKind", "applicationContactValue",',
+        '  "authoredByUserId", "contentChecksum", "createdAt"',
+        ') VALUES (',
+        "  $1, $2, 2, 'Unreleased replacement', 'A draft must never become public.',",
+        "  ARRAY['Draft task'], ARRAY['Draft requirement'],",
+        "  ARRAY['Draft process'], ARRAY['CV']::\"RequiredDocumentKind\"[],",
+        "  'PERMANENT', 'ONSITE', NULL, $3, $4, $5, 'Zürich',",
+        "  80, 100, false, $6, 7, 'SIMPLE',",
+        "  'Applications are assessed against transparent role criteria.',",
+        "  'EMAIL', 'jobs@example.test', $7, $8, $9",
+        ')',
+      ].join("\n"),
+      [
+        IDS.replacementRevision,
+        IDS.job,
+        IDS.category,
+        IDS.canton,
+        IDS.city,
+        validThrough,
+        IDS.user,
+        "e".repeat(64),
+        contractNow,
+      ],
+    );
+    await target().query(
+      'UPDATE "Job" SET "currentRevisionId" = $2, "updatedAt" = $3 WHERE "id" = $1',
+      [IDS.job, IDS.replacementRevision, contractNow],
+    );
+
+    await expect(
+      isJobPubliclyEligible(IDS.job, contractNow, "production", client()),
+    ).resolves.toEqual({ eligible: false });
+  });
+
   it("rejects the expiry boundary and persisted expiry drift", async () => {
     await expect(
       isJobPubliclyEligible(IDS.job, validThrough, "production", client()),
@@ -450,6 +499,17 @@ describe.sequential("PostgreSQL public job eligibility", () => {
         'ALTER TABLE "Job" ENABLE TRIGGER job_published_projection_trigger',
       );
     }
+
+    await expect(
+      isJobPubliclyEligible(IDS.job, contractNow, "production", client()),
+    ).resolves.toEqual({ eligible: false });
+  });
+
+  it("rejects a job whose published revision belongs to an inactive category", async () => {
+    await target().query(
+      'UPDATE "Category" SET "isActive" = false, "updatedAt" = $2 WHERE "id" = $1',
+      [IDS.category, contractNow],
+    );
 
     await expect(
       isJobPubliclyEligible(IDS.job, contractNow, "production", client()),

@@ -584,6 +584,8 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260722130000_phase_13_job_boosts",
       "20260722200000_phase_14_talent_radar_privacy",
       "20260722201500_phase_14_radar_cohort_and_replay_hardening",
+      "20260722210000_phase_15_cluster_evidence",
+      "20260722211000_phase_15_cluster_policy_versioned_check",
     ]);
     expect(
       migrations.rows.every(
@@ -609,6 +611,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "order_line_catalog_reference_xor_check",
       "order_line_tax_rate_snapshot_fkey",
       "plan_entitlement_value_check",
+      "phase15_cluster_ready_thresholds_check",
       "privacy_challenge_request_user_scope_fkey",
       "privacy_correction_text_length_check",
       "privacy_request_type_outcome_check",

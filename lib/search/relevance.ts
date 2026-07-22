@@ -8,7 +8,7 @@ function normalize(value: string): string {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-function queryTerms(query: string): readonly string[] {
+export function normalizedSearchTerms(query: string): readonly string[] {
   return [...new Set(normalize(query).split(/[^\p{L}\p{N}]+/u).filter(Boolean))];
 }
 
@@ -16,7 +16,7 @@ export function calculateRelevanceProxy(
   query: string,
   document: RelevanceDocument,
 ): Readonly<{ score: number; tier: number }> {
-  const terms = queryTerms(query);
+  const terms = normalizedSearchTerms(query);
   if (terms.length === 0) return Object.freeze({ score: 0, tier: 0 });
   const fields = [
     { text: normalize(document.title), weight: 3 },

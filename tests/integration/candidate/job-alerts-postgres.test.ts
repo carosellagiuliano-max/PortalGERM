@@ -786,6 +786,156 @@ describe.sequential("PostgreSQL Phase-09 job-alert contract", () => {
     expect(alert.nextDueAt.getTime()).toBeGreaterThan(runAt.getTime());
   });
 
+  it("excludes a matching job whose current revision pointer drifted", async () => {
+    const createdAt = new Date(DATES.secondRun.getTime() + 30_000);
+    const publishedAt = new Date(createdAt.getTime() + 1_000);
+    const runAt = new Date(createdAt.getTime() + 2_000);
+    const job = await insertPublishedJob(pool(), {
+      index: 24,
+      publishedAt,
+      status: "PUBLISHED",
+      title: "EligibilityDriftNeedle",
+    });
+    const driftRevisionId = randomUUID();
+    await client().jobRevision.create({
+      data: {
+        id: driftRevisionId,
+        jobId: job.jobId,
+        revisionNumber: 2,
+        title: "EligibilityDriftNeedle Draft",
+        description: "Ein unveröffentlichter Entwurf für den Jobabo-Grenztest.",
+        tasks: ["Entwurfsaufgabe"],
+        requirements: ["Entwurfsanforderung"],
+        applicationProcessSteps: ["Entwurfsprozess"],
+        requiredDocumentKinds: ["CV"],
+        jobType: "PERMANENT",
+        remoteType: "HYBRID",
+        categoryId: IDS.category,
+        cantonId: IDS.canton,
+        cityId: IDS.city,
+        locationLabel: "Zürich",
+        workloadMin: 60,
+        workloadMax: 100,
+        salaryPeriod: "YEARLY",
+        salaryMin: 90_000,
+        salaryMax: 110_000,
+        startByArrangement: true,
+        validThrough: DATES.expiresAt,
+        responseTargetDays: 7,
+        applicationEffort: "SIMPLE",
+        applicationContactKind: "EMAIL",
+        applicationContactValue: "draft@example.test",
+        authoredByUserId: IDS.employerUser,
+        contentChecksum: createHash("sha256")
+          .update("phase09-alert-current-revision-drift")
+          .digest("hex"),
+      },
+    });
+    await client().job.update({
+      where: { id: job.jobId },
+      data: { currentRevisionId: driftRevisionId },
+    });
+    const created = await createJobAlert(
+      command({
+        deliveryConsentAccepted: false,
+        query: { ...query, keyword: "EligibilityDriftNeedle" },
+      }),
+      {
+        actorUserId: IDS.candidateUser,
+        database: client(),
+        now: createdAt,
+      },
+    );
+    await client().jobAlert.update({
+      where: { id: created.id },
+      data: { nextDueAt: runAt },
+    });
+
+    try {
+      const result = await runJobAlertDigestMock({
+        alertId: created.id,
+        appUrl: "http://127.0.0.1:3000",
+        candidateUserId: IDS.candidateUser,
+        database: client(),
+        environment: "non-production",
+        mailbox,
+        now: runAt,
+      });
+
+      expect(result.completed).toEqual([
+        expect.objectContaining({ alertId: created.id, itemCount: 0 }),
+      ]);
+      await expect(
+        client().jobAlertDigestItem.count({
+          where: { jobAlertId: created.id, jobId: job.jobId },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await client().job.update({
+        where: { id: job.jobId },
+        data: { currentRevisionId: job.revisionId },
+      });
+      await client().jobRevision.delete({ where: { id: driftRevisionId } });
+    }
+  });
+
+  it("excludes a matching job whose published category is inactive", async () => {
+    const createdAt = new Date(DATES.secondRun.getTime() + 40_000);
+    const publishedAt = new Date(createdAt.getTime() + 1_000);
+    const runAt = new Date(createdAt.getTime() + 2_000);
+    const job = await insertPublishedJob(pool(), {
+      index: 25,
+      publishedAt,
+      status: "PUBLISHED",
+      title: "InactiveCategoryNeedle",
+    });
+    const created = await createJobAlert(
+      command({
+        deliveryConsentAccepted: false,
+        query: { ...query, keyword: "InactiveCategoryNeedle" },
+      }),
+      {
+        actorUserId: IDS.candidateUser,
+        database: client(),
+        now: createdAt,
+      },
+    );
+    await client().jobAlert.update({
+      where: { id: created.id },
+      data: { nextDueAt: runAt },
+    });
+    await client().category.update({
+      where: { id: IDS.category },
+      data: { isActive: false },
+    });
+
+    try {
+      const result = await runJobAlertDigestMock({
+        alertId: created.id,
+        appUrl: "http://127.0.0.1:3000",
+        candidateUserId: IDS.candidateUser,
+        database: client(),
+        environment: "non-production",
+        mailbox,
+        now: runAt,
+      });
+
+      expect(result.completed).toEqual([
+        expect.objectContaining({ alertId: created.id, itemCount: 0 }),
+      ]);
+      await expect(
+        client().jobAlertDigestItem.count({
+          where: { jobAlertId: created.id, jobId: job.jobId },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await client().category.update({
+        where: { id: IDS.category },
+        data: { isActive: true },
+      });
+    }
+  });
+
   it("creates no digest or EmailLog for a paused alert", async () => {
     const createdAt = new Date(DATES.secondRun.getTime() + 9_000);
     const created = await createJobAlert(
@@ -1517,6 +1667,7 @@ async function insertPublishedJob(
     index: number;
     publishedAt: Date;
     status: "PUBLISHED" | "PAUSED";
+    title?: string;
   }>,
 ) {
   const jobId = randomUUID();
@@ -1553,7 +1704,7 @@ async function insertPublishedJob(
     [
       revisionId,
       jobId,
-      `Pflegefachperson ${input.index}`,
+      input.title ?? `Pflegefachperson ${input.index}`,
       "Eine vollständige fiktive Pflege-Stellenbeschreibung für den Jobabo-Vertrag.",
       IDS.category,
       IDS.canton,
@@ -1583,6 +1734,7 @@ async function insertPublishedJob(
       IDS.city,
     ],
   );
+  return Object.freeze({ jobId, revisionId });
 }
 
 async function insertDeepDigestScanCandidates(

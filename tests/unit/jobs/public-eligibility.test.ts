@@ -17,6 +17,7 @@ const SNAPSHOT: PublicEligibilitySnapshot = {
   companyId: "company-1",
   status: "PUBLISHED",
   dataProvenance: "LIVE",
+  currentRevisionId: "revision-1",
   publishedRevisionId: "revision-1",
   publishedAt: new Date("2026-07-01T00:00:00Z"),
   expiresAt: new Date("2026-08-01T00:00:00Z"),
@@ -34,6 +35,7 @@ const SNAPSHOT: PublicEligibilitySnapshot = {
     rejectedAt: null,
     validThrough: new Date("2026-08-01T00:00:00Z"),
     categoryId: "category-1",
+    categoryIsActive: true,
     cantonId: "canton-1",
     cityId: "city-1",
     salaryMin: 90_000,
@@ -82,6 +84,7 @@ describe("sole public Job eligibility policy", () => {
 
   it.each([
     ["status", { status: "PAUSED" }],
+    ["current revision drift", { currentRevisionId: "revision-draft" }],
     ["revision drift", { publishedRevisionId: "revision-old" }],
     [
       "rejected revision",
@@ -89,6 +92,10 @@ describe("sole public Job eligibility policy", () => {
     ],
     ["missing publication", { publishedAt: null }],
     ["expiry drift", { expiresAt: new Date("2026-08-02T00:00:00Z") }],
+    [
+      "inactive category",
+      { revision: { ...SNAPSHOT.revision!, categoryIsActive: false } },
+    ],
     [
       "company suspended",
       { company: { ...SNAPSHOT.company, status: "SUSPENDED" } },

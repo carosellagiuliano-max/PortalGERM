@@ -19,6 +19,7 @@ export type PublicEligibilitySnapshot = Readonly<{
   companyId: string;
   status: string;
   dataProvenance: DataProvenance;
+  currentRevisionId: string | null;
   publishedRevisionId: string | null;
   publishedAt: Date | null;
   expiresAt: Date | null;
@@ -36,6 +37,7 @@ export type PublicEligibilitySnapshot = Readonly<{
     rejectedAt: Date | null;
     validThrough: Date | null;
     categoryId: string;
+    categoryIsActive: boolean;
     cantonId: string | null;
     cityId: string | null;
     salaryMin: number | null;
@@ -62,6 +64,7 @@ const publicEligibilityJobSelect = {
   companyId: true,
   status: true,
   dataProvenance: true,
+  currentRevisionId: true,
   publishedRevisionId: true,
   publishedAt: true,
   expiresAt: true,
@@ -86,6 +89,7 @@ const publicEligibilityJobSelect = {
       rejectedAt: true,
       validThrough: true,
       categoryId: true,
+      category: { select: { isActive: true } },
       cantonId: true,
       cityId: true,
       salaryMin: true,
@@ -120,6 +124,7 @@ export function evaluatePublicJobEligibility(
   const revision = snapshot.revision;
   if (
     snapshot.status !== "PUBLISHED" ||
+    snapshot.currentRevisionId !== snapshot.publishedRevisionId ||
     snapshot.publishedRevisionId !== revision.id ||
     revision.approvedAt === null ||
     revision.rejectedAt !== null ||
@@ -129,6 +134,7 @@ export function evaluatePublicJobEligibility(
     snapshot.publishedAt.getTime() > now.getTime() ||
     now.getTime() >= snapshot.expiresAt.getTime() ||
     snapshot.expiresAt.getTime() !== revision.validThrough.getTime() ||
+    !revision.categoryIsActive ||
     snapshot.company.status !== "ACTIVE" ||
     !snapshot.company.hasCurrentVerifiedCycle ||
     snapshot.hasEffectivePublicHideRestriction ||
@@ -304,6 +310,7 @@ function toPublicEligibilitySnapshot(
     companyId: job.companyId,
     status: job.status,
     dataProvenance: job.dataProvenance,
+    currentRevisionId: job.currentRevisionId,
     publishedRevisionId: job.publishedRevisionId,
     publishedAt: job.publishedAt,
     expiresAt: job.expiresAt,
@@ -324,6 +331,7 @@ function toPublicEligibilitySnapshot(
             rejectedAt: revision.rejectedAt,
             validThrough: revision.validThrough,
             categoryId: revision.categoryId,
+            categoryIsActive: revision.category.isActive,
             cantonId: revision.cantonId,
             cityId: revision.cityId,
             salaryMin: revision.salaryMin,

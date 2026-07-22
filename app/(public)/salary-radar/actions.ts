@@ -27,6 +27,7 @@ export async function calculatePublicSalaryRadarAction(
       categorySlugs: Object.freeze([query.categorySlug]),
       cantonSlugs: Object.freeze([query.cantonSlug]),
       salaryMin: Math.max(1, result.adjustedP25Chf),
+      salaryPeriod: "YEARLY" as const,
       sort: "salary" as const,
     }),
     { pageSize: 20 },

@@ -13,7 +13,8 @@ import { mutateAdminTaxonomy } from "@/lib/admin/taxonomy";
 import { triageAbuseReport, applyModerationRestriction, liftModerationRestriction, expireModerationRestriction, resolveAbuseReport, dismissAbuseReport } from "@/lib/admin/moderation";
 import { parseLicensedImport, decideImportItem, commitImportRun, rollbackImportRun, approveImportSetup, revokeImportSetup, expireImportSetup } from "@/lib/admin/imports";
 import { manageSupportCase } from "@/lib/admin/support";
-import { saveContentDraft, transitionContentRevision, transitionClusterLaunch } from "@/lib/admin/content";
+import { projectExpiredClusterLaunches, saveContentDraft, transitionContentRevision, transitionClusterLaunch } from "@/lib/admin/content";
+import { evaluateClusterLaunch } from "@/lib/admin/cluster-launch";
 import { manageSalesLead } from "@/lib/admin/leads";
 import { projectAdminSlaAlerts } from "@/lib/admin/sla";
 import { deactivatePlanVersion, deactivateProductVersion, grantAdminCredits, reverseCreditConsume, schedulePlanVersion, scheduleProductVersion } from "@/lib/billing/admin-billing";
@@ -71,7 +72,9 @@ export async function adminCommandAction(_previous: AdminActionState, formData: 
                                                                   : operation === "support-manage" ? await manageSupportCase(input, dependencies)
                                                                     : operation === "content-draft" ? await saveContentDraft(input, dependencies)
                                                                       : operation === "content-transition" ? await transitionContentRevision(input, dependencies)
-                                                                        : operation === "cluster-transition" ? await transitionClusterLaunch(input, dependencies)
+                                                                        : operation === "cluster-evaluate" ? await evaluateClusterLaunch(input, dependencies)
+                                                                          : operation === "cluster-expire" ? await projectExpiredClusterLaunches(input, dependencies)
+                                                                            : operation === "cluster-transition" ? await transitionClusterLaunch(input, dependencies)
                                                                           : operation === "lead-manage" ? await manageSalesLead(input, dependencies)
                                                                           : operation === "sla-project" ? await projectAdminSlaAlerts(input as never, dependencies)
                                                                             : operation === "credit-grant" ? await grantAdminCredits(input, dependencies)

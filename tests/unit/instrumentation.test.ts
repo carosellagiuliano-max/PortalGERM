@@ -40,4 +40,50 @@ describe("request error instrumentation", () => {
     expect(serializedLog).toContain("/reset-password");
     expect(serializedLog).not.toContain(secretCanary);
   });
+
+  it.each([
+    [
+      "/invite/[token]",
+      "/invite/raw-invite-token-canary",
+      "raw-invite-token-canary",
+    ],
+    ["/support/[id]", "/support/raw-case-id-canary", "raw-case-id-canary"],
+    [
+      "/alerts/unsubscribe/[token]",
+      "/alerts/unsubscribe/raw-alert-token-canary",
+      "raw-alert-token-canary",
+    ],
+    [
+      "/mock/checkout/[orderId]",
+      "/mock/checkout/raw-order-id-canary",
+      "raw-order-id-canary",
+    ],
+  ])(
+    "logs the route template %s instead of a sensitive dynamic segment",
+    async (routePath, requestPath, canary) => {
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+
+      await onRequestError(
+        Object.assign(new Error(canary), { digest: "safe-digest" }),
+        {
+          path: requestPath,
+          method: "GET",
+          headers: {},
+        },
+        {
+          routerKind: "App Router",
+          routePath,
+          routeType: "render",
+          revalidateReason: undefined,
+        },
+      );
+
+      const serializedLog = String(consoleError.mock.calls[0]?.[0]);
+      expect(serializedLog).toContain(`"routePath":"${routePath}"`);
+      expect(serializedLog).not.toContain(requestPath);
+      expect(serializedLog).not.toContain(canary);
+    },
+  );
 });

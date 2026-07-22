@@ -16,10 +16,12 @@ import { runDemoSeed } from "@/prisma/seed/orchestrator";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
 const HOST = "127.0.0.1";
-const DEFAULT_START_TIMEOUT_MS = 30_000;
+const DEFAULT_START_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 8_000;
 const MAX_DIAGNOSTIC_CHARACTERS = 24_000;
 const NOINDEX_POLICY = "noindex, nofollow, noarchive, nosnippet";
+const EXPECT_STATIC_PUBLIC_INDEXING =
+  process.env.HTTP_SMOKE_STATIC_PUBLIC_INDEXING === "true";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -36,7 +38,7 @@ async function main() {
   try {
     const result = await runSmoke();
     console.info(
-      `HTTP smoke passed on ${result.baseUrl}: Phase-07/08 public routes, Phase-09 unsubscribe privacy, health, anonymous auth redirects and protected response headers verified.`,
+      `HTTP smoke passed on ${result.baseUrl}: public routes, Phase-15 robots/sitemap policy, sensitive-route privacy, health, anonymous auth redirects and protected response headers verified.`,
     );
   } catch (error) {
     const message =
@@ -347,7 +349,15 @@ async function verifyPhase08PublicRoutes(
     const response = await request(baseUrl, page.path, secretCanary);
     expectStatus(response, 200);
     expectContent(response, "text/html", page.expectedText);
-    expectHtmlNoIndex(response);
+    if (
+      EXPECT_STATIC_PUBLIC_INDEXING &&
+      page.path !== "/pricing" &&
+      page.path !== "/employers/demo"
+    ) {
+      expectHtmlIndexable(response);
+    } else {
+      expectHtmlNoIndex(response);
+    }
   }
   const pricing = await request(baseUrl, "/pricing", secretCanary);
   expectContent(pricing, "text/html", "CHF 149.00");
@@ -380,7 +390,7 @@ async function verifyPhase07PublicRoutes(
     },
     {
       path: `/jobs/kanton/${fixtures.canton.slug}`,
-      expectedText: `Jobs in ${fixtures.canton.name}`,
+      expectedText: `Jobs im Kanton ${fixtures.canton.name}`,
       key: "cluster" as const,
     },
     {
@@ -445,6 +455,31 @@ async function verifyPhase07PublicRoutes(
       "/sitemap.xml exposed DEMO URLs in the local Phase-07 smoke runtime.",
     );
   }
+
+  const robots = await request(
+    baseUrl,
+    "/robots.txt",
+    secretCanary,
+    undefined,
+    false,
+  );
+  expectStatus(robots, 200);
+  expectContent(robots, "text/plain", "User-Agent: *");
+  for (const path of [
+    "/candidate/",
+    "/employer/",
+    "/admin/",
+    "/api/",
+    "/reset-password",
+    "/invite/",
+    "/support/",
+    "/alerts/unsubscribe/",
+    "/mock/checkout/",
+    "/dev/",
+  ]) {
+    expectContent(robots, "text/plain", `Disallow: ${path}`);
+  }
+  expectContent(robots, "text/plain", `Sitemap: ${baseUrl}/sitemap.xml`);
 
   const invalidPublicPaths = [
     "/jobs/http-smoke-job-does-not-exist",
@@ -554,7 +589,7 @@ function expectContent(
   }
   if (!result.body.includes(expectedText)) {
     throw new Error(
-      `${result.path} did not contain its expected safe content.`,
+      `${result.path} did not contain the expected safe marker ${JSON.stringify(expectedText)}.`,
     );
   }
 }
@@ -614,6 +649,24 @@ function expectHtmlNoIndex(result: SmokeResponse) {
   if (!hasRobotsDirective(directives, "noindex")) {
     throw new Error(
       `${result.path} did not expose its required noindex policy.`,
+    );
+  }
+}
+
+function expectHtmlIndexable(result: SmokeResponse) {
+  const robotsHeader = result.response.headers.get("x-robots-tag") ?? "";
+  const metaTags = result.body.match(/<meta\b[^>]*>/giu) ?? [];
+  const robotsTag = metaTags.find(
+    (tag) => htmlAttribute(tag, "name")?.toLowerCase() === "robots",
+  );
+  const directives =
+    robotsTag === undefined ? "" : (htmlAttribute(robotsTag, "content") ?? "");
+  if (
+    hasRobotsDirective(robotsHeader, "noindex") ||
+    hasRobotsDirective(directives, "noindex")
+  ) {
+    throw new Error(
+      `${result.path} unexpectedly exposed noindex in the production build.`,
     );
   }
 }

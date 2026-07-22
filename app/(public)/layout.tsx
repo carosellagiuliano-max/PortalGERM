@@ -6,10 +6,35 @@ import { AppFooter } from "@/components/shared/app-footer";
 import { AppHeader } from "@/components/shared/app-header";
 import { getPublicDataContext } from "@/lib/public/environment";
 
+const PUBLIC_DESCRIPTION =
+  "Faire Jobtransparenz, Lohnorientierung und datenschutzfreundliche Zugänge für Kandidat:innen und Arbeitgeber.";
+
 export function generateMetadata(): Metadata {
+  const defaults: Metadata = {
+    title: {
+      default: "SwissTalentHub",
+      template: "%s | SwissTalentHub",
+    },
+    description: PUBLIC_DESCRIPTION,
+    openGraph: {
+      type: "website",
+      locale: "de_CH",
+      siteName: "SwissTalentHub",
+      title: "SwissTalentHub",
+      description: PUBLIC_DESCRIPTION,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "SwissTalentHub",
+      description: PUBLIC_DESCRIPTION,
+    },
+  };
   return getPublicDataContext().publicIndexingAllowed
-    ? {}
-    : { robots: { index: false, follow: false, noarchive: true, nosnippet: true } };
+    ? defaults
+    : {
+        ...defaults,
+        robots: { index: false, follow: false, noarchive: true, nosnippet: true },
+      };
 }
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {

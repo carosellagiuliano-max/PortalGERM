@@ -25,6 +25,7 @@ export function buildPublicJobPostingJsonLd(
   appUrl: string,
 ): Readonly<Record<string, unknown>> {
   const canonical = new URL(`/jobs/${job.slug}`, appUrl).toString();
+  const companyWebsite = safeOrganizationWebsite(job.company.website);
   const location = job.canton === null
     ? undefined
     : {
@@ -32,7 +33,7 @@ export function buildPublicJobPostingJsonLd(
         address: {
           "@type": "PostalAddress",
           addressCountry: "CH",
-          addressRegion: job.canton.code,
+          addressRegion: job.canton.name,
           ...(job.city === null ? {} : { addressLocality: job.city.name }),
         },
       };
@@ -46,7 +47,7 @@ export function buildPublicJobPostingJsonLd(
             "@type": "QuantitativeValue",
             minValue: job.salaryMin,
             maxValue: job.salaryMax,
-            unitText: salaryUnit(job.salaryPeriod),
+            unitText: salaryUnitText(job.salaryPeriod),
           },
         };
 
@@ -54,7 +55,7 @@ export function buildPublicJobPostingJsonLd(
     "@context": "https://schema.org",
     "@type": "JobPosting",
     title: stripUnsafeHtml(job.title),
-    description: stripUnsafeHtml(job.description),
+    description: structuredJobDescription(job),
     identifier: { "@type": "PropertyValue", name: "SwissTalentHub", value: job.id },
     datePosted: job.publishedAt.toISOString(),
     validThrough: job.expiresAt.toISOString(),
@@ -66,14 +67,15 @@ export function buildPublicJobPostingJsonLd(
     hiringOrganization: {
       "@type": "Organization",
       name: stripUnsafeHtml(job.company.name),
-      sameAs: new URL(`/companies/${job.company.slug}`, appUrl).toString(),
+      ...(companyWebsite === null ? {} : { sameAs: companyWebsite }),
     },
+    ...(location === undefined ? {} : { jobLocation: location }),
     ...(job.remoteType === "REMOTE"
       ? {
           jobLocationType: "TELECOMMUTE",
           applicantLocationRequirements: { "@type": "Country", name: "Switzerland" },
         }
-      : { jobLocation: location }),
+      : {}),
     ...(baseSalary === undefined ? {} : { baseSalary }),
     directApply: false,
     url: canonical,
@@ -113,8 +115,56 @@ function employmentType(
   }
 }
 
-function salaryUnit(period: NonNullable<PublicJobDetailModel["salaryPeriod"]>): string {
-  if (period === "HOURLY") return "HOUR";
-  if (period === "MONTHLY") return "MONTH";
-  return "YEAR";
+function safeOrganizationWebsite(value: string | null): string | null {
+  if (value === null || !isSafeAbsoluteHttpUrl(value)) return null;
+  return new URL(value).toString();
+}
+
+function salaryUnitText(
+  period: NonNullable<PublicJobDetailModel["salaryPeriod"]>,
+): "HOUR" | "MONTH" | "YEAR" {
+  switch (period) {
+    case "HOURLY":
+      return "HOUR";
+    case "MONTHLY":
+      return "MONTH";
+    case "YEARLY":
+      return "YEAR";
+  }
+}
+
+function structuredJobDescription(job: PublicJobDetailModel): string {
+  const sections: string[] = [];
+  appendText(sections, job.companyIntro);
+  if (job.description !== job.companyIntro) appendText(sections, job.description);
+  appendList(sections, "Aufgaben", job.tasks);
+  appendList(sections, "Anforderungen", job.requirements);
+  appendList(sections, "Von Vorteil", job.niceToHave);
+  if (job.offer !== null) {
+    const offer = stripUnsafeHtml(job.offer).trim();
+    if (offer !== "") sections.push(`Angebot\n${offer}`);
+  }
+  appendList(
+    sections,
+    "Benefits",
+    job.benefits.map(({ description }) => description),
+  );
+  appendList(sections, "Bewerbungsprozess", job.applicationProcessSteps);
+  appendText(sections, job.inclusionStatement);
+  return sections.join("\n\n");
+}
+
+function appendText(sections: string[], value: string | null) {
+  if (value === null) return;
+  const text = stripUnsafeHtml(value).trim();
+  if (text !== "") sections.push(text);
+}
+
+function appendList(
+  sections: string[],
+  heading: string,
+  values: readonly string[],
+) {
+  const items = values.map(stripUnsafeHtml).map((value) => value.trim()).filter(Boolean);
+  if (items.length > 0) sections.push(`${heading}\n${items.join("\n")}`);
 }

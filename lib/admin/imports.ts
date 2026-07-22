@@ -7,6 +7,7 @@ import { z } from "zod";
 import { canRunLicensedSupplyImport, canUseEmployerImport } from "@/lib/admin/capabilities";
 import { slaDueAt } from "@/lib/admin/sla";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { createJobSlug } from "@/lib/jobs/slug";
 import { slugify } from "@/lib/utils/slug";
 import {
   adminErrorResult,
@@ -318,15 +319,21 @@ async function endImportSetup(raw: unknown, dependencies: AdminDependencies, sta
 }
 
 async function createImportedDraft(transaction: Prisma.TransactionClient, item: NormalizedImportItem, checksum: string, companyId: string, importSourceId: string, actorUserId: string, now: Date, correlationId: string) {
-  const category = await transaction.category.findFirst({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { id: true } });
+  const [category, company] = await Promise.all([
+    transaction.category.findFirst({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { id: true } }),
+    transaction.company.findUnique({ where: { id: companyId }, select: { slug: true } }),
+  ]);
   if (category === null) throw new Error("NO_CATEGORY");
+  if (company === null) throw new AdminDomainError("NOT_FOUND");
   const canton = item.canton.length === 0 ? null : await transaction.canton.findFirst({ where: { isActive: true, OR: [{ code: item.canton.toUpperCase() }, { slug: slugify(item.canton) }, { name: { equals: item.canton, mode: "insensitive" } }] }, select: { id: true } });
   const city = canton === null || item.city.length === 0 ? null : await transaction.city.findFirst({ where: { cantonId: canton.id, isActive: true, OR: [{ slug: slugify(item.city) }, { name: { equals: item.city, mode: "insensitive" } }] }, select: { id: true } });
   if (canton === null || city === null) throw new AdminDomainError("INCOMPLETE");
-  const occupied = await transaction.job.findMany({ where: { slug: { startsWith: slugify(item.title) } }, select: { slug: true } });
-  const baseSlug = `${slugify(item.title)}-${item.id.slice(0, 8).toLowerCase().replace(/[^a-z0-9]/gu, "")}`.slice(0, 210);
-  const slug = occupied.some((row) => row.slug === baseSlug) ? `${baseSlug}-${randomUUID().slice(0, 6)}` : baseSlug;
   const jobId = randomUUID();
+  const slug = createJobSlug({
+    title: item.title,
+    companyShortRef: company.slug,
+    jobId,
+  });
   const revisionId = randomUUID();
   await transaction.job.create({ data: { id: jobId, companyId, slug, status: "DRAFT", origin: "IMPORT", sourceReference: item.id, importSourceId, currentRevisionId: null, createdByUserId: actorUserId, createdAt: now, updatedAt: now } });
   const contactIsUrl = item.application_url.length > 0;

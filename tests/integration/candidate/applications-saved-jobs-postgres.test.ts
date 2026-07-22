@@ -57,6 +57,7 @@ const IDS = Object.freeze({
   category: randomUUID(),
   job: randomUUID(),
   revision: randomUUID(),
+  driftRevision: randomUUID(),
   document: randomUUID(),
   externalJob: randomUUID(),
   externalRevision: randomUUID(),
@@ -144,6 +145,217 @@ describe.sequential(
       await expect(
         client().savedJob.count({ where: { id: savedRows[0]!.id } }),
       ).resolves.toBe(1);
+    });
+
+    it("fails confirmation, Save and Apply closed when the current revision pointer drifts", async () => {
+      const applyIntent = signJobIntent(
+        { action: "APPLY", jobSlug: "phase09-application-job", now: NOW },
+        runtimeEnvironment().secrets.session,
+      );
+      const saveIntent = signJobIntent(
+        { action: "SAVE", jobSlug: "phase09-application-job", now: NOW },
+        runtimeEnvironment().secrets.session,
+      );
+      const saveDependencies = {
+        database: client(),
+        environment: runtimeEnvironment(),
+        signingKey: runtimeEnvironment().secrets.session,
+        now: NOW,
+      } as const;
+      const confirmation = await getApplicationConfirmationView(
+        {
+          candidateUserId: IDS.candidateUser,
+          jobSlug: "phase09-application-job",
+          now: NOW,
+          environment: "non-production",
+        },
+        client(),
+      );
+      expect(confirmation.ok).toBe(true);
+      if (!confirmation.ok) throw new Error("Expected a current confirmation.");
+      await expect(
+        saveJobFromSignedIntent(
+          { signedIntent: saveIntent, candidateUserId: IDS.candidateUser },
+          saveDependencies,
+        ),
+      ).resolves.toMatchObject({ ok: true });
+
+      await client().jobRevision.create({
+        data: {
+          id: IDS.driftRevision,
+          jobId: IDS.job,
+          revisionNumber: 2,
+          title: "Unveröffentlichter Entwurf",
+          description: "Dieser Entwurf darf keine öffentliche Aktion autorisieren.",
+          tasks: ["Entwurfsaufgabe"],
+          requirements: ["Entwurfsanforderung"],
+          applicationProcessSteps: ["Entwurfsprozess"],
+          requiredDocumentKinds: ["CV"],
+          jobType: "PERMANENT",
+          remoteType: "HYBRID",
+          categoryId: IDS.category,
+          cantonId: IDS.canton,
+          cityId: IDS.city,
+          locationLabel: "Zürich",
+          workloadMin: 60,
+          workloadMax: 100,
+          salaryPeriod: "YEARLY",
+          salaryMin: 90_000,
+          salaryMax: 110_000,
+          startByArrangement: true,
+          validThrough: EXPIRES_AT,
+          responseTargetDays: 7,
+          applicationEffort: "SIMPLE",
+          applicationContactKind: "EMAIL",
+          applicationContactValue: "draft@phase09-contract.example",
+          authoredByUserId: IDS.employerUser,
+          contentChecksum: createHash("sha256")
+            .update("phase09-current-revision-drift")
+            .digest("hex"),
+        },
+      });
+      await client().job.update({
+        where: { id: IDS.job },
+        data: { currentRevisionId: IDS.driftRevision },
+      });
+
+      try {
+        await expect(
+          getApplicationConfirmationView(
+            {
+              candidateUserId: IDS.candidateUser,
+              jobSlug: "phase09-application-job",
+              now: NOW,
+              environment: "non-production",
+            },
+            client(),
+          ),
+        ).resolves.toEqual({ ok: false, code: "NOT_ELIGIBLE" });
+        await expect(
+          saveJobFromSignedIntent(
+            { signedIntent: saveIntent, candidateUserId: IDS.candidateUser },
+            saveDependencies,
+          ),
+        ).resolves.toEqual({ ok: false, code: "NOT_ELIGIBLE" });
+
+        const savedJobs = await listCandidateSavedJobs(
+          IDS.candidateUser,
+          client(),
+          { now: NOW, environment: "non-production" },
+        );
+        expect(
+          savedJobs.find(({ job }) => job.slug === "phase09-application-job"),
+        ).toMatchObject({ current: false });
+        await expect(
+          applyToJob(
+            {
+              signedIntent: applyIntent,
+              coverLetter: "Ich bestätige die zuvor angezeigte Bewerbung.",
+              selectedDocumentIds: [IDS.document],
+              confirmationVersion:
+                confirmation.value.projection.confirmationVersion,
+              confirmationSnapshotHash:
+                confirmation.value.projection.confirmationSnapshotHash,
+              confirmed: true,
+              idempotencyKey: "application:current-revision-drift",
+            },
+            {
+              database: client(),
+              environment: runtimeEnvironment(),
+              request: requestContext(90),
+              currentUser: candidateUser(),
+              emailProvider: new MockEmailProvider(
+                new PrismaEmailLogRepository(client()),
+              ),
+              now: NOW,
+            },
+          ),
+        ).resolves.toEqual({ ok: false, code: "NOT_ELIGIBLE" });
+        await expect(
+          client().application.count({
+            where: { jobId: IDS.job, candidateProfileId: IDS.candidateProfile },
+          }),
+        ).resolves.toBe(0);
+      } finally {
+        await client().job.update({
+          where: { id: IDS.job },
+          data: { currentRevisionId: IDS.revision },
+        });
+        await client().jobRevision.delete({
+          where: { id: IDS.driftRevision },
+        });
+      }
+    });
+
+    it("fails confirmation and Apply closed when the published category is inactive", async () => {
+      const confirmation = await getApplicationConfirmationView(
+        {
+          candidateUserId: IDS.candidateUser,
+          jobSlug: "phase09-application-job",
+          now: NOW,
+          environment: "non-production",
+        },
+        client(),
+      );
+      expect(confirmation.ok).toBe(true);
+      if (!confirmation.ok) throw new Error("Expected a current confirmation.");
+      const intent = signJobIntent(
+        { action: "APPLY", jobSlug: "phase09-application-job", now: NOW },
+        runtimeEnvironment().secrets.session,
+      );
+      await client().category.update({
+        where: { id: IDS.category },
+        data: { isActive: false },
+      });
+
+      try {
+        await expect(
+          getApplicationConfirmationView(
+            {
+              candidateUserId: IDS.candidateUser,
+              jobSlug: "phase09-application-job",
+              now: NOW,
+              environment: "non-production",
+            },
+            client(),
+          ),
+        ).resolves.toEqual({ ok: false, code: "NOT_ELIGIBLE" });
+        await expect(
+          applyToJob(
+            {
+              signedIntent: intent,
+              coverLetter: "Ich bestätige die zuvor angezeigte Bewerbung.",
+              selectedDocumentIds: [IDS.document],
+              confirmationVersion:
+                confirmation.value.projection.confirmationVersion,
+              confirmationSnapshotHash:
+                confirmation.value.projection.confirmationSnapshotHash,
+              confirmed: true,
+              idempotencyKey: "application:inactive-category",
+            },
+            {
+              database: client(),
+              environment: runtimeEnvironment(),
+              request: requestContext(91),
+              currentUser: candidateUser(),
+              emailProvider: new MockEmailProvider(
+                new PrismaEmailLogRepository(client()),
+              ),
+              now: NOW,
+            },
+          ),
+        ).resolves.toEqual({ ok: false, code: "NOT_ELIGIBLE" });
+        await expect(
+          client().application.count({
+            where: { jobId: IDS.job, candidateProfileId: IDS.candidateProfile },
+          }),
+        ).resolves.toBe(0);
+      } finally {
+        await client().category.update({
+          where: { id: IDS.category },
+          data: { isActive: true },
+        });
+      }
     });
 
     it("keeps the committed application retryable when the post-commit Mock email fails", async () => {

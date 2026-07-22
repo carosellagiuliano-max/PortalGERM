@@ -19,6 +19,7 @@ vi.mock("@/lib/jobs/public-read-model", () => ({
     cantonSlugs: [], citySlugs: [], categorySlugs: [], jobTypes: [],
     remoteTypes: [], languages: [], efforts: [], salaryDisclosedOnly: false,
     responseEvidenceOnly: false, companyVerifiedOnly: false, sort: "relevance",
+    pageSize: 20, validationIssues: [],
   }),
   listPublicJobs: mocks.listPublicJobs,
 }));
@@ -117,6 +118,7 @@ describe("public Salary Radar action", () => {
         categorySlugs: ["engineering-technik"],
         cantonSlugs: ["zuerich"],
         salaryMin: 80_000,
+        salaryPeriod: "YEARLY",
         sort: "salary",
       }),
       { pageSize: 20 },

@@ -2,26 +2,18 @@ import type { MetadataRoute } from "next";
 
 import { getServerEnvironment } from "@/lib/config/env";
 import { getPublicDataContext } from "@/lib/public/environment";
+import { buildPublicSitemap } from "@/lib/seo/public-sitemap";
 
-const PHASE_08_STATIC_PATHS = [
-  "/",
-  "/jobs",
-  "/pricing",
-  "/employers",
-  "/employers/post-job",
-  "/employers/talent-radar",
-  "/employers/employer-branding",
-  "/employers/xml-import",
-  "/employers/demo",
-] as const;
+// Eligibility, launch approvals, revocations and expiries are time-sensitive.
+// Never freeze this projection at build time or serve a stale cached sitemap.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-/** Stable static routes only; dynamic cluster URLs remain behind the Phase-15 SEO gate. */
-export default function sitemap(): MetadataRoute.Sitemap {
+/** Production-only sitemap assembled exclusively from canonical public gates. */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (!getPublicDataContext().publicIndexingAllowed) return [];
-  const origin = getServerEnvironment().APP_URL;
-  return PHASE_08_STATIC_PATHS.map((path) => ({
-    url: new URL(path, origin).toString(),
-    changeFrequency: path === "/" || path === "/jobs" ? "daily" as const : "weekly" as const,
-    priority: path === "/" ? 1 : path === "/jobs" ? 0.9 : path === "/pricing" ? 0.8 : 0.7,
-  }));
+  return buildPublicSitemap({
+    origin: getServerEnvironment().APP_URL,
+    now: new Date(),
+  });
 }

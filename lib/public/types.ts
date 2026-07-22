@@ -52,6 +52,10 @@ export type PublicJobCardModel = Readonly<{
 }>;
 
 export type PublicJobDetailModel = PublicJobCardModel & Readonly<{
+  company: PublicJobCardModel["company"] & Readonly<{
+    website: string | null;
+    logoUrl: string | null;
+  }>;
   companyIntro: string | null;
   tasks: readonly string[];
   requirements: readonly string[];
@@ -82,14 +86,13 @@ export type PublicJobSearchPage = Readonly<{
   nextCursor: string | null;
   totalEligible: number;
   /**
-   * `false` means `totalEligible` only describes the bounded ranking workset,
-   * not the complete result set for the current filters.
+   * Public search now computes this exactly across its RepeatableRead keyset
+   * scan. The flag remains explicit for older API consumers.
    */
   resultCountIsExact: boolean;
   /**
-   * At least one additional database candidate existed beyond the public
-   * ranking workset. Consumers must not present `totalEligible` as a global
-   * total while this flag is set.
+   * Backwards-compatible truncation signal. Phase-15 search always returns
+   * `false`; no candidate workset cap is applied before global ranking.
    */
   candidateSetTruncated: boolean;
   invalidCursor: boolean;

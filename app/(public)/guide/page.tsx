@@ -5,14 +5,20 @@ import { ArrowRightIcon, BookOpenTextIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { listPublicGuides } from "@/lib/content/public-guides";
+import { getPublicDataContext } from "@/lib/public/environment";
 import { formatDate } from "@/lib/utils/format";
 
-export const metadata: Metadata = {
-  title: "Ratgeber",
-  description: "Geprüfte Orientierung für Bewerbung, Beruf und Arbeitsmarkt in der Schweiz.",
-  alternates: { canonical: "/guide" },
-  robots: { index: false, follow: true },
-};
+export function generateMetadata(): Metadata {
+  const indexable = getPublicDataContext().publicIndexingAllowed;
+  return {
+    title: "Ratgeber",
+    description: "Geprüfte Orientierung für Bewerbung, Beruf und Arbeitsmarkt in der Schweiz.",
+    alternates: { canonical: "/guide" },
+    robots: indexable
+      ? { index: true, follow: true }
+      : { index: false, follow: false, noarchive: true, nosnippet: true },
+  };
+}
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -22,7 +28,7 @@ export default async function GuideIndexPage() {
     <div className="page-shell py-12 sm:py-16">
       <p className="eyebrow">Ratgeber</p>
       <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">Orientierung, die dich weiterbringt.</h1>
-      <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">Hier erscheinen ausschliesslich aktuell publizierte und redaktionell geprüfte Beiträge. Die Suchmaschinenfreigabe erfolgt erst mit dem späteren Inhalts- und Qualitätsgate.</p>
+      <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">Hier erscheinen ausschliesslich aktuell publizierte und redaktionell geprüfte Beiträge.</p>
       {guides.length === 0 ? (
         <div className="mt-10 rounded-xl border border-dashed bg-muted/25 p-10 text-center text-muted-foreground">Aktuell sind keine geprüften Ratgeber veröffentlicht.</div>
       ) : (

@@ -2,13 +2,19 @@ import type { Metadata } from "next";
 
 import { SalaryRadarForm } from "@/components/public/salary-radar-form";
 import { getPublicCatalog } from "@/lib/jobs/public-read-model";
+import { getPublicDataContext } from "@/lib/public/environment";
 
-export const metadata: Metadata = {
-  title: "Lohn-Radar",
-  description: "Nachvollziehbare Schweizer Lohnbänder nach Kategorie, Kanton, Seniorität und Pensum einordnen.",
-  alternates: { canonical: "/salary-radar" },
-  robots: { index: false, follow: true },
-};
+export function generateMetadata(): Metadata {
+  const indexable = getPublicDataContext().publicIndexingAllowed;
+  return {
+    title: "Lohn-Radar",
+    description: "Nachvollziehbare Schweizer Lohnbänder nach Kategorie, Kanton, Seniorität und Pensum einordnen.",
+    alternates: { canonical: "/salary-radar" },
+    robots: indexable
+      ? { index: true, follow: true }
+      : { index: false, follow: false, noarchive: true, nosnippet: true },
+  };
+}
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

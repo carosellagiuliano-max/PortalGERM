@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getServerEnvironment = vi.hoisted(() => vi.fn());
+const buildPublicSitemap = vi.hoisted(() => vi.fn());
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/config/env", () => ({ getServerEnvironment }));
+vi.mock("@/lib/seo/public-sitemap", () => ({ buildPublicSitemap }));
 
 import { metadata as employerBrandingMetadata } from "@/app/(public)/employers/employer-branding/page";
 import { metadata as employerDemoMetadata } from "@/app/(public)/employers/demo/page";
@@ -13,7 +15,10 @@ import { metadata as postJobMetadata } from "@/app/(public)/employers/post-job/p
 import { metadata as talentRadarMetadata } from "@/app/(public)/employers/talent-radar/page";
 import { metadata as xmlImportMetadata } from "@/app/(public)/employers/xml-import/page";
 import { metadata as pricingMetadata } from "@/app/(public)/pricing/page";
-import sitemap from "@/app/sitemap";
+import sitemap, {
+  dynamic as sitemapDynamicMode,
+  revalidate as sitemapRevalidate,
+} from "@/app/sitemap";
 
 const phase08Metadata = [
   {
@@ -72,21 +77,15 @@ const phase08Metadata = [
   metadata: Metadata;
 }>;
 
-const stableProductionPaths = [
-  "/",
-  "/jobs",
-  "/pricing",
-  "/employers",
-  "/employers/post-job",
-  "/employers/talent-radar",
-  "/employers/employer-branding",
-  "/employers/xml-import",
-  "/employers/demo",
-] as const;
-
 describe("Phase 08 metadata and sitemap policy", () => {
   beforeEach(() => {
     getServerEnvironment.mockReset();
+    buildPublicSitemap.mockReset();
+  });
+
+  it("forces request-time sitemap evaluation for expiry and revocation freshness", () => {
+    expect(sitemapDynamicMode).toBe("force-dynamic");
+    expect(sitemapRevalidate).toBe(0);
   });
 
   it.each(phase08Metadata)(
@@ -102,34 +101,32 @@ describe("Phase 08 metadata and sitemap policy", () => {
     },
   );
 
-  it("returns an empty sitemap in the local demo-data environment", () => {
+  it("returns an empty sitemap in the local demo-data environment", async () => {
     getServerEnvironment.mockReturnValue({
       APP_ENV: "local",
       APP_URL: "http://localhost:3000",
     });
 
-    expect(sitemap()).toEqual([]);
+    await expect(sitemap()).resolves.toEqual([]);
+    expect(buildPublicSitemap).not.toHaveBeenCalled();
   });
 
-  it("publishes exactly the stable Phase 08 route set in production", () => {
+  it("delegates the production sitemap to the Phase 15 canonical assembler", async () => {
     const origin = "https://swisstalenthub.example";
+    const assembled = [
+      { url: `${origin}/` },
+      { url: `${origin}/jobs` },
+    ];
     getServerEnvironment.mockReturnValue({
       APP_ENV: "production",
       APP_URL: origin,
     });
+    buildPublicSitemap.mockResolvedValue(assembled);
 
-    const entries = sitemap();
-
-    expect(entries).toEqual(
-      stableProductionPaths.map((path) => ({
-        url: new URL(path, origin).toString(),
-        changeFrequency: path === "/" || path === "/jobs" ? "daily" : "weekly",
-        priority:
-          path === "/" ? 1 : path === "/jobs" ? 0.9 : path === "/pricing" ? 0.8 : 0.7,
-      })),
-    );
-    expect(entries.map(({ url }) => new URL(url).pathname)).toEqual(
-      stableProductionPaths,
-    );
+    await expect(sitemap()).resolves.toEqual(assembled);
+    expect(buildPublicSitemap).toHaveBeenCalledWith({
+      origin,
+      now: expect.any(Date),
+    });
   });
 });

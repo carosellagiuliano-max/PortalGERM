@@ -32,21 +32,21 @@ describe("public job structured data", () => {
       "@context": "https://schema.org",
       "@type": "JobPosting",
       title: "Senior Engineer",
-      description: "Build & ship",
+      description: "Build & ship\n\nAufgaben\nBuild\n\nAnforderungen\nTypeScript\n\nBewerbungsprozess\nCV prüfen",
       datePosted: "2026-07-01T08:00:00.000Z",
       validThrough: "2026-08-31T22:00:00.000Z",
       employmentType: ["FULL_TIME", "PART_TIME"],
       hiringOrganization: {
         "@type": "Organization",
         name: "Acme & Partner",
-        sameAs: "https://talent.example/companies/acme",
+        sameAs: "https://acme.example/",
       },
       jobLocation: {
         "@type": "Place",
         address: {
           "@type": "PostalAddress",
           addressCountry: "CH",
-          addressRegion: "ZH",
+          addressRegion: "Zürich",
           addressLocality: "Zürich",
         },
       },
@@ -65,6 +65,46 @@ describe("public job structured data", () => {
     });
     expect(result).not.toHaveProperty("applicationContactValue");
     expect(result).not.toHaveProperty("applicationContactKind");
+  });
+
+  it.each([
+    ["YEARLY", "YEAR"],
+    ["MONTHLY", "MONTH"],
+    ["HOURLY", "HOUR"],
+  ] as const)(
+    "maps internal salary period %s to Google's case-sensitive %s unit",
+    (salaryPeriod, expectedUnit) => {
+      const result = buildPublicJobPostingJsonLd(
+        jobFixture({ salaryPeriod }),
+        "https://talent.example",
+      );
+
+      expect(result).toMatchObject({
+        baseSalary: {
+          value: { unitText: expectedUnit },
+        },
+      });
+    },
+  );
+
+  it("omits untrusted organization URLs instead of reflecting them", () => {
+    const fixture = jobFixture();
+    const result = buildPublicJobPostingJsonLd(
+      {
+        ...fixture,
+        company: {
+          ...fixture.company,
+          website: "javascript:alert(1)",
+          logoUrl: "https://cdn.example/acme.svg",
+        },
+      },
+      "https://talent.example",
+    );
+
+    expect(result.hiringOrganization).toEqual({
+      "@type": "Organization",
+      name: "Acme & Partner",
+    });
   });
 
   it("uses the remote-only schema fields and omits incomplete salary data", () => {
@@ -132,6 +172,8 @@ function jobFixture(
       slug: "acme",
       name: "Acme &amp; Partner",
       verified: true,
+      website: "https://acme.example",
+      logoUrl: "https://talent.example/company-logos/acme/logo.svg",
     },
     category: { id: "category-1", name: "IT", slug: "it" },
     canton: { id: "canton-zh", name: "Zürich", slug: "zuerich", code: "ZH" },

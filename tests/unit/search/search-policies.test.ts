@@ -8,12 +8,6 @@ import {
   type SearchCursorPayload,
 } from "@/lib/search/cursor";
 import { SPONSORED_PLACEMENT_CONFIG_V1 } from "@/lib/search/placement-config";
-import {
-  buildJobSearchWhere,
-  createSearchQueryHashV1,
-  jobSearchFiltersSchema,
-  organicSortOrder,
-} from "@/lib/search/query";
 import { calculateRelevanceProxy } from "@/lib/search/relevance";
 import {
   compareOrganicCursorTuples,
@@ -24,8 +18,6 @@ import {
 } from "@/lib/search/ranking";
 import type { JobSearchSort, RankingCandidate } from "@/lib/search/types";
 
-const ID = "11111111-1111-4111-8111-111111111111";
-const ID_2 = "22222222-2222-4222-8222-222222222222";
 const SECRET = "a-dedicated-context-bound-cursor-secret-v1";
 const RANKING_AS_OF = new Date("2026-07-19T12:00:00.000Z");
 
@@ -73,73 +65,7 @@ function rankedIds(sort: JobSearchSort, candidates: readonly RankingCandidate[])
   }).ranked.map(({ job: ranked }) => ranked.id);
 }
 
-describe("search query and relevance contracts", () => {
-  it("validates bounded filters and builds case-insensitive Prisma clauses", () => {
-    const filters = jobSearchFiltersSchema.parse({
-      query: "Engineer",
-      categoryIds: [ID],
-      workloadMin: 60,
-      salaryMin: 90_000,
-      salaryPeriod: "YEARLY",
-    });
-    const where = buildJobSearchWhere(filters);
-    expect(where).toMatchObject({
-      publishedRevision: { is: {
-        categoryId: { in: [ID] },
-        workloadMax: { gte: 60 },
-        salaryPeriod: "YEARLY",
-        salaryMax: { gte: 90_000 },
-      } },
-    });
-    expect((where.publishedRevision as { is: { OR: unknown[] } }).is.OR[0]).toEqual(
-      { title: { contains: "Engineer", mode: "insensitive" } },
-    );
-    expect(filters.pageSize).toBe(20);
-    expect(jobSearchFiltersSchema.safeParse({ pageSize: 51 }).success).toBe(false);
-    expect(jobSearchFiltersSchema.safeParse({ after: "x".repeat(4_097) }).success).toBe(false);
-    expect(jobSearchFiltersSchema.safeParse({ salaryMin: 90_000 }).success).toBe(false);
-    expect(jobSearchFiltersSchema.safeParse({ sort: "salary" }).success).toBe(false);
-  });
-
-  it("keeps regional and remote filters on the immutable published revision", () => {
-    const remoteWhere = buildJobSearchWhere(
-      jobSearchFiltersSchema.parse({ remoteTypes: ["REMOTE"] }),
-    );
-    const regionalWhere = buildJobSearchWhere(
-      jobSearchFiltersSchema.parse({ cantonIds: [ID] }),
-    );
-
-    expect(remoteWhere).toEqual({
-      publishedRevision: { is: { remoteType: { in: ["REMOTE"] } } },
-    });
-    expect(regionalWhere).toEqual({
-      publishedRevision: { is: { cantonId: { in: [ID] } } },
-    });
-  });
-
-  it("binds a cursor hash to normalized filters and sort, not page size", () => {
-    const first = jobSearchFiltersSchema.parse({
-      query: " Engineer ",
-      categoryIds: [ID_2, ID],
-      jobTypes: ["TEMPORARY", "PERMANENT"],
-      sort: "newest",
-      pageSize: 20,
-      after: "cursor-one",
-    });
-    const semanticallyEqual = jobSearchFiltersSchema.parse({
-      query: "engineer",
-      categoryIds: [ID, ID_2, ID],
-      jobTypes: ["PERMANENT", "TEMPORARY"],
-      sort: "newest",
-      pageSize: 5,
-      after: "cursor-two",
-    });
-    expect(createSearchQueryHashV1(first)).toBe(createSearchQueryHashV1(semanticallyEqual));
-    expect(createSearchQueryHashV1({ ...first, sort: "response" })).not.toBe(
-      createSearchQueryHashV1(first),
-    );
-  });
-
+describe("search relevance contract", () => {
   it("weights keyword hits title=3, company=2 and body=1", () => {
     expect(calculateRelevanceProxy("engineer", {
       title: "Engineer",
@@ -153,34 +79,6 @@ describe("search query and relevance contracts", () => {
     })).toEqual({ score: 0, tier: 0 });
   });
 
-  it("publishes every complete organic sort tuple", () => {
-    expect(organicSortOrder("relevance")).toEqual([
-      "relevanceTier:desc",
-      "relevanceScore:desc",
-      "fairScore:desc:nulls-last",
-      "publishedAt:desc",
-      "id:asc",
-    ]);
-    expect(organicSortOrder("newest")).toEqual(["publishedAt:desc", "id:asc"]);
-    expect(organicSortOrder("fair-score")).toEqual([
-      "fairScore:desc:nulls-last",
-      "publishedAt:desc",
-      "id:asc",
-    ]);
-    expect(organicSortOrder("salary")).toEqual([
-      "salaryMinChf:desc:nulls-last",
-      "salaryMaxChf:desc:nulls-last",
-      "publishedAt:desc",
-      "id:asc",
-    ]);
-    expect(organicSortOrder("response")).toEqual([
-      "responseEvidenceKnown:desc",
-      "onTimeRateBps:desc",
-      "medianFirstResponseMinutes:asc:nulls-last",
-      "publishedAt:desc",
-      "id:asc",
-    ]);
-  });
 });
 
 describe("canonical organic ordering", () => {

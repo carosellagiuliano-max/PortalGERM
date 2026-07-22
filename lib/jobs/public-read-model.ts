@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import type { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { ANALYTICS_MINIMUM_COHORT_SIZE_V1 } from "@/lib/analytics/metric-contracts";
 import { EMPLOYER_RESPONSE_POLICY_V1 } from "@/lib/analytics/response-policy-v1";
 import { jobHasActiveBoost } from "@/lib/billing/boosts";
@@ -15,7 +15,11 @@ import {
   type PublicEligibilitySnapshot,
 } from "@/lib/jobs/public-eligibility";
 import { getPublicDataContext } from "@/lib/public/environment";
-import type { PublicJobSearchInput } from "@/lib/public/query-params";
+import {
+  DEFAULT_PUBLIC_JOB_PAGE_SIZE,
+  hasBlockingPublicJobSearchIssue,
+  type PublicJobSearchInput,
+} from "@/lib/public/query-params";
 import type {
   PublicCatalog,
   PublicClusterLink,
@@ -25,19 +29,56 @@ import type {
   PublicResponseEvidence,
 } from "@/lib/public/types";
 import { decodeSearchCursor, encodeSearchCursor } from "@/lib/search/cursor";
-import { calculateRelevanceProxy } from "@/lib/search/relevance";
+import {
+  calculateRelevanceProxy,
+  normalizedSearchTerms,
+} from "@/lib/search/relevance";
 import {
   paginateSearchJobs,
   rankSearchJobs,
 } from "@/lib/search/ranking";
-import type { RankingCandidate } from "@/lib/search/types";
+import { projectCanonicalResponseMedianMinutes } from "@/lib/search/response-evidence";
+import type {
+  JobSearchSort,
+  OrganicCursorTuple,
+  RankingCandidate,
+} from "@/lib/search/types";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
 
-/** Deliberate ranking-workset safety cap for public discovery. */
-const MAXIMUM_SEARCH_CANDIDATES = 2_000;
-const DEFAULT_PAGE_SIZE = 20;
+/** Bound used only by non-paginated supporting surfaces such as Company cards. */
+const MAXIMUM_BOUNDED_JOB_CANDIDATES = 2_000;
 const EXACT_COUNT_SCAN_BATCH_SIZE = 500;
 const EXACT_COUNT_TRANSACTION_TIMEOUT_MS = 30_000;
+const RESPONSE_COMPANY_BATCH_SIZE = 100;
+const MAXIMUM_SEARCH_PAGE_SIZE = 50;
+const MAXIMUM_SPONSORED_SEARCH_RESULTS = 3;
+const MAXIMUM_SEARCH_PAGE_HYDRATION =
+  MAXIMUM_SEARCH_PAGE_SIZE + 1 + MAXIMUM_SPONSORED_SEARCH_RESULTS;
+const DAY_MS = 86_400_000;
+const SEARCH_COMBINING_MARK_PATTERN = "[\u0300-\u036f]";
+const UUID_REFERENCE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
+export type PublicSearchRankingFailureCode =
+  | "COUNT_OVERFLOW"
+  | "DATABASE_RESULT_BOUND_EXCEEDED"
+  | "DUPLICATE_RANKED_JOB"
+  | "HYDRATION_MISMATCH"
+  | "RANKING_PROJECTION_DRIFT"
+  | "RESPONSE_PROJECTION_CHANGED";
+
+/**
+ * Typed fail-closed boundary for the SQL ranking/card projection contract.
+ * Callers must never silently serve a partial or differently ordered page.
+ */
+export class PublicSearchRankingContractError extends Error {
+  readonly code: PublicSearchRankingFailureCode;
+
+  constructor(code: PublicSearchRankingFailureCode, message: string) {
+    super(message);
+    this.name = "PublicSearchRankingContractError";
+    this.code = code;
+  }
+}
 
 export const PUBLIC_CLUSTER_DISCOVERY_POLICY_V1 = Object.freeze({
   version: "v1",
@@ -63,6 +104,7 @@ const PUBLIC_JOB_ELIGIBILITY_SELECT = {
   companyId: true,
   status: true,
   dataProvenance: true,
+  currentRevisionId: true,
   publishedRevisionId: true,
   publishedAt: true,
   expiresAt: true,
@@ -84,6 +126,7 @@ const PUBLIC_JOB_ELIGIBILITY_SELECT = {
       title: true,
       description: true,
       categoryId: true,
+      category: { select: { isActive: true } },
       cantonId: true,
       cityId: true,
       salaryPeriod: true,
@@ -122,7 +165,7 @@ const PUBLIC_JOB_CARD_BASE_SELECT = {
     select: {
       ...PUBLIC_JOB_ELIGIBILITY_SELECT.publishedRevision.select,
       contentLanguage: true,
-      category: { select: { id: true, name: true, slug: true } },
+      category: { select: { id: true, name: true, slug: true, isActive: true } },
       canton: { select: { id: true, code: true, name: true, slug: true } },
       city: { select: { id: true, name: true, slug: true } },
       locationLabel: true,
@@ -153,12 +196,27 @@ function buildPublicJobCardSelect(now: Date) {
   } as const satisfies Prisma.JobSelect;
 }
 
+function buildPublicJobSearchSelect(now: Date) {
+  const cardSelect = buildPublicJobCardSelect(now);
+  return {
+    ...cardSelect,
+    publishedRevision: {
+      select: {
+        ...cardSelect.publishedRevision.select,
+        tasks: true,
+        requirements: true,
+        offer: true,
+      },
+    },
+  } as const satisfies Prisma.JobSelect;
+}
+
 const PUBLIC_JOB_CLUSTER_SELECT = {
   ...PUBLIC_JOB_ELIGIBILITY_SELECT,
   publishedRevision: {
     select: {
       ...PUBLIC_JOB_ELIGIBILITY_SELECT.publishedRevision.select,
-      category: { select: { id: true, name: true, slug: true } },
+      category: { select: { id: true, name: true, slug: true, isActive: true } },
       canton: { select: { id: true, code: true, name: true, slug: true } },
     },
   },
@@ -205,6 +263,12 @@ function buildPublicJobDetailSelect(now: Date) {
   const cardSelect = buildPublicJobCardSelect(now);
   return {
     ...cardSelect,
+    company: {
+      select: {
+        ...cardSelect.company.select,
+        website: true,
+      },
+    },
     publishedRevision: {
       select: {
         ...cardSelect.publishedRevision.select,
@@ -251,6 +315,9 @@ type PublicJobLoadScope = Readonly<{
   slug?: string;
   companyId?: string;
   companyIds?: readonly string[];
+  publishedCategoryIds?: readonly string[];
+  publishedCantonIds?: readonly string[];
+  publishedCityIds?: readonly string[];
   take?: number;
   publishedAtUpperBound?: Date;
 }>;
@@ -260,6 +327,63 @@ type LoadedJobs = Readonly<{
   rowById: ReadonlyMap<string, EligiblePublicJobRow>;
   candidates: readonly RankingCandidate[];
   candidateSetTruncated: boolean;
+}>;
+
+type LoadedSearchPage = Readonly<{
+  rows: readonly EligiblePublicJobRow[];
+  rowById: ReadonlyMap<string, EligiblePublicJobRow>;
+  page: ReturnType<typeof paginateSearchJobs> & Readonly<{ totalEligible: number }>;
+}>;
+
+type DatabaseRankingRow = Readonly<{
+  id: string;
+  relevanceTier: number;
+  relevanceScore: number;
+  fairScore: number | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  responseEvidenceKnown: boolean;
+  onTimeRateBps: number | null;
+  medianFirstResponseMinutes: number | null;
+  publishedAt: Date;
+  activeBoost: boolean;
+}>;
+
+type DatabaseSponsoredEnvelopeRow = Readonly<{
+  id: string | null;
+  relevanceTier: number | null;
+  relevanceScore: number | null;
+  fairScore: number | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  responseEvidenceKnown: boolean | null;
+  onTimeRateBps: number | null;
+  medianFirstResponseMinutes: number | null;
+  publishedAt: Date | null;
+  activeBoost: boolean | null;
+  totalEligible: bigint | number | string;
+  responseProjectionFingerprint: string;
+}>;
+
+type RadiusCenter = Readonly<{
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+}>;
+
+type PublishedProjectionFilters = Readonly<{
+  categoryIds: readonly string[];
+  cantonIds: readonly string[];
+  cityIds: readonly string[];
+}>;
+
+type DatabaseSearchQueryContext = Readonly<{
+  input: PublicJobSearchInput;
+  now: Date;
+  rankingAsOf: Date;
+  liveOnly: boolean;
+  projectionFilters: PublishedProjectionFilters;
+  radiusCenter: RadiusCenter | null | undefined;
 }>;
 
 type BoundedEligibleRows<Row extends PublicJobEligibilityRow> = Readonly<{
@@ -280,6 +404,8 @@ export function emptyPublicJobSearchInput(): PublicJobSearchInput {
     responseEvidenceOnly: false,
     companyVerifiedOnly: false,
     sort: "relevance",
+    pageSize: DEFAULT_PUBLIC_JOB_PAGE_SIZE,
+    validationIssues: Object.freeze([]),
   });
 }
 
@@ -287,47 +413,61 @@ export async function listPublicJobs(
   input: PublicJobSearchInput,
   options: Readonly<{ pageSize?: number; now?: Date }> = {},
 ): Promise<PublicJobSearchPage> {
-  const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+  const pageSize = options.pageSize ?? input.pageSize;
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) {
     throw new RangeError("Public job page size must be between 1 and 50.");
   }
+  if (hasBlockingPublicJobSearchIssue(input) ||
+      ((input.salaryMin !== undefined || input.sort === "salary") &&
+        input.salaryPeriod === undefined)) {
+    return emptyPublicJobSearchPage();
+  }
   const now = validNow(options.now);
   const queryHash = createPublicSearchQueryHash(input);
-  const decoded = input.cursor
+  const decoded = input.after
     ? withCursorSecret((secret) =>
-        decodeSearchCursor(input.cursor as string, {
+        decodeSearchCursor(input.after as string, {
           queryHash,
           sort: input.sort,
           secret,
         }),
       )
     : undefined;
-  const invalidCursor = input.cursor !== undefined && decoded === null;
+  let invalidCursor = input.after !== undefined && decoded === null;
   const rankingAsOf = decoded === undefined || decoded === null
     ? now
     : new Date(decoded.rankingAsOf);
-  const loaded = await loadEligibleJobs(input, now, {
-    publishedAtUpperBound: rankingAsOf,
-  });
-  const page = paginateSearchJobs({
-    candidates: loaded.candidates,
-    sort: input.sort,
-    hasQuery: Boolean(input.keyword),
-    pageSize,
-    queryHash,
-    rankingAsOf,
-    ...(decoded === undefined || decoded === null ? {} : { cursor: decoded }),
-  });
+  let loaded: LoadedSearchPage;
+  try {
+    loaded = await loadExactSearchPage(input, now, {
+      pageSize,
+      queryHash,
+      rankingAsOf,
+      ...(decoded === undefined || decoded === null ? {} : { cursor: decoded }),
+    });
+  } catch (error) {
+    if (!(error instanceof PublicSearchRankingContractError) ||
+        error.code !== "RESPONSE_PROJECTION_CHANGED" ||
+        input.sort !== "response" || decoded === undefined || decoded === null) {
+      throw error;
+    }
+    // Response projections are mutable unlike revision-owned ranking fields.
+    // A signed fingerprint mismatch safely restarts instead of serving a page
+    // with possible duplicates or gaps under a stale response tuple.
+    invalidCursor = true;
+    loaded = await loadExactSearchPage(input, now, {
+      pageSize,
+      queryHash,
+      rankingAsOf: now,
+    });
+  }
+  const page = loaded.page;
   const jobs = page.ranked.flatMap((entry) => {
     const row = loaded.rowById.get(entry.job.id);
     return row === undefined
       ? []
       : [toCardModel(row, now, entry.sponsored)];
   });
-  const totalEligible = input.keyword
-    ? loaded.candidates.filter((candidate) => candidate.relevanceScore > 0).length
-    : loaded.candidates.length;
-
   return Object.freeze({
     jobs: Object.freeze(jobs),
     nextCursor:
@@ -336,10 +476,21 @@ export async function listPublicJobs(
         : withCursorSecret((secret) =>
             encodeSearchCursor(page.nextCursorPayload!, secret),
           ),
-    totalEligible,
-    resultCountIsExact: !loaded.candidateSetTruncated,
-    candidateSetTruncated: loaded.candidateSetTruncated,
+    totalEligible: page.totalEligible,
+    resultCountIsExact: true,
+    candidateSetTruncated: false,
     invalidCursor,
+  });
+}
+
+function emptyPublicJobSearchPage(): PublicJobSearchPage {
+  return Object.freeze({
+    jobs: Object.freeze([]),
+    nextCursor: null,
+    totalEligible: 0,
+    resultCountIsExact: true,
+    candidateSetTruncated: false,
+    invalidCursor: false,
   });
 }
 
@@ -501,6 +652,1021 @@ export async function listPublicClusterLinks(
   );
 }
 
+/**
+ * ADR-003 global ranking path. PostgreSQL selects the complete ranking tuple
+ * before LIMIT: one bounded sponsor query (also carrying the exact count and
+ * response-projection fingerprint), then one organic keyset query with only
+ * pageSize+1 IDs. At most 54 card rows cross the database boundary.
+ */
+async function loadExactSearchPage(
+  input: PublicJobSearchInput,
+  now: Date,
+  pagination: Readonly<{
+    pageSize: number;
+    queryHash: string;
+    rankingAsOf: Date;
+    cursor?: NonNullable<ReturnType<typeof decodeSearchCursor>>;
+  }>,
+): Promise<LoadedSearchPage> {
+  const database = getDatabase();
+  const dataContext = getPublicDataContext();
+  return database.$transaction(
+    async (transaction) => {
+      const projectionFilters = await resolvePublishedProjectionFilters(
+        transaction,
+        input,
+      );
+      if (projectionFilters === null) {
+        return emptyLoadedSearchPage(input, pagination);
+      }
+      const radiusCenter = input.radiusKm === undefined
+        ? undefined
+        : await resolveRadiusCenter(
+            transaction,
+            input,
+            projectionFilters.cityIds,
+          );
+      if (input.radiusKm !== undefined && radiusCenter === null) {
+        return emptyLoadedSearchPage(input, pagination);
+      }
+
+      const queryContext = Object.freeze({
+        input,
+        now,
+        rankingAsOf: pagination.rankingAsOf,
+        liveOnly: dataContext.liveOnly,
+        projectionFilters,
+        radiusCenter,
+      });
+      const firstPage = pagination.cursor === undefined;
+      const sponsorEnvelope = await loadDatabaseSponsoredRankingEnvelope(
+        transaction,
+        queryContext,
+        firstPage
+          ? Math.min(pagination.pageSize, MAXIMUM_SPONSORED_SEARCH_RESULTS)
+          : 0,
+      );
+      const totalEligible = exactSearchCount(sponsorEnvelope);
+      const responseProjectionFingerprint =
+        sponsorEnvelope[0]?.responseProjectionFingerprint ?? "";
+      if (input.sort === "response" && pagination.cursor !== undefined &&
+          pagination.cursor.responseProjectionFingerprint !==
+            responseProjectionFingerprint) {
+        throw new PublicSearchRankingContractError(
+          "RESPONSE_PROJECTION_CHANGED",
+          "Employer response evidence changed during cursor pagination.",
+        );
+      }
+      const sponsoredRows = firstPage
+        ? sponsorEnvelope.flatMap(toSponsoredRankingRow)
+        : [];
+      if (sponsoredRows.length > Math.min(
+        pagination.pageSize,
+        MAXIMUM_SPONSORED_SEARCH_RESULTS,
+      )) {
+        throw new PublicSearchRankingContractError(
+          "DATABASE_RESULT_BOUND_EXCEEDED",
+          "The sponsored ranking query exceeded its formal result bound.",
+        );
+      }
+      const selectedSponsoredIds = firstPage
+        ? sponsoredRows.map(({ id }) => id)
+        : [...new Set(pagination.cursor?.sponsoredIds ?? [])];
+      const organicRows = await loadDatabaseOrganicRankingRows(
+        transaction,
+        queryContext,
+        pagination.cursor?.organicTuple ?? null,
+        selectedSponsoredIds,
+        pagination.pageSize + 1,
+      );
+      if (organicRows.length > pagination.pageSize + 1) {
+        throw new PublicSearchRankingContractError(
+          "DATABASE_RESULT_BOUND_EXCEEDED",
+          "The organic ranking query exceeded pageSize+1.",
+        );
+      }
+      const rankingRows = [...sponsoredRows, ...organicRows];
+      const rankedIds = rankingRows.map(({ id }) => id);
+      const uniqueIds = [...new Set(rankedIds)];
+      if (uniqueIds.length !== rankedIds.length) {
+        throw new PublicSearchRankingContractError(
+          "DUPLICATE_RANKED_JOB",
+          "A database-ranked Job appeared in both ranking zones.",
+        );
+      }
+      if (uniqueIds.length > MAXIMUM_SEARCH_PAGE_HYDRATION) {
+        throw new PublicSearchRankingContractError(
+          "DATABASE_RESULT_BOUND_EXCEEDED",
+          "The search card hydration bound was exceeded.",
+        );
+      }
+
+      const hydrated = uniqueIds.length === 0
+        ? []
+        : await transaction.job.findMany({
+            where: {
+              ...buildPublicJobWhere(input, now, dataContext.liveOnly, {
+                publishedAtUpperBound: pagination.rankingAsOf,
+                ...(projectionFilters.categoryIds.length === 0
+                  ? {}
+                  : { publishedCategoryIds: projectionFilters.categoryIds }),
+                ...(projectionFilters.cantonIds.length === 0
+                  ? {}
+                  : { publishedCantonIds: projectionFilters.cantonIds }),
+                ...(projectionFilters.cityIds.length === 0
+                  ? {}
+                  : { publishedCityIds: projectionFilters.cityIds }),
+              }),
+              id: { in: uniqueIds },
+            },
+            orderBy: { id: "asc" },
+            take: uniqueIds.length,
+            select: buildPublicJobCardSelect(now),
+          });
+      const eligibleRows = await filterEligibleRows(
+        hydrated,
+        now,
+        dataContext.eligibilityEnvironment,
+        transaction,
+      );
+      if (eligibleRows.length !== uniqueIds.length) {
+        throw new PublicSearchRankingContractError(
+          "HYDRATION_MISMATCH",
+          "The SQL ranking eligibility contract disagreed with the canonical evaluator.",
+        );
+      }
+      const rowById = new Map(eligibleRows.map((row) => [row.id, row]));
+      const responseMedianByCompany = new Map<string, number | null>();
+      if (input.sort === "response") {
+        await loadCanonicalResponseMedians(
+          transaction,
+          eligibleRows,
+          pagination.rankingAsOf,
+          responseMedianByCompany,
+        );
+      }
+      const candidates = rankingRows.map((rankingRow) => {
+        const row = rowById.get(rankingRow.id);
+        if (row === undefined) {
+          throw new PublicSearchRankingContractError(
+            "HYDRATION_MISMATCH",
+            "A database-ranked Job was not hydrated.",
+          );
+        }
+        return toDatabaseRankingCandidate(
+          row,
+          rankingRow,
+          now,
+          responseMedianByCompany,
+        );
+      });
+      const paginated = paginateSearchJobs({
+        candidates,
+        sort: input.sort,
+        hasQuery: Boolean(input.keyword),
+        pageSize: pagination.pageSize,
+        queryHash: pagination.queryHash,
+        rankingAsOf: pagination.rankingAsOf,
+        ...(pagination.cursor === undefined ? {} : { cursor: pagination.cursor }),
+      });
+      const expectedIds = (firstPage
+        ? [...sponsoredRows, ...organicRows]
+        : organicRows)
+        .slice(0, pagination.pageSize)
+        .map(({ id }) => id);
+      const actualIds = paginated.ranked.map(({ job }) => job.id);
+      if (!sameStringSequence(expectedIds, actualIds)) {
+        throw new PublicSearchRankingContractError(
+          "RANKING_PROJECTION_DRIFT",
+          "The database and in-process ranking tuples disagree.",
+        );
+      }
+      const nextCursorPayload = paginated.nextCursorPayload === null
+        ? null
+        : Object.freeze({
+            ...paginated.nextCursorPayload,
+            ...(input.sort === "response"
+              ? { responseProjectionFingerprint }
+              : {}),
+          });
+      const pageRows = actualIds.map((id) => rowById.get(id)!);
+      return Object.freeze({
+        rows: Object.freeze(pageRows),
+        rowById: new Map(pageRows.map((row) => [row.id, row])),
+        page: Object.freeze({
+          ...paginated,
+          nextCursorPayload,
+          totalEligible,
+        }),
+      });
+    },
+    {
+      isolationLevel: "RepeatableRead",
+      timeout: EXACT_COUNT_TRANSACTION_TIMEOUT_MS,
+    },
+  );
+}
+
+async function resolvePublishedProjectionFilters(
+  transaction: PublicReadTransaction,
+  input: PublicJobSearchInput,
+): Promise<PublishedProjectionFilters | null> {
+  const categories = input.categorySlugs.length === 0
+    ? []
+    : await transaction.category.findMany({
+        where: { isActive: true, ...catalogIdentityWhere(input.categorySlugs) },
+        orderBy: { id: "asc" },
+        select: { id: true },
+      });
+  const cantons = input.cantonSlugs.length === 0
+    ? []
+    : await transaction.canton.findMany({
+        where: { isActive: true, ...catalogIdentityWhere(input.cantonSlugs) },
+        orderBy: { id: "asc" },
+        select: { id: true },
+      });
+  const cities = input.citySlugs.length === 0
+    ? []
+    : await transaction.city.findMany({
+        where: {
+          isActive: true,
+          ...catalogIdentityWhere(input.citySlugs),
+          ...(input.cantonSlugs.length === 0
+            ? {}
+            : { cantonId: { in: cantons.map(({ id }) => id) } }),
+        },
+        orderBy: { id: "asc" },
+        select: { id: true },
+      });
+  if ((input.categorySlugs.length > 0 && categories.length === 0) ||
+      (input.cantonSlugs.length > 0 && cantons.length === 0) ||
+      (input.citySlugs.length > 0 && cities.length === 0)) {
+    return null;
+  }
+  return Object.freeze({
+    categoryIds: Object.freeze(categories.map(({ id }) => id)),
+    cantonIds: Object.freeze(cantons.map(({ id }) => id)),
+    cityIds: Object.freeze(cities.map(({ id }) => id)),
+  });
+}
+
+async function resolveRadiusCenter(
+  transaction: PublicReadTransaction,
+  input: PublicJobSearchInput,
+  cityIds: readonly string[],
+): Promise<RadiusCenter | null> {
+  if (input.radiusKm === undefined || input.citySlugs.length !== 1 || cityIds.length !== 1) {
+    return null;
+  }
+  const rows = await transaction.city.findMany({
+    where: { id: cityIds[0] },
+    orderBy: { id: "asc" },
+    take: 2,
+    select: { latitude: true, longitude: true },
+  });
+  const center = rows[0];
+  if (rows.length !== 1 || center === undefined ||
+      center.latitude === null || center.longitude === null) {
+    return null;
+  }
+  const latitude = Number(center.latitude);
+  const longitude = Number(center.longitude);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+      !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    return null;
+  }
+  return Object.freeze({ latitude, longitude, radiusKm: input.radiusKm });
+}
+
+async function loadDatabaseSponsoredRankingEnvelope(
+  transaction: PublicReadTransaction,
+  context: DatabaseSearchQueryContext,
+  limit: number,
+): Promise<readonly DatabaseSponsoredEnvelopeRow[]> {
+  const ctes = buildDatabaseRankingCtes(
+    context,
+    context.input.sort === "response",
+  );
+  const rows = await transaction.$queryRaw<readonly DatabaseSponsoredEnvelopeRow[]>(Prisma.sql`
+    WITH ${ctes},
+    counted AS MATERIALIZED (
+      SELECT COUNT(*)::bigint AS "totalEligible" FROM ranked_candidates
+    ),
+    response_projection_version AS MATERIALIZED (
+      SELECT md5(COALESCE(string_agg(
+        concat_ws(':',
+          projection."companyId"::text,
+          projection."responseEvidenceKnown"::text,
+          COALESCE(projection."onTimeRateBps"::text, 'null'),
+          COALESCE(projection."medianFirstResponseMinutes"::text, 'null')
+        ),
+        '|' ORDER BY projection."companyId"
+      ), '')) AS "responseProjectionFingerprint"
+      FROM (
+        SELECT DISTINCT candidate."companyId",
+          candidate."responseEvidenceKnown",
+          candidate."onTimeRateBps",
+          candidate."medianFirstResponseMinutes"
+        FROM ranked_candidates AS candidate
+      ) AS projection
+    ),
+    sponsored AS MATERIALIZED (
+      SELECT ranked.*,
+        row_number() OVER (
+          ORDER BY ranked."relevanceTier" DESC,
+            ranked."relevanceScore" DESC,
+            ranked."fairScore" DESC NULLS LAST,
+            ranked."publishedAt" DESC,
+            ranked."id" ASC
+        ) AS "sponsorOrder"
+      FROM ranked_candidates AS ranked
+      WHERE ranked."activeBoost"
+      ORDER BY ranked."relevanceTier" DESC,
+        ranked."relevanceScore" DESC,
+        ranked."fairScore" DESC NULLS LAST,
+        ranked."publishedAt" DESC,
+        ranked."id" ASC
+      LIMIT ${limit}
+    )
+    SELECT sponsored."id",
+      sponsored."relevanceTier",
+      sponsored."relevanceScore",
+      sponsored."fairScore",
+      sponsored."salaryMin",
+      sponsored."salaryMax",
+      sponsored."responseEvidenceKnown",
+      sponsored."onTimeRateBps",
+      sponsored."medianFirstResponseMinutes",
+      sponsored."publishedAt",
+      sponsored."activeBoost",
+      counted."totalEligible",
+      response_projection_version."responseProjectionFingerprint"
+    FROM counted
+    CROSS JOIN response_projection_version
+    LEFT JOIN sponsored ON TRUE
+    ORDER BY sponsored."sponsorOrder" ASC NULLS LAST
+  `);
+  const maximumRows = Math.max(1, limit);
+  if (rows.length === 0 || rows.length > maximumRows) {
+    throw new PublicSearchRankingContractError(
+      "DATABASE_RESULT_BOUND_EXCEEDED",
+      "The sponsor/count envelope violated its formal row bound.",
+    );
+  }
+  return Object.freeze([...rows]);
+}
+
+async function loadDatabaseOrganicRankingRows(
+  transaction: PublicReadTransaction,
+  context: DatabaseSearchQueryContext,
+  after: OrganicCursorTuple | null,
+  sponsoredIds: readonly string[],
+  limit: number,
+): Promise<readonly DatabaseRankingRow[]> {
+  const ctes = buildDatabaseRankingCtes(
+    context,
+    context.input.sort === "response",
+  );
+  const cursorPredicate = databaseOrganicCursorPredicate(context.input.sort, after);
+  const sponsorPredicate = databaseSponsoredExclusionPredicate(sponsoredIds);
+  const orderBy = databaseOrganicOrderBy(context.input.sort);
+  const rows = await transaction.$queryRaw<readonly DatabaseRankingRow[]>(Prisma.sql`
+    WITH ${ctes}
+    SELECT ranked."id",
+      ranked."relevanceTier",
+      ranked."relevanceScore",
+      ranked."fairScore",
+      ranked."salaryMin",
+      ranked."salaryMax",
+      ranked."responseEvidenceKnown",
+      ranked."onTimeRateBps",
+      ranked."medianFirstResponseMinutes",
+      ranked."publishedAt",
+      ranked."activeBoost"
+    FROM ranked_candidates AS ranked
+    WHERE ${sponsorPredicate}
+      AND ${cursorPredicate}
+    ORDER BY ${orderBy}
+    LIMIT ${limit}
+  `);
+  if (rows.length > limit) {
+    throw new PublicSearchRankingContractError(
+      "DATABASE_RESULT_BOUND_EXCEEDED",
+      "The organic ranking result exceeded its formal row bound.",
+    );
+  }
+  return Object.freeze([...rows]);
+}
+
+function buildDatabaseRankingCtes(
+  context: DatabaseSearchQueryContext,
+  includeCanonicalResponse: boolean,
+): Prisma.Sql {
+  const terms = context.input.keyword === undefined
+    ? []
+    : normalizedSearchTerms(context.input.keyword);
+  const titleText = normalizedDatabaseSearchText(Prisma.raw('revision."title"'));
+  const companyText = normalizedDatabaseSearchText(Prisma.raw('company."name"'));
+  const bodyText = normalizedDatabaseSearchText(Prisma.sql`
+    concat_ws(E'\\n',
+      revision."description",
+      array_to_string(revision."tasks", E'\\n'),
+      array_to_string(revision."requirements", E'\\n'),
+      revision."offer"
+    )
+  `);
+  const relevanceScore = Prisma.sql`(
+    ${databaseWeightedMatchScore(titleText, terms, 3)}
+    + ${databaseWeightedMatchScore(companyText, terms, 2)}
+    + ${databaseWeightedMatchScore(bodyText, terms, 1)}
+  )`;
+  const relevanceTier = Prisma.sql`(
+    ${databaseFieldMatchTier(titleText, terms)}
+    + ${databaseFieldMatchTier(companyText, terms)}
+    + ${databaseFieldMatchTier(bodyText, terms)}
+  )`;
+  const predicates = databaseSearchPredicates(context);
+  const keywordGate = context.input.keyword === undefined
+    ? Prisma.sql`TRUE`
+    : Prisma.sql`source."relevanceScore" > 0`;
+  const source = Prisma.sql`
+    candidate_source AS MATERIALIZED (
+      SELECT job."id",
+        job."companyId",
+        job."publishedAt",
+        revision."salaryMin" AS "salaryMin",
+        revision."salaryMax" AS "salaryMax",
+        score."scorePoints" AS "fairScore",
+        ${relevanceTier}::integer AS "relevanceTier",
+        ${relevanceScore}::integer AS "relevanceScore",
+        EXISTS (
+          SELECT 1
+          FROM "JobBoost" AS boost
+          WHERE boost."jobId" = job."id"
+            AND boost."companyId" = job."companyId"
+            AND boost."status" <> 'CANCELLED'::"BoostStatus"
+            AND boost."cancelledAt" IS NULL
+            AND boost."startsAt" <= ${context.now}
+            AND boost."endsAt" > ${context.now}
+        ) AS "activeBoost",
+        company."responseTargetDays" AS "responseTargetDays",
+        company."responseSampleSize" AS "responseSampleSize",
+        company."responseWithinTargetBps" AS "responseWithinTargetBps",
+        (
+          company."responseSampleSize" >= ${ANALYTICS_MINIMUM_COHORT_SIZE_V1}
+          AND company."responseTargetDays" BETWEEN
+            ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
+            AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
+          AND company."responseWithinTargetBps" BETWEEN 0 AND 10000
+        ) AS "responseProjectionKnown"
+      FROM "Job" AS job
+      JOIN "JobRevision" AS revision
+        ON revision."id" = job."publishedRevisionId"
+        AND revision."jobId" = job."id"
+      JOIN "Company" AS company ON company."id" = job."companyId"
+      JOIN "Category" AS category ON category."id" = revision."categoryId"
+      LEFT JOIN "City" AS city ON city."id" = job."publishedCityId"
+      LEFT JOIN "JobScoreSnapshot" AS score
+        ON score."jobRevisionId" = revision."id"
+        AND score."scoreVersion" = 'v2'
+      WHERE ${Prisma.join(predicates, " AND ")}
+    ),
+    search_candidates AS MATERIALIZED (
+      SELECT source.* FROM candidate_source AS source WHERE ${keywordGate}
+    )
+  `;
+  if (!includeCanonicalResponse) {
+    return Prisma.sql`${source},
+      ranked_candidates AS MATERIALIZED (
+        SELECT candidate.*,
+          candidate."responseProjectionKnown" AS "responseEvidenceKnown",
+          CASE WHEN candidate."responseProjectionKnown"
+            THEN candidate."responseWithinTargetBps" ELSE NULL
+          END AS "onTimeRateBps",
+          NULL::integer AS "medianFirstResponseMinutes"
+        FROM search_candidates AS candidate
+      )`;
+  }
+
+  const responseWindowStart = new Date(
+    context.rankingAsOf.getTime() - EMPLOYER_RESPONSE_POLICY_V1.rollingWindowDays * DAY_MS,
+  );
+  return Prisma.sql`${source},
+    response_cases AS MATERIALIZED (
+      SELECT response_job."companyId" AS "companyId",
+        application."id" AS "applicationId",
+        application."submittedAt" AS "submittedAt",
+        snapshot."responseTargetDays" AS "caseTargetDays",
+        first_response."createdAt" AS "firstResponseAt"
+      FROM (
+        SELECT DISTINCT candidate."companyId" FROM search_candidates AS candidate
+      ) AS candidate_company
+      JOIN "Job" AS response_job
+        ON response_job."companyId" = candidate_company."companyId"
+      JOIN "Application" AS application
+        ON application."jobId" = response_job."id"
+      JOIN "CandidateProfile" AS candidate_profile
+        ON candidate_profile."id" = application."candidateProfileId"
+      JOIN "User" AS candidate_user
+        ON candidate_user."id" = candidate_profile."userId"
+      LEFT JOIN "ApplicationSubmissionSnapshot" AS snapshot
+        ON snapshot."applicationId" = application."id"
+      LEFT JOIN LATERAL (
+        SELECT event."createdAt"
+        FROM "ApplicationEvent" AS event
+        WHERE event."applicationId" = application."id"
+          AND event."kind" IN (
+            'STATUS_CHANGE'::"ApplicationEventKind",
+            'MESSAGE_SENT'::"ApplicationEventKind"
+          )
+          AND event."actorUserId" IS NOT NULL
+          AND event."actorUserId" <> candidate_profile."userId"
+          AND event."createdAt" >= application."submittedAt"
+          AND event."createdAt" >= ${responseWindowStart}
+          AND event."createdAt" < ${context.rankingAsOf}
+        ORDER BY event."createdAt" ASC, event."id" ASC
+        LIMIT 1
+      ) AS first_response ON TRUE
+      WHERE application."submittedAt" >= ${responseWindowStart}
+        AND application."submittedAt" < ${context.rankingAsOf}
+        AND candidate_user."dataProvenance" = 'LIVE'::"DataProvenance"
+    ),
+    response_aggregates AS MATERIALIZED (
+      SELECT response_case."companyId",
+        (COUNT(*) FILTER (WHERE
+          response_case."caseTargetDays" BETWEEN
+            ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
+            AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
+          AND response_case."submittedAt"
+            + response_case."caseTargetDays" * INTERVAL '1 day'
+            <= ${context.rankingAsOf}
+        ))::integer AS "dueCases",
+        (COUNT(*) FILTER (WHERE
+          response_case."caseTargetDays" BETWEEN
+            ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
+            AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
+          AND response_case."submittedAt"
+            + response_case."caseTargetDays" * INTERVAL '1 day'
+            <= ${context.rankingAsOf}
+          AND response_case."firstResponseAt" IS NOT NULL
+        ))::integer AS "respondedCases",
+        (COUNT(*) FILTER (WHERE
+          response_case."caseTargetDays" BETWEEN
+            ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
+            AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
+          AND response_case."submittedAt"
+            + response_case."caseTargetDays" * INTERVAL '1 day'
+            <= ${context.rankingAsOf}
+          AND response_case."firstResponseAt" IS NOT NULL
+          AND response_case."firstResponseAt" <= response_case."submittedAt"
+            + response_case."caseTargetDays" * INTERVAL '1 day'
+        ))::integer AS "onTimeCases",
+        percentile_cont(0.5) WITHIN GROUP (
+          ORDER BY floor(extract(epoch FROM (
+            response_case."firstResponseAt" - response_case."submittedAt"
+          )) / 60.0)
+        ) FILTER (WHERE
+          response_case."caseTargetDays" BETWEEN
+            ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
+            AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
+          AND response_case."submittedAt"
+            + response_case."caseTargetDays" * INTERVAL '1 day'
+            <= ${context.rankingAsOf}
+          AND response_case."firstResponseAt" IS NOT NULL
+        ) AS "medianResponseMinutes"
+      FROM response_cases AS response_case
+      GROUP BY response_case."companyId"
+    ),
+    ranked_candidates AS MATERIALIZED (
+      SELECT candidate.*,
+        candidate."responseProjectionKnown" AS "responseEvidenceKnown",
+        CASE WHEN candidate."responseProjectionKnown"
+          THEN candidate."responseWithinTargetBps" ELSE NULL
+        END AS "onTimeRateBps",
+        CASE WHEN candidate."responseProjectionKnown"
+          AND response."dueCases" = candidate."responseSampleSize"
+          AND response."dueCases" >= ${EMPLOYER_RESPONSE_POLICY_V1.minimumDueCases}
+          AND response."respondedCases" >=
+            ${EMPLOYER_RESPONSE_POLICY_V1.minimumMedianResponses}
+          AND floor(
+            response."onTimeCases"::numeric * 10000
+              / response."dueCases"::numeric + 0.5
+          )::integer = candidate."responseWithinTargetBps"
+          AND response."medianResponseMinutes" IS NOT NULL
+        THEN floor(response."medianResponseMinutes" + 0.5)::integer
+        ELSE NULL END AS "medianFirstResponseMinutes"
+      FROM search_candidates AS candidate
+      LEFT JOIN response_aggregates AS response
+        ON response."companyId" = candidate."companyId"
+    )`;
+}
+
+function databaseSearchPredicates(
+  context: DatabaseSearchQueryContext,
+): Prisma.Sql[] {
+  const { input, now, projectionFilters, radiusCenter } = context;
+  const publishedAtUpperBound = context.rankingAsOf.getTime() < now.getTime()
+    ? context.rankingAsOf
+    : now;
+  const predicates: Prisma.Sql[] = [
+    Prisma.sql`job."status" = 'PUBLISHED'::"JobStatus"`,
+    Prisma.sql`job."currentRevisionId" = job."publishedRevisionId"`,
+    Prisma.sql`job."publishedAt" <= ${publishedAtUpperBound}`,
+    Prisma.sql`job."expiresAt" > ${now}`,
+    Prisma.sql`revision."approvedAt" IS NOT NULL`,
+    Prisma.sql`revision."rejectedAt" IS NULL`,
+    Prisma.sql`revision."validThrough" > ${now}`,
+    Prisma.sql`job."expiresAt" = revision."validThrough"`,
+    Prisma.sql`company."status" = 'ACTIVE'::"CompanyStatus"`,
+    Prisma.sql`category."isActive"`,
+    Prisma.sql`(
+      SELECT COUNT(*)
+      FROM "CompanyVerificationRequest" AS verification
+      WHERE verification."companyId" = company."id"
+        AND verification."status" = 'VERIFIED'::"CompanyVerificationStatus"
+        AND NOT EXISTS (
+          SELECT 1 FROM "CompanyVerificationRequest" AS superseding
+          WHERE superseding."supersedesRequestId" = verification."id"
+        )
+    ) = 1`,
+    Prisma.sql`NOT EXISTS (
+      SELECT 1
+      FROM "ModerationRestriction" AS restriction
+      WHERE restriction."status" = 'ACTIVE'::"ModerationRestrictionStatus"
+        AND restriction."startsAt" <= ${now}
+        AND restriction."liftedAt" IS NULL
+        AND (restriction."endsAt" IS NULL OR restriction."endsAt" > ${now})
+        AND (
+          (restriction."targetType" = 'HIDE_JOB'::"ModerationRestrictionType"
+            AND restriction."targetId" = job."id")
+          OR
+          (restriction."targetType" = 'PAUSE_COMPANY'::"ModerationRestrictionType"
+            AND restriction."targetId" = company."id")
+        )
+    )`,
+  ];
+  if (context.liveOnly) {
+    predicates.push(
+      Prisma.sql`job."dataProvenance" = 'LIVE'::"DataProvenance"`,
+      Prisma.sql`company."dataProvenance" = 'LIVE'::"DataProvenance"`,
+    );
+  }
+  pushUuidListPredicate(
+    predicates,
+    Prisma.raw('job."publishedCategoryId"'),
+    projectionFilters.categoryIds,
+  );
+  pushUuidListPredicate(
+    predicates,
+    Prisma.raw('job."publishedCantonId"'),
+    projectionFilters.cantonIds,
+  );
+  if (input.radiusKm === undefined) {
+    pushUuidListPredicate(
+      predicates,
+      Prisma.raw('job."publishedCityId"'),
+      projectionFilters.cityIds,
+    );
+  }
+  if (input.salaryDisclosedOnly) {
+    predicates.push(
+      Prisma.sql`job."publishedSalaryMin" IS NOT NULL`,
+      Prisma.sql`job."publishedSalaryMax" IS NOT NULL`,
+      Prisma.sql`job."publishedSalaryPeriod" IS NOT NULL`,
+    );
+  }
+  if (input.salaryMin !== undefined) {
+    predicates.push(Prisma.sql`job."publishedSalaryMax" >= ${input.salaryMin}`);
+  }
+  if (input.salaryPeriod !== undefined) {
+    predicates.push(
+      Prisma.sql`job."publishedSalaryPeriod"::text = ${input.salaryPeriod}`,
+    );
+  }
+  pushTextListPredicate(
+    predicates,
+    Prisma.raw('revision."jobType"'),
+    input.jobTypes,
+  );
+  pushTextListPredicate(
+    predicates,
+    Prisma.raw('revision."remoteType"'),
+    input.remoteTypes,
+  );
+  pushTextListPredicate(
+    predicates,
+    Prisma.raw('revision."applicationEffort"'),
+    input.efforts,
+  );
+  if (input.workloadMin !== undefined) {
+    predicates.push(Prisma.sql`revision."workloadMax" >= ${input.workloadMin}`);
+  }
+  if (input.workloadMax !== undefined) {
+    predicates.push(Prisma.sql`revision."workloadMin" <= ${input.workloadMax}`);
+  }
+  if (input.languages.length > 0) {
+    const contentLanguages = input.languages.map((value) => value.toUpperCase());
+    const languageCodes = input.languages.map((value) => value.toLowerCase());
+    predicates.push(Prisma.sql`(
+      revision."contentLanguage"::text IN (
+        ${Prisma.join(contentLanguages.map((value) => Prisma.sql`${value}`))}
+      )
+      OR EXISTS (
+        SELECT 1 FROM "JobRevisionLanguage" AS language
+        WHERE language."jobRevisionId" = revision."id"
+          AND lower(language."code") IN (
+            ${Prisma.join(languageCodes.map((value) => Prisma.sql`${value}`))}
+          )
+      )
+    )`);
+  }
+  if (input.responseEvidenceOnly) {
+    predicates.push(Prisma.sql`
+      company."responseSampleSize" >= ${ANALYTICS_MINIMUM_COHORT_SIZE_V1}
+      AND company."responseTargetDays" BETWEEN
+        ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
+        AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
+      AND company."responseWithinTargetBps" BETWEEN 0 AND 10000
+    `);
+  }
+  if (radiusCenter !== undefined && radiusCenter !== null) {
+    predicates.push(Prisma.sql`
+      city."latitude" IS NOT NULL
+      AND city."longitude" IS NOT NULL
+      AND 6371.0 * 2.0 * asin(sqrt(LEAST(1.0, GREATEST(0.0,
+        power(sin(radians((city."latitude"::double precision
+          - ${radiusCenter.latitude}) / 2.0)), 2)
+        + cos(radians(${radiusCenter.latitude}))
+          * cos(radians(city."latitude"::double precision))
+          * power(sin(radians((city."longitude"::double precision
+            - ${radiusCenter.longitude}) / 2.0)), 2)
+      )))) <= ${radiusCenter.radiusKm}
+    `);
+  }
+  return predicates;
+}
+
+function normalizedDatabaseSearchText(field: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`regexp_replace(
+    normalize(lower(COALESCE(${field}, '')), NFKD),
+    ${SEARCH_COMBINING_MARK_PATTERN},
+    '',
+    'g'
+  )`;
+}
+
+function databaseWeightedMatchScore(
+  field: Prisma.Sql,
+  terms: readonly string[],
+  weight: number,
+): Prisma.Sql {
+  if (terms.length === 0) return Prisma.sql`0`;
+  return Prisma.sql`(${Prisma.join(terms.map((term) => Prisma.sql`
+    CASE WHEN ${field} LIKE ${`%${term}%`} THEN ${weight} ELSE 0 END
+  `), " + ")})`;
+}
+
+function databaseFieldMatchTier(
+  field: Prisma.Sql,
+  terms: readonly string[],
+): Prisma.Sql {
+  if (terms.length === 0) return Prisma.sql`0`;
+  return Prisma.sql`CASE WHEN ${Prisma.join(terms.map((term) => Prisma.sql`
+    ${field} LIKE ${`%${term}%`}
+  `), " OR ")} THEN 1 ELSE 0 END`;
+}
+
+function pushUuidListPredicate(
+  predicates: Prisma.Sql[],
+  field: Prisma.Sql,
+  values: readonly string[],
+): void {
+  if (values.length === 0) return;
+  predicates.push(Prisma.sql`${field} IN (
+    ${Prisma.join(values.map((value) => Prisma.sql`${value}::uuid`))}
+  )`);
+}
+
+function pushTextListPredicate(
+  predicates: Prisma.Sql[],
+  field: Prisma.Sql,
+  values: readonly string[],
+): void {
+  if (values.length === 0) return;
+  predicates.push(Prisma.sql`${field}::text IN (
+    ${Prisma.join(values.map((value) => Prisma.sql`${value}`))}
+  )`);
+}
+
+function databaseOrganicOrderBy(sort: JobSearchSort): Prisma.Sql {
+  switch (sort) {
+    case "relevance":
+      return Prisma.sql`ranked."relevanceTier" DESC,
+        ranked."relevanceScore" DESC,
+        ranked."fairScore" DESC NULLS LAST,
+        ranked."publishedAt" DESC,
+        ranked."id" ASC`;
+    case "newest":
+      return Prisma.sql`ranked."publishedAt" DESC, ranked."id" ASC`;
+    case "fair-score":
+      return Prisma.sql`ranked."fairScore" DESC NULLS LAST,
+        ranked."publishedAt" DESC,
+        ranked."id" ASC`;
+    case "salary":
+      return Prisma.sql`ranked."salaryMin" DESC NULLS LAST,
+        ranked."salaryMax" DESC NULLS LAST,
+        ranked."publishedAt" DESC,
+        ranked."id" ASC`;
+    case "response":
+      return Prisma.sql`ranked."responseEvidenceKnown" DESC,
+        ranked."onTimeRateBps" DESC NULLS LAST,
+        ranked."medianFirstResponseMinutes" ASC NULLS LAST,
+        ranked."publishedAt" DESC,
+        ranked."id" ASC`;
+  }
+}
+
+function databaseOrganicCursorPredicate(
+  sort: JobSearchSort,
+  after: OrganicCursorTuple | null,
+): Prisma.Sql {
+  if (after === null) return Prisma.sql`TRUE`;
+  if (after.sort !== sort || !UUID_REFERENCE.test(after.id)) {
+    throw new PublicSearchRankingContractError(
+      "RANKING_PROJECTION_DRIFT",
+      "The organic cursor tuple is not valid for the database ranking query.",
+    );
+  }
+  const tail = (prefix: Prisma.Sql) => Prisma.sql`(
+    ${prefix}
+    OR (
+      ranked."publishedAt" = ${new Date(after.publishedAt)}
+      AND ranked."id" > ${after.id}::uuid
+    )
+  )`;
+  switch (after.sort) {
+    case "newest":
+      return tail(Prisma.sql`ranked."publishedAt" < ${new Date(after.publishedAt)}`);
+    case "relevance": {
+      const fairScore = after.fairScore ?? -1;
+      return Prisma.sql`(
+        ranked."relevanceTier" < ${after.relevanceTier}
+        OR (ranked."relevanceTier" = ${after.relevanceTier}
+          AND ranked."relevanceScore" < ${after.relevanceScore})
+        OR (ranked."relevanceTier" = ${after.relevanceTier}
+          AND ranked."relevanceScore" = ${after.relevanceScore}
+          AND COALESCE(ranked."fairScore", -1) < ${fairScore})
+        OR (ranked."relevanceTier" = ${after.relevanceTier}
+          AND ranked."relevanceScore" = ${after.relevanceScore}
+          AND COALESCE(ranked."fairScore", -1) = ${fairScore}
+          AND ranked."publishedAt" < ${new Date(after.publishedAt)})
+        OR (ranked."relevanceTier" = ${after.relevanceTier}
+          AND ranked."relevanceScore" = ${after.relevanceScore}
+          AND COALESCE(ranked."fairScore", -1) = ${fairScore}
+          AND ranked."publishedAt" = ${new Date(after.publishedAt)}
+          AND ranked."id" > ${after.id}::uuid)
+      )`;
+    }
+    case "fair-score": {
+      const fairScore = after.fairScore ?? -1;
+      return Prisma.sql`(
+        COALESCE(ranked."fairScore", -1) < ${fairScore}
+        OR (COALESCE(ranked."fairScore", -1) = ${fairScore}
+          AND ranked."publishedAt" < ${new Date(after.publishedAt)})
+        OR (COALESCE(ranked."fairScore", -1) = ${fairScore}
+          AND ranked."publishedAt" = ${new Date(after.publishedAt)}
+          AND ranked."id" > ${after.id}::uuid)
+      )`;
+    }
+    case "salary": {
+      const salaryMin = after.salaryMinChf ?? -1;
+      const salaryMax = after.salaryMaxChf ?? -1;
+      return Prisma.sql`(
+        COALESCE(ranked."salaryMin", -1) < ${salaryMin}
+        OR (COALESCE(ranked."salaryMin", -1) = ${salaryMin}
+          AND COALESCE(ranked."salaryMax", -1) < ${salaryMax})
+        OR (COALESCE(ranked."salaryMin", -1) = ${salaryMin}
+          AND COALESCE(ranked."salaryMax", -1) = ${salaryMax}
+          AND ranked."publishedAt" < ${new Date(after.publishedAt)})
+        OR (COALESCE(ranked."salaryMin", -1) = ${salaryMin}
+          AND COALESCE(ranked."salaryMax", -1) = ${salaryMax}
+          AND ranked."publishedAt" = ${new Date(after.publishedAt)}
+          AND ranked."id" > ${after.id}::uuid)
+      )`;
+    }
+    case "response": {
+      const known = Number(after.responseEvidenceKnown);
+      const onTimeRateBps = after.onTimeRateBps ?? -1;
+      const median = after.medianFirstResponseMinutes ?? 2_147_483_647;
+      return Prisma.sql`(
+        CASE WHEN ranked."responseEvidenceKnown" THEN 1 ELSE 0 END < ${known}
+        OR (CASE WHEN ranked."responseEvidenceKnown" THEN 1 ELSE 0 END = ${known}
+          AND COALESCE(ranked."onTimeRateBps", -1) < ${onTimeRateBps})
+        OR (CASE WHEN ranked."responseEvidenceKnown" THEN 1 ELSE 0 END = ${known}
+          AND COALESCE(ranked."onTimeRateBps", -1) = ${onTimeRateBps}
+          AND COALESCE(ranked."medianFirstResponseMinutes", 2147483647) > ${median})
+        OR (CASE WHEN ranked."responseEvidenceKnown" THEN 1 ELSE 0 END = ${known}
+          AND COALESCE(ranked."onTimeRateBps", -1) = ${onTimeRateBps}
+          AND COALESCE(ranked."medianFirstResponseMinutes", 2147483647) = ${median}
+          AND ranked."publishedAt" < ${new Date(after.publishedAt)})
+        OR (CASE WHEN ranked."responseEvidenceKnown" THEN 1 ELSE 0 END = ${known}
+          AND COALESCE(ranked."onTimeRateBps", -1) = ${onTimeRateBps}
+          AND COALESCE(ranked."medianFirstResponseMinutes", 2147483647) = ${median}
+          AND ranked."publishedAt" = ${new Date(after.publishedAt)}
+          AND ranked."id" > ${after.id}::uuid)
+      )`;
+    }
+  }
+}
+
+function databaseSponsoredExclusionPredicate(
+  sponsoredIds: readonly string[],
+): Prisma.Sql {
+  if (sponsoredIds.length === 0) return Prisma.sql`TRUE`;
+  if (sponsoredIds.some((id) => !UUID_REFERENCE.test(id))) {
+    throw new PublicSearchRankingContractError(
+      "RANKING_PROJECTION_DRIFT",
+      "A sponsored cursor ID is not a UUID.",
+    );
+  }
+  return Prisma.sql`ranked."id" NOT IN (
+    ${Prisma.join(sponsoredIds.map((id) => Prisma.sql`${id}::uuid`))}
+  )`;
+}
+
+function exactSearchCount(
+  envelope: readonly DatabaseSponsoredEnvelopeRow[],
+): number {
+  const raw = envelope[0]?.totalEligible;
+  const count = typeof raw === "bigint" ? Number(raw) : Number(raw);
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new PublicSearchRankingContractError(
+      "COUNT_OVERFLOW",
+      "The exact public search count is outside the safe integer range.",
+    );
+  }
+  return count;
+}
+
+function toSponsoredRankingRow(
+  row: DatabaseSponsoredEnvelopeRow,
+): readonly DatabaseRankingRow[] {
+  if (row.id === null) return Object.freeze([]);
+  if (row.relevanceTier === null || row.relevanceScore === null ||
+      row.responseEvidenceKnown === null || row.publishedAt === null ||
+      row.activeBoost === null) {
+    throw new PublicSearchRankingContractError(
+      "RANKING_PROJECTION_DRIFT",
+      "The sponsored ranking tuple is incomplete.",
+    );
+  }
+  return Object.freeze([Object.freeze({
+    id: row.id,
+    relevanceTier: row.relevanceTier,
+    relevanceScore: row.relevanceScore,
+    fairScore: row.fairScore,
+    salaryMin: row.salaryMin,
+    salaryMax: row.salaryMax,
+    responseEvidenceKnown: row.responseEvidenceKnown,
+    onTimeRateBps: row.onTimeRateBps,
+    medianFirstResponseMinutes: row.medianFirstResponseMinutes,
+    publishedAt: row.publishedAt,
+    activeBoost: row.activeBoost,
+  })]);
+}
+
+function emptyLoadedSearchPage(
+  input: PublicJobSearchInput,
+  pagination: Readonly<{
+    pageSize: number;
+    queryHash: string;
+    rankingAsOf: Date;
+    cursor?: NonNullable<ReturnType<typeof decodeSearchCursor>>;
+  }>,
+): LoadedSearchPage {
+  const page = paginateSearchJobs({
+    candidates: Object.freeze([]),
+    sort: input.sort,
+    hasQuery: Boolean(input.keyword),
+    pageSize: pagination.pageSize,
+    queryHash: pagination.queryHash,
+    rankingAsOf: pagination.rankingAsOf,
+    ...(pagination.cursor === undefined ? {} : { cursor: pagination.cursor }),
+  });
+  return Object.freeze({
+    rows: Object.freeze([]),
+    rowById: new Map(),
+    page: Object.freeze({ ...page, totalEligible: 0 }),
+  });
+}
+
+function sameStringSequence(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 async function loadEligibleJobs(
   input: PublicJobSearchInput,
   now: Date,
@@ -509,8 +1675,8 @@ async function loadEligibleJobs(
   const database = getDatabase();
   const dataContext = getPublicDataContext();
   const candidateLimit = Math.min(
-    scope.take ?? MAXIMUM_SEARCH_CANDIDATES,
-    MAXIMUM_SEARCH_CANDIDATES,
+    scope.take ?? MAXIMUM_BOUNDED_JOB_CANDIDATES,
+    MAXIMUM_BOUNDED_JOB_CANDIDATES,
   );
   const detectTruncation = scope.take === undefined;
   const loaded = await loadBoundedEligibleRowsInSnapshot<PublicJobRow>(
@@ -525,7 +1691,9 @@ async function loadEligibleJobs(
       // The extra row is a sentinel. It is never ranked, but proves that a
       // global result count would be incomplete without an unbounded query.
       take: candidateLimit + (detectTruncation ? 1 : 0),
-      select: buildPublicJobCardSelect(now),
+      select: input.keyword
+        ? buildPublicJobSearchSelect(now)
+        : buildPublicJobCardSelect(now),
     }),
   );
   const eligibleRows = loaded.rows;
@@ -649,10 +1817,33 @@ function buildPublicJobWhere(
       scope.publishedAtUpperBound.getTime() < now.getTime()
     ? scope.publishedAtUpperBound
     : now;
+  const publishedSalaryMin = input.salaryDisclosedOnly
+    ? { not: null }
+    : undefined;
+  const publishedSalaryMax = input.salaryMin !== undefined
+    ? {
+        gte: input.salaryMin,
+        ...(input.salaryDisclosedOnly ? { not: null } : {}),
+      }
+    : input.salaryDisclosedOnly ? { not: null } : undefined;
+  const publishedSalaryPeriod = input.salaryPeriod ??
+    (input.salaryDisclosedOnly ? { not: null } : undefined);
   return {
     ...(scope.slug === undefined ? {} : { slug: scope.slug }),
     ...(scope.companyId === undefined ? {} : { companyId: scope.companyId }),
     ...(scope.companyIds === undefined ? {} : { companyId: { in: [...scope.companyIds] } }),
+    ...(scope.publishedCategoryIds === undefined
+      ? {}
+      : { publishedCategoryId: { in: [...scope.publishedCategoryIds] } }),
+    ...(scope.publishedCantonIds === undefined
+      ? {}
+      : { publishedCantonId: { in: [...scope.publishedCantonIds] } }),
+    ...(scope.publishedCityIds === undefined || input.radiusKm !== undefined
+      ? {}
+      : { publishedCityId: { in: [...scope.publishedCityIds] } }),
+    ...(publishedSalaryMin === undefined ? {} : { publishedSalaryMin }),
+    ...(publishedSalaryMax === undefined ? {} : { publishedSalaryMax }),
+    ...(publishedSalaryPeriod === undefined ? {} : { publishedSalaryPeriod }),
     status: "PUBLISHED",
     publishedAt: { lte: publishedAtUpperBound },
     expiresAt: { gt: now },
@@ -821,42 +2012,11 @@ function buildRevisionWhere(input: PublicJobSearchInput): Prisma.JobRevisionWher
   const where: Prisma.JobRevisionWhereInput = {
     category: { is: { isActive: true } },
   };
-  if (input.keyword) {
-    where.OR = [
-      { title: { contains: input.keyword, mode: "insensitive" } },
-      { description: { contains: input.keyword, mode: "insensitive" } },
-      { job: { company: { name: { contains: input.keyword, mode: "insensitive" } } } },
-    ];
-  }
-  if (input.categorySlugs.length > 0) {
-    where.category = {
-      is: { isActive: true, slug: { in: [...input.categorySlugs] } },
-    };
-  }
-  if (input.cantonSlugs.length > 0) {
-    where.canton = { is: { slug: { in: [...input.cantonSlugs] } } };
-  }
-  if (input.citySlugs.length > 0) {
-    where.city = { is: { slug: { in: [...input.citySlugs] } } };
-  }
   if (input.jobTypes.length > 0) where.jobType = { in: [...input.jobTypes] };
   if (input.remoteTypes.length > 0) where.remoteType = { in: [...input.remoteTypes] };
   if (input.workloadMin !== undefined) where.workloadMax = { gte: input.workloadMin };
   if (input.workloadMax !== undefined) where.workloadMin = { lte: input.workloadMax };
   if (input.efforts.length > 0) where.applicationEffort = { in: [...input.efforts] };
-  const requiresYearlySalary =
-    input.salaryMin !== undefined || input.sort === "salary";
-  if (requiresYearlySalary) {
-    where.salaryPeriod = "YEARLY";
-  }
-  if (input.salaryMin !== undefined) {
-    where.salaryMax = { gte: input.salaryMin };
-  }
-  if (input.salaryDisclosedOnly) {
-    where.salaryMin = { not: null };
-    if (input.salaryMin === undefined) where.salaryMax = { not: null };
-    if (!requiresYearlySalary) where.salaryPeriod = { not: null };
-  }
   if (input.languages.length > 0) {
     const contentLanguages = [...input.languages];
     const languageCodes = contentLanguages.map((language) => language.toLowerCase());
@@ -884,6 +2044,7 @@ function toPublicEligibilitySnapshot<Row extends PublicJobEligibilityRow>(
     companyId: row.companyId,
     status: row.status,
     dataProvenance: row.dataProvenance,
+    currentRevisionId: row.currentRevisionId,
     publishedRevisionId: row.publishedRevisionId,
     publishedAt: row.publishedAt,
     expiresAt: row.expiresAt,
@@ -899,6 +2060,7 @@ function toPublicEligibilitySnapshot<Row extends PublicJobEligibilityRow>(
           id: revision.id,
           title: revision.title,
           description: revision.description,
+          categoryIsActive: revision.category.isActive,
           approvedAt: revision.approvedAt,
           rejectedAt: revision.rejectedAt,
           validThrough: revision.validThrough,
@@ -922,17 +2084,128 @@ function toPublicEligibilitySnapshot<Row extends PublicJobEligibilityRow>(
   });
 }
 
+async function loadCanonicalResponseMedians(
+  transaction: PublicReadTransaction,
+  rows: readonly EligiblePublicJobRow[],
+  now: Date,
+  cache: Map<string, number | null>,
+): Promise<void> {
+  const projections = new Map<string, EligiblePublicJobRow["company"]>();
+  for (const row of rows) {
+    if (!cache.has(row.companyId) && responseEvidence(row.company).known) {
+      projections.set(row.companyId, row.company);
+    }
+  }
+  if (projections.size === 0) return;
+
+  const windowStart = new Date(
+    now.getTime() - EMPLOYER_RESPONSE_POLICY_V1.rollingWindowDays * DAY_MS,
+  );
+  for (const companyIds of chunks([...projections.keys()], RESPONSE_COMPANY_BATCH_SIZE)) {
+    const applications = await transaction.application.findMany({
+      where: {
+        job: { companyId: { in: companyIds } },
+        submittedAt: { gte: windowStart, lt: now },
+        candidateProfile: {
+          is: { user: { is: { dataProvenance: "LIVE" } } },
+        },
+      },
+      orderBy: { id: "asc" },
+      select: {
+        id: true,
+        submittedAt: true,
+        job: { select: { companyId: true } },
+        candidateProfile: { select: { userId: true } },
+        submissionSnapshot: { select: { responseTargetDays: true } },
+        events: {
+          where: {
+            kind: { in: ["STATUS_CHANGE", "MESSAGE_SENT"] },
+            actorUserId: { not: null },
+            createdAt: { gte: windowStart, lt: now },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { actorUserId: true, createdAt: true },
+        },
+      },
+    });
+    const casesByCompany = new Map<string, Array<{
+      applicationId: string;
+      submittedAt: Date;
+      responseTargetDays: number | null;
+      firstResponseAt: Date | null;
+    }>>();
+    for (const application of applications) {
+      const cases = casesByCompany.get(application.job.companyId) ?? [];
+      const firstEmployerResponse = application.events.find(
+        (event) => event.actorUserId !== application.candidateProfile.userId &&
+          event.createdAt >= application.submittedAt,
+      );
+      cases.push({
+        applicationId: application.id,
+        submittedAt: application.submittedAt,
+        responseTargetDays:
+          application.submissionSnapshot?.responseTargetDays ?? null,
+        firstResponseAt: firstEmployerResponse?.createdAt ?? null,
+      });
+      casesByCompany.set(application.job.companyId, cases);
+    }
+    for (const companyId of companyIds) {
+      const projection = projections.get(companyId);
+      if (projection === undefined) continue;
+      cache.set(companyId, projectCanonicalResponseMedianMinutes(
+        projection,
+        casesByCompany.get(companyId) ?? [],
+        now,
+      ));
+    }
+  }
+}
+
+function toDatabaseRankingCandidate(
+  row: EligiblePublicJobRow,
+  ranking: DatabaseRankingRow,
+  now: Date,
+  responseMedianByCompany: ReadonlyMap<string, number | null>,
+): RankingCandidate {
+  const projected = toRankingCandidate(
+    row,
+    undefined,
+    now,
+    responseMedianByCompany,
+  );
+  if (projected.id !== ranking.id ||
+      projected.publishedAt.getTime() !== ranking.publishedAt.getTime() ||
+      projected.fairScore !== ranking.fairScore ||
+      projected.salaryMin !== ranking.salaryMin ||
+      projected.salaryMax !== ranking.salaryMax ||
+      projected.activeBoost !== ranking.activeBoost ||
+      projected.responseEvidenceKnown !== ranking.responseEvidenceKnown ||
+      projected.onTimeRateBps !== ranking.onTimeRateBps ||
+      projected.medianFirstResponseMinutes !== ranking.medianFirstResponseMinutes) {
+    throw new PublicSearchRankingContractError(
+      "RANKING_PROJECTION_DRIFT",
+      "A hydrated card disagreed with its database ranking tuple.",
+    );
+  }
+  return Object.freeze({
+    ...projected,
+    relevanceTier: ranking.relevanceTier,
+    relevanceScore: ranking.relevanceScore,
+  });
+}
+
 function toRankingCandidate(
   row: EligiblePublicJobRow,
   keyword: string | undefined,
   now: Date,
+  responseMedianByCompany: ReadonlyMap<string, number | null> = new Map(),
 ): RankingCandidate {
   const revision = row.publishedRevision;
   const relevance = keyword
     ? calculateRelevanceProxy(keyword, {
         title: revision.title,
         companyName: row.company.name,
-        body: revision.description,
+        body: searchableRevisionBody(revision),
       })
     : { score: 0, tier: 0 };
   const score = revision.scoreSnapshots.length === 1
@@ -965,8 +2238,26 @@ function toRankingCandidate(
     activeBoost: hasActiveBoost(row, now),
     responseEvidenceKnown: response.known,
     onTimeRateBps: response.onTimeRateBps,
-    medianFirstResponseMinutes: null,
+    medianFirstResponseMinutes: response.known
+      ? (responseMedianByCompany.get(row.companyId) ?? null)
+      : null,
   });
+}
+
+function searchableRevisionBody(
+  revision: EligiblePublicJobRow["publishedRevision"],
+): string {
+  const searchText = revision as typeof revision & Readonly<{
+    tasks?: readonly string[];
+    requirements?: readonly string[];
+    offer?: string | null;
+  }>;
+  return [
+    revision.description,
+    ...(searchText.tasks ?? []),
+    ...(searchText.requirements ?? []),
+    searchText.offer ?? "",
+  ].join("\n");
 }
 
 function toCardModel(
@@ -989,7 +2280,11 @@ function toCardModel(
       name: stripUnsafeHtml(row.company.name),
       verified: true as const,
     }),
-    category: Object.freeze({ ...revision.category }),
+    category: Object.freeze({
+      id: revision.category.id,
+      name: revision.category.name,
+      slug: revision.category.slug,
+    }),
     canton: revision.canton === null ? null : Object.freeze({ ...revision.canton }),
     city: revision.city === null ? null : Object.freeze({ ...revision.city }),
     locationLabel: cleanOptional(revision.locationLabel),
@@ -1020,6 +2315,14 @@ function toDetailModel(
   const card = toCardModel(row, now, false);
   return Object.freeze({
     ...card,
+    company: Object.freeze({
+      ...card.company,
+      website: safePublicCompanyWebsite(row.company.website),
+      // Fail closed until an operations-reviewed public asset publication and
+      // serving contract exists. Employer-editable storage keys are not review
+      // evidence and must never be projected as trusted structured-data URLs.
+      logoUrl: null,
+    }),
     companyIntro: cleanOptional(revision.companyIntro),
     tasks: cleanList(revision.tasks),
     requirements: cleanList(revision.requirements),
@@ -1049,6 +2352,20 @@ function toDetailModel(
     fairScoreVersion: safeScoreVersion(revision.scoreSnapshots[0]?.scoreVersion),
     fairBreakdown: fairBreakdown(revision.scoreSnapshots[0]?.factorBreakdown),
   });
+}
+
+function safePublicCompanyWebsite(value: string | null): string | null {
+  if (value === null || value.length > 512) return null;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") &&
+        url.username === "" &&
+        url.password === ""
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function safeScoreVersion(value: string | undefined): string | null {
@@ -1124,10 +2441,11 @@ function fairBreakdown(value: unknown): PublicJobDetailModel["fairBreakdown"] {
 
 function createPublicSearchQueryHash(input: PublicJobSearchInput): string {
   const canonical = {
-    version: "public-search-v1",
+    version: "public-search-v2",
     keyword: input.keyword?.trim().normalize("NFKC").toLowerCase() ?? null,
     cantonSlugs: canonicalSet(input.cantonSlugs),
     citySlugs: canonicalSet(input.citySlugs),
+    radiusKm: input.radiusKm ?? null,
     categorySlugs: canonicalSet(input.categorySlugs),
     workloadMin: input.workloadMin ?? null,
     workloadMax: input.workloadMax ?? null,
@@ -1136,16 +2454,31 @@ function createPublicSearchQueryHash(input: PublicJobSearchInput): string {
     languages: canonicalSet(input.languages),
     efforts: canonicalSet(input.efforts),
     salaryMin: input.salaryMin ?? null,
+    salaryPeriod: input.salaryPeriod ?? null,
     salaryDisclosedOnly: input.salaryDisclosedOnly,
     responseEvidenceOnly: input.responseEvidenceOnly,
     companyVerifiedOnly: input.companyVerifiedOnly,
     sort: input.sort,
+    pageSize: input.pageSize,
   };
   return createHash("sha256").update(JSON.stringify(canonical), "utf8").digest("hex");
 }
 
 function canonicalSet(values: readonly string[]): readonly string[] {
   return [...new Set(values)].sort();
+}
+
+function catalogIdentityWhere(values: readonly string[]): {
+  OR: ({ id: { in: string[] } } | { slug: { in: string[] } })[];
+} {
+  const ids = values.filter((value) => UUID_REFERENCE.test(value));
+  const slugs = values.filter((value) => !UUID_REFERENCE.test(value));
+  return {
+    OR: [
+      ...(ids.length === 0 ? [] : [{ id: { in: ids } }]),
+      ...(slugs.length === 0 ? [] : [{ slug: { in: slugs } }]),
+    ],
+  };
 }
 
 function withCursorSecret<T>(consumer: (secret: string) => T): T {
@@ -1160,6 +2493,14 @@ function cleanOptional(value: string | null): string | null {
   if (value === null) return null;
   const clean = stripUnsafeHtml(value);
   return clean.length === 0 ? null : clean;
+}
+
+function chunks<T>(values: readonly T[], size: number): readonly T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
 }
 
 function validNow(value: Date | undefined): Date {

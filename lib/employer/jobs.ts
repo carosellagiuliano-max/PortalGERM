@@ -23,6 +23,7 @@ import {
   SALARY_PERIODS,
 } from "@/lib/employer/job-contracts";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { createJobSlug } from "@/lib/jobs/slug";
 import {
   decideJobTransition,
   type JobActorCapability,
@@ -660,7 +661,7 @@ export async function createEmployerJobDraft(
           removedAt: null,
           company: { status: "ACTIVE" },
         },
-        select: { id: true },
+        select: { id: true, company: { select: { slug: true } } },
       });
       if (membership === null) return failure("NOT_FOUND");
       if (actor.membershipRole === "RECRUITER") {
@@ -694,7 +695,11 @@ export async function createEmployerJobDraft(
         data: {
           id: jobId,
           companyId: actor.companyId,
-          slug: `${slugify(parsed.data.title)}-${jobId.slice(0, 8)}`,
+          slug: createJobSlug({
+            title: parsed.data.title,
+            companyShortRef: membership.company.slug,
+            jobId,
+          }),
           status: "DRAFT",
           origin: "MANUAL",
           sourceReference: `employer:${actor.membershipId}`,
@@ -808,7 +813,11 @@ export async function duplicateEmployerJob(
         data: {
           id: jobId,
           companyId: actor.companyId,
-          slug: `${slugify(source.currentRevision.title)}-kopie-${jobId.slice(0, 8)}`,
+          slug: createJobSlug({
+            title: source.currentRevision.title,
+            companyShortRef: source.company.slug,
+            jobId,
+          }),
           status: "DRAFT",
           origin: "MANUAL",
           sourceReference: `duplicate:${source.id}`,
@@ -1478,6 +1487,7 @@ function mutationJobSelect(actor: EmployerJobActor, now: Date, eventKey: string)
     publishedRevisionId: true,
     publishedAt: true,
     expiresAt: true,
+    company: { select: { slug: true } },
     currentRevision: { select: JOB_REVISION_SELECT },
     revisions: { orderBy: [{ revisionNumber: "desc" as const }, { id: "desc" as const }], take: 1, select: { revisionNumber: true } },
     assignments: { where: currentAssignmentWhere(actor, now), take: 1, select: { role: true } },
@@ -2073,10 +2083,6 @@ function isValidApplicationContact(kind: string, rawValue: string) {
     }
   }
   return false;
-}
-
-function slugify(value: string) {
-  return value.normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "").slice(0, 180) || "job";
 }
 
 function zodIssues(result: { success: boolean; error?: z.ZodError }) {
