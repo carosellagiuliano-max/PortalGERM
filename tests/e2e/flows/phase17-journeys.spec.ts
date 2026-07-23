@@ -156,8 +156,8 @@ test("[E2E-01] @journey candidate search to employer status update", async ({
     expect(updated.status).toBe("IN_REVIEW");
     expect(updated.events).toHaveLength(1);
     expect(updated.candidateProfile.onboardingStatus).toBe("COMPLETE");
-    expect(updated.candidateProfile.radarProfile?.publishedAt).not.toBeNull();
-    expect(updated.candidateProfile.radarProfile?.withdrawnAt).toBeNull();
+    expect(updated.candidateProfile.radarProfile?.publishedAt).toBeNull();
+    expect(updated.candidateProfile.radarProfile?.withdrawnAt).not.toBeNull();
   } finally {
     await database.$disconnect();
   }
@@ -198,7 +198,6 @@ async function completeSwissJobPass(page: import("@playwright/test").Page) {
   await page.locator('input[name="workloadMin"]').fill("80");
   await page.locator('input[name="workloadMax"]').fill("100");
   await page.locator('select[name="remotePreference"]').selectOption("ANY");
-  await page.locator('input[name="radarVisible"]').check();
 
   await page
     .getByRole("button", { name: "SwissJobPass speichern" })
