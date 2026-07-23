@@ -9,6 +9,7 @@ import {
 import {
   getCandidateConversation,
   listCandidateConversations,
+  resolveCandidateMessageReportTarget,
   sendCandidateMessage,
 } from "@/lib/candidate/messages";
 import { getCandidatePrivacyDashboard } from "@/lib/candidate/privacy-dashboard";
@@ -73,11 +74,87 @@ describe.sequential("Phase 09 candidate messages and privacy", () => {
     const stored = await client().message.findMany({ where: { idempotencyKey } });
     expect(stored).toHaveLength(1);
     expect(stored[0]?.body).toBe("Hallo aus dem sicheren Test.");
+    const controlKey = `message-control-${randomUUID()}`;
+    await expect(
+      sendCandidateMessage(
+        client(),
+        owner.userId,
+        {
+          conversationId: conversation.id,
+          body: "Diese Nachricht enthält eine Richtungssteuerung.\u202e",
+          idempotencyKey: controlKey,
+        },
+        ANCHOR,
+      ),
+    ).resolves.toEqual({ ok: false, code: "INVALID" });
+    await expect(
+      client().message.count({ where: { idempotencyKey: controlKey } }),
+    ).resolves.toBe(0);
     await expect(sendCandidateMessage(client(), foreign.userId, {
       conversationId: conversation.id,
       body: "Fremder Zugriff darf nicht funktionieren.",
       idempotencyKey: `foreign-${randomUUID()}`,
     }, ANCHOR)).resolves.toEqual({ ok: false, code: "NOT_FOUND" });
+  });
+
+  it("resolves only incoming messages inside the authenticated candidate scope", async () => {
+    const owner = candidateUsers[0]!;
+    const foreign = candidateUsers[1]!;
+    const incoming = await client().message.findFirstOrThrow({
+      where: {
+        senderUserId: { not: owner.userId },
+        conversation: {
+          application: { candidateProfileId: owner.id },
+          participants: {
+            some: { kind: "USER", userId: owner.userId, leftAt: null },
+          },
+        },
+      },
+      select: {
+        id: true,
+        conversationId: true,
+        conversation: { select: { companyId: true } },
+      },
+    });
+
+    await expect(
+      resolveCandidateMessageReportTarget(client(), owner.userId, incoming.id),
+    ).resolves.toEqual({
+      id: incoming.id,
+      conversationId: incoming.conversationId,
+      companyId: incoming.conversation.companyId,
+    });
+    const inaccessible = await resolveCandidateMessageReportTarget(
+      client(),
+      foreign.userId,
+      incoming.id,
+    );
+    const missing = await resolveCandidateMessageReportTarget(
+      client(),
+      foreign.userId,
+      randomUUID(),
+    );
+    expect(inaccessible).toBeNull();
+    expect(missing).toEqual(inaccessible);
+
+    const own = await sendCandidateMessage(
+      client(),
+      owner.userId,
+      {
+        conversationId: incoming.conversationId,
+        body: "Eigene Nachrichten dürfen nicht als Gegenpartei gemeldet werden.",
+        idempotencyKey: `own-report-target-${randomUUID()}`,
+      },
+      ANCHOR,
+    );
+    if (!own.ok) throw new Error("Expected the candidate fixture message.");
+    await expect(
+      resolveCandidateMessageReportTarget(
+        client(),
+        owner.userId,
+        own.messageId,
+      ),
+    ).resolves.toBeNull();
   });
 
   it("blocks only new Radar messages when the company loses current trust", async () => {

@@ -21,6 +21,7 @@ import {
 } from "@/lib/auth/employer-registration-signals";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { consumeAuthRateLimit, hashAuthIdentifier } from "@/lib/auth/rate-limit-runtime";
+import type { RateLimitScope } from "@/lib/auth/rate-limit";
 import {
   createRegistrationMarketingConsent,
   createRegistrationTermsConsent,
@@ -34,6 +35,7 @@ import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type { EmailProvider } from "@/lib/providers/email/email-provider";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { hashIpWithFirstKey } from "@/lib/utils/hash";
 import { slugify } from "@/lib/utils/slug";
 import type {
@@ -126,24 +128,66 @@ export async function loginWithPassword(
       id: true,
       role: true,
       status: true,
-      credential: { select: { passwordHash: true } },
+      credential: {
+        select: { passwordHash: true, passwordChangedAt: true },
+      },
     },
   });
   const passwordMatches = await verifyPassword(
     input.password,
     user?.credential?.passwordHash ?? DUMMY_PASSWORD_HASH,
   );
-  if (user === null || user.status !== "ACTIVE" || !passwordMatches) {
+  if (
+    user === null ||
+    user.status !== "ACTIVE" ||
+    user.credential === null ||
+    !passwordMatches
+  ) {
     await auditFailedLogin(dependencies, input.email, user?.id, now);
     return Object.freeze({ ok: false, code: "INVALID_CREDENTIALS" });
   }
+  const verifiedCredential = user.credential;
 
-  const session = await dependencies.database.$transaction(async (transaction) => {
-    await transaction.user.update({
-      where: { id: user.id },
+  const authentication = await dependencies.database.$transaction(async (transaction) => {
+    const lockedUsers = await transaction.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+        FROM "User"
+       WHERE "id" = ${user.id}::uuid
+       FOR UPDATE
+    `;
+    const lockedUser =
+      lockedUsers.length === 1
+        ? await transaction.user.findUnique({
+            where: { id: user.id },
+            select: {
+              role: true,
+              status: true,
+              credential: {
+                select: {
+                  passwordHash: true,
+                  passwordChangedAt: true,
+                },
+              },
+            },
+          })
+        : null;
+    if (
+      lockedUser === null ||
+      lockedUser.status !== "ACTIVE" ||
+      lockedUser.credential === null ||
+      lockedUser.credential.passwordHash !== verifiedCredential.passwordHash ||
+      lockedUser.credential.passwordChangedAt.getTime() !==
+        verifiedCredential.passwordChangedAt.getTime()
+    ) {
+      return null;
+    }
+    const updated = await transaction.user.updateMany({
+      where: { id: user.id, status: "ACTIVE" },
       data: { lastLoginAt: now },
-      select: { id: true },
     });
+    if (updated.count !== 1) {
+      return null;
+    }
     const created = await issueSession(transaction, {
       userId: user.id,
       now,
@@ -166,14 +210,18 @@ export async function loginWithPassword(
       },
       auditIpContext(dependencies),
     );
-    return created;
+    return Object.freeze({ role: lockedUser.role, session: created });
   });
+  if (authentication === null) {
+    await auditFailedLogin(dependencies, input.email, user.id, now);
+    return Object.freeze({ ok: false, code: "INVALID_CREDENTIALS" });
+  }
 
   return Object.freeze({
     ok: true,
-    session,
-    role: user.role,
-    destination: resolveSafeNext(input.next, user.role),
+    session: authentication.session,
+    role: authentication.role,
+    destination: resolveSafeNext(input.next, authentication.role),
   });
 }
 
@@ -673,6 +721,13 @@ export async function resetPassword(
           select: { userId: true },
         });
         if (token === null) return false;
+        const lockedUsers = await transaction.$queryRaw<Array<{ id: string }>>`
+          SELECT "id"
+            FROM "User"
+           WHERE "id" = ${token.userId}::uuid
+           FOR UPDATE
+        `;
+        if (lockedUsers.length !== 1) return false;
         await transaction.credential.update({
           where: { userId: token.userId },
           data: {
@@ -687,10 +742,39 @@ export async function resetPassword(
           where: { userId: token.userId, usedAt: null },
           data: { usedAt: now },
         });
-        await transaction.session.updateMany({
+        const sessionsToRevoke = await transaction.session.findMany({
           where: { userId: token.userId, revokedAt: null },
+          orderBy: { id: "asc" },
+          select: { id: true },
+        });
+        const revokedSessions = await transaction.session.updateMany({
+          where: {
+            userId: token.userId,
+            id: { in: sessionsToRevoke.map(({ id }) => id) },
+            revokedAt: null,
+          },
           data: { revokedAt: now },
         });
+        if (revokedSessions.count !== sessionsToRevoke.length) {
+          throw new Error("PASSWORD_RESET_SESSION_REVOCATION_CONFLICT");
+        }
+        for (const session of sessionsToRevoke) {
+          await writeRequiredAudit(
+            createPrismaTransactionAuditPort(transaction),
+            {
+              action: "SESSION_REVOKED",
+              actorKind: "ANONYMOUS",
+              capability: "AUTH_PASSWORD_RESET",
+              correlationId: dependencies.request.correlationId,
+              reasonCode: "PASSWORD_RESET_COMPLETED",
+              result: "SUCCEEDED",
+              retainUntil: auditRetainUntil(now),
+              targetId: session.id,
+              targetType: "SESSION",
+            },
+            auditIpContext(dependencies),
+          );
+        }
         await writeRequiredAudit(
           createPrismaTransactionAuditPort(transaction),
           {
@@ -853,25 +937,26 @@ async function auditFailedPasswordReset(
 async function auditRateLimit(
   dependencies: AuthServiceDependencies,
   preset: "LOGIN" | "REGISTER" | "FORGOT_PASSWORD",
-  scope: string,
+  scope: RateLimitScope | "OPEN_TYPE" | "UNKNOWN",
   now: Date,
 ) {
-  await writeBestEffortAudit(
-    createPrismaAuditPort(dependencies.database),
+  await recordRateLimitDenial(
     {
-      action: "RATE_LIMITED",
+      preset,
+      scope,
+    },
+    {
       actorKind: "ANONYMOUS",
       capability: "AUTH_RATE_LIMIT",
-      correlationId: dependencies.request.correlationId,
-      metadata: { preset, scope },
-      reasonCode: "RATE_LIMITED",
-      result: "DENIED",
-      retainUntil: auditRetainUntil(now),
-      targetId: randomUUID(),
-      targetType: "USER",
+      targetId: dependencies.request.correlationId,
+      targetType: "SYSTEM_TASK",
     },
-    undefined,
-    auditIpContext(dependencies),
+    {
+      database: dependencies.database,
+      environment: dependencies.environment,
+      request: dependencies.request,
+      now,
+    },
   );
 }
 

@@ -121,7 +121,7 @@ describe.sequential("Phase-10 Company onboarding and verification", () => {
           {
             ...profile,
             name: "Swiss Talent Integration AG – aktualisiert",
-            coverStorageKey: "companies/phase10/changed-cover.webp",
+            coverStorageKey: "/assets/company-media/alpine-cover.svg",
           },
           baseOnlySaved.updatedAt,
         ),
@@ -181,6 +181,15 @@ describe.sequential("Phase-10 Company onboarding and verification", () => {
       ]);
       expect(onboardingAudits).toHaveLength(1);
       expect(onboardingAnalytics).toHaveLength(1);
+      await expect(
+        client().auditLog.count({
+          where: {
+            companyId: IDS.company,
+            action: "COMPANY_PROFILE_UPDATED",
+            targetId: IDS.company,
+          },
+        }),
+      ).resolves.toBe(2);
 
       const initialCommand = {
         expectedCurrentRequestId: null,
@@ -757,8 +766,8 @@ function validProfile() {
     industry: "Technology",
     size: "11–50",
     website: "https://phase10.example.ch/company",
-    logoStorageKey: "companies/phase10/logo.svg",
-    coverStorageKey: "companies/phase10/cover.webp",
+    logoStorageKey: "/assets/company-media/default-logo.svg",
+    coverStorageKey: "/assets/company-media/default-cover.svg",
     linkedinUrl: "https://www.linkedin.com/company/phase10",
     facebookUrl: "https://www.facebook.com/phase10",
     instagramUrl: "https://www.instagram.com/phase10",

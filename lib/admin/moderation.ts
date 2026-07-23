@@ -23,6 +23,7 @@ import {
   writeAdminAudit,
   type AdminDependencies,
 } from "@/lib/admin/common";
+import { trimmedString } from "@/lib/validation/common";
 
 const restrictionTypes = ["HIDE_JOB", "PAUSE_COMPANY", "SUSPEND_USER", "BLOCK_MESSAGE_THREAD"] as const;
 const reasonSchema = z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u);
@@ -64,7 +65,7 @@ const triageSchema = z.strictObject({
   severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
   assigneeUserId: z.uuid().nullable().optional(),
   reasonCode: reasonSchema,
-  safeNote: z.string().trim().max(500).optional(),
+  safeNote: trimmedString(0, 500).optional(),
   idempotencyKey: z.uuid(),
 });
 
@@ -88,7 +89,10 @@ export async function triageAbuseReport(raw: unknown, dependencies: AdminDepende
       const dueAt = tightenSlaDueAt(report.dueAt, report.createdAt, abuseSlaKey(parsed.data.severity));
       const changed = await transaction.abuseReport.updateMany({ where: { id: report.id, version: report.version, status: report.status }, data: { status: "IN_REVIEW", severity: parsed.data.severity, dueAt, ...(parsed.data.assigneeUserId === undefined ? {} : { assigneeUserId: parsed.data.assigneeUserId }), version: { increment: 1 }, updatedAt: now } });
       if (changed.count !== 1) throw new AdminDomainError("CONFLICT");
-      await transaction.abuseReportEvent.create({ data: { id: randomUUID(), abuseReportId: report.id, kind: parsed.data.assigneeUserId === undefined ? "TRIAGED" : "ASSIGNED", actorUserId: dependencies.actor.userId, reasonCode: parsed.data.reasonCode, safeNote: parsed.data.safeNote ?? null, correlationId: dependencies.correlationId, idempotencyKey: eventKey, createdAt: now } });
+      await transaction.abuseReportEvent.create({ data: { id: randomUUID(), abuseReportId: report.id, kind: "TRIAGED", actorUserId: dependencies.actor.userId, reasonCode: parsed.data.reasonCode, safeNote: parsed.data.safeNote ?? null, correlationId: dependencies.correlationId, idempotencyKey: eventKey, createdAt: now } });
+      if (parsed.data.assigneeUserId !== undefined && parsed.data.assigneeUserId !== null) {
+        await transaction.abuseReportEvent.create({ data: { id: randomUUID(), abuseReportId: report.id, kind: "ASSIGNED", actorUserId: dependencies.actor.userId, reasonCode: parsed.data.reasonCode, safeNote: null, correlationId: dependencies.correlationId, idempotencyKey: `${eventKey}:assignment`, createdAt: now } });
+      }
       await writeAdminAudit(transaction, dependencies, now, { action: "ABUSE_REPORT_TRIAGED", capability: "ADMIN_REPORT_REVIEW", targetType: "ABUSE_REPORT", targetId: report.id, reasonCode: parsed.data.reasonCode });
       return adminSuccess({ reportId: report.id, status: "IN_REVIEW" as const, severity: parsed.data.severity, dueAt });
     }, { isolationLevel: "Serializable" });
@@ -103,7 +107,7 @@ const applyRestrictionSchema = z.strictObject({
   restrictionType: z.enum(restrictionTypes),
   affectedResourceId: z.uuid(),
   impactConfirmed: z.literal(true),
-  reason: z.string().trim().min(3).max(1000),
+  reason: trimmedString(3, 1000),
   endsAt: z.coerce.date().nullable().optional(),
   idempotencyKey: z.uuid(),
 });
@@ -301,7 +305,31 @@ async function applyRestrictionEffect(transaction: Prisma.TransactionClient, typ
     const user = await transaction.user.findUnique({ where: { id: target.userId }, select: { status: true, candidateProfile: { select: { id: true } } } });
     if (user === null) throw new Error("NOT_FOUND");
     if (user.status === "ACTIVE") await transaction.user.update({ where: { id: target.userId }, data: { status: "SUSPENDED", updatedAt: now } });
-    await transaction.session.deleteMany({ where: { userId: target.userId } });
+    const sessions = await transaction.session.findMany({
+      where: { userId: target.userId, revokedAt: null },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    const revokedSessions = await transaction.session.updateMany({
+      where: {
+        userId: target.userId,
+        id: { in: sessions.map(({ id }) => id) },
+        revokedAt: null,
+      },
+      data: { revokedAt: now },
+    });
+    if (revokedSessions.count !== sessions.length) {
+      throw new AdminDomainError("CONFLICT");
+    }
+    for (const session of sessions) {
+      await writeAdminAudit(transaction, dependencies, now, {
+        action: "SESSION_REVOKED",
+        capability: "ADMIN_RESTRICTION_MANAGE",
+        targetType: "SESSION",
+        targetId: session.id,
+        reasonCode: "MODERATION_SUSPEND_USER",
+      });
+    }
     if (user.candidateProfile !== null) {
       await applyCandidateRadarEligibilityLoss(transaction, {
         candidateProfileId: user.candidateProfile.id,

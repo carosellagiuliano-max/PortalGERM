@@ -14,11 +14,15 @@ import {
   expireModerationRestriction,
   isConversationMessageBlocked,
   liftModerationRestriction,
+  resolveAbuseReport,
+  triageAbuseReport,
 } from "@/lib/admin/moderation";
 import {
+  approveImportSetup,
   commitImportRun,
   decideImportItem,
   parseLicensedImport,
+  revokeImportSetup,
   rollbackImportRun,
 } from "@/lib/admin/imports";
 import {
@@ -40,6 +44,7 @@ import {
   suspendCompany,
 } from "@/lib/admin/companies";
 import {
+  forceLogoutUser,
   reactivateUser,
   suspendUser,
 } from "@/lib/admin/users";
@@ -209,6 +214,20 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     expect(await client.company.findUnique({ where: { id: company.id }, select: { status: true } })).toEqual({ status: "ACTIVE" });
     expect(await client.job.count({ where: { companyId: company.id, status: "PUBLISHED" } })).toBe(0);
     expect(await client.job.count({ where: { companyId: company.id, status: "PAUSED" } })).toBeGreaterThanOrEqual(publishedBefore);
+    const companyAuditActions = await client.auditLog.findMany({
+        where: {
+          targetId: company.id,
+          action: { in: ["COMPANY_SUSPENDED", "COMPANY_REACTIVATED"] },
+        },
+        select: { action: true, targetType: true },
+      });
+    expect(companyAuditActions).toHaveLength(2);
+    expect(companyAuditActions).toEqual(
+      expect.arrayContaining([
+        { action: "COMPANY_SUSPENDED", targetType: "COMPANY" },
+        { action: "COMPANY_REACTIVATED", targetType: "COMPANY" },
+      ]),
+    );
   });
 
   it("revokes sessions on User suspension and requires explicit reactivation", async () => {
@@ -218,26 +237,46 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
       orderBy: { id: "asc" },
       select: { id: true },
     });
-    await client.session.create({ data: {
+    const session = await client.session.create({ data: {
       userId: user.id,
       tokenHash: "a".repeat(64),
       createdAt: NOW,
       expiresAt: new Date(NOW.getTime() + 3_600_000),
       absoluteExpiresAt: new Date(NOW.getTime() + 7_200_000),
-    } });
+    }, select: { id: true } });
+    const suspensionIdempotencyKey = randomUUID();
     const suspended = requireSuccess(
       await suspendUser(
         {
           userId: user.id,
           expectedStatus: "ACTIVE",
           reasonCode: "ABUSE_REVIEW_CONFIRMED",
-          idempotencyKey: randomUUID(),
+          idempotencyKey: suspensionIdempotencyKey,
         },
         deps("user-suspend"),
       ),
     );
     expect(suspended.value.sessionsRevoked).toBeGreaterThan(0);
-    expect(await client.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(await client.session.findMany({
+      where: { userId: user.id, revokedAt: null },
+      orderBy: { id: "asc" },
+      select: { id: true, createdAt: true },
+    })).toEqual([]);
+    await expect(client.session.findUniqueOrThrow({
+      where: { id: session.id },
+      select: { revokedAt: true },
+    })).resolves.toEqual({ revokedAt: NOW });
+    await expect(client.auditLog.findFirstOrThrow({
+      where: {
+        action: "SESSION_REVOKED",
+        targetId: session.id,
+        correlationId: suspensionIdempotencyKey,
+      },
+      select: { targetType: true, reasonCode: true },
+    })).resolves.toEqual({
+      targetType: "SESSION",
+      reasonCode: "USER_SUSPENDED",
+    });
     requireSuccess(
       await reactivateUser(
         {
@@ -249,7 +288,77 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
         deps("user-reactivate"),
       ),
     );
-    expect(await client.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(await client.session.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
+    await expect(
+      client.auditLog.findFirstOrThrow({
+        where: { action: "USER_REACTIVATED", targetId: user.id },
+        select: { targetType: true, result: true },
+      }),
+    ).resolves.toEqual({ targetType: "USER", result: "SUCCEEDED" });
+  });
+
+  it("force-logout preserves and audits every revoked Session by its real id", async () => {
+    const client = db();
+    const user = await client.user.findFirstOrThrow({
+      where: { role: "EMPLOYER", status: "ACTIVE" },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    const sessions = await Promise.all(
+      ["c", "d"].map((prefix) =>
+        client.session.create({
+          data: {
+            userId: user.id,
+            tokenHash: `${prefix}${randomUUID().replaceAll("-", "")}`.padEnd(64, prefix).slice(0, 64),
+            createdAt: NOW,
+            expiresAt: new Date(NOW.getTime() + 3_600_000),
+            absoluteExpiresAt: new Date(NOW.getTime() + 7_200_000),
+          },
+          select: { id: true },
+        }),
+      ),
+    );
+    const idempotencyKey = randomUUID();
+    const activeSessions = await client.session.findMany({
+      where: { userId: user.id, revokedAt: null },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    const input = {
+      userId: user.id,
+      reasonCode: "ADMIN_FORCE_LOGOUT",
+      idempotencyKey,
+    };
+
+    await expect(forceLogoutUser(input, deps("force-logout"))).resolves.toEqual({
+      ok: true,
+      value: { userId: user.id, sessionsRevoked: activeSessions.length },
+    });
+    await expect(forceLogoutUser(input, deps("force-logout-replay"))).resolves.toMatchObject({
+      ok: true,
+      replay: true,
+      value: { userId: user.id, sessionsRevoked: activeSessions.length },
+    });
+    await expect(client.session.count({
+      where: { id: { in: sessions.map(({ id }) => id) } },
+    })).resolves.toBe(sessions.length);
+    await expect(client.session.count({
+      where: { id: { in: sessions.map(({ id }) => id) }, revokedAt: NOW },
+    })).resolves.toBe(sessions.length);
+    const audits = await client.auditLog.findMany({
+      where: { action: "SESSION_REVOKED", correlationId: idempotencyKey },
+      orderBy: { targetId: "asc" },
+      select: { targetId: true, targetType: true, reasonCode: true },
+    });
+    expect(audits).toEqual(
+      activeSessions
+        .map(({ id }) => ({
+          targetId: id,
+          targetType: "SESSION" as const,
+          reasonCode: "ADMIN_FORCE_LOGOUT",
+        }))
+        .sort((left, right) => left.targetId.localeCompare(right.targetId)),
+    );
   });
 
   it("keeps Support requester scope and completes request-information, reply, resolve and reopen", async () => {
@@ -294,6 +403,33 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
       "CREATED", "TRIAGED", "ASSIGNED", "INFORMATION_REQUESTED", "REPLIED", "RESOLVED", "REOPENED",
     ]);
     expect(detail?.events.find(({ kind }) => kind === "REPLIED")?.safeBody).not.toContain("<script>");
+    const supportAuditActions = await client.auditLog.findMany({
+      where: {
+        targetId: created.value.caseId,
+        action: {
+          in: [
+            "SUPPORT_CASE_CREATED",
+            "SUPPORT_CASE_TRIAGED",
+            "SUPPORT_CASE_ASSIGNED",
+            "SUPPORT_CASE_REPLIED",
+            "SUPPORT_CASE_RESOLVED",
+            "SUPPORT_CASE_REOPENED",
+          ],
+        },
+      },
+      select: { action: true },
+    });
+    expect(
+      supportAuditActions.map(({ action }) => action).sort(),
+    ).toEqual([
+      "SUPPORT_CASE_ASSIGNED",
+      "SUPPORT_CASE_CREATED",
+      "SUPPORT_CASE_REOPENED",
+      "SUPPORT_CASE_REPLIED",
+      "SUPPORT_CASE_RESOLVED",
+      "SUPPORT_CASE_TRIAGED",
+      "SUPPORT_CASE_TRIAGED",
+    ]);
   });
 
   it("denies every Support admin read and mutation without the capability", async () => {
@@ -334,6 +470,29 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     const published = requireSuccess(await transitionContentRevision({ revisionId: draft.value.revisionId, expectedVersion: approved.value.version, action: "PUBLISH", reasonCode: "PUBLISH_APPROVED", idempotencyKey: randomUUID() }, deps("content-publish")));
     requireSuccess(await transitionContentRevision({ revisionId: draft.value.revisionId, expectedVersion: published.value.version, action: "UNPUBLISH", reasonCode: "CONTENT_REVIEW_REQUIRED", idempotencyKey: randomUUID() }, deps("content-unpublish")));
     expect(await client.contentPage.findUnique({ where: { id: draft.value.pageId }, select: { currentPublishedRevisionId: true } })).toEqual({ currentPublishedRevisionId: null });
+    const contentAuditActions = await client.auditLog.findMany({
+      where: {
+        targetId: draft.value.revisionId,
+        action: {
+          in: [
+            "CONTENT_DRAFTED",
+            "CONTENT_REVIEWED",
+            "CONTENT_PUBLISHED",
+            "CONTENT_UNPUBLISHED",
+          ],
+        },
+      },
+      select: { action: true },
+    });
+    expect(
+      contentAuditActions.map(({ action }) => action).sort(),
+    ).toEqual([
+      "CONTENT_DRAFTED",
+      "CONTENT_PUBLISHED",
+      "CONTENT_REVIEWED",
+      "CONTENT_REVIEWED",
+      "CONTENT_UNPUBLISHED",
+    ]);
   });
 
   it("parses only a preview, commits explicit mappings to Draft and tombstones a pristine rollback", async () => {
@@ -385,6 +544,29 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     expect(await client.job.findUnique({ where: { id: draft.id }, select: { status: true } })).toEqual({ status: "REMOVED" });
     expect(await rollbackImportRun(rollbackInput, deps("import-rollback"))).toMatchObject({ ok: true, replay: true });
     expect(await client.jobStatusEvent.count({ where: { jobId: draft.id, kind: "IMPORT_ROLLED_BACK" } })).toBe(1);
+    const importAuditActions = await client.auditLog.findMany({
+      where: {
+        targetId: { in: [parsed.value.runId, okItem.id, errorItem.id] },
+        action: {
+          in: [
+            "IMPORT_PARSED",
+            "IMPORT_DECISION_RECORDED",
+            "IMPORT_COMMITTED",
+            "IMPORT_ROLLED_BACK",
+          ],
+        },
+      },
+      select: { action: true },
+    });
+    expect(
+      importAuditActions.map(({ action }) => action).sort(),
+    ).toEqual([
+      "IMPORT_COMMITTED",
+      "IMPORT_DECISION_RECORDED",
+      "IMPORT_DECISION_RECORDED",
+      "IMPORT_PARSED",
+      "IMPORT_ROLLED_BACK",
+    ]);
     expect(await client.auditLog.count({ where: { targetId: parsed.value.runId, action: "IMPORT_ROLLED_BACK" } })).toBe(1);
   });
 
@@ -394,6 +576,66 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     expect(payload.length).toBeLessThan(750_000);
     expect(Buffer.byteLength(payload, "utf8")).toBeGreaterThan(750_000);
     await expect(parseLicensedImport({ importSourceId: source.id, inputSource: "PASTE", format: "JSON", payload, idempotencyKey: randomUUID() }, deps("oversize-import"))).resolves.toEqual({ ok: false, code: "INVALID_INPUT" });
+  });
+
+  it("approves and revokes an Import Setup with persisted audit evidence", async () => {
+    const client = db();
+    const source = await client.importSource.findFirstOrThrow({
+      where: {
+        isActive: true,
+        companyRights: { some: { revokedAt: null } },
+      },
+      orderBy: { id: "asc" },
+      select: {
+        id: true,
+        companyRights: {
+          where: { revokedAt: null },
+          orderBy: { id: "asc" },
+          take: 1,
+          select: { companyId: true },
+        },
+      },
+    });
+    const companyId = source.companyRights[0]?.companyId;
+    if (companyId === undefined) throw new Error("Import setup Company missing.");
+    const approved = requireSuccess(
+      await approveImportSetup(
+        {
+          companyId,
+          importSourceId: source.id,
+          rightsEvidence: "Lizenzrecht und Quelle wurden manuell geprüft.",
+          mappingEvidence: "Das Feldmapping wurde gegen die Vorschau geprüft.",
+          validUntil: new Date(NOW.getTime() + 10 * 86_400_000),
+          reasonCode: "SOURCE_RIGHTS_VERIFIED",
+          idempotencyKey: randomUUID(),
+        },
+        deps("import-setup-approve"),
+      ),
+    );
+    requireSuccess(
+      await revokeImportSetup(
+        {
+          approvalId: approved.value.approvalId,
+          reasonCode: "SOURCE_RIGHTS_REVOKED",
+          idempotencyKey: randomUUID(),
+        },
+        deps("import-setup-revoke", afterMilliseconds(1)),
+      ),
+    );
+    await expect(
+      client.auditLog.findMany({
+        where: {
+          targetId: source.id,
+          companyId,
+          action: { in: ["IMPORT_SETUP_APPROVED", "IMPORT_SETUP_REVOKED"] },
+        },
+        orderBy: { createdAt: "asc" },
+        select: { action: true, targetType: true },
+      }),
+    ).resolves.toEqual([
+      { action: "IMPORT_SETUP_APPROVED", targetType: "IMPORT_SOURCE" },
+      { action: "IMPORT_SETUP_REVOKED", targetType: "IMPORT_SOURCE" },
+    ]);
   });
 
   it("keeps a manually edited imported Draft intact during a mixed, idempotent rollback", async () => {
@@ -433,6 +675,103 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     expect(await rollbackImportRun(rollbackInput, deps("mixed-import-rollback"))).toMatchObject({ ok: true, replay: true });
   });
 
+  it("always records TRIAGED evidence and records ASSIGNED only for a real assignee", async () => {
+    const client = db();
+    const job = await client.job.findFirstOrThrow({
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+
+    const unassignedReportId = await createReport("JOB", job.id);
+    const unassignedInput = {
+      reportId: unassignedReportId,
+      expectedVersion: 1,
+      severity: "MEDIUM" as const,
+      assigneeUserId: null,
+      reasonCode: "INITIAL_TRIAGE",
+      safeNote: "Sachverhalt geprüft und noch nicht zugewiesen.",
+      idempotencyKey: randomUUID(),
+    };
+    requireSuccess(
+      await triageAbuseReport(
+        unassignedInput,
+        deps("moderation-triage-unassigned"),
+      ),
+    );
+    expect(
+      await triageAbuseReport(
+        unassignedInput,
+        deps("moderation-triage-unassigned-replay"),
+      ),
+    ).toMatchObject({ ok: true, replay: true });
+    await expect(
+      client.abuseReportEvent.findMany({
+        where: { abuseReportId: unassignedReportId },
+        select: { kind: true },
+      }),
+    ).resolves.toEqual([{ kind: "TRIAGED" }]);
+    await expect(
+      client.abuseReport.findUniqueOrThrow({
+        where: { id: unassignedReportId },
+        select: { assigneeUserId: true, status: true },
+      }),
+    ).resolves.toEqual({ assigneeUserId: null, status: "IN_REVIEW" });
+
+    const assignedReportId = await createReport("JOB", job.id);
+    requireSuccess(
+      await triageAbuseReport(
+        {
+          reportId: assignedReportId,
+          expectedVersion: 1,
+          severity: "HIGH",
+          assigneeUserId: adminUserId,
+          reasonCode: "INITIAL_TRIAGE",
+          idempotencyKey: randomUUID(),
+        },
+        deps("moderation-triage-assigned"),
+      ),
+    );
+    const assignedEvents = await client.abuseReportEvent.findMany({
+      where: { abuseReportId: assignedReportId },
+      select: { kind: true },
+    });
+    expect(assignedEvents).toHaveLength(2);
+    expect(assignedEvents).toEqual(
+      expect.arrayContaining([{ kind: "TRIAGED" }, { kind: "ASSIGNED" }]),
+    );
+    await expect(
+      client.auditLog.count({
+        where: {
+          action: "ABUSE_REPORT_TRIAGED",
+          targetId: { in: [unassignedReportId, assignedReportId] },
+        },
+      }),
+    ).resolves.toBe(2);
+    requireSuccess(
+      await resolveAbuseReport(
+        {
+          reportId: assignedReportId,
+          expectedVersion: 2,
+          resolutionCode: "REVIEW_COMPLETED",
+          idempotencyKey: randomUUID(),
+        },
+        deps("moderation-resolve-assigned"),
+      ),
+    );
+    await expect(
+      client.auditLog.findFirstOrThrow({
+        where: {
+          action: "ABUSE_REPORT_RESOLVED",
+          targetId: assignedReportId,
+        },
+        select: { targetType: true, result: true },
+      }),
+    ).resolves.toEqual({
+      targetType: "ABUSE_REPORT",
+      result: "SUCCEEDED",
+    });
+  });
+
   it("applies, lifts and expires every typed restriction without automatic restoration", async () => {
     const client = db();
 
@@ -459,12 +798,14 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     expect(await client.job.count({ where: { companyId: company.id, status: "PUBLISHED" } })).toBe(0);
 
     const user = await client.user.findFirstOrThrow({ where: { role: "CANDIDATE", status: "ACTIVE" }, orderBy: { id: "desc" }, select: { id: true } });
-    await client.session.create({ data: { userId: user.id, tokenHash: "b".repeat(64), createdAt: NOW, expiresAt: new Date(NOW.getTime() + 3_600_000), absoluteExpiresAt: new Date(NOW.getTime() + 7_200_000) } });
+    const moderatedSession = await client.session.create({ data: { userId: user.id, tokenHash: "b".repeat(64), createdAt: NOW, expiresAt: new Date(NOW.getTime() + 3_600_000), absoluteExpiresAt: new Date(NOW.getTime() + 7_200_000) }, select: { id: true } });
     const userReportId = await createReport("USER", user.id);
     const suspended = requireSuccess(await applyModerationRestriction({ reportId: userReportId, expectedReportVersion: 1, restrictionType: "SUSPEND_USER", affectedResourceId: user.id, impactConfirmed: true, reason: "Benutzer wird nach bestätigter Moderationsprüfung gesperrt.", idempotencyKey: randomUUID() }, deps("moderation-user")));
     requireSuccess(await liftModerationRestriction({ restrictionId: suspended.value.restrictionId, reasonCode: "RESTRICTION_REVIEW_COMPLETED", idempotencyKey: randomUUID() }, deps("moderation-user-lift")));
     expect(await client.user.findUnique({ where: { id: user.id }, select: { status: true } })).toEqual({ status: "SUSPENDED" });
-    expect(await client.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(await client.session.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
+    await expect(client.session.findUniqueOrThrow({ where: { id: moderatedSession.id }, select: { revokedAt: true } })).resolves.toEqual({ revokedAt: NOW });
+    await expect(client.auditLog.findFirstOrThrow({ where: { action: "SESSION_REVOKED", targetId: moderatedSession.id }, select: { targetType: true, capability: true, reasonCode: true } })).resolves.toEqual({ targetType: "SESSION", capability: "ADMIN_RESTRICTION_MANAGE", reasonCode: "MODERATION_SUSPEND_USER" });
 
     const message = await client.message.findFirstOrThrow({ orderBy: { id: "asc" }, select: { id: true, conversationId: true } });
     const messageReportId = await createReport("MESSAGE", message.id);
@@ -615,6 +956,22 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
         properties: { leadPurpose: lead.purpose },
       },
     ]);
+    await expect(
+      client.auditLog.findMany({
+        where: {
+          OR: [
+            { action: "TAXONOMY_CHANGED", targetId: skill.value.entityId },
+            { action: "LEAD_STATUS_CHANGED", targetId: lead.id },
+          ],
+        },
+        select: { action: true, targetId: true },
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        { action: "TAXONOMY_CHANGED", targetId: skill.value.entityId },
+        { action: "LEAD_STATUS_CHANGED", targetId: lead.id },
+      ]),
+    );
   });
 
   it("projects each SLA threshold once and exposes a privacy-safe evidence cockpit", async () => {

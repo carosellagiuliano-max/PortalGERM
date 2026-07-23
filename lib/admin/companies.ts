@@ -25,6 +25,7 @@ import {
   writeAdminAudit,
   type AdminDependencies,
 } from "@/lib/admin/common";
+import { trimmedString } from "@/lib/validation/common";
 
 const reasonSchema = z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u);
 const idempotencySchema = z.uuid();
@@ -188,7 +189,7 @@ const verificationCommandSchema = z.strictObject({
   verificationRequestId: z.uuid(),
   expectedStatus: z.enum(["PENDING", "CHANGES_REQUESTED", "VERIFIED"]),
   reasonCode: reasonSchema.optional(),
-  evidenceRef: z.string().trim().min(3).max(255).optional(),
+  evidenceRef: trimmedString(3, 255).optional(),
   idempotencyKey: idempotencySchema,
 });
 
@@ -344,7 +345,7 @@ const claimCommandSchema = z.strictObject({
   expectedStatus: z.enum(["PENDING", "NEEDS_EVIDENCE"]),
   approvedRole: z.enum(["OWNER", "ADMIN"]).optional(),
   reasonCode: reasonSchema,
-  evidenceRef: z.string().trim().min(3).max(255).optional(),
+  evidenceRef: trimmedString(3, 255).optional(),
   idempotencyKey: idempotencySchema,
 });
 

@@ -10,6 +10,7 @@ import {
 } from "@/lib/analytics/track";
 import { salesLeadAnalyticsKeyV1 } from "@/lib/sales/lead-policy";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import { trimmedString } from "@/lib/validation/common";
 import {
   adminErrorResult,
   adminFailure,
@@ -42,7 +43,10 @@ const leadCommandSchema = z.strictObject({
   ownerUserId: z.uuid().nullable().optional(),
   nextAt: z.coerce.date().nullable().optional(),
   status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "WON", "LOST"]).optional(),
-  safeNote: z.string().transform(stripUnsafeHtml).pipe(z.string().trim().min(1).max(1000)).optional(),
+  safeNote: trimmedString(1, 1000)
+    .transform(stripUnsafeHtml)
+    .pipe(z.string().min(1).max(1000))
+    .optional(),
   outcomeCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u).optional(),
   reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u),
   idempotencyKey: z.uuid(),

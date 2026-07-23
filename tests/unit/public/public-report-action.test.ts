@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getPublicJobBySlug: vi.fn(),
   getServerEnvironment: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(),
+  recordRateLimitDenial: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -37,6 +38,9 @@ vi.mock("@/lib/db/client", () => ({ getDatabase: mocks.getDatabase }));
 vi.mock("@/lib/jobs/public-read-model", () => ({
   getPublicJobBySlug: mocks.getPublicJobBySlug,
 }));
+vi.mock("@/lib/security/rate-limit-audit", () => ({
+  recordRateLimitDenial: mocks.recordRateLimitDenial,
+}));
 
 import { submitPublicReportAction } from "@/app/(public)/actions";
 
@@ -53,6 +57,7 @@ describe("public report action", () => {
     mocks.getCurrentUser.mockResolvedValue(null);
     mocks.consumeRequestRateLimit.mockResolvedValue({ allowed: true, status: 200 });
     mocks.createPublicReport.mockResolvedValue({ ok: true, reportId: "report-1" });
+    mocks.recordRateLimitDenial.mockResolvedValue({ written: true, gated: false });
   });
 
   it("rejects malformed fields before authentication, rate limiting or target lookup", async () => {
@@ -98,6 +103,22 @@ describe("public report action", () => {
     );
     expect(mocks.getPublicJobBySlug).not.toHaveBeenCalled();
     expect(mocks.createPublicReport).not.toHaveBeenCalled();
+    expect(mocks.recordRateLimitDenial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preset: "ABUSE_INTAKE_PRECHECK",
+        scope: "IP",
+      }),
+      expect.objectContaining({
+        actorKind: "ANONYMOUS",
+        capability: "PUBLIC_ABUSE_REPORT_PRECHECK",
+        targetId: "77777777-7777-4777-8777-777777777777",
+        targetType: "SYSTEM_TASK",
+      }),
+      expect.objectContaining({
+        database: { marker: "database" },
+        environment: { marker: "environment" },
+      }),
+    );
   });
 
   it("resolves a target only after the precheck and forwards the canonical id", async () => {

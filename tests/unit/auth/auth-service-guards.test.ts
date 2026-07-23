@@ -6,6 +6,10 @@ const password = vi.hoisted(() => ({
   hashPassword: vi.fn(),
   verifyPassword: vi.fn(),
 }));
+const rateLimit = vi.hoisted(() => ({
+  consumeAuthRateLimit: vi.fn(),
+  recordRateLimitDenial: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/password", () => ({
@@ -16,8 +20,16 @@ vi.mock("@/lib/auth/password", () => ({
   hashPassword: password.hashPassword,
   verifyPassword: password.verifyPassword,
 }));
+vi.mock("@/lib/auth/rate-limit-runtime", () => ({
+  consumeAuthRateLimit: rateLimit.consumeAuthRateLimit,
+  hashAuthIdentifier: vi.fn(),
+}));
+vi.mock("@/lib/security/rate-limit-audit", () => ({
+  recordRateLimitDenial: rateLimit.recordRateLimitDenial,
+}));
 
 import {
+  loginWithPassword,
   registerCandidate,
   registerEmployer,
   resetPassword,
@@ -36,6 +48,57 @@ describe("Phase 06 auth service guards", () => {
   beforeEach(() => {
     password.hashPassword.mockReset();
     password.verifyPassword.mockReset();
+    rateLimit.consumeAuthRateLimit.mockReset();
+    rateLimit.recordRateLimitDenial.mockReset().mockResolvedValue({
+      written: true,
+      gated: false,
+    });
+  });
+
+  it("uses the request correlation as a stable anonymous rate-limit target", async () => {
+    rateLimit.consumeAuthRateLimit.mockResolvedValue({
+      allowed: false,
+      status: 429,
+      code: "RATE_LIMITED",
+      retryAfterSeconds: 60,
+      audit: {
+        action: "RATE_LIMITED",
+        preset: "LOGIN",
+        scope: "IP_IDENTIFIER",
+      },
+    });
+    const dependencies = {
+      database: {} as never,
+      environment: { marker: "environment" } as never,
+      request,
+      now: new Date("2026-07-23T10:00:00.000Z"),
+    };
+
+    await expect(
+      loginWithPassword(
+        { email: "candidate@example.test", password: "irrelevant" },
+        dependencies,
+      ),
+    ).resolves.toEqual({
+      ok: false,
+      code: "RATE_LIMITED",
+      retryAfterSeconds: 60,
+    });
+    expect(rateLimit.recordRateLimitDenial).toHaveBeenCalledWith(
+      { preset: "LOGIN", scope: "IP_IDENTIFIER" },
+      {
+        actorKind: "ANONYMOUS",
+        capability: "AUTH_RATE_LIMIT",
+        targetId: request.correlationId,
+        targetType: "SYSTEM_TASK",
+      },
+      {
+        database: dependencies.database,
+        environment: dependencies.environment,
+        request,
+        now: dependencies.now,
+      },
+    );
   });
 
   it("rejects an unknown reset token before starting bcrypt work", async () => {

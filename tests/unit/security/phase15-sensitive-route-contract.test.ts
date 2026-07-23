@@ -43,6 +43,7 @@ import nextConfigFactory from "@/next.config";
 const PORTAL_PATHS = ["candidate", "employer", "admin"] as const;
 const SENSITIVE_HEADER_PATHS = [
   "/reset-password",
+  "/session/clear",
   "/invite/:path*",
   "/support/:path*",
   "/alerts/unsubscribe/:path*",
@@ -120,6 +121,20 @@ describe("Phase-15 private and sensitive route contract", () => {
         entry?.headers.find(({ key }) => key === "Cache-Control")?.value,
       ).toContain("no-store");
     }
+  });
+
+  it("keeps personalized public job details private without conflating SEO", async () => {
+    vi.stubEnv("APP_ENV", "local");
+    const entries = await nextConfigFactory("test").headers?.();
+    const detail = entries?.find(({ source }) => source === "/jobs/:slug");
+
+    expect(detail?.headers).toEqual([
+      { key: "Cache-Control", value: "private, no-store, max-age=0" },
+      { key: "Referrer-Policy", value: "no-referrer" },
+    ]);
+    expect(detail?.headers.some(({ key }) => key === "X-Robots-Tag")).toBe(
+      false,
+    );
   });
 
   it("excludes every private namespace from robots and the sitemap allowlist", () => {

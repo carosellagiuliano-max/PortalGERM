@@ -10,9 +10,21 @@ export async function POST(request: Request) {
     await logoutCurrentSession();
   } catch (error) {
     if (error instanceof Error && error.message === "AUTH_ORIGIN_DENIED") {
-      return new Response("Forbidden", { status: 403 });
+      return noStoreResponse("Forbidden", 403);
     }
     throw error;
   }
-  return NextResponse.redirect(new URL("/login?loggedOut=1", request.url), 303);
+  const response = NextResponse.redirect(
+    new URL("/login?loggedOut=1", request.url),
+    303,
+  );
+  response.headers.set("Cache-Control", "private, no-store, max-age=0");
+  return response;
+}
+
+function noStoreResponse(body: BodyInit | null, status: number) {
+  return new NextResponse(body, {
+    status,
+    headers: { "Cache-Control": "private, no-store, max-age=0" },
+  });
 }

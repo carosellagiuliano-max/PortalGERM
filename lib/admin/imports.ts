@@ -7,6 +7,10 @@ import { z } from "zod";
 import { canRunLicensedSupplyImport, canUseEmployerImport } from "@/lib/admin/capabilities";
 import { slaDueAt } from "@/lib/admin/sla";
 import { Prisma } from "@/lib/generated/prisma/client";
+import {
+  controlSafeString,
+  trimmedString,
+} from "@/lib/validation/common";
 import { createJobSlug } from "@/lib/jobs/slug";
 import { slugify } from "@/lib/utils/slug";
 import {
@@ -31,22 +35,30 @@ export const LICENSED_FEED_FIELDS = Object.freeze([
 ] as const);
 
 const normalizedItemSchema = z.strictObject({
-  id: z.string().trim().min(1).max(160),
-  company: z.string().trim().min(1).max(200),
-  title: z.string().trim().min(3).max(200),
-  workplace_country: z.string().trim().toUpperCase().length(2).default("CH"),
-  zip: z.string().trim().max(16).default(""),
-  city: z.string().trim().max(160).default(""),
-  canton: z.string().trim().max(120).default(""),
-  description: z.string().trim().min(10).max(10_000),
-  requirements: z.array(z.string().trim().min(1).max(500)).max(MAX_ARRAY_VALUES).default([]),
-  offer: z.string().trim().max(5_000).default(""),
-  contact: z.string().trim().max(512).default(""),
-  application_url: z.string().trim().max(512).default(""),
-  type: z.string().trim().max(64).default("PERMANENT"),
+  id: trimmedString(1, 160),
+  company: trimmedString(1, 200),
+  title: trimmedString(3, 200),
+  workplace_country: trimmedString(2, 2)
+    .transform((value) => value.toUpperCase())
+    .default("CH"),
+  zip: trimmedString(0, 16).default(""),
+  city: trimmedString(0, 160).default(""),
+  canton: trimmedString(0, 120).default(""),
+  description: trimmedString(10, 10_000),
+  requirements: z
+    .array(trimmedString(1, 500))
+    .max(MAX_ARRAY_VALUES)
+    .default([]),
+  offer: trimmedString(0, 5_000).default(""),
+  contact: trimmedString(0, 512).default(""),
+  application_url: trimmedString(0, 512).default(""),
+  type: trimmedString(0, 64).default("PERMANENT"),
   workload_min: z.coerce.number().int().min(1).max(100).default(80),
   workload_max: z.coerce.number().int().min(1).max(100).default(100),
-  keywords: z.array(z.string().trim().min(1).max(160)).max(MAX_ARRAY_VALUES).default([]),
+  keywords: z
+    .array(trimmedString(1, 160))
+    .max(MAX_ARRAY_VALUES)
+    .default([]),
 }).superRefine((item, context) => {
   if (item.workload_min > item.workload_max) context.addIssue({ code: "custom", path: ["workload_max"], message: "INVALID_WORKLOAD" });
   if (item.workplace_country !== "CH") context.addIssue({ code: "custom", path: ["workplace_country"], message: "UNSUPPORTED_COUNTRY" });
@@ -61,7 +73,7 @@ const parseSchema = z.strictObject({
   importSourceId: z.uuid(),
   inputSource: z.enum(["UPLOAD", "PASTE"]),
   format: z.enum(["XML", "JSON"]),
-  payload: z.string().min(2).max(MAX_IMPORT_BYTES),
+  payload: controlSafeString(MAX_IMPORT_BYTES).min(2),
   idempotencyKey: z.uuid(),
 });
 
@@ -266,7 +278,7 @@ export async function rollbackImportRun(raw: unknown, dependencies: AdminDepende
 }
 
 const setupApprovalSchema = z.strictObject({
-  companyId: z.uuid(), importSourceId: z.uuid(), rightsEvidence: z.string().trim().min(3).max(1000), mappingEvidence: z.string().trim().min(3).max(1000), validUntil: z.coerce.date(), reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u), idempotencyKey: z.uuid(),
+  companyId: z.uuid(), importSourceId: z.uuid(), rightsEvidence: trimmedString(3, 1000), mappingEvidence: trimmedString(3, 1000), validUntil: z.coerce.date(), reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u), idempotencyKey: z.uuid(),
 });
 
 export async function approveImportSetup(raw: unknown, dependencies: AdminDependencies) {

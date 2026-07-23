@@ -7,7 +7,6 @@ import {
   AuditTargetType,
 } from "@/lib/generated/prisma/enums";
 import {
-  AUDIT_IP_HASH_RETENTION_MILLISECONDS,
   AUDIT_ACTOR_KINDS_V1,
   AUDIT_METADATA_SCHEMAS_V1,
   AUDIT_RESULTS_V1,
@@ -155,22 +154,14 @@ describe("audit log contract", () => {
     ).toThrow(AuditInputValidationError);
   });
 
-  it("nullifies event IP hashes at the exact 30-day boundary", async () => {
-    const now = new Date("2040-03-31T12:00:00.000Z");
-    const updateMany = vi.fn(async () => ({ count: 7 }));
+  it("delegates IP retention to a database-clock operation without an app cutoff", async () => {
+    const nullifyExpiredIpHashes = vi.fn(async () => 7);
 
     await expect(
-      nullifyExpiredAuditIpHashes({ auditLog: { updateMany } }, { now }),
+      nullifyExpiredAuditIpHashes({ nullifyExpiredIpHashes }),
     ).resolves.toBe(7);
-    expect(updateMany).toHaveBeenCalledWith({
-      where: {
-        ipHash: { not: null },
-        createdAt: {
-          lte: new Date(now.getTime() - AUDIT_IP_HASH_RETENTION_MILLISECONDS),
-        },
-      },
-      data: { ipHash: null, ipHashVersion: null },
-    });
+    expect(nullifyExpiredIpHashes).toHaveBeenCalledOnce();
+    expect(nullifyExpiredIpHashes).toHaveBeenCalledWith();
   });
 
   it("fails closed on non-allowlisted metadata and top-level properties", () => {

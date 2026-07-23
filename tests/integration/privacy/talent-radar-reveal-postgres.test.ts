@@ -78,6 +78,18 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
     await expect(
       getEmployerRadarRequestView(db(), employerViewInput(fixture)),
     ).resolves.toMatchObject({ identity: [], revealStatus: "NONE" });
+    await expect(
+      db().auditLog.findFirstOrThrow({
+        where: {
+          action: "CONTACT_REQUEST_ACCEPTED",
+          targetId: fixture.contactRequestId,
+        },
+        select: { targetType: true, result: true },
+      }),
+    ).resolves.toEqual({
+      targetType: "CONTACT_REQUEST",
+      result: "SUCCEEDED",
+    });
   });
 
   it("persists exactly one encrypted snapshot and never follows later live-profile edits", async () => {
@@ -407,6 +419,25 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
     await expect(
       getEmployerRadarRequestView(db(), employerViewInput(fixture)),
     ).resolves.toMatchObject({ identity: [], revealStatus: "REVOKED" });
+    await expect(
+      db().auditLog.findMany({
+        where: {
+          targetId: granted.grantId,
+          action: { in: ["IDENTITY_REVEALED", "IDENTITY_REVEAL_REVOKED"] },
+        },
+        orderBy: { createdAt: "asc" },
+        select: { action: true, targetType: true },
+      }),
+    ).resolves.toEqual([
+      {
+        action: "IDENTITY_REVEALED",
+        targetType: "IDENTITY_REVEAL_GRANT",
+      },
+      {
+        action: "IDENTITY_REVEAL_REVOKED",
+        targetType: "IDENTITY_REVEAL_GRANT",
+      },
+    ]);
   });
 });
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { EmployerApplicantReportForm } from "@/components/employer/applicant-report-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export function ApplicantCard({
         <Link href={`/employer/applicants/${application.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
           Bewerbung öffnen
         </Link>
+        <EmployerApplicantReportForm applicationId={application.id} />
       </CardContent>
     </Card>
   );

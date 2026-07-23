@@ -4,6 +4,7 @@ import {
   APPLICATION_STATUSES,
   type ApplicationStatus,
 } from "@/lib/policies/status/application";
+import { trimmedString } from "@/lib/validation/common";
 
 export const APPLICATION_CONFIRMATION_NOTICE_VERSION_V1 =
   "application-confirmation-v1" as const;
@@ -28,7 +29,7 @@ const optionalCoverLetter = z.preprocess(
     typeof value === "string" && value.trim().length === 0
       ? undefined
       : value,
-  z.string().trim().max(4_000).optional(),
+  trimmedString(0, 4_000).optional(),
 );
 
 export const applyToJobInputSchema = z
@@ -61,7 +62,7 @@ export const applyToJobInputSchema = z
 
 export const candidateApplicationNoteSchema = z.strictObject({
   applicationId: z.uuid(),
-  body: z.string().trim().min(1).max(1_000),
+  body: trimmedString(1, 1_000),
   idempotencyKey: z
     .string()
     .min(8)

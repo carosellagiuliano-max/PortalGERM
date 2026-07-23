@@ -30,6 +30,7 @@ import {
 } from "@/lib/talentradar/list-candidates";
 import type { RadarPrivacyHmacKeyV1 } from "@/lib/talentradar/privacy-policy-v1";
 import { signRadarContactSearchSessionProof } from "@/lib/talentradar/request-contact";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 export const metadata: Metadata = {
   title: "Talent Radar",
@@ -99,6 +100,20 @@ export default async function EmployerTalentRadarPage({
               consumedAt,
               { database, environment },
             );
+            if (!decision.allowed) {
+              await recordRateLimitDenial(
+                decision.audit,
+                {
+                  actorKind: "USER",
+                  actorUserId: employerContext.user.id,
+                  capability: "EMPLOYER_TALENT_RADAR_LIST",
+                  companyId: context.companyId,
+                  targetId: context.companyId,
+                  targetType: "COMPANY",
+                },
+                { database, environment, request, now: consumedAt },
+              );
+            }
             return decision.allowed
               ? Object.freeze({ allowed: true as const })
               : Object.freeze({

@@ -2,6 +2,13 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () =>
+    new Headers({
+      "x-nonce": "0123456789abcdef0123456789abcdef",
+    }),
+  ),
+}));
 
 const publicJobData = vi.hoisted(() => ({
   getPublicJobBySlug: vi.fn(),
@@ -175,6 +182,9 @@ describe("public job detail applicant-facing content", () => {
     const script = container.querySelector('script[type="application/ld+json"]');
     expect(script).not.toBeNull();
     expect(script?.textContent).toBe("{}");
+    expect(script?.getAttribute("nonce")).toBe(
+      "0123456789abcdef0123456789abcdef",
+    );
 
     publicEnvironment.getPublicDataContext.mockReturnValue({
       publicIndexingAllowed: false,
@@ -188,5 +198,25 @@ describe("public job detail applicant-facing content", () => {
     expect(
       nonIndexable.container.querySelector('script[type="application/ld+json"]'),
     ).toBeNull();
+  });
+
+  it("renders angle-bracket job text literally without creating executable elements", async () => {
+    publicJobData.getPublicJobBySlug.mockResolvedValue({
+      ...job,
+      description: "Literal: <script>alert('inert')</script>",
+    });
+
+    const { container } = render(
+      await JobDetailPage({
+        params: Promise.resolve({ slug: job.slug }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+
+    expect(
+      screen.getByText("Literal: <script>alert('inert')</script>"),
+    ).toBeInTheDocument();
+    expect(container.querySelector("script:not([type='application/ld+json'])"))
+      .toBeNull();
   });
 });

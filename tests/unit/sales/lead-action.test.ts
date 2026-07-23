@@ -4,13 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   consumeRequestRateLimit: vi.fn(),
-  createPrismaAuditPort: vi.fn(),
   getAuthRequestContext: vi.fn(),
   getDatabase: vi.fn(),
   getServerEnvironment: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(),
+  recordRateLimitDenial: vi.fn(),
   submitPublicEmployerLead: vi.fn(),
-  writeBestEffortAudit: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -21,12 +20,6 @@ vi.mock("@/lib/auth/request-context", () => ({
   getAuthRequestContext: mocks.getAuthRequestContext,
   isValidAuthMutationOrigin: mocks.isValidAuthMutationOrigin,
 }));
-vi.mock("@/lib/audit/log", () => ({
-  writeBestEffortAudit: mocks.writeBestEffortAudit,
-}));
-vi.mock("@/lib/audit/prisma-port", () => ({
-  createPrismaAuditPort: mocks.createPrismaAuditPort,
-}));
 vi.mock("@/lib/config/env", () => ({
   getServerEnvironment: mocks.getServerEnvironment,
 }));
@@ -34,11 +27,13 @@ vi.mock("@/lib/db/client", () => ({ getDatabase: mocks.getDatabase }));
 vi.mock("@/lib/sales/public-lead", () => ({
   submitPublicEmployerLead: mocks.submitPublicEmployerLead,
 }));
+vi.mock("@/lib/security/rate-limit-audit", () => ({
+  recordRateLimitDenial: mocks.recordRateLimitDenial,
+}));
 
 import { submitEmployerDemoLeadAction } from "@/app/(public)/employers/demo/actions";
 
 const NOW = new Date("2026-07-20T10:15:30.000Z");
-const RETAIN_UNTIL = new Date("2028-07-19T10:15:30.000Z");
 const NEUTRAL_SUCCESS_MESSAGE =
   "Danke — deine Anfrage ist erfasst. Unser internes Ziel ist eine Antwort innerhalb eines Werktags; dies ist keine Garantie.";
 const REQUEST = Object.freeze({
@@ -57,7 +52,6 @@ const ENVIRONMENT = Object.freeze({
     keyrings: Object.freeze({ AUDIT_IP_HASH_KEYS: AUDIT_KEYRING }),
   }),
 });
-const AUDIT_PORT = Object.freeze({ marker: "audit-port" });
 
 describe("public employer lead action", () => {
   beforeEach(() => {
@@ -73,8 +67,10 @@ describe("public employer lead action", () => {
       allowed: true,
       status: 200,
     });
-    mocks.createPrismaAuditPort.mockReturnValue(AUDIT_PORT);
-    mocks.writeBestEffortAudit.mockResolvedValue({ written: true });
+    mocks.recordRateLimitDenial.mockResolvedValue({
+      written: true,
+      gated: false,
+    });
     mocks.submitPublicEmployerLead.mockResolvedValue({
       ok: true,
       leadId: "11111111-1111-4111-8111-111111111111",
@@ -104,8 +100,7 @@ describe("public employer lead action", () => {
     expect(mocks.getDatabase).not.toHaveBeenCalled();
     expect(mocks.getServerEnvironment).not.toHaveBeenCalled();
     expect(mocks.consumeRequestRateLimit).not.toHaveBeenCalled();
-    expect(mocks.createPrismaAuditPort).not.toHaveBeenCalled();
-    expect(mocks.writeBestEffortAudit).not.toHaveBeenCalled();
+    expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
     expect(mocks.submitPublicEmployerLead).not.toHaveBeenCalled();
   });
 
@@ -151,7 +146,7 @@ describe("public employer lead action", () => {
     expect(mocks.getDatabase).not.toHaveBeenCalled();
     expect(mocks.getServerEnvironment).not.toHaveBeenCalled();
     expect(mocks.consumeRequestRateLimit).not.toHaveBeenCalled();
-    expect(mocks.writeBestEffortAudit).not.toHaveBeenCalled();
+    expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
     expect(mocks.submitPublicEmployerLead).not.toHaveBeenCalled();
   });
 
@@ -176,30 +171,12 @@ describe("public employer lead action", () => {
       { database: DATABASE, environment: ENVIRONMENT },
     );
     expect(mocks.submitPublicEmployerLead).not.toHaveBeenCalled();
-    expect(mocks.createPrismaAuditPort).not.toHaveBeenCalled();
-    expect(mocks.writeBestEffortAudit).not.toHaveBeenCalled();
+    expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
 
-  it("denies after ten requests and audits at most once per IP window", async () => {
+  it("denies after ten requests and delegates bounded denial auditing", async () => {
     let leadAttempts = 0;
-    let auditAttempts = 0;
-    mocks.consumeRequestRateLimit.mockImplementation(async (preset: string) => {
-      if (preset === "LEAD_DENIAL_AUDIT") {
-        auditAttempts += 1;
-        return auditAttempts === 1
-          ? { allowed: true, status: 200 }
-          : {
-              allowed: false,
-              status: 429,
-              code: "RATE_LIMITED",
-              retryAfterSeconds: 3_600,
-              audit: {
-                action: "RATE_LIMITED",
-                preset: "LEAD_DENIAL_AUDIT",
-                scope: "IP",
-              },
-            };
-      }
+    mocks.consumeRequestRateLimit.mockImplementation(async () => {
       leadAttempts += 1;
       if (leadAttempts <= 10) return { allowed: true, status: 200 };
       return {
@@ -229,31 +206,28 @@ describe("public employer lead action", () => {
         message: "Zu viele Anfragen in kurzer Zeit. Bitte versuche es später erneut.",
       });
     }
-    expect(mocks.consumeRequestRateLimit).toHaveBeenCalledTimes(14);
+    expect(mocks.consumeRequestRateLimit).toHaveBeenCalledTimes(12);
     expect(leadAttempts).toBe(12);
-    expect(auditAttempts).toBe(2);
     expect(mocks.submitPublicEmployerLead).toHaveBeenCalledTimes(10);
-    expect(mocks.createPrismaAuditPort).toHaveBeenCalledOnce();
-    expect(mocks.createPrismaAuditPort).toHaveBeenCalledWith(DATABASE);
-    expect(mocks.writeBestEffortAudit).toHaveBeenCalledOnce();
-    expect(mocks.writeBestEffortAudit).toHaveBeenCalledWith(
-      AUDIT_PORT,
+    expect(mocks.recordRateLimitDenial).toHaveBeenCalledTimes(2);
+    expect(mocks.recordRateLimitDenial).toHaveBeenCalledWith(
       {
         action: "RATE_LIMITED",
+        preset: "LEAD",
+        scope: "IP",
+      },
+      {
         actorKind: "ANONYMOUS",
         capability: "PUBLIC_EMPLOYER_DEMO_SUBMIT",
-        correlationId: REQUEST.correlationId,
-        metadata: { preset: "LEAD", scope: "IP" },
-        reasonCode: "RATE_LIMITED",
-        result: "DENIED",
-        retainUntil: RETAIN_UNTIL,
-        targetId: expect.stringMatching(
-          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
-        ),
+        targetId: REQUEST.correlationId,
         targetType: "SALES_LEAD",
       },
-      undefined,
-      { sourceIp: REQUEST.sourceIp, keyring: AUDIT_KEYRING },
+      {
+        database: DATABASE,
+        environment: ENVIRONMENT,
+        request: REQUEST,
+        now: NOW,
+      },
     );
   });
 
@@ -290,7 +264,7 @@ describe("public employer lead action", () => {
         now: NOW,
       },
     );
-    expect(mocks.writeBestEffortAudit).not.toHaveBeenCalled();
+    expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
 
   it("returns the dedicated German message when notification confirmation fails", async () => {
@@ -321,7 +295,7 @@ describe("public employer lead action", () => {
       },
     });
     expect(mocks.submitPublicEmployerLead).toHaveBeenCalledOnce();
-    expect(mocks.writeBestEffortAudit).not.toHaveBeenCalled();
+    expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
 });
 

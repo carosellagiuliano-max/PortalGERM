@@ -141,6 +141,16 @@ describe.sequential("Phase 13 Job Boost PostgreSQL lifecycle", () => {
       correlationId: randomUUID(),
       now: adjacentAt,
     })).resolves.toEqual({ activated: 0, expired: 0 });
+    await expect(
+      db().auditLog.findFirstOrThrow({
+        where: { action: "JOB_BOOST_EXPIRED", targetId: first.value.boostId },
+        select: { actorKind: true, targetType: true, result: true },
+      }),
+    ).resolves.toEqual({
+      actorKind: "SYSTEM",
+      targetType: "JOB_BOOST",
+      result: "SUCCEEDED",
+    });
 
     const beforeCancelConsumes = await db().creditLedgerEntry.count({
       where: { consumedGrantEntryId: IDS.grant, kind: "CONSUME" },

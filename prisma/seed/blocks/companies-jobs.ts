@@ -4,6 +4,7 @@ import {
   verifyPassword,
 } from "@/lib/auth/password";
 import type { Prisma, PrismaClient } from "@/lib/generated/prisma/client";
+import { companyMediaOptions } from "@/lib/security/company-media-manifest";
 import type { CanonicalJsonValue } from "@/prisma/seed/canonical-json";
 import { createOrVerifySeedRecord, SeedDataDriftError } from "@/prisma/seed/create-or-verify";
 import { createSeedBlockDigest } from "@/prisma/seed/manifest";
@@ -335,6 +336,11 @@ async function seedCompany(
   anchorAt: Date,
 ): Promise<void> {
   const createdAt = addDays(anchorAt, -180);
+  const logoAsset = companyMediaOptions("LOGO")[0];
+  const coverAsset = companyMediaOptions("COVER")[0];
+  if (logoAsset === undefined || coverAsset === undefined) {
+    throw new Error("The reviewed company-media manifest is incomplete.");
+  }
   const companyCore = {
     id: fixture.id,
     name: fixture.name,
@@ -342,8 +348,8 @@ async function seedCompany(
     industry: fixture.industry,
     size: fixture.size,
     website: `https://${fixture.slug}.example.test`,
-    logoStorageKey: `mock-storage/demo/company/${fixture.slug}/logo.svg`,
-    coverStorageKey: `mock-storage/demo/company/${fixture.slug}/cover.webp`,
+    logoStorageKey: logoAsset.path,
+    coverStorageKey: coverAsset.path,
     about: `${fixture.name} ist ein vollständig fiktives Schweizer Demo-Unternehmen. Das Team verbindet ${fixture.industry} mit nachvollziehbaren Arbeitsweisen, fairer Kommunikation und konkreten Lernmöglichkeiten.`,
     values: ["Verlässliche Zusammenarbeit", "Lernen im Alltag", "Faire Entscheidungen"],
     benefits: ["Planbare Arbeitszeiten", "Bezahlte Weiterbildung", "Transparente Lohnbänder"],

@@ -20,6 +20,7 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
   "PRIVACY_IDENTITY_CHALLENGE",
   "LEAD",
   "LEAD_DENIAL_AUDIT",
+  "SECURITY_DENIAL_AUDIT",
   "ABUSE_INTAKE_PRECHECK",
   "ABUSE_INTAKE",
   "CONTACT_REQUEST",
@@ -94,6 +95,9 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
   LEAD: { buckets: [{ scope: "IP", limit: 10, windowMs: HOUR }] },
   LEAD_DENIAL_AUDIT: {
     buckets: [{ scope: "IP", limit: 1, windowMs: HOUR }],
+  },
+  SECURITY_DENIAL_AUDIT: {
+    buckets: [{ scope: "ACTOR_OR_IP", limit: 1, windowMs: HOUR }],
   },
   ABUSE_INTAKE_PRECHECK: {
     buckets: [
@@ -209,7 +213,7 @@ export type RateLimitDecision =
       audit: Readonly<{
         action: "RATE_LIMITED";
         preset: RateLimitPresetName;
-        scope: string;
+        scope: RateLimitScope | "OPEN_TYPE" | "UNKNOWN";
       }>;
     }>;
 

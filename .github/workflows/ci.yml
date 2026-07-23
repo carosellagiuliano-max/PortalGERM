@@ -24,6 +24,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://swisstalenthub_ci:ci-only-password@127.0.0.1:5432/swisstalenthub_ci_test?schema=public
       APP_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_APP_NAME: SwissTalentHub CI
+      APP_BUILD_ID: ${{ github.sha }}
       RATE_LIMIT_BACKEND: postgres
       ENABLE_LOCAL_MOCK_MAILBOX: "false"
       LOG_LEVEL: warn
@@ -147,6 +148,9 @@ jobs:
       - name: Production-HTTP-Smoke
         run: npm run test:e2e
 
+      - name: Production-like HSTS Build und HTTP-Smoke
+        run: npm run test:e2e:hsts
+
   windows-portability:
     name: Windows portability
     runs-on: windows-latest
@@ -158,6 +162,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://phase01_ci:ci-only-password@127.0.0.1:65535/phase01_ci_test?schema=public
       APP_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_APP_NAME: SwissTalentHub CI
+      APP_BUILD_ID: ${{ github.sha }}
       RATE_LIMIT_BACKEND: postgres
       ENABLE_LOCAL_MOCK_MAILBOX: "false"
       LOG_LEVEL: warn

@@ -11,14 +11,15 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { buildNotificationPersistenceRecord } from "@/lib/notifications/writer";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
 import { isConversationMessageBlocked } from "@/lib/admin/moderation";
+import { trimmedString } from "@/lib/validation/common";
 
 const UUID = z.string().uuid();
 export const CANDIDATE_CONVERSATION_PAGE_SIZE = 25;
 export const CANDIDATE_MESSAGE_PAGE_SIZE = 200;
 export const candidateMessageInputSchema = z.strictObject({
   conversationId: UUID,
-  body: z.string().trim().min(1).max(5_000),
-  idempotencyKey: z.string().trim().min(8).max(128),
+  body: trimmedString(1, 5_000),
+  idempotencyKey: trimmedString(8, 128),
 });
 
 export type CandidateConversationListItem = Readonly<{
@@ -272,6 +273,35 @@ export async function getCandidateConversation(
     },
     { isolationLevel: "RepeatableRead" },
   );
+}
+
+export async function resolveCandidateMessageReportTarget(
+  database: DatabaseClient,
+  userId: string,
+  messageId: string,
+) {
+  if (!UUID.safeParse(userId).success || !UUID.safeParse(messageId).success) {
+    return null;
+  }
+  const message = await database.message.findFirst({
+    where: {
+      id: messageId,
+      senderUserId: { not: userId },
+      conversation: candidateConversationWhere(userId),
+    },
+    select: {
+      id: true,
+      conversationId: true,
+      conversation: { select: { companyId: true } },
+    },
+  });
+  return message === null
+    ? null
+    : Object.freeze({
+        id: message.id,
+        conversationId: message.conversationId,
+        companyId: message.conversation.companyId,
+      });
 }
 
 export type SendCandidateMessageResult =

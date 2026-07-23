@@ -34,6 +34,7 @@ import {
 } from "@/lib/notifications/writer";
 import type { EmailProvider } from "@/lib/providers/email/email-provider";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger();
@@ -140,6 +141,22 @@ export async function applyToJob(
         },
       );
       if (!rate.allowed) {
+        await recordRateLimitDenial(
+          rate.audit,
+          {
+            actorKind: "USER",
+            actorUserId: dependencies.currentUser.id,
+            capability: "CANDIDATE_APPLICATION_SUBMIT",
+            targetId: dependencies.currentUser.id,
+            targetType: "USER",
+          },
+          {
+            database: dependencies.database,
+            environment: dependencies.environment,
+            request: dependencies.request,
+            now,
+          },
+        );
         return Object.freeze({ ok: false, code: "RATE_LIMITED" });
       }
 

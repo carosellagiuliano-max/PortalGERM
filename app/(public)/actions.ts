@@ -11,6 +11,8 @@ import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/req
 import { getPublicCompanyCardBySlug } from "@/lib/companies/public-read-model";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
+import { emailProvider } from "@/lib/providers/email";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { getPublicJobBySlug } from "@/lib/jobs/public-read-model";
 import type { PublicReportActionState } from "@/lib/abuse/public-report-state";
 
@@ -45,6 +47,17 @@ export async function submitPublicReportAction(
     { database, environment },
   );
   if (!precheck.allowed) {
+    await recordRateLimitDenial(
+      precheck.audit,
+      {
+        actorKind: currentUser === null ? "ANONYMOUS" : "USER",
+        actorUserId: currentUser?.id,
+        capability: "PUBLIC_ABUSE_REPORT_PRECHECK",
+        targetId: currentUser?.id ?? request.correlationId,
+        targetType: currentUser === null ? "SYSTEM_TASK" : "USER",
+      },
+      { database, environment, request, now },
+    );
     return errorState("Zu viele Meldungen in kurzer Zeit. Bitte versuche es später erneut.");
   }
 
@@ -57,6 +70,7 @@ export async function submitPublicReportAction(
       environment,
       request,
       currentUser,
+      emailProvider,
       now,
     },
   );

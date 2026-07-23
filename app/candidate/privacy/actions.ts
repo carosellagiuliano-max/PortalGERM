@@ -16,6 +16,7 @@ import {
   PRIVACY_REQUEST_POLICY_V1,
   privacyRequestInputSchema,
 } from "@/lib/privacy/requests";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 export type CandidatePrivacyActionState = Readonly<{
   status: "idle" | "success" | "error";
@@ -50,6 +51,7 @@ export async function createCandidatePrivacyRequestAction(
   }
 
   const database = getDatabase();
+  const environment = getServerEnvironment();
   const now = new Date();
   try {
     const existing = await database.privacyRequest.findFirst({
@@ -71,9 +73,20 @@ export async function createCandidatePrivacyRequestAction(
         { userId: user.id },
         request,
         now,
-        { database, environment: getServerEnvironment() },
+        { database, environment },
       );
       if (!rate.allowed) {
+        await recordRateLimitDenial(
+          rate.audit,
+          {
+            actorKind: "USER",
+            actorUserId: user.id,
+            capability: "CANDIDATE_PRIVACY_REQUEST_CREATE",
+            targetId: user.id,
+            targetType: "USER",
+          },
+          { database, environment, request, now },
+        );
         return errorState(
           "Zu viele Datenschutzanfragen im Self-Service. Dein Anliegen kann weiterhin über den Support erfasst werden.",
           PRIVACY_REQUEST_POLICY_V1.supportPath,

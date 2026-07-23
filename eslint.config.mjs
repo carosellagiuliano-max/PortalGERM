@@ -17,6 +17,24 @@ export default defineConfig([
       ],
     },
   },
+  {
+    files: [
+      "app/**/*.{ts,tsx}",
+      "components/**/*.{ts,tsx}",
+      "lib/**/*.{ts,tsx}",
+      "proxy.ts",
+      "instrumentation.ts",
+    ],
+    rules: {
+      "no-console": "error",
+    },
+  },
+  {
+    files: ["lib/utils/logger.ts"],
+    rules: {
+      "no-console": "off",
+    },
+  },
   globalIgnores([
     ".next/**",
     "coverage/**",

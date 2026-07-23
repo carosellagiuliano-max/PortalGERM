@@ -1,11 +1,33 @@
 import { z } from "zod";
 
+const UNSAFE_TEXT_CONTROL_PATTERN =
+  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u;
+
+export const controlSafeString = (maximum: number) =>
+  z
+    .string()
+    .max(maximum)
+    .refine(
+      (value) => !hasUnsafeTextControls(value),
+      "Unsafe control characters are not allowed.",
+    );
+
 export const trimmedString = (minimum: number, maximum: number) =>
-  z.string().trim().min(minimum).max(maximum);
+  controlSafeString(maximum)
+    .normalize("NFC")
+    .trim()
+    .min(minimum)
+    .max(maximum);
 
 export const uuidSchema = z.uuid();
 export const normalizedEmailSchema = z
   .string()
+  .max(320)
+  .refine(
+    (value) => !hasUnsafeTextControls(value),
+    "Unsafe control characters are not allowed.",
+  )
+  .normalize("NFC")
   .trim()
   .email()
   .max(320)
@@ -13,6 +35,12 @@ export const normalizedEmailSchema = z
 
 export const swissPhoneSchema = z
   .string()
+  .max(16)
+  .refine(
+    (value) => !hasUnsafeTextControls(value),
+    "Unsafe control characters are not allowed.",
+  )
+  .normalize("NFC")
   .trim()
   .regex(/^\+41[1-9]\d{8}$/, "Use the international Swiss format +41XXXXXXXXX.");
 
@@ -37,6 +65,10 @@ export function isSafeAbsoluteHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function hasUnsafeTextControls(value: string) {
+  return UNSAFE_TEXT_CONTROL_PATTERN.test(value);
 }
 
 export function addOrderedRangeIssue(

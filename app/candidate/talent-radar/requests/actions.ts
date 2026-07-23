@@ -23,6 +23,7 @@ import {
   grantRevealFields,
   revokeIdentityReveal,
 } from "@/lib/talentradar/reveal";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 const GENERIC_ERROR = "Die Aktion konnte nicht sicher ausgeführt werden.";
 const RATE_LIMIT_ERROR =
@@ -99,7 +100,12 @@ export async function previewCandidateRadarRevealAction(
   if (!parsed.success) {
     return errorState("Wähle mindestens ein noch nicht freigegebenes Feld aus.");
   }
-  if (!(await consumeCandidateActionRateLimit(dependencies))) {
+  if (
+    !(await consumeCandidateActionRateLimit(
+      dependencies,
+      parsed.data.requestId,
+    ))
+  ) {
     return errorState(RATE_LIMIT_ERROR);
   }
 
@@ -145,7 +151,12 @@ export async function grantCandidateRadarRevealAction(
     confirmed: formData.get("confirmed") === "true",
   });
   if (!parsed.success) return errorState(GENERIC_ERROR);
-  if (!(await consumeCandidateActionRateLimit(dependencies))) {
+  if (
+    !(await consumeCandidateActionRateLimit(
+      dependencies,
+      parsed.data.requestId,
+    ))
+  ) {
     return errorState(RATE_LIMIT_ERROR);
   }
 
@@ -189,7 +200,12 @@ export async function revokeCandidateRadarRevealAction(
     confirmed: formData.get("confirmed") === "true",
   });
   if (!parsed.success) return errorState(GENERIC_ERROR);
-  if (!(await consumeCandidateActionRateLimit(dependencies))) {
+  if (
+    !(await consumeCandidateActionRateLimit(
+      dependencies,
+      parsed.data.requestId,
+    ))
+  ) {
     return errorState(RATE_LIMIT_ERROR);
   }
 
@@ -221,7 +237,12 @@ async function runLifecycleAction(
     confirmed: formData.get("confirmed") === "true",
   });
   if (!parsed.success) return errorState(GENERIC_ERROR);
-  if (!(await consumeCandidateActionRateLimit(dependencies))) {
+  if (
+    !(await consumeCandidateActionRateLimit(
+      dependencies,
+      parsed.data.requestId,
+    ))
+  ) {
     return errorState(RATE_LIMIT_ERROR);
   }
 
@@ -283,17 +304,37 @@ async function actionDependencies() {
 
 async function consumeCandidateActionRateLimit(
   dependencies: NonNullable<Awaited<ReturnType<typeof actionDependencies>>>,
+  requestId: string,
 ): Promise<boolean> {
+  const now = new Date();
   const decision = await consumeRequestRateLimit(
     "APPLICATION_CANDIDATE_MUTATION",
     { userId: dependencies.userId },
     dependencies.request,
-    new Date(),
+    now,
     {
       database: dependencies.database,
       environment: dependencies.environment,
     },
   );
+  if (!decision.allowed) {
+    await recordRateLimitDenial(
+      decision.audit,
+      {
+        actorKind: "USER",
+        actorUserId: dependencies.userId,
+        capability: "CANDIDATE_TALENT_RADAR_REQUEST_MUTATE",
+        targetId: requestId,
+        targetType: "CONTACT_REQUEST",
+      },
+      {
+        database: dependencies.database,
+        environment: dependencies.environment,
+        request: dependencies.request,
+        now,
+      },
+    );
+  }
   return decision.allowed;
 }
 

@@ -151,6 +151,25 @@ describe("candidate validation", () => {
       }).success,
     ).toBe(false);
   });
+
+  it.each(["\u0000", "\u0007", "\u202e", "\u2066"])(
+    "rejects unsafe text control U+%s before persistence",
+    (control) => {
+      expect(
+        applicationSchema.safeParse({
+          jobId: ID,
+          coverLetter: `Ich passe aufgrund meiner Erfahrung${control} sehr gut zu dieser Stelle.`,
+          idempotencyKey: "application-safe-text",
+        }).success,
+      ).toBe(false);
+      expect(
+        loginSchema.safeParse({
+          email: `user${control}@example.ch`,
+          password: "LongEnough1!",
+        }).success,
+      ).toBe(false);
+    },
+  );
 });
 
 describe("employer validation", () => {
@@ -218,6 +237,17 @@ describe("employer validation", () => {
         inclusionStatement: undefined,
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects oversized raw text before normalization", () => {
+    expect(
+      jobPostingBasicsSchema.safeParse({
+        title: ` ${"x".repeat(200)} `,
+        description: validJob.description,
+        categoryId: validJob.categoryId,
+        jobType: validJob.jobType,
+      }).success,
+    ).toBe(false);
   });
 
   it.each([

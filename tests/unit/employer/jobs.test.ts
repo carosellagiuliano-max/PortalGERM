@@ -139,6 +139,54 @@ describe("job wizard validation", () => {
     }).success).toBe(true);
   });
 
+  it("rejects control characters before sanitizing persisted job text", () => {
+    const base = {
+      companyIntro:
+        "Wir entwickeln sichere digitale Dienste für Schweizer Unternehmen.",
+      tasks: ["Sie planen wartbare Services für unsere zentrale Plattform."],
+      requirements: [
+        "Sie bringen fundierte Erfahrung mit TypeScript und Tests mit.",
+      ],
+      niceToHave: [],
+      offer:
+        "Wir bieten klare Arbeitsbedingungen und ein dokumentiertes Weiterbildungsbudget.",
+      skillIds: [],
+      benefits: [],
+    };
+
+    for (const control of ["\u0000", "\u0085", "\u202e"]) {
+      expect(
+        jobWizardStepTwoSchema.safeParse({
+          ...base,
+          tasks: [`${base.tasks[0]}${control}`],
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("preserves angle-bracket code as plain text for escaped output", () => {
+    const parsed = jobWizardStepTwoSchema.parse({
+      companyIntro:
+        "Wir erklären <script>alert('inert')</script> als wörtlichen Beispielcode.",
+      tasks: [
+        "Sie dokumentieren <script>alert('inert')</script> ohne HTML-Ausführung.",
+      ],
+      requirements: [
+        "Sie verstehen, dass React spitze Klammern im Text sicher ausgibt.",
+      ],
+      niceToHave: [],
+      offer:
+        "Wir bieten klare Arbeitsbedingungen und sichere Ausgabekodierung.",
+      skillIds: [],
+      benefits: [],
+    });
+
+    expect(parsed.companyIntro).toContain(
+      "<script>alert('inert')</script>",
+    );
+    expect(parsed.tasks[0]).toContain("<script>alert('inert')</script>");
+  });
+
   it("requires all-or-none salary data, exclusive NONE and a valid public contact", () => {
     const valid = {
       salaryPeriod: "YEARLY",

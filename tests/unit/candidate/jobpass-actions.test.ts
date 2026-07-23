@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getDatabase: vi.fn(),
   getServerEnvironment: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(),
+  recordRateLimitDenial: vi.fn(),
   revalidatePath: vi.fn(),
   requireCandidatePage: vi.fn(),
   save: vi.fn(),
@@ -33,6 +34,9 @@ vi.mock("@/lib/config/env", () => ({
   getServerEnvironment: mocks.getServerEnvironment,
 }));
 vi.mock("@/lib/db/client", () => ({ getDatabase: mocks.getDatabase }));
+vi.mock("@/lib/security/rate-limit-audit", () => ({
+  recordRateLimitDenial: mocks.recordRateLimitDenial,
+}));
 vi.mock("@/lib/candidate/profile", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/candidate/profile")>();
   return {
@@ -76,6 +80,10 @@ describe("Phase-09 JobPass server actions", () => {
     mocks.getDatabase.mockReturnValue(mocks.database);
     mocks.getServerEnvironment.mockReturnValue(mocks.environment);
     mocks.consumeRequestRateLimit.mockResolvedValue({ allowed: true, status: 200 });
+    mocks.recordRateLimitDenial.mockResolvedValue({
+      written: true,
+      gated: false,
+    });
     mocks.save.mockResolvedValue({
       outcome: "SAVED",
       reopened: false,
@@ -231,12 +239,36 @@ describe("Phase-09 JobPass server actions", () => {
       status: 429,
       code: "RATE_LIMITED",
       retryAfterSeconds: 60,
+      audit: {
+        action: "RATE_LIMITED",
+        preset: "CANDIDATE_PROFILE_MUTATION",
+        scope: "USER",
+      },
     });
 
     const result = await saveCandidateProfileAction(INITIAL, profileFormData());
 
     expect(result).toMatchObject({ status: "error" });
     expect(result.message).toContain("Zu viele Profiländerungen");
+    expect(mocks.recordRateLimitDenial).toHaveBeenCalledWith(
+      {
+        action: "RATE_LIMITED",
+        preset: "CANDIDATE_PROFILE_MUTATION",
+        scope: "USER",
+      },
+      {
+        actorKind: "USER",
+        actorUserId: USER_ID,
+        capability: "CANDIDATE_PROFILE_MUTATE",
+        targetId: USER_ID,
+        targetType: "USER",
+      },
+      expect.objectContaining({
+        database: mocks.database,
+        environment: mocks.environment,
+        request: expect.objectContaining({ correlationId: CORRELATION_ID }),
+      }),
+    );
     expect(mocks.save).not.toHaveBeenCalled();
     expect(mocks.complete).not.toHaveBeenCalled();
     expect(mocks.setRadar).not.toHaveBeenCalled();

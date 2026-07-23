@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 480" role="img" aria-labelledby="title description">
+  <title id="title">SwissTalentHub Alpencover</title>
+  <desc id="description">Abstrakte Schweizer Alpen in Grün-, Blau- und Sandtönen.</desc>
+  <rect width="1440" height="480" fill="#f1eee4"/>
+  <circle cx="1190" cy="112" r="62" fill="#d9a441"/>
+  <path d="M0 420 316 122l196 185L727 91l347 329z" fill="#24475d"/>
+  <path d="m563 420 201-181 117 105 162-144 267 220z" fill="#47725e"/>
+  <path d="m276 160 40-38 37 35-20 18-17-14-17 17z" fill="#fff" opacity=".92"/>
+</svg>

@@ -15,6 +15,7 @@ export function createValidEnvironment(
       "postgresql://app_test:test-only@127.0.0.1:5435/swisstalenthub_test?schema=public",
     APP_URL: "http://127.0.0.1:3000",
     NEXT_PUBLIC_APP_NAME: "SwissTalentHub",
+    APP_BUILD_ID: "test-build",
     SESSION_SECRET: keyMaterial(1),
     AUDIT_IP_HASH_KEYS: `audit-v1:${keyMaterial(2)}`,
     RADAR_OPAQUE_LOOKUP_KEYS: `lookup-v1:${keyMaterial(3)}`,
@@ -24,6 +25,7 @@ export function createValidEnvironment(
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",
+    ABUSE_REPORT_ADMIN_EMAILS: "admin@demo.ch",
     LOG_LEVEL: "info",
     ...overrides,
   } satisfies Record<string, string | undefined>;

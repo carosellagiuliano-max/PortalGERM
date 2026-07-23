@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { cache, Suspense } from "react";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -44,6 +45,10 @@ import { buildPublicJobPostingJsonLd, serializeJsonLd } from "@/lib/jobs/job-jso
 import { getPublicJobBySlug, listRelatedPublicJobs } from "@/lib/jobs/public-read-model";
 import { getPublicDataContext } from "@/lib/public/environment";
 import { formatDate } from "@/lib/utils/format";
+import {
+  CONTENT_SECURITY_POLICY_NONCE_HEADER,
+  isValidContentSecurityPolicyNonce,
+} from "@/lib/security/content-security-policy";
 
 const getJob = cache((slug: string) => getPublicJobBySlug(slug));
 
@@ -74,6 +79,13 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
   const appUrl = getServerEnvironment().APP_URL;
   const jsonLd = buildPublicJobPostingJsonLd(job, appUrl);
   const emitJsonLd = getPublicDataContext().publicIndexingAllowed && job.dataProvenance === "LIVE";
+  const requestHeaders = await headers();
+  const requestNonce = requestHeaders.get(
+    CONTENT_SECURITY_POLICY_NONCE_HEADER,
+  );
+  const jsonLdNonce = isValidContentSecurityPolicyNonce(requestNonce)
+    ? requestNonce
+    : undefined;
   const intentValue = firstValue(query.intent);
   const environment = getServerEnvironment();
   const intent = verifyJobIntent(
@@ -101,7 +113,13 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
   return (
     <div>
       <PublicJobDetailAnalytics jobSlug={job.slug} />
-      {emitJsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} /> : null}
+      {emitJsonLd ? (
+        <script
+          nonce={jsonLdNonce}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
+        />
+      ) : null}
       <div className="page-shell py-10 sm:py-14">
         <Link href="/jobs" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"><ArrowLeftIcon className="size-4" aria-hidden="true" /> Zur Stellensuche</Link>
 

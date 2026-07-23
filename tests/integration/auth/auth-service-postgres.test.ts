@@ -20,6 +20,7 @@ import {
   requestPasswordReset,
   resetPassword,
 } from "@/lib/auth/auth-service";
+import { suspendUser } from "@/lib/admin/users";
 import {
   resolveEmployerContextSelection,
   type EmployerMembershipContext,
@@ -36,6 +37,7 @@ import {
   createDatabaseClient,
   type DatabaseClient,
 } from "@/lib/db/factory";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { LocalMockMailbox } from "@/lib/providers/email/local-mock-mailbox-core";
 import { MockEmailProvider } from "@/lib/providers/email/mock-email-provider";
 import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
@@ -635,6 +637,20 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
     expect(success.session.record.tokenHash).toBe(
       hashSessionToken(success.session.token),
     );
+    const successAudits = await client().auditLog.findMany({
+      where: { correlationId: successRequest.correlationId },
+    });
+    expect(successAudits).toHaveLength(1);
+    expect(successAudits[0]).toMatchObject({
+      action: "USER_LOGIN",
+      actorKind: "USER",
+      actorUserId: LOGIN_FIXTURE_ID,
+      capability: "AUTH_LOGIN",
+      correlationId: successRequest.correlationId,
+      result: "SUCCEEDED",
+      targetId: success.session.record.id,
+      targetType: "SESSION",
+    });
 
     const knownRequest = requestContext("192.0.2.41");
     const unknownRequest = requestContext("192.0.2.42");
@@ -685,6 +701,230 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
     expect(serializedAudits).not.toContain(unknownRequest.sourceIp);
   });
 
+  it("denies a login whose credential lookup races with a committed user suspension", async () => {
+    const raceUserId = randomUUID();
+    const adminUserId = randomUUID();
+    const raceEmail = "login-suspension-race@fixture.example.test";
+    const racePassword = "Phase16!LoginRace42";
+    await client().user.createMany({
+      data: [
+        {
+          id: adminUserId,
+          email: "phase16-login-race-admin@fixture.example.test",
+          emailNormalized: "phase16-login-race-admin@fixture.example.test",
+          name: "Phase 16 Login Race Admin",
+          role: "ADMIN",
+          status: "ACTIVE",
+          dataProvenance: "TEST",
+        },
+        {
+          id: raceUserId,
+          email: raceEmail,
+          emailNormalized: raceEmail,
+          name: "Phase 16 Login Race Candidate",
+          role: "CANDIDATE",
+          status: "ACTIVE",
+          dataProvenance: "TEST",
+        },
+      ],
+    });
+    await client().credential.create({
+      data: {
+        userId: raceUserId,
+        passwordHash: await hashPassword(racePassword),
+        algorithm: PASSWORD_HASH_POLICY_V1.algorithm,
+        algorithmVersion: PASSWORD_HASH_POLICY_V1.algorithmVersion,
+        passwordChangedAt: NOW,
+      },
+    });
+
+    const lookupBarrier = delayLoginUserLookup(client(), raceEmail);
+    const loginRequest = requestContext("192.0.2.43");
+    const loginPromise = loginWithPassword(
+      { email: raceEmail, password: racePassword },
+      {
+        ...dependencies(loginRequest),
+        database: lookupBarrier.database,
+      },
+    );
+    await lookupBarrier.observed;
+
+    let suspension;
+    try {
+      suspension = await suspendUser(
+        {
+          userId: raceUserId,
+          expectedStatus: "ACTIVE",
+          reasonCode: "SECURITY_REVIEW",
+          idempotencyKey: randomUUID(),
+        },
+        {
+          actor: {
+            userId: adminUserId,
+            email: "phase16-login-race-admin@fixture.example.test",
+            role: "ADMIN",
+            status: "ACTIVE",
+          },
+          correlationId: randomUUID(),
+          database: client(),
+          now: new Date(NOW.getTime() + 500),
+        },
+      );
+    } finally {
+      lookupBarrier.release();
+    }
+
+    const login = await loginPromise;
+    expect(suspension).toMatchObject({
+      ok: true,
+      value: {
+        userId: raceUserId,
+        status: "SUSPENDED",
+        sessionsRevoked: 0,
+      },
+    });
+    expect(login).toEqual({ ok: false, code: "INVALID_CREDENTIALS" });
+    await expect(
+      client().session.count({ where: { userId: raceUserId } }),
+    ).resolves.toBe(0);
+    await expect(
+      client().auditLog.findFirstOrThrow({
+        where: {
+          action: "USER_LOGIN_FAILED",
+          correlationId: loginRequest.correlationId,
+        },
+        select: {
+          capability: true,
+          reasonCode: true,
+          result: true,
+          targetId: true,
+          targetType: true,
+        },
+      }),
+    ).resolves.toEqual({
+      capability: "AUTH_LOGIN",
+      reasonCode: "INVALID_CREDENTIALS",
+      result: "DENIED",
+      targetId: raceUserId,
+      targetType: "USER",
+    });
+  });
+
+  it("denies an old-password login when reset commits after its credential lookup", async () => {
+    const fixture = await createPasswordRaceFixture("reset-first");
+    const lookupBarrier = delayLoginUserLookup(client(), fixture.email);
+    const loginRequest = requestContext("192.0.2.44");
+    const loginPromise = loginWithPassword(
+      { email: fixture.email, password: fixture.oldPassword },
+      {
+        ...dependencies(loginRequest, new Date(NOW.getTime() + 2_000)),
+        database: lookupBarrier.database,
+      },
+    );
+    await lookupBarrier.observed;
+
+    let reset;
+    try {
+      reset = await resetPassword(
+        {
+          token: fixture.resetToken,
+          password: fixture.newPassword,
+          passwordConfirmation: fixture.newPassword,
+        },
+        dependencies(
+          requestContext("192.0.2.45"),
+          new Date(NOW.getTime() + 1_000),
+        ),
+      );
+    } finally {
+      lookupBarrier.release();
+    }
+
+    await expect(loginPromise).resolves.toEqual({
+      ok: false,
+      code: "INVALID_CREDENTIALS",
+    });
+    expect(reset).toEqual({ ok: true });
+    await expect(
+      client().session.count({ where: { userId: fixture.userId } }),
+    ).resolves.toBe(0);
+    await expect(
+      client().auditLog.findFirstOrThrow({
+        where: {
+          action: "USER_LOGIN_FAILED",
+          correlationId: loginRequest.correlationId,
+        },
+        select: { reasonCode: true, result: true, targetId: true },
+      }),
+    ).resolves.toEqual({
+      reasonCode: "INVALID_CREDENTIALS",
+      result: "DENIED",
+      targetId: fixture.userId,
+    });
+  });
+
+  it("lets an already-locked login linearize first and reset then revokes that session", async () => {
+    const fixture = await createPasswordRaceFixture("login-first");
+    const loginLockBarrier = createSignalBarrier();
+    const resetTokenConsumed = createSignalBarrier();
+    const loginDatabase = interceptTransactions(client(), (transaction) =>
+      pauseAfterFirstQueryRaw(transaction, loginLockBarrier),
+    );
+    const resetDatabase = interceptTransactions(client(), (transaction) =>
+      signalAfterFirstResetTokenUpdate(transaction, resetTokenConsumed),
+    );
+
+    const loginPromise = loginWithPassword(
+      { email: fixture.email, password: fixture.oldPassword },
+      {
+        ...dependencies(
+          requestContext("192.0.2.46"),
+          new Date(NOW.getTime() + 3_000),
+        ),
+        database: loginDatabase,
+      },
+    );
+    await loginLockBarrier.observed;
+
+    const resetPromise = resetPassword(
+      {
+        token: fixture.resetToken,
+        password: fixture.newPassword,
+        passwordConfirmation: fixture.newPassword,
+      },
+      {
+        ...dependencies(
+          requestContext("192.0.2.47"),
+          new Date(NOW.getTime() + 4_000),
+        ),
+        database: resetDatabase,
+      },
+    );
+    await resetTokenConsumed.observed;
+    loginLockBarrier.release();
+
+    const [login, reset] = await Promise.all([loginPromise, resetPromise]);
+    expect(login).toMatchObject({ ok: true, role: "CANDIDATE" });
+    expect(reset).toEqual({ ok: true });
+    if (!login.ok) {
+      throw new Error("The login-first race did not produce its session.");
+    }
+    await expect(
+      client().session.findUniqueOrThrow({
+        where: { id: login.session.record.id },
+        select: { userId: true, revokedAt: true },
+      }),
+    ).resolves.toEqual({
+      userId: fixture.userId,
+      revokedAt: new Date(NOW.getTime() + 4_000),
+    });
+    await expect(
+      client().session.count({
+        where: { userId: fixture.userId, revokedAt: null },
+      }),
+    ).resolves.toBe(0);
+  });
+
   it("never keeps a company-context selection after its active membership disappears", () => {
     const first = membershipContext(
       "11111111-1111-4111-8111-111111111111",
@@ -720,11 +960,12 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
       dependencies(requestContext("192.0.2.50"), new Date(NOW.getTime() + 1_000)),
     );
     expect(secondLogin.ok).toBe(true);
-    expect(
-      await client().session.count({
-        where: { userId: LOGIN_FIXTURE_ID, revokedAt: null },
-      }),
-    ).toBeGreaterThanOrEqual(2);
+    const activeSessionsBeforeReset = await client().session.findMany({
+      where: { userId: LOGIN_FIXTURE_ID, revokedAt: null },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    expect(activeSessionsBeforeReset.length).toBeGreaterThanOrEqual(1);
 
     const mailbox = new LocalMockMailbox({
       allowedOrigin: APP_URL,
@@ -808,8 +1049,37 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
       where: { userId: LOGIN_FIXTURE_ID },
       select: { revokedAt: true },
     });
-    expect(sessions.length).toBeGreaterThanOrEqual(2);
+    expect(sessions.length).toBeGreaterThanOrEqual(1);
     expect(sessions.every(({ revokedAt }) => revokedAt !== null)).toBe(true);
+    const revocationAudits = await client().auditLog.findMany({
+      where: {
+        action: "SESSION_REVOKED",
+        targetId: {
+          in: activeSessionsBeforeReset.map(({ id }) => id),
+        },
+      },
+      orderBy: { targetId: "asc" },
+      select: {
+        actorKind: true,
+        actorUserId: true,
+        capability: true,
+        reasonCode: true,
+        result: true,
+        targetId: true,
+        targetType: true,
+      },
+    });
+    expect(revocationAudits).toEqual(
+      activeSessionsBeforeReset.map(({ id }) => ({
+        actorKind: "ANONYMOUS",
+        actorUserId: null,
+        capability: "AUTH_PASSWORD_RESET",
+        reasonCode: "PASSWORD_RESET_COMPLETED",
+        result: "SUCCEEDED",
+        targetId: id,
+        targetType: "SESSION",
+      })),
+    );
     await expect(
       client().passwordResetToken.findUniqueOrThrow({
         where: { tokenHash: persistedToken.tokenHash },
@@ -888,5 +1158,201 @@ function membershipContext(
     companyName,
     companySlug: companyName.toLowerCase().replaceAll(" ", "-"),
     companyStatus: "ACTIVE",
+  });
+}
+
+function delayLoginUserLookup(
+  database: DatabaseClient,
+  normalizedEmail: string,
+) {
+  let observedResolve: (() => void) | undefined;
+  let releaseResolve: (() => void) | undefined;
+  let intercepted = false;
+  const observed = new Promise<void>((resolve) => {
+    observedResolve = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    releaseResolve = resolve;
+  });
+  const userDelegate = new Proxy(database.user, {
+    get(target, property) {
+      if (property !== "findUnique") {
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+      return async (
+        args: Parameters<DatabaseClient["user"]["findUnique"]>[0],
+      ) => {
+        const result = await target.findUnique(args);
+        if (
+          !intercepted &&
+          args.where.emailNormalized === normalizedEmail
+        ) {
+          intercepted = true;
+          observedResolve?.();
+          await released;
+        }
+        return result;
+      };
+    },
+  });
+  const delayedDatabase = new Proxy(database, {
+    get(target, property) {
+      if (property === "user") return userDelegate;
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+
+  return Object.freeze({
+    database: delayedDatabase,
+    observed,
+    release() {
+      releaseResolve?.();
+    },
+  });
+}
+
+async function createPasswordRaceFixture(label: string) {
+  const userId = randomUUID();
+  const email = `password-race-${label}@fixture.example.test`;
+  const oldPassword = "Phase16!OldPassword42";
+  const newPassword = "Phase16!NewPassword43";
+  const resetToken =
+    `${randomUUID().replaceAll("-", "")}Phase16Race`.slice(0, 43);
+  await client().user.create({
+    data: {
+      id: userId,
+      email,
+      emailNormalized: email,
+      name: `Phase 16 ${label}`,
+      role: "CANDIDATE",
+      status: "ACTIVE",
+      dataProvenance: "TEST",
+      credential: {
+        create: {
+          passwordHash: await hashPassword(oldPassword),
+          algorithm: PASSWORD_HASH_POLICY_V1.algorithm,
+          algorithmVersion: PASSWORD_HASH_POLICY_V1.algorithmVersion,
+          passwordChangedAt: NOW,
+        },
+      },
+      passwordResetTokens: {
+        create: {
+          tokenHash: hashPasswordResetToken(resetToken),
+          expiresAt: new Date(NOW.getTime() + 60_000),
+          createdAt: NOW,
+        },
+      },
+    },
+  });
+  return Object.freeze({
+    email,
+    newPassword,
+    oldPassword,
+    resetToken,
+    userId,
+  });
+}
+
+type SignalBarrier = ReturnType<typeof createSignalBarrier>;
+
+function createSignalBarrier() {
+  let observedResolve: (() => void) | undefined;
+  let releaseResolve: (() => void) | undefined;
+  const observed = new Promise<void>((resolve) => {
+    observedResolve = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    releaseResolve = resolve;
+  });
+  return Object.freeze({
+    observed,
+    released,
+    signal() {
+      observedResolve?.();
+    },
+    release() {
+      releaseResolve?.();
+    },
+  });
+}
+
+function interceptTransactions(
+  database: DatabaseClient,
+  intercept: (transaction: Prisma.TransactionClient) => Prisma.TransactionClient,
+): DatabaseClient {
+  const interactiveTransaction = (<T>(
+    operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+  ) =>
+    database.$transaction((transaction) =>
+      operation(intercept(transaction)),
+    )) as DatabaseClient["$transaction"];
+  return new Proxy(database, {
+    get(target, property) {
+      if (property === "$transaction") return interactiveTransaction;
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function pauseAfterFirstQueryRaw(
+  transaction: Prisma.TransactionClient,
+  barrier: SignalBarrier,
+): Prisma.TransactionClient {
+  let intercepted = false;
+  return new Proxy(transaction, {
+    get(target, property) {
+      if (property !== "$queryRaw") {
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+      return async (
+        ...args: Parameters<Prisma.TransactionClient["$queryRaw"]>
+      ) => {
+        const result = await target.$queryRaw(...args);
+        if (!intercepted) {
+          intercepted = true;
+          barrier.signal();
+          await barrier.released;
+        }
+        return result;
+      };
+    },
+  });
+}
+
+function signalAfterFirstResetTokenUpdate(
+  transaction: Prisma.TransactionClient,
+  barrier: SignalBarrier,
+): Prisma.TransactionClient {
+  let intercepted = false;
+  const resetTokenDelegate = new Proxy(transaction.passwordResetToken, {
+    get(target, property) {
+      if (property !== "updateMany") {
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+      return async (
+        args: Parameters<
+          Prisma.TransactionClient["passwordResetToken"]["updateMany"]
+        >[0],
+      ) => {
+        const result = await target.updateMany(args);
+        if (!intercepted) {
+          intercepted = true;
+          barrier.signal();
+        }
+        return result;
+      };
+    },
+  });
+  return new Proxy(transaction, {
+    get(target, property) {
+      if (property === "passwordResetToken") return resetTokenDelegate;
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
   });
 }

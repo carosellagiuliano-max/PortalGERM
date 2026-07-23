@@ -4,9 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   consumeRequestRateLimit: vi.fn(),
-  createPrismaAuditPort: vi.fn(),
   createPrismaTransactionAuditPort: vi.fn(),
-  writeBestEffortAudit: vi.fn(),
+  recordRateLimitDenial: vi.fn(),
   writeRequiredAudit: vi.fn(),
 }));
 
@@ -15,12 +14,13 @@ vi.mock("@/lib/auth/rate-limit-runtime", () => ({
   consumeRequestRateLimit: mocks.consumeRequestRateLimit,
 }));
 vi.mock("@/lib/audit/log", () => ({
-  writeBestEffortAudit: mocks.writeBestEffortAudit,
   writeRequiredAudit: mocks.writeRequiredAudit,
 }));
 vi.mock("@/lib/audit/prisma-port", () => ({
-  createPrismaAuditPort: mocks.createPrismaAuditPort,
   createPrismaTransactionAuditPort: mocks.createPrismaTransactionAuditPort,
+}));
+vi.mock("@/lib/security/rate-limit-audit", () => ({
+  recordRateLimitDenial: mocks.recordRateLimitDenial,
 }));
 
 import { createPublicReport } from "@/lib/abuse/public-report";
@@ -42,9 +42,8 @@ describe("public abuse report use case", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.consumeRequestRateLimit.mockResolvedValue({ allowed: true, status: 200 });
-    mocks.createPrismaAuditPort.mockReturnValue({ marker: "audit-port" });
     mocks.createPrismaTransactionAuditPort.mockReturnValue({ marker: "audit-port" });
-    mocks.writeBestEffortAudit.mockResolvedValue({ written: true });
+    mocks.recordRateLimitDenial.mockResolvedValue({ written: true, gated: false });
     mocks.writeRequiredAudit.mockResolvedValue(undefined);
   });
 
@@ -55,12 +54,19 @@ describe("public abuse report use case", () => {
       createPublicReport({ ...INPUT, slug: "../private" }, TARGET, dependencies(database)),
     ).resolves.toEqual({ ok: false, code: "INVALID_INPUT" });
     await expect(
+      createPublicReport(
+        { ...INPUT, description: `${INPUT.description}\u202e` },
+        TARGET,
+        dependencies(database),
+      ),
+    ).resolves.toEqual({ ok: false, code: "INVALID_INPUT" });
+    await expect(
       createPublicReport(INPUT, { ...TARGET, targetType: "COMPANY" }, dependencies(database)),
     ).resolves.toEqual({ ok: false, code: "TARGET_NOT_FOUND" });
 
     expect(mocks.consumeRequestRateLimit).not.toHaveBeenCalled();
     expect(database.$transaction).not.toHaveBeenCalled();
-    expect(mocks.writeBestEffortAudit).not.toHaveBeenCalled();
+    expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
 
   it("applies the actor-or-IP per-target quota before opening a write transaction", async () => {
@@ -88,15 +94,19 @@ describe("public abuse report use case", () => {
       expect.objectContaining({ database }),
     );
     expect(database.$transaction).not.toHaveBeenCalled();
-    expect(mocks.writeBestEffortAudit).toHaveBeenCalledWith(
-      { marker: "audit-port" },
+    expect(mocks.recordRateLimitDenial).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "RATE_LIMITED",
-        metadata: { preset: "ABUSE_INTAKE", scope: "ACTOR_OR_IP_TARGET" },
+        preset: "ABUSE_INTAKE",
+        scope: "ACTOR_OR_IP_TARGET",
+      }),
+      expect.objectContaining({
         targetId: TARGET.id,
       }),
-      undefined,
-      expect.objectContaining({ sourceIp: "192.0.2.33" }),
+      expect.objectContaining({
+        database,
+        now: NOW,
+        request: expect.objectContaining({ sourceIp: "192.0.2.33" }),
+      }),
     );
   });
 
@@ -146,6 +156,61 @@ describe("public abuse report use case", () => {
     await expect(
       createPublicReport(INPUT, TARGET, dependencies(database)),
     ).resolves.toEqual({ ok: false, code: "WRITE_FAILED" });
+  });
+
+  it("notifies every configured admin recipient without exposing report content", async () => {
+    const database = databaseMock();
+    const emailProvider = {
+      send: vi.fn().mockResolvedValue({ accepted: true }),
+    };
+
+    await expect(
+      createPublicReport(INPUT, TARGET, {
+        ...dependencies(database),
+        environment: {
+          ABUSE_REPORT_ADMIN_EMAILS: [
+            "security@example.test",
+            "ops@example.test",
+          ],
+          secrets: { keyrings: { AUDIT_IP_HASH_KEYS: [] } },
+        } as never,
+        emailProvider: emailProvider as never,
+      }),
+    ).resolves.toEqual({ ok: true, reportId: "report-1" });
+
+    expect(emailProvider.send).toHaveBeenCalledTimes(2);
+    expect(emailProvider.send).toHaveBeenCalledWith({
+      to: "security@example.test",
+      templateKey: "abuse_report_received",
+      subject: "Neue Missbrauchsmeldung eingegangen",
+      data: {
+        categoryLabel: "Irreführende Angaben",
+        idempotencyKey: "abuse-report:report-1",
+      },
+    });
+    expect(emailProvider.send).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ description: expect.anything() }),
+      }),
+    );
+  });
+
+  it("keeps the committed report successful when admin mail delivery fails", async () => {
+    const database = databaseMock();
+    const emailProvider = {
+      send: vi.fn().mockRejectedValue(new Error("mail provider unavailable")),
+    };
+
+    await expect(
+      createPublicReport(INPUT, TARGET, {
+        ...dependencies(database),
+        environment: {
+          ABUSE_REPORT_ADMIN_EMAILS: ["security@example.test"],
+          secrets: { keyrings: { AUDIT_IP_HASH_KEYS: [] } },
+        } as never,
+        emailProvider: emailProvider as never,
+      }),
+    ).resolves.toEqual({ ok: true, reportId: "report-1" });
   });
 });
 

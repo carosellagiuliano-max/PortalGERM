@@ -21,6 +21,7 @@ describe("parseEnvironment", () => {
       RATE_LIMIT_BACKEND: "postgres",
       TRUSTED_PROXY_HOPS: 0,
       ENABLE_LOCAL_MOCK_MAILBOX: false,
+      APP_BUILD_ID: "test-build",
     });
     const auditKeyring = environment.secrets.keyrings.AUDIT_IP_HASH_KEYS;
     expect(auditKeyring.map(({ version }) => version)).toEqual(["audit-v1"]);
@@ -135,6 +136,37 @@ describe("parseEnvironment", () => {
     },
   );
 
+  it("validates the non-secret build identifier", () => {
+    expectValidationFailure(
+      { APP_BUILD_ID: "bad build/id" },
+      "APP_BUILD_ID",
+    );
+
+    const environment = parseEnvironment(
+      createValidEnvironment({ APP_BUILD_ID: "git-abc1234" }),
+    );
+    expect(environment.APP_BUILD_ID).toBe("git-abc1234");
+    expect(getSafeEnvironmentSummary(environment).buildIdentifier).toBe(
+      "git-abc1234",
+    );
+  });
+
+  it.each(["production", "staging"] as const)(
+    "requires a commit-unique build identifier in %s",
+    (appEnvironment: "production" | "staging") => {
+      expectValidationFailure(
+        {
+          APP_ENV: appEnvironment,
+          APP_URL: "https://swisstalenthub.test",
+          TRUSTED_PROXY_HOPS: "2",
+          TEST_DATABASE_URL: undefined,
+          APP_BUILD_ID: undefined,
+        },
+        "must be a commit-unique non-secret identifier",
+      );
+    },
+  );
+
   it.each(["production", "staging"] as const)(
     "requires an explicit trusted proxy topology in %s",
     (appEnvironment: "production" | "staging") => {
@@ -205,6 +237,50 @@ describe("parseEnvironment", () => {
     );
     expect(environment.ENABLE_LOCAL_MOCK_MAILBOX).toBe(true);
   });
+
+  it("normalizes, freezes and safely summarizes the abuse-report distribution", () => {
+    const environment = parseEnvironment(
+      createValidEnvironment({
+        ABUSE_REPORT_ADMIN_EMAILS:
+          " Security@Example.Test,ops@example.test ",
+      }),
+    );
+
+    expect(environment.ABUSE_REPORT_ADMIN_EMAILS).toEqual([
+      "security@example.test",
+      "ops@example.test",
+    ]);
+    expect(Object.isFrozen(environment.ABUSE_REPORT_ADMIN_EMAILS)).toBe(true);
+    expect(
+      getSafeEnvironmentSummary(environment).abuseReportAdminRecipientCount,
+    ).toBe(2);
+  });
+
+  it("rejects duplicate abuse-report recipients after normalization", () => {
+    expectValidationFailure(
+      {
+        ABUSE_REPORT_ADMIN_EMAILS:
+          "security@example.test,SECURITY@example.test",
+      },
+      "must not contain duplicate recipients",
+    );
+  });
+
+  it.each(["production", "staging"] as const)(
+    "requires an abuse-report distribution in %s",
+    (appEnvironment: "production" | "staging") => {
+      expectValidationFailure(
+        {
+          APP_ENV: appEnvironment,
+          APP_URL: "https://swisstalenthub.test",
+          TRUSTED_PROXY_HOPS: "2",
+          TEST_DATABASE_URL: undefined,
+          ABUSE_REPORT_ADMIN_EMAILS: undefined,
+        },
+        "must configure at least one abuse-report recipient",
+      );
+    },
+  );
 
   it("keeps the local mailbox closed in a production Node runtime", () => {
     expectValidationFailure(

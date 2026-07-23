@@ -6,6 +6,12 @@ import {
   CORRELATION_ID_HEADER,
   normalizeCorrelationId,
 } from "@/lib/utils/correlation-id";
+import {
+  buildContentSecurityPolicy,
+  CONTENT_SECURITY_POLICY_HEADER,
+  CONTENT_SECURITY_POLICY_NONCE_HEADER,
+  createContentSecurityPolicyNonce,
+} from "@/lib/security/content-security-policy";
 
 export { CORRELATION_ID_HEADER } from "@/lib/utils/correlation-id";
 
@@ -21,8 +27,14 @@ export function proxy(request: NextRequest) {
   const correlationId = normalizeCorrelationId(
     request.headers.get(CORRELATION_ID_HEADER),
   );
+  const nonce = createContentSecurityPolicyNonce();
+  const contentSecurityPolicy = buildContentSecurityPolicy(nonce, {
+    development: process.env.NODE_ENV === "development",
+  });
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(CORRELATION_ID_HEADER, correlationId);
+  requestHeaders.set(CONTENT_SECURITY_POLICY_HEADER, contentSecurityPolicy);
+  requestHeaders.set(CONTENT_SECURITY_POLICY_NONCE_HEADER, nonce);
   requestHeaders.set(
     TRUSTED_PATHNAME_HEADER,
     `${request.nextUrl.pathname}${request.nextUrl.search}`,
@@ -39,7 +51,10 @@ export function proxy(request: NextRequest) {
       `${request.nextUrl.pathname}${request.nextUrl.search}`,
     );
     const response = NextResponse.redirect(loginUrl);
-    response.headers.set(CORRELATION_ID_HEADER, correlationId);
+    setDynamicSecurityHeaders(response.headers, {
+      contentSecurityPolicy,
+      correlationId,
+    });
     if (request.cookies.has(SESSION_COOKIE_NAME)) {
       response.cookies.delete(SESSION_COOKIE_NAME);
     }
@@ -51,9 +66,26 @@ export function proxy(request: NextRequest) {
       headers: requestHeaders,
     },
   });
-  response.headers.set(CORRELATION_ID_HEADER, correlationId);
+  setDynamicSecurityHeaders(response.headers, {
+    contentSecurityPolicy,
+    correlationId,
+  });
 
   return response;
+}
+
+function setDynamicSecurityHeaders(
+  headers: Headers,
+  values: Readonly<{
+    contentSecurityPolicy: string;
+    correlationId: string;
+  }>,
+) {
+  headers.set(CORRELATION_ID_HEADER, values.correlationId);
+  headers.set(
+    CONTENT_SECURITY_POLICY_HEADER,
+    values.contentSecurityPolicy,
+  );
 }
 
 function isPrivatePath(pathname: string) {
@@ -67,6 +99,9 @@ function isPlausibleSessionToken(token: string | undefined) {
 }
 
 function resolveTrustedSourceIp(request: NextRequest) {
+  // Production relies on the outer ingress replacing (not appending to) any
+  // client-supplied X-Forwarded-For value and TRUSTED_PROXY_HOPS matching that
+  // exact topology. Without that boundary the forwarded chain is untrusted.
   const trustedProxyHops = parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS);
   if (trustedProxyHops === undefined) return SAFE_FALLBACK_IP;
 
@@ -88,6 +123,6 @@ function parseTrustedProxyHops(value: string | undefined) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
   ],
 };

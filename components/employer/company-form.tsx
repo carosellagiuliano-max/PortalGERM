@@ -18,6 +18,10 @@ import {
   type CompanyOnboardingRequirement,
   type EmployerCompanyActionState,
 } from "@/lib/employer/company";
+import {
+  companyMediaOptions,
+  type CompanyMediaKind,
+} from "@/lib/security/company-media-manifest";
 import { cn } from "@/lib/utils";
 
 const INITIAL_ACTION_STATE: EmployerCompanyActionState = Object.freeze({
@@ -180,16 +184,15 @@ export function CompanyForm({
 
         <FieldGroup
           title="Medien-Metadaten"
-          description="Im Mock wird für das Logo nur ein sicherer Storage-Key gespeichert, keine hochgeladenen Dateibytes und keine externe Bild-URL."
+          description="Im Mock wird nur der Pfad eines vorab geprüften, selbst gehosteten Assets gespeichert. Externe Bild-URLs, Uploads und Tracking-Pixel sind deaktiviert."
         >
           <div className="grid gap-5">
-            <TextField
+            <CompanyMediaSelect
               name="logoStorageKey"
-              label="Logo Storage-Key (optional)"
+              label="Geprüftes Logo (optional)"
               defaultValue={initial.logoStorageKey}
               state={state}
-              maxLength={512}
-              placeholder="mock-storage/company/logo.svg"
+              kind="LOGO"
             />
           </div>
         </FieldGroup>
@@ -204,13 +207,12 @@ export function CompanyForm({
             title="Erweitertes Firmenprofil"
             description="Ein Eintrag pro Zeile. Es werden ausschliesslich gespeicherte Angaben dargestellt; Antwortversprechen entstehen daraus nicht."
           >
-            <TextField
+            <CompanyMediaSelect
               name="coverStorageKey"
-              label="Cover Storage-Key (optional)"
+              label="Geprüftes Cover (optional)"
               defaultValue={initial.coverStorageKey}
               state={state}
-              maxLength={512}
-              placeholder="mock-storage/company/cover.webp"
+              kind="COVER"
             />
             <div className="grid gap-5 sm:grid-cols-2">
               <TextAreaField
@@ -549,6 +551,47 @@ function TextAreaField({
       />
       <p id={`${name}-help`} className="text-xs leading-5 text-muted-foreground">
         {description}
+      </p>
+      <FieldError state={state} field={name} />
+    </div>
+  );
+}
+
+function CompanyMediaSelect({
+  name,
+  label,
+  defaultValue,
+  state,
+  kind,
+}: Readonly<{
+  name: "logoStorageKey" | "coverStorageKey";
+  label: string;
+  defaultValue: string;
+  state: EmployerCompanyActionState;
+  kind: CompanyMediaKind;
+}>) {
+  const invalid = hasError(state, name);
+  const assets = companyMediaOptions(kind);
+
+  return (
+    <div className="grid content-start gap-2">
+      <Label htmlFor={name}>{label}</Label>
+      <select
+        id={name}
+        name={name}
+        defaultValue={defaultValue}
+        className="h-11 rounded-md border border-input bg-background px-3 text-sm"
+        aria-invalid={invalid || undefined}
+      >
+        <option value="">Kein Asset</option>
+        {assets.map((asset) => (
+          <option key={asset.path} value={asset.path}>
+            {asset.label}
+          </option>
+        ))}
+      </select>
+      <p className="text-xs leading-5 text-muted-foreground">
+        Auswahl aus Manifest v1 unter /assets/company-media/.
       </p>
       <FieldError state={state} field={name} />
     </div>

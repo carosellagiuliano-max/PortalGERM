@@ -31,7 +31,10 @@ import {
   toCandidateApplicationDto,
   toEmployerApplicationDto,
 } from "@/lib/security/safe-dto";
-import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import {
+  sanitizePlainText,
+  stripUnsafeHtml,
+} from "@/lib/security/sanitize";
 
 const USER = {
   id: "user-1",
@@ -321,6 +324,13 @@ describe("request and output safety", () => {
       ),
     ).toBe("Hello & Grüezi");
     expect(stripUnsafeHtml("&lt;safe text&gt;")).toBe("<safe text>");
+    expect(stripUnsafeHtml("safe&#0;text&#x202e;")).toBe("safetext");
+  });
+
+  it("preserves angle brackets as literal plain text while removing unsafe controls", () => {
+    expect(
+      sanitizePlainText("  Beispiel <script>alert('inert')</script>\u202e  "),
+    ).toBe("Beispiel <script>alert('inert')</script>");
   });
 
   it("allows safe methods and requires an exact mutation origin", () => {

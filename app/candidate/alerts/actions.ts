@@ -21,6 +21,7 @@ import {
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 export type JobAlertActionState = Readonly<{
   status: "idle" | "success" | "error";
@@ -229,14 +230,28 @@ async function secureCandidateMutation() {
   if (!isValidAuthMutationOrigin(request)) {
     return Object.freeze({ ok: false as const, state: unsafeRequestState() });
   }
+  const database = getDatabase();
+  const environment = getServerEnvironment();
+  const now = new Date();
   const rate = await consumeRequestRateLimit(
     "JOB_ALERT_MUTATION",
     { userId: user.id },
     request,
-    new Date(),
-    { database: getDatabase(), environment: getServerEnvironment() },
+    now,
+    { database, environment },
   );
   if (!rate.allowed) {
+    await recordRateLimitDenial(
+      rate.audit,
+      {
+        actorKind: "USER",
+        actorUserId: user.id,
+        capability: "CANDIDATE_JOB_ALERT_MUTATE",
+        targetId: user.id,
+        targetType: "USER",
+      },
+      { database, environment, request, now },
+    );
     return Object.freeze({
       ok: false as const,
       state: errorState(

@@ -586,6 +586,8 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260722201500_phase_14_radar_cohort_and_replay_hardening",
       "20260722210000_phase_15_cluster_evidence",
       "20260722211000_phase_15_cluster_policy_versioned_check",
+      "20260723090000_phase_16_company_media_manifest",
+      "20260723100000_phase_16_audit_ip_retention",
     ]);
     expect(
       migrations.rows.every(

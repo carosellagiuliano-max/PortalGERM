@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { applyCandidateRadarEligibilityLoss } from "@/lib/talentradar/eligibility-loss-effects";
+import type { Prisma } from "@/lib/generated/prisma/client";
 
 import {
   adminErrorResult,
@@ -90,7 +91,33 @@ export async function suspendUser(raw: unknown, dependencies: AdminDependencies)
       const existingAudit = await transaction.auditLog.findFirst({ where: { action: "USER_SUSPENDED", targetId: parsed.data.userId, correlationId: auditCorrelation }, select: { id: true } });
       const user = await transaction.user.findUnique({ where: { id: parsed.data.userId }, select: { id: true, role: true, status: true, candidateProfile: { select: { id: true, radarProfile: { select: { id: true } } } } } });
       if (user === null) return adminFailure("NOT_FOUND");
-      if (existingAudit !== null && user.status === "SUSPENDED") return adminSuccess({ userId: user.id, status: "SUSPENDED" as const, sessionsRevoked: 0 }, true);
+      if (existingAudit !== null && user.status === "SUSPENDED") {
+        const sessionAudits = await transaction.auditLog.findMany({
+          where: {
+            action: "SESSION_REVOKED",
+            correlationId: auditCorrelation,
+          },
+          select: { targetId: true },
+        });
+        const ownedTargets = await transaction.session.count({
+          where: {
+            userId: user.id,
+            id: { in: sessionAudits.map(({ targetId }) => targetId) },
+            revokedAt: { not: null },
+          },
+        });
+        if (ownedTargets !== sessionAudits.length) {
+          return adminFailure("CONFLICT");
+        }
+        return adminSuccess(
+          {
+            userId: user.id,
+            status: "SUSPENDED" as const,
+            sessionsRevoked: sessionAudits.length,
+          },
+          true,
+        );
+      }
       if (user.status !== parsed.data.expectedStatus || user.status !== "ACTIVE") return adminFailure("CONFLICT");
       if (user.id === dependencies.actor.userId) return adminFailure("CONFLICT");
       if (user.role === "ADMIN") {
@@ -99,7 +126,11 @@ export async function suspendUser(raw: unknown, dependencies: AdminDependencies)
       }
       const changed = await transaction.user.updateMany({ where: { id: user.id, status: "ACTIVE" }, data: { status: "SUSPENDED", updatedAt: now } });
       if (changed.count !== 1) return adminFailure("CONFLICT");
-      const sessions = await transaction.session.deleteMany({ where: { userId: user.id } });
+      const revokedSessionIds = await revokeActiveSessions(
+        transaction,
+        user.id,
+        now,
+      );
       if (user.candidateProfile !== null) {
         await applyCandidateRadarEligibilityLoss(transaction, {
           candidateProfileId: user.candidateProfile.id,
@@ -112,8 +143,16 @@ export async function suspendUser(raw: unknown, dependencies: AdminDependencies)
       }
       const auditDependencies = { ...dependencies, correlationId: auditCorrelation };
       await writeAdminAudit(transaction, auditDependencies, now, { action: "USER_SUSPENDED", capability: "ADMIN_USER_MODERATE", targetType: "USER", targetId: user.id, reasonCode: parsed.data.reasonCode });
-      await writeAdminAudit(transaction, auditDependencies, now, { action: "SESSION_REVOKED", capability: "ADMIN_USER_MODERATE", targetType: "SESSION", targetId: user.id, reasonCode: "USER_SUSPENDED" });
-      return adminSuccess({ userId: user.id, status: "SUSPENDED" as const, sessionsRevoked: sessions.count });
+      for (const sessionId of revokedSessionIds) {
+        await writeAdminAudit(transaction, auditDependencies, now, {
+          action: "SESSION_REVOKED",
+          capability: "ADMIN_USER_MODERATE",
+          targetType: "SESSION",
+          targetId: sessionId,
+          reasonCode: "USER_SUSPENDED",
+        });
+      }
+      return adminSuccess({ userId: user.id, status: "SUSPENDED" as const, sessionsRevoked: revokedSessionIds.length });
     }, { isolationLevel: "Serializable" });
   } catch (error) {
     return adminErrorResult(error);
@@ -160,14 +199,53 @@ export async function forceLogoutUser(raw: unknown, dependencies: AdminDependenc
   const auditCorrelation = parsed.data.idempotencyKey;
   try {
     return await dependencies.database.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${parsed.data.userId}::uuid FOR UPDATE`;
       const user = await transaction.user.findUnique({ where: { id: parsed.data.userId }, select: { id: true } });
       if (user === null) return adminFailure("NOT_FOUND");
-      const replay = await transaction.auditLog.findFirst({ where: { action: "SESSION_REVOKED", targetId: user.id, correlationId: auditCorrelation }, select: { id: true } });
-      if (replay !== null) return adminSuccess({ userId: user.id, sessionsRevoked: 0 }, true);
-      const sessions = await transaction.session.deleteMany({ where: { userId: user.id } });
-      await writeAdminAudit(transaction, { ...dependencies, correlationId: auditCorrelation }, now, { action: "SESSION_REVOKED", capability: "ADMIN_USER_MODERATE", targetType: "SESSION", targetId: user.id, reasonCode: parsed.data.reasonCode });
-      return adminSuccess({ userId: user.id, sessionsRevoked: sessions.count });
-    });
+      const replay = await transaction.auditLog.findMany({
+        where: {
+          action: "SESSION_REVOKED",
+          correlationId: auditCorrelation,
+        },
+        select: { targetId: true, reasonCode: true },
+      });
+      if (replay.length > 0) {
+        if (replay.some(({ reasonCode }) => reasonCode !== parsed.data.reasonCode)) {
+          return adminFailure("CONFLICT");
+        }
+        const ownedTargets = await transaction.session.count({
+          where: {
+            userId: user.id,
+            id: { in: replay.map(({ targetId }) => targetId) },
+            revokedAt: { not: null },
+          },
+        });
+        if (ownedTargets !== replay.length) return adminFailure("CONFLICT");
+        return adminSuccess(
+          { userId: user.id, sessionsRevoked: replay.length },
+          true,
+        );
+      }
+      const revokedSessionIds = await revokeActiveSessions(
+        transaction,
+        user.id,
+        now,
+      );
+      const auditDependencies = {
+        ...dependencies,
+        correlationId: auditCorrelation,
+      };
+      for (const sessionId of revokedSessionIds) {
+        await writeAdminAudit(transaction, auditDependencies, now, {
+          action: "SESSION_REVOKED",
+          capability: "ADMIN_USER_MODERATE",
+          targetType: "SESSION",
+          targetId: sessionId,
+          reasonCode: parsed.data.reasonCode,
+        });
+      }
+      return adminSuccess({ userId: user.id, sessionsRevoked: revokedSessionIds.length });
+    }, { isolationLevel: "Serializable" });
   } catch (error) {
     return adminErrorResult(error);
   }
@@ -175,3 +253,30 @@ export async function forceLogoutUser(raw: unknown, dependencies: AdminDependenc
 
 /** Phase 11 intentionally exports no global Role mutation command. */
 export const ADMIN_GLOBAL_ROLE_MUTATION_AVAILABLE = false as const;
+
+async function revokeActiveSessions(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  now: Date,
+): Promise<readonly string[]> {
+  const sessions = await transaction.session.findMany({
+    where: { userId, revokedAt: null },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+  if (sessions.length === 0) return Object.freeze([]);
+
+  const sessionIds = sessions.map(({ id }) => id);
+  const revoked = await transaction.session.updateMany({
+    where: {
+      userId,
+      id: { in: sessionIds },
+      revokedAt: null,
+    },
+    data: { revokedAt: now },
+  });
+  if (revoked.count !== sessionIds.length) {
+    throw new Error("SESSION_REVOCATION_CONFLICT");
+  }
+  return Object.freeze(sessionIds);
+}

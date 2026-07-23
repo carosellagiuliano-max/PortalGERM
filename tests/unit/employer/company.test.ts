@@ -25,8 +25,8 @@ const VALID_PROFILE = Object.freeze({
   industry: "Technology",
   size: "11–50",
   website: "https://example.ch/company",
-  logoStorageKey: "companies/swiss-talent/logo.svg",
-  coverStorageKey: "companies/swiss-talent/cover.webp",
+  logoStorageKey: "/assets/company-media/default-logo.svg",
+  coverStorageKey: "/assets/company-media/default-cover.svg",
   linkedinUrl: "https://www.linkedin.com/company/swiss-talent",
   facebookUrl: "https://www.facebook.com/swiss-talent",
   instagramUrl: "https://www.instagram.com/swiss-talent",
@@ -53,6 +53,14 @@ describe("Phase-10 company profile contract", () => {
   it.each([
     ["unsafe social protocol", { linkedinUrl: "http://linkedin.example/company" }],
     ["unsafe storage traversal", { logoStorageKey: "companies/../secret.svg" }],
+    [
+      "unreviewed self-hosted media",
+      { logoStorageKey: "/assets/company-media/unreviewed.svg" },
+    ],
+    [
+      "external media",
+      { coverStorageKey: "https://tracking.example/pixel.png" },
+    ],
     ["duplicate values", { values: ["Fair", "fair"] }],
     [
       "multiple primary locations",

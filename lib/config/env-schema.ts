@@ -4,6 +4,7 @@ import { posix, win32 } from "node:path";
 import { z } from "zod";
 
 import { inspectPostgresTarget } from "@/lib/db/database-target";
+import { BUILD_IDENTIFIER_PATTERN } from "@/lib/health/build-identifier";
 
 const KEYRING_VARIABLES = [
   "AUDIT_IP_HASH_KEYS",
@@ -40,6 +41,23 @@ const emptyToUndefined = (value: unknown) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
 
 const optionalString = z.preprocess(emptyToUndefined, z.string().optional());
+const adminEmailDistribution = z.preprocess(
+  emptyToUndefined,
+  z
+    .string()
+    .transform((value) =>
+      value
+        .split(",")
+        .map((email) => email.trim().toLowerCase()),
+    )
+    .pipe(z.array(z.string().email().max(320)).min(1).max(20))
+    .refine(
+      (emails) => new Set(emails).size === emails.length,
+      "must not contain duplicate recipients",
+    )
+    .transform((emails) => Object.freeze([...emails]))
+    .optional(),
+);
 
 const rawEnvironmentSchema = z
   .object({
@@ -65,6 +83,11 @@ const rawEnvironmentSchema = z
       .trim()
       .min(2, "must contain at least 2 characters")
       .max(80, "must contain at most 80 characters"),
+    APP_BUILD_ID: optionalString.refine(
+      (value) =>
+        value === undefined || BUILD_IDENTIFIER_PATTERN.test(value),
+      "must be a safe non-secret build identifier",
+    ),
     SESSION_SECRET: z.string({ error: "is required" }),
     AUDIT_IP_HASH_KEYS: z.string({ error: "is required" }),
     RADAR_OPAQUE_LOOKUP_KEYS: z.string({ error: "is required" }),
@@ -78,6 +101,7 @@ const rawEnvironmentSchema = z
       .default("false")
       .transform((value) => value === "true"),
     DEV_MAILBOX_SECRET: optionalString,
+    ABUSE_REPORT_ADMIN_EMAILS: adminEmailDistribution,
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
     BACKUP_AGE_RECIPIENT: optionalString,
     BACKUP_AGE_IDENTITY_FILE: optionalString,
@@ -148,6 +172,27 @@ const rawEnvironmentSchema = z
         code: "custom",
         path: ["ENABLE_LOCAL_MOCK_MAILBOX"],
         message: "must be false in a production runtime",
+      });
+    }
+
+    if (
+      productionLike &&
+      environment.ABUSE_REPORT_ADMIN_EMAILS === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["ABUSE_REPORT_ADMIN_EMAILS"],
+        message:
+          "must configure at least one abuse-report recipient in staging and production",
+      });
+    }
+
+    if (productionLike && environment.APP_BUILD_ID === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["APP_BUILD_ID"],
+        message:
+          "must be a commit-unique non-secret identifier in staging and production",
       });
     }
 
@@ -325,10 +370,13 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     nodeEnvironment: environment.NODE_ENV,
     appUrl: environment.APP_URL,
     appName: environment.NEXT_PUBLIC_APP_NAME,
+    buildIdentifier: environment.APP_BUILD_ID ?? "local-development",
     logLevel: environment.LOG_LEVEL,
     rateLimitBackend: environment.RATE_LIMIT_BACKEND,
     trustedProxyHops: environment.TRUSTED_PROXY_HOPS,
     mailboxEnabled: environment.ENABLE_LOCAL_MOCK_MAILBOX,
+    abuseReportAdminRecipientCount:
+      environment.ABUSE_REPORT_ADMIN_EMAILS?.length ?? 0,
     keyringWriterVersions: Object.fromEntries(
       Object.entries(environment.secrets.keyrings).map(([name, entries]) => [
         name,

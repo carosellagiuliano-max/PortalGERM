@@ -8,6 +8,8 @@ import { createPublicReport } from "@/lib/abuse/public-report";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { parseEnvironment, type ServerEnvironment } from "@/lib/config/env-schema";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
+import { MockEmailProvider } from "@/lib/providers/email/mock-email-provider";
+import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
 type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
@@ -79,6 +81,9 @@ beforeEach(async () => {
 
 describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
   it("persists the sanitized report, CREATED event, required audit and target limit atomically", async () => {
+    const emailProvider = new MockEmailProvider(
+      new PrismaEmailLogRepository(client()),
+    );
     const result = await createPublicReport(
       {
         targetType: "COMPANY",
@@ -93,6 +98,7 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
         environment: runtimeEnvironment(),
         request: requestContext(CORRELATION_ID),
         currentUser: null,
+        emailProvider,
         now: NOW,
       },
     );
@@ -143,6 +149,25 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
     });
     expect(audit?.ipHash).toMatch(/^v1:[a-f0-9]{64}$/u);
     expect(audit?.retainUntil).toEqual(new Date(NOW.getTime() + 365 * DAY));
+    const email = await client().emailLog.findFirstOrThrow({
+      where: {
+        recipient: "abuse-admin@example.test",
+        templateKey: "abuse_report_received",
+      },
+      select: {
+        purpose: true,
+        status: true,
+        payload: true,
+      },
+    });
+    expect(email).toMatchObject({
+      purpose: "abuse_report_received",
+      status: "MOCK_RECORDED",
+    });
+    expect(JSON.stringify(email.payload)).toContain("Betrug oder Täuschung");
+    expect(JSON.stringify(email.payload)).not.toContain(
+      "Belegter Betrugsverdacht",
+    );
 
     const buckets = await client().rateLimitBucket.findMany();
     expect(buckets).toEqual([
@@ -268,6 +293,7 @@ function buildEnvironment(connectionString: string): ServerEnvironment {
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",
+    ABUSE_REPORT_ADMIN_EMAILS: "abuse-admin@example.test",
     LOG_LEVEL: "error",
   });
 }

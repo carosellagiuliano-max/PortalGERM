@@ -433,6 +433,35 @@ describe("Phase-14 persisted Privacy case service", () => {
         select: { status: true, version: true },
       }),
     ).resolves.toEqual({ status: "IDENTITY_CHECK", version: 6 });
+    const denialAudits = await client.auditLog.findMany({
+      where: {
+        action: "AUTHORIZATION_DENIED_SENSITIVE",
+        targetId: privacyCase.id,
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        actorKind: true,
+        actorUserId: true,
+        targetType: true,
+        targetId: true,
+        result: true,
+        reasonCode: true,
+        metadata: true,
+      },
+    });
+    expect(denialAudits).toHaveLength(5);
+    expect(denialAudits).toEqual(
+      denialAudits.map(() => ({
+        actorKind: "USER",
+        actorUserId: fixture.requester.id,
+        targetType: "PRIVACY_REQUEST",
+        targetId: privacyCase.id,
+        result: "DENIED",
+        reasonCode: "CHALLENGE_UNAVAILABLE",
+        metadata: {},
+      })),
+    );
+    expect(JSON.stringify(denialAudits)).not.toContain("credentialVerified");
   });
 
   it("records only reviewed correction fields/domain refs and keeps notes out of audit and notifications", async () => {

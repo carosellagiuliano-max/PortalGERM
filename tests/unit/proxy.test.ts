@@ -9,6 +9,11 @@ import {
   TRUSTED_PATHNAME_HEADER,
   TRUSTED_SOURCE_IP_HEADER,
 } from "@/proxy";
+import {
+  CONTENT_SECURITY_POLICY_HEADER,
+  CONTENT_SECURITY_POLICY_NONCE_HEADER,
+  isValidContentSecurityPolicyNonce,
+} from "@/lib/security/content-security-policy";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -54,6 +59,56 @@ describe("proxy", () => {
     expect(correlationId).not.toContain(attackerValue);
   });
 
+  it("sets one matching nonce policy on the request and response", () => {
+    const first = proxy(
+      new NextRequest("https://swisstalenthub.test/jobs/example"),
+    );
+    const second = proxy(
+      new NextRequest("https://swisstalenthub.test/jobs/example"),
+    );
+    const nonce = first.headers.get(
+      `x-middleware-request-${CONTENT_SECURITY_POLICY_NONCE_HEADER}`,
+    );
+    const requestPolicy = first.headers.get(
+      `x-middleware-request-${CONTENT_SECURITY_POLICY_HEADER}`,
+    );
+    const responsePolicy = first.headers.get(
+      CONTENT_SECURITY_POLICY_HEADER,
+    );
+    const secondNonce = second.headers.get(
+      `x-middleware-request-${CONTENT_SECURITY_POLICY_NONCE_HEADER}`,
+    );
+
+    expect(isValidContentSecurityPolicyNonce(nonce)).toBe(true);
+    expect(requestPolicy).toBe(responsePolicy);
+    expect(responsePolicy).toContain(`'nonce-${nonce}'`);
+    expect(responsePolicy).toContain("'strict-dynamic'");
+    expect(responsePolicy).not.toMatch(/script-src[^;]*'unsafe-inline'/u);
+    expect(secondNonce).not.toBe(nonce);
+  });
+
+  it("overwrites attacker-supplied nonce and policy headers", () => {
+    const response = proxy(
+      new NextRequest("https://swisstalenthub.test/", {
+        headers: {
+          [CONTENT_SECURITY_POLICY_NONCE_HEADER]: "attacker-nonce",
+          [CONTENT_SECURITY_POLICY_HEADER]: "script-src *",
+        },
+      }),
+    );
+    const nonce = response.headers.get(
+      `x-middleware-request-${CONTENT_SECURITY_POLICY_NONCE_HEADER}`,
+    );
+    const requestPolicy = response.headers.get(
+      `x-middleware-request-${CONTENT_SECURITY_POLICY_HEADER}`,
+    );
+
+    expect(isValidContentSecurityPolicyNonce(nonce)).toBe(true);
+    expect(nonce).not.toBe("attacker-nonce");
+    expect(requestPolicy).toContain(`'nonce-${nonce}'`);
+    expect(requestPolicy).not.toContain("script-src *");
+  });
+
   it("redirects anonymous private requests and preserves the intended local path", () => {
     const request = new NextRequest(
       "https://swisstalenthub.test/employer/dashboard?tab=team",
@@ -67,6 +122,9 @@ describe("proxy", () => {
     expect(location.pathname).toBe("/login");
     expect(location.searchParams.get("next")).toBe(
       "/employer/dashboard?tab=team",
+    );
+    expect(response.headers.get(CONTENT_SECURITY_POLICY_HEADER)).toContain(
+      "'strict-dynamic'",
     );
   });
 
@@ -139,8 +197,9 @@ describe("proxy", () => {
     ["/_next/static/chunk.js", false],
     ["/_next/image", false],
     ["/favicon.ico", false],
-    ["/assets/logo.svg", false],
-    ["/fonts/inter.woff2", false],
+    ["/assets/logo.svg", true],
+    ["/fonts/inter.woff2", true],
+    ["/unknown.js", true],
   ] as const)("matches %s: %s", (url: string, expected: boolean) => {
     expect(
       doesProxyMatch({

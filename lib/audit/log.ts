@@ -197,17 +197,7 @@ export type AuditWritePort<TRow = unknown> = Readonly<{
 }>;
 
 export type AuditIpRetentionPort = Readonly<{
-  auditLog: Readonly<{
-    updateMany(
-      input: Readonly<{
-        where: Readonly<{
-          ipHash: Readonly<{ not: null }>;
-          createdAt: Readonly<{ lte: Date }>;
-        }>;
-        data: Readonly<{ ipHash: null; ipHashVersion: null }>;
-      }>,
-    ): Promise<Readonly<{ count: number }>>;
-  }>;
+  nullifyExpiredIpHashes(): Promise<number>;
 }>;
 
 export type BestEffortAuditFailure = Readonly<{
@@ -346,19 +336,8 @@ export function hashAuditSourceIp(
 
 export async function nullifyExpiredAuditIpHashes(
   port: AuditIpRetentionPort,
-  clock: Readonly<{ now: Date }>,
 ): Promise<number> {
-  if (!Number.isFinite(clock.now.getTime())) {
-    throw new TypeError("Audit IP retention requires a valid clock.");
-  }
-  const cutoff = new Date(
-    clock.now.getTime() - AUDIT_IP_HASH_RETENTION_MILLISECONDS,
-  );
-  const result = await port.auditLog.updateMany({
-    where: { ipHash: { not: null }, createdAt: { lte: cutoff } },
-    data: { ipHash: null, ipHashVersion: null },
-  });
-  return result.count;
+  return port.nullifyExpiredIpHashes();
 }
 
 function notifyFailure(

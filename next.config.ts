@@ -27,7 +27,7 @@ const noStorePrivateHeaders = [
 ];
 
 const resetPasswordHeaders = [
-  { key: "Cache-Control", value: "no-store, max-age=0" },
+  { key: "Cache-Control", value: "private, no-store, max-age=0" },
   {
     key: "X-Robots-Tag",
     value: "noindex, nofollow, noarchive, nosnippet",
@@ -45,7 +45,7 @@ const secretLinkHeaders = [
 ];
 
 const oneClickUnsubscribeHeaders = [
-  { key: "Cache-Control", value: "no-store, max-age=0" },
+  { key: "Cache-Control", value: "private, no-store, max-age=0" },
   {
     key: "X-Robots-Tag",
     value: "noindex, nofollow, noarchive, nosnippet",
@@ -54,7 +54,7 @@ const oneClickUnsubscribeHeaders = [
 ];
 
 const localMailboxHeaders = [
-  { key: "Cache-Control", value: "no-store" },
+  { key: "Cache-Control", value: "private, no-store, max-age=0" },
   {
     key: "X-Robots-Tag",
     value: "noindex, nofollow, noarchive, nosnippet",
@@ -77,6 +77,11 @@ const supportCaseHeaders = [
     key: "X-Robots-Tag",
     value: "noindex, nofollow, noarchive, nosnippet",
   },
+  { key: "Referrer-Policy", value: "no-referrer" },
+];
+
+const personalizedPublicDetailHeaders = [
+  { key: "Cache-Control", value: "private, no-store, max-age=0" },
   { key: "Referrer-Policy", value: "no-referrer" },
 ];
 
@@ -126,6 +131,10 @@ const nextConfig = (phase: string): NextConfig => {
           headers: localMailboxHeaders,
         },
         {
+          source: "/jobs/:slug",
+          headers: personalizedPublicDetailHeaders,
+        },
+        {
           source: "/mock/checkout/:path*",
           headers: mockCheckoutHeaders,
         },
@@ -136,6 +145,10 @@ const nextConfig = (phase: string): NextConfig => {
         {
           source: "/reset-password",
           headers: resetPasswordHeaders,
+        },
+        {
+          source: "/session/clear",
+          headers: secretLinkHeaders,
         },
         {
           source: "/invite/:path*",

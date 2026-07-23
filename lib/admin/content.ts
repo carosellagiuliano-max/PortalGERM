@@ -19,6 +19,7 @@ import {
 } from "@/lib/admin/common";
 import type { AdminCapability } from "@/lib/admin/capabilities";
 import { CLUSTER_LAUNCH_POLICY_V1 } from "@/lib/seo/cluster-launch-policy";
+import { trimmedString } from "@/lib/validation/common";
 
 export async function listAdminContent(dependencies: AdminDependencies) {
   if (!requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) return null;
@@ -38,13 +39,13 @@ export async function getAdminContentPage(dependencies: AdminDependencies, pageI
 
 const draftSchema = z.strictObject({
   pageId: z.uuid().optional(),
-  slug: z.string().trim().min(1).max(220),
-  locale: z.string().trim().min(2).max(16).default("de-CH"),
+  slug: trimmedString(1, 220),
+  locale: trimmedString(2, 16).default("de-CH"),
   type: z.enum(["GUIDE", "CLUSTER"]),
-  canonicalPath: z.string().trim().min(2).max(500),
-  title: z.string().trim().min(3).max(220),
-  excerpt: z.string().trim().min(10).max(500),
-  body: z.string().trim().min(20).max(100_000),
+  canonicalPath: trimmedString(2, 500),
+  title: trimmedString(3, 220),
+  excerpt: trimmedString(10, 500),
+  body: trimmedString(20, 100_000),
   idempotencyKey: z.uuid(),
 });
 

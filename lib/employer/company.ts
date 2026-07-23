@@ -17,7 +17,11 @@ import { getEffectiveEntitlements } from "@/lib/billing/entitlements";
 import { createPrismaEntitlementRepository } from "@/lib/billing/prisma-publish-quota";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
-import { isSafeAbsoluteHttpUrl } from "@/lib/validation/common";
+import { isReviewedCompanyMediaPath } from "@/lib/security/company-media-manifest";
+import {
+  hasUnsafeTextControls,
+  isSafeAbsoluteHttpUrl,
+} from "@/lib/validation/common";
 
 const DAY_MILLISECONDS = 86_400_000;
 const AUDIT_RETENTION_MILLISECONDS = 400 * DAY_MILLISECONDS;
@@ -30,10 +34,19 @@ const TERMINAL_VERIFICATION_STATUSES = ["REJECTED", "REVOKED"] as const;
 const COMPANY_ROLES = ["OWNER", "ADMIN", "RECRUITER", "VIEWER"] as const;
 const COMPANY_MANAGER_ROLES = ["OWNER", "ADMIN"] as const;
 
+const safeTrimmedText = (minimum: number, maximum: number) =>
+  z
+    .string()
+    .max(maximum)
+    .refine((value) => !hasUnsafeTextControls(value))
+    .normalize("NFC")
+    .trim()
+    .min(minimum)
+    .max(maximum);
 const nullableText = (maximum: number) =>
-  z.string().trim().max(maximum).nullable();
+  safeTrimmedText(0, maximum).nullable();
 const nullableBoundedText = (minimum: number, maximum: number) =>
-  z.string().trim().min(minimum).max(maximum).nullable();
+  safeTrimmedText(minimum, maximum).nullable();
 const nullableHttpUrl = (maximum: number, httpsOnly = false) =>
   z
     .string()
@@ -46,12 +59,16 @@ const nullableHttpUrl = (maximum: number, httpsOnly = false) =>
       "URL must be an absolute safe HTTP URL.",
     )
     .nullable();
-const nullableStorageKey = z
-  .string()
-  .trim()
-  .max(512)
-  .regex(/^[A-Za-z0-9](?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]*$/u)
-  .nullable();
+const nullableCompanyMediaPath = (kind: "LOGO" | "COVER") =>
+  z
+    .string()
+    .trim()
+    .max(512)
+    .refine(
+      (value) => isReviewedCompanyMediaPath(value, kind),
+      "Asset must be present in the reviewed company-media manifest.",
+    )
+    .nullable();
 
 const companyLocationInputSchema = z
   .strictObject({
@@ -65,7 +82,7 @@ const companyLocationInputSchema = z
 
 export const employerCompanyProfileSchema = z
   .strictObject({
-    name: z.string().trim().min(2).max(200),
+    name: safeTrimmedText(2, 200),
     uid: z
       .string()
       .trim()
@@ -74,14 +91,14 @@ export const employerCompanyProfileSchema = z
     industry: nullableBoundedText(2, 160),
     size: nullableBoundedText(1, 64),
     website: nullableHttpUrl(512),
-    logoStorageKey: nullableStorageKey,
-    coverStorageKey: nullableStorageKey,
+    logoStorageKey: nullableCompanyMediaPath("LOGO"),
+    coverStorageKey: nullableCompanyMediaPath("COVER"),
     linkedinUrl: nullableHttpUrl(512, true),
     facebookUrl: nullableHttpUrl(512, true),
     instagramUrl: nullableHttpUrl(512, true),
     about: nullableBoundedText(20, 5_000),
-    values: z.array(z.string().trim().min(2).max(160)).max(12),
-    benefits: z.array(z.string().trim().min(2).max(200)).max(20),
+    values: z.array(safeTrimmedText(2, 160)).max(12),
+    benefits: z.array(safeTrimmedText(2, 200)).max(20),
     locations: z.array(companyLocationInputSchema).max(10),
   })
   .superRefine((profile, context) => {
@@ -106,8 +123,8 @@ export const employerCompanyProfileSchema = z
   });
 
 export const employerVerificationEvidenceSchema = z.strictObject({
-  summary: z.string().trim().min(20).max(1_000),
-  reference: z.string().trim().min(2).max(255),
+  summary: safeTrimmedText(20, 1_000),
+  reference: safeTrimmedText(2, 255),
 });
 
 export const employerVerificationCommandSchema = z.strictObject({

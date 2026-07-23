@@ -8,6 +8,7 @@ import {
   type AlertFrequency as AlertFrequencyType,
   type RemotePreference as RemotePreferenceType,
 } from "@/lib/generated/prisma/enums";
+import { trimmedString } from "@/lib/validation/common";
 
 export const JOB_ALERT_POLICY_V1 = Object.freeze({
   version: "job-alert-policy-v1",
@@ -29,7 +30,7 @@ const nullableUuid = z.union([z.string().uuid(), z.null()]);
 
 export const jobAlertQuerySchema = z
   .object({
-    keyword: z.string().trim().max(80),
+    keyword: trimmedString(0, 80),
     cantonId: nullableUuid,
     cityId: nullableUuid,
     radiusKm: z.number().int().min(0).max(200),
@@ -81,8 +82,8 @@ export type LegacyJobAlertQuery = Readonly<{
 
 const legacyJobAlertQuerySchema = z
   .object({
-    category: z.string().trim().min(1).max(160).optional(),
-    canton: z.string().trim().min(1).max(8).optional(),
+    category: trimmedString(1, 160).optional(),
+    canton: trimmedString(1, 8).optional(),
     page: z.number().int().positive().optional(),
   })
   .passthrough();

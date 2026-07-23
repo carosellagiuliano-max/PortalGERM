@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="title description">
+  <title id="title">SwissTalentHub Standardlogo</title>
+  <desc id="description">Abstraktes Schweizer Kreuz in einem abgerundeten Quadrat.</desc>
+  <rect width="240" height="240" rx="48" fill="#a51d36"/>
+  <path d="M99 48h42v51h51v42h-51v51H99v-51H48V99h51z" fill="#fff"/>
+</svg>

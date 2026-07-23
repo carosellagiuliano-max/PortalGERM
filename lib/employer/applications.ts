@@ -29,6 +29,7 @@ import {
 import type { AiProvider } from "@/lib/providers/ai/ai-provider";
 import type { EmailProvider } from "@/lib/providers/email/email-provider";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import { trimmedString } from "@/lib/validation/common";
 
 const DAY = 86_400_000;
 const AUDIT_TTL = 365 * DAY;
@@ -52,7 +53,7 @@ const transitionInputSchema = z.strictObject({
   applicationId: z.uuid(),
   nextStatus: z.enum(["IN_REVIEW", "SHORTLISTED", "INTERVIEW", "OFFER", "HIRED", "REJECTED"]),
   rejectionReason: z.enum(["NOT_A_MATCH", "POSITION_FILLED", "REQUIREMENTS_NOT_MET", "OTHER_REVIEWED"]).optional(),
-  idempotencyKey: z.string().trim().min(8).max(128),
+  idempotencyKey: trimmedString(8, 128),
 }).superRefine((value, context) => {
   if (value.nextStatus === "REJECTED" && value.rejectionReason === undefined) {
     context.addIssue({ code: "custom", path: ["rejectionReason"], message: "Ein Ablehnungsgrund ist erforderlich." });
@@ -61,8 +62,8 @@ const transitionInputSchema = z.strictObject({
     context.addIssue({ code: "custom", path: ["rejectionReason"], message: "Ein Ablehnungsgrund ist nur bei einer Ablehnung zulässig." });
   }
 });
-const noteInputSchema = z.strictObject({ applicationId: z.uuid(), body: z.string().trim().min(1).max(3000), idempotencyKey: z.string().trim().min(8).max(128) });
-const messageInputSchema = z.strictObject({ applicationId: z.uuid(), body: z.string().trim().min(1).max(5000), idempotencyKey: z.string().trim().min(8).max(128) });
+const noteInputSchema = z.strictObject({ applicationId: z.uuid(), body: trimmedString(1, 3000), idempotencyKey: trimmedString(8, 128) });
+const messageInputSchema = z.strictObject({ applicationId: z.uuid(), body: trimmedString(1, 5000), idempotencyKey: trimmedString(8, 128) });
 
 export function normalizeEmployerApplicationFilter(raw: Readonly<{ jobId?: string | string[]; status?: string | string[]; query?: string | string[] }>) {
   const jobId = first(raw.jobId);
@@ -111,6 +112,33 @@ export async function getEmployerApplicationDetail(applicationId: string, access
       events: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 20, select: { id: true, kind: true, fromStatus: true, toStatus: true, createdAt: true } },
     },
   });
+}
+
+export async function resolveEmployerApplicantReportTarget(
+  applicationId: string,
+  access: EmployerApplicationAccess,
+  database: DatabaseClient,
+  now = new Date(),
+) {
+  if (
+    !z.uuid().safeParse(applicationId).success ||
+    !Number.isFinite(now.getTime())
+  ) {
+    return null;
+  }
+  const application = await database.application.findFirst({
+    where: { id: applicationId, job: applicationWhere(access, now) },
+    select: {
+      candidateProfile: { select: { userId: true } },
+      job: { select: { companyId: true } },
+    },
+  });
+  return application === null
+    ? null
+    : Object.freeze({
+        userId: application.candidateProfile.userId,
+        companyId: application.job.companyId,
+      });
 }
 
 const applicationCardSelect = {

@@ -12,6 +12,7 @@ import {
   RevealField,
   type RevealField as RevealFieldType,
 } from "@/lib/generated/prisma/enums";
+import { trimmedString } from "@/lib/validation/common";
 
 const MAX_CV_BYTES = 5 * 1024 * 1024;
 const KEY_VERSION = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/;
@@ -42,7 +43,7 @@ export const REVEAL_SNAPSHOT_POLICY_V1 = Object.freeze({
 });
 
 const revealValueSchemas = {
-  DISPLAY_NAME: z.string().trim().min(1).max(120).transform((value) => value.normalize("NFC")),
+  DISPLAY_NAME: trimmedString(1, 120),
   EMAIL: z.string().trim().toLowerCase().min(3).max(254).email(),
   PHONE: z.string().trim().min(8).max(16).regex(/^\+[1-9]\d{6,14}$/),
   CV_METADATA: z
@@ -80,7 +81,7 @@ export const revealConfirmationSchema = z
       ),
     noticeVersion: z.literal(REVEAL_SNAPSHOT_POLICY_V1.noticeVersion),
     previewHmac: z.string().regex(/^[a-f0-9]{64}$/),
-    idempotencyKey: z.string().trim().min(8).max(128),
+    idempotencyKey: trimmedString(8, 128),
   })
   .strict();
 

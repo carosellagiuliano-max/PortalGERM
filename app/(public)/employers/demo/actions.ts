@@ -1,22 +1,16 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
-
 import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
-import { writeBestEffortAudit } from "@/lib/audit/log";
-import { createPrismaAuditPort } from "@/lib/audit/prisma-port";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
-import {
-  SALES_LEAD_INTAKE_POLICY_V1,
-  salesLeadRetainUntilV1,
-} from "@/lib/sales/lead-policy";
+import { SALES_LEAD_INTAKE_POLICY_V1 } from "@/lib/sales/lead-policy";
 import type {
   LeadActionField,
   LeadActionState,
 } from "@/lib/sales/lead-action-state";
 import { submitPublicEmployerLead } from "@/lib/sales/public-lead";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { leadFormSchema } from "@/lib/validation/billing";
 
 const FORM_FIELDS = [
@@ -89,35 +83,16 @@ export async function submitEmployerDemoLeadAction(
     { database, environment },
   );
   if (!rate.allowed) {
-    const auditGate = await consumeRequestRateLimit(
-      "LEAD_DENIAL_AUDIT",
-      {},
-      request,
-      now,
-      { database, environment },
+    await recordRateLimitDenial(
+      rate.audit,
+      {
+        actorKind: "ANONYMOUS",
+        capability: "PUBLIC_EMPLOYER_DEMO_SUBMIT",
+        targetId: request.correlationId,
+        targetType: "SALES_LEAD",
+      },
+      { database, environment, request, now },
     );
-    if (auditGate.allowed) {
-      await writeBestEffortAudit(
-        createPrismaAuditPort(database),
-        {
-          action: "RATE_LIMITED",
-          actorKind: "ANONYMOUS",
-          capability: "PUBLIC_EMPLOYER_DEMO_SUBMIT",
-          correlationId: request.correlationId,
-          metadata: { preset: "LEAD", scope: rate.audit.scope },
-          reasonCode: "RATE_LIMITED",
-          result: "DENIED",
-          retainUntil: salesLeadRetainUntilV1(now),
-          targetId: randomUUID(),
-          targetType: "SALES_LEAD",
-        },
-        undefined,
-        {
-          sourceIp: request.sourceIp,
-          keyring: environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
-        },
-      );
-    }
     return errorState("Zu viele Anfragen in kurzer Zeit. Bitte versuche es später erneut.", raw);
   }
 

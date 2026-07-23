@@ -48,6 +48,7 @@ const TAX_RATE_BASIS_POINTS = 810;
 const ORDER_COUNT = 12;
 const INVOICE_COUNT = 7;
 const JOB_BOOST_COUNT = 12;
+const PHASE_05_AUDIT_JOB_BOOST_COUNT = 10;
 const AUDIT_COUNT = 30;
 const ANALYTICS_COUNT = 300;
 const PHASE_11_IMPORT_SOURCE_KEY = "phase-11:licensed-supply-demo-json";
@@ -3807,7 +3808,16 @@ function resolveAuditTarget(
     case "orders":
       return stableSeedId("order", orderNaturalKey(index % ORDER_COUNT));
     case "boosts":
-      return requireAt(boostIds, index % boostIds.length, "Audit Boost");
+      if (boostIds.length < PHASE_05_AUDIT_JOB_BOOST_COUNT) {
+        throw new Error(
+          "Phase-05 audit evidence requires the ten released Phase-05 Boost identities.",
+        );
+      }
+      return requireAt(
+        boostIds,
+        index % PHASE_05_AUDIT_JOB_BOOST_COUNT,
+        "Audit Boost",
+      );
     case "leads":
       return requireAt(salesLeadIds, index % salesLeadIds.length, "Audit Lead");
     case "content":

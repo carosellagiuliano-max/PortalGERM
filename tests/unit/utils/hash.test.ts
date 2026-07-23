@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
@@ -59,5 +59,26 @@ describe("IP privacy hashing", () => {
     expect(() => hashIpWithFirstKey("192.0.2.42", [], "TEST_KEYS")).toThrow(
       "TEST_KEYS requires an active writer key",
     );
+  });
+
+  it("changes after writer rotation and never equals an unkeyed SHA-256", () => {
+    const sourceIp = "192.0.2.42";
+    const first = hashIp(sourceIp, {
+      version: "writer-v1",
+      secret: "first-dedicated-secret",
+    });
+    const rotated = hashIp(sourceIp, {
+      version: "writer-v2",
+      secret: "second-dedicated-secret",
+    });
+    const unkeyed = createHash("sha256")
+      .update(normalizeIpAddress(sourceIp))
+      .digest("hex");
+
+    expect(rotated).not.toBe(first);
+    expect(first.split(":")[1]).not.toBe(unkeyed);
+    expect(rotated.split(":")[1]).not.toBe(unkeyed);
+    expect(first).not.toContain(sourceIp);
+    expect(rotated).not.toContain(sourceIp);
   });
 });

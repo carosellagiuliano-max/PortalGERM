@@ -665,6 +665,44 @@ describe.sequential("Phase 14 Talent Radar ContactRequest transaction", () => {
         { database: db(), correlationId: randomUUID(), now: expiresAt },
       ),
     ).resolves.toMatchObject({ ok: true, value: { status: "EXPIRED" } });
+    const terminalAudits = await db().auditLog.findMany({
+      where: {
+        targetId: {
+          in: [
+            declined.request.value.requestId,
+            cancelled.request.value.requestId,
+            expired.request.value.requestId,
+          ],
+        },
+        action: {
+          in: [
+            "CONTACT_REQUEST_DECLINED",
+            "CONTACT_REQUEST_CANCELLED",
+            "CONTACT_REQUEST_EXPIRED",
+          ],
+        },
+      },
+      select: { action: true, targetId: true, targetType: true },
+    });
+    expect(terminalAudits).toEqual(
+      expect.arrayContaining([
+        {
+          action: "CONTACT_REQUEST_DECLINED",
+          targetId: declined.request.value.requestId,
+          targetType: "CONTACT_REQUEST",
+        },
+        {
+          action: "CONTACT_REQUEST_CANCELLED",
+          targetId: cancelled.request.value.requestId,
+          targetType: "CONTACT_REQUEST",
+        },
+        {
+          action: "CONTACT_REQUEST_EXPIRED",
+          targetId: expired.request.value.requestId,
+          targetType: "CONTACT_REQUEST",
+        },
+      ]),
+    );
 
     for (const fixture of [declined, cancelled, expired]) {
       await expect(

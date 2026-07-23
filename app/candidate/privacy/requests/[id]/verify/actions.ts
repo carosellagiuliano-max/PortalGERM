@@ -15,6 +15,7 @@ import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { createPostgresPrivacyCaseService } from "@/lib/privacy/privacy-case-service";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 const verifyInputSchema = z.strictObject({
   requestId: z.uuid(),
@@ -50,6 +51,7 @@ export async function completeCandidatePrivacyChallengeAction(
   if (!parsed.success) return genericFailure(nextIdempotencyKey);
 
   const database = getDatabase();
+  const environment = getServerEnvironment();
   const now = new Date();
   try {
     const rate = await consumeRequestRateLimit(
@@ -57,9 +59,22 @@ export async function completeCandidatePrivacyChallengeAction(
       { userId: user.id },
       request,
       now,
-      { database, environment: getServerEnvironment() },
+      { database, environment },
     );
-    if (!rate.allowed) return genericFailure(nextIdempotencyKey);
+    if (!rate.allowed) {
+      await recordRateLimitDenial(
+        rate.audit,
+        {
+          actorKind: "USER",
+          actorUserId: user.id,
+          capability: "CANDIDATE_PRIVACY_IDENTITY_VERIFY",
+          targetId: parsed.data.requestId,
+          targetType: "PRIVACY_REQUEST",
+        },
+        { database, environment, request, now },
+      );
+      return genericFailure(nextIdempotencyKey);
+    }
 
     const credential = await database.credential.findUnique({
       where: { userId: user.id },

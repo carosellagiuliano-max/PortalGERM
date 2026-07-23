@@ -17,6 +17,7 @@ import {
   writeAdminAudit,
   type AdminDependencies,
 } from "@/lib/admin/common";
+import { trimmedString } from "@/lib/validation/common";
 
 export const P1_PRODUCT_TYPES = Object.freeze([
   "ADDITIONAL_JOB",
@@ -39,7 +40,7 @@ const releaseDecisionSchema = z.strictObject({
   allowsPublic: z.boolean(),
   allowsSelfService: z.boolean(),
   reasonCode: adminReasonCodeSchema,
-  rationale: z.string().trim().min(20).max(1_000),
+  rationale: trimmedString(20, 1_000),
   idempotencyKey: adminUuidSchema,
 });
 

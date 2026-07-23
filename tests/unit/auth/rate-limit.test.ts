@@ -42,6 +42,9 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
     expect(RATE_LIMIT_PRESETS_V1.LEAD_DENIAL_AUDIT.buckets).toEqual([
       { scope: "IP", limit: 1, windowMs: 60 * 60_000 },
     ]);
+    expect(RATE_LIMIT_PRESETS_V1.SECURITY_DENIAL_AUDIT.buckets).toEqual([
+      { scope: "ACTOR_OR_IP", limit: 1, windowMs: 60 * 60_000 },
+    ]);
     expect(RATE_LIMIT_PRESETS_V1.ABUSE_INTAKE_PRECHECK.buckets.map(({ scope, limit }) => ({ scope, limit }))).toEqual([
       { scope: "ACTOR_OR_IP", limit: 10 },
       { scope: "IP", limit: 20 },

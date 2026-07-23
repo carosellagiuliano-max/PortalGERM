@@ -1,11 +1,11 @@
 import "server-only";
 
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import { z } from "zod";
 
-import { writeBestEffortAudit, writeRequiredAudit } from "@/lib/audit/log";
-import { createPrismaAuditPort, createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
+import { writeRequiredAudit } from "@/lib/audit/log";
+import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { hashPassword, PASSWORD_HASH_POLICY_V1 } from "@/lib/auth/password";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
@@ -26,6 +26,8 @@ import {
   createRegistrationMarketingConsent,
   createRegistrationTermsConsent,
 } from "@/lib/auth/registration-consent";
+import { trimmedString } from "@/lib/validation/common";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 const DAY = 86_400_000;
 const AUDIT_TTL = 365 * DAY;
@@ -44,7 +46,7 @@ export const membershipRoleSchema = z.strictObject({
 });
 export const removeMembershipSchema = z.strictObject({
   membershipId: z.uuid(),
-  reason: z.string().trim().min(3).max(500),
+  reason: trimmedString(3, 500),
 });
 export const assignmentSchema = z.strictObject({
   jobId: z.uuid(),
@@ -53,7 +55,7 @@ export const assignmentSchema = z.strictObject({
   expiresAt: z.coerce.date().optional(),
 });
 const invitationRegistrationSchema = z.strictObject({
-  name: z.string().trim().min(2).max(160),
+  name: trimmedString(2, 160),
   email: z.string().trim().toLowerCase().email().max(320),
   password: passwordSchema,
   acceptedTerms: z.literal(true),
@@ -652,10 +654,21 @@ export async function registerAndAcceptCompanyInvitation(
       { environment: dependencies.environment, database: dependencies.database },
     );
     if (!rateLimit.allowed) {
-      await auditInvitationRegistrationRateLimit(
-        dependencies,
-        rateLimit.audit.scope,
-        now,
+      await recordRateLimitDenial(
+        rateLimit.audit,
+        {
+          actorKind: "ANONYMOUS",
+          capability: "AUTH_REGISTER_INVITATION",
+          companyId: scope.companyId,
+          targetId: scope.companyId,
+          targetType: "COMPANY",
+        },
+        {
+          database: dependencies.database,
+          environment: dependencies.environment,
+          request: dependencies.request,
+          now,
+        },
       );
       return { ok: false, code: "RATE_LIMITED" };
     }
@@ -832,28 +845,6 @@ async function expireCompanyInvitations(tx: Prisma.TransactionClient, companyId:
 }
 async function writeTeamAudit(tx: Prisma.TransactionClient, action: Parameters<typeof writeRequiredAudit>[1]["action"], actorUserId: string, companyId: string | null, targetId: string, targetType: Parameters<typeof writeRequiredAudit>[1]["targetType"], capability: string, request: AuthRequestContext, now: Date, reasonCode?: string, metadata?: unknown) {
   return writeRequiredAudit(createPrismaTransactionAuditPort(tx), { action, actorKind: "USER", actorUserId, capability, companyId, correlationId: request.correlationId, ...(metadata === undefined ? {} : { metadata }), ...(reasonCode === undefined ? {} : { reasonCode }), result: "SUCCEEDED", retainUntil: new Date(now.getTime() + AUDIT_TTL), targetId, targetType });
-}
-async function auditInvitationRegistrationRateLimit(dependencies: CommandDependencies, scope: string, now: Date) {
-  await writeBestEffortAudit(
-    createPrismaAuditPort(dependencies.database),
-    {
-      action: "RATE_LIMITED",
-      actorKind: "ANONYMOUS",
-      capability: "AUTH_RATE_LIMIT",
-      correlationId: dependencies.request.correlationId,
-      metadata: { preset: "REGISTER", scope },
-      reasonCode: "RATE_LIMITED",
-      result: "DENIED",
-      retainUntil: new Date(now.getTime() + AUDIT_TTL),
-      targetId: randomUUID(),
-      targetType: "USER",
-    },
-    undefined,
-    {
-      sourceIp: dependencies.request.sourceIp,
-      keyring: dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
-    },
-  );
 }
 async function sendInvitationEmail(dependencies: CommandDependencies, email: string, rawToken: string, invitation: { id: string; companyName: string; inviterName: string; version: number }) {
   if (dependencies.emailProvider === undefined) return false;

@@ -43,7 +43,10 @@ import type {
   OrganicCursorTuple,
   RankingCandidate,
 } from "@/lib/search/types";
-import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import {
+  sanitizePlainText,
+  stripUnsafeHtml,
+} from "@/lib/security/sanitize";
 
 /** Bound used only by non-paginated supporting surfaces such as Company cards. */
 const MAXIMUM_BOUNDED_JOB_CANDIDATES = 2_000;
@@ -2217,8 +2220,8 @@ function toRankingCandidate(
     slug: row.slug,
     companyId: row.companyId,
     companyName: stripUnsafeHtml(row.company.name),
-    title: stripUnsafeHtml(revision.title),
-    description: stripUnsafeHtml(revision.description),
+    title: sanitizePlainText(revision.title),
+    description: sanitizePlainText(revision.description),
     publishedAt: new Date(row.publishedAt!),
     expiresAt: new Date(row.expiresAt!),
     fairScore: score,
@@ -2272,8 +2275,8 @@ function toCardModel(
   return Object.freeze({
     id: row.id,
     slug: row.slug,
-    title: stripUnsafeHtml(revision.title),
-    description: stripUnsafeHtml(revision.description),
+    title: sanitizePlainText(revision.title),
+    description: sanitizePlainText(revision.description),
     company: Object.freeze({
       id: row.company.id,
       slug: row.company.slug,
@@ -2330,7 +2333,7 @@ function toDetailModel(
     offer: cleanOptional(revision.offer),
     benefits: Object.freeze(revision.benefits.map((benefit) => Object.freeze({
       code: benefit.benefitCode,
-      description: stripUnsafeHtml(benefit.description),
+      description: sanitizePlainText(benefit.description),
     }))),
     skills: Object.freeze(revision.skills.map((entry) => Object.freeze({
       ...entry.skill,
@@ -2486,12 +2489,12 @@ function withCursorSecret<T>(consumer: (secret: string) => T): T {
 }
 
 function cleanList(values: readonly string[]): readonly string[] {
-  return Object.freeze(values.map(stripUnsafeHtml).filter(Boolean));
+  return Object.freeze(values.map(sanitizePlainText).filter(Boolean));
 }
 
 function cleanOptional(value: string | null): string | null {
   if (value === null) return null;
-  const clean = stripUnsafeHtml(value);
+  const clean = sanitizePlainText(value);
   return clean.length === 0 ? null : clean;
 }
 

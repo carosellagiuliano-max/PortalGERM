@@ -13,6 +13,7 @@ import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { consumeOneCompanyCreditInLockedTransaction } from "@/lib/billing/credits";
 import { getEffectiveEntitlements } from "@/lib/billing/entitlements";
 import { canRequestContact } from "@/lib/billing/feature-gates";
@@ -125,6 +126,12 @@ export const sendContactRequestInputSchema = z
     idempotencyKey: z.string().regex(IDEMPOTENCY_KEY),
   });
 
+export const radarCandidateReportTargetInputSchema =
+  sendContactRequestInputSchema.pick({
+    opaqueCandidateId: true,
+    signedSearchSession: true,
+  });
+
 export type SendContactRequestInput = z.infer<
   typeof sendContactRequestInputSchema
 >;
@@ -183,7 +190,7 @@ export interface RadarContactRateLimitPort {
 export function createRadarContactRateLimitPort(input: Readonly<{
   database: DatabaseClient;
   environment: ServerEnvironment;
-  request: Pick<AuthRequestContext, "sourceIp">;
+  request: Pick<AuthRequestContext, "correlationId" | "sourceIp">;
 }>): RadarContactRateLimitPort {
   return Object.freeze({
     async consume(
@@ -200,12 +207,30 @@ export function createRadarContactRateLimitPort(input: Readonly<{
         identity.now,
         { database: input.database, environment: input.environment },
       );
-      return decision.allowed
-        ? Object.freeze({ allowed: true as const })
-        : Object.freeze({
-            allowed: false as const,
-            retryAfterSeconds: Math.max(1, decision.retryAfterSeconds),
-          });
+      if (decision.allowed) {
+        return Object.freeze({ allowed: true as const });
+      }
+      await recordRateLimitDenial(
+        decision.audit,
+        {
+          actorKind: "USER",
+          actorUserId: identity.actorUserId,
+          capability: "EMPLOYER_TALENT_CONTACT_CREATE",
+          companyId: identity.companyId,
+          targetId: identity.candidateProfileId,
+          targetType: "RADAR_PROFILE",
+        },
+        {
+          database: input.database,
+          environment: input.environment,
+          request: input.request,
+          now: identity.now,
+        },
+      );
+      return Object.freeze({
+        allowed: false as const,
+        retryAfterSeconds: Math.max(1, decision.retryAfterSeconds),
+      });
     },
   });
 }
@@ -424,6 +449,75 @@ export function createEnvironmentRadarContactProofPort(
     opaqueEncryptionKeyring: materializeOpaqueKeyring(
       environment.secrets.keyrings.RADAR_OPAQUE_ENCRYPTION_KEYS,
     ),
+  });
+}
+
+export async function resolveEmployerRadarCandidateReportTarget(
+  rawInput: unknown,
+  dependencies: Readonly<{
+    actor: EmployerRadarContactActor;
+    database: DatabaseClient;
+    proofPort: RadarContactProofPort;
+    now: Date;
+  }>,
+): Promise<Readonly<{ userId: string; companyId: string }> | null> {
+  const input = radarCandidateReportTargetInputSchema.safeParse(rawInput);
+  const actor = z
+    .strictObject({
+      userId: z.uuid(),
+      companyId: z.uuid(),
+      membershipId: z.uuid(),
+    })
+    .safeParse(dependencies.actor);
+  if (
+    !input.success ||
+    !actor.success ||
+    !Number.isFinite(dependencies.now.getTime())
+  ) {
+    return null;
+  }
+
+  return dependencies.database.$transaction(async (transaction) => {
+    const proof = await dependencies.proofPort.authorizeForContact(
+      {
+        actorUserId: actor.data.userId,
+        companyId: actor.data.companyId,
+        membershipId: actor.data.membershipId,
+        opaqueCandidateId: input.data.opaqueCandidateId,
+        signedSearchSession: input.data.signedSearchSession,
+        now: dependencies.now,
+      },
+      transaction,
+    );
+    if (!proof.ok || !isWellFormedAuthorizedProof(proof.value)) return null;
+
+    const session = await loadStoredSearchSessionProof(
+      transaction,
+      actor.data,
+      proof.value,
+    );
+    if (
+      session === null ||
+      !isAuthorizedRadarContactProofForSession(
+        proof.value,
+        session,
+        actor.data,
+        dependencies.now,
+      )
+    ) {
+      return null;
+    }
+
+    const candidate = await transaction.candidateProfile.findUnique({
+      where: { id: proof.value.candidateProfileId },
+      select: { userId: true },
+    });
+    return candidate === null
+      ? null
+      : Object.freeze({
+          userId: candidate.userId,
+          companyId: actor.data.companyId,
+        });
   });
 }
 

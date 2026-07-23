@@ -2,6 +2,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import {
+  rejectAdminJob,
+  requestAdminJobChanges,
+  startAdminJobReview,
+} from "@/lib/admin/jobs";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import {
   closeEmployerJob,
@@ -63,6 +68,7 @@ const IDS = {
   rejectedCloneRevision: id(22),
   closeJob: id(23),
   closeRevision: id(24),
+  admin: id(25),
 };
 const NOW = new Date("2026-07-21T12:00:00.000Z");
 const recruiterActor: EmployerJobActor = {
@@ -473,6 +479,127 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
         "JOB_SUBMITTED",
       ].sort(),
     );
+
+    const adminDependencies = {
+      actor: {
+        userId: IDS.admin,
+        email: "admin-job-test@example.ch",
+        role: "ADMIN" as const,
+        status: "ACTIVE" as const,
+      },
+      correlationId: id(201),
+      database: client,
+      now: new Date(NOW.getTime() + 1_000),
+    };
+    const firstReview = await startAdminJobReview(
+      {
+        jobId: firstSubmit.value.jobId,
+        expectedJobVersion: firstSubmit.value.jobVersion,
+        expectedRevisionVersion: firstSubmit.value.revisionVersion,
+        idempotencyKey: id(202),
+      },
+      adminDependencies,
+    );
+    if (!firstReview.ok) {
+      throw new Error(`Admin review start failed with ${firstReview.code}.`);
+    }
+    const changes = await requestAdminJobChanges(
+      {
+        jobId: firstReview.value.jobId,
+        expectedJobVersion: firstReview.value.jobVersion,
+        expectedRevisionVersion: firstReview.value.revisionVersion,
+        reasonCode: "CONTENT_CLARIFICATION_REQUIRED",
+        idempotencyKey: id(203),
+      },
+      { ...adminDependencies, correlationId: id(204) },
+    );
+    if (!changes.ok) {
+      throw new Error(`Admin changes request failed with ${changes.code}.`);
+    }
+    const editedAfterChanges = requireSuccess(
+      await saveEmployerJobStep(
+        {
+          ...jobEnvelope(changes.value, id(205)),
+          step: 2,
+          data: {
+            ...validStepTwo(),
+            offer:
+              "Wir bieten klare Arbeitsbedingungen, sichere Ausgabekodierung und ein festes Weiterbildungsbudget.",
+          },
+        },
+        {
+          ...dependencies,
+          correlationId: id(206),
+          now: new Date(NOW.getTime() + 2_000),
+        },
+      ),
+      "edit after requested changes",
+    );
+    const recheckedAfterChanges = requireSuccess(
+      await runEmployerJobReportingCheck(
+        {
+          ...jobEnvelope(editedAfterChanges.value, id(207)),
+          occupationCodeId: JOBROOM_FIXTURE_IDS.notRequired,
+        },
+        {
+          ...reportingDependencies,
+          correlationId: id(208),
+          now: new Date(NOW.getTime() + 3_000),
+        },
+      ),
+      "reporting check after requested changes",
+    );
+    const resubmitted = requireSuccess(
+      await submitEmployerJobForReview(
+        jobEnvelope(recheckedAfterChanges.value, id(209)),
+        {
+          ...dependencies,
+          correlationId: id(210),
+          now: new Date(NOW.getTime() + 4_000),
+        },
+      ),
+      "resubmit after requested changes",
+    );
+    const secondReview = await startAdminJobReview(
+      {
+        ...jobEnvelope(resubmitted.value, id(211)),
+      },
+      {
+        ...adminDependencies,
+        correlationId: id(212),
+        now: new Date(NOW.getTime() + 5_000),
+      },
+    );
+    if (!secondReview.ok) {
+      throw new Error(`Second admin review start failed with ${secondReview.code}.`);
+    }
+    const rejected = await rejectAdminJob(
+      {
+        ...jobEnvelope(secondReview.value, id(213)),
+        reasonCode: "QUALITY_REQUIREMENTS_NOT_MET",
+      },
+      {
+        ...adminDependencies,
+        correlationId: id(214),
+        now: new Date(NOW.getTime() + 6_000),
+      },
+    );
+    if (!rejected.ok) {
+      throw new Error(`Admin rejection failed with ${rejected.code}.`);
+    }
+    const reviewAuditActions = await client.auditLog.findMany({
+      where: {
+        targetId: created.value.jobId,
+        action: { in: ["JOB_CHANGES_REQUESTED", "JOB_REJECTED"] },
+      },
+      select: { action: true, targetType: true },
+    });
+    expect(reviewAuditActions).toEqual(
+      expect.arrayContaining([
+        { action: "JOB_CHANGES_REQUESTED", targetType: "JOB" },
+        { action: "JOB_REJECTED", targetType: "JOB" },
+      ]),
+    );
   });
 
   it("serializes pause, unchanged reactivation and material-edit revision creation", async () => {
@@ -615,6 +742,19 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
         idempotencyKey.includes("phase10-reactivate-concurrent"),
       ),
     ).toHaveLength(1);
+    const lifecycleAudits = await client.auditLog.findMany({
+      where: {
+        targetId: IDS.materialEditJob,
+        action: { in: ["JOB_PAUSED", "JOB_REACTIVATED"] },
+      },
+      select: { action: true, targetType: true },
+    });
+    expect(lifecycleAudits).toEqual(
+      expect.arrayContaining([
+        { action: "JOB_PAUSED", targetType: "JOB" },
+        { action: "JOB_REACTIVATED", targetType: "JOB" },
+      ]),
+    );
   });
 
   it("closes once and clones paused or rejected evidence exactly once", async () => {
@@ -808,6 +948,12 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
       ]),
     );
     expect(reopenedEvents).toHaveLength(2);
+    await expect(
+      client.auditLog.findFirstOrThrow({
+        where: { action: "JOB_CLOSED", targetId: IDS.closeJob },
+        select: { targetType: true, result: true },
+      }),
+    ).resolves.toEqual({ targetType: "JOB", result: "SUCCEEDED" });
   });
 
   it("returns zero cross-tenant IDs and drops access immediately after assignment expiry", async () => {
@@ -888,6 +1034,7 @@ async function seed(client: DatabaseClient) {
     { id: IDS.recruiter, email: "recruiter-job-test@example.ch", emailNormalized: "recruiter-job-test@example.ch", role: "RECRUITER" },
     { id: IDS.ownerOther, email: "other-owner@example.ch", emailNormalized: "other-owner@example.ch", role: "EMPLOYER" },
     { id: IDS.primaryOwner, email: "primary-owner@example.ch", emailNormalized: "primary-owner@example.ch", role: "EMPLOYER" },
+    { id: IDS.admin, email: "admin-job-test@example.ch", emailNormalized: "admin-job-test@example.ch", role: "ADMIN" },
   ] });
   await client.company.createMany({ data: [
     { id: IDS.company, name: "Job Test AG", slug: "job-test-ag", industry: "Technology", size: "10-49", website: "https://job-test.example.test", about: "A complete company used for isolated employer job tests.", status: "DRAFT", values: [], benefits: [], dataProvenance: "TEST" },

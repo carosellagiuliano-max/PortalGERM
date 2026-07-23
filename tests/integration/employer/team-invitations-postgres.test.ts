@@ -388,6 +388,48 @@ describe.sequential("Phase-10 team and invitation PostgreSQL contracts", () => {
         where: { companyId: fixture.companyId, userId: acceptedUser.id },
       }),
     ).toBe(1);
+    const invitationAudits = await client().auditLog.findMany({
+      where: {
+        targetId: {
+          in: [
+            revokedInvitation.invitationId,
+            acceptedInvitation.invitationId,
+          ],
+        },
+        action: {
+          in: [
+            "INVITATION_SENT",
+            "INVITATION_REVOKED",
+            "INVITATION_ACCEPTED",
+          ],
+        },
+      },
+      select: { action: true, targetId: true, targetType: true },
+    });
+    expect(invitationAudits).toEqual(
+      expect.arrayContaining([
+        {
+          action: "INVITATION_SENT",
+          targetId: revokedInvitation.invitationId,
+          targetType: "INVITATION",
+        },
+        {
+          action: "INVITATION_REVOKED",
+          targetId: revokedInvitation.invitationId,
+          targetType: "INVITATION",
+        },
+        {
+          action: "INVITATION_SENT",
+          targetId: acceptedInvitation.invitationId,
+          targetType: "INVITATION",
+        },
+        {
+          action: "INVITATION_ACCEPTED",
+          targetId: acceptedInvitation.invitationId,
+          targetType: "INVITATION",
+        },
+      ]),
+    );
   });
 
   it("returns non-disclosing mismatch states and denies Candidate or platform Admin accounts", async () => {
@@ -1041,10 +1083,27 @@ describe.sequential("Phase-10 team and invitation PostgreSQL contracts", () => {
       ),
     ).toEqual({ ok: false, code: "RATE_LIMITED" });
     expect(
-      await client().auditLog.count({
+      await client().auditLog.findMany({
         where: { action: "RATE_LIMITED", reasonCode: "RATE_LIMITED" },
+        select: {
+          actorKind: true,
+          actorUserId: true,
+          capability: true,
+          companyId: true,
+          targetId: true,
+          targetType: true,
+        },
       }),
-    ).toBe(1);
+    ).toEqual([
+      {
+        actorKind: "ANONYMOUS",
+        actorUserId: null,
+        capability: "AUTH_REGISTER_INVITATION",
+        companyId: fixture.companyId,
+        targetId: fixture.companyId,
+        targetType: "COMPANY",
+      },
+    ]);
   });
 
   it("revalidates active Owner or Admin scope for every team read", async () => {

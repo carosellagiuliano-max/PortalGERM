@@ -762,10 +762,11 @@ describe("public Job query data minimization", () => {
 
     expect(result).toMatchObject({
       id: JOB_ID,
-      companyIntro: "Wir bauen sichere Plattformen",
+      companyIntro: "<p>Wir bauen sichere Plattformen</p>",
       tasks: ["Sichere Systeme bauen"],
-      niceToHave: ["PostgreSQL"],
-      offer: "Lernbudget & Weiterbildung",
+      niceToHave: ["<strong>PostgreSQL</strong>"],
+      offer:
+        "<p>Lernbudget &amp; Weiterbildung</p><script>private()</script>",
       applicationContactValue: "jobs@example.test",
       fairScoreVersion: "v2",
       company: {

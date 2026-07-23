@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 480" role="img" aria-labelledby="title description">
+  <title id="title">SwissTalentHub Standardcover</title>
+  <desc id="description">Ruhige abstrakte Berglandschaft in Rot-, Blau- und Cremetönen.</desc>
+  <rect width="1440" height="480" fill="#f7f2eb"/>
+  <path d="M0 405 312 126l219 196L754 72l353 333z" fill="#18334f"/>
+  <path d="m625 405 232-211 140 127 171-154 272 238z" fill="#a51d36" opacity=".92"/>
+  <path d="m258 174 54-48 44 39-29 26-15-13-25 22z" fill="#fff" opacity=".9"/>
+</svg>

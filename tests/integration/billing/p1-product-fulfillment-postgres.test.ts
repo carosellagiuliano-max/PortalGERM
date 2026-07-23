@@ -276,9 +276,25 @@ describe.sequential("Phase 12 P1 product release and fulfillment", () => {
       where: {
         clientIdempotencyKey: "p1-import-business-provider-failed",
       },
-      select: { status: true },
+      select: { id: true, status: true },
     });
     expect(failedOrder.status).toBe("FAILED");
+    await expect(
+      db().auditLog.findFirstOrThrow({
+        where: { action: "ORDER_FAILED", targetId: failedOrder.id },
+        select: {
+          actorKind: true,
+          targetType: true,
+          result: true,
+          reasonCode: true,
+        },
+      }),
+    ).resolves.toEqual({
+      actorKind: "USER",
+      targetType: "ORDER",
+      result: "SUCCEEDED",
+      reasonCode: "MOCK_CHECKOUT_PROVIDER_FAILED",
+    });
     await expect(
       db().importSetupApproval.findUniqueOrThrow({
         where: { id: data().businessApprovalId },

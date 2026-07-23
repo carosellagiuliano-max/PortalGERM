@@ -15,6 +15,7 @@ import {
   writeAdminAudit,
   type AdminDependencies,
 } from "@/lib/admin/common";
+import { trimmedString } from "@/lib/validation/common";
 
 export const TAXONOMY_ENTITY_TYPES = ["CATEGORY", "CANTON", "CITY", "SKILL", "OCCUPATION_VERSION", "OCCUPATION_CODE"] as const;
 export type TaxonomyEntityType = (typeof TAXONOMY_ENTITY_TYPES)[number];
@@ -35,21 +36,21 @@ const baseSchema = z.strictObject({
   entityType: z.enum(TAXONOMY_ENTITY_TYPES),
   entityId: z.uuid().optional(),
   action: z.enum(["CREATE", "UPDATE", "ACTIVATE", "DEACTIVATE"]),
-  name: z.string().trim().min(1).max(255).optional(),
-  slug: z.string().trim().max(160).optional(),
+  name: trimmedString(1, 255).optional(),
+  slug: trimmedString(0, 160).optional(),
   sortOrder: z.coerce.number().int().min(0).max(100_000).optional(),
   parentId: z.uuid().nullable().optional(),
   cantonId: z.uuid().optional(),
-  code: z.string().trim().min(1).max(32).optional(),
+  code: trimmedString(1, 32).optional(),
   language: z.enum(["DE", "FR", "IT", "EN"]).optional(),
   latitude: z.coerce.number().min(-90).max(90).nullable().optional(),
   longitude: z.coerce.number().min(-180).max(180).nullable().optional(),
-  datasetKey: z.string().trim().min(2).max(64).optional(),
+  datasetKey: trimmedString(2, 64).optional(),
   datasetYear: z.coerce.number().int().min(1900).max(2200).optional(),
-  version: z.string().trim().min(1).max(32).optional(),
-  source: z.string().trim().min(3).max(500).optional(),
+  version: trimmedString(1, 32).optional(),
+  source: trimmedString(3, 500).optional(),
   referenceUrl: z.url().max(1000).nullable().optional(),
-  disclaimer: z.string().trim().min(3).max(1000).optional(),
+  disclaimer: trimmedString(3, 1000).optional(),
   validFrom: z.coerce.date().optional(),
   validTo: z.coerce.date().nullable().optional(),
   occupationCodeVersionId: z.uuid().optional(),

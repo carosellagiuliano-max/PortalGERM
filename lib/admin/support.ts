@@ -11,6 +11,7 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import { trimmedString } from "@/lib/validation/common";
 import { slaDueAt, tightenSlaDueAt, type OpsCaseSlaKey } from "@/lib/admin/sla";
 import {
   ADMIN_AUDIT_RETENTION_MILLISECONDS,
@@ -29,8 +30,12 @@ export type SupportRequesterActor = Readonly<{ userId: string; status: string }>
 const createCaseSchema = z.strictObject({
   companyId: z.uuid().nullable().optional(),
   category: z.enum(["ACCOUNT", "APPLICATION", "EMPLOYER", "BILLING", "PRIVACY", "ABUSE", "OTHER"]),
-  subject: z.string().transform(stripUnsafeHtml).pipe(z.string().trim().min(3).max(200)),
-  description: z.string().transform(stripUnsafeHtml).pipe(z.string().trim().min(10).max(3000)),
+  subject: trimmedString(3, 200)
+    .transform(stripUnsafeHtml)
+    .pipe(z.string().min(3).max(200)),
+  description: trimmedString(10, 3000)
+    .transform(stripUnsafeHtml)
+    .pipe(z.string().min(10).max(3000)),
   contactPreference: z.enum(["EMAIL", "PHONE"]),
   idempotencyKey: z.uuid(),
 });
@@ -68,7 +73,7 @@ export async function getRequesterSupportCase(database: DatabaseClient, actor: S
   return database.supportCase.findFirst({ where: { id: caseId, requesterUserId: actor.userId }, select: { id: true, category: true, priority: true, status: true, subject: true, description: true, contactPreference: true, dueAt: true, createdAt: true, updatedAt: true, events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { kind: true, safeBody: true, createdAt: true } } } });
 }
 
-const replySchema = z.strictObject({ caseId: z.uuid(), body: z.string().transform(stripUnsafeHtml).pipe(z.string().trim().min(1).max(2000)), idempotencyKey: z.uuid() });
+const replySchema = z.strictObject({ caseId: z.uuid(), body: trimmedString(1, 2000).transform(stripUnsafeHtml).pipe(z.string().min(1).max(2000)), idempotencyKey: z.uuid() });
 
 export async function replyToSupportCase(raw: unknown, actor: SupportRequesterActor, database: DatabaseClient, now = new Date()) {
   const parsed = replySchema.safeParse(raw);
@@ -103,7 +108,7 @@ export async function getAdminSupportCase(dependencies: AdminDependencies, caseI
 }
 
 const adminSupportSchema = z.strictObject({
-  caseId: z.uuid(), expectedVersion: z.coerce.number().int().positive(), action: z.enum(["TRIAGE", "ASSIGN", "REQUEST_INFORMATION", "RESOLVE", "REOPEN"]), priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(), assigneeUserId: z.uuid().nullable().optional(), reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u), safeBody: z.string().transform(stripUnsafeHtml).pipe(z.string().trim().min(1).max(2000)).optional(), idempotencyKey: z.uuid(),
+  caseId: z.uuid(), expectedVersion: z.coerce.number().int().positive(), action: z.enum(["TRIAGE", "ASSIGN", "REQUEST_INFORMATION", "RESOLVE", "REOPEN"]), priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(), assigneeUserId: z.uuid().nullable().optional(), reasonCode: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u), safeBody: trimmedString(1, 2000).transform(stripUnsafeHtml).pipe(z.string().min(1).max(2000)).optional(), idempotencyKey: z.uuid(),
 });
 
 export async function manageSupportCase(raw: unknown, dependencies: AdminDependencies) {

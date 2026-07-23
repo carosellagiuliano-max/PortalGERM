@@ -5,6 +5,9 @@ import { AlertTriangleIcon, RotateCcwIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { normalizeErrorReference } from "@/lib/utils/error-reference";
+import { createLogger } from "@/lib/utils/logger";
+
+const logger = createLogger();
 
 export default function ErrorPage({
   error,
@@ -31,14 +34,17 @@ export default function ErrorPage({
     if (supportReference === null) {
       return;
     }
-    console.error(
-      JSON.stringify({
-        level: "error",
-        event: "route_error_boundary_shown",
-        ...(errorReference === undefined
-          ? { incidentId: supportReference, referenceSource: "client_incident" }
-          : { errorReference, referenceSource: "next_error_digest" }),
-      }),
+    logger.error(
+      "route_error_boundary_shown",
+      errorReference === undefined
+        ? {
+            incidentId: supportReference,
+            referenceSource: "client_incident",
+          }
+        : {
+            errorReference,
+            referenceSource: "next_error_digest",
+          },
     );
   }, [errorReference, supportReference]);
 

@@ -37,7 +37,11 @@ import {
   type FairJobResult,
 } from "@/lib/scoring/fair-job-score";
 import { buildFairJobScoreSnapshotV2 } from "@/lib/scoring/fair-job-snapshot";
-import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import {
+  sanitizePlainText,
+  stripUnsafeHtml,
+} from "@/lib/security/sanitize";
+import { trimmedString } from "@/lib/validation/common";
 
 const DAY = 86_400_000;
 const AUDIT_RETENTION_DAYS = 365;
@@ -55,7 +59,9 @@ export {
 } from "@/lib/employer/job-contracts";
 
 const boundedPlainText = (minimum: number, maximum: number) =>
-  z.string().transform(stripUnsafeHtml).pipe(z.string().min(minimum).max(maximum));
+  trimmedString(minimum, maximum)
+    .transform(sanitizePlainText)
+    .pipe(z.string().min(minimum).max(maximum));
 const optionalPlainText = (maximum: number, minimum = 1) =>
   z.preprocess(
     (value) => value === "" || value === null || value === undefined ? null : value,
@@ -146,7 +152,7 @@ export const jobWizardStepThreeSchema = z.strictObject({
   requiredDocumentKinds: z.array(z.enum(REQUIRED_DOCUMENT_KINDS)).min(1).max(7),
   inclusionStatement: optionalPlainText(1_000, 20),
   applicationContactKind: z.enum(APPLICATION_CONTACT_KINDS),
-  applicationContactValue: z.string().trim().min(3).max(512),
+  applicationContactValue: trimmedString(3, 512),
 }).superRefine((value, context) => {
   const salaryParts = [value.salaryPeriod, value.salaryMin, value.salaryMax];
   if (salaryParts.some((part) => part !== null) && salaryParts.some((part) => part === null)) {
@@ -1066,7 +1072,7 @@ export const EMPLOYER_JOB_AI_OPERATIONS = ["IMPROVE", "INCLUSIVE", "SHORTEN_REQU
 export const employerJobAiSuggestionSchema = z.strictObject({
   jobId: z.uuid(),
   operation: z.enum(EMPLOYER_JOB_AI_OPERATIONS),
-  text: z.string().max(5_000),
+  text: trimmedString(0, 5_000),
 });
 export type EmployerJobAiOperation = (typeof EMPLOYER_JOB_AI_OPERATIONS)[number];
 

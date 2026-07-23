@@ -127,6 +127,16 @@ describe.sequential("Phase-05 Billing/Ops PostgreSQL seed", () => {
         3,
       );
       expect(await client().auditLog.count()).toBe(30);
+      await expect(
+        client().auditLog.findUnique({
+          where: { id: stableSeedId("audit-log", "phase-05:18") },
+          select: { action: true, targetId: true, targetType: true },
+        }),
+      ).resolves.toEqual({
+        action: "JOB_BOOST_ACTIVATED",
+        targetId: stableSeedId("job-boost", "phase-05:8"),
+        targetType: "JOB_BOOST",
+      });
       expect(await client().analyticsEvent.count()).toBe(300);
       const analyticsEvents = await loadAnalyticsEvents(client());
       expect(

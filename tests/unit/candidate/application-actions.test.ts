@@ -4,13 +4,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   consumeRequestRateLimit: vi.fn(),
-  database: {},
+  createPublicReport: vi.fn(),
+  database: {
+    application: {
+      findFirst: vi.fn(),
+    },
+  },
   environment: { APP_ENV: "local" },
   getAuthRequestContext: vi.fn(),
   getCurrentUser: vi.fn(),
   getDatabase: vi.fn(),
   getServerEnvironment: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(),
+  publicReportInputSafeParse: vi.fn(),
+  recordRateLimitDenial: vi.fn(),
   revalidatePath: vi.fn(),
   updateCandidateApplicationNote: vi.fn(),
   withdrawCandidateApplication: vi.fn(),
@@ -20,8 +27,8 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/abuse/public-report", () => ({
-  createPublicReport: vi.fn(),
-  publicReportInputSchema: { safeParse: vi.fn() },
+  createPublicReport: mocks.createPublicReport,
+  publicReportInputSchema: { safeParse: mocks.publicReportInputSafeParse },
 }));
 vi.mock("@/lib/applications/candidate-commands", () => ({
   updateCandidateApplicationNote: mocks.updateCandidateApplicationNote,
@@ -43,8 +50,12 @@ vi.mock("@/lib/config/env", () => ({
 }));
 vi.mock("@/lib/db/client", () => ({ getDatabase: mocks.getDatabase }));
 vi.mock("@/lib/providers/email", () => ({ emailProvider: {} }));
+vi.mock("@/lib/security/rate-limit-audit", () => ({
+  recordRateLimitDenial: mocks.recordRateLimitDenial,
+}));
 
 import {
+  reportApplicationEmployerAction,
   updateCandidateApplicationNoteAction,
   withdrawCandidateApplicationAction,
 } from "@/app/candidate/applications/actions";
@@ -52,6 +63,7 @@ import { INITIAL_APPLICATION_ACTION_STATE } from "@/lib/applications/action-stat
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const APPLICATION_ID = "22222222-2222-4222-8222-222222222222";
+const COMPANY_ID = "44444444-4444-4444-8444-444444444444";
 const currentUser = Object.freeze({ id: USER_ID, role: "CANDIDATE" });
 const request = Object.freeze({
   correlationId: "33333333-3333-4333-8333-333333333333",
@@ -71,6 +83,26 @@ describe("candidate application mutation actions", () => {
     mocks.getDatabase.mockReturnValue(mocks.database);
     mocks.getServerEnvironment.mockReturnValue(mocks.environment);
     mocks.consumeRequestRateLimit.mockResolvedValue({ allowed: true, status: 200 });
+    mocks.database.application.findFirst.mockResolvedValue({
+      job: {
+        company: {
+          id: COMPANY_ID,
+          slug: "reported-company",
+        },
+      },
+    });
+    mocks.publicReportInputSafeParse.mockImplementation((data) => ({
+      success: true,
+      data,
+    }));
+    mocks.createPublicReport.mockResolvedValue({
+      ok: true,
+      reportId: "55555555-5555-4555-8555-555555555555",
+    });
+    mocks.recordRateLimitDenial.mockResolvedValue({
+      written: true,
+      gated: false,
+    });
     mocks.updateCandidateApplicationNote.mockResolvedValue({
       ok: true,
       applicationId: APPLICATION_ID,
@@ -153,6 +185,11 @@ describe("candidate application mutation actions", () => {
       status: 429,
       code: "RATE_LIMITED",
       retryAfterSeconds: 60,
+      audit: {
+        action: "RATE_LIMITED",
+        preset: "APPLICATION_CANDIDATE_MUTATION",
+        scope: "USER",
+      },
     });
 
     const noteState = await updateCandidateApplicationNoteAction(
@@ -166,8 +203,84 @@ describe("candidate application mutation actions", () => {
 
     expect(noteState).toMatchObject({ status: "error" });
     expect(withdrawState).toMatchObject({ status: "error" });
+    expect(mocks.recordRateLimitDenial).toHaveBeenCalledTimes(2);
+    expect(mocks.recordRateLimitDenial).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        preset: "APPLICATION_CANDIDATE_MUTATION",
+        scope: "USER",
+      }),
+      {
+        actorKind: "USER",
+        actorUserId: USER_ID,
+        capability: "CANDIDATE_APPLICATION_MUTATE",
+        targetId: APPLICATION_ID,
+        targetType: "APPLICATION",
+      },
+      expect.objectContaining({
+        database: mocks.database,
+        environment: mocks.environment,
+        request,
+      }),
+    );
+    expect(mocks.recordRateLimitDenial).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        preset: "APPLICATION_CANDIDATE_MUTATION",
+        scope: "USER",
+      }),
+      expect.objectContaining({
+        targetId: APPLICATION_ID,
+        targetType: "APPLICATION",
+      }),
+      expect.objectContaining({ request }),
+    );
     expect(mocks.updateCandidateApplicationNote).not.toHaveBeenCalled();
     expect(mocks.withdrawCandidateApplication).not.toHaveBeenCalled();
+  });
+
+  it("records a gated denial when the application-report precheck is exhausted", async () => {
+    mocks.consumeRequestRateLimit.mockResolvedValue({
+      allowed: false,
+      status: 429,
+      code: "RATE_LIMITED",
+      retryAfterSeconds: 60,
+      audit: {
+        action: "RATE_LIMITED",
+        preset: "ABUSE_INTAKE_PRECHECK",
+        scope: "ACTOR_OR_IP",
+      },
+    });
+
+    const state = await reportApplicationEmployerAction(
+      INITIAL_APPLICATION_ACTION_STATE,
+      reportForm(),
+    );
+
+    expect(state).toMatchObject({
+      status: "error",
+      message: expect.stringMatching(/Zu viele Meldungen/u),
+    });
+    expect(mocks.recordRateLimitDenial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preset: "ABUSE_INTAKE_PRECHECK",
+        scope: "ACTOR_OR_IP",
+      }),
+      {
+        actorKind: "USER",
+        actorUserId: USER_ID,
+        capability: "CANDIDATE_APPLICATION_ABUSE_REPORT_PRECHECK",
+        companyId: COMPANY_ID,
+        targetId: COMPANY_ID,
+        targetType: "COMPANY",
+      },
+      expect.objectContaining({
+        database: mocks.database,
+        environment: mocks.environment,
+        request,
+      }),
+    );
+    expect(mocks.createPublicReport).not.toHaveBeenCalled();
   });
 });
 
@@ -184,5 +297,16 @@ function withdrawForm(): FormData {
   formData.set("applicationId", APPLICATION_ID);
   formData.set("confirmed", "true");
   formData.set("idempotencyKey", "withdraw-action-0001");
+  return formData;
+}
+
+function reportForm(): FormData {
+  const formData = new FormData();
+  formData.set("applicationId", APPLICATION_ID);
+  formData.set("reasonCode", "SCAM_OR_FRAUD");
+  formData.set(
+    "description",
+    "Die Firmenkommunikation fordert verdächtige Zahlungen außerhalb der Plattform.",
+  );
   return formData;
 }

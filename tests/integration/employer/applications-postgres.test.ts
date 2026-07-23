@@ -19,6 +19,7 @@ import {
   getEmployerApplicationDetail,
   listEmployerApplications,
   normalizeEmployerApplicationFilter,
+  resolveEmployerApplicantReportTarget,
   sendEmployerApplicationMessage,
   transitionEmployerApplication,
   type EmployerApplicationAccess,
@@ -243,6 +244,54 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
         select: { status: true },
       }),
     ).resolves.toEqual({ status: "SHORTLISTED" });
+  });
+
+  it("resolves reportable applicant identities only through the employer application scope", async () => {
+    await expect(
+      resolveEmployerApplicantReportTarget(
+        IDS.accessApplication,
+        access("owner"),
+        client(),
+        NOW,
+      ),
+    ).resolves.toEqual({
+      userId: IDS.candidate,
+      companyId: IDS.company,
+    });
+    await expect(
+      resolveEmployerApplicantReportTarget(
+        IDS.accessApplication,
+        access("pipeline"),
+        client(),
+        NOW,
+      ),
+    ).resolves.toEqual({
+      userId: IDS.candidate,
+      companyId: IDS.company,
+    });
+
+    const inaccessible = await resolveEmployerApplicantReportTarget(
+      IDS.foreignApplication,
+      access("owner"),
+      client(),
+      NOW,
+    );
+    const missing = await resolveEmployerApplicantReportTarget(
+      id(9_999),
+      access("owner"),
+      client(),
+      NOW,
+    );
+    expect(inaccessible).toBeNull();
+    expect(missing).toEqual(inaccessible);
+    await expect(
+      resolveEmployerApplicantReportTarget(
+        IDS.accessApplication,
+        access("viewer"),
+        client(),
+        NOW,
+      ),
+    ).resolves.toBeNull();
   });
 
   it("writes one status event, required audit and notification across a retry", async () => {

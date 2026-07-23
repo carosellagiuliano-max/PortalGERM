@@ -21,6 +21,7 @@ import {
   CANDIDATE_LANGUAGE_CODES,
   swissJobPassSchema,
 } from "@/lib/validation/candidate";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 const FIELD_MESSAGES = Object.freeze({
   firstName: "Bitte prüfe den Vornamen.",
@@ -205,6 +206,17 @@ async function secureCandidateProfileMutation() {
     { database, environment },
   );
   if (!rate.allowed) {
+    await recordRateLimitDenial(
+      rate.audit,
+      {
+        actorKind: "USER",
+        actorUserId: user.id,
+        capability: "CANDIDATE_PROFILE_MUTATE",
+        targetId: user.id,
+        targetType: "USER",
+      },
+      { database, environment, request, now },
+    );
     return Object.freeze({
       ok: false as const,
       state: Object.freeze({

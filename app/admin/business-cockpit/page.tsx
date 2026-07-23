@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import {
+  AdminActionForm,
+  adminInputClass,
+} from "@/components/admin/action-form";
 import { SignalCards } from "@/components/admin/BusinessCockpit/SignalCards";
 import { MetricCard } from "@/components/admin/MetricCard";
 import { Badge } from "@/components/ui/badge";
 import { getBusinessCockpit } from "@/lib/admin/cockpit";
+import { listOpenSystemTasks } from "@/lib/admin/system-governance";
 import { getAdminFinancialMetrics } from "@/lib/analytics/admin-metrics";
 import { requireAdminPage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
@@ -26,11 +31,12 @@ export default async function BusinessCockpitPage() {
     database: getDatabase(),
     now,
   } as const;
-  const [cockpit, financial] = await Promise.all([
+  const [cockpit, financial, systemTasks] = await Promise.all([
     getBusinessCockpit(dependencies),
     getAdminFinancialMetrics(dependencies),
+    listOpenSystemTasks(dependencies),
   ]);
-  if (cockpit === null || financial === null) return null;
+  if (cockpit === null || financial === null || systemTasks === null) return null;
 
   return (
     <div className="grid gap-8">
@@ -104,6 +110,70 @@ export default async function BusinessCockpitPage() {
               </span>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-xl font-semibold">Offene Systemaufgaben</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Das Ergebnis ist ein begrenzter Code; private Notizen oder
+          Nachrichteninhalte gehören nicht in diese Evidenz.
+        </p>
+        <div className="mt-4 grid gap-3">
+          {systemTasks.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Keine offenen Systemaufgaben.
+            </p>
+          ) : (
+            systemTasks.map((task) => (
+              <article
+                key={task.id}
+                className="grid gap-4 rounded-lg border bg-card p-4 lg:grid-cols-[minmax(0,1fr)_24rem]"
+              >
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge>{task.status}</Badge>
+                    <Badge variant="outline">{task.kind}</Badge>
+                  </div>
+                  <h3 className="mt-3 font-medium">
+                    {task.company?.name ?? "Plattformaufgabe"}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {task.reasonCode} · fällig{" "}
+                    {task.dueAt.toLocaleString("de-CH")} ·{" "}
+                    {task.owner?.name ?? "nicht zugewiesen"}
+                  </p>
+                </div>
+                <AdminActionForm
+                  operation="system-task-outcome"
+                  label="Outcome speichern"
+                  hidden={{
+                    taskId: task.id,
+                    expectedStatus: task.status,
+                    idempotencyKey: crypto.randomUUID(),
+                  }}
+                >
+                  <label className="grid gap-1 text-sm">
+                    Abschluss
+                    <select name="status" className={adminInputClass}>
+                      <option value="DONE">Erledigt</option>
+                      <option value="DISMISSED">Verworfen</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    Outcome-Code
+                    <input
+                      name="outcomeCode"
+                      defaultValue="OPERATIONAL_REVIEW_COMPLETED"
+                      pattern="[A-Z][A-Z0-9_]{1,63}"
+                      required
+                      className={adminInputClass}
+                    />
+                  </label>
+                </AdminActionForm>
+              </article>
+            ))
+          )}
         </div>
       </section>
 

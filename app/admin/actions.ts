@@ -17,8 +17,10 @@ import { projectExpiredClusterLaunches, saveContentDraft, transitionContentRevis
 import { evaluateClusterLaunch } from "@/lib/admin/cluster-launch";
 import { manageSalesLead } from "@/lib/admin/leads";
 import { projectAdminSlaAlerts } from "@/lib/admin/sla";
+import { approveTaxRateVersion, recordSystemTaskOutcome } from "@/lib/admin/system-governance";
 import { deactivatePlanVersion, deactivateProductVersion, grantAdminCredits, reverseCreditConsume, schedulePlanVersion, scheduleProductVersion } from "@/lib/billing/admin-billing";
 import { adminMockRenewSubscription, type AdminMockRenewalResult } from "@/lib/billing/admin-renewal";
+import { cancelAdminOrder, voidAdminInvoice } from "@/lib/billing/admin-status-transitions";
 import { projectDueCatalogVersions } from "@/lib/billing/catalog-lifecycle";
 import { recordProductReleaseDecision } from "@/lib/billing/product-release";
 import { projectDueSubscriptionBoundaries, type SubscriptionBoundaryProjectionResult } from "@/lib/billing/subscriptions";
@@ -77,8 +79,12 @@ export async function adminCommandAction(_previous: AdminActionState, formData: 
                                                                             : operation === "cluster-transition" ? await transitionClusterLaunch(input, dependencies)
                                                                           : operation === "lead-manage" ? await manageSalesLead(input, dependencies)
                                                                           : operation === "sla-project" ? await projectAdminSlaAlerts(input as never, dependencies)
+                                                                            : operation === "system-task-outcome" ? await recordSystemTaskOutcome(input, dependencies)
+                                                                              : operation === "tax-rate-approve" ? await approveTaxRateVersion(input, dependencies)
                                                                             : operation === "credit-grant" ? await grantAdminCredits(input, dependencies)
                                                                               : operation === "credit-reverse" ? await reverseCreditConsume(input, dependencies)
+                                                                                : operation === "order-cancel" ? await cancelAdminOrder(input, dependencies)
+                                                                                  : operation === "invoice-void" ? await voidAdminInvoice(input, dependencies)
                                                                                 : operation === "catalog-plan-schedule" ? await schedulePlanVersion(input, dependencies)
                                                                                   : operation === "catalog-product-release-decide" ? await recordProductReleaseDecision(input, dependencies)
                                                                                   : operation === "catalog-product-schedule" ? await scheduleProductVersion(input, dependencies)

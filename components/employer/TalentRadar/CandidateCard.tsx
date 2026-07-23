@@ -1,6 +1,7 @@
 import { BriefcaseBusinessIcon, LanguagesIcon, MapPinIcon, ShieldCheckIcon } from "lucide-react";
 
 import { ContactDialog } from "@/components/employer/TalentRadar/ContactDialog";
+import { CandidateReportForm } from "@/components/employer/TalentRadar/CandidateReportForm";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -68,7 +69,11 @@ export function CandidateCard({
           Identität bleibt anonym bis zur Freigabe.
         </p>
       </CardContent>
-      <CardFooter className="justify-end">
+      <CardFooter className="flex-wrap justify-end gap-3">
+        <CandidateReportForm
+          opaqueCandidateId={candidate.opaqueId}
+          signedSearchSession={signedSearchSession}
+        />
         <ContactDialog
           opaqueCandidateId={candidate.opaqueId}
           signedSearchSession={signedSearchSession}

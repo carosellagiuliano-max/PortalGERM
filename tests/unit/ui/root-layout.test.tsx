@@ -6,6 +6,12 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/config/env", () => ({
   getServerEnvironment: () => ({ APP_URL: "http://localhost:3000" }),
 }));
+vi.mock("next/headers", () => ({
+  headers: async () =>
+    new Headers({
+      "x-nonce": "0123456789abcdef0123456789abcdef",
+    }),
+}));
 
 vi.mock("@/components/shared/app-providers", () => ({
   AppProviders: ({ children }: { children: ReactNode }) => children,
@@ -24,11 +30,11 @@ describe("root layout", () => {
     expect(metadata.metadataBase.protocol).toMatch(/^https?:$/u);
   });
 
-  it("sets de-CH and delegates route chrome to nested layouts", () => {
+  it("sets de-CH and delegates route chrome to nested layouts", async () => {
     const markup = renderToStaticMarkup(
-      <RootLayout>
-        <p>Testinhalt</p>
-      </RootLayout>,
+      await RootLayout({
+        children: <p>Testinhalt</p>,
+      }),
     );
     const document = new DOMParser().parseFromString(markup, "text/html");
 

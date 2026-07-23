@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 
 import { ReportForm } from "@/components/public/report-form";
 import { CandidateMessageComposeForm } from "@/components/candidate/message-compose-form";
+import { CandidateMessageReportForm } from "@/components/candidate/message-report-form";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
@@ -77,6 +78,9 @@ export default async function CandidateConversationPage({ params, searchParams }
               <li key={message.id} className={`max-w-[88%] rounded-xl px-4 py-3 ${message.own ? "ml-auto bg-primary text-primary-foreground" : "bg-muted"}`}>
                 <p className="whitespace-pre-wrap break-words">{message.body}</p>
                 <p className={`mt-2 text-xs ${message.own ? "text-primary-foreground/75" : "text-muted-foreground"}`}>{message.own ? "Du" : conversation.company.name} · {formatDate(message.createdAt)}</p>
+                {message.own ? null : (
+                  <CandidateMessageReportForm messageId={message.id} />
+                )}
               </li>
             ))}
           </ol>

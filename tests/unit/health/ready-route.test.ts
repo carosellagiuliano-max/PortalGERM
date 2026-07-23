@@ -22,11 +22,17 @@ describe("GET /health/ready", () => {
 
   it("returns ready when the database health check succeeds", async () => {
     checkDatabaseHealth.mockResolvedValue({ ready: true });
+    const correlationId = "0196f82d-3fb4-7f1a-8c9d-123456789abc";
 
-    const response = await GET();
+    const response = await GET(
+      new Request("https://swisstalenthub.test/health/ready", {
+        headers: { "x-correlation-id": correlationId },
+      }),
+    );
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-correlation-id")).toBe(correlationId);
     expect(await response.json()).toEqual({ status: "ready" });
     expect(getDatabase).toHaveBeenCalledOnce();
     expect(checkDatabaseHealth).toHaveBeenCalledWith(database);
@@ -39,9 +45,16 @@ describe("GET /health/ready", () => {
     });
 
     const response = await GET();
+    const body = await response.json();
 
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ status: "unavailable" });
+    expect(body).toEqual({
+      status: "unavailable",
+      correlationId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+      ),
+    });
+    expect(response.headers.get("x-correlation-id")).toBe(body.correlationId);
   });
 
   it("fails closed without leaking an unexpected database error", async () => {
@@ -52,7 +65,9 @@ describe("GET /health/ready", () => {
     const body = JSON.stringify(await response.json());
 
     expect(response.status).toBe(503);
-    expect(body).toBe('{"status":"unavailable"}');
+    expect(body).toMatch(
+      /^\{"status":"unavailable","correlationId":"[0-9a-f-]+"\}$/u,
+    );
     expect(body).not.toContain(secretCanary);
   });
 });

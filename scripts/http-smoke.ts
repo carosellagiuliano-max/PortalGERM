@@ -10,18 +10,25 @@ import { CATEGORY_FIXTURES } from "@/prisma/seed/fixtures/categories";
 import {
   buildJobFixtures,
   COMPANY_FIXTURES,
+  DEMO_ACCOUNT_FIXTURES,
 } from "@/prisma/seed/fixtures/companies-jobs";
 import { DEMO_GUIDE_FIXTURES } from "@/prisma/seed/fixtures/content";
 import { runDemoSeed } from "@/prisma/seed/orchestrator";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
+import { createDatabaseClient } from "@/lib/db/factory";
+import { createSession } from "@/lib/auth/session";
+import { createPrismaSessionStore } from "@/lib/auth/session-store";
 
 const HOST = "127.0.0.1";
 const DEFAULT_START_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 8_000;
 const MAX_DIAGNOSTIC_CHARACTERS = 24_000;
 const NOINDEX_POLICY = "noindex, nofollow, noarchive, nosnippet";
+const PRODUCTION_HSTS_VALUE =
+  "max-age=63072000; includeSubDomains; preload";
 const EXPECT_STATIC_PUBLIC_INDEXING =
   process.env.HTTP_SMOKE_STATIC_PUBLIC_INDEXING === "true";
+const HTTP_SMOKE_BUILD_ID = "phase16-http-smoke";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -31,14 +38,17 @@ type ChildExit = Readonly<{
 }>;
 
 type SmokeChild = ChildProcessByStdio<null, Readable, Readable>;
+type SmokeMode = "local-full" | "production-hsts";
 
-await main();
+await main(resolveSmokeMode());
 
-async function main() {
+async function main(mode: SmokeMode) {
   try {
-    const result = await runSmoke();
+    const result = await runSmoke(mode);
     console.info(
-      `HTTP smoke passed on ${result.baseUrl}: public routes, Phase-15 robots/sitemap policy, sensitive-route privacy, health, anonymous auth redirects and protected response headers verified.`,
+      mode === "production-hsts"
+        ? `Production-like HSTS smoke passed on ${result.baseUrl}: next start emitted Strict-Transport-Security exactly as configured. The loopback request is intentionally plain HTTP and proves header emission only, not browser-side TLS/HSTS enforcement.`
+        : `HTTP smoke passed on ${result.baseUrl}: public routes, CSP nonce/hydration, Phase-15 robots/sitemap policy, sensitive-route privacy, health, anonymous auth redirects and protected response headers verified.`,
     );
   } catch (error) {
     const message =
@@ -48,9 +58,9 @@ async function main() {
   }
 }
 
-async function runSmoke() {
+async function runSmoke(mode: SmokeMode) {
   const buildIdPath = resolve(process.cwd(), ".next", "BUILD_ID");
-  if (!existsSync(buildIdPath)) {
+  if (mode === "local-full" && !existsSync(buildIdPath)) {
     throw new Error(
       "No production build found at .next/BUILD_ID. Run `npm run build` before the HTTP smoke.",
     );
@@ -63,13 +73,16 @@ async function runSmoke() {
       DATABASE_URL: database.connectionString,
       ENABLE_DEMO_SEED: "true",
     });
-    return await runHttpSmoke(database.connectionString);
+    if (mode === "production-hsts") {
+      await buildProductionHstsArtifact(database.connectionString);
+    }
+    return await runHttpSmoke(database.connectionString, mode);
   } finally {
     await database.dispose();
   }
 }
 
-async function runHttpSmoke(databaseUrl: string) {
+async function runHttpSmoke(databaseUrl: string, mode: SmokeMode) {
   const port = await resolvePort();
   const baseUrl = `http://${HOST}:${port}`;
   const secretCanary =
@@ -80,6 +93,10 @@ async function runHttpSmoke(databaseUrl: string) {
     process.env.HTTP_SMOKE_START_TIMEOUT_MS,
     DEFAULT_START_TIMEOUT_MS,
   );
+  const candidateSessionToken =
+    mode === "local-full"
+      ? await createCandidateSmokeSession(databaseUrl)
+      : undefined;
 
   const nextBinary = resolve(
     process.cwd(),
@@ -93,20 +110,24 @@ async function runHttpSmoke(databaseUrl: string) {
     throw new Error("The local Next.js CLI was not found. Run `npm ci` first.");
   }
 
-  const childEnvironment: NodeJS.ProcessEnv = {
-    ...process.env,
-    APP_ENV: "local",
-    NODE_ENV: "production",
-    APP_URL: baseUrl,
-    DATABASE_URL: databaseUrl,
-    TEST_DATABASE_URL: "",
-    RATE_LIMIT_BACKEND: "postgres",
-    TRUSTED_PROXY_HOPS: "0",
-    ENABLE_LOCAL_MOCK_MAILBOX: "false",
-    DEV_MAILBOX_SECRET: secretCanary,
-    HTTP_SMOKE_SECRET_CANARY: secretCanary,
-    NEXT_TELEMETRY_DISABLED: "1",
-  };
+  const childEnvironment: NodeJS.ProcessEnv =
+    mode === "production-hsts"
+      ? productionHstsEnvironment(databaseUrl, secretCanary)
+      : {
+          ...process.env,
+          APP_ENV: "local",
+          NODE_ENV: "production",
+          APP_URL: baseUrl,
+          APP_BUILD_ID: HTTP_SMOKE_BUILD_ID,
+          DATABASE_URL: databaseUrl,
+          TEST_DATABASE_URL: "",
+          RATE_LIMIT_BACKEND: "postgres",
+          TRUSTED_PROXY_HOPS: "0",
+          ENABLE_LOCAL_MOCK_MAILBOX: "false",
+          DEV_MAILBOX_SECRET: secretCanary,
+          HTTP_SMOKE_SECRET_CANARY: secretCanary,
+          NEXT_TELEMETRY_DISABLED: "1",
+        };
   const child = spawn(
     process.execPath,
     [nextBinary, "start", "--hostname", HOST, "--port", String(port)],
@@ -138,7 +159,15 @@ async function runHttpSmoke(databaseUrl: string) {
   let smokeFailure: unknown;
   try {
     await waitUntilLive(baseUrl, child, exit, startTimeout);
-    await verifyResponses(baseUrl, secretCanary);
+    if (mode === "production-hsts") {
+      await verifyProductionHsts(baseUrl, secretCanary);
+    } else {
+      await verifyResponses(
+        baseUrl,
+        secretCanary,
+        candidateSessionToken as string,
+      );
+    }
   } catch (error) {
     smokeFailure = error;
   } finally {
@@ -165,6 +194,95 @@ async function runHttpSmoke(databaseUrl: string) {
   }
 
   return { baseUrl };
+}
+
+async function buildProductionHstsArtifact(databaseUrl: string) {
+  const npmCli = process.env.npm_execpath;
+  if (npmCli === undefined || !existsSync(npmCli)) {
+    throw new Error(
+      "The npm CLI path is unavailable. Run the HSTS smoke through `npm run test:e2e:hsts`.",
+    );
+  }
+
+  const child = spawn(process.execPath, [npmCli, "run", "build"], {
+    cwd: process.cwd(),
+    env: productionHstsEnvironment(databaseUrl),
+    shell: false,
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  let diagnostics = "";
+  const recordOutput = (chunk: Buffer | string) => {
+    diagnostics = `${diagnostics}${chunk.toString()}`.slice(
+      -MAX_DIAGNOSTIC_CHARACTERS,
+    );
+  };
+  child.stdout.on("data", recordOutput);
+  child.stderr.on("data", recordOutput);
+
+  const exit = await new Promise<ChildExit>((resolveExit, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code: number | null, signal: NodeJS.Signals | null) =>
+      resolveExit({ code, signal }),
+    );
+  });
+  if (exit.code !== 0) {
+    throw new Error(
+      `Production-like HSTS build failed (code ${String(exit.code)}, signal ${String(exit.signal)}):\n${redactDiagnostics(diagnostics.trim())}`,
+    );
+  }
+}
+
+function productionHstsEnvironment(
+  databaseUrl: string,
+  secretCanary?: string,
+): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    APP_ENV: "production",
+    NODE_ENV: "production",
+    APP_URL: "https://hsts-smoke.invalid",
+    APP_BUILD_ID: HTTP_SMOKE_BUILD_ID,
+    DATABASE_URL: databaseUrl,
+    TEST_DATABASE_URL: "",
+    RATE_LIMIT_BACKEND: "postgres",
+    TRUSTED_PROXY_HOPS: "1",
+    ENABLE_LOCAL_MOCK_MAILBOX: "false",
+    DEV_MAILBOX_SECRET: "",
+    ABUSE_REPORT_ADMIN_EMAILS: "security-smoke@example.test",
+    BACKUP_AGE_RECIPIENT: "",
+    BACKUP_AGE_IDENTITY_FILE: "",
+    STRIPE_SECRET_KEY: "",
+    EMAIL_PROVIDER_API_KEY: "",
+    OPENAI_API_KEY: "",
+    STORAGE_ENDPOINT: "",
+    JOBROOM_API_URL: "",
+    MAPS_API_KEY: "",
+    ...(secretCanary === undefined
+      ? {}
+      : { HTTP_SMOKE_SECRET_CANARY: secretCanary }),
+    NEXT_TELEMETRY_DISABLED: "1",
+  };
+}
+
+async function verifyProductionHsts(
+  baseUrl: string,
+  secretCanary: string,
+) {
+  const live = await request(baseUrl, "/health/live", secretCanary, {
+    // The production-like runtime requires one trusted ingress hop. This
+    // synthetic value represents a header replaced by that ingress.
+    "x-forwarded-for": "198.51.100.25",
+  });
+  expectStatus(live, 200);
+  expectHealthJson(live, "ok", HTTP_SMOKE_BUILD_ID);
+  expectNoStore(live);
+  const actual = live.response.headers.get("strict-transport-security");
+  if (actual !== PRODUCTION_HSTS_VALUE) {
+    throw new Error(
+      `/health/live returned Strict-Transport-Security ${JSON.stringify(actual)}; expected ${JSON.stringify(PRODUCTION_HSTS_VALUE)}.`,
+    );
+  }
 }
 
 async function waitUntilLive(
@@ -208,7 +326,11 @@ async function waitUntilLive(
   );
 }
 
-async function verifyResponses(baseUrl: string, secretCanary: string) {
+async function verifyResponses(
+  baseUrl: string,
+  secretCanary: string,
+  candidateSessionToken: string,
+) {
   const suppliedCorrelationId = "0196f82d-3fb4-7f1a-8c9d-123456789abc";
 
   const home = await request(baseUrl, "/", secretCanary);
@@ -220,6 +342,11 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   );
   await verifyPhase07PublicRoutes(baseUrl, secretCanary, home);
   await verifyPhase08PublicRoutes(baseUrl, secretCanary);
+  const secondHome = await request(baseUrl, "/", secretCanary);
+  if (responseNonce(home) === responseNonce(secondHome)) {
+    throw new Error("Two homepage responses reused the same CSP nonce.");
+  }
+  expectNonceHtmlNotPubliclyCacheable(home);
 
   const anonymousPrivateRoutes = [
     {
@@ -244,6 +371,14 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
     ]);
     expectNoIndex(privateResponse);
   }
+
+  const candidateAdmin = await request(baseUrl, "/admin", secretCanary, {
+    cookie: `session=${candidateSessionToken}`,
+  });
+  expectStatus(candidateAdmin, 403);
+  expectContent(candidateAdmin, "text/html", "Zugriff nicht erlaubt");
+  expectCacheDirectives(candidateAdmin, ["private", "no-store", "max-age=0"]);
+  expectNoIndex(candidateAdmin);
 
   const resetPassword = await request(baseUrl, "/reset-password", secretCanary);
   expectStatus(resetPassword, 200);
@@ -274,7 +409,7 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
     "x-correlation-id": suppliedCorrelationId,
   });
   expectStatus(live, 200);
-  expectJson(live, { status: "ok" });
+  expectHealthJson(live, "ok", HTTP_SMOKE_BUILD_ID);
   if (live.response.headers.get("x-correlation-id") !== suppliedCorrelationId) {
     throw new Error("The live route did not preserve a valid correlation ID.");
   }
@@ -282,7 +417,7 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
 
   const ready = await request(baseUrl, "/health/ready", secretCanary);
   expectStatus(ready, 200);
-  expectJson(ready, { status: "ready" });
+  expectHealthJson(ready, "ready");
   expectNoStore(ready);
 
   const productionMailbox = await request(
@@ -308,6 +443,44 @@ async function verifyResponses(baseUrl: string, secretCanary: string) {
   );
   expectStatus(missing, 404);
   expectContent(missing, "text/html", "Diese Seite ist nicht verfügbar");
+
+  const extensionLookingMissing = await request(
+    baseUrl,
+    `/not-found-smoke-${Date.now().toString(36)}.js`,
+    secretCanary,
+  );
+  expectStatus(extensionLookingMissing, 404);
+  expectContent(
+    extensionLookingMissing,
+    "text/html",
+    "Diese Seite ist nicht verfügbar",
+  );
+}
+
+async function createCandidateSmokeSession(databaseUrl: string) {
+  const candidate = DEMO_ACCOUNT_FIXTURES.find(
+    (account) => account.role === "CANDIDATE",
+  );
+  if (candidate === undefined) {
+    throw new Error("The deterministic candidate smoke account is missing.");
+  }
+  const database = createDatabaseClient(databaseUrl);
+  try {
+    const created = await createSession(
+      {
+        userId: candidate.id,
+        production: false,
+        userAgent: "phase16-http-smoke",
+      },
+      {
+        store: createPrismaSessionStore(database),
+        clock: { now: new Date() },
+      },
+    );
+    return created.token;
+  } finally {
+    await database.$disconnect();
+  }
 }
 
 async function verifyPhase08PublicRoutes(
@@ -435,6 +608,7 @@ async function verifyPhase07PublicRoutes(
     }
     if ("key" in page && page.key === "job") {
       expectNoJobPostingJsonLd(response);
+      expectCacheDirectives(response, ["private", "no-store", "max-age=0"]);
     }
   }
   expectNoPrivatePublicMarkers(home, fixtures.privateMarkers);
@@ -526,7 +700,7 @@ async function request(
     throw new Error(`${path} exposed the secret canary in its HTTP response.`);
   }
 
-  assertSecurityHeaders(path, response.headers);
+  assertSecurityHeaders(path, response.headers, requireCorrelationId);
   const correlationId = response.headers.get("x-correlation-id");
   if (
     requireCorrelationId &&
@@ -534,17 +708,25 @@ async function request(
   ) {
     throw new Error(`${path} returned no valid x-correlation-id header.`);
   }
+  if (requireCorrelationId && response.headers.get("content-type")?.includes("text/html")) {
+    assertHtmlScriptNonces(path, response.headers, body);
+  }
 
   return { path, response, body };
 }
 
-function assertSecurityHeaders(path: string, headers: Headers) {
+function assertSecurityHeaders(
+  path: string,
+  headers: Headers,
+  requireDynamicSecurityHeaders: boolean,
+) {
   const expected = {
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
     "referrer-policy":
       path === "/dev/mailbox" ||
       path === "/reset-password" ||
+      /^\/jobs\/[^/]+$/u.test(path.split("?")[0] ?? path) ||
       path.startsWith("/alerts/unsubscribe/")
         ? "no-referrer"
         : "strict-origin-when-cross-origin",
@@ -555,6 +737,10 @@ function assertSecurityHeaders(path: string, headers: Headers) {
     if (headers.get(name) !== value) {
       throw new Error(`${path} returned an invalid or missing ${name} header.`);
     }
+  }
+
+  if (requireDynamicSecurityHeaders) {
+    responseNonce({ path, response: { headers } as Response });
   }
 }
 
@@ -594,7 +780,11 @@ function expectContent(
   }
 }
 
-function expectJson(result: SmokeResponse, expected: Record<string, string>) {
+function expectHealthJson(
+  result: SmokeResponse,
+  expectedStatus: "ok" | "ready",
+  expectedBuildId?: string,
+) {
   let parsed: unknown;
   try {
     parsed = JSON.parse(result.body);
@@ -602,8 +792,71 @@ function expectJson(result: SmokeResponse, expected: Record<string, string>) {
     throw new Error(`${result.path} did not return valid JSON.`);
   }
 
-  if (JSON.stringify(parsed) !== JSON.stringify(expected)) {
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    !("status" in parsed) ||
+    parsed.status !== expectedStatus ||
+    (expectedBuildId !== undefined &&
+      (!("buildId" in parsed) ||
+        typeof parsed.buildId !== "string" ||
+        parsed.buildId !== expectedBuildId)) ||
+    (expectedBuildId === undefined && "buildId" in parsed)
+  ) {
     throw new Error(`${result.path} returned an unexpected JSON payload.`);
+  }
+}
+
+function responseNonce(
+  result: Pick<SmokeResponse, "path" | "response">,
+) {
+  const policy = result.response.headers.get("content-security-policy");
+  const match = policy?.match(/(?:^|;\s*)script-src\s+[^;]*'nonce-([^']+)'/u);
+  const nonce = match?.[1];
+  if (
+    nonce === undefined ||
+    !/^[a-f0-9]{32}$/u.test(nonce) ||
+    !policy?.includes("'strict-dynamic'") ||
+    /script-src[^;]*'unsafe-inline'/u.test(policy) ||
+    /script-src[^;]*'unsafe-eval'/u.test(policy)
+  ) {
+    throw new Error(`${result.path} returned an invalid production CSP.`);
+  }
+  return nonce;
+}
+
+function assertHtmlScriptNonces(
+  path: string,
+  headers: Headers,
+  body: string,
+) {
+  const nonce = responseNonce({
+    path,
+    response: { headers } as Response,
+  });
+  const openingScriptTags = body.match(/<script\b[^>]*>/giu) ?? [];
+  if (openingScriptTags.length === 0) {
+    throw new Error(`${path} returned HTML without framework bootstrap scripts.`);
+  }
+  for (const tag of openingScriptTags) {
+    if (htmlAttribute(tag, "nonce") !== nonce) {
+      throw new Error(
+        `${path} returned a script without the response CSP nonce.`,
+      );
+    }
+  }
+}
+
+function expectNonceHtmlNotPubliclyCacheable(result: SmokeResponse) {
+  const cacheControl = result.response.headers.get("cache-control") ?? "";
+  if (
+    /(?:^|,)\s*(?:public|s-maxage\s*=)/iu.test(cacheControl) ||
+    !/(?:^|,)\s*(?:private|no-store|no-cache)(?:,|$)/iu.test(cacheControl)
+  ) {
+    throw new Error(
+      `${result.path} returned nonce-bearing HTML with a public cache policy.`,
+    );
   }
 }
 
@@ -806,6 +1059,17 @@ function expectLoginRedirect(
       `${result.path} redirected to an unexpected or unsafely encoded login URL.`,
     );
   }
+}
+
+function resolveSmokeMode(): SmokeMode {
+  const argumentsSet = new Set(process.argv.slice(2));
+  const productionHsts = argumentsSet.delete("--production-hsts");
+  if (argumentsSet.size > 0) {
+    throw new Error(
+      `Unsupported HTTP smoke arguments: ${[...argumentsSet].join(", ")}.`,
+    );
+  }
+  return productionHsts ? "production-hsts" : "local-full";
 }
 
 async function resolvePort() {

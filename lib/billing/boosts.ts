@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 
 import { z } from "zod";
+import { trimmedString } from "@/lib/validation/common";
 
 import { createPrismaTransactionAnalyticsWriter, trackAnalyticsEventV1 } from "@/lib/analytics/track";
 import { writeRequiredAudit } from "@/lib/audit/log";
@@ -146,7 +147,7 @@ const activateBoostSchema = z.strictObject({
 
 const cancelBoostSchema = z.strictObject({
   boostId: z.uuid(),
-  reason: z.string().trim().min(5).max(500),
+  reason: trimmedString(5, 500),
   idempotencyKey: billingIdempotencyKeySchema,
 });
 

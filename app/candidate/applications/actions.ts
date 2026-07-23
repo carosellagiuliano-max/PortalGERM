@@ -29,6 +29,7 @@ import {
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { emailProvider } from "@/lib/providers/email";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 const GENERIC_ERROR = "Die Aktion konnte nicht sicher ausgeführt werden.";
 const RATE_LIMIT_ERROR =
@@ -89,14 +90,33 @@ export async function updateCandidateApplicationNoteAction(
   if (!parsed.success) {
     return errorState("Bitte gib eine private Notiz mit höchstens 1'000 Zeichen ein.");
   }
+  const now = new Date();
   const rate = await consumeRequestRateLimit(
     "APPLICATION_CANDIDATE_MUTATION",
     { userId: dependencies.currentUser.id },
     dependencies.request,
-    new Date(),
+    now,
     { database: dependencies.database, environment: dependencies.environment },
   );
-  if (!rate.allowed) return errorState(RATE_LIMIT_ERROR);
+  if (!rate.allowed) {
+    await recordRateLimitDenial(
+      rate.audit,
+      {
+        actorKind: "USER",
+        actorUserId: dependencies.currentUser.id,
+        capability: "CANDIDATE_APPLICATION_MUTATE",
+        targetId: parsed.data.applicationId,
+        targetType: "APPLICATION",
+      },
+      {
+        database: dependencies.database,
+        environment: dependencies.environment,
+        request: dependencies.request,
+        now,
+      },
+    );
+    return errorState(RATE_LIMIT_ERROR);
+  }
   const result = await updateCandidateApplicationNote(parsed.data, dependencies);
   if (!result.ok) {
     return errorState(
@@ -122,14 +142,33 @@ export async function withdrawCandidateApplicationAction(
     idempotencyKey: formData.get("idempotencyKey"),
   });
   if (!parsed.success) return errorState(GENERIC_ERROR);
+  const now = new Date();
   const rate = await consumeRequestRateLimit(
     "APPLICATION_CANDIDATE_MUTATION",
     { userId: dependencies.currentUser.id },
     dependencies.request,
-    new Date(),
+    now,
     { database: dependencies.database, environment: dependencies.environment },
   );
-  if (!rate.allowed) return errorState(RATE_LIMIT_ERROR);
+  if (!rate.allowed) {
+    await recordRateLimitDenial(
+      rate.audit,
+      {
+        actorKind: "USER",
+        actorUserId: dependencies.currentUser.id,
+        capability: "CANDIDATE_APPLICATION_MUTATE",
+        targetId: parsed.data.applicationId,
+        targetType: "APPLICATION",
+      },
+      {
+        database: dependencies.database,
+        environment: dependencies.environment,
+        request: dependencies.request,
+        now,
+      },
+    );
+    return errorState(RATE_LIMIT_ERROR);
+  }
   const result = await withdrawCandidateApplication(parsed.data, dependencies);
   if (!result.ok) {
     return errorState(
@@ -186,6 +225,23 @@ export async function reportApplicationEmployerAction(
     { database, environment: dependencies.environment },
   );
   if (!precheck.allowed) {
+    await recordRateLimitDenial(
+      precheck.audit,
+      {
+        actorKind: "USER",
+        actorUserId: dependencies.currentUser.id,
+        capability: "CANDIDATE_APPLICATION_ABUSE_REPORT_PRECHECK",
+        companyId: application.job.company.id,
+        targetId: application.job.company.id,
+        targetType: "COMPANY",
+      },
+      {
+        database,
+        environment: dependencies.environment,
+        request: dependencies.request,
+        now,
+      },
+    );
     return errorState("Zu viele Meldungen in kurzer Zeit. Bitte versuche es später erneut.");
   }
   const result = await createPublicReport(
@@ -195,7 +251,7 @@ export async function reportApplicationEmployerAction(
       targetType: "COMPANY",
       companyId: application.job.company.id,
     },
-    { ...dependencies, now },
+    { ...dependencies, emailProvider, now },
   );
   return result.ok
     ? successState("Danke. Deine Meldung wurde erfasst und wird geprüft.")

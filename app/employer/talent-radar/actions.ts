@@ -5,6 +5,10 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import type { TalentRadarActionState } from "@/components/employer/TalentRadar/action-state";
+import {
+  abuseReportContentSchema,
+  createResolvedAbuseReport,
+} from "@/lib/abuse/public-report";
 import { getEmployerContext } from "@/lib/auth/employer-context";
 import {
   getAuthRequestContext,
@@ -13,11 +17,14 @@ import {
 import { buildCatalogUpgradePrompt } from "@/lib/billing/upgrade-prompt";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
+import { emailProvider } from "@/lib/providers/email";
 import { toRadarEligibilityEnvironment } from "@/lib/talentradar/eligibility";
 import { cancelEmployerContactRequest } from "@/lib/talentradar/contact-requests";
 import {
   createEnvironmentRadarContactProofPort,
   createRadarContactRateLimitPort,
+  radarCandidateReportTargetInputSchema,
+  resolveEmployerRadarCandidateReportTarget,
   sendContactRequest,
 } from "@/lib/talentradar/request-contact";
 
@@ -127,6 +134,82 @@ export async function cancelContactRequestAction(
   });
 }
 
+export async function reportRadarCandidateAction(
+  _previousState: TalentRadarActionState,
+  formData: FormData,
+): Promise<TalentRadarActionState> {
+  const dependencies = await mutationDependencies();
+  if (dependencies === null) return unsafeRequest();
+
+  const targetInput = radarCandidateReportTargetInputSchema.safeParse({
+    opaqueCandidateId: stringField(formData, "opaqueCandidateId"),
+    signedSearchSession: stringField(formData, "signedSearchSession"),
+  });
+  const content = abuseReportContentSchema.safeParse({
+    reasonCode: formData.get("reasonCode"),
+    description: formData.get("description"),
+  });
+  if (!targetInput.success || !content.success) {
+    return Object.freeze({
+      status: "error" as const,
+      message:
+        "Bitte wähle einen Grund und beschreibe den Verdacht mit mindestens 20 Zeichen.",
+    });
+  }
+
+  const target = await resolveEmployerRadarCandidateReportTarget(
+    targetInput.data,
+    {
+      actor: dependencies.actor,
+      database: dependencies.database,
+      proofPort: createEnvironmentRadarContactProofPort(
+        dependencies.environment,
+      ),
+      now: dependencies.now,
+    },
+  );
+  if (target === null) {
+    return Object.freeze({
+      status: "error" as const,
+      message:
+        "Dieses anonyme Profil ist nicht mehr verfügbar. Bitte aktualisiere die Suche.",
+    });
+  }
+
+  const result = await createResolvedAbuseReport(
+    content.data,
+    {
+      id: target.userId,
+      targetType: "USER",
+      companyId: target.companyId,
+    },
+    {
+      currentUser: dependencies.currentUser,
+      database: dependencies.database,
+      emailProvider,
+      environment: dependencies.environment,
+      request: dependencies.request,
+      now: dependencies.now,
+    },
+  );
+  if (!result.ok) {
+    return Object.freeze({
+      status: "error" as const,
+      message:
+        result.code === "RATE_LIMITED"
+          ? "Zu viele Meldungen in kurzer Zeit. Bitte versuche es später erneut."
+          : "Die Meldung konnte nicht sicher erfasst werden.",
+    });
+  }
+
+  revalidatePath("/employer/talent-radar");
+  revalidatePath("/admin/reports");
+  return Object.freeze({
+    status: "success" as const,
+    message: "Danke. Das anonyme Profil wurde sicher zur Prüfung gemeldet.",
+  });
+}
+
 async function mutationDependencies() {
   const [context, request] = await Promise.all([
     getEmployerContext(),
@@ -145,6 +228,7 @@ async function mutationDependencies() {
   }
 
   return Object.freeze({
+    currentUser: context.user,
     actor: Object.freeze({
       userId: context.user.id,
       companyId: context.current.companyId,

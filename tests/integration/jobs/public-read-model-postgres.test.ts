@@ -599,6 +599,7 @@ function setRuntimeEnvironment(appEnvironment: "local" | "production") {
         ? "https://phase07.example.test"
         : "http://localhost:3000",
     NEXT_PUBLIC_APP_NAME: "SwissTalentHub Integration",
+    APP_BUILD_ID: "phase15-public-read-model-integration",
     SESSION_SECRET: secret(1),
     AUDIT_IP_HASH_KEYS: `v1:${secret(2)}`,
     RADAR_OPAQUE_LOOKUP_KEYS: `v1:${secret(3)}`,
@@ -608,6 +609,7 @@ function setRuntimeEnvironment(appEnvironment: "local" | "production") {
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: appEnvironment === "production" ? "1" : "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",
+    ABUSE_REPORT_ADMIN_EMAILS: "admin@phase07.example.test",
     LOG_LEVEL: "error",
   });
 }

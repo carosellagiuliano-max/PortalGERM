@@ -27,7 +27,7 @@ describe("Phase 06 security headers", () => {
     const reset = headers?.find(({ source }) => source === "/reset-password");
     expect(reset?.headers).toEqual(
       expect.arrayContaining([
-        { key: "Cache-Control", value: "no-store, max-age=0" },
+        { key: "Cache-Control", value: "private, no-store, max-age=0" },
         { key: "Referrer-Policy", value: "no-referrer" },
       ]),
     );
@@ -47,7 +47,7 @@ describe("Phase 06 security headers", () => {
     );
     expect(unsubscribe?.headers).toEqual(
       expect.arrayContaining([
-        { key: "Cache-Control", value: "no-store, max-age=0" },
+        { key: "Cache-Control", value: "private, no-store, max-age=0" },
         { key: "Referrer-Policy", value: "no-referrer" },
         {
           key: "X-Robots-Tag",

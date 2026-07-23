@@ -19,6 +19,7 @@
     "test:watch": "vitest --config vitest.config.ts",
     "test:integration": "npm run env:validate && vitest run --config vitest.integration.config.ts",
     "test:e2e": "tsx scripts/http-smoke.ts",
+    "test:e2e:hsts": "tsx scripts/http-smoke.ts --production-hsts",
     "env:init": "tsx scripts/env-init.ts",
     "env:validate": "tsx scripts/validate-env.ts",
     "db:generate": "prisma generate",
@@ -29,6 +30,7 @@
     "db:seed": "npm run env:validate && tsx prisma/seed.ts",
     "seed:verify": "npm run env:validate && tsx scripts/seed-verify.ts",
     "db:smoke": "npm run env:validate && tsx scripts/db-smoke.ts",
+    "security:maintenance": "npm run env:validate && tsx scripts/security-maintenance.ts",
     "db:studio": "tsx scripts/require-local-database.ts && prisma studio",
     "postinstall": "prisma generate"
   },
@@ -43,7 +45,7 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "1.25.0",
-    "next": "16.2.10",
+    "next": "16.2.11",
     "next-themes": "0.4.6",
     "pg": "8.22.0",
     "react": "19.2.7",
@@ -68,7 +70,7 @@
     "@vitejs/plugin-react": "6.0.3",
     "dotenv": "17.4.2",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.2.11",
     "jsdom": "29.1.1",
     "postcss": "8.5.20",
     "prisma": "7.8.0",
@@ -88,8 +90,9 @@
   },
   "overrides": {
     "@hono/node-server": "2.0.11",
+    "postcss": "$postcss",
     "sharp": "0.35.3",
-    "next@16.2.10": {
+    "next@16.2.11": {
       "postcss": "$postcss"
     }
   }
