@@ -1,17 +1,8 @@
 "use server";
 
+import type { UnsubscribeActionState } from "@/app/alerts/unsubscribe/[token]/action-state";
 import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
 import { unsubscribeJobAlertWithToken } from "@/lib/candidate/job-alerts";
-
-export type UnsubscribeActionState = Readonly<{
-  status: "idle" | "complete";
-  message: string;
-}>;
-
-export const INITIAL_UNSUBSCRIBE_ACTION_STATE: UnsubscribeActionState = Object.freeze({
-  status: "idle",
-  message: "",
-});
 
 const GENERIC_MESSAGE =
   "Falls der Abmeldelink gültig war, wurde dieses Jobabo pausiert. Es wurden keine Kontodaten offengelegt.";

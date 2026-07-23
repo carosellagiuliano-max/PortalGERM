@@ -38,10 +38,8 @@ vi.mock("@/lib/security/rate-limit-audit", () => ({
   recordRateLimitDenial: mocks.recordRateLimitDenial,
 }));
 
-import {
-  createCandidatePrivacyRequestAction,
-  INITIAL_CANDIDATE_PRIVACY_ACTION_STATE,
-} from "@/app/candidate/privacy/actions";
+import { INITIAL_CANDIDATE_PRIVACY_ACTION_STATE } from "@/app/candidate/privacy/action-state";
+import { createCandidatePrivacyRequestAction } from "@/app/candidate/privacy/actions";
 import { completeCandidatePrivacyChallengeAction } from "@/app/candidate/privacy/requests/[id]/verify/actions";
 
 const USER_ID = "92000000-0000-4000-8000-000000000001";

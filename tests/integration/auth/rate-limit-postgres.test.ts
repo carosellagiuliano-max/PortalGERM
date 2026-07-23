@@ -19,6 +19,13 @@ const CHECK: RateLimitCheck = Object.freeze({
   limit: 10,
   windowMs: 60_000,
 });
+const SHARED_CLIENT_CHECK: RateLimitCheck = Object.freeze({
+  namespace: "v1:TEST:SHARED_CLIENTS",
+  keyHash: `test:${"b".repeat(64)}`,
+  scope: "USER",
+  limit: 6,
+  windowMs: 60_000,
+});
 const NOW = new Date("2026-07-19T12:00:00.000Z");
 
 beforeAll(async () => {
@@ -57,6 +64,48 @@ describe("PostgreSQL atomic rolling rate-limit store", () => {
       await expect(restartedStore.consume([CHECK], new Date(NOW.getTime() + 60_000))).resolves.toEqual({ allowed: true });
     } finally {
       await restartedClient.$disconnect();
+    }
+  });
+
+  it("enforces one global limit across two independent clients and stores", async () => {
+    if (!database || !firstClient)
+      throw new Error("Test database is unavailable.");
+    const leftClient = createDatabaseClient(database.connectionString);
+    const rightClient = createDatabaseClient(database.connectionString);
+    try {
+      const leftStore = createPostgresRateLimitStore(leftClient);
+      const rightStore = createPostgresRateLimitStore(rightClient);
+      const decisions = await Promise.all(
+        Array.from({ length: 12 }, (_, index) =>
+          (index % 2 === 0 ? leftStore : rightStore).consume(
+            [SHARED_CLIENT_CHECK],
+            NOW,
+          ),
+        ),
+      );
+
+      expect(decisions.filter(({ allowed }) => allowed)).toHaveLength(6);
+      expect(decisions.filter(({ allowed }) => !allowed)).toHaveLength(6);
+      expect(
+        decisions
+          .filter(({ allowed }) => !allowed)
+          .every(
+            ({ blockedScope, retryAfterMilliseconds }) =>
+              blockedScope === "USER" &&
+              retryAfterMilliseconds === SHARED_CLIENT_CHECK.windowMs,
+          ),
+      ).toBe(true);
+      await expect(
+        firstClient.rateLimitBucket.findMany({
+          where: {
+            namespace: SHARED_CLIENT_CHECK.namespace,
+            keyHash: SHARED_CLIENT_CHECK.keyHash,
+          },
+          select: { count: true },
+        }),
+      ).resolves.toEqual([{ count: SHARED_CLIENT_CHECK.limit }]);
+    } finally {
+      await Promise.all([leftClient.$disconnect(), rightClient.$disconnect()]);
     }
   });
 });

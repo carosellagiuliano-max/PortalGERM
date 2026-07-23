@@ -335,13 +335,12 @@ export function CompanyForm({
                         id={`location-${index}-city`}
                         name={`location_${index}_cityId`}
                         value={location.cityId}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const cityId = event.currentTarget.value;
                           setLocations((current) =>
-                            updateLocation(current, index, {
-                              cityId: event.currentTarget.value,
-                            }),
-                          )
-                        }
+                            updateLocation(current, index, { cityId }),
+                          );
+                        }}
                         className={nativeControlClassName(hasError(state, "locations"))}
                       >
                         <option value="">Bitte wählen</option>
@@ -356,13 +355,12 @@ export function CompanyForm({
                         id={`location-${index}-address`}
                         name={`location_${index}_address`}
                         value={location.address}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const address = event.currentTarget.value;
                           setLocations((current) =>
-                            updateLocation(current, index, {
-                              address: event.currentTarget.value,
-                            }),
-                          )
-                        }
+                            updateLocation(current, index, { address }),
+                          );
+                        }}
                         maxLength={255}
                         autoComplete="street-address"
                       />
@@ -373,13 +371,12 @@ export function CompanyForm({
                         id={`location-${index}-postal`}
                         name={`location_${index}_postalCode`}
                         value={location.postalCode}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const postalCode = event.currentTarget.value;
                           setLocations((current) =>
-                            updateLocation(current, index, {
-                              postalCode: event.currentTarget.value,
-                            }),
-                          )
-                        }
+                            updateLocation(current, index, { postalCode }),
+                          );
+                        }}
                         inputMode="numeric"
                         pattern="[0-9]{4}"
                         maxLength={4}

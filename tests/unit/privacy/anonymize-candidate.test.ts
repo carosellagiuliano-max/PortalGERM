@@ -67,19 +67,24 @@ describe("anonymous candidate DTO", () => {
     const canaries = {
       firstName: "PII_FIRST_8ebdf2",
       lastName: "PII_LAST_753c11",
+      publicDisplayName: "PII_PUBLIC_NAME_754c12",
       email: "pii-canary@example.invalid",
       phone: "+41999999999",
       exactCity: "PII_CITY_701",
+      cityName: "PII_CITY_NAME_702",
       address: "PII_ADDRESS_702",
       cvFileName: "PII_CV_703.pdf",
+      cvStorageKey: "private/cv/PII_STORAGE_704.pdf",
       candidateProfileId: "77777777-7777-4777-8777-777777777777",
       displayLabel: "PII_NAME_704",
     };
-    const serialized = JSON.stringify(toAnonymousCandidate(candidate(canaries)));
+    const dto = toAnonymousCandidate(candidate(canaries));
+    const serialized = JSON.stringify(dto);
     for (const value of Object.values(canaries)) expect(serialized).not.toContain(value);
     for (const key of Object.keys(canaries).filter((key) => key !== "displayLabel")) {
       expect(serialized).not.toContain(`\"${key}\"`);
     }
+    expect(dto?.opaqueId).not.toBe(canaries.candidateProfileId);
   });
 
   it.each([

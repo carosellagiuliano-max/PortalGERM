@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { JobAlertActionState } from "@/app/candidate/alerts/action-state";
 import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import {
   getAuthRequestContext,
@@ -22,18 +23,6 @@ import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
-
-export type JobAlertActionState = Readonly<{
-  status: "idle" | "success" | "error";
-  message: string;
-  fieldErrors?: Readonly<Record<string, readonly string[]>>;
-}>;
-
-export const INITIAL_JOB_ALERT_ACTION_STATE: JobAlertActionState =
-  Object.freeze({
-    status: "idle",
-    message: "",
-  });
 
 export async function createJobAlertAction(
   _previous: JobAlertActionState,

@@ -304,6 +304,17 @@ describe("calculateFairJobScoreV2", () => {
     expect(result.employerSuggestions).toContain("TASKS_REQUIREMENTS_PARTIAL");
   });
 
+  it("awards exactly fifteen points for clear tasks and requirements", () => {
+    const result = score({ tasksAndRequirementsClarity: "CLEAR" });
+
+    expect(result.score).toBe(15);
+    expect(result.evidence.TASKS_REQUIREMENTS).toBe("MET");
+    expect(result.positiveReasons).toEqual(["TASKS_REQUIREMENTS_MET"]);
+    expect(result.missingImprovements).not.toContain(
+      "TASKS_REQUIREMENTS_MISSING",
+    );
+  });
+
   it.each([
     [{ minChf: 1, maxChf: 1, period: "HOURLY" }, 25],
     [{ minChf: 0, maxChf: 1, period: "HOURLY" }, 0],

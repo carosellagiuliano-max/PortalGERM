@@ -21,6 +21,8 @@ import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import { decideJobTransition, type JobStatus } from "@/lib/policies/status/job";
 import type { EmailProvider } from "@/lib/providers/email";
+import { renderEmailTemplate } from "@/lib/providers/email/templates";
+import { createLogger } from "@/lib/utils/logger";
 import {
   adminErrorResult,
   AdminDomainError,
@@ -36,6 +38,7 @@ import {
 
 const DAY = 86_400_000;
 const MAX_PUBLICATION_DAYS = 90;
+const logger = createLogger();
 
 export const adminJobCommandSchema = z.strictObject({
   jobId: z.uuid(),
@@ -257,7 +260,13 @@ export async function approveAdminJob(
     toStatus: "APPROVED",
   });
   if (result.ok && !result.replay && email !== undefined) {
-    await sendJobReviewEmails(dependencies.database, result.value.jobId, "job_approved", undefined, email);
+    await sendJobReviewEmailsAfterCommit(
+      dependencies,
+      result.value.jobId,
+      "job_approved",
+      undefined,
+      email,
+    );
   }
   return result;
 }
@@ -277,7 +286,13 @@ export async function rejectAdminJob(
     toStatus: "REJECTED",
   });
   if (result.ok && !result.replay && email !== undefined) {
-    await sendJobReviewEmails(dependencies.database, result.value.jobId, "job_rejected", input.reasonCode, email);
+    await sendJobReviewEmailsAfterCommit(
+      dependencies,
+      result.value.jobId,
+      "job_rejected",
+      input.reasonCode,
+      email,
+    );
   }
   return result;
 }
@@ -620,12 +635,43 @@ async function sendJobReviewEmails(
   });
   if (job === null) return;
   for (const membership of job.company.memberships) {
+    const data = {
+      jobTitle: job.currentRevision?.title ?? "Stelleninserat",
+      ...(reason === undefined ? {} : { reason }),
+    };
     await email.send({
       to: membership.user.email,
       templateKey,
-      subject: templateKey === "job_approved" ? "Stelleninserat freigegeben" : "Stelleninserat nicht freigegeben",
-      data: { jobTitle: job.currentRevision?.title ?? "Stelleninserat", ...(reason === undefined ? {} : { reason }) },
+      subject: renderEmailTemplate(templateKey, data).subject,
+      data,
     });
+  }
+}
+
+async function sendJobReviewEmailsAfterCommit(
+  dependencies: AdminDependencies,
+  jobId: string,
+  templateKey: "job_approved" | "job_rejected",
+  reason: string | undefined,
+  email: EmailProvider,
+) {
+  try {
+    await sendJobReviewEmails(
+      dependencies.database,
+      jobId,
+      templateKey,
+      reason,
+      email,
+    );
+  } catch (error) {
+    // The transactional status event, audit and in-app notification are the
+    // authoritative result. A post-commit email failure must never make the
+    // caller retry an already committed review transition.
+    logger.error(
+      "admin_job.review_email_retryable",
+      { entityId: jobId, error, operation: templateKey },
+      dependencies.correlationId,
+    );
   }
 }
 

@@ -2,8 +2,8 @@
 
 import { useActionState } from "react";
 
+import { INITIAL_JOB_ALERT_ACTION_STATE } from "@/app/candidate/alerts/action-state";
 import {
-  INITIAL_JOB_ALERT_ACTION_STATE,
   createJobAlertAction,
   updateJobAlertAction,
 } from "@/app/candidate/alerts/actions";

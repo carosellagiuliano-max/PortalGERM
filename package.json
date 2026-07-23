@@ -18,7 +18,10 @@
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:integration": "npm run env:validate && vitest run --config vitest.integration.config.ts",
-    "test:e2e": "tsx scripts/http-smoke.ts",
+    "test:e2e": "npm run test:e2e:http && npm run test:e2e:browser",
+    "test:e2e:http": "tsx scripts/http-smoke.ts",
+    "test:e2e:browser": "tsx scripts/phase17-browser-gate.ts",
+    "test:e2e:list": "playwright test --config=playwright.config.ts --list",
     "test:e2e:hsts": "tsx scripts/http-smoke.ts --production-hsts",
     "env:init": "tsx scripts/env-init.ts",
     "env:validate": "tsx scripts/validate-env.ts",
@@ -58,6 +61,8 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.61.1",
     "@tailwindcss/postcss": "4.3.3",
     "@testing-library/dom": "10.4.1",
     "@testing-library/jest-dom": "6.9.1",
@@ -86,6 +91,7 @@
     "sharp@0.35.3": true,
     "unrs-resolver@1.12.2": true,
     "@prisma/engines@7.8.0": true,
+    "fsevents@2.3.2": true,
     "fsevents@2.3.3": true
   },
   "overrides": {

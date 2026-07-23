@@ -31,6 +31,7 @@ import {
 } from "@/lib/policies/status/job";
 import type { AiProvider } from "@/lib/providers/ai";
 import type { JobroomProvider } from "@/lib/providers/jobroom";
+import { jobroomReasonCopy } from "@/lib/providers/jobroom/reason-copy";
 import {
   buildFairJobInputV2,
   calculateFairJobScoreV2,
@@ -41,11 +42,13 @@ import {
   sanitizePlainText,
   stripUnsafeHtml,
 } from "@/lib/security/sanitize";
+import { createLogger } from "@/lib/utils/logger";
 import { trimmedString } from "@/lib/validation/common";
 
 const DAY = 86_400_000;
 const AUDIT_RETENTION_DAYS = 365;
 const MAX_PUBLICATION_DAYS = 90;
+const logger = createLogger();
 
 export {
   APPLICATION_CONTACT_KINDS,
@@ -1005,8 +1008,13 @@ export async function runEmployerJobReportingCheck(
     if (versioned?.currentRevision === null || versioned?.currentRevision === undefined) return failure("CONFLICT");
     return success({ jobId: versioned.id, revisionId: versioned.currentRevision.id, jobVersion: versioned.version, revisionVersion: versioned.currentRevision.version, checkId: preflight.currentRevision.reportingChecks[0].id }, true);
   }
+  const selectedOccupation = await dependencies.database.occupationCode.findFirst({
+    where: { id: parsed.data.occupationCodeId },
+    select: { code: true },
+  });
+  if (selectedOccupation === null) return failure("PROVIDER_MISMATCH");
   const providerResult = await dependencies.jobroomProvider.checkReportingObligation({
-    occupationCodeId: parsed.data.occupationCodeId,
+    occupationCode: selectedOccupation.code,
     cantonCode: preflight.currentRevision?.canton?.code,
   });
   try {
@@ -1030,10 +1038,17 @@ export async function runEmployerJobReportingCheck(
           id: true,
           code: true,
           label: true,
+          result: true,
           occupationCodeVersion: { select: { id: true, version: true, datasetYear: true, source: true, referenceUrl: true, disclaimer: true } },
         },
       });
-      if (code === null || code.occupationCodeVersion.disclaimer !== providerResult.disclaimer || code.occupationCodeVersion.referenceUrl !== providerResult.sourceUrl) {
+      if (
+        code === null ||
+        code.code !== selectedOccupation.code ||
+        code.result !== providerResult.result ||
+        code.occupationCodeVersion.disclaimer !== providerResult.disclaimer ||
+        code.occupationCodeVersion.referenceUrl !== providerResult.sourceUrl
+      ) {
         return failure("PROVIDER_MISMATCH");
       }
       const checkId = randomUUID();
@@ -1046,7 +1061,7 @@ export async function runEmployerJobReportingCheck(
           occupationCodeSnapshot: code.code,
           occupationLabelSnapshot: code.label,
           result: providerResult.result,
-          reasonSnapshot: reportingReason(providerResult.reasonCode),
+          reasonSnapshot: jobroomReasonCopy(providerResult.reasonCode),
           disclaimerSnapshot: providerResult.disclaimer,
           sourceSnapshot: code.occupationCodeVersion.source,
           datasetVersionSnapshot: providerResult.datasetVersion,
@@ -1064,6 +1079,15 @@ export async function runEmployerJobReportingCheck(
       return success({ jobId: loaded.id, revisionId: revision.id, jobVersion: loaded.version + 1, revisionVersion: revision.version + 1, checkId });
     });
   } catch (error) {
+    logger.error(
+      "employer_job.reporting_check_write_failed",
+      {
+        error,
+        errorCode: databaseErrorCode(error),
+        operation: "EMPLOYER_JOB_REPORTING_CHECK",
+      },
+      dependencies.correlationId,
+    );
     return commandFailureFromError(error);
   }
 }
@@ -2066,16 +2090,6 @@ function operationKey(operation: string, key: string) {
   return `${operation}:${key}`.slice(0, 128);
 }
 
-function reportingReason(reasonCode: string) {
-  const reasons: Readonly<Record<string, string>> = {
-    OCCUPATION_REQUIRES_REPORTING: "Die gewählte Berufsart ist im aktuellen Mock-Datensatz als meldepflichtig klassifiziert.",
-    OCCUPATION_NOT_REQUIRED: "Die gewählte Berufsart ist im aktuellen Mock-Datensatz nicht als meldepflichtig klassifiziert.",
-    OCCUPATION_UNKNOWN: "Für die gewählte Berufsart liegt im aktuellen Mock-Datensatz kein eindeutiges Ergebnis vor.",
-    OCCUPATION_AMBIGUOUS: "Die gewählte Berufsart ist mehrdeutig; eine offizielle Prüfung ist erforderlich.",
-  };
-  return reasons[reasonCode] ?? `Mock-Prüfgrund: ${reasonCode.slice(0, 900)}`;
-}
-
 function isValidApplicationContact(kind: string, rawValue: string) {
   const value = rawValue.trim();
   if (kind === "EMAIL") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
@@ -2108,6 +2122,18 @@ class EmployerJobCommandError extends Error {
 
 function commandFailureFromError<TValue>(error: unknown): EmployerJobCommandResult<TValue> {
   return error instanceof EmployerJobCommandError ? failure(error.code) : failure("WRITE_FAILED");
+}
+
+function databaseErrorCode(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+  return undefined;
 }
 
 function failure<TValue = never>(

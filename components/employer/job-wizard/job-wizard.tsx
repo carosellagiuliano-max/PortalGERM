@@ -33,6 +33,7 @@ import {
   type EmployerJobFormState,
   type EmployerJobFullDetail,
 } from "@/lib/employer/job-contracts";
+import { getFairJobEmployerHintDe } from "@/lib/scoring/fair-job-employer-hints";
 
 type JobFormAction = (state: EmployerJobFormState, formData: FormData) => Promise<EmployerJobFormState>;
 
@@ -405,7 +406,7 @@ function ScorePreview({ job }: Readonly<{ job: EmployerJobFullDetail }>) {
   if (score === null) return null;
   return <WizardCard title={`Fair-Job-Score: ${score.score}/100`} description={`Deterministische Berechnung ${score.version}; ein Boost verändert diesen Wert nie.`}>
     <div className="grid gap-2 sm:grid-cols-2">{Object.entries(score.evidence).map(([factor, evidence]) => <div key={factor} className="flex items-center justify-between rounded-lg border p-3 text-sm"><span>{factor}</span><Badge variant={evidence === "MET" ? "default" : "outline"}>{evidence}</Badge></div>)}</div>
-    {score.employerSuggestions.length === 0 ? <p className="mt-4 flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2Icon className="size-4" /> Keine regelbasierte Verbesserung offen.</p> : <div className="mt-4"><h3 className="font-medium">Verbesserungen</h3><ul className="mt-2 list-disc pl-5 text-sm text-muted-foreground">{score.employerSuggestions.map((suggestion) => <li key={suggestion}>{suggestion}</li>)}</ul></div>}
+    {score.employerSuggestions.length === 0 ? <p className="mt-4 flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2Icon className="size-4" /> Keine regelbasierte Verbesserung offen.</p> : <div className="mt-4"><h3 className="font-medium">Verbesserungen</h3><ul className="mt-2 list-disc pl-5 text-sm text-muted-foreground">{score.employerSuggestions.map((suggestion) => <li key={suggestion}>{getFairJobEmployerHintDe(suggestion)}</li>)}</ul></div>}
   </WizardCard>;
 }
 

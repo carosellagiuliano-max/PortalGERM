@@ -150,12 +150,21 @@ describe("privacy export manifest Mock", () => {
       actor,
       now,
     )).rejects.toThrow("Privacy export case is unavailable.");
-    await expect(buildExportManifestForCase(
-      transaction(),
-      requestId,
-      { ...actor, capabilities: [] },
-      now,
-    )).rejects.toThrow("Privacy export case is unavailable.");
+    for (const capabilities of [
+      [],
+      ["PRIVACY_CASE_READ"],
+      ["PRIVACY_CASE_VERIFY"],
+      ["PRIVACY_CASE_READ", "PRIVACY_CASE_VERIFY"],
+    ]) {
+      const tx = transaction();
+      await expect(buildExportManifestForCase(
+        tx,
+        requestId,
+        { ...actor, capabilities },
+        now,
+      )).rejects.toThrow("Privacy export case is unavailable.");
+      expect(tx.loadAuthorizedExportCase).not.toHaveBeenCalled();
+    }
   });
 
   it("rejects missing or tampered stored manifests", async () => {

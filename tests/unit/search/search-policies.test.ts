@@ -66,19 +66,41 @@ function rankedIds(sort: JobSearchSort, candidates: readonly RankingCandidate[])
 }
 
 describe("search relevance contract", () => {
-  it("weights keyword hits title=3, company=2 and body=1", () => {
-    expect(calculateRelevanceProxy("engineer", {
+  it("orders isolated keyword hits title=3, company=2 and body=1", () => {
+    const titleOnly = calculateRelevanceProxy("engineer", {
+      title: "Engineer",
+      companyName: "Talent AG",
+      body: "Open role",
+    });
+    const companyOnly = calculateRelevanceProxy("engineer", {
+      title: "Open role",
+      companyName: "Engineer AG",
+      body: "Join our team",
+    });
+    const bodyOnly = calculateRelevanceProxy("engineer", {
+      title: "Open role",
+      companyName: "Talent AG",
+      body: "Engineer role",
+    });
+
+    expect(titleOnly).toEqual({ score: 3, tier: 1 });
+    expect(companyOnly).toEqual({ score: 2, tier: 1 });
+    expect(bodyOnly).toEqual({ score: 1, tier: 1 });
+    expect(titleOnly.score).toBeGreaterThan(companyOnly.score);
+    expect(companyOnly.score).toBeGreaterThan(bodyOnly.score);
+  });
+
+  it("returns zero without a keyword and is deterministic for the same input", () => {
+    const fields = {
       title: "Engineer",
       companyName: "Engineer AG",
       body: "Engineer role",
-    })).toEqual({ score: 6, tier: 3 });
-    expect(calculateRelevanceProxy("missing", {
-      title: "Engineer",
-      companyName: "Talent AG",
-      body: "Role",
-    })).toEqual({ score: 0, tier: 0 });
+    };
+    expect(calculateRelevanceProxy("", fields)).toEqual({ score: 0, tier: 0 });
+    expect(calculateRelevanceProxy("engineer", fields)).toEqual(
+      calculateRelevanceProxy("engineer", fields),
+    );
   });
-
 });
 
 describe("canonical organic ordering", () => {

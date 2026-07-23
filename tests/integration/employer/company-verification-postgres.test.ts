@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
+import { getServerEnvironment } from "@/lib/config/env";
 import {
   completeEmployerCompanyOnboarding,
   saveEmployerCompanyProfile,
@@ -72,6 +73,85 @@ afterAll(async () => {
 });
 
 describe.sequential("Phase-10 Company onboarding and verification", () => {
+  it("updates a fresh Free company with the production audit-IP context", async () => {
+    const freshUserId = uuid(40);
+    const freshCompanyId = uuid(41);
+    const freshMembershipId = uuid(42);
+    await client().user.create({
+      data: {
+        id: freshUserId,
+        email: "phase17-company-owner@example.ch",
+        emailNormalized: "phase17-company-owner@example.ch",
+        role: "EMPLOYER",
+      },
+    });
+    const freshCompany = await client().company.create({
+      data: {
+        id: freshCompanyId,
+        name: "Phase 17 Prüfwerk AG",
+        slug: "phase-17-pruefwerk",
+        values: [],
+        benefits: [],
+        status: "DRAFT",
+      },
+      select: { updatedAt: true },
+    });
+    await client().companyMembership.create({
+      data: {
+        id: freshMembershipId,
+        companyId: freshCompanyId,
+        userId: freshUserId,
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+    });
+
+    const environment = getServerEnvironment();
+    await expect(
+      saveEmployerCompanyProfile(
+        client(),
+        {
+          companyId: freshCompanyId,
+          membershipId: freshMembershipId,
+          actorUserId: freshUserId,
+          correlationId: uuid(43),
+          now: new Date("2026-07-21T08:00:00.000Z"),
+          auditIpContext: {
+            sourceIp: "127.0.0.1",
+            keyring: environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
+          },
+        },
+        {
+          name: "Phase 17 Prüfwerk AG",
+          uid: null,
+          industry: "Prüftechnik",
+          size: "10-49",
+          website: "https://phase17-pruefwerk.example",
+          logoStorageKey: null,
+          coverStorageKey: null,
+          linkedinUrl: null,
+          facebookUrl: null,
+          instagramUrl: null,
+          about:
+            "Fiktive Schweizer Prüftechnikfirma für den vollständigen Phase-17-Verifikationspfad.",
+          values: [],
+          benefits: [],
+          locations: [
+            {
+              id: null,
+              cantonId: IDS.canton,
+              cityId: IDS.city,
+              address: null,
+              postalCode: null,
+              isPrimary: true,
+            },
+          ],
+        },
+        freshCompany.updatedAt,
+      ),
+    ).resolves.toMatchObject({ companyId: freshCompanyId });
+  });
+
   it(
     "persists profile metadata, performs exact DRAFT to ACTIVE and enforces verification cycles",
     async () => {

@@ -3,10 +3,8 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import {
-  adminPrivacyCaseAction,
-  INITIAL_ADMIN_PRIVACY_CASE_ACTION_STATE,
-} from "@/app/admin/privacy-requests/actions";
+import { INITIAL_ADMIN_PRIVACY_CASE_ACTION_STATE } from "@/app/admin/privacy-requests/action-state";
+import { adminPrivacyCaseAction } from "@/app/admin/privacy-requests/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

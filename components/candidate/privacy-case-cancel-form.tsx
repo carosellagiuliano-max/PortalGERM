@@ -2,10 +2,8 @@
 
 import { useActionState } from "react";
 
-import {
-  cancelCandidatePrivacyRequestAction,
-  INITIAL_CANDIDATE_PRIVACY_ACTION_STATE,
-} from "@/app/candidate/privacy/actions";
+import { INITIAL_CANDIDATE_PRIVACY_ACTION_STATE } from "@/app/candidate/privacy/action-state";
+import { cancelCandidatePrivacyRequestAction } from "@/app/candidate/privacy/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 

@@ -2,13 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { SupportActionState } from "@/app/support/action-state";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
 import { getDatabase } from "@/lib/db/client";
 import { createSupportCase, replyToSupportCase } from "@/lib/admin/support";
-
-export type SupportActionState = Readonly<{ status: "idle" | "success" | "error"; message: string }>;
-export const INITIAL_SUPPORT_ACTION_STATE: SupportActionState = Object.freeze({ status: "idle", message: "" });
 
 export async function supportCaseAction(_previous: SupportActionState, formData: FormData): Promise<SupportActionState> {
   const [user, request] = await Promise.all([getCurrentUser(), getAuthRequestContext()]);

@@ -384,6 +384,45 @@ describe("licensed platform and employer import", () => {
     ).toMatchObject({ allowed: false, reason: "EMPLOYER_IMPORT_DISABLED" });
   });
 
+  it.each(["free_basic", "starter", "pro"] as const)(
+    "denies employer import for the P0 %s plan even with a forged plan right and current grant",
+    (planSlug) => {
+      const planWithImport = rights({ EMPLOYER_IMPORT_ACCESS: true });
+      const entitlement = effectiveEntitlements({
+        source: {
+          kind: planSlug === "free_basic" ? "DEFAULT_FREE" : "SUBSCRIPTION",
+          planSlug,
+          planVersionId: `plan-version-${planSlug}-1`,
+          subscriptionId:
+            planSlug === "free_basic" ? null : `subscription-${planSlug}-1`,
+        },
+        planRights: planWithImport,
+        rights: planWithImport,
+      });
+
+      expect(
+        canUseEmployerImport({
+          effectiveEntitlements: entitlement,
+          currentPlanSlug: planSlug,
+          companyId: COMPANY_ID,
+          sourceId: "source-1",
+          accessGrant: {
+            companyId: COMPANY_ID,
+            sourceId: "source-1",
+            status: "ACTIVE",
+            validFrom: new Date(AT.getTime() - DAY),
+            validTo: new Date(AT.getTime() + DAY),
+            revokedAt: null,
+          },
+        }),
+      ).toEqual({
+        allowed: false,
+        reason: "EMPLOYER_IMPORT_PLAN_REQUIRED",
+        suggestedPlanSlug: "business",
+      });
+    },
+  );
+
   it("requires eligible plan and one exact current source grant", () => {
     const planWithImport = rights({ EMPLOYER_IMPORT_ACCESS: true });
     const entitlement = effectiveEntitlements({

@@ -46,10 +46,8 @@ vi.mock("@/lib/security/rate-limit-audit", () => ({
   recordRateLimitDenial: mocks.recordRateLimitDenial,
 }));
 
-import {
-  deleteJobAlertAction,
-  INITIAL_JOB_ALERT_ACTION_STATE,
-} from "@/app/candidate/alerts/actions";
+import { INITIAL_JOB_ALERT_ACTION_STATE } from "@/app/candidate/alerts/action-state";
+import { deleteJobAlertAction } from "@/app/candidate/alerts/actions";
 
 const USER_ID = "91000000-0000-4000-8000-000000000001";
 const REQUEST = Object.freeze({

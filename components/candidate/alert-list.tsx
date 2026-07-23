@@ -5,13 +5,15 @@ import { BellOffIcon, MailCheckIcon, PauseIcon, PlayIcon, Trash2Icon } from "luc
 
 import {
   INITIAL_JOB_ALERT_ACTION_STATE,
+  type JobAlertActionState,
+} from "@/app/candidate/alerts/action-state";
+import {
   deleteJobAlertAction,
   grantJobAlertDeliveryAction,
   pauseJobAlertAction,
   resumeJobAlertAction,
   revokeJobAlertDeliveryAction,
   runJobAlertDigestMockAction,
-  type JobAlertActionState,
 } from "@/app/candidate/alerts/actions";
 import { AlertForm } from "@/components/candidate/alert-form";
 import { Badge } from "@/components/ui/badge";

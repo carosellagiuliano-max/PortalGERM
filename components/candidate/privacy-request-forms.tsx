@@ -5,9 +5,9 @@ import Link from "next/link";
 
 import {
   INITIAL_CANDIDATE_PRIVACY_ACTION_STATE,
-  createCandidatePrivacyRequestAction,
   type CandidatePrivacyActionState,
-} from "@/app/candidate/privacy/actions";
+} from "@/app/candidate/privacy/action-state";
+import { createCandidatePrivacyRequestAction } from "@/app/candidate/privacy/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

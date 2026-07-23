@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { AdminActionState } from "@/app/admin/action-state";
 import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
 import { requireAdminPage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
@@ -25,9 +26,6 @@ import { projectDueCatalogVersions } from "@/lib/billing/catalog-lifecycle";
 import { recordProductReleaseDecision } from "@/lib/billing/product-release";
 import { projectDueSubscriptionBoundaries, type SubscriptionBoundaryProjectionResult } from "@/lib/billing/subscriptions";
 import { projectDueCreditExpiries, type CreditExpiryProjectionResult } from "@/lib/billing/credits";
-
-export type AdminActionState = Readonly<{ status: "idle" | "success" | "error"; message: string; code?: string }>;
-export const INITIAL_ADMIN_ACTION_STATE: AdminActionState = Object.freeze({ status: "idle", message: "" });
 
 export async function adminCommandAction(_previous: AdminActionState, formData: FormData): Promise<AdminActionState> {
   const [user, request] = await Promise.all([requireAdminPage(), getAuthRequestContext()]);

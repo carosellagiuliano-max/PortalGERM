@@ -49,10 +49,8 @@ vi.mock("@/lib/privacy/postgres-adapters", () => ({
   createPostgresPrivacyRequestRepository: () => mocks.repository,
 }));
 
-import {
-  INITIAL_CANDIDATE_PRIVACY_ACTION_STATE,
-  createCandidatePrivacyRequestAction,
-} from "@/app/candidate/privacy/actions";
+import { INITIAL_CANDIDATE_PRIVACY_ACTION_STATE } from "@/app/candidate/privacy/action-state";
+import { createCandidatePrivacyRequestAction } from "@/app/candidate/privacy/actions";
 import { PRIVACY_REQUEST_POLICY_V1 } from "@/lib/privacy/requests";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";

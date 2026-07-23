@@ -18,6 +18,7 @@ import { createPrismaEntitlementRepository } from "@/lib/billing/prisma-publish-
 import type { DatabaseClient } from "@/lib/db/factory";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
 import { isReviewedCompanyMediaPath } from "@/lib/security/company-media-manifest";
+import { createLogger } from "@/lib/utils/logger";
 import {
   hasUnsafeTextControls,
   isSafeAbsoluteHttpUrl,
@@ -25,6 +26,7 @@ import {
 
 const DAY_MILLISECONDS = 86_400_000;
 const AUDIT_RETENTION_MILLISECONDS = 400 * DAY_MILLISECONDS;
+const logger = createLogger();
 const OPEN_VERIFICATION_STATUSES = [
   "DRAFT",
   "PENDING",
@@ -575,6 +577,11 @@ export async function saveEmployerCompanyProfile(
     if (isPrismaKnownError(error, "P2002")) {
       throw new EmployerCompanyDomainError("CONFLICT");
     }
+    logger.error(
+      "employer_company.profile_write_failed",
+      { error, errorCode: databaseErrorCode(error) },
+      scope.correlationId,
+    );
     throw new EmployerCompanyDomainError("WRITE_FAILED");
   }
 }
@@ -1208,6 +1215,18 @@ function isPrismaKnownError(error: unknown, code: string) {
     "code" in error &&
     error.code === code
   );
+}
+
+function databaseErrorCode(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+  return undefined;
 }
 
 function isSerializationFailure(error: unknown) {

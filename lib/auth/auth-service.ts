@@ -473,6 +473,8 @@ export async function registerEmployer(
                 persistedSignals.registrationNameNormalized,
               registrationCantonId: persistedSignals.registrationCantonId,
               size: input.companySize,
+              values: [],
+              benefits: [],
               status: "DRAFT",
             },
             select: { id: true },

@@ -27,10 +27,8 @@ vi.mock("@/lib/billing/admin-renewal", () => ({
 vi.mock("@/lib/db/client", () => ({ getDatabase: mocks.getDatabase }));
 vi.mock("@/lib/providers/email", () => ({ emailProvider: {} }));
 
-import {
-  adminCommandAction,
-  INITIAL_ADMIN_ACTION_STATE,
-} from "@/app/admin/actions";
+import { INITIAL_ADMIN_ACTION_STATE } from "@/app/admin/action-state";
+import { adminCommandAction } from "@/app/admin/actions";
 
 const SERVER_NOW = new Date("2026-08-01T10:00:00.000Z");
 const ADMIN = Object.freeze({

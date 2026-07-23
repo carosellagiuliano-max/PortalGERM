@@ -307,6 +307,98 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
     ).resolves.toBe(0);
   });
 
+  it("denies Employer and Admin actors across preview, grant and revocation", async () => {
+    const fixture = await createPendingContactFixture("forbidden-actors");
+    const adminEmail = "phase14-reveal-forbidden-admin@example.test";
+    const admin = await db().user.create({
+      data: {
+        email: adminEmail,
+        emailNormalized: adminEmail,
+        role: "ADMIN",
+        status: "ACTIVE",
+        dataProvenance: "TEST",
+        emailVerifiedAt: NOW,
+      },
+    });
+    await acceptFixture(fixture, "forbidden-actors-accept");
+    const emailPreview = await preview(fixture, ["EMAIL"]);
+    const deniedActors = [
+      { kind: "employer", userId: fixture.employerUserId },
+      { kind: "admin", userId: admin.id },
+    ] as const;
+
+    for (const actor of deniedActors) {
+      await expect(
+        buildCandidateRevealPreview(
+          db(),
+          {
+            actorUserId: actor.userId,
+            contactRequestId: fixture.contactRequestId,
+            fields: ["EMAIL"],
+            now: NOW,
+          },
+          CONFIRMATION_KEYS,
+        ),
+      ).resolves.toEqual({ ok: false, code: "UNAVAILABLE" });
+      await expect(
+        grantRevealFields(
+          db(),
+          {
+            actorUserId: actor.userId,
+            contactRequestId: fixture.contactRequestId,
+            confirmationToken: emailPreview.confirmationToken,
+            idempotencyKey: `forbidden-${actor.kind}-grant-v1`,
+            now: NOW,
+          },
+          { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+        ),
+      ).resolves.toEqual({ ok: false, code: "UNAVAILABLE" });
+    }
+
+    const granted = await grantRevealFields(
+      db(),
+      {
+        actorUserId: fixture.candidateUserId,
+        contactRequestId: fixture.contactRequestId,
+        confirmationToken: emailPreview.confirmationToken,
+        idempotencyKey: "forbidden-actors-candidate-grant-v1",
+        now: NOW,
+      },
+      { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+    );
+    if (!granted.ok) throw new Error("The Candidate Reveal fixture failed.");
+
+    for (const actor of deniedActors) {
+      await expect(
+        revokeIdentityReveal(db(), {
+          actorUserId: actor.userId,
+          grantId: granted.grantId,
+          reasonCode: "PRIVACY_CHOICE",
+          confirmationVersion: "identity-reveal-revoke-v1",
+          idempotencyKey: `forbidden-${actor.kind}-revoke-v1`,
+          now: new Date(NOW.getTime() + 1_000),
+        }),
+      ).resolves.toEqual({ ok: false, code: "UNAVAILABLE" });
+    }
+
+    await expect(
+      db().identityRevealGrant.findUniqueOrThrow({
+        where: { id: granted.grantId },
+        select: {
+          revokedAt: true,
+          revokedByUserId: true,
+          revokeReason: true,
+          fields: { select: { field: true } },
+        },
+      }),
+    ).resolves.toEqual({
+      revokedAt: null,
+      revokedByUserId: null,
+      revokeReason: null,
+      fields: [{ field: "EMAIL" }],
+    });
+  });
+
   it("enforces current trust, tenant scope, candidate ownership and idempotent revocation", async () => {
     const fixture = await createPendingContactFixture("scope-a");
     const other = await createPendingContactFixture("scope-b");

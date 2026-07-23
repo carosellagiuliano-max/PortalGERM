@@ -189,13 +189,17 @@ export async function getEffectiveEntitlements(
     return failure("INVALID_INPUT");
   }
 
-  const [defaultFreePlanVersions, subscriptions, grants, fundableCredits] =
-    await Promise.all([
-      repository.listDefaultFreePlanVersions(at),
-      repository.listCompanySubscriptions(companyId, at),
-      repository.listCompanyEntitlementGrants(companyId, at),
-      repository.listFundableCredits(companyId, at),
-    ]);
+  // Repository implementations may be backed by one interactive transaction.
+  // Keep these reads sequential because a single PostgreSQL transaction client
+  // cannot safely execute concurrent queries.
+  const defaultFreePlanVersions =
+    await repository.listDefaultFreePlanVersions(at);
+  const subscriptions =
+    await repository.listCompanySubscriptions(companyId, at);
+  const grants =
+    await repository.listCompanyEntitlementGrants(companyId, at);
+  const fundableCredits =
+    await repository.listFundableCredits(companyId, at);
 
   return resolveEffectiveEntitlements({
     companyId,

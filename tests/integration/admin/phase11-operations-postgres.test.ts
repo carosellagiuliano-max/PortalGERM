@@ -53,7 +53,8 @@ import { manageSalesLead } from "@/lib/admin/leads";
 import { projectAdminSlaAlerts } from "@/lib/admin/sla";
 import { mutateAdminTaxonomy } from "@/lib/admin/taxonomy";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
-import type { EmailProvider } from "@/lib/providers/email";
+import { MockEmailProvider, type EmailProvider } from "@/lib/providers/email";
+import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
 import { salesLeadAnalyticsKeyV1 } from "@/lib/sales/lead-policy";
 import { ADMIN_IMPORT_DEMO_FIXTURES } from "@/prisma/seed/fixtures";
 import { orchestrateDemoSeed } from "@/prisma/seed/orchestrator";
@@ -109,9 +110,13 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
         deps("job-start-review", afterMilliseconds(1)),
       ),
     );
+    const persistedEmail = new MockEmailProvider(
+      new PrismaEmailLogRepository(client),
+    );
     const email: EmailProvider = {
-      async send() {
-        return { logId: randomUUID() };
+      async send(input) {
+        await persistedEmail.send(input);
+        throw new Error("Simulated post-persistence delivery failure.");
       },
     };
     const approvedInput = {
@@ -125,6 +130,16 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
       await approveAdminJob(approvedInput, deps("job-approve", afterMilliseconds(2)), email),
     );
     expect(approved.value.status).toBe("APPROVED");
+    await expect(
+      client.emailLog.findFirstOrThrow({
+        where: { templateKey: "job_approved" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { payload: true, status: true },
+      }),
+    ).resolves.toMatchObject({
+      payload: { subject: "Dein Stelleninserat wurde freigegeben" },
+      status: "MOCK_RECORDED",
+    });
     const publishInput = {
       jobId: job.id,
       expectedJobVersion: approved.value.jobVersion,
@@ -578,6 +593,147 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
     await expect(parseLicensedImport({ importSourceId: source.id, inputSource: "PASTE", format: "JSON", payload, idempotencyKey: randomUUID() }, deps("oversize-import"))).resolves.toEqual({ ok: false, code: "INVALID_INPUT" });
   });
 
+  it("denies commit without partial effects when source rights disappear after approval", async () => {
+    const client = db();
+    const source = await client.importSource.findFirstOrThrow({
+      where: { sourceReference: "local-demo-feed-v1", isActive: true },
+      select: {
+        id: true,
+        companyRights: {
+          where: { revokedAt: null },
+          orderBy: { id: "asc" },
+          take: 1,
+          select: { id: true, companyId: true },
+        },
+      },
+    });
+    const right = source.companyRights[0];
+    if (right === undefined) throw new Error("Licensed import right missing.");
+    const base = JSON.parse(
+      ADMIN_IMPORT_DEMO_FIXTURES.validJson,
+    ) as Array<Record<string, unknown>>;
+    const first = base[0];
+    if (first === undefined) throw new Error("Import fixture missing.");
+    const parsed = requireSuccess(
+      await parseLicensedImport(
+        {
+          importSourceId: source.id,
+          inputSource: "PASTE",
+          format: "JSON",
+          payload: JSON.stringify([
+            {
+              ...first,
+              id: "rights-lost-before-commit-001",
+              title: "Import ohne fortbestehendes Quellenrecht",
+            },
+          ]),
+          idempotencyKey: randomUUID(),
+        },
+        deps("rights-lost-import-parse"),
+      ),
+    );
+    const item = await client.importItem.findFirstOrThrow({
+      where: { runId: parsed.value.runId },
+      select: { id: true },
+    });
+    requireSuccess(
+      await decideImportItem(
+        {
+          itemId: item.id,
+          decision: "APPROVE",
+          companyId: right.companyId,
+          reasonCode: "SOURCE_RIGHTS_VERIFIED",
+          idempotencyKey: randomUUID(),
+        },
+        deps("rights-lost-import-approve", afterMilliseconds(1)),
+      ),
+    );
+    const stateBeforeCommit = await client.importRun.findUniqueOrThrow({
+      where: { id: parsed.value.runId },
+      select: {
+        status: true,
+        completedAt: true,
+        items: {
+          select: {
+            id: true,
+            status: true,
+            redactedErrorSummary: true,
+            decision: {
+              select: {
+                id: true,
+                kind: true,
+                selectedCompanyId: true,
+                committedJobId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await client.importSourceCompanyRight.update({
+      where: { id: right.id },
+      data: { revokedAt: afterMilliseconds(2) },
+    });
+    try {
+      await expect(
+        commitImportRun(
+          {
+            runId: parsed.value.runId,
+            idempotencyKey: randomUUID(),
+          },
+          deps("rights-lost-import-commit", afterMilliseconds(3)),
+        ),
+      ).resolves.toEqual({ ok: false, code: "FORBIDDEN" });
+      await expect(
+        client.job.count({
+          where: {
+            importDecision: {
+              importItem: { runId: parsed.value.runId },
+            },
+          },
+        }),
+      ).resolves.toBe(0);
+      await expect(
+        client.importRun.findUniqueOrThrow({
+          where: { id: parsed.value.runId },
+          select: {
+            status: true,
+            completedAt: true,
+            items: {
+              select: {
+                id: true,
+                status: true,
+                redactedErrorSummary: true,
+                decision: {
+                  select: {
+                    id: true,
+                    kind: true,
+                    selectedCompanyId: true,
+                    committedJobId: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+      ).resolves.toEqual(stateBeforeCommit);
+      await expect(
+        client.auditLog.count({
+          where: {
+            targetId: parsed.value.runId,
+            action: "IMPORT_COMMITTED",
+          },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await client.importSourceCompanyRight.update({
+        where: { id: right.id },
+        data: { revokedAt: null },
+      });
+    }
+  });
+
   it("approves and revokes an Import Setup with persisted audit evidence", async () => {
     const client = db();
     const source = await client.importSource.findFirstOrThrow({
@@ -665,13 +821,136 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
       orderBy: { sourceReference: "asc" },
       select: { id: true, sourceReference: true, currentRevisionId: true },
     });
+    const pristine = jobs.find(({ sourceReference }) => sourceReference === "mixed-pristine-001");
     const edited = jobs.find(({ sourceReference }) => sourceReference === "mixed-edited-002");
+    if (pristine === undefined) throw new Error("Pristine import Job missing.");
     if (edited?.currentRevisionId === null || edited?.currentRevisionId === undefined) throw new Error("Edited import Job missing.");
     await client.jobRevision.update({ where: { id: edited.currentRevisionId }, data: { description: "Manuell geprüfter und geänderter Inhalt.", contentChecksum: "f".repeat(64), version: { increment: 1 } } });
+    const jobBeforeRollback = await client.job.findUniqueOrThrow({
+      where: { id: edited.id },
+      select: {
+        id: true,
+        status: true,
+        version: true,
+        currentRevisionId: true,
+        publishedRevisionId: true,
+        currentRevision: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            contentChecksum: true,
+            version: true,
+          },
+        },
+        statusEvents: {
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            kind: true,
+            fromStatus: true,
+            toStatus: true,
+            reasonCode: true,
+            idempotencyKey: true,
+          },
+        },
+      },
+    });
+    const evidenceBeforeRollback = await client.importDecision.findFirstOrThrow({
+      where: { committedJobId: edited.id },
+      select: {
+        id: true,
+        kind: true,
+        selectedCompanyId: true,
+        reasonCode: true,
+        committedJobId: true,
+        idempotencyKey: true,
+        importItem: {
+          select: {
+            id: true,
+            sourceItemKey: true,
+            normalizedPreview: true,
+            normalizedChecksum: true,
+            dedupeKey: true,
+            validationSummary: true,
+          },
+        },
+      },
+    });
     const rollbackInput = { runId: parsed.value.runId, idempotencyKey: randomUUID() };
     const result = requireSuccess(await rollbackImportRun(rollbackInput, deps("mixed-import-rollback")));
     expect(result.value).toMatchObject({ status: "PARTIALLY_ROLLED_BACK", rolledBack: 1, conflicts: 1 });
-    expect(await client.job.findUnique({ where: { id: edited.id }, select: { status: true } })).toEqual({ status: "DRAFT" });
+    await expect(
+      client.job.findUniqueOrThrow({
+        where: { id: edited.id },
+        select: {
+          id: true,
+          status: true,
+          version: true,
+          currentRevisionId: true,
+          publishedRevisionId: true,
+          currentRevision: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              contentChecksum: true,
+              version: true,
+            },
+          },
+          statusEvents: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              kind: true,
+              fromStatus: true,
+              toStatus: true,
+              reasonCode: true,
+              idempotencyKey: true,
+            },
+          },
+        },
+      }),
+    ).resolves.toEqual(jobBeforeRollback);
+    await expect(
+      client.importDecision.findFirstOrThrow({
+        where: { committedJobId: edited.id },
+        select: {
+          id: true,
+          kind: true,
+          selectedCompanyId: true,
+          reasonCode: true,
+          committedJobId: true,
+          idempotencyKey: true,
+          importItem: {
+            select: {
+              id: true,
+              sourceItemKey: true,
+              normalizedPreview: true,
+              normalizedChecksum: true,
+              dedupeKey: true,
+              validationSummary: true,
+            },
+          },
+        },
+      }),
+    ).resolves.toEqual(evidenceBeforeRollback);
+    await expect(
+      client.importItem.findFirstOrThrow({
+        where: { decision: { committedJobId: edited.id } },
+        select: { status: true, redactedErrorSummary: true },
+      }),
+    ).resolves.toEqual({
+      status: "CONFLICT_MANUAL_REMEDIATION",
+      redactedErrorSummary:
+        "Import-Entwurf wurde verändert oder bereits verwendet.",
+    });
+    await expect(
+      client.job.findUniqueOrThrow({
+        where: { id: pristine.id },
+        select: { status: true },
+      }),
+    ).resolves.toEqual({ status: "REMOVED" });
     expect(await rollbackImportRun(rollbackInput, deps("mixed-import-rollback"))).toMatchObject({ ok: true, replay: true });
   });
 

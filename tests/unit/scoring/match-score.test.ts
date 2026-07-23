@@ -11,6 +11,37 @@ function match(input: MatchInput) {
   return calculateCandidateMatchV1(input);
 }
 
+function fullMatchInput(): MatchInput {
+  return {
+    candidate: {
+      skills: [" React ", "typescript", "react"],
+      acceptableCantonIds: [" ZH "],
+      workloadMin: 80,
+      workloadMax: 100,
+      desiredSalaryMin: 90_000,
+      desiredSalaryMax: 110_000,
+      desiredSalaryPeriod: "YEARLY",
+      remotePreference: "HYBRID",
+      languages: [{ code: " DE ", level: "B2" }],
+      jobTypes: ["PERMANENT"],
+      availabilityDate: new Date("2026-08-01T00:00:00.000Z"),
+    },
+    job: {
+      requiredSkills: ["react", "TypeScript"],
+      cantonId: "zh",
+      workloadMin: 80,
+      workloadMax: 100,
+      salaryMin: 100_000,
+      salaryMax: 120_000,
+      salaryPeriod: "YEARLY",
+      remoteType: "HYBRID",
+      requiredLanguages: [{ code: "de", minLevel: "B2" }],
+      jobType: "PERMANENT",
+      startDate: new Date("2026-09-01T00:00:00.000Z"),
+    },
+  };
+}
+
 describe("calculateCandidateMatchV1 golden fixtures", () => {
   it("returns the exact all-factor match fixture", () => {
     const result = match({
@@ -137,6 +168,120 @@ describe("calculateCandidateMatchV1 golden fixtures", () => {
     expect(result.missingFitReasons).toEqual(
       MATCH_FACTOR_ORDER_V1.map((factor) => `${factor}_MISSING`),
     );
+  });
+
+  it("locks exact one-factor deltas and evidence keys against the full fixture", () => {
+    const baseline = fullMatchInput();
+    const cases = [
+      {
+        label: "canton",
+        input: {
+          ...baseline,
+          candidate: {
+            ...baseline.candidate,
+            acceptableCantonIds: ["BE"],
+          },
+        },
+        factor: "REGION",
+        factorScore: 0,
+        score: 85,
+        matchReasons: [
+          "SKILLS_MATCH",
+          "LANGUAGES_MATCH",
+          "WORKLOAD_MATCH",
+          "SALARY_MATCH",
+          "JOB_TYPE_MATCH",
+          "REMOTE_MATCH",
+          "AVAILABILITY_MATCH",
+        ],
+        missingFitReasons: ["REGION_MISMATCH"],
+      },
+      {
+        label: "language",
+        input: {
+          ...baseline,
+          candidate: {
+            ...baseline.candidate,
+            languages: [{ code: "de", level: "B1" as const }],
+          },
+        },
+        factor: "LANGUAGES",
+        factorScore: 0.5,
+        score: 93,
+        matchReasons: [
+          "SKILLS_MATCH",
+          "LANGUAGES_PARTIAL",
+          "REGION_MATCH",
+          "WORKLOAD_MATCH",
+          "SALARY_MATCH",
+          "JOB_TYPE_MATCH",
+          "REMOTE_MATCH",
+          "AVAILABILITY_MATCH",
+        ],
+        missingFitReasons: [],
+      },
+      {
+        label: "workload",
+        input: {
+          ...baseline,
+          candidate: {
+            ...baseline.candidate,
+            workloadMin: 0,
+            workloadMax: 50,
+          },
+        },
+        factor: "WORKLOAD",
+        factorScore: 0,
+        score: 85,
+        matchReasons: [
+          "SKILLS_MATCH",
+          "LANGUAGES_MATCH",
+          "REGION_MATCH",
+          "SALARY_MATCH",
+          "JOB_TYPE_MATCH",
+          "REMOTE_MATCH",
+          "AVAILABILITY_MATCH",
+        ],
+        missingFitReasons: ["WORKLOAD_MISMATCH"],
+      },
+      {
+        label: "salary",
+        input: {
+          ...baseline,
+          candidate: {
+            ...baseline.candidate,
+            desiredSalaryMin: 200_000,
+            desiredSalaryMax: 220_000,
+          },
+        },
+        factor: "SALARY",
+        factorScore: 0,
+        score: 90,
+        matchReasons: [
+          "SKILLS_MATCH",
+          "LANGUAGES_MATCH",
+          "REGION_MATCH",
+          "WORKLOAD_MATCH",
+          "JOB_TYPE_MATCH",
+          "REMOTE_MATCH",
+          "AVAILABILITY_MATCH",
+        ],
+        missingFitReasons: ["SALARY_MISMATCH"],
+      },
+    ] as const;
+
+    for (const fixture of cases) {
+      const result = match(fixture.input);
+      expect(result.score, fixture.label).toBe(fixture.score);
+      expect(result.confidence, fixture.label).toBe(100);
+      expect(result.factorScores[fixture.factor], fixture.label).toBe(
+        fixture.factorScore,
+      );
+      expect(result.matchReasons, fixture.label).toEqual(fixture.matchReasons);
+      expect(result.missingFitReasons, fixture.label).toEqual(
+        fixture.missingFitReasons,
+      );
+    }
   });
 });
 

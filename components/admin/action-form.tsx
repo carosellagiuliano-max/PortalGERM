@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { adminCommandAction, INITIAL_ADMIN_ACTION_STATE } from "@/app/admin/actions";
+import { INITIAL_ADMIN_ACTION_STATE } from "@/app/admin/action-state";
+import { adminCommandAction } from "@/app/admin/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

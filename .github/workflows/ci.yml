@@ -16,7 +16,7 @@ jobs:
   linux-postgres:
     name: Linux / PostgreSQL 16
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       APP_ENV: ci
       NODE_ENV: test
@@ -146,7 +146,24 @@ jobs:
           NODE_ENV: production
 
       - name: Production-HTTP-Smoke
-        run: npm run test:e2e
+        run: npm run test:e2e:http
+
+      - name: Playwright Chromium 1.61.1 mit Systemabhängigkeiten installieren
+        run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+
+      - name: Phase-17-Browser-Gate
+        run: npm run test:e2e:browser
+
+      - name: Phase-17-Browserartefakte hochladen
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase17-playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/phase17/
+            test-results/phase17/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Production-like HSTS Build und HTTP-Smoke
         run: npm run test:e2e:hsts

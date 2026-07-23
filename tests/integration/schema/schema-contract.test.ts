@@ -588,6 +588,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260722211000_phase_15_cluster_policy_versioned_check",
       "20260723090000_phase_16_company_media_manifest",
       "20260723100000_phase_16_audit_ip_retention",
+      "20260723194000_phase_17_company_profile_array_defaults",
     ]);
     expect(
       migrations.rows.every(
@@ -1933,6 +1934,41 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       ].join("\n"),
       [revealGrantId, "2043-01-06T00:00:00.000Z", candidateUserId],
     );
+    await expectConstraintViolation(
+      target.query(
+        [
+          'UPDATE "IdentityRevealGrant"',
+          'SET "revokedAt" = NULL, "revokedByUserId" = NULL,',
+          '  "revokeReason" = NULL',
+          'WHERE "id" = $1',
+        ].join("\n"),
+        [revealGrantId],
+      ),
+      SQLSTATE.checkViolation,
+      "identity_reveal_grant_immutable",
+    );
+    await expect(
+      target.query<{
+        revokeReason: string | null;
+        revokedAtPresent: boolean;
+        revokedByUserId: string | null;
+      }>(
+        [
+          'SELECT "revokedAt" IS NOT NULL AS "revokedAtPresent",',
+          '  "revokedByUserId", "revokeReason"',
+          'FROM "IdentityRevealGrant" WHERE "id" = $1',
+        ].join("\n"),
+        [revealGrantId],
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          revokedAtPresent: true,
+          revokedByUserId: candidateUserId,
+          revokeReason: "PRIVACY_CHOICE",
+        },
+      ],
+    });
     await expectConstraintViolation(
       target.query(
         [

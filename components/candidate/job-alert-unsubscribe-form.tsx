@@ -3,10 +3,8 @@
 import { useActionState } from "react";
 import { CheckCircle2Icon, PauseCircleIcon } from "lucide-react";
 
-import {
-  INITIAL_UNSUBSCRIBE_ACTION_STATE,
-  unsubscribeJobAlertAction,
-} from "@/app/alerts/unsubscribe/[token]/actions";
+import { INITIAL_UNSUBSCRIBE_ACTION_STATE } from "@/app/alerts/unsubscribe/[token]/action-state";
+import { unsubscribeJobAlertAction } from "@/app/alerts/unsubscribe/[token]/actions";
 import { Button } from "@/components/ui/button";
 
 export function JobAlertUnsubscribeForm({ token }: Readonly<{ token: string }>) {

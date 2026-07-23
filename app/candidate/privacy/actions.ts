@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { CandidatePrivacyActionState } from "@/app/candidate/privacy/action-state";
 import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
@@ -17,16 +18,6 @@ import {
   privacyRequestInputSchema,
 } from "@/lib/privacy/requests";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
-
-export type CandidatePrivacyActionState = Readonly<{
-  status: "idle" | "success" | "error";
-  message: string;
-  fieldErrors?: Readonly<Record<string, readonly string[]>>;
-  supportPath?: string;
-}>;
-
-export const INITIAL_CANDIDATE_PRIVACY_ACTION_STATE: CandidatePrivacyActionState =
-  Object.freeze({ status: "idle", message: "" });
 
 export async function createCandidatePrivacyRequestAction(
   _previous: CandidatePrivacyActionState,

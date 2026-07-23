@@ -1465,8 +1465,8 @@ model Company {
   facebookUrl                       String?                      @db.VarChar(512)
   instagramUrl                      String?                      @db.VarChar(512)
   about                             String?                      @db.VarChar(5000)
-  values                            String[]
-  benefits                          String[]
+  values                            String[]                     @default([])
+  benefits                          String[]                     @default([])
   responseTargetDays                Int?
   responseSampleSize                Int                          @default(0)
   responseWithinTargetBps           Int?

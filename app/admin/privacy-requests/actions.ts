@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { AdminPrivacyCaseActionState } from "@/app/admin/privacy-requests/action-state";
 import {
   hasAdminCapability,
   PHASE_14_PRIVACY_ADMIN_CAPABILITIES,
@@ -20,15 +21,6 @@ import type {
 } from "@/lib/generated/prisma/enums";
 import { createPostgresPrivacyCaseService } from "@/lib/privacy/privacy-case-service";
 import { emailProvider } from "@/lib/providers/email";
-
-export type AdminPrivacyCaseActionState = Readonly<{
-  status: "idle" | "success" | "error";
-  message: string;
-  code?: string;
-}>;
-
-export const INITIAL_ADMIN_PRIVACY_CASE_ACTION_STATE: AdminPrivacyCaseActionState =
-  Object.freeze({ status: "idle", message: "" });
 
 export async function adminPrivacyCaseAction(
   _previous: AdminPrivacyCaseActionState,

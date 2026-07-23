@@ -5,7 +5,7 @@ export type DatabaseHealth = Readonly<
 
 export const DATABASE_HEALTH_TIMEOUT_MS = 3_000;
 export const REQUIRED_MIGRATION_ID =
-  "20260723100000_phase_16_audit_ip_retention";
+  "20260723194000_phase_17_company_profile_array_defaults";
 
 type QueryableDatabase = {
   $queryRaw: (

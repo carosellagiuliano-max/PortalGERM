@@ -13,6 +13,9 @@ import {
 } from "@/lib/auth/rate-limit";
 
 const KEY = { version: "2026-07", secret: "rate-limit-test-secret" } as const;
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 const IDENTITY = {
   sourceIp: "192.0.2.10",
   normalizedEmail: "user@example.ch",
@@ -27,48 +30,89 @@ const IDENTITY = {
 
 describe("RATE_LIMIT_PRESETS_V1", () => {
   it("freezes every required scope and limit", () => {
-    expect(RATE_LIMIT_PRESETS_V1.LOGIN.buckets).toEqual([
-      { scope: "IP_EMAIL", limit: 10, windowMs: 15 * 60_000 },
-      { scope: "IP", limit: 30, windowMs: 60 * 60_000 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.CONTACT_REQUEST.buckets.map(({ scope, limit }) => ({ scope, limit }))).toEqual([
-      { scope: "COMPANY", limit: 20 },
-      { scope: "USER", limit: 30 },
-      { scope: "CANDIDATE", limit: 3 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.LEAD.buckets).toEqual([
-      { scope: "IP", limit: 10, windowMs: 60 * 60_000 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.LEAD_DENIAL_AUDIT.buckets).toEqual([
-      { scope: "IP", limit: 1, windowMs: 60 * 60_000 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.SECURITY_DENIAL_AUDIT.buckets).toEqual([
-      { scope: "ACTOR_OR_IP", limit: 1, windowMs: 60 * 60_000 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.ABUSE_INTAKE_PRECHECK.buckets.map(({ scope, limit }) => ({ scope, limit }))).toEqual([
-      { scope: "ACTOR_OR_IP", limit: 10 },
-      { scope: "IP", limit: 20 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.ABUSE_INTAKE.buckets).toEqual([
-      { scope: "ACTOR_OR_IP_TARGET", limit: 3, windowMs: 24 * 60 * 60_000 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.RADAR_LIST.buckets[0]).toMatchObject({ limit: 10, windowMs: 60_000 });
-    expect(RATE_LIMIT_PRESETS_V1.MESSAGE_SEND.buckets).toEqual([
-      { scope: "USER", limit: 60, windowMs: 60 * 60_000 },
-      { scope: "IP", limit: 120, windowMs: 60 * 60_000 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.APPLICATION_CANDIDATE_MUTATION.buckets).toEqual([
-      { scope: "USER", limit: 60, windowMs: 60 * 60_000 },
-      { scope: "IP", limit: 120, windowMs: 60 * 60_000 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.CANDIDATE_PROFILE_MUTATION.buckets).toEqual([
-      { scope: "USER", limit: 30, windowMs: 60 * 60_000 },
-      { scope: "IP", limit: 100, windowMs: 60 * 60_000 },
-    ]);
-    expect(RATE_LIMIT_PRESETS_V1.JOB_ALERT_MUTATION.buckets).toEqual([
-      { scope: "USER", limit: 60, windowMs: 60 * 60_000 },
-      { scope: "IP", limit: 120, windowMs: 60 * 60_000 },
-    ]);
+    expect(RATE_LIMIT_PRESETS_V1).toEqual({
+      LOGIN: {
+        buckets: [
+          { scope: "IP_EMAIL", limit: 10, windowMs: 15 * MINUTE },
+          { scope: "IP", limit: 30, windowMs: HOUR },
+        ],
+      },
+      REGISTER: {
+        buckets: [{ scope: "IP", limit: 10, windowMs: HOUR }],
+      },
+      FORGOT_PASSWORD: {
+        buckets: [{ scope: "IP_EMAIL", limit: 5, windowMs: HOUR }],
+      },
+      APPLICATION_SUBMIT: {
+        buckets: [
+          { scope: "USER", limit: 30, windowMs: HOUR },
+          { scope: "IP", limit: 100, windowMs: HOUR },
+        ],
+      },
+      APPLICATION_CANDIDATE_MUTATION: {
+        buckets: [
+          { scope: "USER", limit: 60, windowMs: HOUR },
+          { scope: "IP", limit: 120, windowMs: HOUR },
+        ],
+      },
+      CANDIDATE_PROFILE_MUTATION: {
+        buckets: [
+          { scope: "USER", limit: 30, windowMs: HOUR },
+          { scope: "IP", limit: 100, windowMs: HOUR },
+        ],
+      },
+      JOB_ALERT_MUTATION: {
+        buckets: [
+          { scope: "USER", limit: 60, windowMs: HOUR },
+          { scope: "IP", limit: 120, windowMs: HOUR },
+        ],
+      },
+      MESSAGE_SEND: {
+        buckets: [
+          { scope: "USER", limit: 60, windowMs: HOUR },
+          { scope: "IP", limit: 120, windowMs: HOUR },
+        ],
+      },
+      PRIVACY_REQUEST: {
+        buckets: [{ scope: "USER", limit: 5, windowMs: 30 * DAY }],
+      },
+      PRIVACY_IDENTITY_CHALLENGE: {
+        buckets: [
+          { scope: "USER", limit: 5, windowMs: 15 * MINUTE },
+          { scope: "IP", limit: 20, windowMs: HOUR },
+        ],
+      },
+      LEAD: {
+        buckets: [{ scope: "IP", limit: 10, windowMs: HOUR }],
+      },
+      LEAD_DENIAL_AUDIT: {
+        buckets: [{ scope: "IP", limit: 1, windowMs: HOUR }],
+      },
+      SECURITY_DENIAL_AUDIT: {
+        buckets: [{ scope: "ACTOR_OR_IP", limit: 1, windowMs: HOUR }],
+      },
+      ABUSE_INTAKE_PRECHECK: {
+        buckets: [
+          { scope: "ACTOR_OR_IP", limit: 10, windowMs: DAY },
+          { scope: "IP", limit: 20, windowMs: DAY },
+        ],
+      },
+      ABUSE_INTAKE: {
+        buckets: [
+          { scope: "ACTOR_OR_IP_TARGET", limit: 3, windowMs: DAY },
+        ],
+      },
+      CONTACT_REQUEST: {
+        buckets: [
+          { scope: "COMPANY", limit: 20, windowMs: HOUR },
+          { scope: "USER", limit: 30, windowMs: HOUR },
+          { scope: "CANDIDATE", limit: 3, windowMs: 30 * DAY },
+        ],
+      },
+      RADAR_LIST: {
+        buckets: [{ scope: "MEMBERSHIP", limit: 10, windowMs: MINUTE }],
+      },
+    });
     expect(RADAR_DISTINCT_FILTER_BUDGET_V1).toEqual({ limit: 30, calendarTimeZone: "Europe/Zurich" });
   });
 

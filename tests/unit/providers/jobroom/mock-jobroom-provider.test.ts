@@ -76,6 +76,19 @@ describe("MockJobroomProvider", () => {
     },
   );
 
+  it("resolves the canonical occupation code independently of database identifiers", async () => {
+    await expect(
+      provider().checkReportingObligation({
+        occupationCode: "mock-chisco-0002",
+        cantonCode: "zh",
+      }),
+    ).resolves.toEqual({
+      result: "NOT_REQUIRED",
+      reasonCode: "REPORTING_NOT_REQUIRED",
+      ...metadata(),
+    });
+  });
+
   it.each([
     [{}, "MISSING_OCCUPATION_CODE"],
     [{ occupationCodeId: "   " }, "MISSING_OCCUPATION_CODE"],
@@ -114,11 +127,20 @@ describe("MockJobroomProvider", () => {
     { occupationCodeId: JOBROOM_FIXTURE_IDS.notRequired, unexpected: true },
     { occupationCodeId: `${JOBROOM_FIXTURE_IDS.notRequired}\u0000` },
     { occupationCodeId: "x".repeat(10_000) },
+    {
+      occupationCodeId: JOBROOM_FIXTURE_IDS.notRequired,
+      occupationCode: "MOCK-CHISCO-0002",
+    },
+    { occupationCode: "nicht gültig" },
     { occupationCodeId: JOBROOM_FIXTURE_IDS.notRequired, cantonCode: 42 },
     { occupationCodeId: JOBROOM_FIXTURE_IDS.notRequired, cantonCode: "Z\u0000" },
   ])("rejects malformed runtime input without throwing: %o", async (runtimeInput) => {
     const result = await provider().checkReportingObligation(
-      runtimeInput as unknown as { occupationCodeId?: string; cantonCode?: string },
+      runtimeInput as unknown as {
+        occupationCodeId?: string;
+        occupationCode?: string;
+        cantonCode?: string;
+      },
     );
 
     expect(result).toEqual({

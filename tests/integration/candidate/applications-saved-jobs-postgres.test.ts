@@ -613,6 +613,8 @@ describe.sequential(
       ).toHaveLength(1);
       const applicationId = results.find((result) => result.ok)?.applicationId;
       expect(applicationId).toBeTypeOf("string");
+      if (applicationId === undefined)
+        throw new Error("Expected the submitted Application id.");
 
       const [
         applications,
@@ -698,6 +700,123 @@ describe.sequential(
           },
         }),
       ).resolves.toBe(2);
+
+      const immutableSnapshotBeforeSourceChanges =
+        await client().applicationSubmissionSnapshot.findUniqueOrThrow({
+          where: { applicationId },
+        });
+      const [
+        originalCandidateProfile,
+        originalCandidateUser,
+        originalCompany,
+        originalRevision,
+        originalJobPointers,
+      ] = await Promise.all([
+        client().candidateProfile.findUniqueOrThrow({
+          where: { id: IDS.candidateProfile },
+          select: { firstName: true, lastName: true },
+        }),
+        client().user.findUniqueOrThrow({
+          where: { id: IDS.candidateUser },
+          select: {
+            email: true,
+            emailNormalized: true,
+            name: true,
+          },
+        }),
+        client().company.findUniqueOrThrow({
+          where: { id: IDS.company },
+          select: { name: true },
+        }),
+        client().jobRevision.findUniqueOrThrow({
+          where: { id: IDS.revision },
+        }),
+        client().job.findUniqueOrThrow({
+          where: { id: IDS.job },
+          select: {
+            currentRevisionId: true,
+            publishedRevisionId: true,
+          },
+        }),
+      ]);
+      const successorRevisionId = randomUUID();
+      try {
+        await Promise.all([
+          client().candidateProfile.update({
+            where: { id: IDS.candidateProfile },
+            data: {
+              firstName: "Nachträglich",
+              lastName: "Geändert",
+            },
+          }),
+          client().user.update({
+            where: { id: IDS.candidateUser },
+            data: {
+              email: "changed-after-submit@example.test",
+              emailNormalized: "changed-after-submit@example.test",
+              name: "Nachträglich Geändert",
+            },
+          }),
+          client().company.update({
+            where: { id: IDS.company },
+            data: { name: "Nachträglich umbenannte Firma AG" },
+          }),
+        ]);
+        await client().jobRevision.create({
+          data: {
+            ...originalRevision,
+            id: successorRevisionId,
+            revisionNumber: originalRevision.revisionNumber + 1,
+            title: "Nachträglich geänderter Stellentitel",
+            applicationContactKind: "APPLY_URL",
+            applicationContactValue:
+              "https://changed-after-submit.example/apply",
+            responseTargetDays: 30,
+            applicationEffort: "LONG",
+            requiredDocumentKinds: ["CV", "COVER_LETTER"],
+            contentChecksum: createHash("sha256")
+              .update("phase09-successor-after-submit")
+              .digest("hex"),
+            submittedAt: null,
+            approvedAt: null,
+            rejectedAt: null,
+          },
+        });
+        await client().job.update({
+          where: { id: IDS.job },
+          data: {
+            currentRevisionId: successorRevisionId,
+          },
+        });
+
+        await expect(
+          client().applicationSubmissionSnapshot.findUniqueOrThrow({
+            where: { applicationId },
+          }),
+        ).resolves.toEqual(immutableSnapshotBeforeSourceChanges);
+      } finally {
+        await Promise.all([
+          client().candidateProfile.update({
+            where: { id: IDS.candidateProfile },
+            data: originalCandidateProfile,
+          }),
+          client().user.update({
+            where: { id: IDS.candidateUser },
+            data: originalCandidateUser,
+          }),
+          client().company.update({
+            where: { id: IDS.company },
+            data: originalCompany,
+          }),
+          client().job.update({
+            where: { id: IDS.job },
+            data: originalJobPointers,
+          }),
+        ]);
+        await client().jobRevision.deleteMany({
+          where: { id: successorRevisionId },
+        });
+      }
 
       const submittedDocument =
         await client().applicationSubmissionDocument.findFirstOrThrow({

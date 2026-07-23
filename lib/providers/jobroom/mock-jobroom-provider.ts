@@ -7,6 +7,7 @@ import {
 } from "./fixtures/occupation-codes-2026";
 import type {
   JobroomProvider,
+  JobroomReasonCode,
   JobroomReportingResult,
   ReportingObligationCheckResult,
 } from "./jobroom-provider";
@@ -43,20 +44,6 @@ const DEFAULT_RESPONSE_METADATA = Object.freeze({
   disclaimer: OCCUPATION_CODES_2026_FIXTURE.disclaimer,
 });
 
-export type JobroomReasonCode =
-  | "REPORTING_REQUIRED"
-  | "REPORTING_NOT_REQUIRED"
-  | "SOURCE_RESULT_UNKNOWN"
-  | "MISSING_OCCUPATION_CODE"
-  | "OCCUPATION_CODE_NOT_FOUND"
-  | "AMBIGUOUS_OCCUPATION_CODE"
-  | "STALE_DATASET"
-  | "STALE_OCCUPATION_CODE"
-  | "UNSUPPORTED_CANTON"
-  | "INVALID_INPUT"
-  | "INVALID_FIXTURE_DATA"
-  | "UNSUPPORTED_SOURCE_RESULT";
-
 export interface MockJobroomProviderOptions {
   readonly fixture?: OccupationCodeDatasetFixture;
   readonly now?: () => Date;
@@ -86,6 +73,7 @@ export class MockJobroomProvider implements JobroomProvider {
 
   async checkReportingObligation(input: {
     occupationCodeId?: string;
+    occupationCode?: string;
     cantonCode?: string;
   }): Promise<ReportingObligationCheckResult> {
     const fixture = validateFixture(this.#fixture);
@@ -111,8 +99,12 @@ export class MockJobroomProvider implements JobroomProvider {
       return this.#result(fixture, "UNKNOWN", "INVALID_INPUT");
     }
 
-    const { occupationCodeId, cantonCode } = validatedInput;
-    if (!occupationCodeId) {
+    const {
+      occupationCodeId,
+      occupationCode: occupationCodeValue,
+      cantonCode,
+    } = validatedInput;
+    if (!occupationCodeId && !occupationCodeValue) {
       return this.#result(fixture, "UNKNOWN", "MISSING_OCCUPATION_CODE");
     }
 
@@ -129,7 +121,10 @@ export class MockJobroomProvider implements JobroomProvider {
     }
 
     const matches = fixture.occupationCodes.filter(
-      (occupationCode) => occupationCode.id === occupationCodeId,
+      (candidate) =>
+        occupationCodeId !== undefined
+          ? candidate.id === occupationCodeId
+          : candidate.code === occupationCodeValue,
     );
     if (matches.length === 0) {
       return this.#result(fixture, "UNKNOWN", "OCCUPATION_CODE_NOT_FOUND");
@@ -507,6 +502,7 @@ function isSupportedCanton(value: string) {
 
 interface ValidatedCheckInput {
   readonly occupationCodeId: string | undefined;
+  readonly occupationCode: string | undefined;
   readonly cantonCode: string | undefined;
 }
 
@@ -522,11 +518,13 @@ function validateCheckInput(input: unknown): ValidatedCheckInput | null {
 
     const keys = Reflect.ownKeys(input);
     if (
-      keys.length > 2 ||
+      keys.length > 3 ||
       keys.some(
         (key) =>
           typeof key !== "string" ||
-          (key !== "occupationCodeId" && key !== "cantonCode"),
+          (key !== "occupationCodeId" &&
+            key !== "occupationCode" &&
+            key !== "cantonCode"),
       )
     ) {
       return null;
@@ -538,9 +536,11 @@ function validateCheckInput(input: unknown): ValidatedCheckInput | null {
     }
 
     const occupationCodeIdValue = descriptors.occupationCodeId?.value;
+    const occupationCodeValue = descriptors.occupationCode?.value;
     const cantonCodeValue = descriptors.cantonCode?.value;
     if (
       occupationCodeIdValue !== undefined && typeof occupationCodeIdValue !== "string" ||
+      occupationCodeValue !== undefined && typeof occupationCodeValue !== "string" ||
       cantonCodeValue !== undefined && typeof cantonCodeValue !== "string"
     ) {
       return null;
@@ -557,6 +557,18 @@ function validateCheckInput(input: unknown): ValidatedCheckInput | null {
       return null;
     }
 
+    const rawOccupationCode = (occupationCodeValue as string | undefined)?.trim();
+    if (
+      rawOccupationCode &&
+      (rawOccupationCode.length > 32 ||
+        !/^[A-Z0-9][A-Z0-9._-]*$/iu.test(rawOccupationCode))
+    ) {
+      return null;
+    }
+    if (rawOccupationCodeId && rawOccupationCode) {
+      return null;
+    }
+
     const rawCantonCode = (cantonCodeValue as string | undefined)?.trim();
     if (
       rawCantonCode !== undefined &&
@@ -567,6 +579,7 @@ function validateCheckInput(input: unknown): ValidatedCheckInput | null {
 
     return Object.freeze({
       occupationCodeId: rawOccupationCodeId?.toLocaleLowerCase("de-CH"),
+      occupationCode: rawOccupationCode?.toLocaleUpperCase("de-CH"),
       cantonCode: rawCantonCode?.toLocaleUpperCase("de-CH"),
     });
   } catch {

@@ -30,6 +30,8 @@ import {
   type JobWizardStepTwo,
 } from "@/lib/employer/jobs";
 import { createJobSlug } from "@/lib/jobs/slug";
+import { MockEmailProvider } from "@/lib/providers/email";
+import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
 import { MockJobroomProvider } from "@/lib/providers/jobroom";
 import {
   JOBROOM_FIXTURE_IDS,
@@ -69,6 +71,7 @@ const IDS = {
   closeJob: id(23),
   closeRevision: id(24),
   admin: id(25),
+  occupation: id(26),
 };
 const NOW = new Date("2026-07-21T12:00:00.000Z");
 const recruiterActor: EmployerJobActor = {
@@ -226,7 +229,7 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
     })).resolves.toEqual({ slug: stableSlug });
   });
 
-  it("persists every wizard step, reporting evidence and one concurrent submission", async () => {
+  it("persists every wizard step, resolves an internal occupation ID and submits once", async () => {
     const client = getDatabase();
     const dependencies = ownerDependencies(client, id(101));
     const created = requireSuccess(
@@ -299,8 +302,9 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
 
     const reportingInput = {
       ...jobEnvelope(savedStepThree.value, "phase10-reporting-check"),
-      occupationCodeId: JOBROOM_FIXTURE_IDS.notRequired,
+      occupationCodeId: IDS.occupation,
     };
+    expect(IDS.occupation).not.toBe(JOBROOM_FIXTURE_IDS.notRequired);
     const reportingDependencies = {
       ...dependencies,
       jobroomProvider: new MockJobroomProvider({ now: () => NOW }),
@@ -395,6 +399,7 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
           select: {
             jobRevisionId: true,
             result: true,
+            reasonSnapshot: true,
             disclaimerSnapshot: true,
             sourceSnapshot: true,
             datasetVersionSnapshot: true,
@@ -450,6 +455,8 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
     expect(reportingCheck).toEqual({
       jobRevisionId: created.value.revisionId,
       result: "NOT_REQUIRED",
+      reasonSnapshot:
+        "Die gewählte Berufsart ist im aktuellen Mock-Datensatz nicht als meldepflichtig klassifiziert.",
       disclaimerSnapshot: JOBROOM_LEGAL_DISCLAIMER,
       sourceSnapshot: OCCUPATION_CODES_2026_FIXTURE.source,
       datasetVersionSnapshot: OCCUPATION_CODES_2026_FIXTURE.datasetVersion,
@@ -539,7 +546,7 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
       await runEmployerJobReportingCheck(
         {
           ...jobEnvelope(editedAfterChanges.value, id(207)),
-          occupationCodeId: JOBROOM_FIXTURE_IDS.notRequired,
+          occupationCodeId: IDS.occupation,
         },
         {
           ...reportingDependencies,
@@ -583,6 +590,7 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
         correlationId: id(214),
         now: new Date(NOW.getTime() + 6_000),
       },
+      new MockEmailProvider(new PrismaEmailLogRepository(client)),
     );
     if (!rejected.ok) {
       throw new Error(`Admin rejection failed with ${rejected.code}.`);
@@ -600,6 +608,16 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
         { action: "JOB_REJECTED", targetType: "JOB" },
       ]),
     );
+    await expect(
+      client.emailLog.findFirstOrThrow({
+        where: { templateKey: "job_rejected" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { payload: true, status: true },
+      }),
+    ).resolves.toMatchObject({
+      payload: { subject: "Dein Stelleninserat benötigt Anpassungen" },
+      status: "MOCK_RECORDED",
+    });
   });
 
   it("serializes pause, unchanged reactivation and material-edit revision creation", async () => {
@@ -1071,7 +1089,7 @@ async function seed(client: DatabaseClient) {
   });
   await client.occupationCode.create({
     data: {
-      id: occupation.id,
+      id: IDS.occupation,
       occupationCodeVersionId: IDS.occupationVersion,
       code: occupation.code,
       label: occupation.label,

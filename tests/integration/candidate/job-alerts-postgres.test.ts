@@ -24,6 +24,7 @@ import {
   type JobAlertCommand,
 } from "@/lib/candidate/job-alert-policy";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
+import { RADAR_CONSENT_NOTICE_V1 } from "@/lib/privacy/radar-consent";
 import type { LocalMockMailboxCaptureInput } from "@/lib/providers/email/local-mock-mailbox-core";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
@@ -557,6 +558,187 @@ describe.sequential("PostgreSQL Phase-09 job-alert contract", () => {
         now: sameAt,
       }),
     ).resolves.toMatchObject({ status: "ACTIVE" });
+  });
+
+  it("globally revokes every active delivery while preserving account, onboarding and Radar consent", async () => {
+    const createdAt = new Date("2026-07-18T13:00:00.000Z");
+    const revokedAt = new Date(createdAt.getTime() + 10_000);
+    const user = await client().user.create({
+      data: {
+        email: "phase09-alert-global-revoke@example.test",
+        emailNormalized: "phase09-alert-global-revoke@example.test",
+        role: "CANDIDATE",
+        status: "ACTIVE",
+        dataProvenance: "TEST",
+      },
+    });
+    const profile = await client().candidateProfile.create({
+      data: {
+        userId: user.id,
+        cantonId: IDS.canton,
+      },
+    });
+    const radarConsent = await client().candidateConsent.create({
+      data: {
+        candidateProfileId: profile.id,
+        kind: RADAR_CONSENT_NOTICE_V1.kind,
+        granted: true,
+        noticeVersion: RADAR_CONSENT_NOTICE_V1.noticeVersion,
+        noticeHash: RADAR_CONSENT_NOTICE_V1.hash,
+        actorUserId: user.id,
+        effectiveAt: new Date(createdAt.getTime() - 1_000),
+        createdAt: new Date(createdAt.getTime() - 1_000),
+      },
+    });
+
+    const firstActive = await createJobAlert(command(), {
+      actorUserId: user.id,
+      database: client(),
+      now: createdAt,
+    });
+    const secondActive = await createJobAlert(
+      command({
+        deliveryConsentAccepted: false,
+        frequency: "WEEKLY",
+        query: { ...query, keyword: "Pflege zweite Zustellung" },
+      }),
+      {
+        actorUserId: user.id,
+        database: client(),
+        now: new Date(createdAt.getTime() + 1_000),
+      },
+    );
+    const alreadyPaused = await createJobAlert(
+      command({
+        active: false,
+        deliveryConsentAccepted: false,
+        query: { ...query, keyword: "Pflege pausiert" },
+      }),
+      {
+        actorUserId: user.id,
+        database: client(),
+        now: new Date(createdAt.getTime() + 2_000),
+      },
+    );
+    const pausedBefore = await client().jobAlert.findUniqueOrThrow({
+      where: { id: alreadyPaused.id },
+      select: { status: true, updatedAt: true },
+    });
+    const emailCountBefore = await client().emailLog.count({
+      where: { recipient: user.email },
+    });
+
+    await expect(
+      revokeJobAlertDeliveryConsentGlobally({
+        actorUserId: user.id,
+        database: client(),
+        now: revokedAt,
+      }),
+    ).resolves.toEqual({ granted: false, pausedAlertCount: 2 });
+
+    const alertIds = [firstActive.id, secondActive.id, alreadyPaused.id];
+    const [
+      alertsAfterRevoke,
+      accountAfterRevoke,
+      profileAfterRevoke,
+      radarConsentsAfterRevoke,
+      deliveryConsentsAfterRevoke,
+      globalPauseEvents,
+    ] = await Promise.all([
+      client().jobAlert.findMany({
+        where: { id: { in: alertIds } },
+        orderBy: { id: "asc" },
+        select: { id: true, status: true, updatedAt: true },
+      }),
+      client().user.findUniqueOrThrow({
+        where: { id: user.id },
+        select: { status: true },
+      }),
+      client().candidateProfile.findUniqueOrThrow({
+        where: { id: profile.id },
+        select: { onboardingStatus: true },
+      }),
+      client().candidateConsent.findMany({
+        where: { candidateProfileId: profile.id },
+        orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }],
+      }),
+      client().userConsentEvent.findMany({
+        where: { userId: user.id, kind: "JOB_ALERT_DELIVERY" },
+        orderBy: [{ effectiveAt: "asc" }, { createdAt: "asc" }],
+        select: { granted: true },
+      }),
+      client().jobAlertEvent.findMany({
+        where: {
+          jobAlertId: { in: alertIds },
+          kind: "PAUSED",
+          reasonCode: "GLOBAL_DELIVERY_CONSENT_REVOKED",
+        },
+        orderBy: { jobAlertId: "asc" },
+        select: { jobAlertId: true },
+      }),
+    ]);
+    expect(alertsAfterRevoke.map(({ status }) => status)).toEqual([
+      "PAUSED",
+      "PAUSED",
+      "PAUSED",
+    ]);
+    expect(
+      alertsAfterRevoke.find(({ id }) => id === alreadyPaused.id)?.updatedAt,
+    ).toEqual(pausedBefore.updatedAt);
+    expect(globalPauseEvents.map(({ jobAlertId }) => jobAlertId).sort()).toEqual(
+      [firstActive.id, secondActive.id].sort(),
+    );
+    expect(accountAfterRevoke).toEqual({ status: "ACTIVE" });
+    expect(profileAfterRevoke).toEqual({ onboardingStatus: "DRAFT" });
+    expect(radarConsentsAfterRevoke).toEqual([radarConsent]);
+    expect(deliveryConsentsAfterRevoke).toEqual([
+      { granted: true },
+      { granted: false },
+    ]);
+
+    for (const alertId of alertIds) {
+      await expect(
+        runJobAlertDigestMock({
+          alertId,
+          appUrl: "http://127.0.0.1:3000",
+          candidateUserId: user.id,
+          database: client(),
+          environment: "non-production",
+          mailbox,
+          now: DATES.firstRun,
+        }),
+      ).resolves.toEqual({ completed: [], skipped: 0 });
+    }
+    await expect(
+      Promise.all([
+        client().jobAlertDigest.count({
+          where: { jobAlertId: { in: alertIds } },
+        }),
+        client().emailLog.count({ where: { recipient: user.email } }),
+      ]),
+    ).resolves.toEqual([0, emailCountBefore]);
+
+    await grantJobAlertDeliveryConsent({
+      actorUserId: user.id,
+      database: client(),
+      now: new Date(revokedAt.getTime() + 1_000),
+    });
+    await expect(
+      client().jobAlert.findMany({
+        where: { id: { in: alertIds } },
+        orderBy: { id: "asc" },
+        select: { status: true },
+      }),
+    ).resolves.toEqual([
+      { status: "PAUSED" },
+      { status: "PAUSED" },
+      { status: "PAUSED" },
+    ]);
+    await expect(
+      client().candidateConsent.findUniqueOrThrow({
+        where: { id: radarConsent.id },
+      }),
+    ).resolves.toEqual(radarConsent);
   });
 
   it("uses the next half-open window, excludes repeats and accepts an older valid token", async () => {

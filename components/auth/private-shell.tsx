@@ -65,6 +65,7 @@ export function PrivateShell({
           <div className="grid min-w-0 gap-7 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start">
             <nav
               aria-label={`${area} Navigation`}
+              data-e2e-horizontal-scroll="true"
               className="flex gap-2 overflow-x-auto pb-2 lg:sticky lg:top-6 lg:grid lg:overflow-visible lg:rounded-xl lg:border lg:bg-card lg:p-3"
             >
               <NavigationLinks navigation={navigation} vertical />
@@ -81,6 +82,7 @@ export function PrivateShell({
           <>
             <nav
               aria-label={`${area} Navigation`}
+              data-e2e-horizontal-scroll="true"
               className="mb-8 flex gap-2 overflow-x-auto pb-2"
             >
               <NavigationLinks navigation={navigation} />
