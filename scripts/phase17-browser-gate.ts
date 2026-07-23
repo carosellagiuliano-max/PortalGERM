@@ -353,10 +353,21 @@ function packageVersion(path: string) {
 }
 
 function npmVersion() {
-  const match = /npm\/([0-9.]+)/u.exec(
-    process.env.npm_config_user_agent ?? "",
-  );
-  return match?.[1] ?? "unknown";
+  const npmCli = process.env.npm_execpath;
+  if (npmCli === undefined || !existsSync(npmCli)) {
+    throw new Error(
+      "Phase 17 browser E2E must be launched through npm so the actual npm CLI can be identified.",
+    );
+  }
+  const version = execFileSync(process.execPath, [npmCli, "--version"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    windowsHide: true,
+  }).trim();
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/u.test(version)) {
+    throw new Error("The active npm CLI returned an invalid version.");
+  }
+  return version;
 }
 
 function commitSha() {
