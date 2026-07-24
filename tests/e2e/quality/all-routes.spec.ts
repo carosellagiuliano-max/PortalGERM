@@ -18,6 +18,7 @@ import {
   expect,
   login,
   observePage,
+  phase17Database,
   test,
   type PageObservation,
 } from "@/tests/e2e/fixtures/phase17-test";
@@ -81,6 +82,7 @@ let actorCookies: ActorCookies | undefined;
 
 test.describe("Phase 18 exhaustive route quality", () => {
   test.beforeAll(async ({ browser }, testInfo) => {
+    await clearIsolatedLoginRateLimitBuckets();
     const baseURL = requiredLoopbackBaseUrl(testInfo);
     actorCookies = Object.freeze({
       candidate: await authenticateActor(
@@ -99,6 +101,10 @@ test.describe("Phase 18 exhaustive route quality", () => {
         DEMO_ACCOUNTS.admin,
       ),
     });
+  });
+
+  test.afterAll(async () => {
+    await clearIsolatedLoginRateLimitBuckets();
   });
 
   test(
@@ -327,6 +333,17 @@ function requiredLoopbackBaseUrl(testInfo: TestInfo) {
     throw new Error("All-routes quality permits only a loopback baseURL.");
   }
   return url;
+}
+
+async function clearIsolatedLoginRateLimitBuckets() {
+  const database = phase17Database();
+  try {
+    await database.rateLimitBucket.deleteMany({
+      where: { namespace: { startsWith: "v1:LOGIN:" } },
+    });
+  } finally {
+    await database.$disconnect();
+  }
 }
 
 function parseRouteInventory(value: unknown): readonly InventoryRoute[] {

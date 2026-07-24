@@ -25,10 +25,16 @@ export function JobReviewTable({ jobs }: Readonly<{ jobs: readonly JobReviewRow[
     return <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">Keine Jobs in dieser Queue.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div
+      className="overflow-x-auto rounded-lg border"
+      data-e2e-horizontal-scroll="true"
+      role="region"
+      aria-label="Job-Prüfungstabelle"
+      tabIndex={0}
+    >
       <table className="w-full min-w-[68rem] text-left text-sm">
         <thead className="bg-muted/60">
-          <tr><th className="p-3">Job</th><th className="p-3">Firma</th><th className="p-3">Status</th><th className="p-3">Score</th><th className="p-3">Boost</th><th className="p-3"><span className="sr-only">Öffnen</span></th></tr>
+          <tr><th className="p-3">Job</th><th className="p-3">Firma</th><th className="p-3">Status</th><th className="p-3">Score</th><th className="p-3">Boost</th><th className="sticky right-0 border-l bg-muted p-3"><span className="sr-only">Öffnen</span></th></tr>
         </thead>
         <tbody className="divide-y">
           {jobs.map((job) => {
@@ -56,7 +62,7 @@ export function JobReviewTable({ jobs }: Readonly<{ jobs: readonly JobReviewRow[
                     </div>
                   )}
                 </td>
-                <td className="p-3 text-right"><Link className="text-primary underline" href={`/admin/jobs/${job.id}`}>Prüfen</Link></td>
+                <td className="sticky right-0 border-l bg-background p-3 text-right shadow-[-6px_0_8px_-8px_rgba(15,23,42,0.35)]"><Link className="whitespace-nowrap text-primary underline" href={`/admin/jobs/${job.id}`}>Prüfen</Link></td>
               </tr>
             );
           })}
