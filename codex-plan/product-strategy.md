@@ -238,6 +238,32 @@ Eine Seite wird nur indexiert, wenn sie (a) ausreichend aktuelle reale Stellen, 
 
 \* Preis- und Rabattannahmen, keine bestätigte Zahlungsbereitschaft. Die Jahreswerte sind interne P1-Forschung und im P0 weder öffentlich noch kaufbar. Alle Rechnungsbeträge in Rappen; MWST-Logik konfigurierbar. Der aktuelle Schweizer Normalsatz beträgt 8,1 % laut [ESTV](https://www.estv.admin.ch/de/mwst-steuersaetze-schweiz), doch Steuerpflicht und konkrete Behandlung benötigen fachliche Prüfung.
 
+### Packaging- und Zahlungsvalidierung
+
+`CHECKOUT_COMPLETED` bedeutet im aktuellen System ausschliesslich, dass ein
+lokaler Mock-Auftrag bestätigt wurde. Es belegt keine Karten-/Bankautorisierung,
+keine bezahlte Conversion und keine Zahlungsbereitschaft. Auch Stripe-Testmode
+wäre nur technische Evidence. Vor einer Preisfreigabe werden Monats-Workflow,
+30-/45-/90-Tage-Hiring-Sprint und kleiner Retainer plus Credits als klar
+getrennte Angebote mit echtem Geld und vorab definierter Stichprobe/
+Erfolgsschwelle getestet. Ein rechtlich und steuerlich freigegebener manueller
+Rechnungs-Pilot ist dafür zulässig; öffentlicher Self-Service braucht später
+einen eigenen Real-Payment-ADR.
+
+Der Vergleich mit einem reichweitenstarken Einzelinserat ist nicht
+einheitengleich. jobs.ch wirbt aktuell mit kostenlosem Start und optionalen
+Werbeprodukten ab CHF 290; andere Einzelangebote können deutlich höher liegen.
+Das macht CHF 149 weder automatisch richtig noch „massiv unterpreist“. Laufzeit,
+Reichweite, aktive Slots, Workflow, Talentzugang und erzielte Resultate müssen
+normalisiert werden. Quelle:
+[jobs.ch für Arbeitgeber](https://b2b.jobs.ch/de-arbeitgeber-stelle-job-inserieren).
+
+Für gelegentlich einstellende KMU ist `pause → reactivation` ein eigener
+Lifecycle und nicht automatisch gescheiterte dauerhafte Retention. Kohorten
+trennen deshalb Renewal, bewusste Pause, Reaktivierung und endgültigen Churn.
+Die verbindlichen offenen Gates stehen in
+[`commercial-go-live-gates.md`](./commercial-go-live-gates.md).
+
 ### Einmalige Produkte und Priorität
 
 | Produkt | Priorität | Begründung / Regel |
@@ -290,6 +316,31 @@ Eine Seite wird nur indexiert, wenn sie (a) ausreichend aktuelle reale Stellen, 
 
 Das Basis-Szenario läge bei angenommenen fixen Personal-, Sales-, Rechts- und Betriebskosten von CHF 42'000, direkten Arbeitgeberkosten von CHF 13'200 und Infrastruktur/Tools von CHF 7'000 gegenüber CHF 61'500 Monatsumsatz bei rund **CHF −700** operativem Ergebnis, also nahe, aber noch unter Break-even. Das ist eine **Rechenannahme**, kein Finanzversprechen. Vor Skalierung gelten als Guardrails: LTV/CAC > 3, CAC-Payback < 12 Monate, monatlicher Logo-Churn < 4 %, positive Deckung je Plan und Supportaufwand < 1 Stunde je zahlendem Arbeitgeber/Monat.
 
+### Cashflow-/Runway-Sensitivität
+
+Die Tabelle ist ein Endpunkt, kein Monat-1–18-Cashflow. Unter der
+illustrativen Annahme einer linearen Rampe von null vor Monat 1 auf den
+Basis-Endpunkt in Monat 18, CHF 42'000 Fixkosten ab Monat 1, linearen direkten
+Kosten und Tools von CHF 3'000 auf CHF 7'000 entsteht rund **CHF 387'000**
+kumuliertes Defizit. Bei CHF 7'000 Tools ab Monat 1 sind es rund
+**CHF 423'000**. Falls `150 × CHF 1'100 = CHF 165'000` CAC zusätzlich und nicht
+bereits im Sales-Fixblock bezahlt wird, steigt die Sensitivität auf rund
+**CHF 552'000–588'000**. Damit sind CHF 400–600k plausibel, aber ohne
+Hiring-/Zahlungszeitplan keine Prognose.
+
+Bei der Basisrelation von 600 aktiven zu 150 zahlenden Arbeitgebern entstehen
+CHF 88 direkte Kosten je Zahlendem. Recurring-only Break-even liegt damit bei
+ungefähr `CHF 49'000 ÷ (330−88) = 203` Zahlenden. Wird der Einmalumsatz
+proportional mit CHF 80 je Zahlendem angesetzt, sind es ungefähr
+`CHF 49'000 ÷ (330+80−88) = 153`. Ein Break-even von 42–90 Kunden ist ohne
+explizit kleineren Fixkostenblock nicht ableitbar.
+
+Vor Hiring oder bezahlter Akquise ist ein monatliches 18-/24-Monatsmodell
+Pflicht: Opening Cash, Hiring/Fixkosten, Paid-/Free-Cohorts, ARPA,
+Einmalumsatz, VAT/Payment Fees, CAC-Zahlungszeitpunkt, Support,
+Infrastruktur, Churn/Pause/Reaktivierung, kumulierter Burn, Peak Funding und
+Downside. CAC und Sales-Personal dürfen nicht doppelt gezählt werden.
+
 ## 12. KPI-System und Messplan
 
 ### North Star
@@ -317,6 +368,24 @@ Events enthalten pseudonyme Actor-/Tenant-IDs, Zweck, Zeit und minimal notwendig
 - Die Stellenmeldepflicht-Liste ändert jährlich. 2026 gilt laut arbeit.swiss der Schwellenwert von 5 % und die offizielle Prüfung/RAV-Beurteilung bleibt massgeblich. Der MVP speichert deshalb eine versionierte Mock-Liste, Jahresgültigkeit, Ergebnisgrund und den Link zum offiziellen Check. Quelle: [arbeit.swiss, Stellenmeldepflicht 2026](https://www.arbeit.swiss/de/arbeitgebende/stellenmeldepflicht-2026).
 - Match-Score ist im MVP ein erklärbares Kandidatenwerkzeug. Arbeitgeberseitige Rangfolge oder automatische Entscheidungen sind P1 und benötigen Fairness-, Rechts- und Bias-Prüfung.
 - Besonders schützenswerte oder potenziell diskriminierende Merkmale sind keine Score-Eingaben.
+- Das AVG/AVV-Gate gilt nicht erst für eine Success Fee. Ein regelmässiger,
+  entgeltlicher Online-Stellenmarkt und insbesondere Radar-Matching,
+  Contact Request und Identitätsfreigabe können bewilligungspflichtige
+  Arbeitsvermittlung sein. Vor paid LIVE braucht der konkrete Daten-/Kontakt-/
+  Vertrags-/Geldfluss eine schriftliche Beurteilung des Sitzkantons/
+  Schweizer Counsel und gegebenenfalls eine kantonale sowie bei
+  grenzüberschreitender Tätigkeit eidgenössische Bewilligung. Quellen:
+  [SECO](https://www.seco.admin.ch/de/private-arbeitsvermittlung-und-personalverleih),
+  [AVG](https://www.fedlex.admin.ch/eli/cc/1991/392_392_392/de) und
+  [AVV](https://www.fedlex.admin.ch/eli/cc/1991/408_408_408/de).
+- Der aktuelle Salary Radar nutzt ausschliesslich einen klar fiktiven
+  Demo-Datensatz und liefert in Staging/Production keine Werte. Die Seite
+  bleibt dort `noindex` und ausserhalb der Sitemap. Ein möglicher LIVE-Snapshot
+  kommt aus der offiziellen
+  [BFS/LSE-PxWeb-API](https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0304010000_205/px-x-0304010000_205.px)
+  mit CH-ISCO-19 und **Grossregion**, nicht erfundener Kantonsgenauigkeit;
+  Mapping, Unsicherheit, Attribution, Review und Refresh müssen zuerst
+  versioniert freigegeben werden.
 - Rechtstexte, Aufbewahrungsfristen, Auftragsbearbeiter, internationale Bekanntgaben, Verifizierungsmethoden, Refunds und reale Zahlungsprozesse bleiben vor Produktionsbetrieb offene Fachprüfungen.
 
 ## 14. Priorisierte Produktentscheidungen
@@ -333,15 +402,24 @@ Events enthalten pseudonyme Actor-/Tenant-IDs, Zweck, Zeit und minimal notwendig
 
 ### P1 — überzeugender Marktstart
 
+- invite-only Design-Partner-Angebote mit echtem, transparentem Geldfluss nach
+  AVG-/Tax-/Vertragsfreigabe; Mock-Abschlüsse zählen nicht als Paid Conversion;
 - Business/Enterprise-Verkaufsworkflow, Jahrespläne, zusätzliche Teamrollen;
 - Agenturmandate, Multi-Client-Kontexte und erweiterte Delegation; **P0** umfasst bereits robuste interne Company-Einladung/Annahme/Entfernung/Rollenwechsel sowie job-spezifische Assignment-Erteilung/Widerruf mit sofortiger Wirkung;
 - Growth-Landingpages nur nach Liquiditätsgate, missbrauchsgeschützte Referral-Attribution, Content-Workflow;
 - erweiterte Funnelanalytics, Retention-/Churn-Signale, betreutes Import-Setup;
-- echte Hintergrundjobs und Benachrichtigungs-Outbox.
+- echte Hintergrundjobs und Benachrichtigungs-Outbox; ein kontrollierter
+  Concierge-Pilot darf nur mit benanntem Operator/Runbook explizite Commands
+  verwenden, für unbeaufsichtigten öffentlichen Self-Service ist der Worker
+  ein harter Blocker;
+- Talent Radar als Wedge über reale Opt-in-, Cohort-, Contact-, Accept-,
+  Reveal-, Gesprächs- und Paid-Use-Kohorten validieren; „Moat“ erst nach
+  belegtem Netzwerkeffekt.
 
 ### P2 / später
 
-- reale Provider, ATS/API/SSO, vollständige Mehrsprachigkeit, ausgefeilte Volltextsuche;
+- skalierte reale Provider nach ihren separaten ADRs, ATS/API/SSO,
+  vollständige Mehrsprachigkeit, ausgefeilte Volltextsuche;
 - employerseitige Match-Rangfolge nach Prüfung, mobile Apps, Refund-Automation;
 - Success Fee ausschließlich nach Rechts- und Geschäftsmodellprüfung.
 

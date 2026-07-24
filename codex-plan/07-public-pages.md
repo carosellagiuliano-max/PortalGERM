@@ -138,6 +138,14 @@ Live-Marktaktivität noch als indexierbarer Inhalt ausgegeben.
 - [x] Der fiktive Phase-05-Datensatz ist im Demo-Kontext deutlich benannt und
   wird in Production vollständig fail-closed ausgeschlossen.
 
+> **Commercial-/Daten-Follow-up 24. Juli 2026:** Weil noch kein fachlich
+> freigegebener LIVE-Datensatz existiert, zeigt die Route in Staging/Production
+> nun einen expliziten Nicht-verfügbar-Zustand, bleibt `noindex` und wird nicht
+> in die Sitemap aufgenommen. Eine spätere Freigabe benötigt einen
+> versionierten BFS/LSE- oder anderen rechtmässigen Snapshot mit ehrlichem
+> Grossregions-/Berufsgruppenmapping; siehe
+> [`commercial-go-live-gates.md`](./commercial-go-live-gates.md).
+
 ### `/guide` und `/guide/[slug]`
 
 - [x] Liste und Detail lesen nur die aktuelle reviewed/published Revision;

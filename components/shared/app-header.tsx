@@ -4,6 +4,7 @@ import { LogInIcon } from "lucide-react";
 import { BrandLink } from "@/components/layout/brand-link";
 import { MobilePublicNav } from "@/components/layout/mobile-public-nav";
 import { buttonVariants } from "@/components/ui/button";
+import { getPublicDataContext } from "@/lib/public/environment";
 
 const navigation = [
   { href: "/jobs", label: "Jobs" },
@@ -15,13 +16,17 @@ const navigation = [
 ] as const;
 
 export function AppHeader() {
+  const visibleNavigation = getPublicDataContext().liveOnly
+    ? navigation.filter(({ href }) => href !== "/salary-radar")
+    : navigation;
+
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
       <div className="page-shell flex min-h-16 items-center justify-between gap-4 py-2">
         <BrandLink />
 
         <nav aria-label="Hauptnavigation" className="hidden items-center gap-0.5 xl:flex">
-          {navigation.map((item) => (
+          {visibleNavigation.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -51,7 +56,7 @@ export function AppHeader() {
           </Link>
         </nav>
 
-        <MobilePublicNav navigation={navigation} />
+        <MobilePublicNav navigation={visibleNavigation} />
       </div>
     </header>
   );

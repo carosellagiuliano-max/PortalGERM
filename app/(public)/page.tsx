@@ -18,6 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { listPublicGuides } from "@/lib/content/public-guides";
 import { listPublicCompanies } from "@/lib/companies/public-read-model";
 import { getPublicCatalog, listHomepageJobs, listPublicClusterLinks, loadPublicOpenJobCounts } from "@/lib/jobs/public-read-model";
+import { getPublicDataContext } from "@/lib/public/environment";
 import { listIndexableClusterLandings } from "@/lib/seo/cluster-indexability";
 
 export const metadata: Metadata = {
@@ -30,6 +31,7 @@ export const runtime = "nodejs";
 
 export default async function HomePage() {
   const now = new Date();
+  const salaryRadarAvailable = !getPublicDataContext().liveOnly;
   const [jobs, discoveredClusters, indexableLandings, guides, companies, catalog] = await Promise.all([
     listHomepageJobs({ limit: 6, now }),
     listPublicClusterLinks({ limit: 8, now }),
@@ -95,7 +97,9 @@ export default async function HomePage() {
       <section className="border-y bg-secondary/25 py-10" aria-label="Transparenzmerkmale">
         <div className="page-shell grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Highlight title="Fair-Job-Score" text="Erklärbare Transparenzfaktoren" />
-          <Highlight title="Lohn-Radar" text="Geprüfte Bänder statt Scheingenauigkeit" />
+          {salaryRadarAvailable ? (
+            <Highlight title="Lohn-Radar" text="Geprüfte Bänder statt Scheingenauigkeit" />
+          ) : null}
           <Highlight title="Antwortsignal" text="Nur ab belastbarer Stichprobe" />
           <Highlight title="Direkter Kontakt" text="Sicher geprüfter externer Bewerbungsweg" />
           <Highlight title="Privater SwissJobPass" text="Keine automatische Talentpool-Freigabe" />
@@ -133,7 +137,9 @@ export default async function HomePage() {
         <h2 id="explore-title" className="mt-3 text-3xl font-semibold tracking-tight">Entdecke den Arbeitsmarkt nach deinen Kriterien.</h2>
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           <FeatureCard icon={Building2Icon} title="Unternehmen" description="Entdecke aktive Firmenprofile und ihre öffentlich verfügbaren Stellen." href="/companies" action="Firmen ansehen" />
-          <FeatureCard icon={BarChart3Icon} title="Lohnradar" description="Ordne marktübliche Lohnbänder mit nachvollziehbarer Datengrundlage ein." href="/salary-radar" action="Lohn einschätzen" />
+          {salaryRadarAvailable ? (
+            <FeatureCard icon={BarChart3Icon} title="Lohnradar" description="Ordne marktübliche Lohnbänder mit nachvollziehbarer Datengrundlage ein." href="/salary-radar" action="Lohn einschätzen" />
+          ) : null}
           <FeatureCard icon={BookOpenTextIcon} title="Ratgeber" description="Kompakte, redaktionell geprüfte Orientierung rund um Bewerbung und Arbeit." href="/guide" action="Ratgeber lesen" />
         </div>
         {clusters.length > 0 ? (

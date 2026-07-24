@@ -5,20 +5,46 @@ import { getPublicCatalog } from "@/lib/jobs/public-read-model";
 import { getPublicDataContext } from "@/lib/public/environment";
 
 export function generateMetadata(): Metadata {
-  const indexable = getPublicDataContext().publicIndexingAllowed;
+  const liveOnly = getPublicDataContext().liveOnly;
   return {
-    title: "Lohn-Radar",
-    description: "Nachvollziehbare Schweizer Lohnbänder nach Kategorie, Kanton, Seniorität und Pensum einordnen.",
+    title: liveOnly ? "Lohn-Radar in Vorbereitung" : "Lohn-Radar",
+    description: liveOnly
+      ? "Der Schweizer Lohn-Radar bleibt bis zur fachlichen Freigabe einer geeigneten LIVE-Datenquelle ohne Werte."
+      : "Nachvollziehbare Demo-Lohnbänder nach Kategorie, Kanton, Seniorität und Pensum einordnen.",
     alternates: { canonical: "/salary-radar" },
-    robots: indexable
-      ? { index: true, follow: true }
-      : { index: false, follow: false, noarchive: true, nosnippet: true },
+    robots: {
+      index: false,
+      follow: true,
+      noarchive: true,
+      nosnippet: true,
+    },
   };
 }
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function SalaryRadarPage() {
+  const dataContext = getPublicDataContext();
+  if (dataContext.liveOnly) {
+    return (
+      <div className="page-shell py-12 sm:py-16">
+        <p className="eyebrow">Lohn-Radar</p>
+        <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+          Schweizer Lohnorientierung ist in Vorbereitung.
+        </h1>
+        <div
+          className="mt-6 max-w-3xl rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-950"
+          role="status"
+        >
+          Für den LIVE-Betrieb ist noch kein fachlich freigegebener,
+          versionierter Lohndatensatz aktiv. Bis Quelle, Berufsgruppen- und
+          Regionsmapping, Datenstand sowie Methodik geprüft sind, zeigen wir
+          bewusst keine Lohnwerte.
+        </div>
+      </div>
+    );
+  }
+
   const catalog = await getPublicCatalog();
   return (
     <div className="page-shell py-12 sm:py-16">

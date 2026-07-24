@@ -102,7 +102,7 @@ export const METRIC_DEFINITIONS_V1 = Object.freeze({
     window: "PERIOD", denominatorSubject: "REQUEST", requiredLiveProvenance: ["ACTOR", "COMPANY"],
   }),
   CHECKOUT_FUNNEL: metricDefinition({
-    version: "v1", owner: "BILLING", formula: "completed orders per started order",
+    version: "v1", owner: "BILLING", formula: "mock-confirmed orders per started order; not paid conversion",
     window: "EVENT", denominatorSubject: "ORDER", requiredLiveProvenance: ["COMPANY"],
   }),
   COMMERCIAL_INTENT: metricDefinition({

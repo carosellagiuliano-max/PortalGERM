@@ -186,12 +186,20 @@ HTML-Rechnungen sind keine PDFs; Success Fee bleibt deaktiviert.
   Datenbanken;
 - Staging-Smoke sowie reale HTTPS-/Ingress-/HSTS-Wirkung;
 - Legal-, Privacy- und Tax-Freigaben;
+- flowspezifische AVG/AVV-Beurteilung und gegebenenfalls kantonale/
+  eidgenössische Vermittlungsbewilligung;
+- echte bezahlte KMU-Marktvalidierung; Mock-Checkout ist kein
+  Zahlungsbereitschaftsnachweis;
+- monatliches Cashflow-/Runway-Modell vor Hiring oder bezahlter Akquise;
+- fachlich freigegebener LIVE-Lohndatensatz; der aktuelle Salary Radar bleibt
+  in Staging/Production ohne Werte, `noindex` und ausserhalb der Sitemap;
 - reale Provider samt DPA, Webhooks, Retry, Monitoring und Fallback;
 - produktiver verschlüsselter Backup-Lifecycle `30 daily + 12 monthly`;
 - Business-/Owner-Freigabe von RPO/RTO;
 - benannter Incident Owner, On-call/Pager und organisatorischer Drill;
+- autonomer Worker/Outbox mit Retry, Dead-Letter, Monitoring und
+  Failure-Recovery vor unbeaufsichtigtem öffentlichem Self-Service;
 - reale Export-, Lösch- und Retention-Prozesse;
-- autonomer Worker für Renewal, Alerts und fällige Projektionen;
 - das separat gegatete P1-Paket `REQ-REC-002`.
 
 Diese offenen Punkte blockieren Pilot- und Produktionsfreigabe, nicht den

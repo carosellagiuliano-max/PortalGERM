@@ -23,7 +23,6 @@ export const PUBLIC_SITEMAP_STATIC_PATHS = Object.freeze([
   "/",
   "/jobs",
   "/companies",
-  "/salary-radar",
   "/guide",
   "/pricing",
   "/employers",

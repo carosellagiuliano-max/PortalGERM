@@ -1,6 +1,6 @@
 # SwissTalentHub — Plan-Audit und Verbesserungsregister
 
-> **Abschlussstand:** 24. Juli 2026. Die historischen Befundklassifizierungen unten bleiben als Entscheidungsregister erhalten. Phasen 01–18 sind inzwischen im Zielrepository implementiert und lokal verifiziert; der technische Abschluss einschließlich E2E-08 steht in der [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). „Im Plan gelöst“ bezeichnet weiterhin die damalige Planauflösung, nicht automatisch eine externe Fach- oder Go-live-Freigabe. Staging, Legal/Privacy/Tax, reale Provider und organisatorische Ops-Gates bleiben offen.
+> **Abschlussstand:** 24. Juli 2026. Die historischen Befundklassifizierungen unten bleiben als Entscheidungsregister erhalten. Phasen 01–18 sind inzwischen im Zielrepository implementiert und lokal verifiziert; der technische Abschluss einschließlich E2E-08 steht in der [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). Ein nachgelagerter Commercial-/Daten-/AVG-Audit ist in [`commercial-go-live-gates.md`](./commercial-go-live-gates.md) festgehalten und schliesst keine externe Freigabe. „Im Plan gelöst“ bezeichnet weiterhin die damalige Planauflösung, nicht automatisch eine externe Fach- oder Go-live-Freigabe. Staging, AVG/Legal/Privacy/Tax, reale Provider, bezahlte Marktvalidierung, LIVE-Lohndaten und organisatorische Ops-Gates bleiben offen.
 
 ## 1. Auditumfang und Urteil
 
@@ -79,13 +79,18 @@ Vollständig gelesen und gegeneinander geprüft wurden:
 | AUD-LAUNCH-10 | Keine Betriebs-/Support-/Moderationsqueues und SLAs. | `OPS_CASE_SLA_POLICY_V1` fixes elapsed-hour targets/order/warning/overdue evidence; values remain operational hypotheses. | Implementierungsbaseline gelöst; Pilot-Owner/Fachfreigabe offen |
 | AUD-LAUNCH-11 | Deployment, Backup/Restore, Observability und Incident-Basis fehlten. | Phase 16/18, shared PostgreSQL rate store, Health/logs/runbooks and pg_dump→Age isolated restore. | technisch implementiert; E2E-08 lokal bestanden; produktiver Lifecycle/Owner/Freigabe offen |
 | AUD-LAUNCH-12 | AGB, Datenschutzinformation, Steuerpflicht und reale Rechnung wurden durch Disclaimer nicht ersetzt. | ausdrückliche Legal/Tax/Privacy Go-live-Blocker; keine Compliancebehauptung. | Fachprüfung offen |
+| AUD-LAUNCH-13 | Mock-Checkout wurde als möglicher Zahlungsbereitschaftsnachweis gelesen. | Admin-Funnel benennt Mock-Bestätigung ausdrücklich; ADR-014/029 trennen technische Checkout-Evidence von echtem Geldfluss. | WTP-/Paid-Pilot-Gate offen |
+| AUD-LAUNCH-14 | AVG/AVV war nur indirekt unter generischem Legal Review und Success Fee erwähnt. | Entgeltlicher Online-Stellenmarkt sowie Radar-Matching/Kontakt/Reveal sind als flowspezifisches Kantons-/SECO-Gate erfasst. | kritischer Go-live-Fachblocker offen |
+| AUD-LAUNCH-15 | Salary Radar hatte nur fiktive Daten, war aber in Production indexierbar und in der Sitemap. | Production zeigt explizit unavailable, bleibt `noindex` und ausserhalb der Sitemap; BFS/LSE-Grossregions-/CH-ISCO-Gate definiert. | aktueller Widerspruch technisch geschlossen; LIVE-Datensatz offen |
+| AUD-LAUNCH-16 | Szenarien enthielten nur Endpunkte, keinen kumulierten Cashflow/Runway. | lineare Burn-Sensitivität, Break-even-Varianten und verbindlicher 18-/24-Monatsmodell-Vertrag ergänzt. | Finance-/Owner-Modell offen |
+| AUD-LAUNCH-17 | Gelegentliche Einstellungen wurden mit dauerhaftem Monats-Churn vermischt. | Pause/Reaktivierung wird separater Lifecycle; Monats-, Hiring-Sprint- und Retainer/Credit-Angebot werden real bezahlt gegeneinander getestet. | Commercial-Experiment offen |
 
 ## 5. Nach MVP / später
 
 | ID | Thema | Einstufung und Grund |
 |---|---|---|
 | AUD-POST-01 | Reale Payment-, E-Mail-, Storage-, AI-, Job-Room-, Commute- und PDF-Provider | später; benötigen DPA/Legal/Security/Webhook/Retry/Monitoring und externe Credentials |
-| AUD-POST-02 | Background Worker/Outbox für Alerts, Expiry, Aggregation, Import und Renewal | P1; für echten Betrieb wichtig, aber kontrolliertes Mock-MVP kann Commands nutzen |
+| AUD-POST-02 | Background Worker/Outbox für Alerts, Expiry, Aggregation, Import und Renewal | P1 und harter Blocker für unbeaufsichtigten öffentlichen Self-Service; nur ein begrenzter Concierge-Pilot darf mit benanntem Owner/Runbook explizite Commands nutzen |
 | AUD-POST-03 | Postgres FTS/GIN oder Suchservice | P2; erst bei Relevanz-/Volumenbeleg, ausser P0-Ranking ist sonst nicht korrekt |
 | AUD-POST-04 | Externe Recruiter-Agentur mit mehreren Mandanten | P1; Core unterstützt Company Context, Mandate brauchen zusätzliche Isolation |
 | AUD-POST-05 | ATS/API/SSO und Enterprise-Vertragsbilling | später; Enterprise-Verkauf/Integration separat |
@@ -130,6 +135,11 @@ Vollständig gelesen und gegeneinander geprüft wurden:
 | Per-line VAT/invoice-number baseline validate; actual tax liability/legal invoice remains open | real invoice/payment | Finance/Tax |
 | `EMPLOYER_RESPONSE_POLICY_V1` thresholds and non-guarantee copy validate | public LIVE badge/filter | Product/Ops/Legal |
 | `RADAR_PRIVACY_POLICY_V1` cohort/buckets/rates/opaque retention validate | Production Radar | Privacy/Security/Product |
+| AVG/AVV-Einordnung des konkreten Stellenmarkt-, Bewerbungs-, Radar-, Reveal-, Abo-/Contact-Pack- und möglichen Success-Fee-Flows; Bewilligung oder schriftliche Negativbeurteilung | jeder reale/paid Pilot bzw. LIVE-Betrieb | Sitzkanton/SECO bzw. Schweizer Counsel + Owner |
+| Vorab registrierter KMU-Angebotstest mit echtem Geldfluss; Mock-/Testmode-Abschlüsse zählen null | Preis-/Packaging-Freigabe und Real-Payment-ADR | Product/Commercial + Finance/Tax/Legal |
+| monatliches 18-/24-Monats-Cashflow-/Runway-Modell ohne CAC-/Sales-Doppelzählung | Hiring oder bezahlte Akquise | Finance/Owner |
+| versionierter rechtmässiger Salary-Snapshot mit BFS/LSE-Grossregions-/CH-ISCO-Mapping, Unsicherheit, Attribution und Refresh Owner | Production-Indexierung des Salary Radar | Data/Product/Legal |
+| durable Worker/Outbox mit Retry/DLQ/Monitoring und Restart-/Concurrency-/Failure-Evidence | unbeaufsichtigter öffentlicher Self-Service | Engineering/Ops/Owner |
 | Datenaufbewahrung, Export, Löschung, internationale Bekanntgabe | Pilot-Go-live | Legal/Privacy |
 | Exact `CLUSTER_LAUNCH_POLICY_V1` values and the particular LIVE pair receive Product+Ops approval | public acquisition/indexing | Marketplace/Growth |
 | RPO≤24h/RTO≤8h, 30-daily/12-monthly encrypted retention and Incident Owner | Pilot-Go-live | Ops/Owner |

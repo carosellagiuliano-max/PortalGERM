@@ -157,7 +157,7 @@ Referenced by: Phase 01, 06.
 
 **Decision:** The MVP uses mock adapters only for payments, email, AI, Job-Room, storage and commute. Analytics is an internal domain contract; invoice output is a deterministic internal HTML renderer. Real-provider files may exist as explicit placeholders to protect architecture, but they must not be selected automatically by env keys and must not call external APIs during MVP implementation.
 
-**Why:** The business goal is a privacy-friendly, demo-ready Swiss MVP with working local behavior and no secrets. Real payments, real email delivery, real AI calls, real storage, real Job-Room integration, or real success-fee billing add legal, security, operations, webhook, data-processing, and compliance risks that are out of scope before the product is validated.
+**Why:** The business goal is a privacy-friendly, demo-ready Swiss MVP with working local behavior and no secrets. Real payments, real email delivery, real AI calls, real storage, real Job-Room integration, or real success-fee billing add legal, security, operations, webhook, data-processing, and compliance risks that are out of scope before the product is validated. A Mock checkout validates only product mechanics and commercial **intent**; it never validates willingness to pay. That assumption must be tested through a separately approved real-money Design-Partner pilot, which may use a lawful manual invoice before a self-service provider exists.
 
 **Allowed in MVP:**
 - Mock checkout that creates versioned `Order`/`Invoice`, `SubscriptionEvent`/Entitlement or Credit Ledger effects, and `PaymentEvent` rows exactly once.
@@ -173,9 +173,11 @@ Referenced by: Phase 01, 06.
 **Implications:**
 - Do not add provider-specific schema fields such as external customer/subscription ids unless the real-provider phase is explicitly approved.
 - Do not mark a provider "ready" because a placeholder file exists.
+- Never report `CHECKOUT_COMPLETED` from the Mock flow as paid conversion, collected revenue or willingness-to-pay evidence.
+- A later real-payment ADR is scoped to payment and its fulfillment/webhook contract. It does not pull email/storage providers forward merely because they exist in another repository.
 - README must state "Implemented with mock provider" and "Ready for later real-provider integration"; never "production-ready".
 
-Referenced by: Phase 04, 09, 12, 18.
+Referenced by: Phase 04, 09, 12, 18; ADR-029.
 
 ---
 
@@ -329,3 +331,55 @@ All calculations use one injected UTC instant plus Zurich calendar helpers. Gold
 **Why:** These choices avoid implementer-defined money totals, credit order and downgrade side effects while preserving an explicit, reversible Mock-MVP contract. They are commercial hypotheses and still require Finance/Legal approval before real payments.
 
 Referenced by: Phase 02, 03, 05, 10, 12, 14, 17, 18.
+
+---
+
+## ADR-029 — Real-market evidence and regulated LIVE launch are separate gates
+
+**Decision:** Technical Demo completion, paid-market validation and a regulated
+Swiss LIVE launch are three different states:
+
+1. The current Mock-only MVP may prove deterministic product workflows.
+2. Pricing and willingness to pay require a pre-registered experiment with
+   real Swiss KMU and a real, transparent money flow. Mock completion and
+   Stripe test mode count as zero paid conversions.
+3. Public/paid job-market and Talent-Radar operation requires a flowspecific
+   AVG/AVV assessment and, where required, cantonal and/or federal permission.
+   Disabling Success Fee alone does not close that gate.
+
+Until a reviewed LIVE salary dataset exists, `/salary-radar` stays fail-closed
+in Staging/Production, `noindex` and absent from the sitemap. An approved
+dataset must carry source, reference URL, data year/as-of, methodology,
+taxonomy/region mapping, uncertainty/suppression rules, review status,
+validity and refresh ownership. Public BFS/LSE data may be used only at its
+honest Grossregion/CH-ISCO granularity; Kanton input must not be presented as a
+kantonspecific official estimate. It requires a new Policy/Schema/DTO/UI
+version if its real dimensions differ from V1: age is not seniority, an
+unpublished sample size is not invented, and monthly values are not converted
+to annual values without an approved and disclosed method.
+
+An autonomous worker/outbox is not required for a supervised local demo. It is
+a hard prerequisite for unattended public Self-Service, recurring delivery,
+renewal and lifecycle promises. A bounded Concierge pilot may use explicit
+commands only with a named operator, schedule, checklist and escalation path.
+
+**Why:** Provider plumbing, customer demand, regulatory authorization,
+statistical validity and unattended operations fail in different ways and need
+different evidence. Treating one green Mock funnel or technical release as all
+five would create false market, legal and operational confidence.
+
+**Implications:**
+
+- The authoritative open gates and arithmetic sensitivities are recorded in
+  [`commercial-go-live-gates.md`](./commercial-go-live-gates.md).
+- Paid conversion dashboards explicitly label Mock confirmations.
+- A monthly cashflow/runway model is required before hiring or paid
+  acquisition; a point-in-time MRR snapshot is insufficient.
+- Episodic hiring is measured with pause/reactivation cohorts and competing
+  monthly, hiring-sprint and retainer/credit packages before repricing.
+- Talent Radar is tested as a commercial wedge through opt-in, cohort,
+  contact, accept, reveal, qualified-conversation and paid-use evidence; it is
+  not called a moat before a real network effect is shown.
+
+Referenced by: Product Strategy, Release Checklist, Phase 07/12/14/15/18
+follow-up.

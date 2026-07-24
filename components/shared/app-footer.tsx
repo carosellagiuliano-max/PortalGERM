@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { getPublicDataContext } from "@/lib/public/environment";
+
 const discoveryLinks = [
   { href: "/jobs", label: "Jobs entdecken" },
   { href: "/companies", label: "Unternehmen" },
@@ -24,6 +26,11 @@ const employerLinks = [
 ] as const;
 
 export function AppFooter() {
+  const salaryRadarAvailable = !getPublicDataContext().liveOnly;
+  const visibleDiscoveryLinks = salaryRadarAvailable
+    ? discoveryLinks
+    : discoveryLinks.filter(({ href }) => href !== "/salary-radar");
+
   return (
     <footer className="mt-auto border-t bg-muted/35">
       <div className="page-shell py-10 sm:py-12">
@@ -36,15 +43,16 @@ export function AppFooter() {
               SwissTalentHub
             </Link>
             <p className="mt-2 max-w-xs text-sm leading-6 text-muted-foreground">
-              Faire Jobtransparenz, verständliche Lohnorientierung und sichere
-              Zugänge für Kandidat:innen und Arbeitgeber.
+              {salaryRadarAvailable
+                ? "Faire Jobtransparenz, verständliche Lohnorientierung und sichere Zugänge für Kandidat:innen und Arbeitgeber."
+                : "Faire Jobtransparenz und sichere Zugänge für Kandidat:innen und Arbeitgeber."}
             </p>
           </div>
 
           <FooterNavigation
             id="footer-discovery"
             title="Entdecken"
-            links={discoveryLinks}
+            links={visibleDiscoveryLinks}
           />
           <FooterNavigation
             id="footer-account"

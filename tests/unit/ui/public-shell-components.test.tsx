@@ -1,11 +1,22 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const shellContext = vi.hoisted(() => ({ liveOnly: false }));
+
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/public/environment", () => ({
+  getPublicDataContext: () => ({ liveOnly: shellContext.liveOnly }),
+}));
 
 import { AppFooter } from "@/components/shared/app-footer";
 import { AppHeader } from "@/components/shared/app-header";
 
 describe("public shell components", () => {
+  beforeEach(() => {
+    shellContext.liveOnly = false;
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -81,6 +92,18 @@ describe("public shell components", () => {
     expect(screen.getByText(/keine Rechts-, Finanz- oder Lohnberatung/)).toBeInTheDocument();
     expect(within(employerNavigation).getByRole("link", { name: "Preise" })).toHaveAttribute("href", "/pricing");
     expect(within(employerNavigation).getByRole("link", { name: "Demo anfragen" })).toHaveAttribute("href", "/employers/demo");
+  });
+
+  it("removes fictional Salary Radar promotion from the LIVE shell", () => {
+    shellContext.liveOnly = true;
+
+    const { unmount } = render(<AppHeader />);
+    expect(screen.queryByRole("link", { name: "Lohn-Radar" })).not.toBeInTheDocument();
+    unmount();
+
+    render(<AppFooter />);
+    expect(screen.queryByRole("link", { name: "Lohn-Radar" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/verständliche Lohnorientierung/)).not.toBeInTheDocument();
   });
 });
 

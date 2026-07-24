@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getCandidateDashboard } from "@/lib/candidate/dashboard";
 import { getDatabase } from "@/lib/db/client";
+import { getPublicDataContext } from "@/lib/public/environment";
 import { formatDate } from "@/lib/utils/format";
 import { markCandidateNotificationReadAction } from "./actions";
 
@@ -24,6 +25,7 @@ export default async function CandidateDashboardPage() {
   const user = await requireCandidatePage();
   const dashboard = await getCandidateDashboard(getDatabase(), user.id);
   if (dashboard === null) return null;
+  const salaryRadarAvailable = !getPublicDataContext().liveOnly;
   return (
     <section aria-labelledby="candidate-dashboard-title">
       <p className="eyebrow">Übersicht</p>
@@ -35,7 +37,7 @@ export default async function CandidateDashboardPage() {
         <Card><CardHeader><CardTitle as="h2">Talent Radar</CardTitle></CardHeader><CardContent className="grid gap-4"><Badge className="w-fit" variant={dashboard.radarVisible ? "default" : "outline"}>{dashboard.radarVisible ? "Anonym sichtbar im Talent Radar" : "Nicht im Talent Radar"}</Badge><Link href="/candidate/talent-radar" className={buttonVariants({ variant: "outline", className: "w-fit" })}>{dashboard.radarVisible ? "Sichtbarkeit prüfen" : "Jetzt aktivieren"}</Link></CardContent></Card>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2"><Link href="/jobs" className={buttonVariants()}>Jobs suchen</Link><Link href="/candidate/alerts" className={buttonVariants({ variant: "outline" })}>Jobabo erstellen</Link><Link href="/candidate/applications" className={buttonVariants({ variant: "outline" })}>Bewerbungen ansehen</Link><Link href="/salary-radar" className={buttonVariants({ variant: "ghost" })}>Lohn-Radar öffnen</Link></div>
+      <div className="mt-5 flex flex-wrap gap-2"><Link href="/jobs" className={buttonVariants()}>Jobs suchen</Link><Link href="/candidate/alerts" className={buttonVariants({ variant: "outline" })}>Jobabo erstellen</Link><Link href="/candidate/applications" className={buttonVariants({ variant: "outline" })}>Bewerbungen ansehen</Link>{salaryRadarAvailable ? <Link href="/salary-radar" className={buttonVariants({ variant: "ghost" })}>Lohn-Radar öffnen</Link> : null}</div>
 
       <section className="mt-10" aria-labelledby="recommended-title"><div className="flex items-end justify-between gap-4"><div><p className="eyebrow">Passend zu deinem Profil</p><h2 id="recommended-title" className="mt-2 text-2xl font-semibold">Empfohlene Stellen</h2></div><Link href="/jobs" className={buttonVariants({ variant: "ghost" })}>Alle Jobs</Link></div>{dashboard.recommendations.length === 0 ? <p className="mt-5 text-muted-foreground">Aktuell gibt es keine öffentlich geeignete Empfehlung.</p> : <div className="mt-5 grid gap-5 xl:grid-cols-2">{dashboard.recommendations.map(({ job, match }) => <div key={job.id} className="relative"><div className="absolute right-3 top-3 z-10"><Badge>{match.score ?? "–"}% Match</Badge></div><JobCard job={job} /></div>)}</div>}</section>
 

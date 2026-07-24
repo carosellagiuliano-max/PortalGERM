@@ -76,7 +76,7 @@ Versioned deterministic Candidate decision aid. Frozen v1 weights: skills 30 · 
 ## §13 Monetization Rules
 Five versioned plan hypotheses: Free Basic CHF 0 (1 job/1 seat), Starter CHF 149 (3/2), Pro CHF 399 (10/5, analytics, 10 Radar contacts, 3 Boosts), Business CHF 899 (30/15, 50 contacts, 10 Boosts, advanced Radar; Import only after its P1 gate), Enterprise custom. Annual 10-for-12 pricing is a hypothesis requiring approval. Plan rights come from structured Entitlements, never marketing strings or stale Company booleans.
 
-P0 one-time products: Job Boost 7/30 days and Talent Contact Packs 10/50. Targeted Additional Job and approved Import Setup are P1 under REQ-BIL-008/009; Featured/Newsletter/Social are P2 pending real inventory/reach. Every sponsored product is disclosed. **Success Fee remains disabled in UI, API and Admin until legal review.** See [product-strategy.md](./product-strategy.md) §10.
+P0 one-time products: Job Boost 7/30 days and Talent Contact Packs 10/50. Targeted Additional Job and approved Import Setup are P1 under REQ-BIL-008/009; Featured/Newsletter/Social are P2 pending real inventory/reach. Every sponsored product is disclosed. **Success Fee remains disabled in UI, API and Admin until legal review.** AVG/AVV review applies to the concrete entgeltliche job-market/Radar/contact flow, not only Success Fee. See [product-strategy.md](./product-strategy.md) §10 and [commercial-go-live-gates.md](./commercial-go-live-gates.md).
 
 ## §14 Billing & Payment Rules
 Mock payment by default. Adapter:
@@ -85,7 +85,7 @@ Mock payment by default. Adapter:
 /lib/providers/payments/mock-payment-provider.ts
 /lib/providers/payments/stripe-payment-provider.ts (unwired placeholder)
 ```
-Mock checkout: server-side quote/catalog snapshot → Order with validated target context → "Mock bezahlen" → atomic/idempotent PaymentEvent + Invoice + entitlement/ledger/product fulfillment → mock notification after commit → success page. Client never sends authoritative amount. Invoices in CHF/Rappen with explicit rounding/numbering policy; VAT 8.1 % is current planning input, not a substitute for tax review. Refund/dunning/PDF are later.
+Mock checkout: server-side quote/catalog snapshot → Order with validated target context → "Mock bezahlen" → atomic/idempotent PaymentEvent + Invoice + entitlement/ledger/product fulfillment → mock notification after commit → success page. Client never sends authoritative amount. **Mock completion is never paid conversion, collected revenue or WTP evidence.** A pre-registered real-money KMU pilot comes before pricing approval; real self-service payment needs a separate ADR. Invoices in CHF/Rappen with explicit rounding/numbering policy; VAT 8.1 % is current planning input, not a substitute for tax review. Refund/dunning/PDF are later.
 
 ## §15 Feature Gating Rules
 **One typed server-side `getEffectiveEntitlements` source.** Complete default Free PlanVersion → exactly one effective Subscription replaces that baseline → only allowlisted typed Grants raise/replace/add; unknown/missing/mistyped/ambiguous fails closed. Ledger balances remain distinct and never grant access. Gate active jobs at every Published/reactivation transition, Radar/query/contact, atomic credits/allowances, analytics, import, branding, boosts and seats.

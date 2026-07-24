@@ -348,15 +348,15 @@ export async function getAdminFunnelDashboard(
     }),
     multiStageCard({
       key: "CHECKOUT_FUNNEL",
-      title: "Checkout",
+      title: "Mock-Checkout · kein Zahlungsnachweis",
       metricKey: "CHECKOUT_FUNNEL",
       status: checkout.status,
       stages: checkout.status === "VALUE"
         ? [
-            { label: "Gestartete Aufträge", value: checkout.started },
-            { label: "Abgeschlossene Aufträge", value: checkout.completed },
+            { label: "Mock-Aufträge gestartet", value: checkout.started },
+            { label: "Mock-Aufträge bestätigt", value: checkout.completed },
           ]
-        : suppressedStages(["Gestartete Aufträge", "Abgeschlossene Aufträge"]),
+        : suppressedStages(["Mock-Aufträge gestartet", "Mock-Aufträge bestätigt"]),
       rateBps: checkout.conversionBps,
       appliedDimensions: selectedDimensions(filters, ["CHANNEL", "PLAN"]),
       unavailableDimensions: ["CLUSTER"],

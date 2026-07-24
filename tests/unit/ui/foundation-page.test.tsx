@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 const homePageData = vi.hoisted(() => ({
+  liveOnly: false,
   getPublicCatalog: vi.fn(),
   listHomepageJobs: vi.fn(),
   listPublicClusterLinks: vi.fn(),
@@ -32,6 +33,10 @@ vi.mock("@/lib/seo/cluster-indexability", () => ({
   listIndexableClusterLandings: homePageData.listIndexableClusterLandings,
 }));
 
+vi.mock("@/lib/public/environment", () => ({
+  getPublicDataContext: () => ({ liveOnly: homePageData.liveOnly }),
+}));
+
 vi.mock("@/components/public/apply-save-actions", () => ({
   PublicJobActions: () => null,
 }));
@@ -41,6 +46,7 @@ import NotFound from "@/app/not-found";
 
 describe("public discovery entry UI", () => {
   beforeEach(() => {
+    homePageData.liveOnly = false;
     homePageData.getPublicCatalog.mockResolvedValue({
       cantons: [],
       cities: [],
@@ -111,6 +117,15 @@ describe("public discovery entry UI", () => {
       { limit: 8, verifiedOnly: true },
       homePageData.loadPublicOpenJobCounts,
     );
+  });
+
+  it("does not promote the fictional Salary Radar in LIVE environments", async () => {
+    homePageData.liveOnly = true;
+
+    render(await HomePage());
+
+    expect(screen.queryByRole("link", { name: "Lohn einschätzen" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Lohn-Radar")).not.toBeInTheDocument();
   });
 
   it("provides a useful 404 recovery link", () => {

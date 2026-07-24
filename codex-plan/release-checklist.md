@@ -100,12 +100,26 @@ Diese Punkte dürfen nicht durch einen lokalen Test auf `[x]` wechseln:
 - [ ] echte Preview-/Staging-/Production-Umgebungen mit getrennten Secrets/DBs;
 - [ ] Staging-Smoke und reale HTTPS-/Ingress-/HSTS-Wirkung;
 - [ ] Legal-/Privacy-/Tax-Freigabe;
+- [ ] flowspezifische AVG/AVV-Beurteilung des Stellenmarkt-, Bewerbungs-,
+  Radar-, Contact-/Reveal- und Entgeltmodells; erforderliche kantonale sowie
+  gegebenenfalls eidgenössische Bewilligung oder schriftliche
+  Nicht-Bewilligungspflicht;
+- [ ] vorab definierter Design-Partner-Test mit echtem Geldfluss; lokale
+  Mock-Bestätigungen und Provider-Testmode zählen nicht als Paid Conversion;
 - [ ] Freigabe realer Provider, DPA, Webhooks/Retry/Monitoring;
+- [ ] versionierter, rechtmässiger und fachlich geprüfter LIVE-Lohndatensatz
+  samt Berufsgruppen-/Grossregionsmapping, Attribution, Unsicherheit und
+  Refresh Owner, bevor `/salary-radar` indexiert/in die Sitemap aufgenommen
+  wird;
+- [ ] monatliches 18-/24-Monats-Cashflow-/Runway-Modell vor Hiring oder
+  bezahlter Akquise;
 - [ ] produktiver verschlüsselter Storage-Lifecycle `30 daily + 12 monthly`;
 - [ ] Business-Freigabe RPO ≤24 h und RTO ≤8 h;
 - [ ] benannter Incident Owner, On-call/Pager und getestete Übung;
 - [ ] reale Export-/Lösch-/Retention-Prozesse;
-- [ ] autonomer Worker für Renewal, Alerts und fällige Projektionen.
+- [ ] autonomer Worker/Outbox mit Retry, Dead-Letter, Monitoring und
+  Restart-/Concurrency-/Failure-Recovery für Renewal, Alerts und fällige
+  Projektionen vor unbeaufsichtigtem öffentlichen Self-Service.
 
 ## Abschlussentscheidung
 

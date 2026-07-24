@@ -1,9 +1,12 @@
 // @vitest-environment node
 
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   publicIndexingAllowed: false,
+  liveOnly: false,
+  getPublicCatalog: vi.fn(),
   getPublicGuideBySlug: vi.fn(),
   listRelatedPublicGuides: vi.fn(),
   notFound: vi.fn(() => {
@@ -13,7 +16,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/jobs/public-read-model", () => ({
-  getPublicCatalog: vi.fn(),
+  getPublicCatalog: mocks.getPublicCatalog,
+}));
+vi.mock("@/components/public/salary-radar-form", () => ({
+  SalaryRadarForm: () => "SALARY_RADAR_FORM",
 }));
 vi.mock("@/lib/content/public-guides", () => ({
   getPublicGuideBySlug: mocks.getPublicGuideBySlug,
@@ -23,6 +29,7 @@ vi.mock("@/lib/content/public-guides", () => ({
 vi.mock("@/lib/public/environment", () => ({
   getPublicDataContext: () => ({
     publicIndexingAllowed: mocks.publicIndexingAllowed,
+    liveOnly: mocks.liveOnly,
   }),
 }));
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
@@ -32,22 +39,31 @@ import {
   default as GuideDetailPage,
 } from "@/app/(public)/guide/[slug]/page";
 import { generateMetadata as generateGuideIndexMetadata } from "@/app/(public)/guide/page";
-import { generateMetadata as generateSalaryRadarMetadata } from "@/app/(public)/salary-radar/page";
+import SalaryRadarPage, {
+  generateMetadata as generateSalaryRadarMetadata,
+} from "@/app/(public)/salary-radar/page";
 
 describe("Salary Radar and Guide indexing policy", () => {
   beforeEach(() => {
     mocks.publicIndexingAllowed = false;
+    mocks.liveOnly = false;
+    mocks.getPublicCatalog.mockReset().mockResolvedValue({});
     mocks.getPublicGuideBySlug.mockReset();
     mocks.listRelatedPublicGuides.mockReset();
     mocks.notFound.mockClear();
   });
 
-  it("indexes the Salary Radar and Guide index only in production", () => {
+  it("keeps the mock-only Salary Radar noindex while the Guide follows production indexing", () => {
     mocks.publicIndexingAllowed = true;
 
     expect(generateSalaryRadarMetadata()).toMatchObject({
       alternates: { canonical: "/salary-radar" },
-      robots: { index: true, follow: true },
+      robots: {
+        index: false,
+        follow: true,
+        noarchive: true,
+        nosnippet: true,
+      },
     });
     expect(generateGuideIndexMetadata()).toMatchObject({
       alternates: { canonical: "/guide" },
@@ -55,17 +71,39 @@ describe("Salary Radar and Guide indexing policy", () => {
     });
 
     mocks.publicIndexingAllowed = false;
-    for (const metadata of [
-      generateSalaryRadarMetadata(),
-      generateGuideIndexMetadata(),
-    ]) {
-      expect(metadata.robots).toEqual({
-        index: false,
-        follow: false,
-        noarchive: true,
-        nosnippet: true,
-      });
-    }
+    expect(generateSalaryRadarMetadata().robots).toEqual({
+      index: false,
+      follow: true,
+      noarchive: true,
+      nosnippet: true,
+    });
+    expect(generateGuideIndexMetadata().robots).toEqual({
+      index: false,
+      follow: false,
+      noarchive: true,
+      nosnippet: true,
+    });
+  });
+
+  it("shows a fail-closed LIVE state without loading the fictional salary catalog", async () => {
+    mocks.liveOnly = true;
+
+    const html = renderToStaticMarkup(await SalaryRadarPage());
+
+    expect(generateSalaryRadarMetadata()).toMatchObject({
+      title: "Lohn-Radar in Vorbereitung",
+      description: expect.stringContaining("ohne Werte"),
+    });
+    expect(html).toContain("noch kein fachlich freigegebener");
+    expect(html).not.toContain("SALARY_RADAR_FORM");
+    expect(mocks.getPublicCatalog).not.toHaveBeenCalled();
+  });
+
+  it("keeps the reviewed fictional form available in the labelled demo environment", async () => {
+    const html = renderToStaticMarkup(await SalaryRadarPage());
+
+    expect(html).toContain("SALARY_RADAR_FORM");
+    expect(mocks.getPublicCatalog).toHaveBeenCalledOnce();
   });
 
   it("indexes only a canonical LIVE Guide returned by the reviewed public read path", async () => {

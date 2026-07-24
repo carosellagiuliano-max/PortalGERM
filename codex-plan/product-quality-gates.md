@@ -181,6 +181,12 @@ Use one record for every important page before checking its route deliverable:
 - [ ] Pricing, period, VAT, renewal, cancellation and downgrade effects are visible before confirmation.
 - [ ] Every upgrade prompt has a real reason code and points to a currently available product/plan.
 - [ ] Sponsored inventory is capped, clearly labelled and never changes fairness scores.
+- [ ] Mock checkout completion is labelled as product-mechanics evidence, never paid conversion, collected revenue or willingness-to-pay.
+- [ ] Pricing/packaging approval uses a pre-registered real-money KMU offer test; monthly, hiring-sprint and retainer/credit options are compared on normalized value.
+- [ ] Episodic pause/reactivation is measured separately from durable logo churn.
+- [ ] A monthly cashflow/runway model covers hiring, CAC timing, support, infrastructure, churn/reactivation, cumulative burn and peak funding without double-counting Sales/CAC.
+- [ ] Any indexed salary orientation uses a versioned, lawful, reviewed LIVE source with honest occupation/region granularity, uncertainty, attribution and refresh owner; otherwise it is unavailable, `noindex` and absent from the sitemap.
+- [ ] The concrete job-market/Application/Radar/Contact/Reveal/payment flow has a documented AVG/AVV determination and required permission before real operation.
 - [ ] Product analytics can measure activation, application response, employer value, conversion and churn without content/PII.
 - [ ] Business Cockpit recommendations contain evidence period, reason, next action, owner and outcome.
 - [ ] Unsupported products/claims are removed or explicitly labelled as future; Success Fee cannot be activated.
@@ -218,6 +224,7 @@ Use one record for every important page before checking its route deliverable:
 - [ ] Private pages are both `noindex` and no-store/dynamic as required.
 - [ ] Live/readiness checks, structured redacted logs and correlation IDs work.
 - [ ] Alerts/runbooks cover auth, database, ledger/payment, import and suspected cross-tenant/privacy incidents.
+- [ ] Unattended public self-service has a durable worker/outbox with lease/singleton, idempotency, retry/backoff, dead-letter, monitoring and restart/concurrency/failure-recovery evidence.
 - [ ] Backup retention and business-approved RPO/RTO exist; an isolated restore was actually tested.
 - [ ] Dependency, license and secret scans have no unresolved critical finding.
 - [ ] Legal/privacy/tax/provider Go-live blockers are named and signed off separately from technical tests.

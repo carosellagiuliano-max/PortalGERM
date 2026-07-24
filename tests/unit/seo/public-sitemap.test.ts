@@ -66,6 +66,7 @@ describe("Phase 15 public sitemap", () => {
     });
     const paths = sitemap.map(({ url }) => new URL(url).pathname);
 
+    expect(PUBLIC_SITEMAP_STATIC_PATHS).not.toContain("/salary-radar");
     expect(paths.slice(0, PUBLIC_SITEMAP_STATIC_PATHS.length)).toEqual(
       PUBLIC_SITEMAP_STATIC_PATHS,
     );

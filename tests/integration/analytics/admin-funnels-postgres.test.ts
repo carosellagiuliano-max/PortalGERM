@@ -115,8 +115,8 @@ describe.sequential("Phase 12 admin strategy funnels", () => {
     });
     expect(valueCard(dashboard.cards, "CHECKOUT_FUNNEL")).toMatchObject({
       stages: [
-        { label: "Gestartete Aufträge", value: 20 },
-        { label: "Abgeschlossene Aufträge", value: 15 },
+        { label: "Mock-Aufträge gestartet", value: 20 },
+        { label: "Mock-Aufträge bestätigt", value: 15 },
       ],
       rateBps: 7_500,
     });

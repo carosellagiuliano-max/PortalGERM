@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** Stand 24. Juli 2026. **Phasen 01 bis 18 sind im Zielrepository implementiert und lokal verifiziert.** Der technische Abschluss umfasst E2E-01–08, den Clean Clone, zwei identische Seeds, Production-Demo-Guard, die vollständige 100-Seiten-Desktop-/360px-Matrix sowie den verschlüsselten Backup-/Restore-Drill. Das ist keine Pilot- oder Produktionsfreigabe: Staging, echte Provider, Legal/Privacy/Tax, produktiver Backup-Lifecycle, bestätigte RPO/RTO, Incident Ownership und autonome Worker bleiben externe Gates. Mock Payment umfasst weder Stripe noch echte Webhooks; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
+> **Planstatus:** Stand 24. Juli 2026. **Phasen 01 bis 18 sind im Zielrepository implementiert und lokal verifiziert.** Der technische Abschluss umfasst E2E-01–08, den Clean Clone, zwei identische Seeds, Production-Demo-Guard, die vollständige 100-Seiten-Desktop-/360px-Matrix sowie den verschlüsselten Backup-/Restore-Drill. Das ist keine Pilot- oder Produktionsfreigabe: Staging, echte Provider, AVG/Legal/Privacy/Tax, bezahlte Marktvalidierung, ein monatliches Cashflow-/Runway-Modell, ein fachlich freigegebener LIVE-Lohndatensatz, produktiver Backup-Lifecycle, bestätigte RPO/RTO, Incident Ownership und autonome Worker bleiben externe Gates. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -9,12 +9,13 @@ Die folgende Liste ist die empfohlene **Lesereihenfolge**, nicht die Konflikthie
 1. [`../AGENTS.md`](../AGENTS.md) — verbindliche Arbeits- und Evidence-Regeln.
 2. [`99-rules-quickref.md`](./99-rules-quickref.md) — nicht verhandelbare Produkt-/Technikregeln.
 3. [`product-strategy.md`](./product-strategy.md) — Zielgruppen, Positionierung, Marketplace, Journeys, Growth, Monetarisierung und KPIs.
-4. [`architecture-blueprint.md`](./architecture-blueprint.md) — Rollen, Routen, Daten, Use Cases, Security, UX, Test und Betrieb.
-5. [`requirements-matrix.md`](./requirements-matrix.md) — Anforderung → Phase → Modell → Policy → UX → Test → Abnahme.
-6. [`decisions.md`](./decisions.md) und [`glossary.md`](./glossary.md) — verbindliche ADRs und Begriffe.
-7. [`plan-audit.md`](./plan-audit.md) — Konflikte, Klassifizierung, offene Entscheidungen und verworfener Scope.
-8. [`implementation-plan.md`](./implementation-plan.md) — ausführbare Schritte und Definition of Done.
-9. Die Detailphase `01` bis `18` — technische Deliverables und Evidence je Schritt.
+4. [`commercial-go-live-gates.md`](./commercial-go-live-gates.md) — bezahlte Marktvalidierung, Cashflow, Packaging, AVG, LIVE-Lohndaten und Worker-Gates.
+5. [`architecture-blueprint.md`](./architecture-blueprint.md) — Rollen, Routen, Daten, Use Cases, Security, UX, Test und Betrieb.
+6. [`requirements-matrix.md`](./requirements-matrix.md) — Anforderung → Phase → Modell → Policy → UX → Test → Abnahme.
+7. [`decisions.md`](./decisions.md) und [`glossary.md`](./glossary.md) — verbindliche ADRs und Begriffe.
+8. [`plan-audit.md`](./plan-audit.md) — Konflikte, Klassifizierung, offene Entscheidungen und verworfener Scope.
+9. [`implementation-plan.md`](./implementation-plan.md) — ausführbare Schritte und Definition of Done.
+10. Die Detailphase `01` bis `18` — technische Deliverables und Evidence je Schritt.
 
 Das historisch referenzierte `../plan.md` existiert nicht. Diese lokale Dokumentgruppe ist deshalb die alleinige Planungsquelle. Tote `plan.md §…`-Verweise begründen keine zusätzliche oder abweichende Anforderung.
 
@@ -58,9 +59,9 @@ Der Phase-17-Code-Commit `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` ergänzt dar
 | Stufe     | Bedeutung                                  | Beispiele                                                                                                                                              |
 | --------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | P0        | kontrolliertes MVP funktioniert end-to-end | Auth/Tenant, öffentliche Suche, JobPass, Bewerbung, Company/Job/Moderation, Billing Mock, Boost, Radar Contact/Reveal, Adminqueues, Security-/DB-Tests |
-| P1        | überzeugender Pilot/Marktstart             | Jahrespläne, Agenturmandate, erweiterte Analytics/Cockpit, Growth-Gates, Worker/Delivery-Queue, Deployment/Backup/Monitoring                           |
+| P1        | überzeugender Pilot/Marktstart             | AVG-/Tax-/Vertragsgate, echte bezahlte Design-Partner-Validierung, Cashflow/Runway, LIVE-Lohndaten, Jahrespläne, Agenturmandate, erweiterte Analytics/Cockpit, Growth-Gates, Worker/Delivery-Queue, Deployment/Backup/Monitoring |
 | P2        | nach erstem Marktfeedback                  | zusätzliche Sponsored-Produkte, breitere Mehrsprachigkeit, fortgeschrittene Suche, Visual Regression, Refund-Automation                                |
-| später    | explizites Folgeprojekt                    | reale Provider, ATS/API/SSO, Enterprise Billing, employerseitige Match-Sortierung nach Prüfung, Success Fee nach Legal Review                          |
+| später    | explizites Folgeprojekt                    | skalierte reale Provider nach separaten ADRs, ATS/API/SSO, Enterprise Billing, employerseitige Match-Sortierung nach Prüfung, Success Fee nach AVG-/Legal Review |
 | verworfen | nicht bauen                                | Scraping, globale Reveals, bezahlte Fairness, Fake-Aktivität, automatische Ablehnung, dünne SEO-Massenpages                                            |
 
 ## 6. Phasen und Verantwortungsgrenzen
@@ -197,14 +198,26 @@ npm run test:e2e:hsts
 - offene Rechts-/Steuer-/Provider-/Markthypothesen sind als solche markiert;
 - Start erfolgt mit Schritt 01, nicht mit einem Feature-Sprung.
 
-### Pilotbereit (später, durch Code zu beweisen)
+### Öffentlicher Produktpilot bereit (später, durch Code und externe Evidence zu belegen)
+
+Dieser Begriff bezeichnet einen für echte Nutzer:innen zugänglichen
+Produktpilot. Ein eng beaufsichtigter Design-Partner-/WTP-Test mit manueller
+Rechnung ist kein öffentlicher Produktpilot und darf nur nach seinen eigenen
+AVG-, Vertrags-, Tax-, Datenschutz- und Operations-Gates stattfinden.
 
 - E2E-01 bis E2E-08 grün;
 - 0 offene P0 Auditpunkte und 0 kritische Accessibility-/Security-Funde;
 - Cross-Tenant- und Talent-PII-Leak-Tests grün;
 - Mock-Billing exakt einmal, Ledger nicht negativ, Rechnung in Rappen korrekt;
+- AVG/AVV-Einordnung und erforderliche Bewilligung des konkreten
+  Stellenmarkt-/Radar-/Entgeltflows liegen vor;
+- echte bezahlte Design-Partner-Evidence und ein freigegebenes
+  Cashflow-/Runway-Modell liegen vor; Mock-Abschlüsse zählen null;
+- Salary Radar bleibt ohne fachlich geprüften LIVE-Datensatz `noindex` und
+  ausserhalb der Sitemap;
 - alle wichtigen mobilen States geprüft;
-- Migration, Clean Seed, Build, Backup/Restore und Staging-Smoke belegt;
+- Migration, Clean Seed, Build, Backup/Restore, Staging-Smoke sowie
+  Worker/Outbox-Failure-Recovery belegt;
 - Legal-/Privacy-/Tax-Go-live-Entscheidung separat erfolgt.
 
 ## 11. Definition of Done

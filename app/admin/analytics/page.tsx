@@ -176,6 +176,7 @@ export default async function AdminAnalyticsPage({
             <p>Definition {ADMIN_FUNNEL_POLICY_V1.definitionVersion} · Zeitzone {ADMIN_FUNNEL_POLICY_V1.businessTimezone} · Fenster [{funnels.filters.fromDate}, {funnels.filters.toDate}).</p>
             <p>Clusteroptionen stammen ausschliesslich aus aktuell aktivierten Launch-Assessments. Kanal und Plan akzeptieren nur geschlossene Werte aus dem Eventvertrag.</p>
             <p>TEST wird immer ausgeschlossen. DEMO erscheint nur im lokalen Demo-Modus; ausserhalb davon fliessen ausschliesslich unveränderliche LIVE-Provenienz-Snapshots ein.</p>
+            <p>Ein abgeschlossenes Checkout-Event belegt im aktuellen MVP nur die Mock-Bestätigung eines Auftrags. Es ist weder Kartenbelastung noch bezahlte Conversion oder Nachweis der Zahlungsbereitschaft.</p>
             <p>Die Antwort enthält keine Actor-, Session-, Lead-, Order-, Company- oder Job-IDs und keine freien Texte.</p>
           </CardContent>
         </Card>

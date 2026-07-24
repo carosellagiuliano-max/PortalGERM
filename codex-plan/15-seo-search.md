@@ -51,13 +51,22 @@ Polish search and SEO: server-side full-text-ish search via Postgres, URL-driven
   - All currently eligible published `Job` detail URLs under the documented freshness policy
   - only Canton/Category/combination pages whose versioned Content **and** Liquidity Gate passes; all other cluster routes stay `noindex` and absent
   - `/companies` and Company profiles satisfying canonical `evaluatePublicCompanyEligibility`: `status=ACTIVE`, closed validated/sanitized public profile projection, no public-hide restriction and `dataProvenance=LIVE` outside Demo mode. P0 has no separate profile review; verification controls the badge/Job publication, not profile existence.
-  - `/salary-radar`
+  - `/salary-radar` nur mit einem aktuellen, fachlich freigegebenen
+    LIVE-Lohndatensatz; der aktuelle fiktive Demo-Datensatz ist in
+    Staging/Production fail-closed, deshalb bleibt die Route `noindex` und
+    ausserhalb der Sitemap
   - `/guide` and only current reviewed/published Guide `ContentPage` revisions that also pass the indexability gate
   - `/pricing`, `/employers`, `/employers/post-job`, `/employers/talent-radar`, `/employers/employer-branding`, `/employers/xml-import`
 - [x] Exclude all private routes
 - [x] `lastModified` from row updatedAt
 
 > **Decision (MVP):** Eine dynamische Sitemap enthält höchstens 50.000 exakt gegatete URLs. Eine Überschreitung schlägt mit `PublicSitemapCapacityError` geschlossen fehl und wird niemals still abgeschnitten. Sitemap-Index und Chunks sind vor Erreichen dieser Grenze als P1 nachzurüsten.
+
+> **Follow-up 24. Juli 2026:** Die frühere statische
+> `/salary-radar`-Aufnahme wurde entfernt, nachdem der abschliessende
+> Commercial-/Daten-Audit die Diskrepanz zwischen Production-`NO_RESULT` und
+> Indexierbarkeit bestätigt hat. Das ändert nicht den verifizierten
+> Phase-15-SEO-Mechanismus; es schliesst dessen Datenquellen-Gate konsequent.
 
 ### `/robots.txt`
 

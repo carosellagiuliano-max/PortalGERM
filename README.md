@@ -11,10 +11,16 @@ verändern niemals den Fair-Job-Score.
 Der aktuelle Stand ist **Demo-ready für lokale Vorführungen und kontrollierte
 interne Produkt-Evaluationen mit Mock-Providern**. Er ist **weder pilot-ready
 noch Production-ready**:
-externe Provider, Rechts-/Datenschutz-/Steuerfreigaben, produktiver
-Worker-Betrieb, Incident-Prozesse und bestätigte Recovery-SLAs sind separate
-Go-live-Gates. Den reproduzierten Release- und Teststatus des Zielcommits
-dokumentiert [`BUILD_REPORT.md`](./BUILD_REPORT.md).
+externe Provider, AVG-/Rechts-/Datenschutz-/Steuerfreigaben, echte bezahlte
+Marktvalidierung, ein monatliches Cashflow-/Runway-Modell, ein fachlich
+freigegebener LIVE-Lohndatensatz, produktiver Worker-Betrieb,
+Incident-Prozesse und bestätigte Recovery-SLAs sind separate Go-live-Gates.
+Den reproduzierten Release- und Teststatus des Zielcommits dokumentiert
+[`BUILD_REPORT.md`](./BUILD_REPORT.md).
+
+Dieses Verzeichnis ist ein eigenes verschachteltes Git-Repository. Die
+[`CLAUDE.md`](./CLAUDE.md) grenzt es ausdrücklich vom separaten Elternprojekt
+`Portal.git` ab; dessen Providerregeln gelten hier nicht.
 
 ## Demo-Konten
 
@@ -357,6 +363,15 @@ Preise und Packaging sind versionierte Markt- und Planungshypothesen, keine
 bewiesene Zahlungsbereitschaft. Beträge werden als ganze Rappen gespeichert;
 Formatierung in CHF findet erst an der Anzeigegrenze statt.
 
+Ein lokales `CHECKOUT_COMPLETED` ist nur die Bestätigung eines Mock-Auftrags.
+Es ist weder bezahlte Conversion noch Umsatz- oder
+Zahlungsbereitschaftsnachweis. Vor einer Preisfreigabe müssen reale Schweizer
+KMU ein vorab definiertes Angebot mit echtem, transparentem Geldfluss testen;
+ein freigegebener manueller Rechnungs-Pilot kann einer Stripe-Integration
+vorausgehen. Monatsabo, zeitlich begrenzter Hiring-Sprint und Retainer/Credits
+werden getrennt getestet, weil gelegentliches Hiring Pause/Reaktivierung statt
+dauerhafter Monatsretention erzeugen kann.
+
 ### Seed-Pläne
 
 | Plan | Netto/Monat | Aktive Jobs | Seats | Talent Radar | Kontakte/Periode | Boosts/Periode | Analytics | Self-Service |
@@ -398,6 +413,9 @@ Der lokale Checkout kann einen Order bezahlen, die atomare
 Mock-Fulfillment-Logik auslösen und eine HTML-Rechnung erzeugen. Es findet keine
 echte Zahlung statt. Subscription-Renewal wird nicht autonom ausgeführt,
 sondern als explizite Admin-Mock-Aktion dokumentiert und auditiert.
+
+Die geprüften Business-, Cashflow-, AVG-, Salary- und Worker-Gates stehen in
+[`codex-plan/commercial-go-live-gates.md`](./codex-plan/commercial-go-live-gates.md).
 
 ## Mock-Integrationen
 
@@ -462,7 +480,8 @@ Steuerkonformitätszusage.
 ## Bekannte Limitationen des MVP
 
 1. **Mock Payments:** kein Stripe, keine Kartenbelastung, keine echten
-   Webhooks, kein Dunning und keine Provider-Reconciliation.
+   Webhooks, kein Dunning und keine Provider-Reconciliation; Mock-Abschlüsse
+   belegen keine Zahlungsbereitschaft.
 2. **Mock Email:** Nachrichten werden als redigiertes `EmailLog` erfasst; es
    findet kein echter Versand statt. Die optionale lokale Mailbox ist kein
    Delivery-System.
@@ -480,7 +499,8 @@ Steuerkonformitätszusage.
 8. **Keine Background Jobs/Cron im MVP:** Reads berechnen wirksame
    Laufzeit-/Ablaufzustände ohne Schreibeffekt. Explizite idempotente
    Maintenance-Kommandos dürfen fällige Projektionen und Audit-Evidence
-   persistieren; ein produktiver Scheduler/Outbox-Worker fehlt.
+   persistieren; ein produktiver Scheduler/Outbox-Worker fehlt und blockiert
+   unbeaufsichtigten öffentlichen Self-Service.
 9. **Search:** parameterisiertes PostgreSQL-SQL normalisiert Titel,
    Firmenname und Body und verwendet gewichtetes `LIKE` mit globaler
    DB-Rangfolge und signiertem Keyset-Cursor. Es gibt noch kein
@@ -504,7 +524,11 @@ Steuerkonformitätszusage.
     Case-/Manifest-Mocks ohne automatischen Download oder vollständige
     Datenlöschung.
 15. **Betrieb und Recht:** keine bestätigte Incident-Response, DPA-Landschaft,
-    Rechts-/Steuerfreigabe oder produktive RPO/RTO-Zusage.
+    AVG-/Rechts-/Steuerfreigabe oder produktive RPO/RTO-Zusage.
+16. **Salary Radar:** der vorhandene Datensatz ist ausdrücklich fiktiv und
+    Demo-only. Staging/Production zeigen keine Werte; die Route ist `noindex`
+    und fehlt in der Sitemap, bis ein versionierter, fachlich geprüfter
+    LIVE-Snapshot mit ehrlichem Berufsgruppen-/Grossregionsmapping vorliegt.
 
 ## Mock-Provider später ersetzen
 
@@ -609,7 +633,8 @@ Identitäten, DB-URLs und Credentials dürfen nie committed werden.
 
 Ein Deployment ist erst zulässig, nachdem der grüne technische Release-Report
 vorliegt **und** sämtliche dafür relevanten, weiterhin offenen
-Legal-/Privacy-/Tax-/Provider-/Ops-Gates geschlossen und freigegeben wurden.
+AVG-/Legal-/Privacy-/Tax-/Commercial-/Data-/Provider-/Ops-Gates geschlossen
+und freigegeben wurden.
 
 1. Einen verwalteten, PostgreSQL-16-kompatiblen Anbieter in einer
    freigegebenen Schweizer/EU-Region mit TLS, Backups, Restore-Möglichkeit,
@@ -644,9 +669,12 @@ Legal-/Privacy-/Tax-/Provider-/Ops-Gates geschlossen und freigegeben wurden.
 6. Demo-Seeding ist in Staging/Production verboten. Readiness erst nach
    erfolgreicher Migration aktivieren und `/health/live` sowie
    `/health/ready` überwachen.
-7. Ein externer, serieller Scheduler müsste
-   `npm run security:maintenance` mindestens täglich ausführen. Dieser
-   Scheduler gehört nicht zum MVP und ist ein Go-live-Gate.
+7. Ein autonomer Worker/Outbox muss vor unbeaufsichtigtem öffentlichem
+   Self-Service Alerts, Renewal und fällige Projektionen mit Lease,
+   Idempotenz, Retry/Backoff, Dead-Letter und Monitoring betreiben. Ein
+   externer, serieller Scheduler müsste zusätzlich
+   `npm run security:maintenance` mindestens täglich ausführen. Beides gehört
+   nicht zum MVP und bleibt ein Go-live-Gate.
 8. Rollback bedeutet nicht `db push` oder ein blindes Down-Script. Eine frühere
    App-Version darf nur bei bestätigter Schema-Kompatibilität zurückgesetzt
    werden; andernfalls ist der geprobte, verschlüsselte Restore in ein neues
@@ -654,13 +682,21 @@ Legal-/Privacy-/Tax-/Provider-/Ops-Gates geschlossen und freigegeben wurden.
 
 ## Rechtlicher und Compliance-Hinweis
 
-> **Datenschutzfreundliches MVP — keine Rechtsberatung. Erfolgsbasierte
-> Vermittlungsmodelle werden erst nach rechtlicher Prüfung aktiviert.**
+> **Datenschutzfreundliches MVP — keine Rechtsberatung. Ein entgeltlicher
+> Online-Stellenmarkt und Talent-Radar-Kontaktfluss werden erst nach konkreter
+> AVG/AVV-Prüfung und gegebenenfalls erforderlicher Bewilligung real betrieben.
+> Success Fee bleibt zusätzlich deaktiviert.**
 
 Zusätzlich benötigen insbesondere Datenschutzerklärung, AGB, Aufbewahrung und
 Löschung, Talent-Radar-Kohorten, Recontact-Regeln, Stellenmeldepflicht,
 Steuerbehandlung, Datenstandorte, Auftragsbearbeitung und Incident-Prozesse eine
 fachliche Freigabe vor einem realen Betrieb.
+
+SECO weist darauf hin, dass regelmässige, entgeltliche Zusammenführung von
+Stellensuchenden und Arbeitgebenden bewilligungspflichtige private
+Arbeitsvermittlung sein kann; Inlandstätigkeit ist kantonal,
+grenzüberschreitende Tätigkeit zusätzlich eidgenössisch zu beurteilen:
+[SECO – Private Arbeitsvermittlung und Personalverleih](https://www.seco.admin.ch/de/private-arbeitsvermittlung-und-personalverleih).
 
 ## Plan, Requirements und Evidence
 
@@ -671,6 +707,9 @@ fachliche Freigabe vor einem realen Betrieb.
   P0- und E2E-Traceability;
 - [`codex-plan/product-quality-gates.md`](./codex-plan/product-quality-gates.md)
   — Qualitäts- und Release/Operations-Gates;
+- [`codex-plan/commercial-go-live-gates.md`](./codex-plan/commercial-go-live-gates.md)
+  — bewertete Businessbefunde sowie offene WTP-, Cashflow-, AVG-, Salary- und
+  Worker-Gates;
 - [`codex-plan/18-documentation-final-audit.md`](./codex-plan/18-documentation-final-audit.md)
   — Phase-18-Vertrag;
 - [`codex-plan/evidence/README.md`](./codex-plan/evidence/README.md) —
