@@ -116,7 +116,7 @@ export function CreditSourceOverview({
             </p>
           ) : (
             <div
-              className="max-w-full overflow-x-auto"
+              className="max-w-full contain-paint overflow-x-auto"
               data-e2e-horizontal-scroll="true"
               role="region"
               aria-label="Letzte Guthabenbewegungen"

@@ -178,7 +178,7 @@ export default async function EmployerBillingPage() {
             <p className="text-sm text-muted-foreground">Noch keine Bestellungen.</p>
           ) : (
             <div
-              className="max-w-full overflow-x-auto"
+              className="max-w-full contain-paint overflow-x-auto"
               data-e2e-horizontal-scroll="true"
               role="region"
               aria-label="Letzte Bestellungen"

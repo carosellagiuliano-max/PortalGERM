@@ -103,6 +103,8 @@ describe("employer Billing overview", () => {
     });
     expect(orders).toHaveAttribute("data-e2e-horizontal-scroll", "true");
     expect(ledger).toHaveAttribute("data-e2e-horizontal-scroll", "true");
+    expect(orders).toHaveClass("contain-paint");
+    expect(ledger).toHaveClass("contain-paint");
     expect(orders.closest('[data-slot="card-content"]')).toHaveClass("min-w-0");
     expect(ledger.closest('[data-slot="card"]')).toHaveClass("min-w-0");
   });
