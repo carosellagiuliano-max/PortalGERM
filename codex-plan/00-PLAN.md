@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 23. Juli 2026. **Phasen 01 bis 16 sind im Zielrepository implementiert und verifiziert. Phasen 17–18 sind offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth, öffentliche Discovery, Pricing und Arbeitgeberakquise, Candidate-/Employer-/Recruiter-Core, Admin-Operations/Moderation, Katalog/Billing, Job-Boosts, Talent-Radar Contact/Reveal und Privacy-Cases, Search/SEO sowie Security/Operations ergeben noch kein fertiges Produkt: Cross-role-E2E und Release-Audit folgen. Mock Payment umfasst weder Stripe noch echte Webhooks; ein autonomer Renewal-Worker ist nicht vorhanden. Export/Löschung bleiben P0-Mocks ohne automatische Datenbereitstellung oder Erasure. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
+> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 24. Juli 2026. **Phasen 01 bis 16 sind im Zielrepository implementiert und verifiziert. Phase 17 ist lokal vollständig verifiziert und bleibt nur bis zum Remote-CI-/Artefaktnachweis offen; Phase 18 ist offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth, öffentliche Discovery, Pricing und Arbeitgeberakquise, Candidate-/Employer-/Recruiter-Core, Admin-Operations/Moderation, Katalog/Billing, Job-Boosts, Talent-Radar Contact/Reveal und Privacy-Cases, Search/SEO sowie Security/Operations ergeben noch kein freigegebenes Produkt: E2E-08, Clean Clone, Backup/Restore und Release-Audit folgen in Phase 18. Mock Payment umfasst weder Stripe noch echte Webhooks; ein autonomer Renewal-Worker ist nicht vorhanden. Export/Löschung bleiben P0-Mocks ohne automatische Datenbereitstellung oder Erasure. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -38,6 +38,8 @@ Der vollständige Ausgangs-`codex-plan` mit 24 Dateien wurde in das leere Ziel �
 
 Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-Primitives, leeres Prisma-Schema, Placeholder-Seed, keine Domainlogik/Auth/APIs/Tests. Diese Foundation wurde **nicht** als Zielimplementierung gewertet oder kopiert. PortalGERM erhielt danach eine eigenständig gepinnte und geprüfte Phase-01-Basis, den unabhängig auditierten Phase-02-Domänenvertrag, die reproduzierbar verifizierten Phase-03-Core-Policies, die netzwerkfreien Phase-04-Provider-Mocks, den deterministischen Phase-05-Demo-Seed mit Produktionssperre, End-to-End-Auth aus Phase 06, die sicher projizierte öffentliche Discovery aus Phase 07, fail-closed Pricing und Arbeitgeberakquise aus Phase 08, den vollständig geprüften Candidate-Core aus Phase 09, den tenant- und assignment-gesicherten Employer/Recruiter-Core aus Phase 10, die capability-gesicherten Admin-Operations aus Phase 11, die zentrale Katalog-, Entitlement-, Credit-, Subscription-, Order-, Invoice- und Mock-Fulfillment-Domain aus Phase 12, den atomaren Job-Boost-Lifecycle aus Phase 13, den privacy-bounded Talent-Radar-/Reveal-Vertrag aus Phase 14, datenbankgerankte Search-/SEO-/Cluster-Gates aus Phase 15 sowie per-request CSP, CSRF-/IDOR-/Cache-Härtung, Audit-Vollständigkeit, redigiertes Logging, Health/Readiness und Security-Maintenance aus Phase 16. Die Nachweise referenzieren unveränderliche Code-Commits in [`evidence/2026-07-19-phase-01.md`](./evidence/2026-07-19-phase-01.md), [`evidence/2026-07-19-phase-02.md`](./evidence/2026-07-19-phase-02.md), [`evidence/2026-07-19-phase-03.md`](./evidence/2026-07-19-phase-03.md), [`evidence/2026-07-20-phase-04.md`](./evidence/2026-07-20-phase-04.md), [`evidence/2026-07-20-phase-05.md`](./evidence/2026-07-20-phase-05.md), [`evidence/2026-07-20-phase-06.md`](./evidence/2026-07-20-phase-06.md), [`evidence/2026-07-20-phase-07.md`](./evidence/2026-07-20-phase-07.md), [`evidence/2026-07-20-phase-08.md`](./evidence/2026-07-20-phase-08.md), [`evidence/2026-07-20-phase-09.md`](./evidence/2026-07-20-phase-09.md), [`evidence/2026-07-21-phase-10.md`](./evidence/2026-07-21-phase-10.md), [`evidence/2026-07-21-phase-11.md`](./evidence/2026-07-21-phase-11.md), [`evidence/2026-07-22-phase-12.md`](./evidence/2026-07-22-phase-12.md), [`evidence/2026-07-22-phase-13.md`](./evidence/2026-07-22-phase-13.md), [`evidence/2026-07-22-phase-14.md`](./evidence/2026-07-22-phase-14.md), [`evidence/2026-07-22-phase-15.md`](./evidence/2026-07-22-phase-15.md) und [`evidence/2026-07-23-phase-16.md`](./evidence/2026-07-23-phase-16.md). Historische Details: [`repository-audit.md`](./repository-audit.md).
 
+Der Phase-17-Code-Commit `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` ergänzt darauf einen Production-Browser-Harness mit isolierter migrierter PostgreSQL-Datenbank, logischer Serveruhr, blockiertem externem Netzwerk, E2E-01–07, einer Desktop-/360px-Quality-Matrix, einem maschinenlesbaren Zero-Retry-Manifest und Linux-/Windows-CI. Der vollständige lokale Lauf ist mit 1.940 Unit-, 369 PostgreSQL-Integration- und 17 Browsertests ohne Skip/Retry bestanden; die [Phase-17-Evidence](./evidence/2026-07-23-phase-17.md) bleibt bis zum verlinkten Remote-CI-/Artefaktnachweis vorläufig.
+
 ## 4. Unverhandelbare Invarianten
 
 - Talent-Radar-Identität bleibt bis zum ausdrücklichen kandidateninitiierten Reveal verborgen; Reveal gilt nur für vorgesehene Firma und Anfrage/Thread.
@@ -56,7 +58,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 | Stufe     | Bedeutung                                  | Beispiele                                                                                                                                              |
 | --------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | P0        | kontrolliertes MVP funktioniert end-to-end | Auth/Tenant, öffentliche Suche, JobPass, Bewerbung, Company/Job/Moderation, Billing Mock, Boost, Radar Contact/Reveal, Adminqueues, Security-/DB-Tests |
-| P1        | überzeugender Pilot/Marktstart             | Jahrespläne, Agenturmandate, erweiterte Analytics/Cockpit, Growth-Gates, Worker/Outbox, Deployment/Backup/Monitoring                                   |
+| P1        | überzeugender Pilot/Marktstart             | Jahrespläne, Agenturmandate, erweiterte Analytics/Cockpit, Growth-Gates, Worker/Delivery-Queue, Deployment/Backup/Monitoring                           |
 | P2        | nach erstem Marktfeedback                  | zusätzliche Sponsored-Produkte, breitere Mehrsprachigkeit, fortgeschrittene Suche, Visual Regression, Refund-Automation                                |
 | später    | explizites Folgeprojekt                    | reale Provider, ATS/API/SSO, Enterprise Billing, employerseitige Match-Sortierung nach Prüfung, Success Fee nach Legal Review                          |
 | verworfen | nicht bauen                                | Scraping, globale Reveals, bezahlte Fairness, Fake-Aktivität, automatische Ablehnung, dünne SEO-Massenpages                                            |
@@ -131,7 +133,7 @@ Das Quellprojekt besass lediglich eine Phase-01-Referenz: statische Homepage/UI-
 
 ### [ ] 17 — Cross-role Verification
 
-[`17-testing.md`](./17-testing.md) · Owning-phase Regression plus E2E-01 bis E2E-07, A11y/Mobile/Performance. Tests beginnen nicht erst hier; E2E-08 gehört Phase 18.
+[`17-testing.md`](./17-testing.md) · Owning-phase Regression plus E2E-01 bis E2E-07, A11y/Mobile/Performance und der vollständige lokale Gate-Lauf sind grün. Die Phase bleibt nur bis zum Remote-CI-/Artefaktnachweis `[ ]`; E2E-08 gehört Phase 18.
 
 ### [ ] 18 — Dokumentation und Release-Audit
 
@@ -177,11 +179,13 @@ npm run lint
 npm run typecheck
 npm test
 npm run test:integration
-npm run test:e2e
 npm run build
+npm run test:e2e:http
+npm run test:e2e:browser
+npm run test:e2e:hsts
 ```
 
-Erwartet wird Exit-Code 0 sowie phasenspezifische DB-/HTTP-/Browser-Assertions. Die endgültigen Scripts werden in Phase 01 plattformneutral definiert. Kein nicht ausführbarer Befehl wird als bestanden markiert.
+`npm run test:e2e` bleibt der kombinierte HTTP- plus Browserbefehl; der Abschlussnachweis führt die Teilgates getrennt auf, damit ein Fehler eindeutig zuordenbar ist. Erwartet wird Exit-Code 0 sowie phasenspezifische DB-/HTTP-/Browser-Assertions. Kein nicht ausführbarer, nur gezielt ausgeführter oder durch Retries maskierter Befehl wird als bestanden markiert.
 
 ## 10. Produkt- und Release-Gates
 
@@ -218,4 +222,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 16 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Als nächster Implementierungsschritt folgt Phase 17 — Cross-role Verification. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 16 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Phase 17 ist lokal vollständig grün; als letzter Schritt folgt der Linux-/Windows-CI-/Artefaktnachweis und erst danach das Setzen von `[x]`. Anschliessend folgt Phase 18 mit Clean Clone, Backup/Restore und Release-Audit. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
