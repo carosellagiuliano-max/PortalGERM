@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** vollständig überarbeitete Planungsgrundlage, Stand 24. Juli 2026. **Phasen 01 bis 17 sind im Zielrepository implementiert und verifiziert; Phase 18 ist offen.** Foundation, persistenter Domänenvertrag, Core Policies, lokale Provider-Mocks, deterministische Demo-Seeds, End-to-End-Auth, öffentliche Discovery, Pricing und Arbeitgeberakquise, Candidate-/Employer-/Recruiter-Core, Admin-Operations/Moderation, Katalog/Billing, Job-Boosts, Talent-Radar Contact/Reveal und Privacy-Cases, Search/SEO, Security/Operations sowie die Cross-role-Verifikation ergeben noch kein freigegebenes Produkt: E2E-08, Clean Clone, Backup/Restore und Release-Audit folgen in Phase 18. Mock Payment umfasst weder Stripe noch echte Webhooks; ein autonomer Renewal-Worker ist nicht vorhanden. Export/Löschung bleiben P0-Mocks ohne automatische Datenbereitstellung oder Erasure. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
+> **Planstatus:** Stand 24. Juli 2026. **Phasen 01 bis 18 sind im Zielrepository implementiert und lokal verifiziert.** Der technische Abschluss umfasst E2E-01–08, den Clean Clone, zwei identische Seeds, Production-Demo-Guard, die vollständige 100-Seiten-Desktop-/360px-Matrix sowie den verschlüsselten Backup-/Restore-Drill. Das ist keine Pilot- oder Produktionsfreigabe: Staging, echte Provider, Legal/Privacy/Tax, produktiver Backup-Lifecycle, bestätigte RPO/RTO, Incident Ownership und autonome Worker bleiben externe Gates. Mock Payment umfasst weder Stripe noch echte Webhooks; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -135,9 +135,9 @@ Der Phase-17-Code-Commit `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` ergänzt dar
 
 [`17-testing.md`](./17-testing.md) · Owning-phase Regression plus E2E-01 bis E2E-07, A11y/Mobile/Performance, Linux/PostgreSQL 16, Windows-Portabilität, HSTS und Artefakte sind lokal sowie auf `main` und dem Phasen-Branch grün. E2E-08 gehört Phase 18.
 
-### [ ] 18 — Dokumentation und Release-Audit
+### [x] 18 — Dokumentation und Release-Audit
 
-[`18-documentation-final-audit.md`](./18-documentation-final-audit.md) · E2E-08 Clean Clone, Migration/Seed, Production-Demo-Guard, Backup/isolierter Restore/Smoke, Evidence, Abschlussbericht und ehrliche Pilotgrenzen.
+[`18-documentation-final-audit.md`](./18-documentation-final-audit.md) · E2E-08 Clean Clone, Migration/Seed, Production-Demo-Guard, Backup/isolierter Restore/Smoke, vollständige Route-/Requirement-Evidence und Abschlussbericht sind auf `f7158c7999b25da467f172d228b9d475ec00c127` verifiziert; siehe [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). Externe Pilot-/Go-live-Gates bleiben offen.
 
 Die genaue Abhängigkeitsgrafik und jedes ausführbare Arbeitspaket stehen in [`implementation-plan.md`](./implementation-plan.md).
 
@@ -222,4 +222,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 17 wurden gemäss ihren Detailverträgen umgesetzt und verifiziert. Als nächster Schritt folgt Phase 18 mit E2E-08, Clean Clone, Backup/Restore und Release-Audit. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 18 wurden gemäss ihren Detailverträgen umgesetzt und lokal verifiziert. Weitere Arbeit beginnt nur über ein ausdrücklich freigegebenes Folgepaket oder durch Schliessen der separat dokumentierten externen Pilot-/Go-live-Gates; insbesondere bleibt REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

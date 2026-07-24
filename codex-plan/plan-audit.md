@@ -1,6 +1,6 @@
 # SwissTalentHub — Plan-Audit und Verbesserungsregister
 
-> **Auditstand:** 19. Juli 2026. Klassifizierung bezieht sich auf den Zeitpunkt, zu dem die Lücke geschlossen sein muss. „Im Plan gelöst“ bedeutet nur, dass eine eindeutige Sollentscheidung dokumentiert ist — nicht, dass Code existiert. Ausnahme: Phase 01 ist inzwischen separat durch [Ziel-Evidence](./evidence/2026-07-19-phase-01.md) als implementiert verifiziert.
+> **Abschlussstand:** 24. Juli 2026. Die historischen Befundklassifizierungen unten bleiben als Entscheidungsregister erhalten. Phasen 01–18 sind inzwischen im Zielrepository implementiert und lokal verifiziert; der technische Abschluss einschließlich E2E-08 steht in der [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). „Im Plan gelöst“ bezeichnet weiterhin die damalige Planauflösung, nicht automatisch eine externe Fach- oder Go-live-Freigabe. Staging, Legal/Privacy/Tax, reale Provider und organisatorische Ops-Gates bleiben offen.
 
 ## 1. Auditumfang und Urteil
 
@@ -76,8 +76,8 @@ Vollständig gelesen und gegeneinander geprüft wurden:
 | AUD-LAUNCH-07 | Cockpit-Signale „many views/near limit/churn“ waren undefiniert. | `COCKPIT_SIGNAL_POLICY_V1` fixes reason/evidence/window/threshold/action/owner/outcome and golden fixtures. | Implementierungsbaseline gelöst; spätere Version aus Daten |
 | AUD-LAUNCH-08 | Kein Geschäftsmodell/CAC/LTV/Break-even. | drei explizite Szenarien und Formeln; keine Marktbehauptung. | im Plan gelöst als Annahme |
 | AUD-LAUNCH-09 | Mehrsprachige landesweite Marke vs de-CH UI nicht priorisiert. | de-CH Launch; FR/IT und breite regionale Qualität P2/Expansion nach Beleg. | strategische Entscheidung |
-| AUD-LAUNCH-10 | Keine Betriebs-/Support-/Moderationsqueues und SLAs. | `OPS_CASE_SLA_POLICY_V1` fixes elapsed-hour targets/order/warning/overdue evidence; values remain operational hypotheses. | Implementierungsbaseline gelöst; Pilot-Owner bestätigt |
-| AUD-LAUNCH-11 | Deployment, Backup/Restore, Observability und Incident-Basis fehlten. | Phase 16/18, shared PostgreSQL rate store, Health/logs/runbooks and pg_dump→Age isolated restore. | im Plan gelöst; Umsetzung/E2E-08 offen |
+| AUD-LAUNCH-10 | Keine Betriebs-/Support-/Moderationsqueues und SLAs. | `OPS_CASE_SLA_POLICY_V1` fixes elapsed-hour targets/order/warning/overdue evidence; values remain operational hypotheses. | Implementierungsbaseline gelöst; Pilot-Owner/Fachfreigabe offen |
+| AUD-LAUNCH-11 | Deployment, Backup/Restore, Observability und Incident-Basis fehlten. | Phase 16/18, shared PostgreSQL rate store, Health/logs/runbooks and pg_dump→Age isolated restore. | technisch implementiert; E2E-08 lokal bestanden; produktiver Lifecycle/Owner/Freigabe offen |
 | AUD-LAUNCH-12 | AGB, Datenschutzinformation, Steuerpflicht und reale Rechnung wurden durch Disclaimer nicht ersetzt. | ausdrückliche Legal/Tax/Privacy Go-live-Blocker; keine Compliancebehauptung. | Fachprüfung offen |
 
 ## 5. Nach MVP / später
@@ -155,6 +155,6 @@ The listed implementation baselines are executable and may not be paused or rein
 - alle Phasen 01–18 durch Zielstatus-/Execution-Contract- und Dependency-Korrekturen
 - Root `README.md` als Plan-Navigation und Statushinweis
 
-## 10. Implementierungsbereitschaft
+## 10. Abschlussstatus
 
-Phase 01 ist implementiert und verifiziert. Der nächste Implementierungsschritt ist **Phase 02**; die offenen Business-/Legal-Entscheidungen besitzen weiterhin harte Deadlines vor ihren betroffenen Phasen beziehungsweise vor Pilot-Go-live. Keine spätere Phase darf wegen vorhandener Quellfiles oder alter Soll-Evidence übersprungen werden.
+Phasen 01–18 sind implementiert und durch datierte Ziel-Evidence lokal verifiziert. Es gibt keinen automatisch folgenden Implementierungsschritt: neue Arbeit benötigt ein ausdrücklich freigegebenes Folgepaket. Die offenen Business-/Legal-/Privacy-/Tax-/Provider-/Ops-Entscheidungen besitzen weiterhin harte Deadlines vor Pilot oder realem Betrieb; der lokale technische Abschluss ersetzt keine dieser Freigaben.

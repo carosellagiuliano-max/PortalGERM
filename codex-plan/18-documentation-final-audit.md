@@ -1,6 +1,6 @@
 # Phase 18 — Documentation & Final Audit
 
-> **PortalGERM target status: NOT IMPLEMENTED.** Documentation cannot turn a Mock-/Legal-/Ops placeholder into production readiness. Every final claim needs target-commit evidence.
+> **PortalGERM-Status: ABGESCHLOSSEN UND LOKAL VERIFIZIERT.** Der unveränderliche Code-Commit `f7158c7999b25da467f172d228b9d475ec00c127` bestand die vollständigen technischen Gates einschließlich E2E-08. Der datierte Nachweis steht in [evidence/2026-07-24-phase-18.md](./evidence/2026-07-24-phase-18.md). Dokumentation macht daraus keine Produktionsfreigabe: Staging, echte Provider, Legal/Privacy/Tax und organisatorische Ops-Gates bleiben offen.
 
 > Detail file for [00-PLAN.md](./00-PLAN.md) Phase 18. Read [99-rules-quickref.md](./99-rules-quickref.md) §34, §35, §36 before starting.
 
@@ -10,18 +10,18 @@ Write the real `README.md`, finalise `.env.example`, and verify the Masterplan P
 
 ## Prerequisites
 
-- [ ] Phases 01–17 complete
-- [ ] Phase-17 Unit/Integration/E2E-01–07 passing
-- [ ] `npm run lint` and `npm run build` clean
+- [x] Phases 01–17 complete
+- [x] Phase-17 Unit/Integration/E2E-01–07 passing
+- [x] `npm run lint` and `npm run build` clean
 
 ## Deliverables (checklist)
 
 ### `README.md` sections (per `99-rules-quickref.md` §34)
 
-- [ ] **Product overview** — what SwissTalentHub is, who it serves, what it differentiates on
-- [ ] **Tech stack** — Next.js + TS + Tailwind + shadcn/ui + Prisma + Postgres + Zod + auth choice + Vitest
-- [ ] **Architecture overview** — directory map (`/app`, `/components`, `/lib`, `/prisma`, `/tests`); link to `lib/scoring/__rules.md`, the ADR log ([decisions.md](./decisions.md)) and the [glossary.md](./glossary.md)
-- [ ] **Setup instructions** use only cross-platform npm/Node scripts (same commands in PowerShell, cmd, bash and CI):
+- [x] **Product overview** — what SwissTalentHub is, who it serves, what it differentiates on
+- [x] **Tech stack** — Next.js + TS + Tailwind + shadcn/ui + Prisma + Postgres + Zod + auth choice + Vitest
+- [x] **Architecture overview** — directory map (`/app`, `/components`, `/lib`, `/prisma`, `/tests`); link to `lib/scoring/__rules.md`, the ADR log ([decisions.md](./decisions.md)) and the [glossary.md](./glossary.md)
+- [x] **Setup instructions** use only cross-platform npm/Node scripts (same commands in PowerShell, cmd, bash and CI):
   ```text
   npm ci
   npm run env:init
@@ -30,17 +30,17 @@ Write the real `README.md`, finalise `.env.example`, and verify the Masterplan P
   npm run db:seed
   npm run dev
   ```
-- [ ] `env:init` refuses Production, creates ignored `.env.local` only when absent, interactively validates `DATABASE_URL`/`APP_URL`, generates every Phase-01 32-byte key/keyring and mailbox secret through CSPRNG, sets `RATE_LIMIT_BACKEND=postgres`, leaves future provider placeholders inactive and prints variable names only—never values. A non-interactive CI mode reads pre-provisioned environment variables and writes no file.
-- [ ] **Environment variables** — copy of `.env.example` plus a one-line description per var; clearly mark "placeholder, leave empty for MVP"
-- [ ] **Database setup** — committed migration workflow, isolated test DB and Postgres-via-Docker option; clearly forbid production `db push`
-- [ ] **Seed instructions** — `npx prisma db seed`; mention idempotency
-- [ ] **Demo accounts** — table of the four accounts + the per-plan employers
-- [ ] **Available routes** — generate/verify against the implemented route tree and the [architecture blueprint](./architecture-blueprint.md) §5; mark unavailable/deferred routes honestly
-- [ ] **Role overview** — Candidate / Employer / Recruiter / Admin + company-level roles (Owner / Admin / Recruiter / Viewer)
-- [ ] **Monetization overview** — plans, active/deferred products, Credits and Invoice snapshots; current 8.1 % planning rate plus Tax-review caveat; Success Fee disabled
-- [ ] **Mock integrations** — list of the external ports under `/lib/providers/{payments,email,ai,jobroom,storage,commute}`, what each does locally and which approval gates a real provider requires. State separately that Analytics validation/aggregation and HTML Invoice rendering are internal services, not provider ports.
-- [ ] **Security & privacy notes** — DSG-friendly wording, anonymity in Talent Radar, consent log, data deletion mock, audit log, no real external APIs, no scraping
-- [ ] **Limitations of MVP** — explicit list:
+- [x] `env:init` refuses Production, creates ignored `.env.local` only when absent, interactively validates `DATABASE_URL`/`APP_URL`, generates every Phase-01 32-byte key/keyring and mailbox secret through CSPRNG, sets `RATE_LIMIT_BACKEND=postgres`, leaves future provider placeholders inactive and prints variable names only—never values. A non-interactive CI mode reads pre-provisioned environment variables and writes no file.
+- [x] **Environment variables** — copy of `.env.example` plus a one-line description per var; clearly mark "placeholder, leave empty for MVP"
+- [x] **Database setup** — committed migration workflow, isolated test DB and Postgres-via-Docker option; clearly forbid production `db push`
+- [x] **Seed instructions** — `npx prisma db seed`; mention idempotency
+- [x] **Demo accounts** — table of the four accounts + the per-plan employers
+- [x] **Available routes** — generate/verify against the implemented route tree and the [architecture blueprint](./architecture-blueprint.md) §5; mark unavailable/deferred routes honestly
+- [x] **Role overview** — Candidate / Employer / Recruiter / Admin + company-level roles (Owner / Admin / Recruiter / Viewer)
+- [x] **Monetization overview** — plans, active/deferred products, Credits and Invoice snapshots; current 8.1 % planning rate plus Tax-review caveat; Success Fee disabled
+- [x] **Mock integrations** — list of the external ports under `/lib/providers/{payments,email,ai,jobroom,storage,commute}`, what each does locally and which approval gates a real provider requires. State separately that Analytics validation/aggregation and HTML Invoice rendering are internal services, not provider ports.
+- [x] **Security & privacy notes** — DSG-friendly wording, anonymity in Talent Radar, consent log, data deletion mock, audit log, no real external APIs, no scraping
+- [x] **Limitations of MVP** — explicit list:
   - Mock payments only (Stripe placeholders only)
   - Mock email (writes `EmailLog`, no real send)
   - Mock AI (deterministic rule-based rewrite)
@@ -53,27 +53,27 @@ Write the real `README.md`, finalise `.env.example`, and verify the Masterplan P
   - Actual sitemap/indexability limits, if any, with reason
   - Production uses the shared atomic PostgreSQL rate store; process memory is a Local/Test-only adapter, not a launch limitation presented as protection
   - HTML invoices, no PDF generation; amounts stored in Rappen (ADR-002)
-- [ ] **How to swap mock providers for real providers later** — for each external adapter: which interface to implement, env vars to populate (Stripe, OpenAI, Postmark/Mailgun/SendGrid, S3, arbeit.swiss, optional map/commute service), and what additional code may be needed (webhooks, retry, etc.). Do not invent an Analytics/Invoice provider; document their separate future gates.
-- [ ] **Deployment notes** — required env vars, recommended Postgres provider, secure cookie flags in prod, `STRICT-TRANSPORT-SECURITY` only with HTTPS, build command, start command
-- [ ] **Legal / compliance disclaimer** — "Datenschutzfreundliches MVP — keine Rechtsberatung. Erfolgsbasierte Vermittlungsmodelle werden erst nach rechtlicher Prüfung aktiviert."
+- [x] **How to swap mock providers for real providers later** — for each external adapter: which interface to implement, env vars to populate (Stripe, OpenAI, Postmark/Mailgun/SendGrid, S3, arbeit.swiss, optional map/commute service), and what additional code may be needed (webhooks, retry, etc.). Do not invent an Analytics/Invoice provider; document their separate future gates.
+- [x] **Deployment notes** — required env vars, recommended Postgres provider, secure cookie flags in prod, `STRICT-TRANSPORT-SECURITY` only with HTTPS, build command, start command
+- [x] **Legal / compliance disclaimer** — "Datenschutzfreundliches MVP — keine Rechtsberatung. Erfolgsbasierte Vermittlungsmodelle werden erst nach rechtlicher Prüfung aktiviert."
 
 ### `.env.example` confirmed
 
-- [ ] Matches Phase 01, Billing Phase 12, encrypted Radar/Reveal Phase 14 and Backup/Ops expectations exactly, including keyring lengths/versions/rotation, `RATE_LIMIT_BACKEND=postgres`, `BACKUP_AGE_RECIPIENT` and an external secret-mounted `BACKUP_AGE_IDENTITY_FILE` path
-- [ ] Comments explaining which vars are required vs placeholders
+- [x] Matches Phase 01, Billing Phase 12, encrypted Radar/Reveal Phase 14 and Backup/Ops expectations exactly, including keyring lengths/versions/rotation, `RATE_LIMIT_BACKEND=postgres`, `BACKUP_AGE_RECIPIENT` and an external secret-mounted `BACKUP_AGE_IDENTITY_FILE` path
+- [x] Comments explaining which vars are required vs placeholders
 
 ### Run quality gates
 
-- [ ] `npm ci` from committed lockfile
-- [ ] `npm run db:generate`
-- [ ] `npm run db:migrate`
-- [ ] `npm run db:seed` twice with stable manifest
-- [ ] `npm run lint`
-- [ ] `npm run typecheck`
-- [ ] `npm run build`
-- [ ] `npm test`
-- [ ] `npm run test:integration`
-- [ ] `npm run test:e2e`
+- [x] `npm ci` from committed lockfile
+- [x] `npm run db:generate`
+- [x] `npm run db:migrate`
+- [x] `npm run db:seed` twice with stable manifest
+- [x] `npm run lint`
+- [x] `npm run typecheck`
+- [x] `npm run build`
+- [x] `npm test`
+- [x] `npm run test:integration`
+- [x] `npm run test:e2e`
 
 If any command can't run in the environment, document why per `99-rules-quickref.md §37`.
 
@@ -85,10 +85,10 @@ Walk through the Masterplan Product/Pilot gates, every P0 Requirement and E2E-01
 
 ### E2E-08 — clean release and recovery (owned here)
 
-- [ ] From a clean isolated clone/worktree and empty database: validate Env, `npm ci`, migrate, seed twice with identical manifest, build and start; Production-mode seed attempt must fail before DEMO write
-- [ ] Use the reviewed cross-platform Node wrappers: `npm run ops:backup -- --source release-test --out <explicit .dump.age path>` spawns `pg_dump --format=custom --no-owner --no-acl` and streams directly into `age -r BACKUP_AGE_RECIPIENT`, atomically renames completed ciphertext and writes its SHA-256; it stores no plaintext and deletes a partial temp ciphertext on failure. `npm run ops:restore -- --in <explicit .dump.age path> --target restore-test` verifies checksum/distinct allowlisted empty target, reads `BACKUP_AGE_IDENTITY_FILE` only from the Ops secret-mounted path, streams `age --decrypt` into `pg_restore --exit-on-error --clean --if-exists --no-owner`, then runs migration/integrity/manifest/smoke. Wrapper rejects same/unknown/shared/Production source or target and removes temporary identity mount/DB after evidence.
-- [ ] Record tool/version, release commit, start/end, backup checksum/location/retention classification, restored DB identifier, measured RPO/RTO versus hypotheses, commands/exit codes and cleanup. Never put credentials or backup bytes in Git/BUILD_REPORT.
-- [ ] `E2E-08` passes only when clean clone, Production Demo guard, backup, isolated restore and post-restore smoke all succeed. A missing DB/tool/environment is `Needs Verification` and blocks the Release/Operations gate; Phase 17 remains green but does not substitute for this result.
+- [x] From a clean isolated clone/worktree and empty database: validate Env, `npm ci`, migrate, seed twice with identical manifest, build and start; Production-mode seed attempt must fail before DEMO write
+- [x] Use the reviewed cross-platform Node wrappers: `npm run ops:backup -- --source release-test --out <explicit .dump.age path>` spawns `pg_dump --format=custom --no-owner --no-acl` and streams directly into `age -r BACKUP_AGE_RECIPIENT`, atomically renames completed ciphertext and writes its SHA-256; it stores no plaintext and deletes a partial temp ciphertext on failure. `npm run ops:restore -- --in <explicit .dump.age path> --target restore-test` verifies checksum/distinct allowlisted empty target, reads `BACKUP_AGE_IDENTITY_FILE` only from the Ops secret-mounted path, streams `age --decrypt` into `pg_restore --exit-on-error --clean --if-exists --no-owner`, then runs migration/integrity/manifest/smoke. Wrapper rejects same/unknown/shared/Production source or target and removes temporary identity mount/DB after evidence.
+- [x] Record tool/version, release commit, start/end, backup checksum/location/retention classification, restored DB identifier, measured RPO/RTO versus hypotheses, commands/exit codes and cleanup. Never put credentials or backup bytes in Git/BUILD_REPORT.
+- [x] `E2E-08` passes only when clean clone, Production Demo guard, backup, isolated restore and post-restore smoke all succeed. A missing DB/tool/environment is `Needs Verification` and blocks the Release/Operations gate; Phase 17 remains green but does not substitute for this result.
 
 ### Final Acceptance walkthrough
 
@@ -106,7 +106,7 @@ Produce a `BUILD_REPORT.md` (or close-out comment) covering:
 
 Use precise wording: **"Implemented with mock provider"** · **"Server-side gated"** · **"Demo-ready"** · **"Known limitation"** · **"Ready for later real provider integration"**. Do **not** say "production-ready" — anything mocked is not.
 
-- [ ] `BUILD_REPORT.md` created with command outcomes, limitations and blocked DB/E2E gates.
+- [x] `BUILD_REPORT.md` created with command outcomes, limitations, closed local DB/E2E gates and explicitly open external gates.
 
 ## Files to create / modify
 
@@ -123,12 +123,12 @@ Use precise wording: **"Implemented with mock provider"** · **"Server-side gate
 
 ## Verification
 
-- [ ] All four demo accounts can log in
-- [ ] `npm run build` succeeds with no errors
-- [ ] Every P0 Requirement and applicable Masterplan/Release gate has linked target evidence; open legal/production gates remain explicitly open
-- [ ] Every P0 Requirement and E2E-01–08 has linked target evidence; any excluded item has an approved Audit/ADR reason
-- [ ] E2E-08 evidence explicitly names the isolated source/restore databases, backup checksum and post-restore smoke; no destructive command targets an unknown or shared database
-- [ ] README opens to the demo-accounts table within 30 seconds of scanning
+- [x] All four demo accounts can log in
+- [x] `npm run build` succeeds with no errors
+- [x] Every P0 Requirement and applicable Masterplan/Release gate has linked target evidence; open legal/production gates remain explicitly open
+- [x] Every P0 Requirement and E2E-01–08 has linked target evidence; any excluded item has an approved Audit/ADR reason
+- [x] E2E-08 evidence explicitly names the isolated source/restore databases, backup checksum and post-restore smoke; no destructive command targets an unknown or shared database
+- [x] README opens to the demo-accounts table within 30 seconds of scanning
 
 ## Common pitfalls
 
@@ -142,14 +142,14 @@ Use precise wording: **"Implemented with mock provider"** · **"Server-side gate
 
 | Field | Binding phase contract |
 |---|---|
-| Business value | Deliver an honest, reproducible pilot candidate with setup/operation/limitations understood by the next engineer and business owner. |
+| Business value | Deliver an honest, reproducible technical demo candidate with setup/operation/limitations understood by the next engineer and business owner. |
 | Roles / requirements | Engineering, Product, Ops, Owner; REQ-DOC-001, OPS-001–003, all P0 Requirements. |
 | Prerequisites | 01–17 green; 0 open P0 Audit items; Legal/Privacy/Tax/Provider blockers explicitly listed. |
 | Deliverables | Real README, Env catalog, Architecture/route/role docs, migration/deploy/rollback/runbooks, mock/provider limitations, evidence index, BUILD_REPORT, release checklist and final report. |
 | Routes/data | Generate/verify route/schema catalog against code. Clean migration/seed and Production demo guard; backup/restore isolated. No new feature hidden in docs phase. |
 | Security/privacy | Secret/dependency/license scan; final IDOR/Radar/cache/header review; retention/legal status truthful. Demo credentials never production. |
 | UX/mobile | Manual four-role walkthrough of every critical state at desktop/360px with named fixtures; German copy, A11y and no template/placeholder review. |
-| Tests/verification | Full Phase-17 E2E-01–07 suite on release commit; this phase owns E2E-08 migration status, clean clone, Production Demo guard, isolated backup/restore and staging smoke, plus link/checkbox/Requirement audit. |
+| Tests/verification | Full Phase-17 E2E-01–07 suite on release commit; this phase owns E2E-08 migration status, clean clone, Production Demo guard, isolated backup/restore and local post-restore smoke, plus link/checkbox/Requirement audit. A real Staging-Smoke remains an external gate. |
 | Expected result | All commands exit 0 and evidence records contain environment/commit/assertions; known limitations remain visible and are not converted to `[x]`. |
 | Risks / limitations | A successful build is not production readiness. Real providers, legal texts, tax, durable Workers, incident process and confirmed SLAs/RPO/RTO may still block launch; the shared atomic Production rate store itself is required, not deferred. |
-| Definition of Done | Next owner can set up and audit without reinterpretation; all completion claims are evidence-backed; report says controlled/mock/pilot-ready only where true. |
+| Definition of Done | Next owner can set up and audit without reinterpretation; all completion claims are evidence-backed; report says controlled/mock/demo-ready and explicitly withholds pilot-/production-readiness while external gates are open. |

@@ -9,7 +9,8 @@ feldgenauen Freigabe. Bezahlte Job-Boosts werden sichtbar gekennzeichnet und
 verändern niemals den Fair-Job-Score.
 
 Der aktuelle Stand ist **Demo-ready für lokale Vorführungen und kontrollierte
-Pilot-Evaluationen mit Mock-Providern**. Er ist **nicht Production-ready**:
+interne Produkt-Evaluationen mit Mock-Providern**. Er ist **weder pilot-ready
+noch Production-ready**:
 externe Provider, Rechts-/Datenschutz-/Steuerfreigaben, produktiver
 Worker-Betrieb, Incident-Prozesse und bestätigte Recovery-SLAs sind separate
 Go-live-Gates. Den reproduzierten Release- und Teststatus des Zielcommits
@@ -606,8 +607,9 @@ Identitäten, DB-URLs und Credentials dürfen nie committed werden.
 
 ## Deployment-Hinweise
 
-Ein Deployment ist erst nach grünem Release-Report und den noch offenen
-Legal-/Privacy-/Tax-/Provider-/Ops-Gates zulässig.
+Ein Deployment ist erst zulässig, nachdem der grüne technische Release-Report
+vorliegt **und** sämtliche dafür relevanten, weiterhin offenen
+Legal-/Privacy-/Tax-/Provider-/Ops-Gates geschlossen und freigegeben wurden.
 
 1. Einen verwalteten, PostgreSQL-16-kompatiblen Anbieter in einer
    freigegebenen Schweizer/EU-Region mit TLS, Backups, Restore-Möglichkeit,
@@ -672,7 +674,7 @@ fachliche Freigabe vor einem realen Betrieb.
 - [`codex-plan/18-documentation-final-audit.md`](./codex-plan/18-documentation-final-audit.md)
   — Phase-18-Vertrag;
 - [`codex-plan/evidence/README.md`](./codex-plan/evidence/README.md) —
-  Evidence-Index einschließlich Phase 17;
+  Evidence-Index einschließlich Phase 18;
 - [`BUILD_REPORT.md`](./BUILD_REPORT.md) — Zielcommit, tatsächlich ausgeführte
   Gates, E2E-08, bekannte Blocker und ehrlicher Freigabestatus.
 

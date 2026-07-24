@@ -377,7 +377,7 @@ flowchart LR
 
 ## 12 — Katalog, Entitlements, Credits und idempotentes Mock-Billing
 
-**Status:** [x] Abgeschlossen und gegen Code-Commit `b28245e6ba1c2fce29c5b05f2383410da0d7410e` verifiziert; siehe [Phase-12-Evidence](./evidence/2026-07-22-phase-12.md). Der damalige Nachweis umfasste 35 committed Migrationen und den Seed-Vertrag `phase-12-demo-v10`; der additive Phase-11-Nachtrag rotiert den aktuellen Vertrag auf `phase-12-demo-v11`, ohne Billing-Semantik zu ändern. Payment bleibt ein lokaler Mock ohne Stripe oder echte Webhooks; ein autonomer Renewal-Worker ist nicht Bestandteil dieses Abschlusses. Die abhängigen Phasen 13–18 bleiben offen.
+**Status:** [x] Abgeschlossen und gegen Code-Commit `b28245e6ba1c2fce29c5b05f2383410da0d7410e` verifiziert; siehe [Phase-12-Evidence](./evidence/2026-07-22-phase-12.md). Der damalige Nachweis umfasste 35 committed Migrationen und den Seed-Vertrag `phase-12-demo-v10`; der additive Phase-11-Nachtrag rotierte den damaligen Vertrag auf `phase-12-demo-v11`, ohne Billing-Semantik zu ändern. Payment bleibt ein lokaler Mock ohne Stripe oder echte Webhooks; ein autonomer Renewal-Worker ist nicht Bestandteil dieses Abschlusses. Die abhängigen Phasen 13–18 waren zu diesem Zeitpunkt offen und wurden später separat verifiziert.
 
 **Ziel und Begründung:** Monetarisierung als konsistente Domain statt verstreuter UI-Gates; einziges Payment-/Fulfillment-Ownership.
 
@@ -557,7 +557,7 @@ flowchart LR
 
 ## 18 — Dokumentation, Deployment-/Restore-Probe und finaler Release-Audit
 
-**Ziel und Begründung:** Ehrliche Übergabe und kontrollierte Pilotfreigabe; Mock-/Legal-/Ops-Grenzen bleiben sichtbar.
+**Ziel und Begründung:** Ehrliche Übergabe und lokal verifizierter technischer Demo-Abschluss; Mock-/Legal-/Ops-Grenzen bleiben sichtbar.
 
 **Abhängigkeiten:** 17 und geschlossene P0 Auditpunkte.
 
@@ -571,12 +571,12 @@ flowchart LR
 
 **Seed:** E2E-08 clean isolated clone/database, seed twice, Production guard; `pg_dump -Fc` streamed directly through Age encryption and restored into a distinct empty DB with checksum/evidence, no plaintext artifact.
 
-**Tests/Verifikation:** all Phase-17 commands/E2E-01–07 again on release commit; implement/run E2E-08 clean clone→migrate/seed/build→backup→isolated restore→four-role/public smoke; record checksum/RPO/RTO/DB identifiers; migration/dependency/secret/link/route/trace audit and staging smoke.
+**Tests/Verifikation:** all Phase-17 commands/E2E-01–07 again on release commit; implement/run E2E-08 clean clone→migrate/seed/build→backup→isolated restore→four-role/public smoke; record checksum/RPO/RTO/DB identifiers; migration/dependency/secret/link/route/trace audit. Ein realer Staging-Smoke bleibt ein separates externes Gate.
 
 **Definition of Done / erwartetes Ergebnis:** Coding-Agent oder Team kann Setup, Betrieb und Einschränkungen ohne Interpretation nachvollziehen; jede `[x]` hat Evidence; `plan-audit.md` hat 0 offene P0; Abschlussbericht nennt Mocks, rechtliche Prüfungen und Nicht-Produktionsreife korrekt.
 
-**Risiken/Limitierungen:** Pilotfreigabe ist nicht allgemeine Produktion. Reale Provider, formale DSG-/AGB-/Steuerprüfung, durable Workers, Incident Response und bestätigte encrypted-backup SLAs remain Go-live gates; shared atomic rate limiting is required in the release candidate, not deferred.
+**Risiken/Limitierungen:** Auch eine spätere Pilotfreigabe wäre keine allgemeine Produktionsfreigabe. Reale Provider, formale DSG-/AGB-/Steuerprüfung, durable Workers, Incident Response und bestätigte encrypted-backup SLAs remain Go-live gates; shared atomic rate limiting is required in the release candidate, not deferred.
 
-## Startentscheidung
+## Abschlussentscheidung
 
-Schritte 01 bis 12 sind gemäss ihren Evidence-Records abgeschlossen. Der nächste zulässige Schritt ist **Schritt 13 — Job Boosts** im Zielrepository. Quellcode aus Referenzprojekten bleibt reine Vergleichsbasis und darf auch in späteren Schritten nicht blind kopiert oder als Ziel-Evidence behandelt werden.
+Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert und lokal verifiziert. Der technische Abschluss ist „Demo-ready, serverseitig gegatet, mit lokalen Mock-Providern“, nicht pilot- oder production-ready. Weitere Umsetzung beginnt nur über ein ausdrücklich freigegebenes Folgepaket oder durch Schliessen der externen Staging-/Legal-/Privacy-/Tax-/Provider-/Ops-Gates; REQ-REC-002 bleibt separat gegatet. Quellcode aus Referenzprojekten bleibt reine Vergleichsbasis und darf nicht blind kopiert oder als Ziel-Evidence behandelt werden.
