@@ -41,7 +41,7 @@ export default async function BusinessCockpitPage() {
   return (
     <div className="grid gap-8">
       <header>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Badge>{cockpit.policyVersion}</Badge>
           <Badge variant="outline">{financial.policyVersion}</Badge>
         </div>
@@ -53,7 +53,7 @@ export default async function BusinessCockpitPage() {
       </header>
 
       <section>
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-semibold">Finanzen</h2>
           <Link className="text-sm font-medium text-primary" href="/admin/analytics">
             Definitionen und Details →
