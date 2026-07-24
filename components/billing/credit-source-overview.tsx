@@ -17,7 +17,10 @@ export function CreditSourceOverview({
     (credit) => credit.expiringSoon,
   );
   return (
-    <section aria-labelledby="credit-sources-title" className="grid gap-5">
+    <section
+      aria-labelledby="credit-sources-title"
+      className="grid min-w-0 gap-5"
+    >
       <div>
         <h2 id="credit-sources-title" className="text-xl font-semibold">
           Guthaben nach Finanzierungsquelle
@@ -53,7 +56,7 @@ export function CreditSourceOverview({
             Jede aktive Quelle behält ihren eigenen Typ, Restbestand und Ablauf.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           {usage.purchasedAndGranted.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Keine zusätzlichen aktiven Guthaben.
@@ -112,7 +115,13 @@ export function CreditSourceOverview({
               Noch keine Guthabenbewegungen.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <div
+              className="max-w-full overflow-x-auto"
+              data-e2e-horizontal-scroll="true"
+              role="region"
+              aria-label="Letzte Guthabenbewegungen"
+              tabIndex={0}
+            >
               <table className="w-full min-w-[42rem] text-left text-sm">
                 <thead className="text-muted-foreground">
                   <tr>

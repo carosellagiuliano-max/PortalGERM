@@ -53,7 +53,7 @@ export default async function AdminAuditPage({
       </header>
 
       <form
-        className="grid gap-3 rounded-lg border bg-card p-4 lg:grid-cols-4"
+        className="grid min-w-0 gap-3 rounded-lg border bg-card p-4 lg:grid-cols-4"
         method="get"
       >
         <FilterSelect label="Aktion" name="action" values={AUDIT_ACTIONS_V1} />
@@ -67,10 +67,10 @@ export default async function AdminAuditPage({
           name="result"
           values={AUDIT_RESULTS_V1}
         />
-        <label className="grid gap-1 text-sm">
+        <label className="grid min-w-0 gap-1 text-sm">
           Correlation-ID
           <input
-            className="h-10 rounded-lg border bg-background px-3"
+            className="h-10 w-full min-w-0 rounded-lg border bg-background px-3"
             maxLength={128}
             name="correlationId"
             pattern="[A-Za-z0-9._:-]+"
@@ -96,6 +96,9 @@ export default async function AdminAuditPage({
         <div
           className="overflow-x-auto rounded-lg border"
           data-e2e-horizontal-scroll="true"
+          role="region"
+          aria-label="Audit-Evidenztabelle"
+          tabIndex={0}
         >
           <table className="min-w-[70rem] text-left text-sm">
             <thead className="bg-muted/50">
@@ -166,9 +169,12 @@ function FilterSelect({
   values: readonly string[];
 }>) {
   return (
-    <label className="grid gap-1 text-sm">
+    <label className="grid min-w-0 gap-1 text-sm">
       {label}
-      <select className="h-10 rounded-lg border bg-background px-3" name={name}>
+      <select
+        className="h-10 w-full min-w-0 rounded-lg border bg-background px-3"
+        name={name}
+      >
         <option value="">Alle</option>
         {values.map((value) => (
           <option key={value}>{value}</option>

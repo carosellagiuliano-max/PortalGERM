@@ -49,7 +49,13 @@ export function JobsTable({
     );
   }
   return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
+    <div
+      className="max-w-full overflow-x-auto rounded-xl border bg-card"
+      data-e2e-horizontal-scroll="true"
+      role="region"
+      aria-label="Jobtabelle"
+      tabIndex={0}
+    >
       <table className="w-full min-w-[70rem] text-left text-sm">
         <thead className="border-b bg-muted/40 text-xs text-muted-foreground"><tr><th className="px-4 py-3">Titel</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Standort</th><th className="px-4 py-3">Bewerbungen</th><th className="px-4 py-3">Views</th><th className="px-4 py-3">Saves</th><th className="px-4 py-3">Fair-Job-Score</th><th className="px-4 py-3">Boost</th><th className="px-4 py-3">Aktionen</th></tr></thead>
         <tbody className="divide-y">{jobs.map((job) => <JobRow key={job.id} job={job} actions={actions} keys={idempotencyKeys[job.id] ?? {}} />)}</tbody>

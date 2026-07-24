@@ -49,7 +49,7 @@ export default async function EmployerBillingPage() {
   }
   const isOwner = context.membershipRole === "OWNER";
   return (
-    <section aria-labelledby="billing-title" className="grid gap-7">
+    <section aria-labelledby="billing-title" className="grid min-w-0 gap-7">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="eyebrow">Firma · Billing</p>
@@ -173,11 +173,17 @@ export default async function EmployerBillingPage() {
           <CardTitle as="h2">Letzte Bestellungen</CardTitle>
           <CardDescription>Status und unveränderlicher Rechnungsbetrag.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           {overview.recentOrders.length === 0 ? (
             <p className="text-sm text-muted-foreground">Noch keine Bestellungen.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div
+              className="max-w-full overflow-x-auto"
+              data-e2e-horizontal-scroll="true"
+              role="region"
+              aria-label="Letzte Bestellungen"
+              tabIndex={0}
+            >
               <table className="w-full min-w-[42rem] text-left text-sm">
                 <thead className="text-muted-foreground"><tr><th className="pb-2">Datum</th><th className="pb-2">Produkt / Plan</th><th className="pb-2">Status</th><th className="pb-2 text-right">Total</th><th className="pb-2"><span className="sr-only">Aktion</span></th></tr></thead>
                 <tbody>

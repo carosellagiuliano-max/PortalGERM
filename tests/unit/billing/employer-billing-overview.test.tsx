@@ -55,11 +55,28 @@ describe("employer Billing overview", () => {
           },
         ],
         totalFundable: { talentContacts: 2, jobBoosts: 0 },
-        ledgerHistory: [],
+        ledgerHistory: [
+          {
+            id: "ledger-1",
+            createdAt: new Date("2026-07-20T10:00:00.000Z"),
+            creditType: "TALENT_CONTACT",
+            fundingSource: "ADMIN_GRANT",
+            kind: "GRANT",
+            amount: 2,
+          },
+        ],
       },
       openInvoiceCount: 0,
       openInvoiceTotalRappen: 0,
-      recentOrders: [],
+      recentOrders: [
+        {
+          id: "order-1",
+          createdAt: new Date("2026-07-20T10:00:00.000Z"),
+          label: "Contact Pack",
+          status: "PAID",
+          totalRappen: 9_900,
+        },
+      ],
       cancellationRetentionOptions: [],
       profileComplete: true,
     });
@@ -78,5 +95,15 @@ describe("employer Billing overview", () => {
     expect(
       screen.queryByRole("link", { name: "Talent Radar mit Pro freischalten" }),
     ).not.toBeInTheDocument();
+    const orders = screen.getByRole("region", {
+      name: "Letzte Bestellungen",
+    });
+    const ledger = screen.getByRole("region", {
+      name: "Letzte Guthabenbewegungen",
+    });
+    expect(orders).toHaveAttribute("data-e2e-horizontal-scroll", "true");
+    expect(ledger).toHaveAttribute("data-e2e-horizontal-scroll", "true");
+    expect(orders.closest('[data-slot="card-content"]')).toHaveClass("min-w-0");
+    expect(ledger.closest('[data-slot="card"]')).toHaveClass("min-w-0");
   });
 });
