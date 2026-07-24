@@ -101,6 +101,16 @@ jobs:
       - name: Umgebung validieren
         run: npm run env:validate
 
+      - name: CI-Env-Initialisierung ohne Dateischreibzugriff verifizieren
+        run: npm run env:init -- --ci
+
+      - name: Plan-, Routen-, Secret- und Lizenz-Audits
+        run: |
+          npm run plan:audit
+          npm run route:audit
+          npm run security:release-scan
+          npm run license:audit
+
       - name: Isolierte Testdatenbank anlegen
         shell: bash
         run: >-
@@ -244,6 +254,17 @@ jobs:
 
       - name: Umgebung validieren
         run: npm run env:validate
+
+      - name: CI-Env-Initialisierung ohne Dateischreibzugriff verifizieren
+        run: npm run env:init -- --ci
+
+      - name: Plan-, Routen-, Secret- und Lizenz-Audits
+        shell: pwsh
+        run: |
+          npm run plan:audit
+          npm run route:audit
+          npm run security:release-scan
+          npm run license:audit
 
       - name: Prisma Client generieren
         run: npm run db:generate

@@ -6,21 +6,30 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
 import { parseEnvironment } from "@/lib/config/env-schema";
+import { inspectPostgresTarget } from "@/lib/db/database-target";
 
 const argumentsSet = new Set(process.argv.slice(2));
 const ciMode = process.env.CI === "true" || argumentsSet.has("--ci");
 const nonInteractive = argumentsSet.has("--non-interactive") || ciMode;
 
+if (
+  process.env.NODE_ENV === "production" ||
+  process.env.APP_ENV === "production" ||
+  process.env.APP_ENV === "staging"
+) {
+  throw new Error("env:init refuses Production and Staging environments.");
+}
+
 if (ciMode) {
+  if (process.env.APP_ENV !== "ci") {
+    throw new Error("env:init --ci requires APP_ENV=ci.");
+  }
   parseEnvironment(process.env);
   console.info("CI environment validated; no file was written.");
   process.exit(0);
 }
 
-if (
-  process.env.NODE_ENV === "production" ||
-  (process.env.APP_ENV !== undefined && process.env.APP_ENV !== "local")
-) {
+if (process.env.APP_ENV !== undefined && process.env.APP_ENV !== "local") {
   throw new Error("env:init only runs in an explicitly local environment.");
 }
 
@@ -38,7 +47,7 @@ if (existsSync(targetPath)) {
   throw new Error(".env.local already exists; env:init never overwrites it.");
 }
 
-const defaults = {
+let urls = {
   databaseUrl:
     "postgresql://swisstalenthub:local-development-only@127.0.0.1:5434/swisstalenthub?schema=public",
   testDatabaseUrl:
@@ -48,14 +57,22 @@ const defaults = {
 
 if (!nonInteractive && stdin.isTTY && stdout.isTTY) {
   const prompt = createInterface({ input: stdin, output: stdout });
-  const confirmation = await prompt.question(
-    "Lokale DATABASE_URL, TEST_DATABASE_URL und APP_URL übernehmen? [J/n] ",
-  );
-  prompt.close();
-  if (confirmation.trim().toLowerCase() === "n") {
-    throw new Error(
-      "env:init was cancelled. Create the local file deliberately if different endpoints are required.",
+  try {
+    const confirmation = await prompt.question(
+      "Sichere lokale PostgreSQL-Ziele auf Loopback 5434/5435 verwenden? [J/n] ",
     );
+    if (confirmation.trim().toLowerCase() === "n") {
+      throw new Error(
+        "env:init was cancelled; it never accepts or echoes a credential-bearing URL.",
+      );
+    }
+    urls = {
+      databaseUrl: urls.databaseUrl,
+      testDatabaseUrl: urls.testDatabaseUrl,
+      appUrl: await askWithDefault(prompt, "Lokale APP_URL", urls.appUrl),
+    };
+  } finally {
+    prompt.close();
   }
 }
 
@@ -63,9 +80,9 @@ const secret = () => randomBytes(32).toString("base64");
 const values: Record<string, string> = {
   APP_ENV: "local",
   NODE_ENV: "development",
-  DATABASE_URL: defaults.databaseUrl,
-  TEST_DATABASE_URL: defaults.testDatabaseUrl,
-  APP_URL: defaults.appUrl,
+  DATABASE_URL: urls.databaseUrl,
+  TEST_DATABASE_URL: urls.testDatabaseUrl,
+  APP_URL: urls.appUrl,
   NEXT_PUBLIC_APP_NAME: "SwissTalentHub",
   APP_BUILD_ID: "local-development",
   SESSION_SECRET: secret(),
@@ -90,6 +107,7 @@ const values: Record<string, string> = {
   MAPS_API_KEY: "",
 };
 
+assertSafeLocalDatabaseUrls(urls.databaseUrl, urls.testDatabaseUrl);
 parseEnvironment(values);
 
 const file = `${Object.entries(values)
@@ -105,3 +123,34 @@ await writeFile(targetPath, file, {
 console.info(
   `Created ignored .env.local with ${Object.keys(values).join(", ")}. Values were not printed.`,
 );
+
+async function askWithDefault(
+  prompt: ReturnType<typeof createInterface>,
+  label: string,
+  fallback: string,
+) {
+  const answer = await prompt.question(`${label} [Enter = Standard]: `);
+  return answer.trim() === "" ? fallback : answer.trim();
+}
+
+function assertSafeLocalDatabaseUrls(
+  databaseUrl: string,
+  testDatabaseUrl: string,
+) {
+  const application = inspectPostgresTarget(databaseUrl);
+  const test = inspectPostgresTarget(testDatabaseUrl);
+  if (
+    application === undefined ||
+    test === undefined ||
+    application.hostname !== "loopback" ||
+    test.hostname !== "loopback" ||
+    application.identity === test.identity ||
+    !/test/iu.test(test.databaseName) ||
+    /prod|production|staging|shared/iu.test(application.databaseName) ||
+    /prod|production|staging|shared/iu.test(test.databaseName)
+  ) {
+    throw new Error(
+      "env:init requires distinct, non-production loopback DATABASE_URL and TEST_DATABASE_URL targets.",
+    );
+  }
+}

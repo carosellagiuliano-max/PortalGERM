@@ -1,0 +1,779 @@
+[
+  {
+    "kind": "page",
+    "path": "/",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/analytics",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/audit",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/billing",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/business-cockpit",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/companies",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/companies/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/content",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/content/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/content/clusters/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/imports",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/imports/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/invoices",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/invoices/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/jobs",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/jobs/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/leads",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/leads/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/orders",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/orders/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/plans",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/privacy-requests",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/privacy-requests/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/products",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/reports",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/reports/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/support",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/support/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/system",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/taxonomy",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/users",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/users/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/alerts/unsubscribe/[token]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/alerts",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/applications",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/applications/[id]",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/dashboard",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/jobpass",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/messages",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/messages/[threadId]",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/privacy",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/privacy/requests/[id]",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/privacy/requests/[id]/verify",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/saved-jobs",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/support",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/talent-radar",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/talent-radar/requests",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/talent-radar/requests/[id]",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/talent-radar/requests/[id]/report",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/companies",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/companies/[slug]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/dev/mailbox",
+    "roles": [
+      "LOCAL_OPS_TOKEN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/analytics",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/applicants",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/applicants/[id]",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/billing",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/billing/checkout",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/billing/invoices",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/billing/invoices/[id]",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/billing/profile",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/billing/success",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/billing/usage",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/company",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/company/claim-pending",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/dashboard",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/jobs",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/jobs/[id]",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/jobs/[id]/boost",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/jobs/new",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/talent-radar",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/talent-radar/requests",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/talent-radar/requests/[id]",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/team",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/team/invitations",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employers",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employers/demo",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employers/employer-branding",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employers/post-job",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employers/talent-radar",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employers/xml-import",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/forbidden",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/forgot-password",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/guide",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/guide/[slug]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/health/live",
+    "roles": [
+      "PUBLIC_OPERATIONS"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/health/ready",
+    "roles": [
+      "PUBLIC_OPERATIONS"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/invite/[token]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/invite/resume",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/jobs",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/jobs/[slug]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/jobs/kanton/[slug]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/jobs/kanton/[slug]/kategorie/[category]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/jobs/kategorie/[slug]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/login",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/logout",
+    "roles": [
+      "AUTHENTICATED"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/mock/checkout/[orderId]",
+    "roles": [
+      "EMPLOYER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/pricing",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/register",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/register/candidate",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/register/employer",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/reset-password",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/salary-radar",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/session/clear",
+    "roles": [
+      "AUTHENTICATED"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/session/refresh",
+    "roles": [
+      "AUTHENTICATED"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/support",
+    "roles": [
+      "CANDIDATE",
+      "EMPLOYER",
+      "RECRUITER",
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/support/[id]",
+    "roles": [
+      "CANDIDATE",
+      "EMPLOYER",
+      "RECRUITER",
+      "ADMIN"
+    ]
+  }
+]

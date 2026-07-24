@@ -1,229 +1,682 @@
 # SwissTalentHub / PortalGERM
 
-**Phasen 01 bis 16 sind implementiert und verifiziert; als nächster Schritt folgt Phase 17.** Auf der reproduzierbaren Next.js-/TypeScript-Foundation und dem Prisma/PostgreSQL-Domänenvertrag stehen inzwischen Core-Policies, netzwerkfreie lokale Provider-Mocks mit persistierten Logs/Effekten, ein deterministischer Demo-Datensatz, End-to-End-Authentifizierung und rollen-/mandantenbasierte Autorisierung.
+SwissTalentHub ist ein Schweizer Job-Marktplatz für Stellensuchende, Arbeitgeber,
+Recruiter und Plattform-Operations. Der kontrollierte MVP verbindet öffentliche
+Job- und Firmensuche, transparente Lohnbänder und einen versionierten
+Fair-Job-Score mit Candidate-, Employer- und Admin-Workflows. Talent Radar schützt
+die Identität von Kandidat:innen bis zu einer ausdrücklich bestätigten,
+feldgenauen Freigabe. Bezahlte Job-Boosts werden sichtbar gekennzeichnet und
+verändern niemals den Fair-Job-Score.
 
-Der aktuelle Produktumfang umfasst öffentliche Job- und Firmen-Discovery, eine datenbankgerankte Keyset-Suche, stabile SEO-/Canonical-/Sitemap-Verträge, Jobdetails und sichere Save-/Apply-Intents, Pricing sowie persistierte Arbeitgeber-Leads. Kandidaten erhalten SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Nachrichten und Privacy-/Talent-Radar-Basics. Arbeitgeber und Recruiter erhalten Firmenprofil und Verifizierungsanträge, Team/Einladungen/Zuweisungen, Jobliste und 5-Schritt-Wizard, Bewerberpipeline sowie ehrliche Analytics- und Radar-Locked-States. Arbeitgeber-Owner können ausserdem Billingprofile, Abonnemente, Credits, Kontingente, Rechnungen und den vollständig lokalen Mock-Checkout verwalten. Plattformadmins betreiben Job-/Company-/User-Moderation, Reports, lizenzierte Imports, Support, Content, Taxonomie, Leads, Billing/Katalog sowie evidenzbasierte Operations- und Finanzansichten. Phase 16 schliesst den kontrollierten MVP mit per-request CSP-Nonces, CSRF-/IDOR-/Cache-Härtung, strukturiertem redigiertem Logging, Health-/Readiness-Routen, vollständiger Audit-Evidenz und Abuse-Workflows ab.
+Der aktuelle Stand ist **Demo-ready für lokale Vorführungen und kontrollierte
+Pilot-Evaluationen mit Mock-Providern**. Er ist **nicht Production-ready**:
+externe Provider, Rechts-/Datenschutz-/Steuerfreigaben, produktiver
+Worker-Betrieb, Incident-Prozesse und bestätigte Recovery-SLAs sind separate
+Go-live-Gates. Den reproduzierten Release- und Teststatus des Zielcommits
+dokumentiert [`BUILD_REPORT.md`](./BUILD_REPORT.md).
 
-Job-Boosts besitzen einen vollständigen, zeitgebundenen Lebenszyklus mit Plan-/Admin-Credit oder lokalem Mock-Checkout, Arbeitgeber-/Admin-Kündigung, öffentlicher Kennzeichnung und begrenzter Sponsored-Zone. **Boosts beeinflussen die Sichtbarkeit, niemals den Fair-Job-Score.** Talent Radar bietet berechtigten, verifizierten Firmen eine kohortengeschützte anonyme Suche, atomar finanzierte Kontaktanfragen und ausschliesslich kandidatengesteuerte, feldgenaue Reveal-Snapshots; Kandidat:innen und Admins erhalten die dazugehörigen Contact-, Consent-, Abuse- und Privacy-Case-Workflows. Der Zahlungsfluss bleibt ausdrücklich ein lokaler Mock: Es gibt weder Stripe noch echte Payment-Webhooks oder einen autonomen Renewal-Worker. Export und Löschung bleiben dokumentierte P0-Mock-Verfahren ohne automatische Dateiübermittlung oder Datenlöschung. Alle Provider bleiben lokale Mocks; echte Provider, Produktionsbetrieb und eine abschliessende Produktions-/DSG-Freigabe sind nicht behauptet.
+## Demo-Konten
 
-## Verbindliche Runtime
+Die folgenden Konten existieren nur nach dem lokalen/CI-Demo-Seed. Das gemeinsame
+Passwort lautet `Demo12345!`. Diese Zugangsdaten dürfen niemals in Staging oder
+Production angelegt oder wiederverwendet werden.
 
-- Node.js **24.18.0**
-- npm **11.16.0**
-- PostgreSQL **16**
+| Perspektive | E-Mail | Rolle / Fixture | Einstieg |
+|---|---|---|---|
+| Kandidat:in | `candidate@demo.ch` | `CANDIDATE` | `/candidate/dashboard` |
+| Arbeitgeber | `employer@demo.ch` | `EMPLOYER`, Owner von NovaRigi Digital AG, Pro | `/employer/dashboard` |
+| Recruiter | `recruiter@demo.ch` | `RECRUITER`, zugewiesene NovaRigi-Jobs | `/employer/dashboard` |
+| Plattformadmin | `admin@demo.ch` | `ADMIN` | `/admin` |
 
-Die Node-Version ist in `.node-version` und `.nvmrc`, die npm-Version in `package.json#packageManager` und den Engines gepinnt. `engine-strict=true` verhindert Installationen mit einer abweichenden Runtime.
+Für Plan- und Entitlement-Vergleiche erzeugt derselbe Seed zusätzlich diese
+Arbeitgeber-Owner:
 
-Prüfen:
+| Plan | Firma | Login |
+|---|---|---|
+| Free Basic | Alpenfaden Atelier GmbH | `owner+alpenfaden-atelier@demo.swisstalenthub.test` |
+| Starter | Rheintal Werkbogen AG | `owner+rheintal-werkbogen@demo.swisstalenthub.test` |
+| Pro | NovaRigi Digital AG | `employer@demo.ch` |
+| Business | Carevia Quartiergesundheit AG | `owner+carevia-quartiergesundheit@demo.swisstalenthub.test` |
+| Enterprise Contract | Quarzspindel Industriewerke AG | `owner+quarzspindel-industriewerke@demo.swisstalenthub.test` |
 
-```powershell
+## Verbindliche Runtime und Tech-Stack
+
+| Bereich | Implementierung |
+|---|---|
+| Runtime | Node.js `24.18.0`, npm `11.16.0` |
+| Web | Next.js `16.2.11` App Router, React `19.2.7`, TypeScript `5.9.3` |
+| UI | Tailwind CSS `4.3.3`, shadcn CLI `4.13.1`, Base UI, Lucide |
+| Daten | PostgreSQL 16, Prisma ORM/Client `7.8.0` |
+| Validierung | Zod `4.4.3`, zusätzliche Domain- und SQL-Constraints |
+| Auth | Eigene E-Mail/Passwort-Authentifizierung mit `bcryptjs`, persistierten DB-Sessions und httpOnly-Cookie; kein Auth.js |
+| Tests | Vitest `4.1.10`, Testing Library, Playwright `1.61.1`, axe-core |
+| Provider | Sechs serverseitige Ports mit lokalen, netzwerkfreien Mock-Adaptern |
+
+Die Versionen sind in `.node-version`, `.nvmrc`,
+`package.json#packageManager` und `package.json#engines` festgelegt.
+`engine-strict=true` lehnt eine abweichende Runtime ab.
+
+```text
 node --version
 npm --version
 ```
 
 Erwartet werden `v24.18.0` und `11.16.0`.
 
+## Architektur
+
+Die Anwendung folgt einem serverseitig autorisierten, mock-first
+Ports-and-Adapters-Ansatz. UI oder Route Handler nehmen keine Preise,
+Tenant-Zugehörigkeiten oder Identitätsfreigaben als autoritativ an. Der
+vollständige Pfad lautet:
+
+```text
+UI/Route
+  -> Zod-Eingabe
+  -> Session, Rolle, Capability und Ownership
+  -> Domain-Policy/Use Case
+  -> autorisiertes Repository / Provider-Port
+  -> PostgreSQL-Transaktion
+  -> Audit/Notification
+  -> redigierte Antwort und UI-Feedback
+```
+
+| Verzeichnis | Verantwortung |
+|---|---|
+| [`app`](./app) | Next.js-Routen, Layouts, Server Actions und Route Handler |
+| [`components`](./components) | UI-Primitives und rollenbezogene Oberflächen |
+| [`lib`](./lib) | Domain-Policies, Auth, Billing, Search, Privacy, Provider-Ports und autorisierte Datenzugriffe |
+| [`prisma`](./prisma) | Schema, 43 committed Migrationen, deterministischer Seed |
+| [`tests`](./tests) | Unit-, PostgreSQL-Integration- und Playwright-E2E-Suiten |
+| [`scripts`](./scripts) | plattformneutrale Env-, DB-, Release-, Security- und Recovery-Werkzeuge |
+| [`codex-plan`](./codex-plan) | verbindlicher Plan, ADRs, Requirements und Evidence |
+
+Weiterführende Verträge:
+
+- [`lib/scoring/__rules.md`](./lib/scoring/__rules.md) — Fair-Job- und
+  Match-Score-Regeln;
+- [`codex-plan/decisions.md`](./codex-plan/decisions.md) — Architecture Decision
+  Records;
+- [`codex-plan/glossary.md`](./codex-plan/glossary.md) — gemeinsame
+  Fachbegriffe;
+- [`prisma/README.md`](./prisma/README.md) — Datenmodell- und
+  Migrationshinweise.
+
 ## Voraussetzungen
 
-- Git und eine PowerShell- oder vergleichbare Shell
-- Node.js/npm in den oben genannten exakten Versionen
-- Docker Desktop beziehungsweise Docker Engine mit Compose für die lokale PostgreSQL-Instanz
-- freie lokale Ports `3000`, `5434` und bei Integrationstests `5435`
+- Git;
+- exakt die oben genannten Node-/npm-Versionen;
+- Docker Desktop beziehungsweise Docker Engine mit Compose für die
+  dokumentierte lokale PostgreSQL-Option;
+- freie Ports `3000`, `5434` und für Integrationstests `5435`;
+- für den isolierten Recovery-Drill zusätzlich `age`/`age-keygen` sowie
+  PostgreSQL-16-`pg_dump`/`pg_restore` oder die dokumentierte
+  Docker-Compose-Toolausführung.
 
 ## Lokales Setup
 
-```powershell
+Falls kein PostgreSQL 16 läuft, zuerst die lokale, nur an Loopback gebundene
+Compose-Datenbank starten:
+
+```text
+docker compose up -d postgres
+```
+
+Danach sind die Setup-Befehle in PowerShell, cmd, bash und CI identisch:
+
+```text
 npm ci
 npm run env:init
-npm run env:validate
-docker compose up -d postgres
 npm run db:generate
-npm run db:validate
 npm run db:migrate
-npm run db:migrate:status
 npm run db:seed
-npm run db:smoke
 npm run dev
 ```
 
-Danach ist die lokale Anwendung unter [http://127.0.0.1:3000](http://127.0.0.1:3000) erreichbar.
+Die Anwendung ist danach unter
+[http://127.0.0.1:3000](http://127.0.0.1:3000) erreichbar.
 
-Der lokale Demo-Seed stellt unter anderem folgende bereits dokumentierte Konten bereit (Passwort jeweils `Demo12345!`):
+`npm run env:init`:
 
-- `candidate@demo.ch` — Candidate-Portal
-- `employer@demo.ch` — Arbeitgeber-Portal, Owner einer Pro-Demofirma
-- `recruiter@demo.ch` — Recruiter mit mandanten- und jobgebundenen Zuweisungen
-- `admin@demo.ch` — Adminportal für Operations, Moderation, Import, Support, Content, Leads sowie Phase-12-Billing und -Katalog
+- verweigert Staging, Production und einen Production-Node-Prozess;
+- erzeugt ausschließlich eine ignorierte `.env.local`, nur wenn sie noch nicht
+  existiert, mit Dateimodus `0600`, soweit das Dateisystem ihn unterstützt;
+- bestätigt interaktiv getrennte lokale PostgreSQL-Ziele auf Loopback und
+  validiert die eingegebene credential-freie `APP_URL`;
+- übernimmt keine DB-/App-URL aus dem Prozess und gibt keine
+  credential-tragende DB-URL aus;
+- erzeugt Session-Secret, alle fünf Keyrings und das Mailbox-Secret aus jeweils
+  32 CSPRNG-Bytes;
+- setzt `RATE_LIMIT_BACKEND=postgres` und lässt alle zukünftigen
+  Provider-Platzhalter leer;
+- validiert das Ergebnis vor dem exklusiven Neuanlegen und gibt nur
+  Variablennamen, niemals Werte aus.
 
-`npm ci` verwendet ausschliesslich das committed Lockfile. `package.json#allowScripts` dokumentiert zusätzlich die versionsgenaue Soll-Allowlist geprüfter Dependency-Install-Scripts; das gepinnte npm 11.16 meldet die streng erzwingende Projektoption `strict-allow-scripts` jedoch noch als unbekannt. Diese Erzwingung wird deshalb ehrlich als Runtime-Upgrade-Punkt geführt und nicht als bereits wirksam behauptet. `npm run env:init` erzeugt einmalig eine ignorierte `.env.local` mit lokal gültigen, voneinander verschiedenen Zufallsschlüsseln. Der Befehl überschreibt keine vorhandene Datei, läuft nur lokal, übernimmt keine URL aus dem Shell-Environment und setzt auf unterstützenden Dateisystemen Modus `0600`. `.env.example` ist absichtlich nicht direkt lauffähig und enthält nur erkennbare Platzhalter.
+`npm run env:init -- --non-interactive` verwendet ausschließlich die sicheren
+lokalen Defaults. `npm run env:init -- --ci` verlangt `APP_ENV=ci`, validiert nur
+die vollständig vorab gesetzte Prozessumgebung und schreibt keine Datei.
+`npm run env:validate` validiert die aktive Prozesskonfiguration oder, wenn
+keine explizite Prozesskonfiguration vorhanden ist, die lokale Env-Datei.
 
 ## Umgebungsvariablen
 
-`npm run env:validate` prüft unter anderem:
+Die vollständige, absichtlich nicht direkt lauffähige Vorlage ist
+[`.env.example`](./.env.example). Fehler nennen nur Variablennamen und Regeln,
+nie Secret-Werte. `.env`, `.env.local`, andere lokale Env-Dateien, private
+Age-Identitäten und Provider-Credentials gehören nicht ins Repository oder in
+Logs.
 
-- ein explizites `APP_ENV`; Prozesskonfiguration und lokale Env-Dateien werden nie still gemischt;
-- PostgreSQL-URLs und absolute `APP_URL`;
-- einen 32-Byte-Base64-`SESSION_SECRET`;
-- getrennte, versionierte 32-Byte-Keyrings für Audit-IP-HMAC, Radar-Lookup, Radar-Verschlüsselung, Reveal-Bestätigung und PII-Reveal;
-- keine wiederverwendeten Schlüssel;
-- `RATE_LIMIT_BACKEND=postgres` und deaktivierte lokale Mock-Mailbox in Staging/Production;
-- einen credential-, query- und fragmentfreien `APP_URL`-Origin;
-- leere, noch nicht freigegebene Real-Provider-Variablen;
-- falls gesetzt, einen absoluten `BACKUP_AGE_IDENTITY_FILE`-Pfad ausserhalb des Repositories.
+### Anwendung und Datenbank
 
-Fehler nennen nur Variablenname und Regel, niemals den Secret-Wert. `.env.local`, `.env` und andere lokale Env-Dateien dürfen nicht committed oder in Logs ausgegeben werden. Ops-Backup-Werte bleiben leer, bis der separate Betriebsprozess freigegeben ist; private Age-Identitäten gehören nie ins Repository.
+| Variable | Pflicht / Scope | Beschreibung |
+|---|---|---|
+| `APP_ENV` | immer | `local`, `ci`, `preview`, `staging` oder `production`; steuert Sicherheits- und Seed-Gates |
+| `NODE_ENV` | immer | Node-Laufzeit `development`, `test` oder `production` |
+| `DATABASE_URL` | immer | Explizite PostgreSQL-URL; in CI muss der DB-Name `ci`/`test` enthalten |
+| `TEST_DATABASE_URL` | Local/CI | Getrennte, testbenannte PostgreSQL-DB; in CI Pflicht, in Staging/Production verboten |
+| `APP_URL` | immer | Absolute credential-, Query-, Fragment- und Pfad-freie HTTP(S)-Origin; Staging/Production nur HTTPS |
+| `NEXT_PUBLIC_APP_NAME` | immer | Öffentlicher Produktname, standardmäßig `SwissTalentHub` |
+| `APP_BUILD_ID` | Staging/Production | Nicht sensitiver, commit-eindeutiger Build-Identifier; lokal `local-development` |
+| `LOG_LEVEL` | immer | `debug`, `info`, `warn` oder `error` |
+| `TRUSTED_PROXY_HOPS` | immer | Lokal `0`; in Staging/Production exakt `1` bis `8` gemäß kontrollierter Ingress-Topologie |
 
-## PostgreSQL und Compose
+Eine vollständig explizite Prozesskonfiguration muss mindestens `APP_ENV`,
+`DATABASE_URL` und `APP_URL` gemeinsam bereitstellen; sie wird nicht still mit
+lokalen Env-Dateien ergänzt.
+
+### Secrets, Rotation und lokale Mailbox
+
+| Variable | Pflicht / Scope | Beschreibung |
+|---|---|---|
+| `SESSION_SECRET` | immer | Kanonisches Base64 für exakt 32 zufällige Bytes |
+| `AUDIT_IP_HASH_KEYS` | immer | Versioniertes HMAC-Keyring für Audit-IP-Pseudonyme |
+| `RADAR_OPAQUE_LOOKUP_KEYS` | immer | Versioniertes HMAC-Keyring für opake Radar-Lookups |
+| `RADAR_OPAQUE_ENCRYPTION_KEYS` | immer | Versioniertes Verschlüsselungs-Keyring für Radar-Mappings |
+| `REVEAL_CONFIRMATION_KEYS` | immer | Versioniertes HMAC-Keyring für einmalige Reveal-Bestätigungen |
+| `PII_REVEAL_KEYS` | immer | Versioniertes Verschlüsselungs-Keyring für freigegebene Identitätswerte |
+| `ENABLE_LOCAL_MOCK_MAILBOX` | Local/Test | Standard `false`; in Production-Builds, Staging und Production zwingend `false` |
+| `DEV_MAILBOX_SECRET` | bei aktivierter lokaler Mailbox | Base64/Base64url für mindestens 32 zufällige Bytes |
+| `ABUSE_REPORT_ADMIN_EMAILS` | Staging/Production | Kommagetrennte, geprüfte Empfängerliste; `admin@demo.ch` ist nur der lokale Default |
+
+Alle `*_KEYS` verwenden kommaseparierte Einträge
+`version:base64-32-byte-key`. Der **erste** Eintrag ist der aktive Writer.
+Ältere, eindeutige Einträge werden nur zum Lesen behalten, bis kein
+persistierter Datensatz mehr auf sie verweist. Schlüsselmaterial darf weder
+zwischen Keyrings noch mit `SESSION_SECRET` wiederverwendet werden.
+
+### Rate-Limiting, Recovery und inaktive Provider
+
+| Variable | Pflicht / Scope | Beschreibung |
+|---|---|---|
+| `RATE_LIMIT_BACKEND` | immer | `postgres`; `memory` ist ausschließlich ein Local/Test-Adapter |
+| `BACKUP_AGE_RECIPIENT` | Recovery-Drill | Ein öffentlicher X25519-`age1...`-Empfänger |
+| `BACKUP_AGE_IDENTITY_FILE` | Restore-Drill | Absoluter, geschützter Secret-Mount außerhalb des Repositories; enthält nur den Pfad, nie das Keymaterial selbst |
+| `STRIPE_SECRET_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
+| `EMAIL_PROVIDER_API_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
+| `OPENAI_API_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
+| `STORAGE_ENDPOINT` | Platzhalter | Für den Mock-MVP leer lassen |
+| `JOBROOM_API_URL` | Platzhalter | Für den Mock-MVP leer lassen |
+| `MAPS_API_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
+
+Nicht leere Provider-Platzhalter werden bis zu einem expliziten
+Security-/Legal-/Ops-Gate abgelehnt. Ein Env-Wert aktiviert nie automatisch
+einen Real-Adapter.
+
+## PostgreSQL, Migrationen und Seed
+
+### Lokale Dienste
 
 | Dienst | Zweck | Host-Port | Persistenz |
 |---|---|---:|---|
 | `postgres` | lokale Entwicklung | `127.0.0.1:5434` | Named Volume `swisstalenthub-postgres` |
 | `postgres-test` | isolierte Integrationstests | `127.0.0.1:5435` | flüchtiges `tmpfs` |
 
-Entwicklungsdatenbank starten:
-
-```powershell
+```text
 docker compose up -d postgres
-```
-
-Zusätzliche Testdatenbank starten:
-
-```powershell
 docker compose --profile test up -d postgres-test
+docker compose config --quiet
 ```
 
-Beide Dienste und die Linux-CI verwenden PostgreSQL `16.13-alpine` mit festem
-Image-Digest. `DATABASE_URL` und `TEST_DATABASE_URL` sind getrennt. CI verwendet
-ausschliesslich eine kurzlebige Service-Datenbank; keine CI-Aktion kennt oder
-akzeptiert eine Production-URL.
+Compose und Linux-CI verwenden PostgreSQL `16.13-alpine` mit festem
+Image-Digest. CI arbeitet ausschließlich mit kurzlebigen, testbenannten
+Service-Datenbanken.
 
-## Prisma, Migration, Seed und DB-Smoke
+### Committed-Migration-Workflow
 
-```powershell
+```text
+npm run db:generate
+npm run db:validate
+npm run db:migrate
+npm run db:migrate:status
+npm run db:smoke
+```
+
+- `db:migrate` führt `prisma migrate deploy` gegen die ausdrücklich
+  konfigurierte Ziel-DB aus.
+- Die **43 committed Migrationen** reichen von der Baseline über Domain-,
+  Billing-, Radar-, Search- und Security-Verträge bis zu den
+  Phase-17-Company-Profile-Array-Defaults.
+- `db:migrate:dev` und `db:studio` sind durch einen Local-/Loopback-Guard
+  geschützt.
+- `prisma db push` ist für Production, Staging, Releases und
+  Completion-Evidence verboten. Schemaänderungen benötigen eine geprüfte,
+  committed Migration.
+- Es gibt keinen automatischen destruktiven Reset und keine allgemein sichere
+  Down-Migration. Ein Rollback muss die konkrete Migration,
+  Vorwärtskompatibilität und den getesteten Recovery-Pfad berücksichtigen.
+
+### Deterministischer Demo-Seed
+
+Beide Befehle rufen denselben Seed-Einstieg auf:
+
+```text
+npm run db:seed
+npx prisma db seed
+```
+
+Der Seed-Vertrag `phase-14-demo-v13` verwendet stabile natürliche Schlüssel und
+UUIDv5-Identitäten. Der erste Lauf legt Fixtures an oder verifiziert sie; jeder
+weitere Lauf verifiziert dieselben unveränderlichen Inhalte und liefert
+denselben versiegelten Manifest-Hash.
+
+```text
+npm run db:seed
+npm run db:seed
+npm run seed:verify
+```
+
+Enthalten sind unter anderem alle 26 Kantone, mindestens 29 Städte, 18
+Kategorien, mindestens 60 Skills, 25 Firmen, mindestens 115 Jobs, die
+Demo-Konten, Candidate-/Employer-/Admin-Workflows, Billing-Snapshots,
+Job-Boosts, Radar-/Reveal- und Privacy-Fixtures.
+
+Der Seed verweigert Staging, Production, produktionsbezeichnete Datenbanken und
+lokale Nicht-Loopback-Ziele, bevor ein Demo-Datensatz geschrieben werden kann.
+Preview-Seeding erfordert zusätzlich den nur für diesen kontrollierten Lauf
+gesetzten Schalter `ENABLE_DEMO_SEED=true`; er ist bewusst kein normaler
+Production-Env-Default.
+
+## Verfügbare Routen
+
+Der maschinenlesbare Sollstand liegt in
+[`codex-plan/route-inventory.json`](./codex-plan/route-inventory.json) und wird
+gegen den App-Router geprüft:
+
+```text
+npm run route:audit
+```
+
+Die Tabelle gruppiert die implementierten Einstiege; dynamische Segmente stehen
+in eckigen Klammern.
+
+| Bereich | Implementierte Routen |
+|---|---|
+| Öffentlich | `/`, `/jobs`, `/jobs/[slug]`, `/jobs/kanton/[slug]`, `/jobs/kategorie/[slug]`, `/jobs/kanton/[slug]/kategorie/[category]`, `/companies`, `/companies/[slug]`, `/salary-radar`, `/guide`, `/guide/[slug]`, `/pricing` |
+| Arbeitgeber-Marketing | `/employers`, `/employers/demo`, `/employers/post-job`, `/employers/talent-radar`, `/employers/employer-branding`, `/employers/xml-import` |
+| Auth | `/login`, `/register`, `/register/candidate`, `/register/employer`, `/forgot-password`, `/reset-password`, `/invite/[token]`, `/invite/resume`, `/logout`, Session-Refresh/Clear |
+| Candidate | `/candidate/dashboard`, `/candidate/jobpass`, `/candidate/saved-jobs`, `/candidate/applications[/[id]]`, `/candidate/alerts`, `/candidate/messages[/[threadId]]`, `/candidate/talent-radar`, `/candidate/talent-radar/requests[/[id]]`, `/candidate/privacy`, Privacy-Request-Detail/Verify, `/candidate/support` |
+| Employer/Recruiter | `/employer/dashboard`, `/employer/company`, `/employer/team`, `/employer/jobs[/[id]]`, `/employer/jobs/new`, `/employer/jobs/[id]/boost`, `/employer/applicants[/[id]]`, `/employer/analytics`, `/employer/billing` inklusive Usage/Profile/Checkout/Invoices, `/employer/talent-radar/requests` |
+| Admin | `/admin`, `/admin/jobs`, `/admin/companies`, `/admin/users`, `/admin/reports`, `/admin/imports`, `/admin/support`, `/admin/content`, `/admin/taxonomy`, `/admin/leads`, `/admin/billing`, `/admin/orders`, `/admin/invoices`, `/admin/plans`, `/admin/products`, `/admin/privacy-requests`, `/admin/analytics`, `/admin/business-cockpit`, `/admin/audit`, `/admin/system` einschließlich vorhandener Detailrouten |
+| Rollenübergreifend | `/support`, `/support/[id]`, `/alerts/unsubscribe/[token]`, `/forbidden` |
+| Betriebs-/Mock-Handler | `/health/live`, `/health/ready`, Local-only `/dev/mailbox`, Employer-only `/mock/checkout/[orderId]`, `/sitemap.xml`, `/robots.txt` |
+
+Routen schützen nicht nur die Navigation: Layouts, Server Actions und
+Repositories prüfen Rolle, Capability, Company-Mitgliedschaft,
+Job-Zuweisung und Objekt-Ownership serverseitig. Fremde Objekt-IDs liefern eine
+sichere 404 beziehungsweise einen Rollen-403 ohne Datenleck.
+
+Bewusst **nicht verfügbar** sind eine öffentliche Partner-/ATS-API, SSO,
+Stripe-/Provider-Webhooks, echte Datei-Downloadrouten, ein automatischer
+Privacy-Export-Download und PDF-Rechnungen. Diese Funktionen dürfen nicht aus
+der vorhandenen Route-Struktur abgeleitet werden.
+
+## Rollen und Berechtigungen
+
+| Plattformrolle | Kernumfang |
+|---|---|
+| `CANDIDATE` | SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Nachrichten, Support, Privacy und eigener Talent-Radar-Consent/Reveal |
+| `EMPLOYER` | Firmen-, Team-, Job-, Bewerber-, Billing-, Analytics- und berechtigte Talent-Radar-Workflows im eigenen Tenant |
+| `RECRUITER` | Employer-Oberfläche, zusätzlich auf aktive Company-Mitgliedschaft und zugewiesene Jobs begrenzt |
+| `ADMIN` | Capability-basierte Moderation, Operations, Support, Content, Billing, Katalog, Privacy und Audit; kein pauschaler UI-Vertrauensbonus |
+
+Innerhalb einer Firma existieren die Mitgliedschaftsrollen:
+
+- `OWNER` — Eigentümeraktionen, insbesondere Planwechsel/Kündigung und
+  kritische Teamverwaltung;
+- `ADMIN` — operative Firmen- und zulässige Billing-/Teamaktionen;
+- `RECRUITER` — Recruiting auf zugewiesenen Ressourcen;
+- `VIEWER` — lesender Zugriff, soweit der jeweilige Use Case ihn erlaubt.
+
+Eine Plattformrolle ersetzt keine Company-Mitgliedschaft. Jeder Tenant-Zugriff
+prüft Mitgliedschaftsstatus, Rolle und bei Recruitern die konkrete Zuweisung.
+
+## Monetarisierung
+
+Preise und Packaging sind versionierte Markt- und Planungshypothesen, keine
+bewiesene Zahlungsbereitschaft. Beträge werden als ganze Rappen gespeichert;
+Formatierung in CHF findet erst an der Anzeigegrenze statt.
+
+### Seed-Pläne
+
+| Plan | Netto/Monat | Aktive Jobs | Seats | Talent Radar | Kontakte/Periode | Boosts/Periode | Analytics | Self-Service |
+|---|---:|---:|---:|---|---:|---:|---|---|
+| Free Basic | CHF 0 | 1 | 1 | nein | 0 | 0 | None | kein Checkout |
+| Starter | CHF 149 | 3 | 2 | nein | 0 | 0 | Basic | ja |
+| Pro | CHF 399 | 10 | 5 | ja | 10 | 3 | Advanced | ja |
+| Business | CHF 899 | 30 | 15 | ja | 50 | 10 | Pro | Sales-Gate |
+| Enterprise Contract | privat verhandelt | 100 | 50 | ja | 100 | 20 | Pro | nicht öffentlich |
+
+Business, Enterprise und die inaktiven Jahresversionen sind nicht als
+Self-Service-Checkout freigegeben. Employer-Import ist in allen P0-Plänen
+standardmäßig deaktiviert.
+
+### Produkte, Credits und Rechnungen
+
+Aktive Mock-Self-Service-Produkte:
+
+| Produkt | Netto | Wirkung |
+|---|---:|---|
+| Job Boost 7 Tage | CHF 79 | zeitgebundener, gekennzeichneter Boost |
+| Job Boost 30 Tage | CHF 199 | zeitgebundener, gekennzeichneter Boost |
+| Talent Radar Contact Pack 10 | CHF 99 | 10 `TALENT_CONTACT`-Credits |
+| Talent Radar Contact Pack 50 | CHF 299 | 50 `TALENT_CONTACT`-Credits |
+
+Featured Job/Employer, Newsletter, Social Push, Import Setup und Zusatzstelle
+sind als inaktive P1/P2-Produkte gespeichert. `SUCCESS_FEE` ist für jede Rolle
+serverseitig deaktiviert und bleibt bis zu einer ausdrücklichen rechtlichen
+Prüfung inaktiv.
+
+Credits laufen über append-only Grants/Consumption/Expiry-Belege.
+Order- und Invoice-Zeilen speichern unveränderliche Preis-, Steuer-,
+Währungs- und Produkt-/Plan-Snapshots. Der aktuelle Seed verwendet einen
+geprüft zu bestätigenden **Planungssteuersatz von 810 Basispunkten = 8,1 %**.
+Das ist keine Steuerberatung; vor einem realen Verkauf ist eine fachliche
+Tax-Freigabe zwingend.
+
+Der lokale Checkout kann einen Order bezahlen, die atomare
+Mock-Fulfillment-Logik auslösen und eine HTML-Rechnung erzeugen. Es findet keine
+echte Zahlung statt. Subscription-Renewal wird nicht autonom ausgeführt,
+sondern als explizite Admin-Mock-Aktion dokumentiert und auditiert.
+
+## Mock-Integrationen
+
+Nur die folgenden sechs Verzeichnisse unter `lib/providers` sind externe
+Provider-Ports:
+
+| Port | Lokales Verhalten | Gate für einen Real-Adapter |
+|---|---|---|
+| `payments/PaymentProvider` | deterministische `/mock/checkout/...`-Operation; akzeptiert keinen Clientpreis und schreibt selbst keine Billing-Daten | Payment-/Legal-/Security-Review, Webhook-Signatur, Idempotenz, Reconciliation, Retry/Monitoring |
+| `email/EmailProvider` | rendert Templates und schreibt redigierte `EmailLog`-Zeilen; kein externer Versand | gewählter Mailanbieter, DPA, Absender-/Bounce-/Suppression-/Retry-Konzept, Delivery-Monitoring |
+| `ai/AiProvider` | deterministische regelbasierte Textverbesserung; kein Modellaufruf | Datenschutz-/Human-review-Policy, Timeouts, Limits, Redaction, Monitoring und freigegebener Modellanbieter |
+| `jobroom/JobroomProvider` | versionierter `OccupationCode`-Fixture-Lookup mit `REQUIRES_REPORTING`, `NOT_REQUIRED` oder `UNKNOWN`; kein arbeit.swiss-Aufruf | offizielle Schnittstelle/Lizenz, Datenversionierung, Auth, Cache/Retry und rechtliche Prüfung; kein Scraping |
+| `storage/StorageProvider` | validiert Dateimetadaten bis 5 MiB, speichert keine Bytes und liefert keine Read-URL | freigegebener S3/Supabase-kompatibler Speicher, Bucket/Region, Malware-Scan, signierte URLs, Retention/Deletion und DPA |
+| `commute/CommuteProvider` | deterministische Haversine-Luftlinie aus Seed-Koordinaten; keine Route/Fahrzeit und kein Netzwerk | freigegebener Kartenanbieter, Datenminimierung, Quoten, Cache, DPA und klare Distanz-/Fahrzeitsemantik |
+
+Analytics-Validierung/-Aggregation und der HTML-Invoice-Renderer sind interne
+Domain-/Application-Services. Es existieren bewusst weder ein
+`AnalyticsProvider` noch ein `InvoiceProvider`.
+
+## Sicherheit und Datenschutz
+
+- Passwörter werden mit `bcryptjs` gehasht. DB-Sessions speichern nur
+  Token-Hashes; Session-Cookies sind httpOnly, `SameSite=Lax` und in
+  Production `Secure`.
+- Rollen, Capabilities, Tenant, Ownership und Recruiter-Zuweisungen werden
+  serverseitig geprüft. Personalisierte und sensitive Antworten sind
+  `private, no-store` und gegebenenfalls `noindex`.
+- Eine per Request erzeugte Nonce schützt Next-Hydration, Theme-Script und
+  geprüftes JSON-LD unter einer strikten CSP ohne
+  `script-src 'unsafe-inline'`.
+- Sensible öffentliche Aktionen verwenden atomare Rate-Limit-Buckets und
+  `RATE_LIMITED`-Audit-Evidence. Production/Staging verlangen den gemeinsam
+  genutzten PostgreSQL-Store; Prozessspeicher ist kein Produktionsschutz.
+- Audit-Ereignisse, Consent-Änderungen, Kontaktanfragen, Reveals,
+  Moderations-, Billing- und Privacy-Aktionen werden mit minimierten,
+  allowlist-validierten Metadaten protokolliert. IP-Pseudonyme können mit
+  `npm run security:maintenance` nach 30 Tagen entfernt werden, ohne das
+  Audit-Ereignis zu löschen.
+- Talent Radar sendet Arbeitgebern keine identitätsführenden Felder.
+  Company-spezifische opake IDs, Kohortengrenzen, atomarer Credit-Verbrauch,
+  kandidatengesteuerte Annahme und ein feldgenauer Reveal schützen die
+  Identität.
+- Consent ist versioniert und append-only. Kandidat:innen können Radar
+  deaktivieren und Reveals widerrufen; abhängige Mappings und offene Requests
+  werden dabei geschlossen.
+- Privacy-Export, Korrektur und Löschung sind nachvollziehbare
+  **Mock-Verfahren**. Ein Export erzeugt ein Manifest, aber keine ausgelieferte
+  Datei; Löschung ist kein automatisches vollständiges Erasure.
+- Provider-Mocks führen keine HTTP-, TCP- oder TLS-Aufrufe aus. Die Anwendung
+  scrapt keine Websites und ruft insbesondere arbeit.swiss nicht automatisiert
+  ab.
+- Logs und Nutzerfehler werden redigiert. E-Mail-/Reset-Fehler verraten nicht,
+  ob ein Konto existiert.
+- `GET /health/live` prüft nur den Prozess; `GET /health/ready` prüft
+  PostgreSQL, Schema und letzte Migration mit Timeouts, ohne URLs,
+  Credentials oder Tabelleninhalte preiszugeben.
+
+Diese Maßnahmen sind eine datenschutzfreundliche technische Vorbereitung,
+keine abschließende DSG-/DSGVO-, Arbeitsvermittlungs-, AGB- oder
+Steuerkonformitätszusage.
+
+## Bekannte Limitationen des MVP
+
+1. **Mock Payments:** kein Stripe, keine Kartenbelastung, keine echten
+   Webhooks, kein Dunning und keine Provider-Reconciliation.
+2. **Mock Email:** Nachrichten werden als redigiertes `EmailLog` erfasst; es
+   findet kein echter Versand statt. Die optionale lokale Mailbox ist kein
+   Delivery-System.
+3. **Mock AI:** deterministische Regeln statt eines Sprachmodells; Qualität und
+   Fairness eines späteren Modells sind nicht vorweggenommen.
+4. **Mock Job-Room:** versionierter Fixture-Lookup; kein aktueller
+   arbeit.swiss-Call. `UNKNOWN` ist ein absichtlicher, fail-closed Zustand.
+5. **Mock Storage:** nur Metadaten, keine Dateibytes, Download-URL oder
+   Malware-Prüfung.
+6. **Mock Commute:** ungefähre Luftlinie aus Seed-Koordinaten, keine Route oder
+   Fahrzeit; bei fehlender Konfiguration kann die Funktion nicht als
+   Kartenersatz dienen.
+7. **Subscription-Renewal:** keine automatische Verlängerung; nur eine
+   explizite Admin-Mock-Aktion.
+8. **Keine Background Jobs/Cron im MVP:** Reads berechnen wirksame
+   Laufzeit-/Ablaufzustände ohne Schreibeffekt. Explizite idempotente
+   Maintenance-Kommandos dürfen fällige Projektionen und Audit-Evidence
+   persistieren; ein produktiver Scheduler/Outbox-Worker fehlt.
+9. **Search:** parameterisiertes PostgreSQL-SQL normalisiert Titel,
+   Firmenname und Body und verwendet gewichtetes `LIKE` mit globaler
+   DB-Rangfolge und signiertem Keyset-Cursor. Es gibt noch kein
+   `tsvector`/GIN, keine linguistische Volltextsuche und keine
+   Rechtschreib-/Synonymtoleranz. Seiten sind standardmäßig 20 und maximal 50
+   Treffer groß.
+10. **Sponsored-Zone:** maximal drei relevante, klar markierte Treffer auf der
+    ersten Suchseite und zwei auf der Homepage; keine Wiederauffüllung auf
+    Folgeseiten. Boosting beeinflusst niemals den Fair-Job-Score.
+11. **SEO/Sitemap:** beliebige Filter-/Keyword-/Cursor-URLs sind
+    `noindex,follow`. Cluster-Landings werden nur mit publiziertem Inhalt und
+    wirksamer, dual freigegebener Live-Evidence indexiert. Die einzelne Sitemap
+    ist auf 50.000 URLs begrenzt und bricht bei Überschreitung ab; ein
+    Sitemap-Index/Chunking ist noch nicht implementiert.
+12. **Rate-Limiting:** PostgreSQL ist der verpflichtende atomare
+    Production-Store. Der Memory-Adapter ist nur Local/Test und wird nicht als
+    Launch-Schutz dargestellt.
+13. **Rechnungen:** internes HTML, kein PDF. Alle Beträge und Snapshots liegen
+    in ganzen Rappen vor.
+14. **Privacy-Verfahren:** Export und Löschung bleiben kontrollierte
+    Case-/Manifest-Mocks ohne automatischen Download oder vollständige
+    Datenlöschung.
+15. **Betrieb und Recht:** keine bestätigte Incident-Response, DPA-Landschaft,
+    Rechts-/Steuerfreigabe oder produktive RPO/RTO-Zusage.
+
+## Mock-Provider später ersetzen
+
+Ein Providerwechsel beginnt immer am bestehenden Port und in der serverseitigen
+Composition Root. Das bloße Befüllen eines Platzhalters ist absichtlich
+wirkungslos und wird von der Env-Validierung abgelehnt.
+
+| Integration | Zu implementierender Port | Aktueller Platzhalter | Zusätzlich notwendige Arbeit |
+|---|---|---|---|
+| Stripe | `lib/providers/payments/payment-provider.ts` | `STRIPE_SECRET_KEY` | freigegebene Publishable-/Webhook-Secrets ergänzen, signierte Webhooks, Idempotenz, Reconciliation, Refund/Dunning, Retry, Monitoring und PCI-/Legal-Gate |
+| Postmark/Mailgun/SendGrid | `lib/providers/email/email-provider.ts` | `EMAIL_PROVIDER_API_KEY` | Anbieterwahl, Absenderdomain, Bounce/Suppression, Templates, Retry/Outbox, Delivery-Monitoring und DPA |
+| OpenAI oder anderer Modellanbieter | `lib/providers/ai/ai-provider.ts` | `OPENAI_API_KEY` | freigegebene Modell-/Region-Konfiguration, Redaction, Moderation, Limits, Timeouts, Fallback und Human Review |
+| S3/Supabase-kompatibler Speicher | `lib/providers/storage/storage-provider.ts` | `STORAGE_ENDPOINT` | nach Freigabe Bucket/Region/Credentials ergänzen, Upload-Streaming, Malware-Scan, signierte URLs, Lifecycle/Deletion und DPA |
+| Offizielle Job-Room-Integration | `lib/providers/jobroom/jobroom-provider.ts` | `JOBROOM_API_URL` | offizieller Zugang/Auth, Lizenz, Versionierung, Retry/Cache, Monitoring und Audit; niemals Scraping als Ersatz |
+| Karten-/Commute-Service | `lib/providers/commute/commute-provider.ts` | `MAPS_API_KEY` | Anbieter/Endpoint, Routing-Semantik, Quoten, Cache, Datenschutz und Fallback |
+
+Jeder Real-Adapter benötigt Failure-Mode-, Security-, Datenschutz- und
+Operations-Tests sowie einen dokumentierten Fallback. Analytics bleibt intern;
+eine spätere Vendor-Integration wäre eine neue Architekturentscheidung. Für
+Rechnungen wäre ein PDF-Renderer zu ergänzen, kein erfundener
+Invoice-Provider.
+
+## Qualitäts-, Release- und Recovery-Befehle
+
+Die normalen Gates:
+
+```text
+npm ci
+npm run env:validate
 npm run db:generate
 npm run db:validate
 npm run db:migrate
 npm run db:migrate:status
 npm run db:seed
+npm run db:seed
+npm run seed:verify
 npm run db:smoke
-```
-
-- `db:generate` erzeugt den ignorierten Prisma Client neu.
-- `db:validate` prüft Schema und Konfiguration ohne Datenbankmutation.
-- `db:migrate` verwendet `prisma migrate deploy` gegen die explizite `DATABASE_URL`.
-- `db:migrate:status` bestätigt, dass alle committed Migrationen angewandt sind.
-- Die **42 committed Migrationen** reichen von der leeren Baseline über den Domänenvertrag und die Phase-14-Radar-/Privacy-Verträge bis zu den Phase-15-Cluster-Gates sowie dem Phase-16-Company-Media-Manifest und der Audit-IP-Retention. Zusätzlich zu Prisma-SQL enthalten sie benannte Checks, Composite-FKs, Partial-/Exclusion-Indizes sowie Lifecycle-, Append-only- und Concurrency-Trigger.
-- `db:seed` erzeugt beziehungsweise verifiziert den deterministischen, wiederholbaren Demo-Vertrag `phase-14-demo-v13` mit Katalogen und Preisversionen, Demo-Identitäten, Firmen, Jobs, Bewerbungen, Candidate-/Employer-Workflows, Billingprofilen, Abonnementperioden, Credits, Orders, Rechnungen und Boost-Belegen. Phase 14 ergänzt zwei anonymisierte 10er-Radar-Sessions, firmenspezifische Opaque-Mappings, 0/1-Credit-Kontraste, alle Contact-Zustände, aktive/widerrufene Reveal-Belege, Privacy-Cases, seltene Kohorten und PII-Canaries. Hinzu kommen eine klar begrenzte lokale Importquelle und ein nicht aktivierbares DEMO-Cluster-Assessment. Staging und Production sind fail-closed gesperrt; es gibt keinen Production-Seed.
-- Phase-16-Angriffspayloads, Tenant-A/B-IDOR-Fälle, Secret-Canaries und Rate-Grenzfälle leben ausschliesslich in isolierten Test-Fixtures; der öffentliche Demo-Seed enthält keine absichtlich schädlichen Inhalte.
-- `npm run seed:verify` prüft den vollständigen Seed-Vertrag und liefert einen stabilen Manifest-Hash.
-- `db:smoke` führt einen read-only Datenbank-Smoke aus; bei `APP_ENV=ci` verwendet er `TEST_DATABASE_URL`.
-
-Die interaktiven Befehle `npm run db:migrate:dev` und `npm run db:studio` besitzen zusätzlich einen Fail-closed-Guard: Sie akzeptieren nur `APP_ENV=local`, einen Loopback-Host und keine production-/staging-bezeichnete Datenbank. `db:migrate` bleibt der nicht-interaktive Deploy-Pfad für eine ausdrücklich vollständig konfigurierte Zielumgebung.
-
-Der Demo-Seed ist ausschliesslich für lokale Entwicklung, CI und explizit freigegebene Preview-Umgebungen gedacht. Es gibt keinen automatischen Reset. Die Gruppierung der Modelle und der Umgang mit dem strengeren SQL-Vertrag sind in [`prisma/README.md`](./prisma/README.md) dokumentiert.
-
-## Qualitätsbefehle
-
-```powershell
 npm run lint
 npm run typecheck
 npm test
 npm run test:integration
 npm run build
 npm run test:e2e
-npm run test:e2e:hsts
-npm run seed:verify
 ```
 
-`test:integration` und `test:e2e` verlangen `APP_ENV=local|ci` sowie eine
-eindeutig test-bezeichnete, von `DATABASE_URL` getrennte `TEST_DATABASE_URL`.
-`test:e2e` startet nach einem erfolgreichen Build selbst einen Production-Server
-auf einem freien Loopback-Port, prüft Inhalt, Health/404, Security-, Correlation-
-und No-store-Header sowie eine Secret-Canary und beendet den Prozess wieder.
-`test:e2e:hsts` erzeugt zusätzlich in einer isolierten Testdatenbank einen
-production-like Build mit `APP_ENV=production`, `TRUSTED_PROXY_HOPS=1`,
-HTTPS-`APP_URL` und sicherer Testkonfiguration. Danach startet es genau dieses
-Artefakt per `next start` und verlangt auf `/health/live` exakt
-`Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`.
-Der lokale Request bleibt absichtlich HTTP und beweist daher ausschliesslich die
-Header-Emission, nicht die TLS- oder Browserwirkung von HSTS.
-`typecheck` erzeugt davor mit `next typegen` die von Next verwaltete und bewusst
-ignorierte `next-env.d.ts`; dadurch hinterlassen `dev` und `build` keinen
-versionsabhängigen Diff im Repository.
+`test:e2e` führt den HTTP-/Header-Smoke und danach die Playwright-Suite mit
+Candidate-, Employer-, Recruiter-, Admin-, Billing-, Radar-, Search- und
+Security-Flows aus. `test:e2e:hsts` prüft die HSTS-Header-Emission in einer
+isolierten production-like Testkonfiguration; es beweist keine echte
+TLS-Terminierung.
 
-Zusätzliche Konfigurationschecks:
+Zusätzliche Phase-18-Gates:
 
-```powershell
-npm run env:validate
-npm run db:generate
-npm run db:validate
-docker compose config --quiet
+```text
+npm run route:audit
+npm run plan:audit
+npm run security:release-scan
+npm run license:audit
+npm run test:release
 ```
 
-Die Linux-CI führt Clean Install, Env-Validierung, Prisma Generate/Validate, Lint, Typecheck, Unit-Tests, alle committed Migrationen samt Statusprüfung, Demo-Seed, DB-Smoke, PostgreSQL-Integrationstests, Production Build und einen HTTP-Smoke aus. Ein separater `windows-latest`-Job wiederholt ohne Docker mindestens Install, Env-, Prisma-, Lint-, Typecheck-, Unit- und Build-Prüfung und belegt damit die npm-cmd-Portabilität.
+`test:release` besitzt E2E-08: sauberer isolierter Clone, leere
+release-/restore-benannte Datenbanken, CI-Env-Validierung ohne Datei,
+Migration, zweimal identischer Seed, Production-Demo-Guard, Build,
+verschlüsseltes Backup, isolierter Restore, Migration-/Manifest-/DB-Smoke,
+Vier-Rollen-/Password-Reset-Smoke und Cleanup. Tatsächliche Befehle,
+Exit-Codes, Commit, Checksummen, DB-Identifier, Zeiten und Blocker gehören in
+[`BUILD_REPORT.md`](./BUILD_REPORT.md), nicht als unbelegte Behauptung hierher.
 
-## Health-Routen
+### Verschlüsselter Recovery-Drill
 
-- `GET /health/live` liefert `200 {"status":"ok","buildId":"…"}`, prüft nur die Prozess-Liveness und ist `no-store`. Deployments setzen dafür einen nicht sensitiven, commit-eindeutigen `APP_BUILD_ID`; lokal gilt der explizite Fallback `local-development`.
-- `GET /health/ready` führt einen auf drei Sekunden begrenzten PostgreSQL-, Schema- und Migrationscheck aus. Die zuletzt erforderliche Migration muss erfolgreich abgeschlossen sein; Pool-Verbindungs- und Query-Timeouts verhindern unbegrenztes Warten. Bei Bereitschaft liefert die Route `200 {"status":"ready"}`, sonst `503 {"status":"unavailable","correlationId":"…"}`. Sie gibt weder URL noch Credentials oder Tabelleninhalte aus und ist ebenfalls `no-store`.
+Die Wrapper sind bewusst nur für allowlistete Local-/CI-Drills bestimmt, nicht
+für eine unbekannte, geteilte, Staging- oder Production-Datenbank:
 
-Health-Routen sind Betriebschecks, keine Produktfeatures und keine Autorisierungsgrenze.
-Der freigegebene Mock-MVP besitzt neben PostgreSQL keine erforderliche externe
-Readiness-Abhängigkeit; Mail, Storage und Payment sind lokale persistente Mocks.
-
-## Security-Maintenance und manueller IDOR-Test
-
-Die idempotente Wartung
-
-```powershell
-npm run security:maintenance
+```text
+npm run ops:backup -- --source release-test --out <absoluter-externer-pfad>.dump.age
+npm run ops:restore -- --in <absoluter-externer-pfad>.dump.age --target restore-test
 ```
 
-entfernt nach exakt 30 Tagen nur die versionierten HMAC-IP-Felder aus bestehenden
-Audit-Zeilen; die Audit-Ereignisse selbst bleiben erhalten. Der Befehl protokolliert
-nur die Anzahl bearbeiteter Zeilen. Ein produktiver Scheduler ist
-Deployment-Verantwortung und muss diesen Befehl mindestens täglich seriell ausführen.
+Für Backup muss `DATABASE_URL` eine getrennte Loopback-Datenbank
+`swisstalenthub_release_test_<12-32 hex>` bezeichnen. Restore verwendet eine
+andere, leere `TEST_DATABASE_URL`
+`swisstalenthub_restore_test_<12-32 hex>`. Output, `.sha256` und
+`BACKUP_AGE_IDENTITY_FILE` müssen absolut und außerhalb des Repositories
+liegen.
 
-Für den manuellen Phase-16-IDOR-Nachweis werden zwei voneinander unabhängige
-Demo-Konten und die Browser-Netzwerkanalyse verwendet. IDs dürfen nur zwischen
-den beiden eigenen Test-Tenants ausgetauscht werden; nie fremde reale Daten nutzen.
+Der Backup-Wrapper streamt
+`pg_dump --format=custom --no-owner --no-acl` direkt durch `age`, schreibt
+keinen Plaintext-Dump, benennt erst den vollständigen Ciphertext atomar um und
+löscht Teilartefakte bei Fehlern. Restore prüft zuerst SHA-256 und das leere,
+getrennte Ziel, streamt `age --decrypt` in
+`pg_restore --exit-on-error --clean --if-exists --no-owner` und prüft danach
+Migration, Seed-Manifest und DB-Smoke.
 
-| Versuch | Manipulation im zweiten Konto | Erwartung |
-|---|---|---|
-| Arbeitgeber/Job | Job-ID eines anderen Unternehmens in `/employer/jobs/[id]` lesen und mutieren | identische sichere 404 wie bei einer zufälligen UUID; keine Jobdetails |
-| Kandidat/Bewerbung | fremde Application-ID in `/candidate/applications/[id]` und zugehörigen Aktionen einsetzen | identische sichere 404/Fehlerantwort; keine Statusänderung |
-| Nachrichten | fremde Thread-ID in `/candidate/messages/[threadId]` einsetzen | identische sichere 404; weder Teilnehmer noch Nachrichten sichtbar |
-| Billing | Invoice-/Order-ID des anderen Unternehmens öffnen | identische sichere 404; keine Beträge, Adressen oder Belege |
-| Talent Radar | Opaque Candidate-ID oder Request-ID aus der anderen Firma wiederverwenden | generisches „nicht gefunden“; keine Identitätsauflösung und kein Credit-Verbrauch |
-| Admin/Support | als Nicht-Admin `/admin` sowie fremde Support-/Mock-Checkout-ID aufrufen | echtes HTTP 403 am Rollenrand beziehungsweise generische 404 am Objekt; `private, no-store` und `noindex` |
+Der Architektur-Zielwert für einen später freigegebenen produktiven
+Backupdienst lautet 30 tägliche plus 12 monatliche verschlüsselte Objekte.
+RPO ≤ 24 Stunden und RTO ≤ 8 Stunden sind **unbestätigte Hypothesen**, bis
+wiederholte Drills und Business/Ops sie freigeben. Backupbytes, private
+Identitäten, DB-URLs und Credentials dürfen nie committed werden.
 
-Bei jedem Versuch wird zusätzlich geprüft, dass eine zufällige, nicht vorhandene
-UUID dieselbe objektbezogene Antwort liefert und dass Response, Logs und Audit keine
-fremden Identifikatoren enthalten.
+## Deployment-Hinweise
 
-## Sicherheits- und Scope-Hinweise
+Ein Deployment ist erst nach grünem Release-Report und den noch offenen
+Legal-/Privacy-/Tax-/Provider-/Ops-Gates zulässig.
 
-- Keine echten Secrets, Provider-Keys, persönlichen Daten oder Produktionsdaten in Repository, Fixtures oder CI.
-- Keine automatische oder unbeabsichtigte Verbindung zu einer unbekannten oder Production-Datenbank; Tests verwenden immer die isolierte Testdatenbank. Der Deploy-Migrationspfad benötigt eine ausdrücklich konfigurierte Zielumgebung.
-- Keine Real-Provider werden durch Env-Keys automatisch aktiviert; deren Variablen müssen leer bleiben. Mail, AI, Payment, Storage, Jobroom und weitere Integrationen bleiben kontrollierte lokale Mocks.
-- Der Logger redigiert sensitive Werte; Stacktraces und Konfiguration gehören nicht in Nutzerantworten.
-- Rate-limitierte Route Handler antworten mit HTTP `429` und `Retry-After`. Next Server Actions liefern stattdessen einen typisierten `RATE_LIMITED`-Domänenwert mit Status `429`, freundlicher deutscher Meldung und `RATE_LIMITED`-Audit; Server Actions setzen keinen eigenen Transportstatus.
-- Eine per Request erzeugte Nonce schützt Next-Hydration, `next-themes` und geprüftes JSON-LD unter einer strikten CSP ohne `script-src 'unsafe-inline'`. Persönliche Bereiche und personalisierte Jobdetails sind `private, no-store`; `noindex` bleibt davon getrennt.
-- HSTS wird nur mit `APP_ENV=production` gesendet. Seine Schutzwirkung setzt voraus, dass der produktive Ingress HTTPS korrekt terminiert und den Header unverändert ausliefert; lokales HTTP kann nur das Vorhandensein, nicht die Browserwirkung prüfen. Der äusserste Ingress muss eingehende, clientseitig gesetzte `X-Forwarded-For`-Werte verwerfen und den Header selbst neu setzen; `TRUSTED_PROXY_HOPS` muss exakt dieser kontrollierten Topologie entsprechen.
-- Firmenmedien stammen im Mock-MVP ausschliesslich aus dem versionierten, selbst gehosteten Manifest unter `/assets/company-media/`. Arbeitgeber-URLs, Remote-Fetches und hochgeladene Dateibytes sind dafür nicht freigeschaltet.
-- Security-Header, Auth, Rate-Limits und rollen-/ressourcenbasierte Autorisierung sind implementiert und regressionsgetestet.
-- Der belegte Phase-16-MVP-Stand ist weder produktionsbereit noch eine vollständige rechtliche, steuerliche oder DSG-Konformitätszusage. Kohorten-, Retention-, Privacy- und Recontact-Werte benötigen vor Produktion eine fachliche/rechtliche Freigabe. Mock Payment ersetzt insbesondere keine Stripe-/Webhook-Integration, und Renewal wird nicht von einem echten autonomen Worker ausgeführt.
+1. Einen verwalteten, PostgreSQL-16-kompatiblen Anbieter in einer
+   freigegebenen Schweizer/EU-Region mit TLS, Backups, Restore-Möglichkeit,
+   DPA, Monitoring und Zugriffskontrolle auswählen. Im Repository ist bewusst
+   kein konkreter Cloudanbieter freigegeben.
+2. Secrets aus einem Secret Manager injizieren, nicht aus einer committed
+   Env-Datei. Production benötigt insbesondere `APP_ENV=production`,
+   `NODE_ENV=production`, `DATABASE_URL`, eine HTTPS-`APP_URL`,
+   `APP_BUILD_ID`, Session-/Keyring-Secrets,
+   `RATE_LIMIT_BACKEND=postgres`, die exakte `TRUSTED_PROXY_HOPS`-Zahl,
+   `ENABLE_LOCAL_MOCK_MAILBOX=false` und eine geprüfte
+   `ABUSE_REPORT_ADMIN_EMAILS`-Liste. `TEST_DATABASE_URL` und alle
+   Real-Provider-Platzhalter bleiben leer.
+3. Der äußerste Ingress muss HTTPS terminieren, eingehende
+   `X-Forwarded-For`-Werte verwerfen und selbst neu setzen. Nur unter echter
+   HTTPS-Auslieferung darf der in `APP_ENV=production` gesetzte
+   `Strict-Transport-Security`-Header wirksam werden.
+4. Production setzt Session- und Company-Context-Cookies automatisch auf
+   `Secure`; httpOnly und `SameSite=Lax` gelten in jeder Umgebung.
+5. Installation, Migration und Build erfolgen reproduzierbar:
 
-## Plan und Evidence
+   ```text
+   npm ci
+   npm run env:validate
+   npm run db:generate
+   npm run db:migrate
+   npm run db:migrate:status
+   npm run build
+   npm run start
+   ```
 
-1. [`AGENTS.md`](./AGENTS.md) — Implementierungs- und Evidence-Regeln.
-2. [`codex-plan/00-PLAN.md`](./codex-plan/00-PLAN.md) — Masterplan und Status.
-3. [`codex-plan/01-setup-foundation.md`](./codex-plan/01-setup-foundation.md) bis [`codex-plan/16-security-hardening.md`](./codex-plan/16-security-hardening.md) — verbindliche Verträge der implementierten Phasen 01–16.
-4. [`codex-plan/17-testing.md`](./codex-plan/17-testing.md) — nächster Implementierungsschritt.
-5. [`codex-plan/decisions.md`](./codex-plan/decisions.md) — Architekturentscheidungen.
-6. [`codex-plan/requirements-matrix.md`](./codex-plan/requirements-matrix.md) — Traceability.
-7. [`codex-plan/implementation-plan.md`](./codex-plan/implementation-plan.md) — Ausführungsschritte 01–18.
-8. [`codex-plan/evidence/README.md`](./codex-plan/evidence/README.md) — Evidence-Index der abgeschlossenen Phasen.
-9. [`codex-plan/evidence/2026-07-19-phase-01.md`](./codex-plan/evidence/2026-07-19-phase-01.md) bis [`codex-plan/evidence/2026-07-23-phase-16.md`](./codex-plan/evidence/2026-07-23-phase-16.md) — reproduzierbare Abnahmenachweise für Phasen 01–16.
+6. Demo-Seeding ist in Staging/Production verboten. Readiness erst nach
+   erfolgreicher Migration aktivieren und `/health/live` sowie
+   `/health/ready` überwachen.
+7. Ein externer, serieller Scheduler müsste
+   `npm run security:maintenance` mindestens täglich ausführen. Dieser
+   Scheduler gehört nicht zum MVP und ist ein Go-live-Gate.
+8. Rollback bedeutet nicht `db push` oder ein blindes Down-Script. Eine frühere
+   App-Version darf nur bei bestätigter Schema-Kompatibilität zurückgesetzt
+   werden; andernfalls ist der geprobte, verschlüsselte Restore in ein neues
+   isoliertes Ziel mit anschließendem Smoke und kontrolliertem Cutover nötig.
 
-Ein Checkbox-Häkchen bedeutet „im Zielrepository implementiert und verifiziert“. Evidence nennt mindestens Datum, Zielcommit, Umgebung, OS, Node/npm-Version, Befehl beziehungsweise manuellen Check, Exit-Code/Ergebnis und bekannte Limitation. Zuerst wird die Detailphase aktualisiert, danach gegebenenfalls der Masterplan.
+## Rechtlicher und Compliance-Hinweis
+
+> **Datenschutzfreundliches MVP — keine Rechtsberatung. Erfolgsbasierte
+> Vermittlungsmodelle werden erst nach rechtlicher Prüfung aktiviert.**
+
+Zusätzlich benötigen insbesondere Datenschutzerklärung, AGB, Aufbewahrung und
+Löschung, Talent-Radar-Kohorten, Recontact-Regeln, Stellenmeldepflicht,
+Steuerbehandlung, Datenstandorte, Auftragsbearbeitung und Incident-Prozesse eine
+fachliche Freigabe vor einem realen Betrieb.
+
+## Plan, Requirements und Evidence
+
+- [`AGENTS.md`](./AGENTS.md) — End-to-End- und Evidence-Regeln;
+- [`codex-plan/00-PLAN.md`](./codex-plan/00-PLAN.md) — Masterplan und
+  Product-/Pilot-Gates;
+- [`codex-plan/requirements-matrix.md`](./codex-plan/requirements-matrix.md) —
+  P0- und E2E-Traceability;
+- [`codex-plan/product-quality-gates.md`](./codex-plan/product-quality-gates.md)
+  — Qualitäts- und Release/Operations-Gates;
+- [`codex-plan/18-documentation-final-audit.md`](./codex-plan/18-documentation-final-audit.md)
+  — Phase-18-Vertrag;
+- [`codex-plan/evidence/README.md`](./codex-plan/evidence/README.md) —
+  Evidence-Index einschließlich Phase 17;
+- [`BUILD_REPORT.md`](./BUILD_REPORT.md) — Zielcommit, tatsächlich ausgeführte
+  Gates, E2E-08, bekannte Blocker und ehrlicher Freigabestatus.
+
+Ein Checkbox-Häkchen bedeutet „im Zielcommit implementiert und verifiziert“.
+Ein fehlendes Tool, eine unerreichbare Datenbank oder ein nicht gelaufener
+Recovery-Drill bleibt `Needs Verification` und blockiert den betreffenden
+Release-Gate; ein erfolgreicher Build ersetzt diesen Nachweis nicht.

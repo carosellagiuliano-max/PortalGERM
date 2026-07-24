@@ -27,11 +27,13 @@ gelten nicht als Nachweis.
 - [`2026-07-20-phase-09.md`](./2026-07-20-phase-09.md) — Candidate-Core mit SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Messaging, Talent-Radar-Consent und Privacy-Cases.
 - [`2026-07-21-phase-10.md`](./2026-07-21-phase-10.md) — Arbeitgeber- und Recruiter-Core mit Firma, Team, Einladungen, Job-Wizard, Bewerber:innen-Pipeline und ehrlichen Radar-/Analytics-Grenzen.
 - [`2026-07-21-phase-11.md`](./2026-07-21-phase-11.md) — Admin-Operations mit Moderation, Imports, Support, Content, Leads und evidenzbasiertem Business Cockpit.
+- [`2026-07-22-phase-11-follow-up.md`](./2026-07-22-phase-11-follow-up.md) — unabhängig bewertete und geschlossene Phase-11-UI-, Audit-, Seed- und Testlücken.
 - [`2026-07-22-phase-12.md`](./2026-07-22-phase-12.md) — Entitlements, sicherer Mock-Checkout, Subscriptions, Rechnungen, Credits, Katalog und Finanzmetriken.
 - [`2026-07-22-phase-13.md`](./2026-07-22-phase-13.md) — Atomare Job-Boost-Aktivierung, Paid-Fulfillment, Lifecycle, Kündigung, Sponsored-Ranking und transparente Kennzeichnung.
 - [`2026-07-22-phase-14.md`](./2026-07-22-phase-14.md) — Privacy-bounded Talent Radar, atomare Kontaktfinanzierung, kandidateninitiierte verschlüsselte Reveal-Snapshots und kontrollierte Datenschutzfälle.
 - [`2026-07-22-phase-15.md`](./2026-07-22-phase-15.md) — Datenbankgerankte Keyset-Suche, stabile Slugs, JobPosting-JSON-LD, Canonicals, dynamische Sitemap/Robots und dual freigegebene Content-/Liquiditätsgates.
 - [`2026-07-23-phase-16.md`](./2026-07-23-phase-16.md) — Per-request CSP, CSRF-/IDOR-/Cache-Härtung, Audit-Vollständigkeit, redigiertes Logging, Health/Readiness, Abuse-Flows und Security-Maintenance.
+- [`2026-07-23-phase-17.md`](./2026-07-23-phase-17.md) — Cross-role E2E-01–07, Desktop-/360px-Quality-Matrix, Zero-Retry-Manifest sowie Linux/PostgreSQL- und Windows-CI.
 
 ## Pflichtfelder eines Records
 

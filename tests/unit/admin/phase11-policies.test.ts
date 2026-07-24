@@ -80,6 +80,8 @@ describe("Phase 11 admin policy boundary", () => {
       "/admin/products",
       "/admin/analytics",
       "/admin/business-cockpit",
+      "/admin/audit",
+      "/admin/system",
     ]);
   });
 });
