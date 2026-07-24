@@ -56,10 +56,13 @@ if (!existsSync(inventoryPath)) {
 }
 
 for (const area of ["candidate", "employer", "admin"]) {
-  for (const boundary of ["layout.tsx", "loading.tsx"]) {
-    if (!existsSync(resolve(appDirectory, area, boundary))) {
-      failures.push(`Protected /${area} is missing ${boundary}.`);
-    }
+  if (!existsSync(resolve(appDirectory, area, "layout.tsx"))) {
+    failures.push(`Protected /${area} is missing layout.tsx.`);
+  }
+  if (existsSync(resolve(appDirectory, area, "loading.tsx"))) {
+    failures.push(
+      `Protected /${area} has a broad loading.tsx that can stream before tenant/owner 404 guards.`,
+    );
   }
 }
 
@@ -77,7 +80,7 @@ if (failures.length > 0) {
   const pages = observed.filter((route) => route.kind === "page").length;
   const handlers = observed.length - pages;
   console.info(
-    `Route inventory audit passed: ${pages} pages, ${handlers} handlers; Candidate/Employer/Admin layout and loading boundaries present.`,
+    `Route inventory audit passed: ${pages} pages, ${handlers} handlers; Candidate/Employer/Admin layouts present and broad private loading boundaries absent.`,
   );
 }
 
