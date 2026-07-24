@@ -13,6 +13,7 @@ import { chromium, type Page } from "@playwright/test";
 import { resolveReleaseSmokeDatabase } from "@/lib/ops/recovery-contract";
 import { loadLocalEnvironment } from "@/scripts/load-local-environment";
 import { redact } from "@/scripts/ops/process-tools";
+import { isCriticalBrowserConsoleMessage } from "@/tests/e2e/console-policy";
 
 const HOST = "127.0.0.1";
 const EMAIL = "candidate@demo.ch";
@@ -121,12 +122,14 @@ async function runPasswordResetJourney(
       viewport: { width: 1_440, height: 900 },
       serviceWorkers: "block",
     });
+    const blockedExternalHosts: string[] = [];
     await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
       if (
         ["http:", "https:", "ws:", "wss:"].includes(url.protocol) &&
         !["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname)
       ) {
+        blockedExternalHosts.push(url.hostname);
         await route.abort("blockedbyclient");
         return;
       }
@@ -203,6 +206,13 @@ async function runPasswordResetJourney(
     if (consumed.status !== 200 || consumedPayload.email !== null) {
       throw new Error("Local mailbox envelope was not consumed exactly once.");
     }
+    if (blockedExternalHosts.length > 0) {
+      throw new Error(
+        `Password-reset browser attempted external requests: ${[
+          ...new Set(blockedExternalHosts),
+        ].join(", ")}`,
+      );
+    }
     errors.assertClean();
     await context.close();
   } finally {
@@ -234,7 +244,12 @@ function observePage(page: Page) {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+    if (
+      message.type() === "error" &&
+      isCriticalBrowserConsoleMessage(message.text())
+    ) {
+      errors.push(message.text());
+    }
   });
   return Object.freeze({
     assertClean() {

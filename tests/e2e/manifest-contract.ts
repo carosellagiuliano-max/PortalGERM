@@ -13,17 +13,37 @@ export const PHASE17_JOURNEY_PROJECT = "chromium-journeys" as const;
 export const PHASE17_MOBILE_PROJECT = "chromium-mobile-360" as const;
 export const PHASE17_QUALITY_FILE =
   "quality/critical-routes.spec.ts" as const;
+export const PHASE18_ALL_ROUTES_QUALITY_FILE =
+  "quality/all-routes.spec.ts" as const;
+export const PHASE17_QUALITY_FILES = Object.freeze([
+  PHASE17_QUALITY_FILE,
+  PHASE18_ALL_ROUTES_QUALITY_FILE,
+] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
   Object.freeze({
     project: PHASE17_JOURNEY_PROJECT,
     tag: "@quality-desktop",
+    file: PHASE17_QUALITY_FILE,
     expectedCount: 5,
   }),
   Object.freeze({
     project: PHASE17_MOBILE_PROJECT,
     tag: "@quality-mobile",
+    file: PHASE17_QUALITY_FILE,
     expectedCount: 5,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@quality-desktop",
+    file: PHASE18_ALL_ROUTES_QUALITY_FILE,
+    expectedCount: 101,
+  }),
+  Object.freeze({
+    project: PHASE17_MOBILE_PROJECT,
+    tag: "@quality-mobile",
+    file: PHASE18_ALL_ROUTES_QUALITY_FILE,
+    expectedCount: 101,
   }),
 ] as const);
 
@@ -134,7 +154,9 @@ export function classifyPhase17Result(
     return match[1] as Phase17CaseId;
   }
   if (
-    normalizedRelativeFile === PHASE17_QUALITY_FILE &&
+    PHASE17_QUALITY_FILES.includes(
+      normalizedRelativeFile as (typeof PHASE17_QUALITY_FILES)[number],
+    ) &&
     /(?:^|\s)@quality-(?:desktop|mobile)(?:\s|$)/u.test(title)
   ) {
     return "QUALITY";
@@ -332,25 +354,28 @@ function assertCompleteQualityResults(
   }
   for (const contract of PHASE17_QUALITY_CONTRACT) {
     const results = quality.filter(
-      ({ project }) => project === contract.project,
+      ({ project, file }) =>
+        project === contract.project && file === contract.file,
     );
     if (results.length !== contract.expectedCount) {
       contractFailure(
-        `${contract.project} has ${results.length} quality result(s), expected exactly ${contract.expectedCount}`,
+        `${contract.project} / ${contract.file} has ${results.length} quality result(s), expected exactly ${contract.expectedCount}`,
       );
     }
     if (
       results.some(
         ({ title, file }) =>
-          !title.includes(contract.tag) || file !== PHASE17_QUALITY_FILE,
+          !title.includes(contract.tag) || file !== contract.file,
       )
     ) {
       contractFailure(
-        `${contract.project} contains a quality result with the wrong tag or file`,
+        `${contract.project} / ${contract.file} contains a quality result with the wrong tag or file`,
       );
     }
     if (new Set(results.map(({ title }) => title)).size !== results.length) {
-      contractFailure(`${contract.project} contains duplicate quality titles`);
+      contractFailure(
+        `${contract.project} / ${contract.file} contains duplicate quality titles`,
+      );
     }
   }
   const expectedCount = PHASE17_QUALITY_CONTRACT.reduce(

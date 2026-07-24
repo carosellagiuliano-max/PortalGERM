@@ -15,13 +15,40 @@ const repository = process.cwd();
 const planDirectory = resolve(repository, "codex-plan");
 const masterPlanPath = resolve(planDirectory, "00-PLAN.md");
 const markdownLinkPattern = /!?\[[^\]]*\]\(([^)]+)\)/gu;
+const checkedChecklistPattern = /^\s*[-*]\s+\[[xX]\]\s+/gmu;
+const evidenceLinkPattern =
+  /!?\[[^\]]*\]\((?<target>[^)#]*evidence\/[^)#]+\.md)(?:#[^)]*)?\)/giu;
 
 const failures: string[] = [];
 let checkedLinks = 0;
 let checkedPhases = 0;
+let checkedChecklistFiles = 0;
+let checkedChecklistItems = 0;
 
 for (const path of markdownFiles(planDirectory)) {
   const source = readFileSync(path, "utf8");
+  const checkedItems = [...source.matchAll(checkedChecklistPattern)].length;
+  if (checkedItems > 0) {
+    checkedChecklistFiles += 1;
+    checkedChecklistItems += checkedItems;
+    const evidenceTargets = [...source.matchAll(evidenceLinkPattern)]
+      .map((match) => match.groups?.target)
+      .filter((target): target is string => target !== undefined);
+    if (evidenceTargets.length === 0) {
+      failures.push(
+        `${relative(path)} contains ${checkedItems} checked checklist item(s) without a linked evidence record.`,
+      );
+    } else if (
+      !evidenceTargets.some((target) => {
+        const resolved = resolve(dirname(path), decodeURIComponent(target));
+        return existsSync(resolved) && statSync(resolved).isFile();
+      })
+    ) {
+      failures.push(
+        `${relative(path)} contains checked checklist items, but none of its evidence links resolves to a file.`,
+      );
+    }
+  }
   for (const match of source.matchAll(markdownLinkPattern)) {
     const rawTarget = match[1]?.trim();
     if (
@@ -95,7 +122,7 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   console.info(
-    `Plan/evidence audit passed: ${checkedPhases} checked phases have linked records; ${checkedLinks} local Markdown links resolve.`,
+    `Plan/evidence audit passed: ${checkedPhases} checked phases and ${checkedChecklistItems} checked items across ${checkedChecklistFiles} files have linked records; ${checkedLinks} local Markdown links resolve.`,
   );
 }
 

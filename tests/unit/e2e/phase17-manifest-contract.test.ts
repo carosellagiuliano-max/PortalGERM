@@ -12,10 +12,16 @@ import {
   PHASE17_MOBILE_PROJECT,
   PHASE17_NETWORK_POLICY,
   PHASE17_QUALITY_CONTRACT,
-  PHASE17_QUALITY_FILE,
+  PHASE18_ALL_ROUTES_QUALITY_FILE,
   type Phase17RunIdentity,
   validatePhase17RunManifest,
 } from "@/tests/e2e/manifest-contract";
+
+const FULL_QUALITY_RESULT_COUNT = PHASE17_QUALITY_CONTRACT.reduce(
+  (total, contract) => total + contract.expectedCount,
+  0,
+);
+const FULL_RESULT_COUNT = PHASE17_CASES.length + FULL_QUALITY_RESULT_COUNT;
 
 describe("Phase 17 manifest contract", () => {
   it("accepts the exact retry-free full journey and quality inventory", () => {
@@ -61,13 +67,15 @@ describe("Phase 17 manifest contract", () => {
     const quality = manifest.quality.slice(0, -1);
     const incomplete = {
       ...manifest,
-      counts: resultCounts({ passed: 16 }),
+      counts: resultCounts({ passed: FULL_RESULT_COUNT - 1 }),
       quality,
     };
 
     expect(() =>
       validatePhase17RunManifest(incomplete, validationOptions(manifest)),
-    ).toThrow(/chromium-mobile-360 has 4 quality result/u);
+    ).toThrow(
+      /chromium-mobile-360 \/ quality\/all-routes\.spec\.ts has 100 quality result/u,
+    );
   });
 
   it("rejects an actually retried result despite a claimed zero policy", () => {
@@ -100,7 +108,10 @@ describe("Phase 17 manifest contract", () => {
       validatePhase17RunManifest(
         {
           ...manifest,
-          counts: resultCounts({ passed: 16, skipped: 1 }),
+          counts: resultCounts({
+            passed: FULL_RESULT_COUNT - 1,
+            skipped: 1,
+          }),
           quality: skippedQuality,
         },
         validationOptions(manifest),
@@ -119,7 +130,7 @@ describe("Phase 17 manifest contract", () => {
       validatePhase17RunManifest(
         {
           ...manifest,
-          counts: resultCounts({ passed: 18 }),
+          counts: resultCounts({ passed: FULL_RESULT_COUNT + 1 }),
           unclassified,
         },
         validationOptions(manifest),
@@ -133,11 +144,16 @@ describe("Phase 17 manifest contract", () => {
       validatePhase17RunManifest(
         {
           ...manifest,
-          counts: resultCounts({ passed: 16 }),
+          counts: resultCounts({ passed: FULL_RESULT_COUNT - 1 }),
         },
         validationOptions(manifest),
       ),
-    ).toThrow(/count for passed is 16, observed 17/u);
+    ).toThrow(
+      new RegExp(
+        `count for passed is ${FULL_RESULT_COUNT - 1}, observed ${FULL_RESULT_COUNT}`,
+        "u",
+      ),
+    );
 
     expect(() =>
       validatePhase17RunManifest(
@@ -169,7 +185,9 @@ describe("Phase 17 manifest contract", () => {
         { ...manifest, quality },
         validationOptions(manifest),
       ),
-    ).toThrow(/chromium-mobile-360 contains duplicate quality titles/u);
+    ).toThrow(
+      /chromium-mobile-360 \/ quality\/critical-routes\.spec\.ts contains duplicate quality titles/u,
+    );
   });
 
   it("rejects evidence from a different fixture, commit, runtime, database or network policy", () => {
@@ -249,7 +267,7 @@ describe("Phase 17 manifest contract", () => {
 });
 
 describe("Phase 17 reporter evidence helpers", () => {
-  it("classifies only named journeys and the allowlisted quality file", () => {
+  it("classifies only named journeys and the two allowlisted quality files", () => {
     expect(
       classifyPhase17Result(
         "[E2E-07] @journey deterministic search",
@@ -260,6 +278,12 @@ describe("Phase 17 reporter evidence helpers", () => {
       classifyPhase17Result(
         "@quality-mobile public routes",
         "quality/critical-routes.spec.ts",
+      ),
+    ).toBe("QUALITY");
+    expect(
+      classifyPhase17Result(
+        "@quality-desktop exhaustive route",
+        PHASE18_ALL_ROUTES_QUALITY_FILE,
       ),
     ).toBe("QUALITY");
     expect(
@@ -301,7 +325,7 @@ function validFullManifest() {
         id: "QUALITY",
         project: contract.project,
         title: `${contract.tag} quality case ${index + 1}`,
-        file: PHASE17_QUALITY_FILE,
+        file: contract.file,
       }),
     ),
   );
@@ -325,7 +349,7 @@ function validFullManifest() {
     networkPolicy: PHASE17_NETWORK_POLICY,
     startedAt: "2026-07-23T20:00:00.000Z",
     finishedAt: "2026-07-23T20:01:00.000Z",
-    counts: resultCounts({ passed: 17 }),
+    counts: resultCounts({ passed: FULL_RESULT_COUNT }),
     cases,
     quality,
     unclassified: [],

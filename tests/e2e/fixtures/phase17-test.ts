@@ -10,6 +10,7 @@ import {
 } from "@playwright/test";
 
 import { createDatabaseClient } from "@/lib/db/factory";
+import { isCriticalBrowserConsoleMessage } from "@/tests/e2e/console-policy";
 
 export const DEMO_PASSWORD = "Demo12345!" as const;
 export const PHASE17_CANDIDATE = Object.freeze({
@@ -77,7 +78,7 @@ export async function observePage(page: Page): Promise<PageObservation> {
   page.on("console", (message) => {
     if (message.type() !== "error") return;
     const text = message.text();
-    if (isCriticalConsoleMessage(text)) {
+    if (isCriticalBrowserConsoleMessage(text)) {
       failures.push(`Critical console error: ${text}`);
     }
   });
@@ -241,17 +242,6 @@ export async function assertKeyboardFocusVisible(page: Page) {
 
 function isLoopback(hostname: string) {
   return ["127.0.0.1", "localhost", "::1", "[::1]"].includes(hostname);
-}
-
-function isCriticalConsoleMessage(value: string) {
-  return [
-    /content security policy/iu,
-    /refused to (?:execute|load|connect|frame)/iu,
-    /uncaught/iu,
-    /hydration (?:failed|error|mismatch)/iu,
-    /phase17_external_network_blocked/iu,
-    /error occurred in the server components render/iu,
-  ].some((pattern) => pattern.test(value));
 }
 
 function requiredEnvironment(name: string) {
