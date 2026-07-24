@@ -234,7 +234,7 @@ async function main() {
       "production build",
       ["run", "build"],
       clone,
-      environment,
+      { ...environment, NODE_ENV: "production" },
       20 * 60_000,
     );
 
