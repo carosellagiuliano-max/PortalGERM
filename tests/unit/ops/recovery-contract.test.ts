@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -107,7 +107,10 @@ describe("Phase-18 recovery contract", () => {
     const identity = join(directory, "identity.txt");
     await writeFile(input, "ciphertext", "utf8");
     await writeFile(`${input}.sha256`, `${"a".repeat(64)}\n`, "utf8");
-    await writeFile(identity, "not-real-test-identity", "utf8");
+    await writeFile(identity, "not-real-test-identity", {
+      encoding: "utf8",
+      mode: 0o600,
+    });
 
     const result = resolveRestoreContract(
       ["--in", input, "--target", "restore-test"],
@@ -121,6 +124,17 @@ describe("Phase-18 recovery contract", () => {
     );
     expect(result.target.identity).not.toBe(result.source.identity);
     expect(result.identityFile).toBe(identity);
+
+    if (process.platform !== "win32") {
+      await chmod(identity, 0o644);
+      expect(() =>
+        resolveRestoreContract(
+          ["--in", input, "--target", "restore-test"],
+          environment({ BACKUP_AGE_IDENTITY_FILE: identity }),
+          repository,
+        ),
+      ).toThrow(/group or other permissions/u);
+    }
 
     expect(() =>
       resolveRestoreContract(
