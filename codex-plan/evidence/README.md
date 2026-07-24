@@ -35,6 +35,7 @@ gelten nicht als Nachweis.
 - [`2026-07-23-phase-16.md`](./2026-07-23-phase-16.md) — Per-request CSP, CSRF-/IDOR-/Cache-Härtung, Audit-Vollständigkeit, redigiertes Logging, Health/Readiness, Abuse-Flows und Security-Maintenance.
 - [`2026-07-23-phase-17.md`](./2026-07-23-phase-17.md) — Cross-role E2E-01–07, Desktop-/360px-Quality-Matrix, Zero-Retry-Manifest sowie Linux/PostgreSQL- und Windows-CI.
 - [`2026-07-24-phase-18.md`](./2026-07-24-phase-18.md) — Dokumentations-/Release-Audit, vollständige 100-Seiten-Desktop-/360px-Matrix, E2E-08 Clean Clone sowie verschlüsselter Backup-/Restore-Drill.
+- [`2026-07-24-commercial-launch-follow-up.md`](./2026-07-24-commercial-launch-follow-up.md) — unabhängig bewertete Commercial-, Cashflow-, Packaging-, Salary-, Worker- und AVG-Befunde samt isolierter Zielcommit-Verifikation.
 
 ## Pflichtfelder eines Records
 
