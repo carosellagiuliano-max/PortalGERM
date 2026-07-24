@@ -1,6 +1,6 @@
 # Phase 17 — Testing
 
-> **PortalGERM-Status: LOKAL VERIFIZIERT, REMOTE-CI AUSSTEHEND.** Der vollständige lokale Unit-/PostgreSQL-/Build-/HTTP-/HSTS-/Zero-Retry-Browserlauf ist auf dem unveränderlichen Code-Commit belegt. Bis Linux-/Windows-CI und das Playwright-Artefakt nach dem direkten Push verlinkt sind, bleibt die Phase in [00-PLAN.md](./00-PLAN.md) `[ ]`. Der Nachweis steht in [evidence/2026-07-23-phase-17.md](./evidence/2026-07-23-phase-17.md).
+> **PortalGERM-Status: ABGESCHLOSSEN UND VERIFIZIERT.** Der vollständige lokale Unit-/PostgreSQL-/Build-/HTTP-/HSTS-/Zero-Retry-Browserlauf ist auf dem unveränderlichen Code-Commit belegt. Linux/PostgreSQL 16 und Windows sind auf dem direkt nach `main` und den Phasen-Branch gepushten CI-Zielcommit grün; beide Playwright-Artefakte sind für 14 Tage vorhanden. Der vollständige Nachweis steht in [evidence/2026-07-23-phase-17.md](./evidence/2026-07-23-phase-17.md).
 
 > Detail file for [00-PLAN.md](./00-PLAN.md) Phase 17. Read [99-rules-quickref.md](./99-rules-quickref.md) §23 before starting.
 
@@ -137,8 +137,8 @@ Consolidate the owning-phase Unit/PostgreSQL integration suites and add product-
 - [x] Domain boundary tests use injected clocks; browser day/expiry boundaries use the logical server clock instead of wall-clock sleeps. Performance timings intentionally measure elapsed browser time against explicit budgets.
 - [x] Pure Unit tests may mock repositories; schema, ownership, idempotency and concurrency tests use an isolated real PostgreSQL database migrated with the production migration path
 - [x] `npm test` exits non-zero on any failure
-- [ ] Linux CI runs PostgreSQL 16 plus Unit, Integration, Build, HTTP smoke, Chromium E2E and HSTS smoke; Windows CI proves install/lint/typecheck/Unit/Build portability
-- [ ] CI uploads `playwright-report/phase17/` and `test-results/phase17/` for 14 days even when the browser gate fails
+- [x] Linux CI runs PostgreSQL 16 plus Unit, Integration, Build, HTTP smoke, Chromium E2E and HSTS smoke; Windows CI proves install/lint/typecheck/Unit/Build portability
+- [x] CI uploads `playwright-report/phase17/` and `test-results/phase17/` for 14 days even when the browser gate fails
 
 ## Files to create / modify
 
@@ -159,13 +159,14 @@ Consolidate the owning-phase Unit/PostgreSQL integration suites and add product-
 > **Plan status:** Der vollständige lokale Gate-Lauf ist auf
 > `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` bestanden: 1.940/1.940 Unit,
 > 369/369 PostgreSQL-Integration und 17/17 Browser mit Retry `0`, beiden
-> Projekten und vollständiger Quality-Matrix. Nur der Remote-CI-/Artefaktnachweis
-> ist vor dem endgültigen `[x]` noch offen.
+> Projekten und vollständiger Quality-Matrix. Der CI-Zielcommit
+> `02c6a51a01dd3b81a4eb53e0b989c3ef83c4d832` ist auf `main` und dem
+> Phasen-Branch in Linux und Windows grün; beide Artefakte sind verlinkt.
 
 - [x] Unit, PostgreSQL integration and E2E commands pass on the target release commit; report actual discovered/pass/skip counts rather than inherited numbers
 - [x] `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e:http` and `npm run test:e2e:hsts` pass on the same code commit
 - [x] The complete browser manifest records E2E-01–07 exactly once, retry policy `0`, both configured projects, the final migration hash and no skipped/failed/interrupted result
-- [ ] Linux PostgreSQL CI and Windows portability CI pass for the final pushed commit; the artifact name/run URL are linked from evidence
+- [x] Linux PostgreSQL CI and Windows portability CI pass for the final pushed commit; the artifact name/run URL are linked from evidence
 - [x] Fair-Job-Score v2 golden fixtures assert every current ADR-017 factor/evidence value; Company verification and paid inputs remain absent
 - [x] Anonymizer test fails if a developer adds `email` to the returned shape *(keys + serialized-payload assertions)*
 - [x] Concurrent Credit Ledger test against PostgreSQL proves exactly one funded contact succeeds at balance 1 and the derived balance never becomes negative

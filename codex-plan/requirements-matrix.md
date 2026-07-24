@@ -129,7 +129,7 @@
 
 **Owner:** Phase 17 implements and runs E2E-01–07. Phase 18 alone implements/runs E2E-08 clean-clone/backup/restore and then re-runs the complete release set.
 
-> **Phase-17-Status (24. Juli 2026):** E2E-01–07 und die Desktop-/360px-Quality-Matrix sind im vollständigen lokalen Zero-Retry-Lauf auf `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` mit 17/17 Tests bestanden. Unit (1.940/1.940), PostgreSQL-Integration (369/369), Build, HTTP und HSTS sind ebenfalls grün; vor dem endgültigen Phasenabschluss fehlt nur noch der verlinkte Linux-/Windows-CI-/Artefaktnachweis in der [Phase-17-Evidence](./evidence/2026-07-23-phase-17.md). E2E-05 ist im Browser eine repräsentative Job-/Application-/Rollen-Grenze; die breitere Objektmatrix bleibt zusätzlich durch die grünen owning Route-/Repository-Tests belegt.
+> **Phase-17-Status (24. Juli 2026): ABGESCHLOSSEN.** E2E-01–07 und die Desktop-/360px-Quality-Matrix sind im vollständigen lokalen Zero-Retry-Lauf auf `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` mit 17/17 Tests bestanden. Unit (1.940/1.940), PostgreSQL-Integration (369/369), Build, HTTP und HSTS sind ebenfalls grün. Der CI-Zielcommit `02c6a51a01dd3b81a4eb53e0b989c3ef83c4d832` bestand dieselben Linux/PostgreSQL-16-Gates sowie Windows-Portabilität auf `main` und dem Phasen-Branch; beide 14-Tage-Artefakte sind in der [Phase-17-Evidence](./evidence/2026-07-23-phase-17.md) verlinkt. E2E-05 ist im Browser eine repräsentative Job-/Application-/Rollen-Grenze; die breitere Objektmatrix bleibt zusätzlich durch die grünen owning Route-/Repository-Tests belegt.
 
 | Test-ID | Verknüpfte Anforderungen | Szenario / verbindliche Erwartung | Ausführbarer Phase-17-Nachweis | Aktueller Status |
 |---|---|---|---|---|
