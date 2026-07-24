@@ -22,8 +22,11 @@
 Ein Layout- oder Navigationseintrag ist keine Autorisierungsgrenze. Fremde und
 nicht existente Tenant-/Candidate-Ressourcen liefern dieselbe sichere 404;
 rollenbezogene Seitenfehler ohne Objektbezug dürfen 403 liefern. Private
-Layouts sind dynamisch, `noindex` und no-store. Candidate, Employer und Admin
-besitzen je eine Loading-Grenze; Root-Error und Root-404 bleiben generisch.
+Layouts sind dynamisch, `noindex` und no-store. Mutationen besitzen kompakte
+Pending-Zustände. Über den privaten Root-Segmenten liegt bewusst keine
+`loading.tsx`-Streaming-Grenze: Tenant-/Owner-Guards müssen ihren echten
+HTTP-404-Status setzen können, bevor Antwort-Header gesendet werden.
+Root-Error und Root-404 bleiben generisch.
 
 ## Öffentliche und Auth-Seiten — 27
 
@@ -200,7 +203,7 @@ Audit-Metadaten redigiert.
 `npm run route:audit` beweist Vollständigkeit und Rollenklassifikation des
 Dateibaums, nicht jeden UX-Zustand. Phase 17 prüft eine kritische Desktop-/
 360px-Stichprobe; Phase 18 muss zusätzlich den Vier-Rollen-Walkthrough,
-Loading-Grenzen, lokale Links sowie Requirement → Test → Evidence im
-datierenden Abschlussrecord dokumentieren. Eine fehlende Route oder ein nicht
-gelaufener State bleibt sichtbar und darf nicht durch diese Matrix als
-„bestanden“ ausgegeben werden.
+Pending-/Loading-Zustände nach den Sicherheits-Gates, lokale Links sowie
+Requirement → Test → Evidence im datierenden Abschlussrecord dokumentieren.
+Eine fehlende Route oder ein nicht gelaufener State bleibt sichtbar und darf
+nicht durch diese Matrix als „bestanden“ ausgegeben werden.

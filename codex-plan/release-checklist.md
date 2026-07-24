@@ -71,7 +71,9 @@ keinen Lauf auf dem Phase-18-Release-Commit.
 
 - [ ] `npm run route:audit` stimmt mit `codex-plan/route-inventory.json` überein.
 - [ ] [Route-/Rollen-Matrix](./route-role-matrix.md) deckt alle 100 Seiten und 7 Handler ab.
-- [ ] Candidate-/Employer-/Admin-Layouts besitzen Loading-Grenzen; Fehler-/404-/Locked-Zustände sind nachvollziehbar.
+- [ ] Candidate-/Employer-/Admin-Mutationen besitzen Pending-Zustände; keine
+  breite private Streaming-Grenze verdeckt echte Tenant-/Owner-404-Status;
+  Fehler-/404-/Locked-Zustände sind nachvollziehbar.
 - [ ] Der manuelle Vier-Rollen-Walkthrough nennt Route, Fixture, Desktop/360px, Tastatur/Fokus und Resultat.
 - [ ] `npm run plan:audit` meldet keine `[x]` ohne erreichbare Target-Evidence und keine gebrochenen lokalen Links.
 - [ ] Alle 51 P0-/P0-P1-Zeilen und E2E-01–08 besitzen im Abschlussrecord Requirement → Test → Evidence.
