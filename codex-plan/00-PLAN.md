@@ -137,7 +137,7 @@ Der Phase-17-Code-Commit `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` ergänzt dar
 
 ### [x] 18 — Dokumentation und Release-Audit
 
-[`18-documentation-final-audit.md`](./18-documentation-final-audit.md) · E2E-08 Clean Clone, Migration/Seed, Production-Demo-Guard, Backup/isolierter Restore/Smoke, vollständige Route-/Requirement-Evidence und Abschlussbericht sind auf `f7158c7999b25da467f172d228b9d475ec00c127` verifiziert; siehe [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). Externe Pilot-/Go-live-Gates bleiben offen.
+[`18-documentation-final-audit.md`](./18-documentation-final-audit.md) · E2E-08 Clean Clone, Migration/Seed, Production-Demo-Guard, Backup/isolierter Restore/Smoke, vollständige Route-/Requirement-Evidence und Abschlussbericht sind auf `a9f24e7190681c23886de84add321db32b43651e` verifiziert; siehe [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). Externe Pilot-/Go-live-Gates bleiben offen.
 
 Die genaue Abhängigkeitsgrafik und jedes ausführbare Arbeitspaket stehen in [`implementation-plan.md`](./implementation-plan.md).
 

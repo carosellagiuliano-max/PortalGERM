@@ -1,6 +1,6 @@
 # Phase 18 — Documentation & Final Audit
 
-> **PortalGERM-Status: ABGESCHLOSSEN UND LOKAL VERIFIZIERT.** Der unveränderliche Code-Commit `f7158c7999b25da467f172d228b9d475ec00c127` bestand die vollständigen technischen Gates einschließlich E2E-08. Der datierte Nachweis steht in [evidence/2026-07-24-phase-18.md](./evidence/2026-07-24-phase-18.md). Dokumentation macht daraus keine Produktionsfreigabe: Staging, echte Provider, Legal/Privacy/Tax und organisatorische Ops-Gates bleiben offen.
+> **PortalGERM-Status: ABGESCHLOSSEN UND VERIFIZIERT.** Der unveränderliche Code-Commit `a9f24e7190681c23886de84add321db32b43651e` bestand lokal E2E-08 auf dem exakten Commit sowie die vollständige Linux/PostgreSQL-16- und Windows-CI auf `main` und dem Phasen-Branch. Der datierte Nachweis steht in [evidence/2026-07-24-phase-18.md](./evidence/2026-07-24-phase-18.md). Dokumentation macht daraus keine Produktionsfreigabe: Staging, echte Provider, Legal/Privacy/Tax und organisatorische Ops-Gates bleiben offen.
 
 > Detail file for [00-PLAN.md](./00-PLAN.md) Phase 18. Read [99-rules-quickref.md](./99-rules-quickref.md) §34, §35, §36 before starting.
 

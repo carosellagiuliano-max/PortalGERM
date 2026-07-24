@@ -11,9 +11,9 @@
 
 | Feld | Wert |
 | --- | --- |
-| verifizierter Code-Commit | `f7158c7999b25da467f172d228b9d475ec00c127` |
+| verifizierter Code-Commit | `a9f24e7190681c23886de84add321db32b43651e` |
 | Branch | `codex/phase-18-release-audit` |
-| E2E-08 Start/Ende | `2026-07-24T15:25:17.629Z` / `2026-07-24T15:31:51.825Z` |
+| E2E-08 Start/Ende | `2026-07-24T16:26:24.308Z` / `2026-07-24T16:32:37.438Z` |
 | Operator/Reviewer | Codex · technischer Selbstreview; keine unabhängige Fach-/Go-live-Freigabe |
 | Phase-18-Evidence | [`evidence/2026-07-24-phase-18.md`](./evidence/2026-07-24-phase-18.md) |
 | BUILD_REPORT | [`../BUILD_REPORT.md`](../BUILD_REPORT.md) |
