@@ -55,6 +55,7 @@ describe("Phase-18 recovery process tools", () => {
       NODE_ENV: "test",
       PATH: "C:\\safe-bin",
       SystemRoot: "C:\\Windows",
+      ProgramFiles: "C:\\Program Files",
       SESSION_SECRET: "must-not-cross-process-boundary",
       GITHUB_TOKEN: "must-not-cross-process-boundary",
     });
@@ -63,6 +64,7 @@ describe("Phase-18 recovery process tools", () => {
       NODE_ENV: "test",
       PATH: "C:\\safe-bin",
       SystemRoot: "C:\\Windows",
+      ProgramFiles: "C:\\Program Files",
     });
     expect(environment.SESSION_SECRET).toBeUndefined();
     expect(environment.GITHUB_TOKEN).toBeUndefined();
