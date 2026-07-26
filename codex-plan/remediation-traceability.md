@@ -64,8 +64,8 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 |---|---|---|---|---|---|---|---|---|---|---|
 | STH-001 | Keine E-Mail-Verifikation | technisch gelöst; LIVE-Aktivierung extern blockiert | P0 vor personenbezogenem LIVE-Betrieb | Identity/E-Mail | 20 | 19, Provider- und Outbox-Entscheid | Phase-20-Workflow, Low-Assurance, Reverification und E-Mail-Change implementiert | Unit/PostgreSQL/Race/Browser `PASS`; Retry 0 | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `lib/auth/email-verification-service.ts`; `lib/auth/email-change-service.ts` | Absenderdomain, DPA, Zustellprovider |
 | STH-002 | Privacy-Identitätschallenge für normale Registrierungen unerreichbar | technisch gelöst; reale Privacy-Ausführung bleibt Phase 22 | P0 | Privacy/Identity | 20 | STH-001, STH-013 | Registration→Verify→Privacy-Brücke implementiert, unabhängige Passwort-Challenge bleibt fail-closed | PostgreSQL plus Browser positiv/negativ `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `tests/integration/privacy/privacy-verified-identity-postgres.test.ts` | reale Export-/Erasure-/Legal-Freigabe Phase 22 |
-| STH-003 | CV nur als Metadaten, keine nutzbaren Bytes | bestätigt; bewusstes Mock-Verhalten | P0 vor realer Bewerbung | Dokumente/Storage | 21 | 19, STH-004, Malware-/Retention-Entscheid | offen; Metadatenmodell und Port vorhanden | Mock-Storage-/Profiltests vorhanden, kein realer Upload/Download | `lib/providers/storage/mock-storage-provider.ts:56-107`; `lib/candidate/profile.ts:336-376` | Storage-Region/DPA, Scanner, Retention |
-| STH-004 | Produktive externe Provider fehlen | teilweise gelöst; E-Mail-Sandbox technisch, LIVE und andere Provider offen | P0-Programm, je Provider separat | Provider | 20/21/23/24, Lead 23 | 19 sowie Legal, Secrets, Monitoring | E-Mail-Port/Resend-Sandbox fail-closed; Storage/Payment/Ops weiter offen | E-Mail-Contract/Failure-Smoke `PASS`; keine LIVE-Evidence | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `lib/providers/email/resend-email-provider.ts` | Providerwahl, DPA, DNS, Zugänge, Budget |
+| STH-003 | CV nur als Metadaten, keine nutzbaren Bytes | technisch gelöst; LIVE-Aktivierung extern blockiert | P0 vor realer Bewerbung | Dokumente/Storage | 21 | 19/20, STH-004; Retention/Worker/Step-up bleiben 22/23/25 | Quarantäne-first CV-Bytes, immutable Versionen, single-use Read-Grants und Reconciliation im Local-/CI-Sandboxvertrag implementiert | Unit/Provider/PostgreSQL/Last/Browser Desktop+360 `PASS`; G3 Retry 0 | [Phase-21-Evidence](./evidence/2026-07-26-phase-21.md); `lib/documents/vault-service.ts`; `lib/providers/storage/local-encrypted-object-store.ts` | externer Storage/KMS/Scanner, Region/DPA, Retention/Legal-Hold, autonome Worker |
+| STH-004 | Produktive externe Provider fehlen | teilweise gelöst; E-Mail- und Storage-/Scanner-Sandbox technisch, LIVE und Payment/Ops offen | P0-Programm, je Provider separat | Provider | 20/21/23/24, Lead 23 | 19 sowie Legal, Secrets, Monitoring | E-Mail-Port/Resend-Sandbox und verschlüsselter Storage-/Scanner-Sandboxvertrag fail-closed; Payment/LIVE/Ops weiter offen | E-Mail- und Storage-/Scanner-Contracts/Failure-Smokes `PASS`; keine LIVE-Evidence | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); [Phase-21-Evidence](./evidence/2026-07-26-phase-21.md) | Providerwahl, DPA/Region, DNS/Zugänge, Monitoring, Budget |
 | STH-005 | Keine reale Zahlung/Billing-Abwicklung | bestätigt; Mock-Billing fachlich umfangreich | P0 für Paid Self-Service | Billing/Finance | 24 | 19, STH-004, Worker, Tax/Legal, früher Phase-31A-Go/No-go | offen; Orders/Invoices/Entitlements bleiben erhalten | starke Mock-/DB-Tests, keine Webhook/Reconciliation-E2E | `lib/providers/payments/index.ts:1-16`; `lib/providers/payments/stripe-payment-provider.ts:7-40`; `lib/billing/orders.ts:248-263` | PSP-Vertrag, Steuer-/Refund-/Dunning-Freigabe |
 | STH-006 | Kein realer Datenexport und keine reale Löschung | bestätigt; Case-Orchestrierung ist vorhanden | P0 | Privacy/Legal | 22 | 19, STH-001/002, Storage, Retention-/Legal-Matrix | offen; Export ist Manifest, Delete ist Assessment | starke Case-/Manifesttests, bewusst kein Erasure-Test | `lib/privacy/export-mock.ts:15-20,99-102`; `lib/privacy/privacy-case-service.ts:842-890`; `tests/integration/privacy/privacy-case-service.test.ts:149-160,281-290` | Counsel, Aufbewahrungspflichten, Dateninventar |
 | STH-007 | Keine öffentlichen Rechtsseiten/kanonischen Rechtstexte | bestätigt | P0 vor öffentlichem LIVE | Legal/Consent | 22 | 19, Counsel, STH-006/017/026 | offen; nur Notice-Identifier und Kurztexte | Consent-Hash-Tests vorhanden, keine Legal-Routen/Version-Regression | `components/shared/app-footer.tsx:5-26,68-84`; `lib/privacy/user-consent.ts:8-19`; `codex-plan/route-inventory.json:1-399` | freigegebene CH-Texte, AVG/DSG/AGB |
@@ -175,60 +175,66 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 ### STH-003 — CV wird nur als Metadaten behandelt
 
-- **Status / Priorität / Phase:** bestätigt und als Mock-Verhalten ehrlich;
-  P0 vor realer interner Bewerbung; Phase 21 `21-document-cv-vault.md`.
-- **Fundstellen:** `StorageProvider` erlaubt laut
-  `lib/providers/storage/storage-provider.ts:1-16` keinen Read-URL-Rückgabewert.
-  `lib/providers/storage/mock-storage-provider.ts:56-107` verwirft den Buffer.
-  `lib/candidate/profile.ts:336-376` übergibt nur Dateiname, MIME und Größe.
-  Die UI sendet diese als Hidden Fields
-  (`components/candidate/JobPassForm.tsx:251-273`). Metadaten stehen in
-  `prisma/schema.prisma:1424-1439`.
-- **Betroffene Modelle:** `CandidateDocumentMetadata`,
-  `ApplicationSubmissionDocument`, `CandidateProfile`; neuer Scan-/Blob-
-  Lifecycle und Löschbeleg.
+- **Status / Priorität / Phase:** technisch geschlossen und auf Candidate
+  `ca36bff` verifiziert; P0 vor realer interner Bewerbung; Aktivierung bleibt
+  Local-/CI-Sandbox, Phase 21 `21-document-cv-vault.md`.
+- **Fundstellen:** `lib/documents/vault-service.ts`,
+  `lib/documents/document-content-policy.ts`,
+  `lib/providers/storage/local-encrypted-object-store.ts`,
+  `components/candidate/DocumentVaultCard.tsx` und
+  `components/employer/DocumentDownloadButton.tsx`; die neun Handler stehen
+  im aktuellen Routeinventar.
+- **Betroffene Modelle:** `Document`, immutable `DocumentVersion`,
+  `DocumentUploadIntent`, append-only `DocumentScanAttempt`,
+  `DocumentReadGrant`, `DocumentAccessEvent`, `ObjectLifecycleOutcome`,
+  `CandidateDocumentMetadata` und `ApplicationSubmissionDocument`.
 - **Betroffene Rollen:** Candidate Owner; explizit berechtigte
   Employer-/Recruiter-Mitglieder; Privacy/Admin nur begründet.
-- **Ist:** Die Anwendung validiert plausible Metadaten und Snapshots, speichert
-  aber keine Bytes; Arbeitgeber sehen ausdrücklich „kein Download im
-  Mock-MVP“ (`app/employer/applicants/[id]/page.tsx:23`).
-- **Soll:** Streaming-Upload in privaten Storage, serverseitige Größen- und
-  MIME-/Magic-Byte-Prüfung, Malware-Quarantäne, atomare Aktivierung,
-  kurzlebige autorisierte Downloads, Retention/Löschung und unveränderliche
-  Bewerbungs-Snapshots.
+- **Ist:** Der Test-Cohort kann echte, gestreamte und AES-GCM-verschlüsselte
+  CV-Bytes hochladen. Nur eine CLEAN-Version ist bewerbbar; Replacement
+  mutiert die Submission nicht. Owner beziehungsweise aktuell berechtigter
+  Employer/Recruiter lesen über actor-gebundene Single-use-Grants. Legacy
+  bleibt ehrlich metadata-only; Production ist fail-closed.
+- **Soll:** Der technische Sandboxvertrag ist erreicht. Offen bleiben die
+  externe Storage-/KMS-/Scannerwahl und Freigabe, Phase-22-Retention/
+  Legal-Hold/Export/Erasure, Phase-23-Autonomie und Phase-25-Bulk-Step-up.
 - **Root Cause:** ADR-014 verschob Storage, während die Domäne für spätere
   Integration nur Metadaten konservierte.
-- **Impact:** Eine reale Bewerbung mit CV ist operativ unbrauchbar; Privacy-
-  Export/Löschung und Radar-Reveal können keine Datei liefern.
+- **Impact:** Der frühere technische CV-Blocker ist in Sandbox geschlossen;
+  ohne die offenen externen/Privacy-/Operations-Gates darf das Ergebnis
+  weiterhin nicht als LIVE-Dokumentbetrieb beworben werden.
 - **Änderungsrisiko:** sehr hoch; PII, Malware, Tenant-Leakage, verwaiste
   Objekte, Range Requests und Provider-Transaktionsgrenzen.
 - **Abhängigkeiten:** Storage-Anteil STH-004, STH-006, Key-/Bucket-Region,
   DPA, Malware-Scanner, Retention- und Download-Policy.
-- **Geeignete Tests:** Magic-Byte-Mismatch, Oversize-Streaming, Malware-
-  Quarantäne, Cross-Tenant/expired URL, DB-Rollback mit Blob-Cleanup,
-  Re-Upload/Race, Bewerbungs-Snapshot, Export und Erasure.
-- **Abnahmekriterium:** Nur gescannte ACTIVE-Dokumente sind zeitlich begrenzt
-  und autorisiert abrufbar; jeder Upload/Delete besitzt idempotente,
-  auditierte DB- und Storage-Evidence ohne öffentliche Objekt-URL.
+- **Geeignete Tests:** Magic-Byte-Mismatch, Oversize-/Slow-Streaming,
+  Malware/Polyglot/Timeout, Cross-Tenant/expired/replayed Grant,
+  Membership-/Assignment-Revoke, Reconciliation, Re-Upload/Race,
+  immutable Bewerbungs-Version, Last sowie Desktop/360 px sind `PASS`.
+  Export und Erasure bleiben owning Tests der Phase 22.
+- **Abnahmekriterium:** In der Sandbox erfüllt: Nur gescannte CLEAN-
+  Dokumente sind kurzlebig und aktuell autorisiert abrufbar; Upload,
+  Scan, Read, Replacement, Delete-Request und Reconciliation besitzen
+  redigierte Evidence ohne öffentliche Objekt-URL.
 
 ### STH-004 — Produktive Provider fehlen
 
 - **Status / Priorität / Phase:** bestätigt, aber keine überraschende
   Regression; P0-Programm über Phasen 20, 21, 23 und 24, Lead Phase 23.
-- **Fundstellen:** ADR-014 dokumentiert die Mock-only-Entscheidung in
-  `codex-plan/decisions.md:156-177`. Production weist zukünftige
-  Provider-Variablen in `lib/config/env-schema.ts:237-243` sogar ab.
-  Beispiele: Mock-E-Mail-Root `lib/providers/email/index.ts:31-43`,
-  Mock-Storage `lib/providers/storage/index.ts:20-21`, Mock-Payment
-  `lib/providers/payments/index.ts:1-16` und unwired OpenAI-Placeholder
-  `lib/providers/ai/openai-ai-provider.ts:3-59`.
+- **Fundstellen:** ADR-014 dokumentiert die ursprüngliche Mockgrenze;
+  ADR-032 akzeptiert inzwischen den Phase-21-Sandboxvertrag.
+  `lib/config/env-schema.ts` trennt `disabled`/Sandbox/Production
+  fail-closed. Beispiele sind Resend-Sandbox,
+  `document-storage-composition.ts`, der lokale verschlüsselte
+  Object-Store, Mock-Payment und der weiterhin unwired AI-Placeholder.
 - **Betroffene Modelle:** `EmailLog`, `Order`, `PaymentEvent`,
   `CandidateDocumentMetadata`, `ImportSource/Run`, Salary- und
   Job-Room-Snapshots; je Adapter eigene externe Referenzen nur nach ADR.
 - **Betroffene Rollen:** alle Produktrollen; besonders Finance, Privacy,
   Employer Owner und Operations.
-- **Ist:** Fachlogik arbeitet über Ports, lokale Mocks sind wahrheitsgetreu und
-  externe Netzwerkzugriffe unterbleiben. Das ist demo-ready, nicht
+- **Ist:** Fachlogik arbeitet über Ports; lokale Mocks sowie E-Mail- und
+  Storage-/Scanner-Sandboxadapter sind wahrheitsgetreu und fail-closed.
+  Externe Netzwerkzugriffe unterbleiben. Das ist technisch testbar, nicht
   production-ready.
 - **Soll:** Pro Provider ein expliziter ADR, Composition Root mit
   Environment-Gate, Secret Handle, Timeouts, Idempotenz, Retry/DLQ,
@@ -236,8 +242,8 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
   Fallback. Nicht jeder Mock muss für den ersten Pilot ersetzt werden.
 - **Root Cause:** bewusste Risikoreduktion bis zur Produkt- und
   Rechtsvalidierung.
-- **Impact:** Kein echter Versand, Geldfluss, CV-Speicher, offizieller
-  Job-Room-/Commute-Dienst oder frei schaltbarer AI-Service.
+- **Impact:** Kein echter Versand, Geldfluss, externer LIVE-CV-Speicher,
+  offizieller Job-Room-/Commute-Dienst oder frei schaltbarer AI-Service.
 - **Änderungsrisiko:** XL; ein gemeinsamer „RealProvider“-Umbau würde
   Sicherheits-, Legal- und Fehlerdomänen unzulässig koppeln.
 - **Abhängigkeiten:** Providerverträge/Zugänge, DPA, Secrets, STH-009/013 und

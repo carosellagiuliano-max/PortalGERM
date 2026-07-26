@@ -345,7 +345,7 @@ Headroom, Forecast, Alert und Owner.
 | --- | --- | --- | --- |
 | [x] 19 | [Remediation-Baseline und Regression](./19-remediation-baseline-regression.md) | alle `STH-*` als Steuerung | Candidate `769ee62`, vollständige aktuelle Golden-Baseline, Regressionvertrag, Test-/Migrationsinventar und Gate-Backlog verifiziert |
 | [x] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md) | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | technischer Verification-/E-Mail-Change-/Outbox-/Dispatcher-/Preference-Vertrag auf Candidate `5908900`; LIVE/Worker/Step-up bleiben gegatet |
-| [ ] 21 | [Document-/CV-Vault](./21-document-cv-vault.md) | `STH-003`; Storage-Anteil `STH-004` | echte CV-/Evidenzdateien mit Quarantäne, Zugriff, Retention und Audit |
+| [x] 21 | [Document-/CV-Vault](./21-document-cv-vault.md) | `STH-003`; Storage-Anteil `STH-004` | Candidate `ca36bff`: echte CV-Bytes mit Quarantäne, Scan, immutable Application-Version, Single-use-Grant, Reconciliation und Audit im Local-/CI-Sandboxvertrag; LIVE/Retention/Worker/Bulk gegatet |
 | [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md) | `STH-006`, `STH-007`, `STH-017` | vollständiges Dateninventar, reale Export-/Korrektur-/Löschprozesse, Legal Holds, versionierte Rechtstexte und consent-bewusste LIVE-Analytics |
 | [ ] 23 | [Production Operations und Worker](./23-production-operations-workers.md) | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034` | explizit freigegebene reale Adapter, autonome Ausführung, Kapazitäts-/Stückkostenmodell und belastbare Staging-/Recovery-Grenzen |
 | [ ] 24 | [Reales Billing und Finance](./24-real-billing-finance.md) | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031` | echter, webhookbasierter Geldfluss, Reconciliation, Dunning/Dispute sowie vertraglich korrekte Refund-/Credit-Restoration |
@@ -441,9 +441,16 @@ HSTS, Seed×2, Provider-/Dispatcher-Failure- und Governance-Gates. Der
 [Phase-20-Evidence-Record](./evidence/2026-07-26-phase-20.md) trennt diesen
 technischen Abschluss von weiterhin `DISABLED`/`PAUSED` gesetzter
 Productionzustellung, autonomer Phase-23-Ausführung und Phase-25-Step-up.
-Phase 21 darf beginnen.
+Phase 21 ist auf Candidate `ca36bff` technisch abgeschlossen; Phase 22 darf
+als nächster sequenzieller Track beginnen.
 
-### [ ] 21 — Document-/CV-Vault
+### [x] 21 — Document-/CV-Vault
+
+> **Technisch abgeschlossen und verifiziert:** Quarantäne-first Vault,
+> Streaming-/Content-/Scanner-Grenzen, immutable Application-Version,
+> actor-gebundener Single-use-Read, Reconciliation und vollständiges G3 sind
+> auf `ca36bff` grün. Aktivierung bleibt Local-/CI-Sandbox; siehe
+> [Phase-21-Evidence](./evidence/2026-07-26-phase-21.md).
 
 **Zweck:** CVs und später Verifikationsevidenz werden als echte,
 verschlüsselte und autorisierte Objekte verwaltet statt nur als Metadaten.
@@ -453,15 +460,16 @@ Widerruf und Löschung bilden einen durchgängigen Lifecycle.
 **Befunde:** `STH-003` sowie der Storage-Provideranteil von `STH-004`.
 
 **Abhängigkeiten:** 19 und der technische Identity-/Outbox-Vertrag aus Phase
-20; bestehende Candidate-/Application-/Radar-Policies. Der Storage-Port und
-sein produktiver Adapter werden hier fachlich geschlossen; zentrale
+20; bestehende Candidate-/Application-/Radar-Policies. Storage-/Scanner-Ports
+und ein verschlüsselter Local-/CI-Sandboxadapter sind fachlich geschlossen;
+ein externer produktiver Adapter bleibt bewusst offen. Die zentrale
 Privacy-Policy gehört Phase 22, LIVE-Aktivierung, Monitoring und Recovery
 bleiben zusätzlich an die Operations-Gates aus Phase 23 gebunden.
 
 **Pflicht-Gates:** serverseitige Grössen-/Magic-Byte-/Typprüfung; zufällige
-Objektschlüssel; kein öffentlicher Bucket; kurzlebige autorisierte Downloads;
-Virus-Scan-Fail-closed; Verschlüsselung/Key-Rotation; Retention und Legal
-Hold; CV niemals vor Radar-Reveal.
+Objektschlüssel; keine öffentliche URL; kurzlebige autorisierte Downloads;
+Virus-Scan-Fail-closed; Verschlüsselung/Key-Rotation; Retention-/Legal-Hold-
+Hooks mit fail-closed Übergabe an Phase 22; CV niemals vor Radar-Reveal.
 
 **Risiken:** Malware, SSRF, Object-IDOR, unvollständige Löschung, sensible
 Backups und fehlerhafte MIME-Vertrauensannahmen.

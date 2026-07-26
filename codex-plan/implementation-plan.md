@@ -2,8 +2,8 @@
 
 > **Historischer Ausführungsplan für Phase 01–18.** Diese Phasen und ihre
 > commitgebundene Evidence bleiben unverändert. Für neue Implementierung ist
-> Phasen 19 und 20 sind inzwischen auf den Candidates `769ee62` und
-> `5908900` abgeschlossen; als nächster technischer Track gilt Phase 21 und
+> Phasen 19 bis 21 sind inzwischen auf den Candidates `769ee62`, `5908900`
+> und `ca36bff` abgeschlossen; als nächster technischer Track gilt Phase 22 und
 > danach der prospektive Abschnitt am
 > Ende dieses Dokuments zusammen mit
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md)
@@ -641,29 +641,34 @@ flowchart TD
    bounded Dispatcher, Preferences und Sandboxprovider-Vertrag; siehe
    [Evidence](./evidence/2026-07-26-phase-20.md). LIVE-Zustellung und
    autonome Ausführung bleiben deaktiviert.
-3. **Frühe parallele Discovery**: 31A (ICP, genau ein erstes
+3. **Phase 21 — abgeschlossen**: Candidate `ca36bff`, Quarantäne-first
+   Dokumenten-Vault, immutable Bewerbungs-CV-Version, Single-use-Read,
+   Reconciliation und Sandbox-Providervertrag; siehe
+   [Evidence](./evidence/2026-07-26-phase-21.md). LIVE-Provider,
+   Retention/Legal-Hold, autonome Worker und Bulk bleiben deaktiviert.
+4. **Frühe parallele Discovery**: 31A (ICP, genau ein erstes
    Region×Beruf-Paar, WTP, Cashflow, Operationskosten) und 29A (moderierte
    aktuelle Kernreisen).
-4. **Track 30A**: fachliches Pflege-Korpus und, nur bei Aktivierung,
+5. **Track 30A**: fachliches Pflege-Korpus und, nur bei Aktivierung,
    Engineering-Korpus; gemeinsame Berufs-/Ort-/Qualifikations-/Skill-/
    Branchenkonzepte und privacy-safe Learning.
-5. **Phasen 21→22→23**: reale Dokumente,
-   Datenschutz/Legal/Analytics und autonome Operations.
-6. **Phasen 25→26→30D**: privilegierte Assurance/Least Privilege/Fraud,
+6. **Phasen 22→23**: Datenschutz/Legal/Analytics und autonome Operations
+   bauen auf dem abgeschlossenen Phase-21-Sandboxvertrag auf.
+7. **Phasen 25→26→30D**: privilegierte Assurance/Least Privilege/Fraud,
    belastbarer Company Trust und Job Freshness.
-7. **Phase 24 nur bei LC5-Go**: reales Billing plus Paid-Service-Recovery.
-8. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
+8. **Phase 24 nur bei LC5-Go**: reales Billing plus Paid-Service-Recovery.
+9. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
    final usability-/mobile-/a11y-prüfen; erst danach genau das lieferbare
    Angebot/den Cluster aktivieren.
-9. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
+10. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
    Artefakt prüfen.
 
 ### Parallel zulässig
 
 - Nach grünen 19-/20-Gates: nichttechnische 31A-/29A-Arbeit und fachliche
   Korpusvorbereitung.
-- Phase 21/22 dürfen vorbereitet, aber gemeinsame Schema-/Auth-/
-  Verschlüsselungsänderungen nur nacheinander integriert werden.
+- Phase 21 ist abgeschlossen; Phase 22 integriert Retention-/Legal-Hold- und
+  Privacy-Schemaänderungen sequenziell auf diesem Vertrag.
 - Phase 23 kann Worker-Grundlagen bauen; eine Domainqueue aktiviert erst nach
   deren stabilem fachlichem Contract.
 - Phase 25 und 26 dürfen nach Phase 20 vorbereitet werden; Auth-/Role- und

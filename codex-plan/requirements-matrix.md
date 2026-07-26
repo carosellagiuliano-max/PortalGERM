@@ -119,7 +119,7 @@
 | REQ-INT-001 | Alle externen Dienste über Ports mit persistierenden Mocks. | System/Ops · P0 · 04 | provider-specific logs/domain rows | composition root; no real call/env autoselect | network-disabled E2E succeeds; expected DB records exist |
 | REQ-INT-002 | Real-Provider erst nach Security/Legal/Ops-Gate. | Owner/Ops · später · after MVP | adapter config + provider fields later | explicit approval, DPA, monitoring, retries/webhooks | checklist approved; fallback/runbook tested; otherwise disabled |
 | REQ-QA-001 | Unit + echte Postgres-Integration + kritische E2E-Flows. | Engineering · P0 · jede Phase/17 | `tests/fixtures/isolated-postgres.ts`, `scripts/phase17-browser-gate.ts`, Playwright manifest | isolierte Migration/Seed, logische Uhr, Zero-Retry, Loopback-only; kein Mock-only-Atomicitätsbeweis | alle Befehle Exit 0; echte Discover/Pass/Skip-Zahlen; E2E-01–07 je exakt ein Pass im Manifest |
-| REQ-QA-002 | Jede Route hat UX-State, 360px und Accessibility-Beleg. | alle · P0/P1 · 07–18 | route read models + `tests/e2e/quality/all-routes.spec.ts` + `critical-routes.spec.ts` | vollständiges Inventar mit keyboard/focus/critical axe/clipping/console plus vertiefte State-/Performance-Matrix | alle 100 Seiten auf Desktop/360 px; kritische axe violations 0; Route-Audit exakt 100 Seiten/7 Handler |
+| REQ-QA-002 | Jede Route hat UX-State, 360px und Accessibility-Beleg. | alle · P0/P1 · 07–21 | route read models + `tests/e2e/quality/all-routes.spec.ts` + `critical-routes.spec.ts` | vollständiges Inventar mit keyboard/focus/critical axe/clipping/console plus vertiefte State-/Performance-Matrix | alle 103 Seiten auf Desktop/360 px; kritische axe violations 0; Route-Audit exakt 103 Seiten/16 Handler |
 | REQ-OPS-001 | CI/Preview/Staging/Production, Migration/Rollback und Env validation. | Ops · P1 before launch · 01/18 | migrations/config | no demo seed prod; fail-fast secrets; explicit release | clean clone pipeline succeeds; migration dry-run and rollback documented |
 | REQ-OPS-002 | Logs/Metriken/Health/Alerts ohne sensible Daten. | Ops · P1 · 03/11/16/18 | Audit/metrics/system tasks | request/correlation ID; redaction; runbooks | health distinguishes live/ready; simulated failure observable, no PII |
 | REQ-OPS-003 | Backups und Restore-Probe vor Production. | Ops/Owner · P1 · 18 | DB backup metadata | encrypted, retention, RPO/RTO confirmed | dated restore succeeds in isolated environment |
@@ -148,10 +148,11 @@
 Inventarvertrag plus alle 103 Seiten; zusammen sind das 208 exhaustive Fälle.
 `critical-routes.spec.ts` ergänzt je fünf vertiefte Desktop-/360px-Gruppen.
 Phase 20 ergänzt zwei Identity-Journeys sowie je drei Desktop-/Mobile-
-Identity-/Notification-Qualitätsfälle. Der vollständige Browservertrag
-umfasst damit 233 Fälle: sieben historische Journeys, 208 exhaustive
-Route-Fälle, zehn Critical-Route-Fälle und acht Phase-20-Fälle, jeweils Retry
-`0`.
+Identity-/Notification-Qualitätsfälle. Phase 21 ergänzt E2E-21 sowie je zwei
+Desktop-/Mobile-Vault-Zustandsfälle. Der vollständige Browservertrag umfasst
+damit 238 Fälle: sieben historische Journeys, 208 exhaustive Route-Fälle,
+zehn Critical-Route-Fälle, acht Phase-20- und fünf Phase-21-Fälle, jeweils
+Retry `0`.
 
 ## 10. Änderungsdisziplin
 
@@ -189,7 +190,7 @@ Neue oder geänderte Anforderungen erhalten eine stabile ID, Owner, Priorität u
 | --- | --- | --- | --- |
 | `REQ-ID-005` | E-Mail-Verifikation, Reverification, Änderung der Login-E-Mail und Recovery sind versioniert, enumeration-safe und race-/replayfest. | 20 · technisch `PASS`; Aktivierung `DISABLED`/`SANDBOX` | neue Registrierung bleibt bis Verify in definiertem Low-Assurance-State; Token single-use/expiry/supersession; Candidate-/Employer-/Invite-E2E; Phase-20-Evidence |
 | `REQ-NOT-001` | Domainwrite und Notification-Outbox committen atomar; Preference-/Pflichtklassifikation, Attempt, Retry, Bounce/Suppression und DLQ sind dauerhaft. | 20 fachlich `PASS`, 23 autonom offen | Crash zwischen Domaincommit/Send verliert keine Nachricht; Duplicate Delivery bewirkt genau eine fachliche Zustellung; Pflichtmail nicht durch Marketingopt-out unterdrückt; Phase-20-Evidence |
-| `REQ-DOC-002` | Reale CV-/Dokumentbytes werden direkt, quarantänisiert, gescannt, versioniert und nur nach aktueller Authorization ausgeliefert. | 21 | MIME/Size/Hash/AV, traversal/polyglot, incomplete upload, expired URL, revoked reveal und cross-tenant Download negativ; Retention/Export/Erasure konsistent |
+| `REQ-DOC-002` | Reale CV-/Dokumentbytes werden direkt, quarantänisiert, gescannt, versioniert und nur nach aktueller Authorization ausgeliefert. | 21 technisch `PASS`, Local-/CI-Sandbox; LIVE `DISABLED` | MIME/Size/Hash/AV, traversal/polyglot, incomplete upload, expired/replayed Grant, revoked Membership/Assignment und cross-tenant Download negativ; immutable Application-Version und Reconciliation grün; Retention/Export/Erasure bleiben Phase 22; [Phase-21-Evidence](./evidence/2026-07-26-phase-21.md) |
 | `REQ-PRIV-004` | Export, Correction und Erasure arbeiten über vollständiges Daten-/Providerinventar mit Legal Holds und wiederaufnehmbaren Teilfehlern. | 22 | verschlüsseltes Exportartefakt, single-use Download, 30-Tage-/freigegebene SLA, Erasure-/Anonymisierungschecks und Drittprovider-Reconciliation |
 | `REQ-OPS-005` | Autonome Worker/Outbox besitzen Lease, Heartbeat, Retry/Backoff, DLQ, Replay, Monitoring, SLO und Restart-/Concurrency-Evidence. | 23 | parallel/restart/crash/poison/provider-outage erzeugt keine verlorene oder doppelte fachliche Wirkung; Alarm und Runbookprobe grün |
 | `REQ-PAY-001` | Reales Payment ist nur nach WTP-Go aktiv und verwendet hosted Checkout, signierte Webhooks, Reconciliation, Refund/Chargeback/Dunning und fail-closed Providerwahl. | 24 | Sandbox-/LIVE-getrennte Secrets, Replay/Amount/Currency/Tenant negativ, provider receipt↔Order↔Invoice↔Ledger täglich reconciled |

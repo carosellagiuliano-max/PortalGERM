@@ -443,7 +443,9 @@ Referenced by: Phase 20, 23, 25; `REQ-ID-004/005`, `REQ-NOT-001`.
 
 ## ADR-032 — Private object vault is quarantine-first and capability-bound
 
-**Status:** prospective Phase-21 decision.
+**Status:** accepted for the Phase-21 Local/CI sandbox on Candidate
+`ca36bff59e0d759cc5243da346c6e717c650e35e`; LIVE provider activation
+remains blocked.
 
 **Decision:** Private CV/document uploads use a reviewed object-store adapter
 and a direct-upload protocol with server-issued, short-lived intents. New
@@ -458,6 +460,17 @@ idempotent and observable.
 If the provider/scanner contract or approved data region is absent, internal
 CV-byte submission is disabled; metadata must not masquerade as an uploaded
 file.
+
+The accepted sandbox realization uses an external-root, streaming
+AES-256-GCM filesystem adapter with versioned keys, SHA-256 verification
+before and after storage, atomic publication, a closed PDF/PNG content
+policy, a deterministic malware-scanner sandbox and actor-bound single-use
+read grants of at most 60 seconds. Uploads are limited to 5 MiB, 1 MiB
+chunks, ten-minute intents and three concurrent actor uploads; scanner and
+reconciliation commands are bounded. Production configuration, external
+object storage/KMS/scanner, DPA/region approval, retention/legal-hold policy,
+autonomous scheduling and bulk access are not accepted by this ADR status
+and remain fail-closed under Phases 22, 23 and 25.
 
 **Why:** A functional file picker without bytes or scan/retention controls
 creates a false and unsafe application promise.

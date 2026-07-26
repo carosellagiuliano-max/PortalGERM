@@ -72,7 +72,7 @@ keinen Lauf auf dem Phase-18-Release-Commit.
 ## Trace-, Route- und Security-Audit
 
 - [x] `npm run route:audit` stimmt mit `codex-plan/route-inventory.json` überein.
-- [x] [Route-/Rollen-Matrix](./route-role-matrix.md) deckt alle 100 Seiten und 7 Handler ab.
+- [x] [Route-/Rollen-Matrix](./route-role-matrix.md) deckt alle 103 Seiten und 16 Handler ab.
 - [x] Candidate-/Employer-/Admin-Mutationen besitzen Pending-Zustände; keine
   breite private Streaming-Grenze verdeckt echte Tenant-/Owner-404-Status;
   Fehler-/404-/Locked-Zustände sind nachvollziehbar.

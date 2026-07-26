@@ -434,7 +434,7 @@ Nur Payment, Email, Storage, Job-Room, AI und Commute sind externe Provider-Port
 |---|---|---|---|
 | Payment | Checkout-Page, bestätigbarer Erfolgs-/Fehlerfall | Order/PaymentEvent/Invoice/Fulfillment | Webhook-Signatur, Idempotenz, PCI-Scope, Refund/Dunning |
 | Email | Template rendern und Zustellung simulieren | Notification/EmailLog | DPA, Domain, Bounce/Complaint, unsubscribe |
-| Storage | nur validierte Metadaten | DocumentMetadata | Malware Scan, signed URLs, Region, Retention |
+| Storage | Legacy-Metadaten plus Local-/CI-Sandbox: gestreamte AES-GCM-Quarantäne, geschlossene Content-/Scanner-Policy und single-use Read-Grants | Document/DocumentVersion/Intent/Scan/Grant/Access/Lifecycle; Legacy bleibt metadata-only | externer Object Store/KMS/Scanner, DPA/Region, Production-Retention/Legal-Hold, autonome Worker und Bulk-Step-up |
 | Job-Room | versionierte OccupationCode-Liste | ReportingCheck + DatasetVersion | offizieller Vertrag/API, jährliches Update, Monitoring |
 | AI | deterministische Textvorschläge, nie Entscheidung | Prompt-/Rule-Version ohne sensible Inhalte | DPIA/Legal, DPA, Evaluation, Human Review |
 | Commute | deterministische Distanzklasse/aus | optional Cache | Kartenlizenz, Standortminimierung |
@@ -542,9 +542,10 @@ Eine Funktion ist nur fertig, wenn Datenmodell/Migration, validierter Use Case, 
 
 ## 17. Prospektive Remediation-Architektur Phase 19–32
 
-> Dieser Abschnitt ist Zielarchitektur und keine Istbehauptung. Jede Box
-> bleibt hinter ihrem Phase-/Provider-/Legal-/Cohort-Gate, bis Test- und
-> Aktivierungsevidence vorliegt.
+> Dieser Abschnitt ist Zielarchitektur. Identity/Outbox (Phase 20) und der
+> Local-/CI-Sandboxanteil des Private Document Vault (Phase 21) besitzen
+> Test-Evidence; ihre LIVE-Provider-/Legal-/Operations-/Cohort-Gates sowie
+> alle späteren Boxen bleiben bis eigener Aktivierungsevidence geschlossen.
 
 ```mermaid
 flowchart LR

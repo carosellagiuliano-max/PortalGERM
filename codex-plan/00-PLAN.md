@@ -191,9 +191,14 @@ Security-, Privacy-, Payment- oder Tenant-Negativtests nicht auf.
 
 [`20-identity-email-notifications.md`](./20-identity-email-notifications.md) · E-Mail-Verifikation, sichere Login-E-Mail-Änderung, Privacy-Brücke, atomare Outbox, bounded Dispatcher und zentrale Notification Preferences sind auf Candidate `59089009f54312a4c10989b7efde2d5fda9a2b8d` technisch verifiziert; siehe [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md). LIVE-Zustellung, autonomer Worker und MFA/Step-up bleiben deaktiviert.
 
-### [ ] 21 — Document-/CV-Vault
+### [x] 21 — Document-/CV-Vault
 
-[`21-document-cv-vault.md`](./21-document-cv-vault.md) · echte, quarantänisierte und autorisierte Dokumentbytes mit Retention und Löschung.
+[`21-document-cv-vault.md`](./21-document-cv-vault.md) · echte,
+quarantänisierte, versionierte und grant-gebunden autorisierte CV-Bytes sind
+auf Candidate `ca36bff59e0d759cc5243da346c6e717c650e35e` im Local-/CI-Sandboxvertrag
+technisch verifiziert; siehe
+[Phase-21-Evidence](./evidence/2026-07-26-phase-21.md). LIVE-Provider,
+Retention/Legal-Hold-Policy, autonome Worker und Bulk bleiben deaktiviert.
 
 ### [ ] 22 — Privacy, Legal und Analytics
 
@@ -389,4 +394,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 20 wurden gemäss ihren Detailverträgen auf ihren jeweiligen Evidence-Commits umgesetzt und verifiziert. Der nächste technische Arbeitsschritt ist Phase 21; nichtaktivierende frühe Research-Tracks 29A/31A dürfen gemäss der Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md) parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates bleiben separat und können nur für die jeweilige Launchklasse geschlossen werden; insbesondere bleiben reale E-Mail-Zustellung, autonome Ausführung, MFA/Step-up und REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 21 wurden gemäss ihren Detailverträgen auf ihren jeweiligen Evidence-Candidates umgesetzt und verifiziert. Der nächste sequenzielle technische Arbeitsschritt ist Phase 22; nichtaktivierende frühe Research-Tracks 29A/31A dürfen gemäss der Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md) parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates bleiben separat und können nur für die jeweilige Launchklasse geschlossen werden; insbesondere bleiben reale E-Mail-/Storage-/Scanner-Zustellung, Production-Retention/Legal-Hold, autonome Ausführung, MFA/Step-up, Bulkzugriff und REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

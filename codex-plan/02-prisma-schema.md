@@ -4,6 +4,40 @@
 
 > Detail file for [00-PLAN.md](./00-PLAN.md) Phase 02. Read [99-rules-quickref.md](./99-rules-quickref.md) §27 before starting.
 
+## Current schema extension — Phase 21
+
+Phase 21 extends the original Phase-02 schema on Candidate
+`ca36bff59e0d759cc5243da346c6e717c650e35e`; it does not rewrite the
+historical Phase-02 evidence. Migration
+`20260726210000_phase_21_document_vault` adds the private, quarantine-first
+document contract:
+
+- `Document` is the Candidate-owned stable CV identity and points only to its
+  current immutable `DocumentVersion`.
+- `DocumentVersion` stores object-version, size/hash, detected MIME type,
+  encryption-key version, region, classification and the closed vault
+  lifecycle. Replacements create a new version; an Application never follows
+  the mutable current-version pointer.
+- `DocumentUploadIntent`, `DocumentScanAttempt`, `DocumentReadGrant` and
+  `DocumentAccessEvent` preserve bounded upload, scanner and single-use access
+  evidence. A read grant is actor-bound, expires after at most 60 seconds and
+  is still subject to current owner, Company Membership, Job Assignment and
+  Application authorization.
+- `ObjectLifecycleOutcome` records reconciliation observations without
+  treating a DB row or provider object as self-proving consistency.
+- `CandidateDocumentMetadata` remains only as the legacy/application-safe
+  metadata projection. Existing rows are explicitly
+  `METADATA_ONLY_LEGACY`; vault-backed projections are
+  `VAULT_ENCRYPTED` and reference one exact `DocumentVersion`.
+- `ApplicationSubmissionDocument.documentVersionId` freezes the exact CLEAN
+  CV version selected at submit time. Legacy links may remain null, but no new
+  vault-backed Application may silently fall back to the current version.
+
+The committed adapter is deliberately a Local-/CI-Sandbox. External
+Storage/KMS/scanner providers and LIVE document bytes remain disabled pending
+their own provider, region/DPA, retention/legal-hold and operational gates.
+See [Phase-21-Evidence](./evidence/2026-07-26-phase-21.md) and ADR-032.
+
 ## Goal
 
 Build the authoritative Prisma schema and committed migrations from the Blueprint, Requirement IDs and ADRs. The transferred inventory below is a capability-mapping aid: its legacy names and field shapes are replaced where the current contract says so, and a checkbox is earned only when the replacement capability, constraints and tests exist.
@@ -91,6 +125,10 @@ erDiagram
 - [x] `CandidateOnboardingEventKind` — `DRAFT_CREATED`, `COMPLETED`, `REOPENED`
 - [x] `DocumentPurpose` — `CV`; later purposes require an explicit enum migration/review
 - [x] `DocumentStatus` — `ACTIVE`, `REMOVED`, `REJECTED`
+- [x] `DocumentStorageKind` — `METADATA_ONLY_LEGACY`, `VAULT_ENCRYPTED`; no legacy row is reclassified merely because a storage key exists
+- [x] `DocumentClassification` — `HIGHLY_SENSITIVE`; `VaultDocumentStatus` — `UPLOADING`, `QUARANTINED`, `SCANNING`, `CLEAN`, `REJECTED`, `INFECTED`, `SCAN_FAILED`, `REPLACED`, `DELETE_PENDING`, `HELD`, `DELETED`
+- [x] `DocumentUploadIntentStatus` — `CREATED`, `UPLOADING`, `UPLOADED`, `FINALIZED`, `ABORTED`, `EXPIRED`, `FAILED`; `DocumentScanOutcome` — `CLEAN`, `INFECTED`, `POLICY_REJECTED`, `TIMEOUT`, `FAILED`
+- [x] `DocumentReadGrantStatus` — `ACTIVE`, `CONSUMED`, `EXPIRED`, `REVOKED`; `DocumentAccessKind` and `ObjectLifecycleKind|Status` are closed evidence vocabularies for upload/read/reconciliation, not free-form status strings
 - [x] `JobAssignmentRole` — `EDITOR`, `REVIEWER`, `PIPELINE`; `JobAssignmentStatus` — `ACTIVE`, `REVOKED`, `EXPIRED`
 - [x] `JobAssignmentEventKind` — `ASSIGNED`, `ROLE_CHANGED`, `REVOKED`, `EXPIRED`
 - [x] `JobStatus` — `DRAFT`, `SUBMITTED`, `IN_REVIEW`, `CHANGES_REQUESTED`, `APPROVED`, `PUBLISHED`, `PAUSED`, `EXPIRED`, `CLOSED`, `REJECTED`, `REMOVED`; `REMOVED` is a terminal, non-public tombstone used only for an untouched imported Draft rollback
@@ -177,7 +215,8 @@ erDiagram
 - [x] **`CandidateSkill`** — `id`, `candidateProfileId`, `skillId`, `level Int?` (1–5 self-rating), `years Int?`. **Unique on `(candidateProfileId, skillId)`**. Indexes: `candidateProfileId`, `skillId`. *(Compared with the approved Revision's `JobRevisionSkill`; consumed by Match v1 and Talent Radar.)*
 - [x] **`CandidateLanguage`** — `id`, `candidateProfileId`, `code String` (e.g. `de`/`fr`/`it`/`en`/other ISO 639-1), `level: LanguageLevel`. **Unique on `(candidateProfileId, code)`**. Index: `candidateProfileId`. *(Consumed by match-score language compatibility + Talent Radar language filter.)*
 - [x] **`CandidatePreference`** — one replace-in-transaction preference set per CandidateProfile for desired titles/types/categories, salary period/range, workload, remote/mobility and availability; structured joins are used where filtering needs referential integrity.
-- [x] **`CandidateDocumentMetadata`** — candidate-owned metadata only (`storageKey`, safe filename, MIME, size, purpose, status, created/removed timestamps); the Mock stores no file bytes and exposes no fake read URL.
+- [x] **`Document` + immutable `DocumentVersion` + `CandidateDocumentMetadata` projection** — Candidate-owned stable CV identity and version history. The original metadata row remains the application-safe legacy/projection surface: `METADATA_ONLY_LEGACY` proves no bytes, while `VAULT_ENCRYPTED` references exactly one immutable version. Object key/version, declared/detected MIME, size/SHA-256, encryption-key version, region, classification and vault status live on `DocumentVersion`; no raw bytes or read URL live in PostgreSQL.
+- [x] **`DocumentUploadIntent` + `DocumentScanAttempt` + `DocumentReadGrant` + `DocumentAccessEvent` + `ObjectLifecycleOutcome`** — bounded idempotent upload intent; immutable per-attempt scanner evidence; hashed actor-bound single-use read grant; append-only access evidence; and reconciliation outcome. Cross-owner, cross-tenant, stale Membership/Assignment, wrong Application/version, replayed/expired/revoked token and non-`CLEAN` reads fail closed.
 - [x] **`EmployerProfile`** — `id`, `userId @unique`, `displayName?`, `phone?`, `createdAt`, `updatedAt`. Company linkage exists only through `CompanyMembership`.
 - [x] **`Company` + `CompanyStatusEvent`** — `id`, draft-capable onboarding fields (`name`, `slug @unique`, `uid?`, `industry?`, `size?`, `website?`, location, self-hosted/seed logo/cover metadata, about/values/benefits), explicit `status: CompanyStatus`, `dataProvenance`, evidence-based response settings/metrics and timestamps. `completeCompanyOnboarding` alone validates/sanitizes and publishes the closed safe profile projection (`name`, industry/size, website, primary coarse location, approved media metadata, about/values/company benefits); P0 has no separate profile-review claim. It moves `DRAFT → ACTIVE` after the required profile predicate and appends `ONBOARDING_COMPLETED`. Later edits atomically validate the same allowlist; private UID/billing/contact fields never enter the public DTO. Verification is derived only from its request/events, never a Company field. Plan access, premium profile and import rights come from versioned Entitlements, not mutable duplicate booleans.
 - [x] **`CompanyMembership`** — `id`, `companyId`, `userId`, `role: CompanyMembershipRole`, lifecycle status, joined/removed timestamps. Unique on `(companyId,userId)`; index company/user/status; last-Owner invariant and suspension effects tested. Re-inviting a previously `REMOVED` user reactivates this same row under the seat lock, writes the reviewed new role plus `REACTIVATED` event and preserves history; it never inserts a duplicate Membership.
@@ -201,7 +240,7 @@ erDiagram
 - [x] **`JobViewAggregate`** — privacy-safe job/window counters derived from allowlisted events, with threshold/version and `refreshedAt`; raw identity/content is absent and the aggregate never becomes a publication truth field.
 - [x] **`Application`** — `id`, `jobId`, required `submittedJobRevisionId`, `candidateProfileId`, `status: ApplicationStatus @default(SUBMITTED)`, `coverLetter?`, `rejectionReason?`, `rejectionNote?`, `submittedAt`, `updatedAt`. Absolute `@@unique([jobId,candidateProfileId])`: P0 never permits re-application, including after a terminal state; indexes by job/candidate/status. Every transition appends `ApplicationEvent`; notes live in visibility-specific models.
 - [x] **`ApplicationSubmissionSnapshot`** — exactly one immutable row per Application (`applicationId @unique`) built by the server inside the submit transaction: `jobRevisionId`, candidate first/last/email snapshots, recipient Company name plus public `applicationContactKind/value` snapshots, `responseTargetDays`, application effort, canonical ordered `requiredDocumentKinds` snapshot, confirmation notice/version/hash and submitted time. Candidate confirms this exact preview; the client cannot author or replace snapshot fields. Response metrics read this field, never a later Revision.
-- [x] **`ApplicationSubmissionDocument`** — links the Application to a Candidate-owned ACTIVE `CandidateDocumentMetadata{purpose=CV}` selected at confirmation; unique `(applicationId,documentMetadataId)`. P0 accepts at most one CV, uses `coverLetter` for `COVER_LETTER`, requires every advertised P0 kind and accepts none when `NONE`; no bytes or foreign document metadata are copied.
+- [x] **`ApplicationSubmissionDocument`** — links the Application to a Candidate-owned ACTIVE `CandidateDocumentMetadata{purpose=CV}` and, for vault-backed submissions, the exact immutable CLEAN `DocumentVersion` selected at confirmation. Unique `(applicationId,documentMetadataId)`; owner and version consistency are database-backed. P0 accepts at most one CV, uses `coverLetter` for `COVER_LETTER`, requires every advertised P0 kind and accepts none when `NONE`; no bytes or foreign document metadata are copied and later replacement never changes the submitted version.
 - [x] **`ApplicationEvent`** — `id`, `applicationId`, `actorUserId?`, `kind: ApplicationEventKind`, `metadata Json?`, `createdAt`. Index: `applicationId`.
 - [x] **`ApplicationCandidateNote`** — at most one candidate-owned private note per Application, bounded/sanitized body and timestamps; Employer/Admin DTOs never select it.
 - [x] **`ApplicationEmployerNote`** — `id`, `applicationId`, required `companyId`, authorUserId, bounded/sanitized body and timestamps; index `(applicationId,createdAt)` and Company scope. Candidate/public DTOs never select it; create appends body-free `EMPLOYER_NOTE_ADDED` event + Audit evidence.
