@@ -4,6 +4,9 @@
 > ist keine Staging- oder Produktionsfreigabe. Zum Zeitpunkt der Phase-18-
 > Erstellung ist kein Deployment-Provider und keine echte Staging-Umgebung
 > mit diesem Repository verbunden.
+> Der geplante Phase-19+-Produktionsvertrag steht separat im
+> [Remediation-Runbookziel](./remediation-production-target.md) und ist noch
+> nicht ausgeführt.
 
 ## Zweck und Grenzen
 

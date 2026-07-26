@@ -4,6 +4,9 @@
 > E2E-08. Die Wrapper verweigern Production, Staging, gemeinsame Datenbanken
 > und unbekannte Namen. Sie sind kein produktiver Scheduler oder
 > Storage-Lifecycle.
+> Das geplante LC2–LC6-Ziel und seine noch offenen produktiven RPO/RTO-/
+> Retention-Gates stehen im
+> [Remediation-Runbookziel](./remediation-production-target.md).
 
 ## Sicherheitsvertrag
 

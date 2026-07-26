@@ -383,3 +383,219 @@ five would create false market, legal and operational confidence.
 
 Referenced by: Product Strategy, Release Checklist, Phase 07/12/14/15/18
 follow-up.
+
+---
+
+## ADR-030 — Remediation governance, six launch classes and commit-bound gates
+
+**Status:** prospective; binding for Phase 19+ and not historical Phase-01–18
+evidence.
+
+**Decision:** Phase 19+ uses the four-state model `Plan → Technical →
+Quality-Gate → Activation` and the six launch classes LC1 local Demo, LC2
+supervised Design Partner, LC3 invite-only Pilot, LC4 public Free, LC5 paid
+Self-Service and LC6 scaled Production. Every `STH-*`/`REQ-*` has a
+launch-class priority, one lead phase, an acceptance-to-test matrix and
+commit-bound evidence. A dependent phase may integrate only after its hard
+predecessor gate; a feature may avoid a launch blocker only by being
+server-side disabled across UI/API/worker/marketing.
+
+`route-inventory.json` remains generated current-state evidence. Future
+routes live in the planned delta of `route-role-matrix.md` until the files
+exist. Phase 01–18 phase files and Evidence are immutable history.
+
+**Why:** A formally higher but stale Requirement/ADR must not overrule the
+new remediation contract, and a technical implementation must not be
+misrepresented as an external or LIVE approval.
+
+Referenced by: Phase 19–32,
+[`remediation-execution-contract.md`](./remediation-execution-contract.md),
+`REQ-GOV-001`, `REQ-QA-003`, `REQ-REL-001`.
+
+---
+
+## ADR-031 — Identity assurance and durable notification delivery are separate layers
+
+**Status:** prospective; supersedes ADR-014 only for the explicitly approved
+Phase-20/23 scope. The historical Mock-MVP decision remains true.
+
+**Decision:** Registration produces a bounded low-assurance state until a
+single-use, expiring, supersedable email-verification token is consumed.
+Login-email change re-verifies the new address and notifies the old address.
+Domain state and a typed NotificationOutbox record commit atomically.
+Attempts, provider idempotency, bounce/suppression and DLQ are durable; Phase
+20 may drive the same contract synchronously or by explicit command, while
+Phase 23 owns autonomous leases, retry, monitoring and recovery.
+
+Authentication assurance is distinct from delivery: privileged actions use
+a short-lived, actor/purpose/tenant/action-bound StepUpGrant and never infer
+freshness merely from an old session or a delivered email.
+
+**Why:** Real mail can be delayed or duplicated, and verified email alone is
+not MFA or authorization.
+
+Referenced by: Phase 20, 23, 25; `REQ-ID-004/005`, `REQ-NOT-001`.
+
+---
+
+## ADR-032 — Private object vault is quarantine-first and capability-bound
+
+**Status:** prospective Phase-21 decision.
+
+**Decision:** Private CV/document uploads use a reviewed object-store adapter
+and a direct-upload protocol with server-issued, short-lived intents. New
+objects are `UPLOADING`/`QUARANTINED`, are identified by content hash and
+server-side MIME detection, and become readable only after a successful
+malware/policy scan. Download authorization is checked at request time and
+issues short-lived, single-object URLs; object keys are never authorization.
+Retention, legal hold, version replacement, export and erasure operate from a
+canonical Document record. Orphan object/database reconciliation is
+idempotent and observable.
+
+If the provider/scanner contract or approved data region is absent, internal
+CV-byte submission is disabled; metadata must not masquerade as an uploaded
+file.
+
+**Why:** A functional file picker without bytes or scan/retention controls
+creates a false and unsafe application promise.
+
+Referenced by: Phase 21/22/23; `REQ-DOC-002`.
+
+---
+
+## ADR-033 — Privacy execution uses a versioned data inventory and legal holds
+
+**Status:** prospective Phase-22 decision.
+
+**Decision:** Export, correction and erasure execute from a versioned
+DataInventory that lists every database domain, object store, notification/
+payment provider and immutable legal record. Each processor returns a
+replay-safe result. Export produces an encrypted, expiring, single-use
+artifact. Erasure deletes or irreversibly anonymizes only after a
+flowspecific Retention/LegalHold decision; immutable financial, consent,
+security and AVG evidence retains only the approved minimum. Partial failure
+remains resumable and visible.
+
+Technical implementation does not publish legal text or enable Analytics,
+Radar, CV or paid flows until Swiss counsel/privacy owners approve the exact
+version. High-risk processing receives a documented DSFA decision.
+
+**Why:** A manifest or generic disclaimer cannot prove a real data-subject
+process, and indiscriminate deletion can violate other duties.
+
+Referenced by: Phase 22/23/32; `REQ-PRIV-004`, `REQ-SRCH-002`.
+
+---
+
+## ADR-034 — Real providers and autonomous workers activate through a ledger
+
+**Status:** prospective Phase-23 decision.
+
+**Decision:** Each environment/provider/worker capability has a versioned
+activation record covering config completeness, secret version, contract/DPA,
+sandbox/LIVE approval, health, owner, runbook and rollback. No implicit
+`NODE_ENV` fallback activates a provider, and Production never silently falls
+back to Mock.
+
+Worker claims use PostgreSQL-backed leases with heartbeat, bounded batches,
+idempotent effect keys, retry classes/backoff, poison-message DLQ, audited
+replay and backpressure. SLO, queue age, arrival rate, handling capacity,
+pager and shutdown policy are measurable. Exactly-once network delivery is
+not claimed; exactly-once business effect is enforced by inbox/outbox and
+domain idempotency.
+
+**Why:** A command that can be run manually is not an unattended service, and
+provider selection without a reviewable activation state is unsafe.
+
+Referenced by: Phase 20/23/24/26/30; `REQ-OPS-004/005`.
+
+---
+
+## ADR-035 — Paid service recovery supersedes blanket no-auto-refund only for platform failure
+
+**Status:** prospective Phase-24/31 decision; ADR-028 remains unchanged for
+ordinary decline, expiry, user cancellation and unused credits.
+
+**Decision:** Paid fulfillment and service delivery are distinct. A
+versioned ServiceDeliveryPolicy classifies user-caused outcomes, expected
+market outcomes and platform-caused non-delivery. Only an approved
+platform-caused case may create exactly one replacement window, restored
+credit, extension or monetary refund linked to the original OrderLine,
+Ledger entry and service instance. Radar decline/normal expiry and voluntary
+Boost cancellation retain ADR-028’s no-auto-refund baseline unless a later
+version explicitly changes the commercial promise.
+
+Payment webhooks use raw-payload signature verification, inbox dedupe,
+server-side amount/currency/tenant checks and reconciliation. Phase 24 starts
+only after a Phase-31A WTP Go for LC5; manual invoices may validate WTP before
+self-service payment.
+
+**Why:** Customers must not pay for a platform service the platform failed to
+deliver, while normal recruiting outcomes must not create unlimited refund
+fraud.
+
+Referenced by: Phase 24/31; `REQ-BIL-010`, `REQ-PAY-001`, `STH-035/037`.
+
+---
+
+## ADR-036 — Privileged assurance, least privilege and Trust & Safety share one risk model
+
+**Status:** prospective Phase-25 decision.
+
+**Decision:** Phase 25 has three tracks:
+
+- **25A:** persisted Admin roles/capabilities, MFA, separation of duties,
+  dual approval and time-bounded audited break-glass;
+- **25B:** risk-based Step-up for Employer Owner, Billing, team/role changes,
+  login-email/account recovery, Candidate export/delete and critical
+  Consent/Reveal actions.
+- **25C:** a coherent Trust-&-Safety/Fraud lifecycle for Credential
+  Stuffing/ATO, compromised companies, scam/duplicate jobs, mass messaging/
+  contacts, Reveal-/Export anomalies, complaints and Payment Fraud. Domain
+  owners in Phases 24/26/30 implement their specific containment while 25C
+  owns risk decisions, case routing, appeal and incident escalation.
+
+A versioned risk model consumes minimal session/device/velocity/trust/
+complaint signals and emits allow, step-up, hold, revoke or review. Trust &
+Safety cases can rapidly revoke sessions, badges, public jobs, messaging,
+Radar and payment operations with appeal and false-positive review. Secret
+risk weights and device data are not exposed or retained without purpose.
+
+**Why:** Admin MFA does not protect a compromised verified-company Owner or
+candidate high-risk action; a once-only company verification does not prevent
+future abuse.
+
+Referenced by: Phase 20/24/25/26/30; `REQ-ID-004`, `REQ-TRUST-001`.
+
+---
+
+## ADR-037 — Cluster quality, job freshness and commercial activation are independent gates
+
+**Status:** prospective Phase-30/31 decision.
+
+**Decision:** A cluster uses one versioned concept contract across Search,
+Alerts, Preferences, Recommendations and Matching. It covers occupation,
+neutral/gendered forms, singular/plural, abbreviation, typographical and
+regional variants, location aliases, qualifications/certificates, skills and
+industry. Pflege and Engineering use separate fachlich reviewed corpora; only
+an actually activated cluster must be P0. Privacy-safe Search-Learning may
+observe redacted/aggregated unknown concepts but never store unrestricted raw
+queries.
+
+Cluster activation separately requires current, non-duplicate jobs:
+reconfirmation, reminder/grace, filled/unavailable feedback and duplicate/
+copy review share public Eligibility across Search, Sitemap, Alerts,
+Recommendations and Analytics.
+
+Commercial discovery may compare several cluster hypotheses, but the first
+public activation is one Region×Profession pair unless each additional pair
+independently passes search, liquidity, freshness, fraud and operations-
+capacity gates. Base workflow, Hiring Sprint, Retainer/Credits and Concierge/
+Import Setup receive real-money tests before Boost (organic reach gate),
+Radar (eligible density gate) or premium breadth.
+
+**Why:** Feature breadth and a taxonomy alone do not create a liquid, current
+marketplace or prove willingness to pay.
+
+Referenced by: Phase 23/26/29/30/31/32; `REQ-JOB-007`,
+`REQ-SRCH-002/003`, `REQ-COM-001`.

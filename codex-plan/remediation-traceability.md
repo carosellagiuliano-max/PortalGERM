@@ -1,10 +1,14 @@
-# Remediation-Traceability — STH-001 bis STH-028
+# Remediation-Traceability — STH-001 bis STH-037
 
-> **Planungsstand:** 25. Juli 2026
+> **Planungsstand:** 26. Juli 2026
 >
-> **Geprüfte Baseline:** `eb9b45ae5caca638b558f6a98e406af9ee8be0fc` (`eb9b45a`)
+> **Frühere Analysebaseline:** `eb9b45ae5caca638b558f6a98e406af9ee8be0fc`
+> (`eb9b45a`)
 >
-> **Geltungsbereich:** unabhängige Neubewertung der 28 Befunde gegen Schema,
+> **Aktueller Planungscommit:** `e34262e3074565840e371c336a5d2ba5cf3efbac`
+> (`e34262e`), bei Prüfungsbeginn identisch mit `origin/main` und sauber.
+>
+> **Geltungsbereich:** unabhängige Neubewertung der 37 Befunde gegen Schema,
 > Migrationen, Runtime-Code, Provider-Composition, Rollen-/Capability-Grenzen,
 > Tests, Release-Evidence und Runbooks. Dieses Dokument ist Planung, keine
 > Implementierungs- oder Go-live-Evidence.
@@ -24,8 +28,17 @@ Die Statuswerte bedeuten:
   behauptete Produktions- oder Qualitätsumfang fehlt aber.
 - **bewusst anders / korrekt:** Die Abweichung ist ein gewollter Schutzvertrag
   und darf vor den genannten Gates nicht entfernt werden.
+- **bereits korrekt gelöst:** Der behauptete Fehler besteht auf der
+  Planungsbaseline nicht; seine Owning-Regression bleibt geschützt.
+- **falsch oder veraltet:** Code/Plan/Evidence widerlegt die Aussage; daraus
+  entsteht keine Scheinanforderung.
+- **deferred / fail-closed:** Die Lücke ist real, aber ohne Demand-/Capacity-/
+  Zielklassen-Trigger bleibt die Funktion sicher deaktiviert.
 - **externe Voraussetzung:** Der technische Mess- oder Gate-Pfad ist vorhanden;
   der Abschluss kann nur durch reale externe Evidenz erfolgen.
+- **launchklassenspezifisch:** Priorität und notwendige Testtiefe stehen in
+  Abschnitt 3B; ein optionaler Pfad wird entweder vollständig gegatet oder für
+  seine aktivierte Klasse P0.
 
 `Implementierungsstatus` beschreibt ausschließlich Remediation-Arbeit nach
 Phase 18. Keine offene Phase und kein offener Test wird hier als erledigt
@@ -52,14 +65,14 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | STH-009 | Kein autonomer Worker | bestätigt | P0 für unbeaufsichtigten Self-Service | Worker/Outbox/Ops | 23 | 19, STH-013, Monitoring | offen; idempotente Runner existieren, Scheduler/Queue/DLQ fehlen | einzelne Runner getestet, kein Restart-/DLQ-Systemtest | `lib/candidate/job-alerts.ts:535`; `lib/jobs/effective-status.ts:95`; `lib/talentradar/contact-requests.ts:264`; `package.json:11-46` | Queue/Scheduler-Hosting, Alerting |
 | STH-010 | Alle Admin-Capabilities hängen am globalen ADMIN | bestätigt; Capability-Namen sind gute Vorarbeit | P0 vor Admin-LIVE | Admin-RBAC | 25 | 19, Rollen-/Duties-Matrix | offen; jede Capability wird demselben Actor erteilt | Test beweist gerade die globale Vollmacht | `lib/admin/capabilities.ts:1-60`; `tests/unit/admin/phase11-policies.test.ts:29-47` | benannte Support/Moderation/Finance/Privacy-Owner |
 | STH-011 | Kein Admin-MFA/Step-up | bestätigt | P0 vor privilegiertem LIVE-Zugriff | Admin Security | 25 | 19, STH-001/013, Identity-Provider-Entscheid | offen; Password+Session ohne zweiten Faktor | Session/Auth-Tests, keine MFA-/Recovery-/Step-up-Tests | `prisma/schema.prisma:1181-1208`; `lib/auth/route-guards.ts:18-23,39-55` | MFA-Verfahren, Recovery- und Supportprozess |
-| STH-012 | Exklusive globale Rolle verhindert Multi-Persona | bestätigt | P1 | Identity/Persona | 27 | 19, STH-010/011, Tenant-RBAC | offen; CompanyMembership löst nur Unternehmenskontext | Rollen-/Company-Tests vorhanden, keine Persona-Kombination | `prisma/schema.prisma:10-15,1129-1137`; `lib/auth/route-guards.ts:10-23`; `prisma/schema.prisma:1536-1555` | Produktentscheidung zu Persona-Wechsel |
+| STH-012 | Exklusive globale Rolle verhindert Multi-Persona | bestätigt | P3 default/deferred; P0 nur bei explizitem Persona-Scope | Identity/Persona | 27 | 19, STH-010/011, Tenant-RBAC, Bedarfsgate | offen; CompanyMembership löst nur Unternehmenskontext | Rollen-/Company-Tests vorhanden, keine Persona-Kombination | `prisma/schema.prisma:10-15,1129-1137`; `lib/auth/route-guards.ts:10-23`; `prisma/schema.prisma:1536-1555` | Produktentscheidung und moderierter Bedarf |
 | STH-013 | Kein dauerhafter E-Mail-Outbox-/Retry-Vertrag | bestätigt | P0 | E-Mail/Worker | 20 | 19, STH-004/009 | offen; `EmailLog` ist Log, keine Lease-/Attempt-/DLQ-Queue | Idempotenz des Mocks getestet, keine Provider-Ausfallkette | `prisma/schema.prisma:596-601,2250-2264`; `lib/providers/email/mock-email-provider.ts:190-213` | Zustellprovider, Bounce/Suppression, Monitoring |
 | STH-014 | Company Verification beruht auf Text/Referenz | bestätigt; Lifecycle selbst ist robust | P0 für Trust-/Publish-Gate | Company Trust | 26 | 19, STH-003/004, Legal/Operations | offen; keine Dokumentbytes/Registry-Validierung | Cycle-/Concurrency-Tests vorhanden, keine Evidenzvalidierung | `prisma/schema.prisma:1665-1699`; `components/employer/verification-panel.tsx:160-195`; `lib/employer/company.ts:1120-1144` | Registerzugang, Prüfpolicy, Reviewer |
-| STH-015 | Externe Bewerbung endet beim Klick | bestätigt | P1 | Recruiting/Application | 28 | 19, STH-009/013/026, Phase-22-Privacy-Lifecycle | offen; nur Analytics-Klick, keine Candidate-owned Journey | Redirect/Privacy-Test vorhanden, kein Outcome-/Export/Delete/Correct-E2E | `app/(public)/jobs/actions.ts:92-110,251-278`; `lib/applications/service.ts:193-197` | optional ATS-/Mail-Signale |
-| STH-016 | Keine persistente Interviewplanung | bestätigt | P1 | Recruiting/Scheduling | 28 | 19, STH-009/013, Application-RBAC, Phase-22-Privacy-Lifecycle | offen; Pipeline-Status/Mock-Text statt Termin | Status-Tests vorhanden, keine Slot/DST/ICS-/Privacy-Lifecycle-Tests | `prisma/schema.prisma:264-288`; `lib/policies/status/application.ts:105-113`; `lib/employer/applications.ts:328-335` | optional Kalenderprovider |
+| STH-015 | Externe Bewerbung endet beim Klick | bestätigt | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Application | 28A | 19, 29A-Bedarf, STH-009/013/026, Phase-22-Privacy-Lifecycle | offen; nur Analytics-Klick, keine Candidate-owned Journey | Redirect/Privacy-Test vorhanden, kein Outcome-/Export/Delete/Correct-E2E | `app/(public)/jobs/actions.ts:92-110,251-278`; `lib/applications/service.ts:193-197` | moderierter Bedarf; optional ATS-/Mail-Signale |
+| STH-016 | Keine persistente Interviewplanung | bestätigt | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Scheduling | 28B | 19, 29A-Bedarf, STH-009/013, Application-RBAC, Phase-22-Privacy-Lifecycle | offen; Pipeline-Status/Mock-Text statt Termin | Status-Tests vorhanden, keine Slot/DST/ICS-/Privacy-Lifecycle-Tests | `prisma/schema.prisma:264-288`; `lib/policies/status/application.ts:105-113`; `lib/employer/applications.ts:328-335` | moderierter Bedarf; optional Kalenderprovider |
 | STH-017 | Produktionsanalytics deaktiviert | teilweise bestätigt | P1; Legal-Gate vor Aktivierung | Analytics/Consent | 22 | 19, STH-007/026, Legal/Data Governance | offen; Product Analytics aus, essentielle Operations-LIVE-Ereignisse möglich | Runtime-Policy getestet, kein consentierter Production-E2E | `lib/analytics/runtime-policy.ts:8-35,39-56`; `lib/analytics/track.ts:55-58` | Consent-/DPA-/Retention-Freigabe |
 | STH-018 | Marketplace-Liquidität unbewiesen | externe Voraussetzung; technische Gate-Mechanik vorhanden | P0 Markt-Gate | Marketplace/Go-to-market | 31 | 19, reale Kohorten/Analytics und STH-019-Evidence je Startcluster | kein generischer Codefix; LIVE-Evidence offen | Gate, Seed, Dual Approval und Revoke getestet; Search-Quality-Gate fehlt | `lib/seo/cluster-launch-policy.ts:3-15`; `prisma/schema.prisma:2918-2963`; `lib/admin/cluster-launch.ts:36-287` | reale Arbeitgeber/Kandidaten/Jobs/Responses und Fachreview der Suchmenge |
-| STH-019 | Startcluster-Suche ohne kontrollierte Berufsvarianten/Tippfehlertoleranz | bestätigt; normalisierte MVP-Suche vorhanden | P1 Kandidatennutzen- und Startcluster-Launch-Gate | Search | 30A | 19, versionierte Taxonomie, Golden-/Negativkorpus und Clusterfreigabe | offen; Search, Alert und Recommendations besitzen keinen gemeinsamen Berufsvertrag | deterministische Basis-Tests, aber kein Startcluster-Recall-/Parity-Benchmark | `lib/search/relevance.ts:7-38`; `lib/jobs/public-read-model.ts:1412-1439`; `lib/candidate/job-alerts.ts:1444-1462`; `lib/candidate/dashboard.ts:318-386` | fachliche Berufs-/Aliasliste und Relevanzreview |
+| STH-019 | Startcluster-Suche ohne gemeinsamen Berufs-/Ort-/Qualifikations-/Skill-/Branchenvertrag | bestätigt; normalisierte MVP-Suche vorhanden | P0 je aktivem LC3+-Cluster; P1 Design Partner, P2 Demo | Search | 30A | 19, versionierte Taxonomie, Pflege-/Engineering-Korpus, Golden-/Negativkorpus und Clusterfreigabe | offen; Search, Alert und Recommendations besitzen keinen gemeinsamen Konzeptvertrag | deterministische Basis-Tests, aber kein Startcluster-Recall-/Parity-Benchmark | `lib/search/relevance.ts:7-38`; `lib/jobs/public-read-model.ts:1412-1439`; `lib/candidate/job-alerts.ts:1444-1462`; `lib/candidate/dashboard.ts:318-386` | Fachreview je tatsächlich aktiviertem Cluster |
 | STH-020 | Admin-Queues mit harten Caps | bestätigt | P1 vor hohem Betriebsvolumen | Admin Operations/Scale | 30B | 19, STH-010, Cursor-/Indexvertrag | offen | Bounded-read-Tests, keine >250-Erreichbarkeitsmatrix | `lib/admin/companies.ts:33-45`; `lib/admin/jobs.ts:68-79`; `lib/admin/users.ts:18-25`; `lib/admin/support.ts:99-103` | keine |
 | STH-021 | Dashboard-Empfehlungen mit Query-Fan-out | bestätigt | P1 Performance | Candidate/DB Scale | 30B | 19, Batch-Read-/Rankingvertrag | offen | Ranking-/Read-Model-Tests, kein Query-Count-Ceiling | `lib/candidate/dashboard.ts:318-386` | keine |
 | STH-022 | Business/Enterprise nur eingeschränkt lieferbar | teilweise bestätigt; bewusst gegatet | P1 nach WTP, XL je Integration | Monetization/Enterprise | 31 | 19, STH-004/009/024, Marktvalidierung | offen; Kernentitlements vorhanden, Integrationen fehlen | Release-/Grant-Tests vorhanden, bewusst kein ImportRun | `prisma/seed/fixtures/plans.ts:138-168,263-282`; `components/marketing/pricing-card.tsx:120-157`; `prisma/schema.prisma:3472-3528` | Design-Partner, SLA/DPA, Integrationszugänge |
@@ -1151,11 +1164,89 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
   Vertrag wie Checkout abgeleitet; Demo übertreibt nichts und Production
   bewirbt oder verkauft keine ungeprüfte Leistung.
 
+## 3A. Ergänzende Dossiers STH-029 bis STH-037
+
+> Diese Dossiers wurden am 26. Juli 2026 gegen den sauberen Planungscommit
+> `e34262e3074565840e371c336a5d2ba5cf3efbac` verifiziert. Sie sind geplant,
+> nicht implementiert. Die Priorität je Launchklasse steht in Abschnitt 3B.
+
+| ID | Befund und unabhängiger Status | Lead / Mitwirkende | Rollen, Portale und aktuelle Fundstellen | Abhängigkeiten und geschützte Regressionen | Verbindlicher Test-/Evidence-Vertrag | Externer Gate / Abschlussstatus |
+| --- | --- | --- | --- | --- | --- | --- |
+| `STH-029` | **bestätigt:** höher priorisierte Requirements, Architektur, ADRs, Implementation Guidance, Quickref/Glossary und Phasen 19–32 waren nicht synchron; alle offenen Phasen hatten keinen vollständigen 28-Punkte-/AC-Testvertrag. | 19 / alle Phasen 20–32 | Product, Engineering, QA; `00-PLAN.md`, `requirements-matrix.md`, `architecture-blueprint.md`, `decisions.md`, `implementation-plan.md`, alte Phase-19–32-Testabschnitte | aktueller sauberer `main`; Phasen 01–18/Evidence immutable; Ist-Routeinventar nicht vorplanen | 37/37 IDs, sechs LC, vier Statusdimensionen, jede Phase 28 Punkte und vollständige AC-Matrix; G4-Baseline und Diff-Invarianten auf einem Commit; neuer Phase-19-Evidence-Record | kein externes Fachgate; **offen bis Phase-19-Gate** |
+| `STH-030` | **bestätigt:** Admin-MFA war geplant, aber Employer Owner/Billing/Team, Login-E-Mail, Candidate Export/Delete und kritische Consent-/Reveal-Aktionen besitzen keine risikobasierte frische Step-up-Authentisierung. | 25B / 20, 22, 24, 26 | Candidate, Employer Owner, Billing, Admin; `lib/auth/current-user.ts`, `lib/auth/route-guards.ts`, Candidate-Privacy-/Employer-Team-/Billing-Actions; kein MFA-/StepUp-Modell im Schema | Phase-20 Identity; bestehende Session-, safe-next-, tenant-, candidate-owner-, Reveal- und Billing-Autorisierung bleibt erhalten | AAL-/Action-Matrix; fresh/stale/replay/cross-purpose/cross-tenant/direct-action/recovery/credential-revoke Unit+PostgreSQL+E2E; genau eine Wirkung; G3 | MFA-Verfahren, Recovery-/Supportpolicy, Security Owner; **offen** |
+| `STH-031` | **teilweise bestätigt:** Rate Limits, Abusequeue, Audit und Revocation existieren; ein kohärenter Fraud-/Scam-/ATO-Vertrag für kompromittierte Firmen, Credential Stuffing, Fake-/Duplicate-Jobs, Massennachrichten, Reveal/Export-Anomalien, Payment Fraud und wiederholte Beschwerden fehlt. | 25 Threat-Model / 23, 24, 26, 30D | alle Nutzer, Trust & Safety, Security, Finance; `lib/auth/rate-limit.ts`, `lib/abuse/public-report.ts`, `lib/admin/moderation.ts`, `lib/admin/capabilities.ts`; keine RiskSignal-/ATO-Orchestrierung | 20 Identity, 23 Incidents/Worker, 26 Trust; Session-/Company-/Job-/Radar-/Payment-/Audit-Invarianten | kompromittierte VERIFIED-Firma, Stuffing, Massennachricht, abnormaler Reveal/Export, Payment Fraud, Complaint-Repeat, false positive/Appeal und Incident-Drill; nächste Reads verlieren riskante Rechte; G3 | benannte Trust-&-Safety-/Security-/Finance-Owner, Signal-/Retentionfreigabe; **offen** |
+| `STH-032` | **teilweise bestätigt:** Job-Ablauf und öffentliche Ausblendung sind fail-closed; Reconfirmation, Reminder, „besetzt/nicht verfügbar“-Feedback, Copy-/Dublettenreview und schnelle kanalübergreifende Deaktivierung fehlen. | 30D / 23 Worker, 26 Trust, 31 Cluster | Visitor, Candidate, Employer, Admin; Public Search/Detail, Employer Jobs, Admin Queue; `lib/jobs/effective-status.ts`, `lib/jobs/public-eligibility.ts`, Alerts/Sitemap/Recommendations | 23 Notifications/Worker und 26 Trust; bestehende Publish-/Revision-/Quota-/Slug-/Boost-/Eligibility-Verträge | Time-travel, concurrency, filled/report, exact/near-duplicate, appeal; identische Ausblendung aus Search, Sitemap, Alerts, Recommendations und Analytics; keine Promotion veralteter Dublette; G2/G3 vor Public | fachliche Freshness-/Duplicate-Policy, Moderationskapazität; **offen** |
+| `STH-033` | **bestätigt:** Browser-, Mobile- und Axe-Tests beweisen keine Verständlichkeit oder Vertrauen; es gibt kein rekrutiertes, moderiertes Research-Protokoll mit Schwellen. | frühe 29A / 26, 30, 31; 29B Abschluss | Candidate, Employer, Admin/Support; JobPass, Search, Fair Score, Verification, Radar/Reveal, CV/Privacy, Pricing/Limits/Kündigung; `playwright.config.ts`, `tests/e2e/quality/*`, Phase 29 | nach Phase 19 früh möglich; keine PII in Research; Defekte gehen in owning Phase statt UI-Kaschierung | vorab definierte Segmente/Tasks, Task success, Zeit, Fehler, Abbruch, Comprehension/Trust; anonymisiertes Research-Repository, Moderatorprotokoll und Go/No-go | Rekrutierung, Research/Privacy Owner; externe Nutzerhypothesen bleiben **offen** |
+| `STH-034` | **bestätigt:** SLA-/Queue-Alter existieren, aber kein Minuten-/Arrival-/Backlog-/Staffing-/Coverage-/Unit-Cost-Modell je Verification, Moderation, Import, Privacy, Support und Fraud. | frühe 31A / Telemetrie 23, Queues 25/26/30 | Ops, Support, Privacy, Trust, Commercial; `lib/admin/sla.ts`, `lib/admin/support.ts`, `product-strategy.md`, Phase 31 | reale oder kontrolliert gemessene Fälle; STH-033 Research; Demo-Zeitwerte nicht als Marktbeleg | p50/p95 Handling Time, Arrival, Backlog Age, FTE/Vertretung/On-call, Automation- und Aufnahme-Stopp, max. Concierge-COGS; Capacity-/Cost-Report mit Owner | Staffing-/Kosten-/Servicelevel-Freigabe; **offen** |
+| `STH-035` | **bestätigt:** Phase 24 plante Refundmechanik, aber keine fachliche Service-Recovery für plattformverursachten Boost-/Radar-Ausfall; ADR-028 kennt bewusst nur no-auto-refund und exakte Adminreversal. | 24 / Policy 31, Trust 26 | Employer Owner, Finance, Support, System; Billing/Radar/Boost; ADR-028, `lib/billing/credit-policy.ts`, `lib/billing/boosts.ts`, `lib/talentradar/request-contact.ts` | WTP-Go, real Payment, Trust-/Provider-Failureklassifikation; Ledger/Invoice/Order unverändert und idempotent | Outcome-Matrix Plattformfehler vs Decline/Expiry/User-Cancel; exactly-once replacement/extension/credit/refund, concurrent webhook/reconciliation/support E2E; G3 | Finance/Legal/Support-Freigabe und konkretes Paid-Versprechen; **offen, P0 nur bei Geldfluss** |
+| `STH-036` | **teilweise bestätigt:** datenschutzarme Result-Count-Buckets einschließlich Nulltreffer existieren; unbekannte/schlechte Suchbegriffe können nicht sicher in Taxonomiepflege zurückgeführt werden. | 30A / Privacy 22, Fachreview 31A | Visitor/Candidate, Search/Data/Privacy; `lib/analytics/event-contracts.ts`, `app/(public)/jobs/actions.ts`, `lib/search/relevance.ts` | STH-017 Analytics/Consent und STH-019 Taxonomie; keine Rohquery-/PII-/Rare-query-Leaks, Demo/LIVE getrennt | redaction/tokenization, k-/Mindestmengen-Suppression, Retention, Access, Poisoning/Bias, Review→TaxonomyVersion→publish/revoke und Re-identification-negativ; Data/Privacy Evidence | Privacy/Data-/Fachfreigabe; **offen, bestehende Bucket-Erfassung bereits gelöst** |
+| `STH-037` | **bestätigt:** Phase 31 priorisierte Boost/Radar vor Basisworkflow-WTP, obwohl deren Wert organische Reichweite beziehungsweise Kandidatendichte voraussetzt; erster Launch war nicht ausdrücklich auf genau ein Paar begrenzt. | frühe 31A / 24, 26, 30A; 31B Freigabe | KMU, Product, Commercial, Finance; Phase 31 Angebotsreihenfolge, Product Strategy/Commercial Gates | Phase 19; fachliches Korpus, WTP-/Cashflow-/Capacity-Modell; Paid Self-Service Phase 24 erst nach Go | preregistrierte Starter/Pro-, Hiring-Sprint-, Retainer+Credits-, Concierge-/Import-Angebote; reale beglichene Rechnung, Stopregel; Boost-Reach-/Radar-Density-Gate; Pause/Reactivation getrennt | reale KMU, Tax/Legal/AVG/Finance; **offen, keine WTP-Behauptung** |
+
+## 3B. P0–P4-Matrix nach Launchklasse
+
+`P0*` bedeutet: P0, sobald der benannte Feature-/Geld-/Volumentrack in dieser
+Launchklasse aktiviert wird; andernfalls muss er vollständig fail-closed
+bleiben. Diese Matrix ersetzt pauschale globale Prioritäten nicht durch
+weniger Testtiefe: Security-, Privacy-, Payment- und Tenant-Negativtests
+bleiben für jeden vorhandenen Pfad Pflicht.
+
+| ID | LC1 Demo | LC2 Design Partner | LC3 Invite Pilot | LC4 Public Free | LC5 Paid Self-Service | LC6 Scale |
+| --- | --- | --- | --- | --- | --- | --- |
+| `STH-001` | P2 | P0 | P0 | P0 | P0 | P0 |
+| `STH-002` | P2 | P0 | P0 | P0 | P0 | P0 |
+| `STH-003` | P2 | P0* | P0* | P0* | P0* | P0* |
+| `STH-004` | P3 | P0* | P0* | P0* | P0* | P0* |
+| `STH-005` | P4 | P2 | P2 | P4 | P0 | P0 |
+| `STH-006` | P3 | P0 | P0 | P0 | P0 | P0 |
+| `STH-007` | P3 | P0 | P0 | P0 | P0 | P0 |
+| `STH-008` | P3 | P0 | P0 | P0 | P0 | P0 |
+| `STH-009` | P3 | P1 | P0 | P0 | P0 | P0 |
+| `STH-010` | P3 | P0 | P0 | P0 | P0 | P0 |
+| `STH-011` | P3 | P0 | P0 | P0 | P0 | P0 |
+| `STH-012` | P4 | P4 | P3 | P3 | P3 | P3 |
+| `STH-013` | P3 | P0 | P0 | P0 | P0 | P0 |
+| `STH-014` | P3 | P0* | P0* | P0 | P0 | P0 |
+| `STH-015` | P4 | P3 | P3 | P3 | P3 | P3 |
+| `STH-016` | P4 | P3 | P3 | P3 | P3 | P3 |
+| `STH-017` | P3 | P1 | P1 | P0 | P0 | P0 |
+| `STH-018` | P4 | P1 | P0 | P0 | P0 | P0 |
+| `STH-019` | P2 | P1 | P0 | P0 | P0 | P0 |
+| `STH-020` | P4 | P3 | P2 | P1 | P1 | P0 |
+| `STH-021` | P4 | P3 | P2 | P1 | P1 | P0 |
+| `STH-022` | P4 | P4 | P3 | P3 | P2 | P1 |
+| `STH-023` | P2 | P1 | P1 | P0 | P0 | P0 |
+| `STH-024` | P1 | P0 | P0 | P0 | P0 | P0 |
+| `STH-025` | P3 | P2 | P1 | P0* | P0* | P0 |
+| `STH-026` | P3 | P1 | P0 | P0 | P0 | P0 |
+| `STH-027` | P4 | P4 | P4 | P3 | P3 | P0* |
+| `STH-028` | P0 | P0 | P0 | P0 | P0 | P0 |
+| `STH-029` | P0 | P0 | P0 | P0 | P0 | P0 |
+| `STH-030` | P2 | P0 | P0 | P0 | P0 | P0 |
+| `STH-031` | P2 | P0 | P0 | P0 | P0 | P0 |
+| `STH-032` | P3 | P1 | P0 | P0 | P0 | P0 |
+| `STH-033` | P3 | P0 | P0 | P0 | P0 | P0 |
+| `STH-034` | P3 | P0 | P0 | P0 | P0 | P0 |
+| `STH-035` | P2 | P0* | P1* | P3 | P0 | P0 |
+| `STH-036` | P2 | P1 | P1 | P1 | P1 | P1 |
+| `STH-037` | P3 | P0 | P0 | P0 | P0 | P0 |
+
+Scopekorrekturen:
+
+- `STH-012` Multi-Persona wird nur bei explizitem Scope-Go P0; default P3/P4.
+- `STH-015/016` werden nur P0, wenn externer Tracker/Vollscheduler ausdrücklich
+  verkauft oder als Launchfunktion versprochen wird.
+- `STH-020/021` eskalieren anhand gemessener Caps/Querybudgets.
+- `STH-027` bleibt P3/P4 bis zum dokumentierten Capacity-Trigger.
+- `STH-037` ist für LC3/LC4 wegen „genau ein erster Cluster“ P0; echte
+  WTP-Evidence ist dort nur bei bezahltem Angebot Pflicht. LC5/LC6 benötigen
+  zusätzlich das Real-Money-/Delivery-Go.
+- Salary LIVE bleibt deaktiviert/deferred und wird erst vor Aktivierung P0.
+
 ## 4. Abdeckungs- und Evidence-Regeln
 
-- Die Matrix enthält jede ID von STH-001 bis STH-028 genau einmal; die Dossiers
-  enthalten dieselbe vollständige Menge.
-- Phase 19 `19-remediation-baseline-regression.md` rebaselined alle 28 IDs und
+- Die Matrix und ergänzenden Dossiers enthalten jede ID von STH-001 bis
+  STH-037 genau einmal mit Lead-Owner und launchklassenspezifischer Priorität.
+- Phase 19 `19-remediation-baseline-regression.md` rebaselined alle 37 IDs und
   schützt die bestehenden Phase-01-bis-18-Verträge. Die in der Matrix genannte
   Phase ist der fachliche Remediation-Owner; Phase 19 bleibt eine
   Querschnittsabhängigkeit.
@@ -1174,8 +1265,10 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
   Usability/Liquidität, aber niemals WTP belegen; Phase 24 bleibt für LIVE bis
   zum ProductRelease-/Katalog-/Paid-WTP-Gate geschlossen.
 - Phase 30 besitzt getrennte Evidenzstände: Track 30A ist ein frühes
-  P1-Startcluster-Gate, 30B schließt die operativen P1-Scale-Befunde und 30C
-  steuert STH-027. Ein grüner 30A-Track schließt STH-027 nicht. Liegt dessen
+  P0-Gate für jeden aktivierten LC3+-Cluster (P1 für beaufsichtigte
+  Discovery), 30B schließt die operativen Scale-Befunde, 30C steuert STH-027
+  und 30D die LC3+-Freshness. Ein grüner 30A-/30D-Track schließt STH-027
+  nicht. Liegt dessen
   Trigger nicht vor, erhält STH-027 eine datierte `P3 DEFERRED / MONITORED`-
   Entscheidung mit Count-/Byte-Headroom, Forecast, Alert und Owner, ohne den
   Launch zu blockieren; bei Trigger werden Index/Shards Pflicht.

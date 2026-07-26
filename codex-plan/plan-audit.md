@@ -1,6 +1,16 @@
 # SwissTalentHub — Plan-Audit und Verbesserungsregister
 
-> **Abschlussstand:** 24. Juli 2026. Die historischen Befundklassifizierungen unten bleiben als Entscheidungsregister erhalten. Phasen 01–18 sind inzwischen im Zielrepository implementiert und lokal verifiziert; der technische Abschluss einschließlich E2E-08 steht in der [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). Ein nachgelagerter Commercial-/Daten-/AVG-Audit ist in [`commercial-go-live-gates.md`](./commercial-go-live-gates.md) festgehalten und schliesst keine externe Freigabe. „Im Plan gelöst“ bezeichnet weiterhin die damalige Planauflösung, nicht automatisch eine externe Fach- oder Go-live-Freigabe. Staging, AVG/Legal/Privacy/Tax, reale Provider, bezahlte Marktvalidierung, LIVE-Lohndaten und organisatorische Ops-Gates bleiben offen.
+> **Historischer Abschlussstand 24. Juli 2026; prospektiver
+> Remediation-Audit 26. Juli 2026.** Die historischen
+> Befundklassifizierungen unten bleiben als Entscheidungsregister erhalten.
+> Phasen 01–18 sind im Zielrepository implementiert und für ihre
+> unveränderlichen damaligen Commits lokal verifiziert; der technische
+> Abschluss einschließlich E2E-08 steht in der
+> [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). Der aktuelle
+> Remediation-Plan 19–32 erteilt keine neue Code-, Pilot- oder
+> Produktionsfreigabe. „Im Plan gelöst“ bezeichnet die jeweilige
+> Planauflösung, nicht automatisch Technical-, Quality- oder
+> Activation-Evidence.
 
 ## 1. Auditumfang und Urteil
 
@@ -71,7 +81,7 @@ Vollständig gelesen und gegeneinander geprüft wurden:
 | AUD-LAUNCH-02 | Henne-Ei-Problem nur als Featureliste, keine Startsequenz. | Concierge → Supply → Demand → clusterweiser Launch; erlaubte Quellen und klare Demo-Grenze. | im Plan gelöst |
 | AUD-LAUNCH-03 | Programmatic SEO ohne Mindestnutzen-/Indexgate. | Content-/Liquiditätsgate, noindex/consolidate; Seitenzahl kein KPI. | im Plan gelöst |
 | AUD-LAUNCH-04 | Paketpreise/Features waren gesetzt, aber ohne Segment, Validierung oder Jahreslogik. | fünf Plans mit Zielkunde/Trigger, 10-für-12 Hypothese, Design-Partner-/Conversion-Messung. | Hypothese zu validieren |
-| AUD-LAUNCH-05 | Neun Produkte erzeugten Feature-Bloat und teilweise nicht lieferbare Reichweite. | Boost/Contacts P0; targeted Zusatzstelle/approved Import P1 mit REQ-BIL-008/009; Featured/Newsletter/Social P2 nach Reichweitenbeleg; Success Fee später. | im Plan gelöst |
+| AUD-LAUNCH-05 | Neun Produkte erzeugten Feature-Bloat und teilweise nicht lieferbare Reichweite. | Historischer Demo-Katalog: Boost/Contacts P0, Zusatzstelle/Import P1, Featured/Newsletter/Social P2. Für reale Angebote ersetzt `STH-037` diese Reihenfolge durch Basisworkflow/Hiring-Sprint/Retainer/Concierge/Import vor Boost/Radar. | historisch gelöst; reale Sequenz in Phase 31A offen |
 | AUD-LAUNCH-06 | Keine North Star/KPI-Definition oder Funnel-Events. | exact dedupe/response/cluster/month North Star plus typed funnel events and suppression v1. | Implementierungsbaseline gelöst; später versioniert kalibrieren |
 | AUD-LAUNCH-07 | Cockpit-Signale „many views/near limit/churn“ waren undefiniert. | `COCKPIT_SIGNAL_POLICY_V1` fixes reason/evidence/window/threshold/action/owner/outcome and golden fixtures. | Implementierungsbaseline gelöst; spätere Version aus Daten |
 | AUD-LAUNCH-08 | Kein Geschäftsmodell/CAC/LTV/Break-even. | drei explizite Szenarien und Formeln; keine Marktbehauptung. | im Plan gelöst als Annahme |
@@ -167,4 +177,58 @@ The listed implementation baselines are executable and may not be paused or rein
 
 ## 10. Abschlussstatus
 
-Phasen 01–18 sind implementiert und durch datierte Ziel-Evidence lokal verifiziert. Es gibt keinen automatisch folgenden Implementierungsschritt: neue Arbeit benötigt ein ausdrücklich freigegebenes Folgepaket. Die offenen Business-/Legal-/Privacy-/Tax-/Provider-/Ops-Entscheidungen besitzen weiterhin harte Deadlines vor Pilot oder realem Betrieb; der lokale technische Abschluss ersetzt keine dieser Freigaben.
+Phasen 01–18 sind implementiert und durch datierte, commitgebundene
+Ziel-Evidence lokal verifiziert. Das freigegebene Folgepaket ist nun
+ausführlich als Phase 19–32 geplant; **Phase 19 ist der einzige zulässige
+Implementierungsstart**. Die offenen
+Business-/Legal-/Privacy-/Tax-/Provider-/Ops-Entscheidungen besitzen weiterhin
+harte Deadlines vor Pilot oder realem Betrieb; der lokale technische Abschluss
+ersetzt keine dieser Freigaben.
+
+## 11. Prospektiver Remediation-Plan-Audit 19–32
+
+### 11.1 Baseline und Urteil
+
+Die neue Planung wurde gegen den beim Prüfungsbeginn sauberen
+`e34262e3074565840e371c336a5d2ba5cf3efbac` geprüft. Frühere Analysen auf
+`eb9b45a` bleiben nachvollziehbar, ihre grünen Läufe werden aber nicht auf
+`e34262e` übertragen. Phase 01–18 und ihre Evidence wurden nicht editiert.
+
+**Urteil:** Der frühere Remediation-Entwurf war als Themenliste nützlich, aber
+noch nicht ausführbar: Requirement-Namespace und globale Governance endeten
+bei `STH-028`, Zielklassen waren uneinheitlich, Phasen enthielten keinen
+vollständigen AC→Test-Vertrag, Markt-/Search-/Trust-/Fraud-/Freshness- und
+Service-Delivery-Abhängigkeiten waren teilweise falsch geordnet. Der
+überarbeitete Plan verwendet `STH-001`–`STH-037`, sechs Launchklassen, ein
+Statusquartett, 28 Pflichtfelder je Phase und G0–G4. Das ist
+Plan-Evidence; die Phase bleibt bis zur späteren Implementierung offen.
+
+### 11.2 Neu verifizierte oder präzisierte Befunde
+
+| Befund | Bewertung am aktuellen Baum | Planauflösung |
+| --- | --- | --- |
+| E-Mail-Verifikation/Delivery | bestätigt; Registrierung erstellt unmittelbar eine Session, Delivery ist Mock/best-effort | Phase 20: Verification-/Email-change-Lifecycle, atomare Outbox, dauerhafte Attempts/Retry/DLQ; LIVE-Aktivierung Phase 23 |
+| CV-/Dokumentbytes | bestätigt; aktuelle Demo speichert Metadaten, keine Bytes | Phase 21: Quarantäne-first Object Vault, Streaming-/Polyglot-/Malware-/IDOR-/Retention-Vertrag |
+| Privacy Export/Delete | bestätigt/teilweise; Export ist Manifest, Assessment kennt keine echte Erasure | Phase 22: versioniertes Dateninventar, Export/Korrektur/Löschung, Legal Holds, DSFA-/AVG-/Consent-Gates |
+| autonome Worker | bestätigt | Phase 23: Lease/Heartbeat/Dedupe/Retry/DLQ/Replay, Provider-Aktivierungsledger, Capacity/Unit Cost |
+| Payment/Refund | bestätigt für LIVE; Mockmechanik ist absichtlich korrekt | Phase 24 erst nach WTP-Go; Webhook/Reconciliation/Fraud plus Service-Recovery |
+| Admin ist Superrolle | bestätigt; Capabilities mindern Teilrisiko | Phase 25A Least Privilege/SoD/Break-glass, 25B Non-Admin-Step-up, 25C Fraud/ATO/Scam |
+| Firmenprüfung | teilweise gelöst; Lifecycle vorhanden, Evidenz/Expiry/Re-review schwach | Phase 26 und zwingendes Public-Trust-Gate |
+| Multi-Persona/Tracker/Scheduler | echte mögliche Lücken, aber Nachfrage nicht belegt | Phase 27, 28A und 28B jeweils P3/DEFERRED mit eigenem Demand-Go |
+| moderierte Forschung | bestätigt; Automation stark, Zielgruppenbeleg fehlt | Phase 29A früh; 29B finale Cross-browser/Mobile/A11y-Evidence |
+| Startcluster-Suche | bestätigt; Semantik driftet je Consumer | Phase 30A Shared Concepts für Beruf/Ort/Qualifikation/Zertifikat/Skill/Branche und getrennte Clusterkorpora |
+| Zero-Result-Lernen | teilweise falsch; Result-count-Buckets existieren bereits | Phase 30A ergänzt nur privacy-safe Unknown-Term-/Review-Loop (`STH-036`) |
+| Sitemap | ursprüngliche Dringlichkeit falsch; no-truncation/fail-closed ist getestet | Phase 30C nur triggerbasiert P3 |
+| Job Freshness | teilweise gelöst; Ablauf/Public-Hiding vorhanden | Phase 30D Reconfirmation, Filled/Unavailable, Duplicate/Copied und Consumer-Parität |
+| Monetarisierungsreihenfolge | bestätigt falsch priorisiert | Phase 31A: genau ein Cluster und WTP; Base/Hiring Sprint/Retainer/Concierge/Import vor Boost/Radar |
+| Supportkapazität/Service-Abhilfe | bestätigt | `STH-034`/`STH-035` über 23/24/26/31 |
+| Release-Abhängigkeiten | bestätigt fehlerhaft | Phase 32 prüft `STH-001`–`037`; Phase 26 für Public Trust Pflicht, Phase 28 nur bei versprochenem Scope |
+
+### 11.3 Kein zusätzlicher Phase-33-Container
+
+Die neuen Befunde besitzen eindeutige Owner in bestehenden Phasen:
+25A–C, 28A/B, 29A/B und 30A–D verhindern künstliche Serienabhängigkeiten.
+Eine Phase 33 würde keinen eigenen atomaren Migrations-/Releasevertrag
+besitzen und wird deshalb nicht angelegt. Neue Phasen sind nur zulässig, wenn
+später ein tatsächlich unabhängiger, nicht sauber zuordenbarer Lieferumfang
+mit eigenem Gate entsteht.

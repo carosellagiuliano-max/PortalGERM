@@ -15,6 +15,12 @@ Die strategische Wette besteht aus vier verbundenen Nutzenbausteinen:
 
 Das MVP validiert zuerst einen liquiden Marktplatz und drei End-to-End-Schleifen: **Suchen → Bewerben → Status**, **Stelle erstellen → moderieren → Bewerbung bearbeiten** und **Planlimit → Mock-Kauf → serverseitige Freischaltung**. Breite Integrationen, automatisierte Vermittlungsentscheide und operative Sonderfälle werden erst nach Nutzungsnachweis ergänzt.
 
+Für die Remediation 19–32 gilt eine strengere Aktivierungsreihenfolge:
+Mock-Kauf bleibt reine Mechanik; genau ein erster Cluster wird gewählt, der
+Basisworkflow/Hiring-Sprint/Retainer/Concierge-/Import-Nutzen wird mit
+realem Geld geprüft, und erst ein positives WTP-/Operations-Go rechtfertigt
+PSP-Self-Service oder Boost-/Radar-Premiumbreite.
+
 ## 2. Vision, Positionierung und strategische Leitplanken
 
 ### Vision
@@ -29,7 +35,15 @@ Menschen in der Schweiz sollen eine berufliche Entscheidung nicht aufgrund einer
 
 - **Primäre Arbeitgeber:** eigenständige Schweizer KMU mit 20–249 Mitarbeitenden, 3–30 Einstellungen pro Jahr und ohne ausgereiftes ATS oder grosses internes Recruiting-Team.
 - **Primäre Kandidaten:** aktiv oder latent wechselbereite Fachkräfte mit Berufserfahrung, die ihren Marktwert verstehen und Kontrolle über ihre Daten behalten wollen.
-- **Startcluster als Hypothese:** deutschsprachige Regionen Zürich/Aargau/Bern; zunächst Pflege/Gesundheit und Engineering/Technik. Vor öffentlichem Launch muss durch Interviews und Angebotsakquise bestätigt werden, dass je Cluster genügend reale Stellen und Kandidateninteresse entstehen. Zusätzlich muss die kontrollierte Startcluster-Berufstaxonomie belegen, dass fachlich gleichwertige Schweizer Berufsbezeichnungen, Abkürzungen, Varianten und häufige Tippfehler dieselben relevanten Stellen erschließen.
+- **Startcluster als Auswahlentscheidung:** deutschsprachige Regionen
+  Zürich/Aargau/Bern sind die Regionshypothese; Pflege/Gesundheit und
+  Engineering/Technik sind **zwei Kandidaten, nicht zwei gleichzeitige
+  Starts**. Phase 31A wählt nach vorregistrierten Interviews, realen
+  Angebotsversuchen, Supply, Kandidateninteresse, Supportaufwand,
+  Stückkosten und rechtlichen Grenzen genau einen ersten Cluster. Der andere
+  bleibt ungeöffnet. Pflege und Engineering erhalten getrennte
+  Query-/Judgment-Korpora; Evidence des einen darf den anderen nicht
+  freigeben.
 - **Sekundär:** Berufseinsteiger, Quereinsteiger, weitere Kantone/Sprachen, grössere Arbeitgeber und interne Recruiter.
 - **Später:** Agenturen mit mehreren Mandanten, Enterprise-ATS-Integrationen und landesweit optimierte französische/italienische Inhalte.
 
@@ -296,15 +310,31 @@ trennen deshalb Renewal, bewusste Pause, Reaktivierung und endgültigen Churn.
 Die verbindlichen offenen Gates stehen in
 [`commercial-go-live-gates.md`](./commercial-go-live-gates.md).
 
-### Einmalige Produkte und Priorität
+### Angebotsreihenfolge und einmalige Produkte
+
+Die erste reale Zahlungsbereitschaft wird am gelösten Kernproblem gemessen,
+nicht an zusätzlich gekaufter Reichweite. Die Reihenfolge lautet deshalb:
+
+1. kostenlos beziehungsweise bezahlt klar abgegrenzter Basisworkflow;
+2. betreuter 30-/45-/90-Tage-Hiring-Sprint;
+3. kleiner Retainer mit klaren Arbeits-/Credit-Grenzen;
+4. Concierge-/Qualitätshilfe und rechtmässig betreuter Import;
+5. Boost erst bei bereits relevanter Stelle und belegtem Reichweitenengpass;
+6. Talent-Radar-Zugang/Kontakte erst bei belegter Opt-in-Dichte,
+   Suchqualität und zulässigem Contact-/Reveal-Vertrag.
+
+Ein Boost-Kauf belegt allenfalls Zahlungsbereitschaft für Reichweite, nicht
+für den Recruiting-Workflow. Ein Contact-Pack belegt ohne ausreichende
+Kohorte keinen verteidigbaren Radar-Wert.
 
 | Produkt | Priorität | Begründung / Regel |
 |---|---|---|
-| Job Boost 7 / 30 Tage | P0 | direkter, messbarer Reichweitenwert; immer „Geboostet“, kein Score-Effekt |
-| Talent-Kontakte 10 / 50 | P0 | Add-on nur für bereits Talent-Radar-berechtigte Firmen; erweitert einen genutzten Workflow, gewährt selbst keinen Radar-Zugang; atomarer Verbrauch und Ablaufregel |
-| Zusatzstelle 30 Tage | P1 | Downsell für saisonalen Bedarf; darf Abo nicht kannibalisieren |
+| Hiring-Sprint / Concierge | Discovery/P0 des Paid-Piloten | klarer Outcome, Dauer, manueller Aufwand, Kapazität, Stückkosten und Service-Recovery vorab begrenzen |
+| Import-Setup | Discovery/P0 als betreute Leistung | echter operativer Wert; nur rechtmässige Dateien/Feeds, Preview und Freigabe, kein falscher vollautomatischer Eindruck |
+| Zusatzstelle 30 Tage | P1 nach Basis-WTP | Downsell für saisonalen Bedarf; darf Abo nicht künstlich kannibalisieren |
+| Job Boost 7 / 30 Tage | P1 nach Reichweitenbeleg | immer „Geboostet“, kein Score-Effekt; nur wenn Inhalt/Relevanz bereits gut und Distribution der Engpass ist |
+| Talent-Kontakte 10 / 50 | P1 nach Radar-Dichte-/Legal-Gate | Add-on nur für Radar-berechtigte Firmen; erweitert einen belegten Workflow, gewährt selbst keinen Zugang; atomarer Verbrauch und Ablaufregel |
 | Featured Job / Employer | P2 | erst nach Reichweiten-/Inventarbeleg; Job Boost deckt P0-Reichweite bereits ab |
-| Import-Setup | P1 als betreute Leistung | operativer Aufwand wird bezahlt; kein falscher vollautomatischer Eindruck |
 | Newsletter Placement / Social Push | P2 | erst mit nachweisbarer Reichweite verkaufen; Einwilligungen/Kanalregeln nötig |
 | Success Fee | später, deaktiviert | rechtliche und geschäftliche Prüfung erforderlich; keine Admin-Aktivierung im MVP |
 
@@ -436,6 +466,12 @@ Events enthalten pseudonyme Actor-/Tenant-IDs, Zweck, Zeit und minimal notwendig
 
 - invite-only Design-Partner-Angebote mit echtem, transparentem Geldfluss nach
   AVG-/Tax-/Vertragsfreigabe; Mock-Abschlüsse zählen nicht als Paid Conversion;
+- genau ein erster Region×Beruf-Cluster nach vorregistriertem
+  Go/No-go; Pflege- und Engineering-Korpus bleiben getrennt und der
+  nichtgewählte Kandidat bleibt ungeöffnet;
+- Basisworkflow, Hiring-Sprint, Retainer, Concierge und betreuter Import
+  werden vor Boost-/Radar-Upsells auf reale Zahlungsbereitschaft,
+  Lieferfähigkeit, Supportminuten, Vollkosten und Service-Recovery geprüft;
 - kontrollierte Berufstaxonomie und erklärbare Alias-/Trigramm-/FTS-Suche für
   jeden aktivierten Startcluster; Search, Alerts, Preferences,
   Recommendations, Matching und Cluster-Launch-Evidence teilen denselben
@@ -451,6 +487,24 @@ Events enthalten pseudonyme Actor-/Tenant-IDs, Zweck, Zeit und minimal notwendig
 - Talent Radar als Wedge über reale Opt-in-, Cohort-, Contact-, Accept-,
   Reveal-, Gesprächs- und Paid-Use-Kohorten validieren; „Moat“ erst nach
   belegtem Netzwerkeffekt.
+
+### Verbindliche Betriebs- und Research-Grenzen des Marktstarts
+
+- Moderierte Kandidaten-, Arbeitgeber- und Operator-Aufgaben starten in
+  Phase 29A bereits nach der Phase-19-Baseline. Pro Kernaufgabe werden
+  Erfolgsquote, Zeit, Fehler, Abbruch und Verständnis erfasst; internes
+  Klicken ersetzt keine Zielgruppen-Evidence.
+- Vor jedem Design-Partner-Vertrag sind maximal gleichzeitig betreubare
+  Firmen/Stellen/Fälle, Minuten je Workflow, Vollkosten, Eskalationsbudget und
+  benannter Owner festgelegt. Überbuchung fällt geschlossen aus.
+- Ein bezahltes Leistungsversprechen nennt Ergebnisgrenze, Frist,
+  Kundenpflichten und Abhilfe bei Plattformversagen. Refund, Rechnungskorrektur,
+  Credit-Restoration und Nicht-Erfüllung werden getrennt; normale Ablehnung,
+  Ablauf oder fehlender Markterfolg lösen keinen stillen Auto-Refund aus.
+- Aktuelle Jobs benötigen Reconfirmation, Ablauf und einen
+  „besetzt/nicht mehr verfügbar“-Meldepfad. Abgelaufene oder widerrufene
+  Stellen verschwinden konsistent aus Public Search, Alerts,
+  Recommendations, Radar-/Matching-Ansichten, Feeds, Export und Sitemap.
 
 ### P2 / später
 

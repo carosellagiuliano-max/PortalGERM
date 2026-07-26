@@ -1,189 +1,349 @@
-# Phase 19 — Remediation-Baseline und Regressionsschutz
+# Phase 19 — Aktuelle Remediation-Baseline, Governance und Regressionsschutz
 
-> **Status: GEPLANT / NICHT BEGONNEN.** Diese Phase ist die zwingende
-> Ausführungsschranke vor jeder Remediation am Produktcode. Die statische
-> Analyse und die neuen Planungsdokumente ersetzen weder einen frischen
-> Golden Run noch einen unveränderlichen Evidence-Commit.
+> **Planstatus:** GEPLANT / NICHT BEGONNEN
+> **Technikstatus:** NICHT IMPLEMENTIERT
+> **Quality-Gate:** NICHT GELAUFEN
+> **Aktivierung:** DISABLED
+>
+> Phase 19 ist die zwingende Ausführungsschranke vor jeder Änderung an
+> Produkt-, Runtime-, Schema- oder Testcode ab Phase 20. Die Planprüfung vom
+> 26. Juli 2026 lief auf `e34262e3074565840e371c336a5d2ba5cf3efbac`;
+> dieser Planungscommit ist noch kein frisch getesteter Implementierungs-
+> baseline-Commit.
 
-## Ziel
+## 1. Status
 
-Den aktuellen Repositoryzustand reproduzierbar versiegeln, alle 28 Befunde
-gegen denselben Stand zurückverfolgen und die Null-Regressions-Basis für die
-Phasen 20–32 schaffen.
+| Dimension | Status |
+| --- | --- |
+| Planstatus | `GEPLANT / NICHT BEGONNEN` |
+| Technikstatus | `NICHT IMPLEMENTIERT` |
+| Quality-Gate | `NICHT GELAUFEN` |
+| Aktivierung | `DISABLED` |
 
-## Ausgangslage und bestätigte Probleme
+Der Vorspann und diese Tabelle beschreiben denselben Planungsstand. Keine
+Dimension darf aus einer anderen abgeleitet oder vor bestandenem Gate
+hochgestuft werden.
 
-- Die historischen Phasen 01–18 sind innerhalb ihres kontrollierten
-  Mock-MVP-Vertrags abgeschlossen.
-- Der letzte vollständige Release-Gate gilt für den Code-Commit `a9f24e7`.
-  Danach folgten die kommerziellen Schutzkorrekturen in `22ea451` und der
-  reine Evidence-Commit `eb9b45a`.
-- Auf `22ea451` liefen Unit, Lint, Build und ein gezielter
-  PostgreSQL-Funneltest; der vollständige Integrations-, Browser- und
-  Recovery-Gate wurde danach nicht erneut ausgeführt.
-- `STH-001` bis `STH-028` sind in
-  [remediation-traceability.md](./remediation-traceability.md) unabhängig
-  klassifiziert. Keine ID darf während der Umsetzung verloren gehen.
-- Lokale Nutzeränderungen an `components/layout/brand-link.tsx` und `.claude/`
-  gehören nicht zur Remediation-Baseline.
+## 2. Ziel und Business Value
 
-## Betroffene Problem-IDs
+Den bei Umsetzungsbeginn tatsächlich aktuellen, sauberen `main`-Commit
+reproduzierbar versiegeln, den vollen Phase-01–18-Vertrag neu testen und alle
+Findings `STH-001` bis `STH-037` widerspruchsfrei in Requirements,
+Architektur, ADRs, Phasen, Tests, Launchklassen und Evidence verankern. Dadurch
+startet keine teure Remediation auf einer unbekannten oder formal
+widersprüchlichen Grundlage.
 
-Alle `STH-001` bis `STH-028` als Governance-, Baseline- und
-Traceability-Vertrag. Diese Phase behebt noch keinen Produktbefund.
+## 3. Aktueller tatsächlicher Repositoryzustand
 
-## In Scope
+- Historische Phasen 01–18 und ihre Evidence-Dateien sind abgeschlossen und
+  unveränderliche Historie.
+- Der letzte vollständige Phase-18-Code-Golden-Run gehört zu `a9f24e7`, nicht
+  zum heutigen Planungscommit.
+- Die frühere Remediation-Analyse gehört zu `eb9b45a`.
+- Der am 26. Juli geprüfte saubere Planungsstand ist `e34262e`; `HEAD` und
+  `origin/main` stimmten bei Prüfungsbeginn überein.
+- `e34262e` enthält die Phasen 19–32, `.claude/launch.json` und die Änderung
+  an `components/layout/brand-link.tsx`. Die alte Aussage, diese seien lokale
+  Fremdänderungen, ist veraltet.
+- Die Testarchitektur ist stark: Vitest Unit, isolierte reale PostgreSQL-
+  Integration, Production-Build/HTTP, Playwright Desktop/360 px, Linux- und
+  Windows-CI sowie ein isolierter Release-/Recovery-Drill.
+- Es wurde in diesem Planungsauftrag kein neuer Golden Run ausgeführt.
 
-- Clean-Clone-/detached-Worktree-Golden-Run auf dem gewählten Baseline-Commit.
-- Commit-, Runtime-, Migrations-, Route-, Schema-, Provider- und Testinventar.
-- Verifizierte Liste aller kritischen Nutzerreisen und Owning-Tests.
-- Query-/Queue-/Sitemap-/Admin-Cap-Baselines für spätere Performancevergleiche:
-  insbesondere heutige Berufsquery-/Alert-/Recommendation-Semantik, das
-  Cluster-V1-Coverage-Verfahren sowie Sitemap-Count/Bytes/Laufzeit/Headroom.
-- Vollständige Zuordnung Problem → Phase → Test → Evidence → externer Gate.
-- Feature-Flag-, Migrations-, Rollback- und Datenkompatibilitätskonventionen.
-- Neuer Remediation-Branch erst nach sauberer Scope-Prüfung.
+## 4. Findings und Requirements
 
-## Out of Scope
+| ID | Eigentum dieser Phase |
+| --- | --- |
+| `STH-001`–`STH-037` | aktuelle Baseline, Owner-, Test-, Launch- und Evidence-Vollständigkeit |
+| `STH-029` / `REQ-GOV-001` | Governance, Präzedenz, sechs Launchklassen und verbindlicher Phase-19+-Testvertrag |
+| `REQ-QA-003` | jede offene Phase besitzt Akzeptanz→Test, exakte Befehle, Passschwellen und Folgephasengate |
 
-- Produkt-, Schema-, Provider- oder UI-Implementierung.
-- Neuinterpretation oder rückwirkendes Umschreiben der Phasen 01–18.
-- Push, Merge oder Produktionsaktivierung ohne ausdrückliche Freigabe.
-- Anerkennung historischer Testzahlen als frischer Pass des aktuellen HEAD.
+Phase 19 behebt keine fachliche Runtime-Lücke. Sie macht alle Dossiers
+ausführbar und verhindert, dass ein höher priorisiertes Altdokument eine
+neuere Detailphase überschreibt.
 
-## Rollen und geschützte Prozesse
+## 5. In Scope
 
-Alle Rollen sind betroffen: Public, Candidate, Employer, Recruiter, Company
-Owner/Admin/Viewer, Platform Admin und System/Ops. Besonders zu schützen sind:
+- bei tatsächlichem Start `origin/main` fetchen und den exakten sauberen
+  Startcommit wählen;
+- Clean-Clone-/detached-Golden-Run auf genau diesem Commit;
+- Commit-, Runtime-, Env-, Schema-, Migration-, Seed-, Route-, Provider-,
+  Queue-, Test-, CI- und Runbookinventar;
+- Synchronität aller autoritativen Dokumente für `STH-001`–`STH-037`;
+- aktuelle Search-/Alert-/Preference-/Recommendation-/Matching-Baseline;
+- aktuelle Zero-result-Bucket-, Admin-Cap-/Pagination-/Fan-out- und
+  Sitemap-Count-/Bytes-/Laufzeit-/Forecast-Baseline;
+- sechs Launchklassen, Priority-Matrix, kritischer Pfad,
+  Parallelisierungs-/Integrationssperren;
+- Owning-Suite und phasenspezifischer Testvertrag für jede Phase 20–32;
+- Evidence-Template und Statusmodell aus
+  [`remediation-execution-contract.md`](./remediation-execution-contract.md).
 
-- Public Eligibility, Suche, Ranking, Boost-Kennzeichnung, SEO und Fair Score;
-- Registrierung, Login, JobPass, Apply, Alerts, Messages, Privacy und Radar;
-- Company, Team, Jobs, Pipeline, Billing, Credits und Boosts;
-- Moderation, Support, Privacy, Import, Billing, Audit und Systemoperationen;
-- Tenant-/Owner-/Assignment-Grenzen, Idempotenz, Ledger und Snapshots.
+## 6. Out of Scope
 
-## Betroffene Dateien und Module
+- Produkt-, Runtime-, Schema-, Migration-, Provider-, UI- oder Testcode;
+- rückwirkende Änderungen an Phasen 01–18 oder ihrer Evidence;
+- Branch, Commit, Push, PR, Deployment oder Freigabe ohne separaten Auftrag;
+- Übernahme historischer Testresultate als Pass des neuen Baseline-Commits;
+- ungeprüfte Rechts-, Provider-, Markt- oder Produktionsfreigaben.
 
-- `codex-plan/**`, `BUILD_REPORT.md`, `README.md`, `.env.example`
-- `prisma/schema.prisma`, `prisma/migrations/**`, `prisma/seed/**`
-- `app/**`, `components/**`, `lib/**`, `scripts/**`, `tests/**`
-- `.github/workflows/ci.yml`, `playwright.config.ts`, Vitest-Konfigurationen
+## 7. Betroffene Rollen und Owner
 
-## Datenmodell und Migration
+Alle Rollen und Portale sind als Regression betroffen: Public, Candidate,
+Employer, Recruiter, Company Owner/Admin/Viewer, Platform Admin/Support/
+Moderation/Finance/Privacy/Sales sowie System/Ops.
 
-Keine fachliche Migration. Es wird nur ein unveränderliches Inventar aus
-Schema, 43 bestehenden Migrationen, Constraints, Indizes und Seed-Manifest
-erzeugt. Abweichungen zwischen leerer Datenbank, Upgradepfad und Seed gelten als
-Blocker und werden nicht durch Datenreset kaschiert.
+| Verantwortung | Owner |
+| --- | --- |
+| Baseline/Golden Run | Engineering + QA |
+| Planpräzedenz/Traceability | Product + Engineering |
+| Security-/Tenant-Invarianten | Security |
+| Migration/Recovery | Data/DB + Ops |
+| Launchklasse/Scope | Product + Commercial + Legal/Ops je Klasse |
 
-## Implementierungsschritte
+## 8. Portale, Routen, Services und Hintergrundprozesse
 
-- [ ] Baseline-Commit, Branch, Remotes und fremde Arbeitsbaumänderungen
-  redigiert protokollieren.
-- [ ] Einen sauberen isolierten Clone/Worktree exakt auf dem Baseline-Commit
-  erstellen; keine lokale `.env`, Datenbank oder Nutzerdatei erben.
-- [ ] Gepinnte Node-/npm-/Docker-/PostgreSQL-Versionen prüfen.
-- [ ] `npm ci`, Env-/Schema-/Compose-Prüfung, Migration und Seed zweimal
-  reproduzierbar ausführen.
-- [ ] Lint, Typecheck, alle Unit- und PostgreSQL-Integrationstests ausführen.
-- [ ] Production-Build, HTTP, HSTS und vollständigen Zero-Retry-Browsergate
-  ausführen.
-- [ ] Route-, Plan-, Secret-, Dependency- und License-Audits ausführen.
-- [ ] Release-/Backup-/Restore-Gate gegen eine explizit isolierte Datenbank
-  ausführen; keine bestehende Datenbank verändern.
-- [ ] Für die gewählten Startcluster ein vor Shadowresultaten eingefrorenes
-  Berufsquery-Inventar anlegen: heutige must-find-/must-not-find-Resultate,
-  False-Zeros, Search↔Alert-Abweichungen, `desiredTitles`-Einfluss,
-  Cluster-V1-Proxy und Query-Plan/p50/p95. Das ist Baseline, keine
-  Fachfreigabe; Track 31A liefert anschließend das fachliche Judgment-Korpus.
-- [ ] Kritische Query Shapes, Admin-Caps und Recommendation-Fan-out als
-  Vergleichswerte dokumentieren.
-- [ ] Sitemap-Baseline getrennt dokumentieren: Formel und Count pro
-  Ressourcentyp, gemeinsame Summe, unkomprimierte Bytes, Laufzeit/DB-Batches,
-  letzter Erfolg, 7-/30-Tage-Wachstum und 90-Tage-Prognose. Repo-/DEMO-Werte
-  werden nicht als reale Production-Zahl ausgegeben.
-- [ ] Für STH-027 anhand der Zielumgebung `P3 DEFERRED / MONITORED` oder
-  ausgelösten Ausbau entscheiden: unter 70 % mit Headroom/Alert/Owner, ab 70 %
-  verbindlicher Shardplan, spätestens vor 80 % Cutover; Capacity-/Byte-/
-  Timeout-/p95-Fehler eskalieren sofort. Diese Messung ist kein
-  unconditionaler Sitemap-Umbau.
-- [ ] Für jede STH-ID Owning-Tests und noch fehlende Abnahmetests bestätigen.
-- [ ] Erst nach grünem, dokumentiertem Gate den Remediation-Branch und die
-  Umsetzungsreihenfolge freigeben.
+Alle 100 implementierten Seiten und sieben Handler aus
+`route-inventory.json`, sämtliche Domain-Services, Provider-Composition-Roots,
+Maintenance Commands und CI-Gates werden inventarisiert. Das
+`route-inventory.json` bleibt ein **Ist-Inventar**: geplante Phase-20+-Routen
+werden nur in der geplanten Delta-Matrix dokumentiert und erst nach ihrer
+Implementierung per `route:audit:update` übernommen.
 
-## Sicherheits- und Datenschutzfolgen
+## 9. Datenmodell, Constraints und Indizes
 
-Die Phase erzeugt keine personenbezogenen Testartefakte außerhalb isolierter
-DEMO/TEST-Datenbanken. Logs und Evidence enthalten keine Secrets, Tokens,
-vollständigen Verbindungs-URLs, Backup-Bytes oder reale Identitäten.
+Keine fachliche Änderung. Phase 19 inventarisiert das aktuelle Prisma-Schema,
+alle committed Migrationen, benannte PostgreSQL-Constraints/Indizes,
+Provenienz-, Ledger-, Snapshot-, Consent-, Audit- und Seed-Verträge. Anzahl
+und Hash werden aus dem bei Start gewählten Commit ermittelt; keine alte
+Zahl wird hart übernommen.
 
-## Abhängigkeiten
+## 10. Migration, Backfill und Kompatibilität
 
-Keine Produktphase. Docker/PostgreSQL und die gepinnte Runtime müssen
-verfügbar sein. Ein fehlendes Pflichtwerkzeug ist `Needs Verification` und
-blockiert jeden Produkttrack nach Phase 19, einschließlich Phase 20 und 30A.
+Der Golden Run prüft:
 
-## Risiken und Regressionen
+- `migrate deploy` auf leerer isolierter Datenbank;
+- Upgrade auf einer realistischen Phase-18-Bestandsfixture;
+- Seed zweimal mit identischem Manifest;
+- Production-Demo-Guard;
+- Migrationstatus, Schema-/Constraint-/Indexinventar;
+- Backup/Restore in eine andere leere Datenbank.
 
-- Ein Golden Run auf einem anderen Commit erzeugt falsche Baseline-Evidence.
-- Lokale Nutzeränderungen könnten versehentlich gestaged oder getestet werden.
-- Ein roter historischer Test darf nicht gelöscht, geskippt oder abgeschwächt
-  werden.
-- Ein Datenbankreset könnte echte Upgradeprobleme verbergen.
+Es gibt in Phase 19 keinen Backfill. Ein roter Upgradepfad wird nicht durch
+Reset oder `db push` kaschiert.
 
-## Abwärtskompatibilität und Rollback
+## 11. Serverlogik, Worker, Queue und Provider
 
-Keine Runtimeänderung. Dokumentänderungen sind per Git revertierbar. Temporäre
-Worktrees, Datenbanken und Recovery-Artefakte werden nur anhand explizit
-allowlist-geprüfter Namen entfernt.
+Nur Ist-Aufnahme: Mock-/Placeholder-/unwired-/produktive Composition Roots,
+idempotente Runner, fehlende Scheduler/Leases/DLQ, Provider- und Failure-
+Tests. Keine Verbindung zu realen Providerzugängen wird in Phase 19
+aktiviert.
 
-## Verifikation
+## 12. UI-/UX-Zustandsvertrag
 
-- [ ] Vollständige Baseline-Befehlstabelle mit Exit-Codes vorhanden.
-- [ ] Leere Migration, Upgradepfad und Seed×2 sind konsistent.
-- [ ] Vollständige Unit-/Integration-/Browser-/Release-Gates sind grün.
-- [ ] Alle 28 STH-IDs besitzen Owner-Phase, Risiko, Test und Gate.
-- [ ] STH-019 besitzt eine reproduzierbare Ist-Ergebnismenge je zentraler
-  Startcluster-Query; STH-027 besitzt Count-/Byte-/Forecast-Headroom und einen
-  dokumentierten Triggerstatus.
-- [ ] `git diff --check`, Plan- und Linkaudit sind grün.
-- [ ] Fremde Arbeitsbaumänderungen sind weder Teil noch Voraussetzung.
+Das Routeinventar ordnet kritischen Reisen Loading, Empty, Locked, Pending,
+Error, Retry, Conflict, Expired, Cancelled und Success zu. Fehlende Zustände
+werden der owning Phase zugewiesen; Phase 19 baut keine UI. Öffentliche
+Nichtverfügbarkeit und Mock-Copy müssen während der ganzen Remediation
+unverändert ehrlich bleiben.
 
-## Evidence
+## 13. Mobile und Barrierefreiheit
 
-Der Abschluss benötigt einen neuen Record nach dem Vertrag in
-`codex-plan/evidence/README.md`. Er muss den unveränderlichen Baseline-Commit,
-die isolierte Umgebung und sämtliche tatsächlichen Ergebnisse nennen. Eine
-statische Codeanalyse allein ist kein Abschlussnachweis.
+Die bestehende Desktop-/360-px-/Keyboard-/Focus-/Axe-Baseline wird neu auf
+dem Startcommit ausgeführt. Sie belegt keine Verständlichkeit; moderierte
+Research gehört `STH-033`/Phase 29A.
 
-## Definition of Done
+## 14. Authentisierung, Autorisierung und Tenantgrenzen
 
-- [ ] Der Golden Run ist auf exakt einem unveränderlichen Commit reproduzierbar.
-- [ ] Keine Pflichtprüfung ist übersprungen oder nur aus alter Evidence geerbt.
-- [ ] Die Remediation-Traceability ist vollständig und widerspruchsfrei.
-- [ ] Kritische Invarianten und Rollbackkonventionen sind freigegeben.
-- [ ] Loading-, Empty-, Error-, Locked-, Retry-, Conflict- und Success-Zustände
-  sowie relevante Mobile-Ansichten sind im kritischen Flussinventar erfasst.
-- [ ] Es existiert keine ungeklärte P0-Regression innerhalb des bestehenden
-  Phase-01–18-Vertrags und kein ungeklärter roter Pflicht-Gate; die
-  dokumentierten offenen Remediation-P0s bleiben erwartungsgemäss offen.
-- [ ] Erst danach darf Produktcode in Phase 20 oder einem anderen
-  Remediation-Track wie 30A verändert werden.
+Rollen-, Membership-, Assignment-, Ownership-, Capability-, Status- und
+Entitlement-Grenzen sowie sichere 404 werden als geschützte Invarianten
+erfasst. Jeder spätere Phasevertrag benennt die berührten Owning-Suites.
 
-## Offene externe Voraussetzungen
+## 15. Datenschutz, Retention, Export, Löschung und Audit
 
-Keine Fachfreigabe wird in dieser Phase erteilt. Hosting-, Provider-, Legal-,
-Privacy-, Tax-, AVG-, On-call- und Marktfreigaben bleiben ausdrücklich offen.
+Evidence enthält keine Secrets, Tokens, vollständigen URLs, Backup-Bytes oder
+reale Identitäten. TEST/DEMO-Provenienz ist Pflicht. Die aktuellen Mock-
+Grenzen für CV, Export, Erasure, Mail und Payment werden als offene
+Remediation, nicht als verdeckter Testfehler oder LIVE-Funktion, erfasst.
 
-## PortalGERM Execution Contract
+## 16. Abuse-, Fraud- und Missbrauchsszenarien
 
-| Feld | Verbindlicher Vertrag |
-|---|---|
-| Business Value | Verhindert, dass Remediation auf einer unbewiesenen oder bereits regressierten Basis startet. |
-| Requirements / Rollen | Alle STH-IDs und Rollen; keine fachliche Mutation. |
-| Prerequisites | Historischer Stand 01–18; sauberer isolierter Baseline-Commit. |
-| Deliverables | Golden-Run-Evidence, Traceability, Startcluster-Search-/Alert-/Recommendation-Istbaseline, Sitemap-Headroom-/Triggerstatus, Branch- und Rollbackvertrag. |
-| Security / Privacy | Keine Secrets/PII in Evidence; keine fremde Datenbank oder lokale Nutzerdatei. |
-| Tests | Vollständige bestehende Gates ohne Skip/Retry-Kaschierung. |
-| Expected Result | Reproduzierbarer grüner Ausgangspunkt für Phase 20. |
-| Risks / Limits | Historische Evidence ist Kontext, kein frischer Pass. |
+Die Baseline erfasst vorhandene Rate Limits, Abuse-/Supportqueues, Audit,
+Session-Revocation und Trust-Loss. Fehlende ATO-, kompromittierte Firmen-,
+Jobduplikat-, Massennachrichten-, Reveal/Export-Anomalie- und Payment-Fraud-
+Szenarien werden `STH-031` zugeordnet; sie werden nicht als bereits gelöst
+ausgegeben.
+
+## 17. Externe und organisatorische Voraussetzungen
+
+Für den technischen Golden Run: gepinnte Node-/npm-Version, Docker,
+PostgreSQL 16, Playwright-Browser und Age. Hosting, Provider, AVG/AVV,
+Legal/Privacy/Tax, WTP, reale Salary-Daten, Incident Owner und Operations-
+Personal bleiben externe Gates.
+
+## 18. Abhängigkeiten
+
+Keine Produktphase. Ein fehlendes Tool oder ein rotes Pflichtgate blockiert
+jede Produktänderung ab Phase 20. Fachliche Discovery in 29A/31A darf
+vorbereitet werden, aber keine Runtime aktivieren.
+
+## 19. Geordnete Implementierungsschritte
+
+1. `origin/main` fetchen, aktuellen sauberen Commit und Nutzeränderungen
+   protokollieren.
+2. Isolierten Clean Clone/detached Worktree ohne lokale Env-/DB-Artefakte
+   erzeugen.
+3. Runtime, Env, Plan, Links, Routes, Schema, Migrationen, Seed, Provider,
+   CI und Tests inventarisieren.
+4. Baseline- und vollständiges G4-Release-Gate ausführen.
+5. bestehende Vorfehler unverändert erfassen; nichts skippen/abschächen.
+6. Search-/Zero-result-/Admin-/Fan-out-/Sitemap-/Performance-Istwerte
+   aufnehmen, getrennt nach DEMO und echter Zielumgebung.
+7. alle `STH-001`–`STH-037` mit Requirement, Phase, Launchpriorität,
+   Testmatrix, Owner, Gate und Evidence abgleichen.
+8. für jede Phase 20–32 die konkrete Owning-Suite und Integrationssperre
+   bestätigen.
+9. erst nach grünem Gate den Beginn unabhängiger Tracks freigeben.
+
+## 20. Feature-Flag- und Aktivierungsstrategie
+
+Keine Aktivierung. Alle Phase-20+-Funktionen bleiben in ihrem heutigen
+Mock-/Unavailable-/Absent-Zustand. Phase 19 dokumentiert die spätere
+Flaghierarchie `build → environment → provider → legal/product → cohort →
+runtime health` und verlangt Kill Switches; sie erstellt keine impliziten
+`NODE_ENV`-Schalter.
+
+## 21. Verbindlicher Testvertrag
+
+### Ausgangsbaseline
+
+Die am 26. Juli geprüfte Planungsidentität ist `e34262e`; beim
+Implementierungsstart ist der dann aktuelle `origin/main`-Commit maßgeblich.
+Historische Zahlen sind Vergleichswerte. Der erste neue Pass entsteht erst
+durch die folgenden Befehle auf dem gewählten Commit.
+
+### Exakte Phase-19-/G4-Befehlsfolge
+
+```powershell
+git status --short
+git rev-parse HEAD
+git rev-parse origin/main
+npm ci
+npm run env:validate
+npm run db:generate
+npm run db:validate
+npm run db:migrate
+npm run db:migrate:status
+npm run db:seed
+npm run seed:verify
+npm run db:seed
+npm run seed:verify
+npm run db:smoke
+npm run lint
+npm run typecheck
+npm test
+npm run test:integration
+npm run build
+npm run test:e2e:http
+npm run test:e2e:browser
+npm run test:e2e:hsts
+npm run plan:audit
+npm run route:audit
+npm run security:release-scan
+npm run license:audit
+npm run test:release
+git diff --check
+git status --short
+```
+
+Der Ablauf läuft im isolierten Clean Clone mit getrennten, allowlist-
+konformen Source-, Test-, Restore- und Production-Guard-Datenbanken.
+`npm run db:seed` plus `npm run seed:verify` wird bewusst zweimal ausgeführt;
+beide Manifeste müssen bytegleich sein. Browser-Evidence hat Retry `0`.
+`npm run test:release` ersetzt keinen der vorherigen Einzelbefehle.
+
+### Akzeptanz-zu-Test-Matrix
+
+| AC/Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Testumgebung | Exakter Befehl/Ablauf | Erwartung und Schwelle | Evidence | Owner | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `19-AC-01`, `REQ-GOV-001` | falscher Commit/Evidence | Repository-Preflight | Startidentität | sauberer HEAD entspricht dokumentiertem Commit | Dirty Tree oder Remoteabweichung blockiert | Engineering | Git | aktueller Clone | lokales Repository | `git status --short`; `git rev-parse HEAD`; `git rev-parse origin/main` | Status leer; erwartete Commitwerte identisch | Befehlstabelle | QA | PLANNED |
+| `19-AC-02`, `REQ-QA-003` | gebrochene Planung | Contract-Audit | Plan/Route/Secret/License | Links und Istinventare grün | fehlender Link oder vorgeplante Route rot | Engineering | Plan/Repository | Markdown und App-Baum | Clean Clone | `npm run plan:audit`; `npm run route:audit`; `npm run security:release-scan`; `npm run license:audit` | vier Exit Codes `0` | Auditoutputs | Engineering | PLANNED |
+| `19-AC-03` | nicht reproduzierbare DB | PostgreSQL/Recovery | leer, Upgrade, Seed×2, Restore | alle Zustände migrieren und Seedmanifest identisch | Partial-/Production-Seed oder fremde Restore-DB blockiert | System | PostgreSQL/Recovery | leere, Bestands-, Guard- und Restore-DB | isoliertes PostgreSQL 16 | `npm run db:migrate`; `npm run db:migrate:status`; `npm run db:seed` zweimal; `npm run seed:verify`; `npm run db:smoke`; `npm run test:release` | Exit `0`; Seedmanifeste identisch; Restore-DB verschieden; Cleanup vollständig | Release-Manifest | Data/Ops | PLANNED |
+| `19-AC-04` | verdeckte Regression | G3/G4 Golden | vollständiger Altvertrag | alle vorhandenen Suites bestehen | Skip, Retry, Flake oder anderer Commit blockiert | alle Rollen | alle Portale | deterministischer Seed | PostgreSQL 16, Production Build, Desktop/360 | die lokale „Exakte Phase-19-/G4-Befehlsfolge“ unmittelbar oberhalb dieser Matrix, ohne Auslassung | alle Exit `0`; Seedmanifest A=B; Browser Retry `0`; keine unerklärten Skips; Start-/End-HEAD identisch | Test-/Playwright-/Release-Manifeste | QA | PLANNED |
+| `19-AC-05`, `STH-019`, `STH-036` | falsche Searchbaseline | Read/Analytics/Performance | Query-/Consumer-Istzustand | reproduzierbare Resultsets und Ergebnis-Buckets | Rohquery-PII oder vermischte Taxonomieversion blockiert | Visitor/Candidate | Search/Alerts/Recommendations/Analytics | Startcluster-Demoqueries plus freigegebene Zielmessung | Demo und Zielmessung getrennt | manuelle SQL-/HTTP-Messung plus bestehende Search-/Analytics-Suites | Resultsets, Queryplan, p50/p95 und Consumer-Deltas versioniert; null Rohtext in Evidence | Benchmark-Manifest | Search/Data | PLANNED |
+| `19-AC-06`, `STH-020/021/027` | falsche Scalepriorität | Capacity/Query-Messung | Caps/Fan-out/Sitemap | reale Counts, Bytes und Queryanzahl erfasst | DEMO wird nicht als LIVE ausgegeben; Capacity Error darf nicht truncieren | Admin/Candidate/Visitor | Queues/Dashboard/Sitemap | Demo und freigegebene Zielwerte | getrennte Umgebungen | bestehende Admin-/Dashboard-/Sitemap-Tests plus dokumentierte Messqueries | Istwert, Headroom, Forecast, Trigger und Owner; Sitemap fail-closed | Capacity-Report | Ops/Data | PLANNED |
+| `19-AC-07`, `STH-001`–`037` | verlorener Befund | Governance-Review | Traceability-Vollständigkeit | jede ID hat genau einen Lead-Owner und LC-/Testmatrix | unowned, doppelt oder widersprüchlich ist rot | Product/Engineering | Plan | alle STH-/REQ-Zeilen | Clean Clone + zweiter Reviewer | manueller zweiter Review plus `npm run plan:audit` | 37/37 IDs mit Status, Phase, LC-Matrix, Tests, Evidence und externem Gate | signierte Reviewtabelle | Product + QA | PLANNED |
+| `19-AC-08` | historische Umschreibung | Diff-Invariantenprüfung | Phase-01–18-Historie | 01–18/Evidence bytegleich | jede Änderung blockiert | Governance | Git/Plan | Start- und Endcommit | Clean Clone | `git diff --name-only <start>...<end> -- codex-plan/01-*.md codex-plan/02-*.md codex-plan/03-*.md codex-plan/04-*.md codex-plan/05-*.md codex-plan/06-*.md codex-plan/07-*.md codex-plan/08-*.md codex-plan/09-*.md codex-plan/10-*.md codex-plan/11-*.md codex-plan/12-*.md codex-plan/13-*.md codex-plan/14-*.md codex-plan/15-*.md codex-plan/16-*.md codex-plan/17-*.md codex-plan/18-*.md codex-plan/evidence` | keine Ausgabe | Diffmanifest | Governance | PLANNED |
+
+`N/A` ist für Unit-, PostgreSQL-, E2E-, Mobile-, A11y-, Security- oder
+Release-Gates dieser Phase nicht zulässig. Moderierte Nutzerforschung und
+reale Provider-Smokes sind hier `N/A`, weil Phase 19 nichts aktiviert; ihre
+späteren Owner bleiben sichtbar.
+
+## 22. Performance- und Skalierungsgrenzen
+
+Phase 19 friert Istwerte ein, erteilt aber keine Performancefreigabe.
+Mindestens erfasst werden Search p50/p95 und Query Plan, Candidate-
+Recommendation-Querycount, Adminlisten-Caps/Erreichbarkeit, Sitemap-Count/
+unkomprimierte Bytes/Laufzeit/7-/30-Tage-Wachstum/90-Tage-Prognose sowie
+Release-Gate-Laufzeiten. STH-027 bleibt unter dokumentiertem Trigger P3.
+
+## 23. Zu verhindernde Regressionen
+
+- keine Änderung an Phase-01–18-Dateien/Evidence;
+- kein Verlust von Tenant-, Radar-, Ledger-, Job-Publish-, Fairness-,
+  Import-, Audit-, Demo-/LIVE- oder Kompatibilitätsinvarianten;
+- kein Test auf anderem Commit, kein Dirty-Tree-Einfluss;
+- kein Datenbankreset als Ersatz für Upgrade-Evidence;
+- kein Vorabeintrag geplanter Routen in das Ist-Inventar;
+- keine falsche Umdeutung grober Zero-result-Buckets als Taxonomie-Learning.
+
+## 24. Rollback-/Roll-forward-Strategie
+
+Keine Runtimeänderung. Plandokumente sind per Git revertierbar. Temporäre
+Clones, Datenbanken und Recovery-Artefakte werden nur mit explizit
+allowlist-geprüften Pfaden/Namen entfernt. Ein rotes Baseline-Gate wird
+vorwärts im owning Phase-01–18-Domaincode behoben und neu vollständig
+getestet; historische Evidence wird nicht umgeschrieben.
+
+## 25. Benötigte Evidence
+
+Ein neuer `evidence/YYYY-MM-DD-phase-19.md`-Record nach
+[`remediation-execution-contract.md`](./remediation-execution-contract.md)
+§12, einschließlich Start-/Endcommit, Umgebung, vollständiger Befehlstabelle,
+Migration-/Recovery-Manifest, 37-ID-Traceability, Route-/Testinventar,
+Baseline-Metriken, Diff-Invarianten und Go/No-go.
+
+## 26. Definition of Done
+
+- `19-AC-01` bis `19-AC-08` sind auf demselben Commit grün.
+- Keine Pflichtprüfung ist geerbt, übersprungen, flakig oder abgeschwächt.
+- 37/37 STH-IDs und alle Phase-19+-Requirements sind widerspruchsfrei
+  zugeordnet.
+- Phasen 01–18 und historische Evidence sind unverändert.
+- alle offenen Phasen besitzen ihren 28-Punkte- und Testvertrag.
+- es besteht keine ungeklärte Regression des historischen Vertrags; offene
+  Remediation-P0s bleiben erwartungsgemäß offen und deaktiviert.
+
+## 27. Quality-Gate für Folgephasen
+
+Erst nach verlinkter, grüner Phase-19-Evidence dürfen Phase 20 oder andere
+Runtime-Tracks beginnen. 31A und 29A dürfen zuvor nur nichttechnische Research-
+Vorbereitung leisten. Ein späterer Wechsel des Baseline-Commits erfordert
+einen neuen vollständigen Phase-19-Lauf.
+
+## 28. Was Phase 19 ausdrücklich nicht beweist
+
+Keine Produktlücke ist behoben. Sie beweist keine reale Mail, Datei,
+Datenschutz-Erasure, Provider-, Payment-, Worker-, MFA-, Firmen-, Search-,
+Markt-, AVG-, Tax-, Staging- oder Produktionsfreigabe.
+
+### Verbindliche Referenzen
+
+- [`remediation-execution-contract.md`](./remediation-execution-contract.md)
+- [`remediation-traceability.md`](./remediation-traceability.md)
+- [`requirements-matrix.md`](./requirements-matrix.md)
+- [`architecture-blueprint.md`](./architecture-blueprint.md)
+- [`decisions.md`](./decisions.md)
+- [`route-role-matrix.md`](./route-role-matrix.md)
+- [`evidence/README.md`](./evidence/README.md)

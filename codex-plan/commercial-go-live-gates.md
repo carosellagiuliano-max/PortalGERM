@@ -1,10 +1,15 @@
 # Commercial-, Daten- und AVG-Go-live-Gates
 
-> **Status 24. Juli 2026:** Dieses Dokument ist ein Folgeaudit nach dem
+> **Status 26. Juli 2026:** Dieses Dokument ist ein Folgeaudit nach dem
 > technischen Abschluss der Phasen 01–18. Es ändert keine historische
 > Phase-Evidence und erteilt keine Rechts-, Steuer- oder
 > Produktionsfreigabe. Die offenen Kästchen sind echte Business-/Fach-/
 > Operations-Gates.
+
+Die Entscheidung wird immer für genau eine Zielklasse getroffen: LC1 lokale
+Demo, LC2 beaufsichtigter Design-Partner-Test, LC3 Invite-only Pilot, LC4
+Public Free, LC5 Paid Self-Service oder LC6 Scale. Ein grüner LC2-Pilot
+beweist weder LC4-Self-Service noch LC5-Zahlungsfähigkeit.
 
 ## 1. Bewertete Befunde
 
@@ -20,8 +25,14 @@
 | Salary Radar besitzt keine reale Quelle | **hoch, korrekt** | Der fiktive Datensatz bleibt Demo-only. Die LIVE-Seite ist jetzt fail-closed, `noindex` und nicht in der Sitemap. |
 | Google for Jobs kam erst in Phase 15 | **falsch** | `JobPosting`-JSON-LD entstand bereits in Phase 07; Phase 15 härtete und validierte es. Kein Fix nötig. |
 | AVG fehlt | **kritisches Go-live-Gate** | Ein entgeltlicher Online-Stellenmarkt und insbesondere Radar-Matching/Kontaktfreigabe können bewilligungspflichtige Arbeitsvermittlung sein. Vor realem Betrieb ist eine konkrete behördliche/fachjuristische Beurteilung nötig. |
-| Startcluster-Suche verbindet Berufsvarianten nicht | **P1, korrekt für den Kandidaten-Launch** | Pflege/Gesundheit benötigt vor öffentlicher Aktivierung eine kontrollierte Schweizer Berufstaxonomie, gemeinsame Search-/Alert-/Recommendation-Semantik und fachlich beurteilte Positiv-/Negativtests. Eine spätere allgemeine „KI-Suche“ ersetzt dieses Gate nicht. |
+| Startcluster-Suche verbindet Berufsvarianten nicht | **P0 für jede aktivierte LC3+ Clusterfreigabe** | Der gewählte Cluster benötigt kontrollierte Schweizer Berufs-, Orts-, Skill-, Qualifikations-, Zertifikats- und Branchenkonzepte, gemeinsame Search-/Alert-/Recommendation-Semantik und fachlich beurteilte Positiv-/Negativtests. Pflege und Engineering benötigen getrennte Korpora; eine spätere allgemeine „KI-Suche“ ersetzt dieses Gate nicht. |
 | Einzel-Sitemap endet bei 50.000 URLs | **P3 solange mit großem Headroom; sichere Mitigation** | Der heutige Abbruch ist fail-closed und schneidet nicht still ab. Count/Bytes/Wachstum werden überwacht; Index/Shards werden vor dem dokumentierten Kapazitätstrigger gebaut, nicht als heutiges P0/P1 behandelt. |
+| Zero-Result-Lernen fehlt vollständig | **teilweise falsch** | Ergebniszahl-Buckets existieren bereits. Offen sind sichere Unknown-Term-/Zero-Result-Aggregation, Mindestschwelle, kurze Retention, kein stabiler Nutzerfingerprint und ein fachlich moderierter Taxonomie-Backlog. |
+| Betrugs-/ATO-Schutz fehlt vollständig | **teilweise korrekt** | Rate Limits, Audits, Abuse Intake und Widerruf schützen Teilpfade. Ein zusammenhängender Credential-Stuffing-/ATO-/Scam-Job-/Compromised-Company-/Mass-Contact-/Reveal-Export-/Payment-Fraud-Vertrag fehlt. |
+| Jobs können als Ghost Jobs weiterleben | **teilweise korrekt** | Ablauf und Public-Hiding existieren. Reconfirmation, Reminder, Filled-/Unavailable-Meldung, Duplicate/Copied-Job-Prüfung und konsistenter Entzug aus allen Consumern fehlen. |
+| Produkt kann ohne Zielgruppenforschung freigegeben werden | **korrekt** | Automatisierte A11y-/Mobile-Tests sind stark, ersetzen aber keine moderierten Candidate-/Employer-/Operator-Aufgaben mit Task Success, Zeit, Fehlern, Abbruch und Verständnis. |
+| Supportkapazität und Stückkosten fehlen | **korrekt** | Vor jedem betreuten Pilot müssen gleichzeitige Kunden/Fälle, Minuten je Flow, Vollkosten, Backlog-SLO, Eskalationsbudget und Overload-Verhalten belegt sein. |
+| Paid-Service-Abhilfe ist unklar | **korrekt** | Angebot, Kundenpflichten, Frist und Abhilfe bei Plattformversagen müssen zusammenpassen; Refund, Credit-Restoration und Rechnungskorrektur bleiben getrennte, auditierte Vorgänge. |
 
 ## 2. Zahlungsbereitschaft statt Mock-Conversion
 
@@ -188,6 +199,10 @@ nicht gescrapt.
   neutralen/geschlechtsspezifischen Formen, Schreib- und regionalen Varianten
   sowie kontrollierten häufigen Tippfehler des konkreten Startclusters sind
   versioniert und fachlich freigegeben.
+- [ ] Ort/Radius beziehungsweise erreichbare Region, Qualifikationen,
+  Zertifikate, Skills und Branche besitzen dieselbe kontrollierte
+  Konzept-/Alias-/Ausschlusssemantik. Freitext darf keine sensitive
+  Profilableitung oder ungeprüfte Taxonomieänderung bewirken.
 - [ ] Fachlich gleichwertige Berufsbezeichnungen liefern konsistente relevante
   Resultate; harte Gegenbeispiele belegen, dass verwandte Berufe oder andere
   Qualifikationen nicht unkontrolliert einbezogen werden.
@@ -207,6 +222,23 @@ Diese Punkte blockieren den öffentlichen Cluster-Launch, seine Indexierung und
 Paid Acquisition. Sie blockieren keine nichtöffentlichen Interviews oder einen
 kontrollierten Concierge-Research-Track.
 
+Pflege/Gesundheit und Engineering/Technik sind Kandidaten für den ersten
+Cluster. Phase 31A wählt genau einen davon. Beide erhalten getrennte
+fachliche Korpora; der nichtgewählte Cluster bleibt deaktiviert, `noindex`
+und ohne Paid Acquisition. Ein späteres Go benötigt neue eigene Evidence.
+
+### Datenschutzsicheres Lernen aus Nulltreffern
+
+- [ ] Vor Speicherung sind Suchbegriffe normalisiert, seltene/raw
+  personenbezogene Inhalte verworfen und stabile User-/IP-Identifier
+  ausgeschlossen.
+- [ ] Es werden nur Mindestschwellen-überschreitende, zeitlich begrenzte
+  Aggregate nach Cluster/Sprache/Konzeptversion ausgewertet.
+- [ ] Ein fachlicher Owner reviewt Kandidatenbegriffe samt harten
+  Gegenbeispielen; keine Suchanfrage ändert die LIVE-Taxonomie automatisch.
+- [ ] Opt-out/Analytics-Consent und Lösch-/Retention-Vertrag stimmen mit
+  Phase 22 überein.
+
 ### Später sinnvoll beziehungsweise vor Erreichen der Kapazitätsgrenze
 
 - [ ] Die reale Sitemap-Kapazität wird pro Ressourcentyp und gemeinsam anhand
@@ -223,3 +255,41 @@ kontrollierten Concierge-Research-Track.
 - [ ] Index-/Shard-Tests belegen erst beim ausgelösten Ausbau jede eligible URL
   exakt einmal, keine Lücke/Dublette/private/DEMO-URL, stabile Grenzen sowie
   Count-/Bytelimits und unveränderte Eligibility.
+
+## 9. Verbindliche Reihenfolge für Pilot und Paid Launch
+
+1. Phase 19 friert Baseline, sechs Launchklassen und Evidence-Vertrag ein.
+2. Phase 31A und 29A prüfen genau einen ersten Cluster, Problem, WTP,
+   Bedienbarkeit, Supportminuten und Vollkosten.
+3. Basisworkflow, Hiring-Sprint, Retainer, Concierge und rechtmässiger
+   betreuter Import werden als erste bezahlbare Angebote geprüft.
+4. Boost folgt nur bei relevanter Stelle plus belegtem Reichweitenengpass;
+   Radar folgt nur bei ausreichender Opt-in-Dichte und grünem
+   Legal-/Trust-/Search-Vertrag.
+5. Real-Payment-Integration beginnt erst nach WTP-Go. Öffentliche Aktivierung
+   benötigt zusätzlich Identity, Worker/Ops, Non-Admin-Step-up,
+   Trust/Fraud, Freshness, Finance/Tax und Service-Recovery.
+
+## 10. Betriebs-, Vertrauens- und Service-Gates
+
+- [ ] Das gewählte Angebot hat Concurrent-Customer-/Case-Limit,
+  Minutenbudget je Schritt, voll belastete Stückkosten, Backlog-SLO,
+  Eskalationsbudget, Owner und fail-closed Überlastverhalten.
+- [ ] Firmenprüfung speichert Evidenzquelle, Reviewer, Gültigkeit, Re-Review
+  und schnellen Widerruf. Public Badge, aktive Jobs und Radarzugang werden
+  beim Trust-Verlust innerhalb des definierten SLO entzogen.
+- [ ] Credential Stuffing, Account Takeover, Scam-/Copied Jobs,
+  kompromittierte Firmen, Massennachrichten/-kontakte, Reveal-/Exportanomalie
+  und Payment Fraud besitzen Detection, Containment, Recovery/Appeal,
+  Runbook und Tests.
+- [ ] High-risk Candidate-/Employer-Aktionen verwenden risikobasiertes
+  Step-up; Admin-MFA allein genügt nicht.
+- [ ] Jobs werden vor Ablauf erneut bestätigt. Filled-/Unavailable-Reports,
+  Duplikatprüfung und Ablauf wirken auf Public Search, Alerts,
+  Recommendations, Matching/Radar, Feeds, Exports und Sitemap identisch.
+- [ ] Paid-Service-Policy unterscheidet normales Marktrisiko von
+  Plattformversagen und definiert Refund, Credit-Restoration,
+  Rechnungskorrektur, Kommunikation, Audit und Reconciliation.
+- [ ] Moderierte Aufgaben mit Kandidaten, Arbeitgebern und Operatoren
+  erreichen die vorregistrierten Schwellen für Task Success, Zeit, Fehler,
+  Abbruch und Verständnis.

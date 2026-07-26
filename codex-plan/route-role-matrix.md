@@ -198,6 +198,39 @@ Audit-Metadaten redigiert.
 - Es gibt keine realen Provider-Webhook-, Datei-Download-, PDF-Invoice-,
   Scraping- oder Success-Fee-Routen.
 
+## Geplantes Route-/Prozessdelta Phase 19–32
+
+> **Nicht implementiert und nicht Bestandteil von `route-inventory.json`.**
+> Diese Tabelle ist ein Zielregister. Eine Zeile wird erst nach vorhandener
+> Route, serverseitigem Guard, UX-/A11y-Abnahme und grünem Owning-Test in das
+> maschinenlesbare Ist-Inventar übernommen. Der genaue Pfad darf die Phase per
+> ADR konsolidieren, solange Rollen, Guard und Zustand erhalten bleiben.
+
+| Phase / Requirement | Geplanter Einstieg | Rollen / Capability und Tenantgrenze | Zustände / Datenklasse | Flag, Test und Aktivierung |
+| --- | --- | --- | --- | --- |
+| 20 · `REQ-ID-005` | `/verify-email`, `/verify-email/resend`; Login-E-Mail-Änderung unter Security Settings | Public Token beziehungsweise aktiver Actor; Token an User/Purpose/normalized target gebunden | Pending, sent, expired, superseded, used, rate-limited, provider-degraded; Identity data | identity provider/config + cohort flag; Verify/resend/replay/race E2E; LC2+ erst nach realer Delivery |
+| 20/25 · `REQ-ID-004` | gemeinsame `/security`-/Step-up-Challenge, keine Query-Token-Weitergabe | Candidate, Employer Owner, Billing, Admin; purpose/action/tenant/resource/session-bound | challenge, success, stale, cancelled, recovery, revoked; Security-sensitive | risk/assurance policy; direct-action/tenant/replay tests; High-risk actions fail-closed |
+| 20 · `REQ-NOT-001` | `/candidate|employer/notifications` oder konsolidiertes Preference Center | eigener Actor beziehungsweise Company Owner für zulässige Tenantpräferenzen | loading/empty/conflict/success; Pflicht- vs optionaler Zweck getrennt | Delivery-/Preference-Version; opt-out darf Pflichtmail nicht deaktivieren |
+| 21 · `REQ-DOC-002` | Dokument-Intent/finalize in JobPass; autorisierter Download/Delete aus Application/Privacy | Candidate owner; Employer nur Application-/Reveal-spezifisch; Admin nur benannte Need-to-know-Capability | uploading, quarantined, scanning, clean, rejected, failed, expired, deleted; besonders schützenswert | Storage+Scanner approved; object key nie Auth; cross-tenant/polyglot/expiry E2E |
+| 22 · `REQ-PRIV-004` | public `/legal/*`/Impressum; bestehende Privacy Cases plus expiring Export-Download | Public legal read; Candidate owner; Privacy Read/Verify/Process getrennt | versioned/pending/hold/partial/retry/ready/expired/erased; PII/Legal | Counsel/version flags; Step-up; processor/retention/export/delete E2E |
+| 23 · `REQ-OPS-005` | Admin/Ops Worker-, DLQ-, Provider- und Health-Details; keine Public Controls | Operations/Support/Security per least privilege; Local Token nicht Production-Ersatz | healthy/degraded/paused/backpressured/DLQ/replay; redigierte Opsdaten | environment/provider activation ledger; load/crash/restart/runbook tests |
+| 24 · `REQ-PAY-001` | hosted checkout redirect/return plus PSP webhook handler; Finance reconciliation/admin dispute views | Company Owner/Billing; webhook signature+Inbox; Finance capability tenant-/need-to-know | pending/authorized/paid/failed/refunded/disputed/reconciled; financial | nur LC5 WTP-Go + PSP/Tax/Legal; signature/replay/amount/tenant/chargeback E2E |
+| 24 · `REQ-BIL-010` | existing order/Boost/Radar/service detail and Support escalation | same Company entitlement plus Finance/Support capability | assessed, replacement, extended, credited, refunded, rejected, appealed | ServiceDeliveryPolicy; exactly-once ledger/refund tests |
+| 25 · `REQ-ADM-007` | `/admin/security`, role/assignment, dual-approval and break-glass oversight | Security Admin distinct from Support/Moderation/Finance/Privacy; SoD enforced server-side | enroll/recover/pending-second-approval/expired/revoked/break-glass | Admin RBAC/MFA flag; cross-capability/direct-action/E2E; no global fallback |
+| 25/26 · `REQ-TRUST-001` | risk-based Trust-&-Safety queues/details, possibly consolidated with existing reports | Trust & Safety/Security/Finance scoped by case type; subjects see bounded appeal | open/held/revoked/appealed/false-positive/resolved; secret signal details hidden | risk-policy version; fraud/ATO/incident drill; rapid kill switch |
+| 26 · `REQ-EMP-008` | existing Company verification plus structured evidence/re-review | Company Owner submits; independent reviewers approve; no self-approval | draft/pending/needs-info/verified/expiring/expired/revoked/appealed | evidence provider + dual review; Badge/Job/Radar same-read revocation |
+| 30D · `REQ-JOB-007` | Employer reconfirm/fill action; public/candidate „nicht verfügbar“ report | own Company Job; public bounded report; Trust/Moderation review | due/grace/reconfirmed/filled/expired/duplicate-review/appeal | freshness policy+worker; Search/Sitemap/Alert/Recommendation parity tests |
+
+Conditional routes:
+
+- Phase 27 Multi-Persona routes remain P3/deferred until an explicit
+  `REQ-PER-001` scope decision.
+- Phase 28A external tracker and 28B full scheduler remain absent until
+  separate `REQ-REC-003` moderated-demand gates.
+- Phase 30C sitemap index/shards remain absent until the documented
+  Count-/Byte-/Forecast trigger; the current single sitemap continues to
+  fail closed without truncation.
+
 ## Evidence-Grenze
 
 `npm run route:audit` beweist Vollständigkeit und Rollenklassifikation des
@@ -207,3 +240,9 @@ Pending-/Loading-Zustände nach den Sicherheits-Gates, lokale Links sowie
 Requirement → Test → Evidence im datierenden Abschlussrecord dokumentieren.
 Eine fehlende Route oder ein nicht gelaufener State bleibt sichtbar und darf
 nicht durch diese Matrix als „bestanden“ ausgegeben werden.
+
+Für Phase 19+ gilt zusätzlich
+[`remediation-execution-contract.md`](./remediation-execution-contract.md):
+Das geplante Delta ist keine Route-Evidence, und jede spätere Promotion in
+`route-inventory.json` benötigt einen passierenden `npm run route:audit` auf
+dem Abschlusscommit.

@@ -1,242 +1,415 @@
 # Phase 20 — Identität, E-Mail und zuverlässige Benachrichtigungen
 
-> **Status: GEPLANT / NICHT BEGONNEN.** Kein produktiver E-Mail-Provider,
-> Verifizierungs-Lifecycle oder Outbox-Worker ist derzeit implementiert.
+> **Planstatus:** GEPLANT / NICHT BEGONNEN
+> **Technikstatus:** NICHT IMPLEMENTIERT
+> **Quality-Gate:** NICHT GELAUFEN
+> **Aktivierung:** DISABLED
+>
+> Die folgenden Verträge sind Zielzustand. Weder reale Zustellung noch
+> Verifikation, Step-up, Outboxbetrieb oder LIVE-Freigabe sind am
+> Planungsstand `e34262e3074565840e371c336a5d2ba5cf3efbac` bewiesen.
 
-## Ziel
+## 1. Status in vier Dimensionen
 
-Eine verlässliche Identity- und Delivery-Kette schaffen: neue Konten
-verifizieren, transaktionale Benachrichtigungen dauerhaft zustellen und
-optionale Kommunikation zentral steuerbar machen, ohne Pflichtnachrichten oder
-Privacy-Grenzen zu schwächen.
+Die vier Statuswerte werden getrennt geführt. Ein implementierter
+Sandbox-Adapter darf den Technikstatus auf `TECHNISCH ABGESCHLOSSEN` und das
+Quality-Gate nach vollständigem G3 auf `BESTANDEN` bringen, ohne die
+Aktivierung über `SANDBOX` hinauszuheben. `ALLOWLIST` oder `LIVE` benötigen
+zusätzlich Provider-, DNS-, Legal-, Security-, Ops- und Cohort-Freigaben.
 
-## Ausgangslage und bestätigte Probleme
+## 2. Ziel und messbarer Business-/Nutzerwert
 
-- `STH-001`: Candidate-, Employer- und Einladungsregistrierungen stellen sofort
-  eine Session aus; ein E-Mail-Verifizierungsweg fehlt.
-- `STH-002`: Privacy Identity Challenge verlangt `emailVerifiedAt`, regulär neu
-  registrierte Nutzer können diesen Zustand nicht erreichen.
-- `STH-013`: Domainwrites und E-Mail sind nicht über eine transaktionale Outbox
-  verbunden; nach Providerfehler gibt es keine garantierte Wiederholung.
-- `STH-026`: Es existiert kein zentrales Preference Center.
-- `STH-004` (E-Mail-Anteil): Composition Root ist fest auf Mock gestellt;
-  Provider-Env muss derzeit leer bleiben.
+Neue Candidate-, Employer- und Invitation-Konten erreichen über einen
+single-use Verifikationsweg zuverlässig eine bestätigte E-Mail-Identität.
+Jeder freigegebene Domainwrite erzeugt seine Pflichtbenachrichtigung atomar,
+optionale Kommunikation respektiert aktuelle Präferenzen und die bestehende
+Privacy-Challenge wird über den regulären Registrierungsweg erreichbar.
 
-## In Scope
+Messbarer Zielzustand:
 
-- Gehashte, zeitlich begrenzte, einmalige E-Mail-Verifikation mit Resend.
-- E-Mail-Adresswechsel mit Address-Epoch/Snapshot, Invalidierung alter Tokens,
-  Reverification und definierter Session-/Capability-Wirkung.
-- Abstufung zulässiger Aktionen für unverifizierte Konten; kein clientseitiges
-  Gating als Sicherheitsgrenze.
-- Candidate-, Employer- und Invitation-Registrierung sowie bestehende Nutzer.
-- Transactional Outbox, Delivery Attempts, Lease, Retry/Backoff, DLQ und Replay.
-- Freigegebener realer E-Mail-Adapter, Sandbox und fail-closed Composition Root.
-- Bounces, Suppression, Zustellstatus, Redaction und Provider-Dedupe.
-- Preference Center für Kanal/Frequenz/optionale Zwecke; Pflichtkommunikation
-  bleibt technisch und rechtlich getrennt.
-- Vollständiges repositoryweites Inventar aller E-Mail-Callsites und
-  Templates. Jeder produktive Pfad – einschliesslich Auth, Invitations,
-  Applications, Messages, Billing/Boosts, Privacy, Radar, Abuse, Moderation,
-  Leads und Commercial Signals – wird atomarer Outbox-Produzent oder im
-  Realmodus explizit deaktiviert.
+- 100 % der erfolgreichen, zustellungspflichtigen Domaincommits besitzen
+  genau einen deduplizierten Outbox-Datensatz;
+- 0 Vollfreigaben für unverifizierte Konten und 0 Token-Replays;
+- 0 dauerhaft verlorene fachliche Benachrichtigungen bei simuliertem
+  Prozess-/Providerfehler;
+- Pflichtkommunikation wird in 100 % der Preference-Testfälle nicht durch ein
+  Marketing-Opt-out unterdrückt;
+- Registration → Verify → Privacy Challenge besteht für Candidate und die
+  Identity-Basis besteht für Employer und Einladungen.
 
-## Out of Scope
+## 3. Tatsächlicher Repositoryzustand
 
-- Multi-Persona-Umbau (Phase 27).
-- Admin-MFA/Step-up (Phase 25).
-- SMS/Push als produktive Kanäle.
-- Marketing-Automation, Referral und Newsletter.
-- Abschwächung der bestehenden Privacy-Challenge.
+- `prisma/schema.prisma:1129-1138` besitzt `User.emailVerifiedAt?`, aber kein
+  regulär erreichbares Verification-Tokenmodell.
+- `lib/auth/auth-service.ts:243-331` und `586-597` stellen nach Candidate- und
+  Employer-Registrierung sofort eine Session aus.
+- `lib/auth/current-user.ts:42-59` und `lib/auth/route-guards.ts:39-55`
+  akzeptieren aktive Nutzer unabhängig von `emailVerifiedAt`.
+- `lib/providers/email/index.ts:31-42` verdrahtet ausschliesslich den
+  Mock-Provider. `lib/providers/email/email-provider.ts:35-41` besitzt nur
+  `send`, keinen dauerhaften Zustellvertrag.
+- `prisma/schema.prisma:2235-2264` führt `Notification`/`EmailLog`, jedoch
+  keine Outbox-Lease, Attempts, Backoff, DLQ, Bounce oder Suppression.
+- `lib/applications/service.ts:274-339` zeigt den heutigen best-effort-Aufruf
+  nach dem Domaincommit. Die vorhandenen Auth-, Reset-, Invitation-,
+  Application-, Alert-, Privacy- und Mock-Provider-Tests schützen wertvolle
+  Altverträge, beweisen aber keinen Verify-/Outbox-Lifecycle.
+- Es wurden für diese Planung keine neuen Tests ausgeführt.
 
-## Rollen und Prozesse
+## 4. Findings und Requirements
 
-Public registriert; Candidate, Employer und Recruiter verifizieren und verwalten
-Präferenzen; Support/Ops untersucht DLQ ohne Payload-PII; Privacy/Finance können
-Pflichtzustellungen auslösen, aber nicht als Marketing deklarieren.
+| Finding / Requirement | Verantwortung dieser Phase | Launchpriorität |
+| --- | --- | --- |
+| `STH-001`, `REQ-ID-005` | Verification, Reverification, Login-E-Mail-Änderung und Recovery-Vertrag | LC1 P2; LC2–LC6 P0 |
+| `STH-002`, `REQ-ID-005` | regulärer Verify-Weg macht die bestehende Privacy-Challenge erreichbar | LC1 P2; LC2–LC6 P0 |
+| `STH-013`, `REQ-NOT-001` | atomare fachliche Outbox, Attempts, Suppression, DLQ und bounded Dispatcher | LC1 P3; LC2–LC6 P0 |
+| `STH-026`, `REQ-NOT-001` | versionierte Pflicht-/Optional-/Kanal-/Frequenz-Präferenzen | LC1 P3; LC2 P1; LC3–LC6 P0 |
+| E-Mail-Anteil `STH-004` | realer Adaptervertrag und Sandbox; autonome Ausführung bleibt Phase 23 | je aktiviertem Provider LC2–LC6 P0 |
+| Beitrag `STH-030`, `REQ-ID-004` | Assurance-Grundmodell und sicherer E-Mail-Change; risikobasierte MFA-/Step-up-Policy bleibt Phase 25 | LC2–LC6 P0 für aktivierte Hochrisikoaktion |
+| Beitrag `STH-031`, `REQ-TRUST-001` | minimale Auth-/ATO-Signale und Session-/Credential-Revocation-Hooks; Risk Decision/Case bleibt Phase 25 | LC2–LC6 P0 |
+| `REQ-QA-003` | dieser 28-Punkte- und AC→Test-Vertrag | alle Launchklassen P0 |
 
-## Betroffene Dateien und Module
+Phase 20 schliesst `STH-030` oder `STH-031` ausdrücklich nicht allein.
 
-- `lib/auth/auth-service.ts`, `lib/auth/current-user.ts`,
-  `lib/auth/route-guards.ts`, `lib/employer/team.ts`
-- `app/(auth)/**`, `components/auth/**`, private Layouts/Navigation
-- `lib/providers/email/**`, `lib/notifications/**`,
-  `lib/applications/service.ts`, `lib/candidate/job-alerts.ts`
-- `prisma/schema.prisma`, additive Migrationen und Seeds
-- `app/admin/system/**` oder ein capability-geschütztes Delivery-Cockpit
-- Auth-, Notification-, Provider-, Privacy- und E2E-Tests
+## 5. In Scope
 
-## Datenmodelländerungen
+- Candidate-, Employer- und Invitation-Verifikation samt Resend,
+  Supersession, Ablauf, generischen Antworten und Sessionrotation;
+- Login-E-Mail-Änderung: neue Adresse bleibt pending, alte Login-Adresse bleibt
+  bis erfolgreicher Bestätigung autoritativ, danach atomarer Address-Epoch-
+  Wechsel, Benachrichtigung der alten Adresse und Sessionrevocation;
+- definierter Low-Assurance-Zustand für unverifizierte Sessions;
+- atomare, typisierte Notification-Outbox für alle produktiven Mail-Callsites;
+- langlebige Attempts, Provider-Dedupe, Timeout, Retry/Backoff, Bounce,
+  Suppression, DLQ und auditiertes Replay;
+- bounded, idempotent per Command ausführbarer Dispatcher; autonomes Hosting
+  und Scheduling gehören Phase 23;
+- reales Providerport, Sandbox-Contract und fail-closed Composition Root;
+- zentrale Notification Preferences mit Pflicht-/Optional-Taxonomie;
+- Auth-Security-Events für Stuffing-, Resend-, Verify-, Recovery- und
+  E-Mail-Change-Anomalien als Phase-25-kompatible ATO-Grundlage;
+- Privacy-Journey Registration → Verification → bestehende Challenge.
 
-Die endgültigen Namen werden in einem ADR fixiert; mindestens werden benötigt:
+## 6. Out of Scope und deaktivierte Nachbarfunktionen
 
-- Verification Token/Challenge mit `tokenHash`, `expiresAt`, `usedAt`,
-  `supersededAt`, gebundener E-Mail-/Address-Epoch, Purpose und
-  Rate-/Auditkontext;
-- Outbox Message mit stabiler fachlicher Dedupe-ID, Template-/Schema-Version,
-  Empfängerreferenz, verfügbar ab, Lease, Attempts und Terminalstatus;
-- envelope-verschlüsseltes, kurzlebiges Delivery-Material mit Key-Version, wenn
-  ein nach Restart identischer Einmallink zugestellt werden muss; der
-  fachliche Consume-Pfad vergleicht weiterhin ausschliesslich den Hash;
-- append-only Delivery Attempt ohne unredigierte Providerpayloads;
-- versionierte Notification Preference/Consent Events mit Zweck, Kanal und
-  Frequenz;
-- Bounce/Suppression-Evidence und capability-gebundene Replay-Audits.
+- MFA, WebAuthn/TOTP, risikobasierte Decision Engine, Recovery-Support und
+  allgemeine Hochrisiko-Step-ups: Phase 25;
+- autonome Workerplattform, Pager und Production Scheduling: Phase 23;
+- SMS, Push, Marketing-Automation, Referral und Newsletter;
+- Multi-Persona-Umbau: Phase 27;
+- freie Ops-Payloadsicht oder Production-Replay vor Phase-25-Grants/Step-up;
+- automatisches Real→Mock-Fallback.
 
-Keine Provider-Message-ID wird zur fachlichen Autorität. `EmailLog` wird
-kompatibel migriert oder als Zustellprojektion weitergeführt, nicht blind
-ersetzt.
+Bis die jeweilige Abhängigkeit grün ist, bleiben optionale LIVE-Kommunikation,
+Production-Replay und nicht abgesicherte E-Mail-Change-Aktionen serverseitig
+`DISABLED`; Navigation und API dürfen keinen funktionsfähigen Eindruck
+erzeugen.
 
-## Sicherheits- und Datenschutzfolgen
+## 7. Benutzerrollen und organisatorische Owner
 
-- Verifikationstokens werden fachlich nur gehasht geprüft und erscheinen
-  niemals in Logs, DTOs oder Klartextspalten. Für crash-sichere Zustellung darf
-  die Outbox ausschliesslich envelope-verschlüsseltes, kurzlebiges
-  Delivery-Material beziehungsweise einen gleichwertig sicheren,
-  nonce-gebundenen Rekonstruktionsvertrag speichern; Schlüsselrotation und
-  kryptografische Löschung sind Teil des ADR.
-- Generische Antworten für bekannte und unbekannte Adressen.
-- Resend-, Verify- und Enumeration-Rate-Limits über PostgreSQL.
-- Outbox enthält nur die minimal notwendige versionierte Payload; keine freien
-  Domainobjekte, Passwörter, Klartexttokens oder Reveal-Ciphertexte.
-- Unverifizierte Sessions besitzen serverseitig definierte Minimalrechte.
-- Preference Center darf Security-, Privacy-, Vertrags- und
-  Rechnungsnachrichten nicht deaktivieren.
+| Rolle | Erlaubter Zweck | Owner |
+| --- | --- | --- |
+| Public/Registrant | Verify/Resend generisch starten und Token konsumieren | Identity Engineering |
+| Candidate | eigene Adresse/Präferenzen, Privacy-Challenge nach Verify | Candidate + Privacy |
+| Employer/Recruiter/Invitee | eigene Identität; Company-Präferenzen nur mit bestehender Membership-Berechtigung | Employer Engineering |
+| Support/Ops | redigierter Zustand; kein Token/Payloadinhalt | Ops + Support |
+| Security | Rate-/ATO-Signale, Revocation und Incident-Eskalation | Security |
+| Privacy/Legal/Finance | Klassifikation verpflichtender Nachrichten freigeben | jeweiliger Fachowner |
 
-## Migrationsstrategie
+Produktowner ist Identity/Notifications; technische Zustellung gehört gemeinsam
+Identity und Ops, rechtliche Purpose-Klassifikation Legal/Privacy.
 
-- [ ] Additive Tabellen/Enums/Indizes und Constraints einführen.
-- [ ] Legacy-LIVE-User explizit klassifizieren; keine stille Massenverifikation.
-- [ ] Bestehende DEMO/TEST-Fixtures deterministisch auf Verifizierungszustände
-  erweitern.
-- [ ] Alte synchrone Mailpfade hinter einem dual-read/dual-observe Gate
-  schrittweise auf Outbox umstellen.
-- [ ] Erst nach Backfill- und Replay-Evidence Legacy-Pfade entfernen.
+## 8. Portale, Routen, Services, Provider und Worker
 
-## Implementierungsschritte
+Bestehende Einstiege sind `/register/candidate`, `/register/employer`,
+Invitation-/Login-/Reset-Flows sowie
+`/candidate/privacy/requests/[id]/verify`. Geplantes, noch nicht im
+`route-inventory.json` geführtes Delta:
 
-- [ ] ADR für Verifizierungs-, Outbox-, Provider- und Preference-Vertrag
-  freigeben.
-- [ ] Token-/Outbox-/Attempt-/Preference-Schema additiv migrieren.
-- [ ] Verification Request, Resend, Consume und Sessionrotation implementieren.
-- [ ] Adresswechsel mit Address-Epoch, Token-/Outbox-Supersession und
-  Reverification implementieren; alte Links dürfen die neue Adresse nicht
-  bestätigen.
-- [ ] Serverseitige `verified-email-required`-Policy für sensible Aktionen
-  definieren; Safe Next und Locked States ergänzen.
-- [ ] Registrierung und Invitation atomar mit Verification-Outbox verbinden.
-- [ ] Dispatcher mit Lease, Backoff, Max Attempts, DLQ und idempotentem Replay
-  implementieren.
-- [ ] Reale Provider-Composition nur mit explizitem Mode, Secret und
-  erfolgreich validierter Konfiguration aktivieren; kein Fallback auf Mock.
-- [ ] Alle E-Mail-Callsites/Templates inventarisieren und jeden Pfad atomar auf
-  Outbox umstellen oder im Realmodus explizit fail-closed deaktivieren.
-- [ ] Preference Center und Pflicht-/Optional-Taxonomie integrieren.
-- [ ] Admin/Ops-Cockpit redigiert und auditiert anbinden; Replay/PII-Reads
-  ausserhalb Sandbox bleiben bis zu den Grants und Step-up-Gates aus Phase 25
-  fail-closed.
-- [ ] Privacy Journey Registrierung → Verifizierung → Challenge beweisen.
+- `/verify-email` und `/verify-email/resend`;
+- konsolidierte Security Settings für Login-E-Mail und Recovery;
+- `/candidate/notifications` und `/employer/notifications` oder eine
+  rollenkorrekt konsolidierte Preference-Route;
+- capability-geschützte, redigierte Delivery-Ansicht unter `/admin/system`.
 
-## Abhängigkeiten
+Neue Services: Verification Service, Email-Change Service, Notification
+Classifier, Outbox Repository, bounded Dispatcher und Provider Adapter.
+Phase 20 liefert Handler/Command und Sandbox-Smoke; Phase 23 registriert ihn
+später als autonomen Worker.
 
-- Phase 19 abgeschlossen.
-- E-Mail-Vendor, DPA, Absenderdomain, SPF/DKIM/DMARC und Secret-Management.
-- Phase 20 schliesst Handler, Adaptervertrag und lokale/Sandbox-
-  Failure-Evidence. Autonomes Hosting, Scheduling und übergreifendes
-  Monitoring sind ein Aktivierungs-Gate aus Phase 23, keine
-  Implementierungsabhängigkeit zurück auf Phase 20.
-- Eine konservative Pflicht-/Optional-Taxonomie wird in Phase 20
-  versioniert und fail-closed eingeführt. Optionale LIVE-Kommunikation bleibt
-  bis zur Legal-/Consent-Freigabe aus Phase 22 deaktiviert.
+## 9. Datenmodelle, Constraints, Indizes und Klassifikation
 
-## Risiken und Regressionsschutz
+Die ADR-031-konformen Namen werden vor Migration finalisiert. Mindestens:
 
-- Lockout bestehender Nutzer oder Einladungskonflikte.
-- Doppelte Zustellung bei Crash nach Providerannahme.
-- Falsches Preference-Gating unterdrückt Pflichtkommunikation.
-- Providerfehler darf Domaintransaktionen nicht zurückrollen.
-- Bestehende Password-Reset-, Application-, Invitation-, Alert- und
-  Notification-Tests bleiben grün.
+- `EmailVerificationChallenge`: `userId`, `purpose`, `addressEpoch`,
+  `targetNormalizedHash`, `tokenHash`, `expiresAt`, `usedAt`,
+  `supersededAt`, `createdAt`; partiell eindeutig höchstens ein aktueller
+  Challenge je `(userId,purpose,addressEpoch)`;
+- pending Login-E-Mail-Change mit normalisiertem Ziel, Epoch, Initiator,
+  Challenge und Konfliktconstraint gegen bestehende `emailNormalized`;
+- `AuthAssuranceEvidence`/gleichwertige zweck-, actor-, session-,
+  action- und optional tenantgebundene Evidence ohne Faktor-Secret;
+- `NotificationOutbox`: fachlicher Dedupe-Key, Purpose, Template-/Payload-
+  Schema-Version, Empfängerreferenz, `availableAt`, Status und minimale
+  verschlüsselte Delivery-Material-Referenz;
+- `NotificationDeliveryAttempt`: append-only Attempt, Lease Owner/Expiry,
+  Providerklasse, redigierter Outcome, nächste Fälligkeit;
+- `NotificationSuppression` und versionierte Preference-/Consent-Events;
+- minimierte, retention-bound `AuthSecurityEvent`-Signale.
 
-## Abwärtskompatibilität und Rollback
+Tokens bleiben nur gehasht. Falls ein identischer Einmallink nach Restart
+erneut zugestellt werden muss, ist ausschliesslich envelope-verschlüsseltes,
+kurzlebiges Delivery-Material mit Key-Version zulässig. `EmailLog` wird
+kompatibel als Projektion migriert, nicht still umgedeutet.
 
-Alte Sessions bleiben nach dokumentierter Übergangspolicy gültig oder werden
-gezielt widerrufen. Additive Tabellen können bei Rollback ungenutzt bleiben.
-Provider-Aktivierung ist ein serverseitiges, fail-closed Release-Gate; Rollback
-schaltet Zustellung in `PAUSED`, nicht unbemerkt auf Mock.
+## 10. Expand–Migrate–Contract und Datenprüfung
 
-## Akzeptanzkriterien und Tests
+1. Additive Tabellen/Enums/Indizes auf leerer und Phase-19-Bestandsdatenbank.
+2. TEST/DEMO-Fixtures erhalten explizite Verifikationszustände; keine
+   fiktive LIVE-Verifikation.
+3. Bestehende LIVE-Nutzer werden nach schriftlicher Übergangspolicy als
+   `LEGACY_ASSURANCE` klassifiziert, nie still massenverifiziert.
+4. Alte Mail-Callsites dual-observe: Domainwrite erzeugt Outbox; alter
+   direkte Send bleibt in Production aus und wird nur in kontrollierter
+   Vergleichsumgebung beobachtet.
+5. Backfill ist batchweise, restartbar und dedupliziert; Null-/Orphan-/
+   Duplicate-/Tenant-/Purpose-Counts werden vor Cutover verglichen.
+6. Read-Cutover und Pflichtklassifikation vor Provideraktivierung; Contract
+   alter Pfade erst nach Replay- und Golden-Evidence.
 
-### Unit
+Migrationstests decken leere DB, Bestand, abgebrochenen Backfill,
+Wiederholung, Parallelwriter und Roll-forward nach Contract ab.
 
-- [ ] Token-Hash, TTL, Rotation, Resend und generische Resultate.
-- [ ] Address-Epoch, alte/neue Adresse, paralleler Wechsel, alte Links und
-  Session-/Capability-Wirkung.
-- [ ] Rechte-Matrix unverifiziert/verifiziert je Rolle und Aktion.
-- [ ] Preference-Matrix Pflicht/Optional, Kanal und Frequenz.
-- [ ] Backoff, Lease, Redaction und Provider-Dedupe.
+## 11. Serverlogik, Queue, Lease, Retry und Providervertrag
 
-### PostgreSQL / Integration
+- Registrierung, Einladung oder anderer fachlicher Write und Outbox-Insert
+  liegen in derselben PostgreSQL-Transaktion. Rollback erzeugt weder User-
+  Vollfreigabe noch Message.
+- Verify/Resend sind enumeration-safe, rate-limited, single-use,
+  zeitgebunden und supersedable. Concurrency bewirkt genau eine Transition.
+- E-Mail-Change verlangt mindestens frische Credential-Bestätigung; ein
+  Phase-25-`StepUpGrant` ist die spätere strengere Autorität. Vor Verify wird
+  die Login-Adresse nicht gewechselt. Beim Commit werden andere Sessions
+  widerrufen und die aktuelle rotiert.
+- Dispatcher claimt bounded Batches mit Lease; Crash vor/nach Providerannahme
+  führt durch stabilen Provider-Dedupe-Key zu at-least-once Delivery, aber
+  höchstens einer fachlichen Wirkung. Exactly-once Netzwerkzustellung wird
+  nicht behauptet.
+- Retryklassen unterscheiden Timeout/429/5xx von permanentem 4xx,
+  Hard Bounce und Suppression. Max Attempts führt in DLQ, nie in Endlosschleife.
+- Optionale Nachricht wird bei Enqueue und erneut vor Send gegen die aktuelle
+  Preference geprüft. Pflichtkommunikation kann nicht als Marketing
+  umklassifiziert werden.
+- Auth-Security-Events sind typisiert/minimiert; Phase 20 blockiert bekannte
+  Abusegrenzen, Phase 25 entscheidet später über risikobasierte Holds/Cases.
 
-- [ ] Domaincommit und Outbox sind atomar; Rollback erzeugt keine Message.
-- [ ] Parallelverbrauch von Verification Token und Outbox Lease ist genau
-  kontrolliert.
-- [ ] Crash vor/nach Providerannahme, Retry, DLQ und Replay.
-- [ ] Crash nach Commit vor Send, Restart mit demselben gültigen Einmallink,
-  Envelope-Key-Rotation/-Widerruf und kein Secret in Log/DTO.
-- [ ] Candidate-, Employer-, Invite-, Reset-, Application- und Privacy-Flows.
-- [ ] Vollständiges Callsite-Inventar: jeder Mailproduzent besitzt atomare
-  Outbox-Evidence oder ein getestetes Realmodus-Denial.
-- [ ] Cross-User-/Admin-Capability-Denials vor Repositoryzugriff.
+## 12. UI-Zustandsvertrag
 
-### E2E und manuell
+Verification, E-Mail-Change, Preferences und Delivery-Cockpit besitzen
+Loading, Empty, Locked, Pending, Provider-Degraded, Rate-limited, Error,
+Retry, Conflict, Expired, Superseded, Cancelled, Suppressed, Bounced, DLQ und
+Success. Generische öffentliche Antworten verraten nicht, ob eine Adresse
+existiert. Ein unverifizierter Nutzer sieht konkrete erlaubte nächste Schritte
+statt einer Redirectschleife.
 
-- [ ] Registrierung → Mock/Sandbox-Mail → Verify → Sessionrotation → Portal.
-- [ ] Privacy Request → Challenge ist danach erreichbar.
-- [ ] Abgelaufen, wiederholt, rate-limited, bounced und suppressed.
-- [ ] Preference Center auf 360 px, Keyboard und Screenreader.
-- [ ] Sandbox-Zustellung, Bounce und DLQ im Ops-Cockpit ohne PII-Leak.
-- [ ] Cockpit-/Replay-Direct-Action ist ohne Phase-25-Capability und frischen
-  Step-up ausserhalb Sandbox gesperrt.
+## 13. 360 px, Touch, Keyboard, Screenreader und Accessibility
 
-## Evidence
+- Verify-, Resend-, Change- und Preference-Flows funktionieren bei 360×800
+  ohne horizontales Clipping;
+- Statusänderungen nutzen `aria-live`, Fokus landet nach Submit am
+  Ergebnis-/Fehlerkopf und Rate-/Expiry-Texte sind programmatisch zugeordnet;
+- Pflichtzwecke sind nicht als deaktivierbare Checkbox missverständlich;
+- Keyboard-only deckt Dialog, Cancel, Retry und Konfliktauflösung;
+- Axe `critical` und `serious` sind 0 oder eine befristete, ownergebundene
+  Ausnahme blockiert die Aktivierung.
 
-Ein späterer Phase-20-Record nennt unveränderlichen Commit, Provider-Mode,
-Sandbox statt Live, DNS-/DPA-Status, Befehle, Testresultate und offene externe
-Gates. Für den technischen Phasenabschluss genügen der idempotente, bounded
-ausführbare Handler sowie Mock-/Sandbox-Delivery- und Failure-Evidence; die
-autonome Production-Ausführung bleibt bis Phase 23 als Aktivierungs-Gate offen.
+## 14. Authentisierung, Step-up, Autorisierung und Tenantgrenzen
 
-## Definition of Done
+Eine versionierte Action-Matrix definiert je Rolle, Verifikations- und
+Assurancezustand die erlaubten Reads/Writes. Unverifiziert zulässig sind nur
+Logout, Verify/Resend, begrenzte Security-/Supporthilfe und explizit
+freigegebene Onboarding-Schritte. Bewerbung, Company-Publish, Billing, Radar,
+Privacy-Vollzug und Rollenänderung bleiben fail-closed.
 
-- [ ] Reguläre neue Konten besitzen einen sicheren erreichbaren
-  Verifizierungs-Lifecycle.
-- [ ] Sensitive Aktionen sind serverseitig korrekt gegatet.
-- [ ] Kein relevanter Domainwrite kann eine E-Mail dauerhaft ohne Outbox
-  verlieren oder ist im Realmodus ausdrücklich deaktiviert.
-- [ ] Retry, DLQ, Replay, Suppression und Monitoring sind belegt.
-- [ ] Preference Center schützt Pflichtkommunikation.
-- [ ] Privacy-Challenge funktioniert über den echten Registrierungsweg.
-- [ ] Loading-, Empty-, Error-, Locked-, Retry-, Conflict- und Success-Zustände
-  sind für Verification, Recovery, Zustellung und Preferences umgesetzt.
-- [ ] Lint, Typecheck, Unit, Integration, DB, E2E, Mobile und A11y sind grün.
-- [ ] Mock- und Realmodus sind sichtbar getrennt und fail-closed.
+E-Mail-Change-Evidence ist actor-, session-, purpose- und actiongebunden;
+stale, replay, cross-purpose und cross-user ergeben 0 Wirkung.
+Company-Präferenzen beachten Membership/Tenant. Ops-Replay verlangt
+Capability plus Phase-25-Step-up; ausserhalb isolierter Sandbox bleibt die
+Action bis dahin gesperrt. Verifizierte E-Mail ist weder MFA noch alleinige
+Autorisierung.
 
-## Offene externe Voraussetzungen
+## 15. Datenschutz, Zweck, Retention, Export, Löschung und Audit
 
-Vendorvertrag/DPA, Absenderdomain, DNS, Reputation, Produktionssecret,
-Legal-Freigabe der Templates und On-call. Ohne sie darf Realmodus nicht als
-produktiv abgeschlossen markiert werden.
+Outboxpayloads sind allowlisted, versioniert und enthalten keine Passwörter,
+Klartexttokens, freien Domainobjekte, CVs, Messages oder Reveal-Ciphertexte.
+Empfänger, Bounce und Security-Events besitzen getrennte, von Phase 22
+freizugebende Retention. Preference- und Pflichtklassifikationsänderungen sind
+append-only auditiert. Phase 22 inventarisiert Export/Erasure/Legal Hold für
+alle neuen Tabellen; bis dahin gilt ein konservativer kurzer Retention-
+Vertrag und optionales LIVE-Messaging bleibt aus.
 
-## PortalGERM Execution Contract
+## 16. Abuse-, Fraud-, ATO-, Enumeration-, Replay- und Insider-Szenarien
 
-| Feld | Verbindlicher Vertrag |
-|---|---|
-| Business Value | Erreichbare Identität, zuverlässige Kommunikation und weniger verlorene Kernaktionen. |
-| Problem-IDs | STH-001, STH-002, STH-013, STH-026; E-Mail-Anteil STH-004. |
-| Prerequisites | Phase 19; Vendor-/DPA-Entscheid für Realaktivierung. |
-| Deliverables | Verification, Outbox/Attempts/DLQ, Provider, Preference Center, Ops-Replay. |
-| Security / Privacy | Hash-Tokens, generische Antworten, minimale Payloads, Pflicht-/Optional-Trennung. |
-| Tests | Concurrency, Crash/Retry, Rollen, Privacy-E2E, Sandbox und Mobile/A11y. |
-| Expected Result | Keine unverifizierte Vollfreigabe und keine best-effort-only Kernmail. |
-| Risks / Limits | Exactly-once extern ist nicht behauptbar; stabile Dedupe und at-least-once sind Pflicht. |
+- Credential Stuffing, Resend-/Verify-Flood, Address-Enumeration,
+  Token-Bruteforce und paralleler Consume;
+- gestohlene Session versucht Login-E-Mail-Change, Recovery oder Preference-
+  Manipulation;
+- alter Token nach Resend/Adresswechsel, cross-purpose Token und
+  Provider-Callback-Replay;
+- Queue-Flood, poison payload, manipulierter Template-/Purpose-Key und
+  Support-Replay ohne Capability;
+- kompromittierte verifizierte Firma erzeugt ungewöhnliches Mailvolumen.
+
+Phase 20 liefert Rate Limits, Audit, Sessionrevocation, Signale und
+fail-closed Hooks. Gesamt-Fraud-Case, False-positive/Appeal und
+firmenübergreifende Risk Decision bleiben `STH-031`/Phase 25.
+
+## 17. Externe und organisatorische Voraussetzungen
+
+E-Mail-Vendor und Sandbox, AVV/DPA, Datenregion/Subprozessoren,
+Absenderdomain, SPF/DKIM/DMARC, Secret-/KMS-Verwaltung, Bounce-Domain,
+Template- und Purpose-Freigabe, Security Owner, Zustell-/Reputationsowner und
+Incidentkontakt. Jedes Gate besitzt im Evidence-Record Owner, Datum,
+Dokumentversion und Entscheidung. Ohne diese Voraussetzungen bleibt
+Aktivierung `DISABLED` oder höchstens `SANDBOX`.
+
+## 18. Harte Abhängigkeiten
+
+- grüne Phase-19-Evidence auf dem tatsächlichen Implementierungscommit;
+- ADR-031 und Migration-/Kryptovertrag;
+- Phase 22 für finale Legal-/Retention-/Consent-Freigabe;
+- Phase 23 für autonome Production-Ausführung, Monitoring und Pager;
+- Phase 25 für risikobasierte Step-up-, Admin-Replay- und Fraud-Entscheidung.
+
+Phase 21 und 22 dürfen fachlich parallel vorbereitet werden; gemeinsame
+Migrationen werden nacheinander integriert. Phase 20 darf einen bounded
+Dispatcher testen, aber keinen unbeaufsichtigten Productionbetrieb behaupten.
+
+## 19. Geordnete Implementierungsschritte
+
+1. Callsite-/Template-/Purpose-/Preference-/Auth-Action-Inventar versiegeln.
+2. ADR-031, Low-Assurance- und E-Mail-Change-Policy freigeben.
+3. Additive Identity-, Outbox-, Attempt-, Suppression- und Preference-
+   Migration samt Upgrade-/Backfill-Test.
+4. Verify/Resend/Consume und E-Mail-Change ohne Provider implementieren.
+5. Action-Matrix, Sessionrotation/-revocation, ATO-Events und Privacy-Brücke.
+6. Alle Mailproduzenten atomar auf typisierte Outbox umstellen oder im
+   Realmodus serverseitig deaktivieren.
+7. Bounded Dispatcher, Lease, Retry, Dedupe, DLQ und Replay implementieren.
+8. Mock- und realen Adaptervertrag trennen; Sandbox-Failure-Suite ausführen.
+9. Preference Center und alle UX-/A11y-Zustände implementieren.
+10. Migration, Owning-Suites, Provider-Smoke, vollständiges G3 und Evidence.
+11. Erst danach Cohort-Allowlist; Production Scheduling bleibt bis Phase 23
+    aus.
+
+## 20. Feature-/Provider-/Cohort-Flags und Aktivierungsreihenfolge
+
+Serverseitige, auditierte Flags werden getrennt geführt:
+`IDENTITY_VERIFICATION_ENFORCEMENT`, `LOGIN_EMAIL_CHANGE`,
+`NOTIFICATION_OUTBOX_PRODUCERS`, `EMAIL_PROVIDER_MODE`,
+`NOTIFICATION_DISPATCH`, `OPTIONAL_EMAIL`, `DELIVERY_REPLAY` und Cohort.
+
+Reihenfolge: Schema → Producers/dispatch paused → Low-Assurance UI → Sandbox
+Provider → interne Cohort → Design-Partner-Allowlist → nach Phase 22/23/25
+gegebenenfalls LIVE. Kill Switch setzt Dispatch `PAUSED`, bewahrt Outbox und
+zeigt Degraded-State. Er darf weder auf Mock umschalten noch verifizierte
+Identität zurücksetzen.
+
+## 21. Akzeptanzkriterien und vollständige AC→Test-Matrix
+
+Alle als „anzulegen“ bezeichneten Dateien sind geplante Deliverables und
+dürfen erst nach Existenz und Exit Code `0` als Evidence gelten.
+
+| Criterion | Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `20-AC-01` | `STH-001`, `REQ-ID-005` | unverifizierte Vollfreigabe, LC2+ P0 | Unit + PostgreSQL | Candidate-/Employer-/Invite-Registrierung erzeugt Low-Assurance + Verify-Outbox atomar | Commit erzeugt User, Challenge und genau eine Outboxmessage | Rollback, Duplicate Submit oder unbekannte Rolle erzeugt keine Vollsession/Doppelmessage | Public/Invitee | Auth/DB/Outbox | je Rolle, gleiche E-Mail und idempotency keys | jsdom + isoliertes PostgreSQL 16 | `npx vitest run --config vitest.config.ts tests/unit/auth/email-verification-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/auth/email-verification-postgres.test.ts` | 3/3 Rollen low-assurance; je Commit 1 Message; Rollback 0; Duplicate fachlich 1 | Vitest JSON/SQL Count | Identity + QA | PLANNED |
+| `20-AC-02` | `STH-001`, `REQ-ID-005` | Tokenübernahme/Replay, P0 | Unit + PostgreSQL Security | TTL, Resend, Supersession und konkurrierender Consume | aktueller Token bestätigt einmal und rotiert Session | expired, used, alter Resend-Token, cross-user/purpose und 20 parallele Consumes wirken 0/1 | Public/Registrant | Verify Service/PostgreSQL | logische Uhr, zwei Nutzer, 20 konkurrierende Clients | isoliertes PostgreSQL 16 | `npx vitest run --config vitest.config.ts tests/unit/auth/email-verification-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/auth/email-verification-races-postgres.test.ts` | exakt 1 `usedAt`/Verify-Transition; 19 Konflikte; kein Rohtoken in DB/Log | Race-Manifest, Redaction-Scan | Identity + Security | PLANNED |
+| `20-AC-03` | `REQ-ID-005`, Beitrag `REQ-ID-004`/`STH-030` | ATO/Lockout durch E-Mail-Change, P0 | Unit + PostgreSQL + E2E | pending neue Adresse → Verify → atomarer Epochwechsel | neue Adresse wird Login, alte erhält Pflichtnotice, andere Sessions revoked | Passwort falsch, Ziel belegt, stale/replay/cross-session/cross-user bewirken 0 Änderung | Candidate/Employer | Security Settings/Auth | zwei Accounts, aktive Sessions, kollidierende Adresse | PostgreSQL + Production Browser | `npx vitest run --config vitest.config.ts tests/unit/auth/email-change-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/auth/email-change-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase20-identity-email.spec.ts --project=chromium-journeys` | vor Verify alte Adresse autoritativ; danach genau 1 Epochwechsel; alle Fremdsessions revoked; 1 Altadress-Notice | DB-Diff, Playwright-Trace, Audit | Identity + Security | PLANNED |
+| `20-AC-04` | `STH-013`, `REQ-NOT-001` | verlorene/doppelte Kernmail, P0 | PostgreSQL + Failure Injection | Crash vor/nach Claim und Providerannahme, Retry, Lease-Takeover, DLQ/Replay | Restart liefert über stabilen Dedupe-Key ohne fachliche Doppelwirkung | 429/5xx/timeout retry; permanent 4xx/poison bounded DLQ; unberechtigtes Replay 0 | System/Ops | Outbox/Dispatcher/Provider | 100 Messages, Fake Clock, zwei Dispatcher, Failure Provider | isoliertes PostgreSQL 16 | `npx vitest run --config vitest.integration.config.ts tests/integration/notifications/outbox-delivery-postgres.test.ts` | 0 verlorene Outboxrows; je Dedupe-Key 1 fachlicher Delivery-Receipt; Lease-Takeover nach Ablauf; spätestens Max Attempt DLQ | Attempt-/Lease-Timeline | Notifications + Ops | PLANNED |
+| `20-AC-05` | `STH-026`, `REQ-NOT-001` | Pflichtmail unterdrückt/Marketing unerlaubt, P0 | Unit + PostgreSQL | Purpose×Channel×Role×Consent inklusive Preference-Änderung während Queueing | optionales Opt-in sendet; Pflichtzweck sendet unabhängig vom Marketingopt-out | optionales Opt-out vor Dispatch suppressiert; unbekannter Purpose fail-closed | Candidate/Employer/System | Preferences/Outbox | vollständige geschlossene Purpose-Matrix | jsdom + PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/notifications/notification-preference-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/notifications/preferences-outbox-postgres.test.ts` | 100 % Matrixfälle erwartungsgleich; unbekannt 0 Sends; Pflichtfälle nie Marketingklassifikation | Matrixreport, Audit Events | Notifications + Legal/Privacy | PLANNED |
+| `20-AC-06` | `STH-002`, `REQ-ID-005`, `REQ-PRIV-004` | unerreichbares Betroffenenrecht, P0 | PostgreSQL + E2E | Registration → Verify → Privacy Request → bestehende Challenge | eigener Candidate erreicht und besteht Challenge | unverifiziert, fremder User, abgelaufene Challenge und Direkt-Action bleiben denied | Candidate | Candidate Privacy/Auth | neuer Candidate + Foreign Canary | PostgreSQL + Production Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/privacy-verified-identity-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase20-identity-email.spec.ts --project=chromium-journeys` | positiver Flow 1 verifizierter Case; vier Negativfälle 0 fremde Reads/Writes; sichere 404 | Case-/Audit-Diff, Trace | Identity + Privacy | PLANNED |
+| `20-AC-07` | Beitrag `STH-031`, `REQ-TRUST-001` | Credential Stuffing/Enumeration/Insider, P0 LC2+ | Security + PostgreSQL | Login-, Verify-, Resend-, Recovery- und Change-Rate/Signal-Matrix | legitimer begrenzter Flow bleibt nutzbar und emittiert minimales Audit | verteilte/burst Wiederholung, unbekannte Adresse, Support-Direct-Replay blockiert ohne Informationsleck | Public/User/Support | Auth/Rate Store/Audit | bekannte/unbekannte Adresse, IP-/Actor-Buckets, Capability-Denial | isoliertes PostgreSQL 16 | `npx vitest run --config vitest.integration.config.ts tests/integration/auth/identity-abuse-postgres.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/auth/rate-limit-postgres.test.ts` | definierte Bucketgrenzen exakt; gleiche öffentliche Antwort; 0 Secret/Adresse im Audit; Denial vor Payloadread | Rate-/Audit-Manifest | Security | PLANNED |
+| `20-AC-08` | E-Mail-Anteil `STH-004`, `REQ-NOT-001` | falscher Provider-/LIVE-Modus, P0 | Provider Contract + Sandbox | deliver, duplicate idempotency, bounce, suppression, 429, 5xx, timeout, bad secret | freigegebene Sandbox quittiert korrelierbaren redigierten Receipt | ungültige Konfiguration bootet fail-closed; kein Real→Mock; Failure bleibt durable | System/Ops | Provider Adapter/Env | Vendor-Sandbox-Adressen, keine realen Personen | isolierte Sandbox mit Testdomain | `npx vitest run --config vitest.integration.config.ts tests/integration/providers/email/email-provider-contract.test.ts`; `npx tsx scripts/phase20-email-provider-smoke.ts --mode=sandbox --scenario=deliver,duplicate,bounce,429,500,timeout,bad-config` | alle Contractfälle pass; Duplicate 1 Provider-Dedupewirkung; bad config Exit ≠0; 0 Secrets im Artefakt | Provider Receipt/Redaction Report | Notifications + Ops + Security | PLANNED |
+| `20-AC-09` | `REQ-QA-002`, `REQ-QA-003` | unbedienbarer/irreführender Flow, P0/P1 | E2E + Mobile + A11y | Verify, Resend, Email Change, Preferences in allen Zuständen | Keyboard/Touch/Screenreader erreicht jede erlaubte Action | Locked/rate/expired/conflict/bounce erzeugt Fokus- und Klartextzustand, keine Enumeration | Public/Candidate/Employer | Browserportale | deterministische Mailbox/Sandboxfixtures | Production Build, Desktop 1440×900 und 360×800 | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase20-identity-email-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase20-identity-email-quality.spec.ts --project=chromium-mobile-360` | 0 horizontal clipping; 0 critical/serious Axe; sichtbarer Fokus; alle definierten States besucht | HTML-/Axe-/Screenshot-Report | UX + QA | PLANNED |
+| `20-AC-10` | `REQ-QA-003`, ADR-031 | Lock/Orphan/gefälschte Legacy-Verifikation, P0 | Migration/PostgreSQL | leer, Phase-19-Bestand, unterbrochener Backfill, Wiederholung, Parallelwriter | additive Migration + deduplizierter Backfill | Partial run, Null-/Duplicate-/Tenantfehler blockiert Cutover | System/Data | Prisma/PostgreSQL | leere DB + realistische Legacyzustände | isoliertes PostgreSQL 16 | `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase20-identity-outbox-migration-postgres.test.ts`; `npm run db:migrate`; `npm run db:migrate:status` | Exit 0; Wiederholung 0 Doppelrows; 0 Orphans; Legacy nie still VERIFIED; Lockbudget dokumentiert | Migration-/Countmanifest | Data + Identity | PLANNED |
+| `20-AC-11` | `REQ-QA-001`, `REQ-QA-003` | Regression Auth/Tenant/Privacy/Mail, P0 | G3 Portal-Golden | neue Owning-Suites plus geschützte Altverträge | gesamtes Repository-Gate auf demselben Commit | `.skip`, Retry, anderer Commit oder flakiger Test blockiert | alle | Repository/alle Portale | deterministischer Seed | Clean Clone, PostgreSQL 16, Production Browser | nacheinander `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:integration`, `npm run build`, `npm run test:e2e:http`, `npm run test:e2e:browser`, `npm run test:e2e:hsts` | alle Exit `0`; Retry `0`; keine unerklärten Skips; gleicher Commit/Digest | G3-Testmanifest | QA | PLANNED |
+
+## 22. Performance-, Query-, Queue-, Datei-, Latenz- und Lastgrenzen
+
+- Verify/Resend-/Preference-DB-Command p95 ≤250 ms bei 50 parallelen
+  Requests in der isolierten Referenzumgebung; Providerlatenz separat;
+- Dispatcher-Batch maximal 100, Lease 60 s, Heartbeat spätestens alle 20 s;
+  Werte werden per ADR konfigurierbar und per Fake Clock getestet;
+- Outbox-Allowlist-Payload maximal 32 KiB; kein Domainobjekt als Blob;
+- öffentliche Verify-/Resend-Rategrenzen liegen im PostgreSQL Rate Store und
+  sind je Actor/IP/Purpose messbar;
+- Sandbox-Ziel: 99 % der nicht absichtlich verzögerten Pflichtmessages
+  innerhalb 120 s im Providerreceipt; dies ist noch kein Production-SLO;
+- Backlog-, Bounce-, Suppression-, DLQ- und oldest-age-Metriken besitzen
+  Warn-/Pause-Schwellen, deren Productionwerte Phase 23 freigibt.
+
+## 23. Geschützte Phase-01–18-Invarianten und Owning-Regressionen
+
+Mindestens erneut:
+
+```powershell
+npx vitest run --config vitest.config.ts tests/unit/auth tests/unit/providers/email tests/unit/security/rate-limit-audit.test.ts
+npx vitest run --config vitest.integration.config.ts tests/integration/auth/auth-service-postgres.test.ts tests/integration/auth/rate-limit-postgres.test.ts tests/integration/employer/team-invitations-postgres.test.ts tests/integration/providers/email/mock-email-provider-postgres.test.ts tests/integration/privacy/privacy-case-service.test.ts tests/integration/candidate/job-alerts-postgres.test.ts tests/integration/employer/applications-postgres.test.ts
+npx playwright test --config=playwright.config.ts tests/e2e/flows/phase17-journeys.spec.ts --project=chromium-journeys
+```
+
+Geschützt bleiben Password Reset, safe-next, Session-, Invite-, Candidate-/
+Employer-Tenant-, Application-, Alert-, Privacy-Challenge-, Audit-/Redaction-
+und explizite Mock-Copy-Verträge. Der Mock bleibt LC1-Testadapter, nicht
+Productionfallback.
+
+## 24. Rollback oder Roll-forward-only
+
+Vor Read-Cutover sind additive Tabellen/Flags rückschaltbar. Nach bestätigtem
+Address-Epoch-Wechsel, extern angenommener Mail oder Contract alter Pfade gilt
+Roll-forward: Identität, Zustellreceipt und Audit werden nicht per DB-Rollback
+erfunden oder gelöscht. Kill Switch pausiert Dispatch; Pending-Outbox bleibt
+erhalten. Keykompromittierung rotiert/invalidiert Delivery-Material nach
+Runbook und erzwingt neuen Challenge, statt Klartext wiederherzustellen.
+
+## 25. Benötigte Evidence und Artefakte
+
+`evidence/YYYY-MM-DD-phase-20.md` enthält Start-/Endcommit und Digest,
+Migration-/Backfill-Counts, Action-/Purpose-Matrix, alle Befehle/Exitcodes,
+Race-/Crash-/DLQ-Timeline, Provider-Contract-/Sandboxreceipts, DNS-/DPA-/
+Secret-/Key-Versionstatus, Redaction-Scan, Desktop-/Mobile-/A11y-Berichte,
+Privacy-E2E, aktivierte Flags, Kill-Switch-Probe, offene Phase-23/25-Gates und
+den G3-Entscheid. Keine Adresse, Tokens, Providersecrets oder vollständigen
+URLs gelangen in Evidence.
+
+## 26. Definition of Done für Technik und Quality-Gate
+
+Technikstatus darf erst `TECHNISCH ABGESCHLOSSEN` werden, wenn alle
+Migrationen, Verification-/E-Mail-Change-Flows, atomaren Produzenten, bounded
+Dispatcher, Preference- und Providerverträge implementiert sind. Das
+Quality-Gate darf erst `BESTANDEN` werden, wenn `20-AC-01` bis `20-AC-11` auf
+demselben Commit `PASS` sind, G3 grün ist und kein Pflichtfall `N/A`, Skip oder
+Retry besitzt. Aktivierung bleibt separat und kann weiterhin `SANDBOX` oder
+`BLOCKED BY EXTERNAL GATE` sein.
+
+## 27. Gate für abhängige Folgephasen
+
+Phase 21/22 dürfen ihre fachlichen Adapter parallel entwickeln, aber kein
+Identity-/Outbox-abhängiger LIVE-Flow aktiviert werden, bevor Phase 20 G3
+bestanden hat. Phase 23 übernimmt nur versionierte, bounded und idempotent
+getestete Handler. Phase 25 muss die Phase-20-Assurance-Evidence übernehmen
+und ihre stale/replay/cross-purpose-Invarianten erweitern, nicht ersetzen.
+
+## 28. Ausdrücklich nicht bewiesene Aussagen und Referenzen
+
+Diese Phase beweist noch keine autonome Productionzustellung, kein Provider-
+SLO, keine Inboxplatzierung, keine MFA, keinen vollständigen Fraud-/ATO-Case,
+keine Rechtsfreigabe optionaler Kommunikation und keine LIVE-Freigabe.
+Verifizierte E-Mail beweist nicht die reale Person oder Firmenberechtigung.
+
+Verbindlich ergänzend gelten
+[`remediation-execution-contract.md`](./remediation-execution-contract.md),
+ADR-031/034/036 in [`decisions.md`](./decisions.md),
+[`requirements-matrix.md`](./requirements-matrix.md),
+[`remediation-traceability.md`](./remediation-traceability.md) und
+[`route-role-matrix.md`](./route-role-matrix.md).

@@ -4,6 +4,8 @@
 > kein verbundener Staging-/Production-Deployment-Provider; konkrete
 > Provider-Schritte müssen vor dem ersten realen Rollout ergänzt und geprüft
 > werden.
+> Phase-19+-Provider-, Worker- und Service-Recovery-Ziele stehen im
+> [Remediation-Runbookziel](./remediation-production-target.md).
 
 ## Grundsätze
 

@@ -76,7 +76,16 @@ Versioned deterministic Candidate decision aid. Frozen v1 weights: skills 30 · 
 ## §13 Monetization Rules
 Five versioned plan hypotheses: Free Basic CHF 0 (1 job/1 seat), Starter CHF 149 (3/2), Pro CHF 399 (10/5, analytics, 10 Radar contacts, 3 Boosts), Business CHF 899 (30/15, 50 contacts, 10 Boosts, advanced Radar; Import only after its P1 gate), Enterprise custom. Annual 10-for-12 pricing is a hypothesis requiring approval. Plan rights come from structured Entitlements, never marketing strings or stale Company booleans.
 
-P0 one-time products: Job Boost 7/30 days and Talent Contact Packs 10/50. Targeted Additional Job and approved Import Setup are P1 under REQ-BIL-008/009; Featured/Newsletter/Social are P2 pending real inventory/reach. Every sponsored product is disclosed. **Success Fee remains disabled in UI, API and Admin until legal review.** AVG/AVV review applies to the concrete entgeltliche job-market/Radar/contact flow, not only Success Fee. See [product-strategy.md](./product-strategy.md) §10 and [commercial-go-live-gates.md](./commercial-go-live-gates.md).
+Die historischen P0-Katalogfixtures Job Boost 7/30 und Talent Contact Packs
+10/50 beweisen nur Produktmechanik. Für reale Marktaktivierung gilt:
+Basisworkflow → Hiring-Sprint → Retainer → Concierge/rechtmässiger Import vor
+Boost; Radar/Contact erst nach Dichte-/Trust-/Legal-Gate. Targeted Additional
+Job bleibt P1; Featured/Newsletter/Social P2 bis zum Reichweitenbeleg. Every
+sponsored product is disclosed. **Success Fee remains disabled in UI, API and
+Admin until legal review.** AVG/AVV review applies to the concrete
+entgeltliche job-market/Radar/contact flow, not only Success Fee. See
+[product-strategy.md](./product-strategy.md) §10 and
+[commercial-go-live-gates.md](./commercial-go-live-gates.md).
 
 ## §14 Billing & Payment Rules
 Mock payment by default. Adapter:
@@ -180,3 +189,32 @@ For every change, ask: privacy risk? security risk? RBAC break? identity leak? b
 
 ## §40 Final Principle
 Build SwissTalentHub like it could become a serious Swiss company. Every feature: clear · safe · useful · testable · maintainable · privacy-friendly · commercially sensible · extendable. **Best implementation works reliably, protects users, creates trust, can grow.**
+
+## §41 Remediation Rules Phase 19–32
+
+- Normative Reihenfolge:
+  [00-PLAN](./00-PLAN.md) → [Requirements](./requirements-matrix.md) /
+  [ADRs](./decisions.md) →
+  [Ausführungsvertrag](./remediation-execution-contract.md) →
+  [Traceability](./remediation-traceability.md) → Detailphase. Phase 01–18
+  und ihre Evidence bleiben historisch unverändert.
+- Jede Detailphase instanziiert alle 28 Pflichtfelder und eine vollständige
+  AC→Test-Matrix. Plan-, Technical-, Quality- und Activation-Status sind
+  getrennt; kein Häkchen ohne commitgebundene Evidence.
+- Sechs Klassen: LC1 lokale Demo, LC2 beaufsichtigter Design-Partner-Test,
+  LC3 Invite-only Pilot, LC4 Public Free, LC5 Paid Self-Service, LC6 Scale.
+  P0–P4 wird pro Finding und Zielklasse entschieden, nicht pauschal je Datei.
+- Genau ein erster Region×Beruf-Cluster. Pflege und Engineering erhalten
+  getrennte Korpora. Shared concepts umfassen Beruf, Ort/Region,
+  Qualifikation, Zertifikat, Skill und Branche. Thresholded Zero-Result-
+  Aggregate ändern nie automatisch die Taxonomie.
+- Non-Admin-Step-up, Fraud/ATO/Scam, Company Trust, Job Freshness,
+  moderierter Research, Supportkapazität/Stückkosten und Paid-Service-
+  Recovery sind Launchverträge, keine kosmetischen Nacharbeiten.
+- Phase 27, 28A, 28B, 30B und 30C sind nur bei ihrem expliziten Demand-/
+  Capacity-Trigger Pflicht. Phase 26 ist vor öffentlichem Company Trust,
+  Firmenjobs oder Radar zwingend.
+- G4 umfasst Clean Clone, Migration, Seed zweimal, Full Suite,
+  Security/Route/Plan-Audits, Provider-/Worker-/Restore-Drills und manuellen
+  Rollen-Walkthrough auf exakt demselben Commit/Artefakt. Jede Änderung nach
+  Freeze invalidiert betroffene Evidence.

@@ -1,213 +1,419 @@
-# Phase 31 — Monetarisierung, Rentabilität und Marktvalidierung
+# Phase 31 — WTP-first Monetarisierung, Cluster- und Lieferfähigkeitsvalidierung
 
-> **Status: GEPLANT / NICHT BEGONNEN.** Der externe Discovery-Track für ICP,
-> Packaging, Cashflow, Clusterhypothesen und rechtlich zulässige manuelle
-> Angebots-/Rechnungstests beginnt nach Phase 19, bevor teure Provider- oder
-> Premium-Implementierung freigegeben wird. Erst die technische
-> Production-Aktivierung dieser Phase wartet auf realen Betrieb, Billing und
-> die relevanten Kernprozesse. Mock-Käufe, DEMO-Daten und unverbindliche Leads
-> sind kein Zahlungsbereitschafts- oder Liquiditätsnachweis.
+> **Planstatus: GEPLANT. Technikstatus: NICHT IMPLEMENTIERT. Quality-Gate:
+> NICHT GELAUFEN. Aktivierung: DISABLED.** Track 31A validiert nach Phase 19
+> genau einen ersten Region×Profession-Cluster, zahlbare Kernangebote,
+> Delivery, Kapazität, Unit Cost und Cashflow. Track 31B aktiviert erst danach
+> technisch und öffentlich ein belegtes Angebot. Mock-/Testmode-Zahlungen,
+> kostenlose Design-Partner und unverbindliche Leads zählen als null
+> Zahlungsbereitschaft.
 
-## Ziel
+Es gilt
+[`remediation-execution-contract.md`](./remediation-execution-contract.md)
+vollständig.
 
-Nur belegte, lieferbare und wirtschaftlich sinnvolle Angebote produktiv
-freigeben; Clusterliquidität, Packaging, Pricing, Runway und Supportkosten mit
-echten Design-Partnern und Geldfluss messen.
+## Phasenspezifische Instanziierung des 28-Punkte-Vertrags
 
-## Ausgangslage und Problem-IDs
+### 1. Status
 
-- `STH-018`: technische Cluster-Gates, Seed und Tests existieren; reale
-  Marktliquidität ist externe Evidence.
-- `STH-019` ist ein querliegendes P1-Gate: Ein öffentlich beworbener
-  Startcluster braucht zusätzlich ein fachlich freigegebenes Berufsquery-/
-  Judgment-Korpus und grüne Phase-30A-Evidence. Die heutige grobe
-  Kategorie-/Kanton-Coverage belegt diesen Kandidatennutzen nicht.
-- `STH-022`: Business/Enterprise besitzen Kernbenefits und kontrollierte
-  Import-Architektur, aber keine produktive Feed-/ATS-/API-/SSO-Leistung.
-- `STH-028`: Demo-/Hypothesen-Sprache ist aktuell korrekt und darf erst nach
-  Freigaben durch eine getrennte Production-Darstellung ersetzt werden.
+| Track | Planstatus | Technikstatus | Quality-Gate | Aktivierung |
+|---|---|---|---|---|
+| 31A WTP-/Delivery-Discovery | geplant nach Phase 19 | externe/manuell kontrollierte Validierung nicht begonnen | nicht gelaufen | keine öffentliche Produktaktivierung |
+| 31B Product Release | geplant nach grüner 31A-Evidence und Owning-Phasen | nicht implementiert | nicht gelaufen | `DISABLED` |
+| Boost | Hypothese | nicht als bezahlbares Release freigegeben | Reichweiten-Gate offen | `DISABLED` |
+| Talent Radar | Hypothese | bestehender Privacy-Flow ist kein Paid-Market-Beweis | Dichte-/Nutzungs-Gate offen | Paid-Entitlement `DISABLED` |
+| Salary-Angebot | extern bedingt | kein freigegebener Realdatenvertrag | BFS/LSE-/Legal-Gate offen | Public/SEO/Paid `DISABLED` |
 
-## Priorisierte Angebotsreihenfolge
+### 2. Ziel und messbarer Nutzer-/Businesswert
 
-1. Job-Boost-Pakete;
-2. Talent-Radar-Kontaktpakete;
-3. zusätzliche Stellenkontingente;
-4. Premium-Unternehmensprofile;
-5. Advanced Analytics;
-6. Jahresabonnements;
-7. betreute XML-/JSON-/ATS-Imports;
-8. monatliche Feed-Synchronisierung;
-9. später Enterprise SSO/API.
+- Ein KMU bezahlt zuerst für eine verständliche, lieferbare Kernleistung:
+  Basis-Recruiting-Workflow, zeitbegrenzter Hiring Sprint, Retainer mit
+  Credits, Concierge/Design-Partner-Leistung oder betreuten Import.
+- Genau ein erster Region×Profession-Cluster bündelt Angebot, Nachfrage,
+  Operations und Search-Qualität; weitere Cluster benötigen eigene Evidence.
+- Bruttomarge, Servicezeit, Cash Conversion, Churn-/Pauseverhalten und
+  Supportaufwand werden vor Skalierung gemessen.
+- Boost verkauft nur nachweisbare zusätzliche Reichweite. Radar wird nur bei
+  ausreichender Opt-in-Dichte und belegtem Contact→Accept→Reveal-Nutzen
+  monetarisiert.
+- Bezahlte Leistung hat vor Verkauf eine klare Recovery-, Refund-,
+  Replacement- und Eskalationszusage.
 
-## In Scope
+### 3. Tatsächlicher Repositoryzustand
 
-- ICP/Cluster-Design-Partner und echte LIVE-Gate-Evidence.
-- Real-Money-Angebotstests oder rechtlich zulässige manuelle Rechnung.
-- 18-/24-Monats-Cashflow, Burn, CAC, Support/COGS, Churn und Runway.
-- Monats-, Hiring-Sprint-, Retainer-/Credit- und Jahrespaketvergleich.
-- Produktrelease, serverseitige Entitlements, Limits, Abuse, Analytics,
-  Upgrade/Downgrade/Cancel/Refund je Angebot.
-- Betreuter Import: Source Rights, Mapping, Preview, Draft-only Commit,
-  Fehlerreport, SLA und optional wiederkehrender Sync.
-- Ehrliche Trennung Demo/Research/Production.
+- `STH-018`: technische Cluster-Assessment-/Dual-Approval-Mechanik existiert;
+  reale Liquidität und eine eindeutige erste Clusterentscheidung fehlen.
+- `STH-019`: grobe Search-/Coverage-Evidence ersetzt kein fachliches
+  Query-/Judgment-Korpus; 31A muss dieses an Phase 30A liefern.
+- `STH-022`: Pläne, Entitlements und kontrollierte Importbausteine existieren,
+  aber keine belegte produktive ATS-/Feed-/API-/SSO-Leistung.
+- `STH-028`: Demo-/Hypothesensprache ist korrekt; Production-Copy und echte
+  Angebote sind nicht freigegeben.
+- `STH-034`: kein versioniertes Kapazitäts-/Unit-Cost-Modell für Moderation,
+  Verification, Import, Privacy, Fraud, Support und Billing-Ausnahmen.
+- `STH-035`: technische Refund-/Reversal-Bausteine ersetzen keine
+  kundensichtbare Paid-Service-Recovery-Policy.
+- `STH-037`: die bisherige Add-on-first-Reihenfolge prüft nicht zuerst, ob
+  Kunden für den Kernworkflow und seine Delivery zahlen.
 
-## Out of Scope / nicht früh priorisieren
+### 4. Findings und Requirements
 
-- Success Fee vor AVG/Legal/Attribution/Unit-Economics-Freigabe.
-- Community/Social Feed, generischer AI-Karrierecoach, öffentliche Reviews,
-  Native Apps, White Label, ATS-Ersatz oder internationale Expansion.
-- Enterprise SSO/API vor realem Kundenbedarf und Supportfähigkeit.
-- Preisänderung allein durch Konkurrenzlisten ohne bezahlten Test.
-- DEMO/TEST-Metriken als LIVE-Marktbeweis.
+- `STH-018`, `STH-019`, `STH-022`, `STH-028`, `STH-034`, `STH-035`,
+  `STH-037`.
+- `REQ-BIL-001/002/003/004`, `REQ-MKT-001/002`, `REQ-COM-001`,
+  `REQ-ADM-005`,
+  `REQ-OPS-001/002`, `REQ-INT-001/002`, `REQ-SEC-001/002`.
+- Neu:
+  - `REQ-COM-031-001`: genau ein erster öffentlicher
+    Region×Profession-Cluster;
+  - `REQ-COM-031-002`: WTP-first Angebotssequenz und bezahlte Evidence;
+  - `REQ-COM-031-003`: Capacity-/Unit-Cost-/Cashflow-Gate;
+  - `REQ-COM-031-004`: Paid-Service-Recovery vor Verkauf;
+  - `REQ-COM-031-005`: Boost-/Radar-Add-ons erst nach eigenem Nutzengate.
 
-## Rollen und Prozesse
+### 5. In Scope
 
-Employer Buyer/Owner, Sales/Customer Success, Finance, Product, Ops und Legal.
-Candidate bleibt kostenlos und privacy-geschützt. Product/Ops aktiviert Cluster
-nur mit echter LIVE-Evidence, bestandener cluster-/sprachspezifischer
-Phase-30A-Suchqualität und getrennten Approvern aus Phase 25. Interviews,
-Concierge-Research und nichtöffentliche Tests aus Track A dürfen davor
-stattfinden, aber keine öffentliche Cluster-, SEO- oder Liquiditätsbehauptung.
+- **31A:** ICP und genau einen ersten Region×Profession-Cluster auswählen;
+  Alternativen dürfen als Discovery-Kandidaten verglichen, aber nicht parallel
+  aktiviert werden.
+- WTP-first für Basisworkflow, 30-/45-/90-Tage-Hiring-Sprint, Retainer plus
+  Credits, Concierge/Design-Partner-Paket und Paid Import Setup.
+- Rechtlich, steuerlich und buchhalterisch freigegebene manuelle Rechnung als
+  zulässiger früher Zahlungsnachweis; netto eingegangener Geldfluss und
+  tatsächliche Delivery sind Pflicht.
+- Zwei getrennte Discovery-Korpora für Pflege/Gesundheit und
+  Engineering/Technik, jeweils mit eigener Fachperson und Digest. Genau eines
+  wird nach dem Clusterentscheid als `SELECTED` an Phase 30A übergeben; das
+  andere bleibt `DISCOVERY_ONLY`, erteilt keine Search-/SEO-/Acquisition-
+  Freigabe und darf nie als Evidence des gewählten Clusters zählen.
+- Kapazität und Unit Cost je Company Verification, Jobmoderation, Import,
+  Privacy Request, Support-/Fraudfall und Billing-Ausnahme; Arrival Rate,
+  Backlog, Staffing, On-call und maximaler Concierge-COGS je Kunde.
+- 18-/24-Monats-Cashflow mit Timing von Cash-in, CAC, Providerkosten,
+  Personal, Refunds, Pause/Reactivation, Churn und Sensitivitäten.
+- **31B:** versionierte Offer-/Product-Releases, serverautorisierte Preise,
+  Entitlements, Limits, Billing-/Recoveryvertrag und ehrliche Copy.
+- Betreuter Import mit Source Rights, Mapping, Preview, Draft-only Commit,
+  Fehlerreport und SLA. Wiederkehrender Sync nur nach eigenem Gate.
 
-## Betroffene Dateien und Module
+### 6. Out of Scope und deaktivierte Nachbarfunktionen
 
-- Product Strategy, Commercial Gates, Plans/Products/Entitlements
-- Public Pricing/Employer Marketing und Product Release Decisions
-- Billing/Finance aus Phase 24, Analytics aus Phase 22
-- Cluster Launch/Cockpit, Sales Leads und Admin Content
-- Import Schema/Services/Workers/Storage/Provider
-- Cashflow-/Experiment-Evidence und Runbooks
+- Kein zweiter öffentlicher Cluster, bevor der erste seinen Messzeitraum
+  abgeschlossen hat und ein eigener Folgeentscheid dokumentiert ist.
+- Kein Success Fee vor AVG-/Legal-/Attribution-/Tax-/Unit-Economics-Freigabe.
+- Kein Boost als erstes WTP-Angebot; kein bezahlter Boost ohne organisches
+  Inventar, Reichweitenbaseline und messbaren Deliveryvertrag.
+- Kein Paid Radar ohne ausreichende aktive Candidate-Opt-ins, Suchdichte,
+  Contact-/Accept-/Reveal-Evidence und bestätigte Privacy-/Trust-Gates.
+- Keine Enterprise-API, SSO, native App, White Label, Social Feed,
+  öffentlicher Reviewmarkt oder ATS-Ersatz ohne separat bezahlte Nachfrage.
+- Kein Salary-Radar mit synthetischen/erfundenen Werten. Ohne freigegebene
+  BFS/LSE-Datenquelle, zulässige Methodik und Disclosure bleibt er deaktiviert
+  und `noindex`.
+- Mock, Stripe-Testmode, Seed, kostenloser Pilot, LOI und Lead zählen null WTP.
 
-## Datenmodelländerungen
+### 7. Rollen und Owner
 
-Nur nach Angebotsspezifikation: versionierte Plan/Product Releases,
-Experiment/Offer Assignment ohne manipulative Dark Patterns, Contract/
-ImportFeed/SyncRun/SLA-Evidence. Bestehende Entitlement-, Order-, Invoice- und
-Import-Approval-Modelle werden verwendet. Kein allgemeines Boolean-Featuregate.
+Employer Buyer/Owner bestätigt Kauf und Nutzen. Sales/Research rekrutiert,
+ohne Leads als Umsatz zu zählen. Product besitzt Offer-/Clusterhypothese.
+Finance besitzt Cashflow, Rechnung, Tax und Reconciliation. Ops/Customer
+Success besitzt Delivery-/Recovery-SLA. Search plus Berufsfachperson besitzen
+das Korpus. Privacy/Security/Legal/AVG genehmigen flowspezifisch. Engineering
+besitzt 31B, Import und Kill Switch. Zwei getrennte Phase-25-Approver
+aktivieren den Cluster; niemand genehmigt eigene Evidence.
 
-## Sicherheits- und Datenschutzfolgen
+### 8. Portale, Routen, Services, Provider und Worker
 
-- Preise, Eligibility und Entitlements serverautoritativ.
-- Feed/ATS braucht Source Rights, tenant-scoped Secrets, DPA, least privilege
-  und Draft-only Default.
-- Experimentanalytics nutzt nur Phase-22-freigegebene Events.
-- Kein Social Proof, Partnerlogo oder Umsatzwert ohne echte Freigabe.
-- Success Fee bleibt technisch deaktiviert.
+- Public Pricing/Marketing, Employer Billing/Plans, Employer Jobs/Pipeline,
+  Company/Cluster Cockpit, Talent Radar und Admin Commercial/Product Release.
+- Bestehende Billing-/Ledger-/Invoice-/Entitlement-Logik aus Phase 24;
+  Cluster Launch aus Phase 25/30A; Trust aus Phase 26; Analytics aus Phase 22.
+- Geplant: versionierter Offer Catalog, Experiment-/Delivery-Evidence,
+  Paid-Service-Recovery-Policy, Capacity-/Cashflow-Evidence und betreuter
+  Importworkflow.
+- Reale Provider nur aus Phase 24; manuelle Rechnung braucht kontrollierten
+  Financeabschluss. Worker für Import/Sync, Dunning oder Service-Fristen nur
+  über Phase 23 mit Retry/DLQ/Replay/Alert.
+- 31A darf als kontrollierter manueller Prozess laufen; öffentliche Runtime
+  und Kauf-CTA bleiben dabei aus.
 
-## Implementierungs- und Validierungsschritte
+### 9. Datenmodell, Constraints, Indizes und Klassifikation
 
-- [ ] **Track A – frühe Discovery nach Phase 19:** ICP, Startcluster,
-  Cashflow-/Runway-Modell, Packaging und vorregistrierte Erfolgs-/Stopregeln
-  festlegen; rechtlich freigegebene manuelle Angebots-/Rechnungstests
-  durchführen und ein Go/No-go vor Phase-24-LIVE-Ausbau dokumentieren.
-- [ ] Track A liefert pro gewähltem Startcluster ein durch Berufsfachpersonen
-  geprüftes, versioniertes Query-/Judgment-Korpus mit Sprache, erwarteten
-  Berufs-Konzepten, must-find/must-not-find, Top-K-Relevanz und zentralen
-  Zero-Result-Gegenfällen an Phase 30A. DEMO-Seed oder Marketingbegriffe gelten
-  nicht als Fachurteil.
-- [ ] Kostenlose Design-Partner nur für Usability, Delivery und
-  Clusterliquidität auswerten; sie zählen niemals als WTP-Evidence.
-- [ ] **Track B – Production-Freigabe nach den Kernphasen:** tatsächlichen
-  Provider-Geldfluss, Katalog, Entitlements, Support, LIVE-Kohorten und den
-  zielrelevanten Phase-30A-Search-Release reconciliieren, bevor öffentliche
-  CTAs aktiviert werden.
-- [ ] Reale Supply-/Demand-/Response-Gates mit LIVE-Provenienz erfassen;
-  `ClusterLaunchAssessment V2` bindet Query-Set-, Search-Policy-, Ranking- und
-  Taxonomieversion. V1-Approvals werden nicht still übernommen.
-- [ ] Cashflow/Runway/Support-/CAC-Modell mit Sensitivitäten freigeben.
-- [ ] Angebots-/Packaging-Hypothesen und bezahlte Tests vorab registrieren.
-- [ ] Je Angebot Nutzen, Zielgruppe, Preis, Limits, Gate, Billing, Abuse,
-  Analytics, Upgrade/Downgrade/Cancel/Refund spezifizieren.
-- [ ] Priorisierte Add-ons über bestehende Ledger/Entitlements produktisieren.
-- [ ] Jahresmodelle erst nach Renewal-/Cancel-/Refund-Evidence.
-- [ ] Betreuten Import vertikal bis Draft/Fehler/SLA umsetzen.
-- [ ] Wiederkehrenden Sync erst mit Worker/Monitoring/Datenrechten aktivieren.
-- [ ] Production Pricing nur aus freigegebenen Releases rendern.
-- [ ] SSO/API nur durch konkrete zahlende Nachfrage in neue Folgephase heben.
+- Versionierte `CommercialHypothesis`, `OfferRelease`, `ClusterDecision`,
+  `DeliveryCase`, `DemandEvidence` und `ServicePolicyRelease` oder äquivalente
+  bestehende Evidence-Artefakte mit Actor, Provenienz, Zeitraum und Digest.
+- Ein partial/transactional Constraint erlaubt höchstens **einen** ersten
+  `PUBLIC_ACTIVE` Region×Profession-Cluster; Discovery-Kandidaten bleiben
+  `RESEARCH`.
+- Payment-/Invoice-/Refund-/Entitlement-Wahrheit bleibt bei Phase 24.
+  Commercial Evidence referenziert deren immutable IDs und darf keinen
+  zweiten Geldledger bilden.
+- `CapacityModelRelease` und `CashflowModelRelease` sind versionierte
+  Artefakte, keine manipulierbaren Runtime-Kundendaten.
+- Import speichert Source-Rights-Evidence, Mapping-Version, Source Digest,
+  Tenant, Preview-/Commitstatus und Fehler; Credentials als Secrets, nicht DB-
+  Klartext. Uploads/Company-/Candidate-Daten bleiben personenbezogen bzw.
+  vertraulich klassifiziert.
 
-## Abhängigkeiten
+### 10. Expand–Migrate–Contract und Backfill
 
-Der Query-/Judgment-Substream von Track A hängt nur von Phase 19, bestätigtem
-Startcluster, Product/Search Owner und verfügbaren Berufsfachpersonen ab;
-Track 30A setzt unmittelbar auf diesem Korpus auf. Manuelle Angebots-/
-Rechnungstests in Track A benötigen zusätzlich flowspezifische
-Legal-/Tax-/AVG-Freigabe, Design-Partner, Marktakquise und Budget. Track B hängt
-von den zielrelevanten Phasen 22–26 und 28, besonders realem Billing Phase 24
-sowie den P1-Tracks 30A/30B ab. STH-027/Track 30C blockiert Track B nur, wenn
-sein dokumentierter Count-/Byte-/Forecast-/Performance-Trigger gilt.
+- 31A erzeugt zunächst versionierte, nichtöffentliche Evidence ohne
+  Runtime-Schemazwang.
+- 31B migriert Offer/Product/Service-Policy additiv und lässt bestehende
+  Plan-/Entitlement-Snapshots unverändert. Kein Preis wird rückwirkend
+  überschrieben.
+- Bestehende Demo-/Testprodukte werden explizit als `DEMO`/`TEST` klassifiziert
+  und nie still zu Production migriert.
+- Cluster V2 bindet Query-Set-, Search-/Ranking-/Taxonomie- und Offerrelease;
+  V1-Approvals werden nicht übernommen.
+- Import-/Contract-Backfill ist tenantweise, idempotent und checksumgeprüft.
+  Contract entfernt Altfelder erst nach Read-/Write-Parität und Rollbackfenster.
 
-## Risiken und Regressionen
+### 11. Serverlogik, Queue und Provider
 
-- Zu frühe Production-Copy täuscht Lieferbarkeit/Zahlungsreife vor.
-- Mehr Umsatzfeatures erhöhen Support/COGS stärker als ARPA.
-- Import verletzt Source Rights oder erzeugt Auto-Publish.
-- Dünne Cluster beschädigen Candidate Trust.
-- Monetarisierung beeinflusst Fair Score, organische Relevanz oder Radar-
-  Privacy.
+- Preis, Eligibility, Entitlement, Serviceumfang, verfügbare Kapazität und
+  Cluster sind serverautoritativ; Clientparameter wählen keine günstigere
+  Produktversion.
+- Der WTP-Nachweis zählt nur `CAPTURED/PAID` bzw. reconcilierten manuellen
+  Geldeingang minus vollständige Refunds/Reversals und nur nach real
+  begonnener/gelieferter Leistung.
+- Offer-Sequenz: Kernworkflow/Hiring Sprint/Retainer/Concierge/Paid Import
+  zuerst. Boost und Radar sind nachgelagerte, separat gegatete Add-ons.
+- Boost kauft Reichweite/Platzierung innerhalb der Phase-09-Fairnessgrenzen,
+  nie Score, Eligibility, Empfehlung oder Garantie auf Bewerbungen.
+- Radar verkauft nur freigegebene Kontaktcredits; kein Kauf umgeht Candidate
+  Opt-in, Accept, Reveal, Eligibility Loss oder Grant-Widerruf.
+- Service Failure erzeugt idempotent Supportcase und gemäss freigegebener
+  Policy Retry, Fristverlängerung, Replacement/Credit oder Refund/Reversal.
+- Import ist Preview→explicit Commit→Draft; kein automatisches Publish.
 
-## Abwärtskompatibilität und Rollback
+### 12. Vollständige UX-Zustandsmatrix
 
-Produkte sind versioniert, release-gegatet und serverseitig deaktivierbar.
-Bestehende Verträge/Entitlements behalten ihre Snapshots. Stop-Kriterien
-pausieren Neukauf, nicht rückwirkend bezahlte Rechte. Demo/Research bleibt als
-separater Modus ehrlich erhalten.
+Jedes Angebot zeigt Loading, Empty/No eligible offer, Research-only,
+Locked/Gate missing, Capacity full, Pending invoice/payment/review/delivery,
+Active, Partially delivered, Paused, Cancelled, Expired, Failed, Recovery
+offered, Refunded/Reversed und Success. Preis, Laufzeit, Credits,
+Leistungsgrenzen, Kündigung, Pause/Reactivation, Delivery-SLA und Recovery
+stehen vor Bestätigung. Boost zeigt Baseline/gekaufte Reichweite ohne
+Erfolgsgarantie; Radar zeigt verfügbare Credits und Privacygrenzen. Import
+zeigt Preview, Row errors, Draft count und Commitconfirmation.
 
-## Akzeptanzkriterien und Tests
+### 13. Mobile und Accessibility
 
-### Produkt / Finance / externe Evidence
+Pricing, Checkout/Invoice, Entitlements, Recovery und Import Preview bleiben
+bei 320/360 px vollständig bedienbar. Vergleichstabellen besitzen ein
+semantisches Card-/List-Fallback. Preis, Rhythmus, Steuer, Status und Fehler
+werden nicht nur farblich vermittelt. Dialoge fokussieren korrekt, Async-
+Status wird angekündigt und bezahlpflichtige Bestätigung besitzt eindeutigen
+Accessible Name plus finalen Betrag.
 
-- [ ] kostenlose Design-Partner besitzen getrennte Usability-/Delivery-/
-  Liquiditätsevidence und werden nicht als Zahlungsbereitschaft gezählt.
-- [ ] WTP beruht auf tatsächlich beglichenen Aufträgen und erfüllt die
-  vorregistrierte Mindeststichprobe beziehungsweise Stopregel; Umfang und
-  Resultat sind dokumentiert, Mock/Testmode zählt null.
-- [ ] Cluster-Gates ausschließlich mit LIVE-Provenienz und bestandener
-  cluster-/sprachspezifischer Phase-30A-Search-Evidence.
-- [ ] Cashflow/Runway, CAC, COGS, Churn und Supportsensitivität.
-- [ ] vorab definierte Erfolg-/Stop-Kriterien und Experimentresultate.
+### 14. Authentisierung, Step-up, Autorisierung und Tenant
 
-### Unit / Integration / E2E
+Employer Owner bzw. explizite Billing-Persona darf kaufen, kündigen,
+refund/recovery beantragen oder Import committen. Preis-/Product-/Cluster-/
+Service-Policy-Release sowie manuelle Geldzuordnung benötigen Phase-25-
+Capabilities, Step-up und Separation of Duties. Recruiter erhält nur
+delegierte Entitlements. Candidate zahlt nicht und erhält keine schlechtere
+organische Fairness. Jede Order, Invoice, Credit, Delivery und Importoperation
+ist tenant-scoped; IDOR-/Owner-/Persona-Negativtests sind Pflicht.
 
-- [ ] Offer/Product/Plan Release, Entitlements, Limits und serverseitige Preise.
-- [ ] Upgrade/Downgrade/Cancel/Refund je aktivem Angebot.
-- [ ] Boost/Kontakt/Add-on beeinflusst Fair Score/Privacy nicht.
-- [ ] Import Source Rights → Preview → Draft → Error/Retry/Sync, kein Auto-Publish.
-- [ ] Production/Demo Copy und Feature Flags fail-closed.
-- [ ] Cluster V2 lehnt alte V1-Approvals, Release-Mismatch, reine
-  Location-/`Stellen`-Treffer und unterschwellige Relevanz ab; Revoke/
-  Re-Evaluation sperrt Indexierung und Akquise.
-- [ ] Finance-, Tenant-, Abuse-, Analytics- und Mobile/A11y-E2E.
+### 15. Datenschutz, Retention, Export, Löschung und Audit
 
-## Evidence und Definition of Done
+- WTP-/Research-Evidence minimiert personenbezogene Interviewdaten; Einwilligung,
+  Zweck, Zugriff, Retention und Löschung sind dokumentiert.
+- Commercial Events enthalten keine CVs, Messages, Rohqueries,
+  Payment-Secrets oder unnötige Personenmerkmale.
+- Vertraglich aufzubewahrende Rechnungs-/Ledgerdaten folgen Phase 24 und Legal
+  Hold; Researchnotizen, Importquellen und Deliverycases besitzen getrennte
+  Fristen.
+- Offer-/Price-/Policy-/Cluster-Release, Kauf, Cancel, Refund, Credit,
+  Recovery, Import Commit und Adminoverride sind unveränderlich auditiert.
+- Candidate Radar Opt-in, Reveal-Grants und Privacy Requests bleiben von
+  Monetarisierung unverändert export-/widerruf-/löschbar.
 
-- [ ] Reale Liquidität und die Phase-30A-Suchqualität sind je Startcluster
-  belegt oder der Cluster bleibt für Public, SEO und Paid Acquisition
-  geschlossen.
-- [ ] Kein Produkt wird als lieferbar verkauft, bevor sein End-to-End-Service
-  und Supportmodell bereit ist.
-- [ ] Demo-/Hypothesencopy wird nur im freigegebenen Productionmodus ersetzt.
-- [ ] Preise und Packaging beruhen auf echtem Angebotsversuch, nicht Mock.
-- [ ] Cashflow/Runway und Unit Economics besitzen Owner und Sensitivität.
-- [ ] Loading-, Empty-, Locked-, Unavailable-, Error-, Pending-, Cancelled- und
-  Success-Zustände folgen demselben freigegebenen Angebotsvertrag.
-- [ ] Alle Produkt-, Billing-, Tenant-, Privacy- und Operationsgates sind grün.
-- [ ] Offene SSO/API/Success-Fee-Hypothesen bleiben sichtbar offen.
+### 16. Abuse-, Fraud-, ATO- und Missbrauchsszenarien
 
-## Offene externe Voraussetzungen
+Gefälschte WTP-Evidence, Selbstkauf, Gutschein-/Refund-Cycling, Payment Replay,
+gestohlene Firmenkonten, manipulierte Preise/Entitlements, Radar-Scraping,
+Boost-Spam, Duplicate Jobs, Import fremder Inhalte, Formula-/CSV-Injection,
+Source-Rights-Fälschung und Concierge-Überlastung. `STH-031`-Riskqueue,
+Velocity-/Value-Limits, Step-up, Reviewer Separation, Provenienz,
+Reconciliation, sichere Importparser und Kill Switch sind Pflicht.
 
-Design-Partner, echte Kandidaten/Supply, Paid-Test-Budget, Finance/Tax/Legal/
-AVG, Verträge, Support/SLA und Product/Sales Ownership. Diese Phase kann nicht
-durch Code allein abgeschlossen werden.
+### 17. Externe und organisatorische Voraussetzungen
 
-## PortalGERM Execution Contract
+- Ein benannter Product Owner, genau ein gewählter Startcluster und
+  Berufsfachreview.
+- Reale KMU-Buyer, rechtskonforme Ansprache, Research Consent und Budget für
+  tatsächlich bezahlte Tests.
+- Schriftliche Tax-/Accounting-/VAT-/AVG-/Legal-/Privacy-Freigabe je Offer,
+  Rechnung, Import, Radar und möglichem Provider.
+- Financekonto/Reconciliation, Support-/Opsbesetzung, Servicezeiten,
+  Eskalation, Refundautorität und Fraud/Incident Owner.
+- BFS/LSE-Lizenz-/Methodikfreigabe nur falls Salary-Angebot überhaupt verfolgt
+  wird.
 
-| Feld | Verbindlicher Vertrag |
-|---|---|
-| Business Value | Belegter Umsatz statt Demo-Mechanik und bessere Kapitaldisziplin. |
-| Problem-IDs | STH-018, STH-022, STH-028; STH-019 als von Phase 30A geliefertes Cluster-Launch-Gate. |
-| Prerequisites | Query-/Judgment-Substream: 19 + Startcluster/Fachreview, danach 30A. Angebots-/Rechnungstest: zusätzlich Legal/Tax/AVG/Partner/Budget. Track B: zielrelevante 22–26, 28, P1-Tracks 30A/30B, besonders 24; 30C nur bei Kapazitätstrigger. |
-| Deliverables | LIVE-Gates, Pricing/Packaging-Evidence, priorisierte Produkte, betreuter Import. |
-| Security / Privacy | Serverpreise, Source Rights, tenant-scoped Integrationen, keine Score-/Radar-Manipulation. |
-| Tests | Product releases, billing lifecycle, import, production/demo modes plus externe Evidence. |
-| Expected Result | Nur lieferbare und wirtschaftlich begründete Angebote sind produktiv sichtbar. |
-| Risks / Limits | Code beweist weder WTP noch Liquidität; Success Fee bleibt aus. |
+### 18. Harte Abhängigkeiten
+
+- 31A startet nach Phase 19. Frühe Research-Methodik und Verständlichkeit
+  werden mit 29A koordiniert.
+- 31A liefert genau für den gewählten Cluster ein fachlich signiertes
+  Query-/Judgment-Korpus an 30A; Search-Evidence fliesst zurück ins
+  Cluster-Gate.
+- 31B benötigt für seinen Scope Phasen 20–26, 29B, 30A und 30D. Phase 24 ist
+  für realen Provider-Geldfluss, Ledger, Tax, Invoice, Refund und
+  Reconciliation zwingend.
+- 30B/30C blockieren nur, wenn ihre dokumentierten Scale-/Sitemap-Trigger
+  ausgelöst sind; sonst bleiben sie datiert `DEFERRED / MONITORED`.
+- Phase 28 ist nur für ein verkauftes Tracker-/Scheduler-Versprechen Pflicht.
+  Phase 27 nur für ein versprochenes Multi-Persona-Angebot.
+
+### 19. Geordnete Implementierungsschritte
+
+#### 31A — WTP, Delivery und Economics
+
+1. ICP, Vergleichskandidaten und **genau einen** ersten
+   Region×Profession-Cluster samt Stop-/Success-Regeln entscheiden.
+2. Clusterkorpus durch Berufsfachpersonen signieren und an 30A übergeben.
+3. Kernangebote in dieser Reihenfolge spezifizieren: Basisworkflow, Hiring
+   Sprint, Retainer/Credits, Concierge/Design Partner, Paid Import Setup.
+4. Je Offer Preis, Umfang, Laufzeit, Capacity, Delivery, Pause/Cancel,
+   Recovery und Net-WTP-Messregel vorregistrieren.
+5. Legal/Tax/AVG/Privacy/Accounting freigeben; manuelle Rechnung und
+   Reconciliation kontrolliert vorbereiten.
+6. Moderierte Verständlichkeit und echte bezahlte Tests durchführen;
+   kostenlose/Mock-/Testmode-Fälle separat klassifizieren.
+7. Servicezeiten und Unit Cost messen; Backlog-/Staffing-/On-call-Modell
+   kalibrieren.
+8. 18-/24-Monats-Cashflow und Sensitivitäten mit realem Zahlungs-/CAC-Timing
+   freigeben.
+9. Pro Offer und Cluster Go/Pivot/Stop dokumentieren.
+
+#### 31B — Technische und öffentliche Produktaktivierung
+
+1. Nur ein in 31A freigegebenes Offer als versionierten Product Release
+   implementieren.
+2. Entitlement, Billing, Invoice, Tax, Dunning, Refund und Reconciliation mit
+   Phase 24 integrieren.
+3. Delivery-/Support-/Recovery-Workflow und Capacity Guard implementieren.
+4. Serverautorisierte Public-/Employer-Copy sowie Demo/Production-Trennung.
+5. Betreuten Import als Source Rights→Preview→Draft-only vertikal umsetzen.
+6. Boost erst nach organischem Reach-Gate; Radar erst nach Dichte-/Paid-Use-
+   Gate; jedes Add-on mit eigenem Release.
+7. Canary mit Stop-/Rollbackregeln; danach G3.
+
+### 20. Feature-Flags, Kill Switch und Aktivierung
+
+Getrennte serverseitige Gates für `productionOffers`, jedes Offerrelease,
+manuelle Rechnung, Provider Checkout, Import Commit/Sync, Boost, Paid Radar
+und Salary. Aktivierung: internal→design partner allowlist→ein gewählter
+Cluster→kontrollierter Cohort. Capacity Full, Reconciliation Drift,
+Provider-/Delivery-SLO, Trust/Fraud oder Recoveryausfall stoppen Neukauf
+fail-closed. Bestehende bezahlte Rechte werden erfüllt, ersetzt oder
+zurückerstattet; Kill Switch darf die Servicepflicht nicht löschen.
+
+### 21. Akzeptanzkriterien und vollständige AC→Test-Matrix
+
+- `AC-31-01`: Es gibt genau einen ersten öffentlichen Cluster.
+- `AC-31-02`: Das signierte Clusterkorpus ist an 30A gebunden.
+- `AC-31-03`: Kernangebote werden vor Add-ons gegen reales Geld getestet.
+- `AC-31-04`: Boost erfüllt sein organisches Reichweiten-/Delivery-Gate.
+- `AC-31-05`: Paid Radar erfüllt Dichte-, Privacy- und Nutzengate.
+- `AC-31-06`: Kapazität und Unit Cost begrenzen Verkauf und Concierge.
+- `AC-31-07`: Cashflow modelliert Geld-/CAC-Timing ohne Doppelzählung.
+- `AC-31-08`: Paid-Service-Recovery ist vor Kauf durchgängig belegbar.
+- `AC-31-09`: Product Release, Copy und Entitlements sind fail-closed.
+- `AC-31-10`: Import ist rechtegeprüft, previewbar und Draft-only.
+- `AC-31-11`: Salary bleibt ohne reale Freigabe deaktiviert/noindex.
+
+| Criterion / Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| AC-31-01 / STH-018, REQ-COM-031-001 | P0 LC3+ | Unit + PostgreSQL | zwei Research-Kandidaten, Aktivierung des ersten | genau ein Cluster wird `PUBLIC_ACTIVE` | parallele Aktivierung, stale approval, V1/mismatched releases | Product/Ops Approver | Cluster Launch | zwei Regionen×Berufe, V1/V2 | PostgreSQL 16 | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-cluster-gates.test.ts && npx vitest run --config vitest.integration.config.ts tests/integration/admin/phase31-cluster-v2-postgres.test.ts` | `PUBLIC_ACTIVE` count = 1; zweiter Versuch 0 Writes; zwei getrennte Approvals | JUnit + DB diff + Assessmentdigest | Product/Ops | PLANNED |
+| AC-31-02 / STH-019 | P0 aktiver Cluster | Contract + Fachreview | zwei Discovery-Korpora→genau ein 30A-Release/Cluster V2 | Pflege und Engineering besitzen verschiedene Digests/Fachowner; exakt eines ist `SELECTED` | Demo-/Marketingliste, Cross-Corpus-Evidence, anderer Cluster/Locale, nachträglich geänderter Digest | Search Owner + Pflege-/Engineering-Fachpersonen | Evidence/30A | getrennte Pflege- und Engineering-Korpora | CI + zwei manuelle Reviews | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-corpus-handoff.test.ts`; beide Fachowner verifizieren je Corpusdigest, Sprache, must-find/must-not-find; Product markiert genau einen Digest `SELECTED` | zwei getrennte gültige Digests; `SELECTED` exakt 1; unbekannter/geänderter/`DISCOVERY_ONLY`-Digest aktiviert 0 Cluster | Contractreport + zwei Reviews + Selection Decision | Search + Berufsfachowner | PLANNED |
+| AC-31-03 / STH-037, REQ-COM-031-002 | P0 Paid | Unit + externes Experiment | Kernoffers vor Boost/Radar; bezahlter Auftrag | reconciliertes Geld und reale Delivery zählen | Mock/Testmode/Free/LOI/Lead/Selbstkauf/refunded zählt null | Employer Buyer/Finance | Research/Finance Evidence | vorregistrierte Offer-Cohort | kontrollierte Design-Partner-Umgebung | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-offer-sequencing.test.ts`; manuell: Hypothese+Datenfreeze→Legal/Tax-Freigabe→Buyer akzeptiert Preis/Scope→Rechnung→Bank-/Ledger-Reconcile→Delivery→Outcome→Go/Pivot/Stop | Add-on vor Kernoffer wird denied; WTP count entspricht nur netto bezahlten, unabhängigen, gelieferten Fällen; Mindest-n/Stopregel vorab fixiert | Experimentprotokoll + Rechnung-/Ledgerreferenz ohne PII | Product + Finance | PLANNED |
+| AC-31-04 / REQ-COM-031-005 | P1 iff Boost | Unit + Integration | organische Baseline→Boost Delivery | zusätzlicher eligible Reach gemäss Vertrag | dünnes Inventar, garantierte Bewerbungen, Score-/Rankingkauf, Fraudclicks | Employer/Product | Search/Boost/Billing | organic + paid cohorts | PostgreSQL + Analytics | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-addon-gates.test.ts && npx vitest run --config vitest.integration.config.ts tests/integration/billing/phase31-product-release-postgres.test.ts` | ohne Reach-/Inventory-Schwelle purchasable=false; Fair Score/Eligibility diff=0; Deliverymetriken dedupliziert | Gate-/Reach-/Fairnessreport | Growth + Search | PLANNED |
+| AC-31-05 / REQ-COM-031-005 | P0 iff Paid Radar | PostgreSQL + Privacy | opt-in Supply→Search→Contact→Accept→Reveal→Credit | erlaubter Kontakt liefert belegten Nutzen | zu geringe Dichte, opt-out, reject/expire, cross-tenant, scraping, gekauftes Reveal | Employer/Candidate | Talent Radar/Billing | opt-in/out, accept/reject/expire | PostgreSQL 16 | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/phase31-radar-paid-gate-postgres.test.ts` | unter Dichte-/Accept-/Reveal-Schwelle purchasable=false; Eligibility Loss widerruft Mapping; Privacydenials 0 Leaks/0 Charge oder Policy-Recovery | Density/Funnel/Privacy/Ledger diff | Product + Privacy | PLANNED |
+| AC-31-06 / STH-034, REQ-COM-031-003 | P0 Paid | Unit + Ops Simulation | Arrival Rate versus Staffing/Servicezeiten | Verkauf bleibt innerhalb Capacity/COGS | Spike, Krankheit, Import-/Fraudbacklog, Concierge über COGS-Cap | Ops/Finance | Capacity Guard/Queues | sechs Worktypes, base/high/stress | Modell + staging-like queue | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-capacity-model.test.ts`; Ops trägt gemessene Minuten/Case, Arrivals, Backlog, Servicezeit und verfügbare Stunden in den versionierten Input ein | je Worktype Utilization ≤80 %, Backlog innerhalb SLA, Concierge-COGS/Kunde ≤ vorregistriertem Cap; sonst Neukauf geschlossen | Modelldigest + Messquellen + Capacity decision | Ops + Finance | PLANNED |
+| AC-31-07 / REQ-COM-031-003 | P0 Paid | Unit + Finance Review | 18/24 Monate base/downside/upside | Cash-in/out und Runway stimmen | CAC doppelt, Invoice=Cash, jährlicher Betrag sofort, Pause/Reactivation ignoriert | Finance/Product | Cashflow Model | real timing + sensitivities | versioniertes Modell | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-cashflow.test.ts`; Finance gleicht Monat 0–24 mit Bank/Ledger, Payroll, Provider, Refund und CAC-Quellen ab | Monatssummen/Opening/Closing Cash auf Rappen; CAC einmal; 18/24-Monats-Runway, Break-even, Burn und Downside ausgewiesen | Modelldigest + Reconciliation + Approval | Finance | PLANNED |
+| AC-31-08 / STH-035, REQ-COM-031-004 | P0 Paid | Unit + PostgreSQL + E2E | Provider-/Platform-/Deliveryfehler nach Kauf | Retry/Extension/Replacement/Credit/Refund gemäss Policy | Doppelerstattung, Entitlementverlust ohne Recovery, Trustverlust, abgelaufener Radarcontact, Boost outage | Employer/Support/Finance | Billing/Support/Delivery | paid offers, failure matrix | PostgreSQL + Chromium | `npx vitest run --config vitest.config.ts tests/unit/billing/paid-service-recovery-policy.test.ts && npx vitest run --config vitest.integration.config.ts tests/integration/billing/phase31-service-recovery-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase31-production-offer.spec.ts --project=chromium-journeys` | jeder Failurecode genau eine kundensichtbare Remedy/SLA; Ledger/Reversal idempotent; ungelöste Fälle eskalieren | Policyrelease + JUnit + Ledger/Audit + Screenshot | Support + Finance | PLANNED |
+| AC-31-09 / STH-028 | P0 Public/Paid | Unit + E2E | Demo/Research/Production release | nur freigegebenes Offer zeigt korrekten Preis/CTA | Clientpreis, unknown release, expired capacity, Copy ohne Delivery/Taxfreigabe | Public/Employer/Admin | Marketing/Pricing/Billing | releases/gates/capacity | CI + Chromium | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-production-copy.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase31-production-offer.spec.ts --project=chromium-journeys` | unbekannt/disabled/gate missing: Kauf-CTA 0; Serverpreis=Invoicepreis; Productionclaim nur freigegebener Release | DOM/API snapshot + Release/Audit | Product + Engineering | PLANNED |
+| AC-31-10 / STH-022 | P0 Import | PostgreSQL + Security/E2E | source rights→mapping→preview→commit | nur eigene validierte Rows als Draft | fremde Rechte/Tenant, formula/zip bomb, invalid rows, replay, Auto-Publish | Employer Owner/Ops | Managed Import | XML/JSON/CSV positive/abuse | PostgreSQL + worker sandbox | `npx vitest run --config vitest.integration.config.ts tests/integration/imports/phase31-managed-import-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase31-managed-import.spec.ts --project=chromium-journeys` | 0 Auto-Publish; per-row error; checksum-idempotent; foreign writes 0; Preview=committed Draft set | Import/Audit/DB diff | Import + Security | PLANNED |
+| AC-31-11 / REQ-MKT-002 | P1 iff Salary | Contract + HTTP | fehlende/reale BFS/LSE-Freigabe | realer freigegebener Release mit Disclosure | Seed/mock/alte Quelle, falsche Region/Occupation, indexierbare Placeholderseite | Public/Ops | Salary/Public/SEO | disabled + approved source fixtures | CI + target env | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-salary-gate.test.ts && npm run test:e2e:http`; manuell Quellenlizenz, Stand, Methodik, Brutto-/Perzentil-/Region-/CH-ISCO-Disclosure prüfen | ohne alle Freigaben: Route/CTA disabled und noindex; mit Freigabe: 100 % Werte mit Sourceversion/As-of/Disclosure | Contract/HTTP report + Source approval | Product + Legal/Data | PLANNED |
+| AC-31-01–11 / G3 | Release Gate | Full Regression | unveränderlicher 31B-Kandidat | alle owning/global Gates grün | Skip/Retry/anderer Commit oder externe Evidence fehlt | alle | Repository + Provider | isolierte DB/provider fixtures | CI/Staging | `npm run lint && npm run typecheck && npm test && npm run test:integration && npm run build && npm run test:e2e:http && npm run test:e2e:browser` | Exit 0; Fail/Skip/Retry 0; technische Gates ersetzen keine WTP-/Legal-/Ops-Evidence | G3 Bundle + Commit SHA | Release Owner | PLANNED |
+
+### 22. Performance-, Kapazitäts- und Wirtschaftsgrenzen
+
+- Ein erster Cluster erhält vor Aktivierung ein eingefrorenes Supply-/Demand-/
+  Response-/Search-Gate; die Zahlen sind Hypothesen bis 31A sie vorregistriert.
+- Je Worktype werden p50/p90 Minuten, Arrival Rate, Backlog und SLA gemessen.
+  Planbare Auslastung bleibt ≤80 %; über dem Wert schliesst Capacity Guard
+  Neukauf, statt eine nicht lieferbare Leistung zu verkaufen.
+- Concierge besitzt einen expliziten COGS-/Stunden-Cap je Kunde und Offer.
+- Cashflow zeigt 18 und 24 Monate, monatlichen Burn, Break-even,
+  schlechtesten Cash-Punkt und Runway; Cash-in ist nicht Invoice-/MRR-
+  Buchungsdatum. CAC wird genau einmal und mit Zahlungsverzug erfasst.
+- Offer-SLOs und Performancebudgets werden vor erstem bezahlten Release
+  eingefroren; Boost/Radar erhalten eigene Delivery- und Recoverybudgets.
+
+### 23. Geschützte Phase-01–18-Invarianten
+
+Candidate bleibt kostenlos. Fair Score, organische Relevanz, Public
+Eligibility, Company Trust, Tenant-/Owner-Isolation, Radar Opt-in/Accept/
+Reveal, immutable Ledger, Idempotency, Invoice-/Refundwahrheit, Admin Dual
+Approval, Source Rights, Draft-only Import sowie Demo-/Production-Trennung
+bleiben unverändert. Monetarisierung darf keine Privacy-, Verification-,
+Moderation- oder Searchkontrolle umgehen.
+
+### 24. Rollback / Roll-forward
+
+Offer-/Price-/Service-Policy-Releases sind immutable und cohortweise
+deaktivierbar. Rollback stoppt Neukauf und Copy, nie offene Delivery-,
+Refund-, Invoice- oder Retentionpflichten. Bestehende Entitlements behalten
+ihren Snapshot oder erhalten die dokumentierte Recovery. Cluster kann
+fail-closed auf Research zurückgesetzt werden; Index, Acquisition und
+Productionclaims werden dann entfernt. Ledger-/Providerkorrekturen erfolgen
+als Reversal/Compensation, nicht durch Mutation. Import bleibt Draft; bereits
+publizierte Jobs folgen dem normalen Moderations-/Unpublishvertrag.
+
+### 25. Evidence
+
+Clusterentscheidung und Assessment V2, fachlich signiertes Corpusdigest,
+vorregistrierte Hypothesen/Stopregeln, anonymisierte Interview-/Taskdaten,
+reconciliierte Zahlungsreferenzen, Net-WTP- und Deliverykohorte,
+Capacity-/Unit-Cost-/Cashflow-Releases, Legal/Tax/AVG/Privacy-Freigaben,
+Service-Policy und Failurematrix, Boost-/Radar-Gates, Import Source Rights,
+Testreports, Featureflags, exakter Commit und G3-Bundle.
+
+### 26. Definition of Done
+
+- 31A ist nur `DONE`, wenn genau ein Cluster, mindestens ein zuerst
+  priorisiertes Kernangebot, echter Net-Geldfluss, reale Delivery,
+  Capacity/Unit Cost, 18-/24-Monats-Cashflow und Go/Pivot/Stop dokumentiert
+  sind. Mindeststichprobe und Stopregel wurden vor Kontakt/Kauf festgelegt.
+- 31B ist nur `DONE`, wenn das freigegebene Angebot serverseitig, billing-,
+  tenant-, privacy-, operations- und recovery-sicher geliefert wird.
+- Boost und Radar bleiben unabhängig `DISABLED`, bis ihre eigenen Gates grün
+  sind; kein Gesamtphasen-Häkchen aktiviert sie.
+- Salary bleibt ohne externe Realdatenfreigabe deaktiviert/noindex.
+- Alle Matrixzeilen besitzen direkte Evidence; externe Arbeit wird nicht durch
+  grüne Unit Tests ersetzt.
+
+### 27. Folgephasen-Gate
+
+Phase 32 darf höchstens die Launchklasse freigeben, deren 31A-/31B-Evidence
+tatsächlich benötigt und grün ist. LC1 braucht Phase 31 nicht. LC2 darf
+kontrollierte manuelle Tests nur mit flowspezifischer Legal/Privacy/Tax/AVG-
+Freigabe durchführen. LC4 hält alle Kauf-CTAs geschlossen. LC5 benötigt
+vollständig grüne Phase 24 und Phase 31 inklusive Paid-Service-Recovery.
+LC6 benötigt zusätzlich nachgewiesene Kapazität, On-call und ausgelöste
+Scale-Gates.
+
+### 28. Ausdrücklich nicht bewiesen
+
+Ein bezahlter Auftrag beweist keinen Product-Market-Fit, keinen niedrigen CAC,
+keine Retention und keine nationale Skalierbarkeit. Ein Cluster beweist keinen
+zweiten. Rechnung, LOI oder Testmode beweisen ohne reconcilierten Geldfluss
+und Delivery keine WTP. Free Design Partner beweisen nur Research/Delivery.
+Bestehender Radarcode beweist keine Dichte oder Paid-Nachfrage. Ein
+Cashflowmodell beweist keine Finanzierung. Deaktivierter Salary ist kein
+Realdatenprodukt.

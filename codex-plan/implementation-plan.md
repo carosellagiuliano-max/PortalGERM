@@ -1,6 +1,13 @@
 # SwissTalentHub — Ausführbarer Implementierungsplan
 
-> **Verbindlicher Startpunkt für Coding-Agenten.** Der Zielzustand ist ein kontrollierbares, DSG-freundlich vorbereitetes MVP mit persistierenden Mock-Providern, nicht ein produktionsbereites System. Jeder Schritt wird vollständig abgeschlossen, bevor ein abhängiger Schritt beginnt. Unit-/Integrationstests entstehen in der besitzenden Phase; Phase 17 konsolidiert und erweitert sie.
+> **Historischer Ausführungsplan für Phase 01–18.** Diese Phasen und ihre
+> commitgebundene Evidence bleiben unverändert. Für neue Implementierung ist
+> heute zuerst Phase 19 und danach der prospektive Abschnitt am Ende dieses
+> Dokuments zusammen mit
+> [`remediation-execution-contract.md`](./remediation-execution-contract.md)
+> verbindlich. Der historische Zielzustand war ein kontrollierbares,
+> DSG-freundlich vorbereitetes MVP mit persistierenden Mock-Providern, nicht
+> ein produktionsbereites System.
 
 ## Ausführungsregeln
 
@@ -580,3 +587,91 @@ flowchart LR
 ## Abschlussentscheidung
 
 Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert und lokal verifiziert. Der technische Abschluss ist „Demo-ready, serverseitig gegatet, mit lokalen Mock-Providern“, nicht pilot- oder production-ready. Weitere Umsetzung beginnt nur über ein ausdrücklich freigegebenes Folgepaket oder durch Schliessen der externen Staging-/Legal-/Privacy-/Tax-/Provider-/Ops-Gates; REQ-REC-002 bleibt separat gegatet. Quellcode aus Referenzprojekten bleibt reine Vergleichsbasis und darf nicht blind kopiert oder als Ziel-Evidence behandelt werden.
+
+## Prospektiver Ausführungsplan Phase 19–32
+
+> Dieser Abschnitt ist das ausdrücklich freigegebene Folgepaket auf
+> Planungsebene. Alle Phasen bleiben offen. Jede Phase instanziiert den
+> 28-Punkte-, Test-, Evidence- und Folgephasengate-Vertrag aus
+> [`remediation-execution-contract.md`](./remediation-execution-contract.md).
+
+```mermaid
+flowchart TD
+  P19["19 Current Baseline + Governance G4"] --> D31["31A ICP, one first cluster, WTP, cashflow, capacity"]
+  P19 --> R29["29A Moderated current-state research"]
+  P19 --> P20["20 Identity, verification, notification contract"]
+  D31 --> S30["30A Search concepts, corpora, learning"]
+  R29 --> S30
+  P20 --> P21["21 Private CV/Document Vault"]
+  P21 --> P22["22 Privacy, Legal, Analytics"]
+  P22 --> P23["23 Worker, Providers, Production Ops"]
+  P20 --> P25["25 Privileged assurance + Admin least privilege + Fraud lead"]
+  P23 --> P25
+  P25 --> P26["26 Company Trust"]
+  P23 --> F30["30D Job Freshness"]
+  P26 --> F30
+  D31 --> P24{"LC5 WTP Go?"}
+  P22 --> P24
+  P23 --> P24
+  P25 --> P24
+  P24 --> U29["29B Final UX/Mobile/A11y"]
+  S30 --> U29
+  F30 --> U29
+  P26 --> U29
+  U29 --> B31["31B Offer/cluster activation decision"]
+  B31 --> P32["32 Exact-artifact launch audit"]
+  X30["30B Scale reads"] -. "volume/query trigger" .-> P32
+  C30["30C Sitemap shards"] -. "capacity trigger" .-> P32
+  P27["27 Multi-Persona"] -. "explicit demand only" .-> U29
+  P28["28A Tracker / 28B Scheduler"] -. "separate moderated demand only" .-> U29
+```
+
+### Kritischer Standardpfad
+
+1. **Phase 19**: aktueller sauberer `main`, vollständiger Golden Run,
+   Governance/ADRs/Requirements/Architektur/Traceability/Testverträge.
+2. **Frühe parallele Discovery**: 31A (ICP, genau ein erstes
+   Region×Beruf-Paar, WTP, Cashflow, Operationskosten) und 29A (moderierte
+   aktuelle Kernreisen).
+3. **Track 30A**: fachliches Pflege-Korpus und, nur bei Aktivierung,
+   Engineering-Korpus; gemeinsame Berufs-/Ort-/Qualifikations-/Skill-/
+   Branchenkonzepte und privacy-safe Learning.
+4. **Phasen 20→21→22→23**: Identity/Delivery, reale Dokumente,
+   Datenschutz/Legal/Analytics und autonome Operations.
+5. **Phasen 25→26→30D**: privilegierte Assurance/Least Privilege/Fraud,
+   belastbarer Company Trust und Job Freshness.
+6. **Phase 24 nur bei LC5-Go**: reales Billing plus Paid-Service-Recovery.
+7. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
+   final usability-/mobile-/a11y-prüfen; erst danach genau das lieferbare
+   Angebot/den Cluster aktivieren.
+8. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
+   Artefakt prüfen.
+
+### Parallel zulässig
+
+- Nach grünem 19-Gate: nichttechnische 31A-/29A-Arbeit und fachliche
+  Korpusvorbereitung.
+- Phase 20/21/22 dürfen entworfen, aber gemeinsame Schema-/Auth-/
+  Verschlüsselungsänderungen nur nacheinander integriert werden.
+- Phase 23 kann Worker-Grundlagen bauen; eine Domainqueue aktiviert erst nach
+  deren stabilem fachlichem Contract.
+- Phase 25 und 26 dürfen nach Phase 20 vorbereitet werden; Auth-/Role- und
+  Company-Migrationen werden nicht gleichzeitig gecutovert.
+
+### Bewusst ausserhalb des Standardpfads
+
+- Phase 27 Multi-Persona bleibt P3/deferred, bis ein dokumentierter Persona-
+  Bedarf besteht.
+- Phase 28A externer Tracker und 28B Vollscheduler besitzen getrennte
+  Research-Gates; der bestehende interne Bewerbungsflow hängt nicht davon ab.
+- Phase 30B beginnt bei gemessenem Queue-/Query-/Latenztrigger.
+- Phase 30C baut Index/Shards erst bei gemessenem Sitemap-Trigger; das heutige
+  fail-closed/no-truncation-Verhalten bleibt.
+- Salary LIVE bleibt disabled/noindex/aus der Sitemap, bis ein fachlich
+  freigegebener BFS/LSE- oder anderer rechtmässiger Datensatz vorliegt.
+
+### Integrationssperren
+
+Zwischen zwei grossen Auth/RBAC-, Schema-/Backfill-, Keyring/Object-,
+Worker-, Payment- oder destruktiven Privacy-Cutovers liegt ein grünes G3 mit
+Kill-Switch-/Rollback-Evidence. Phase 32 enthält keine neue Funktion.

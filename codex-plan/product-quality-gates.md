@@ -1,6 +1,9 @@
 # Product Quality Gates
 
 > Cross-cutting checklist for every SwissTalentHub route, component, server action, model, and business flow. Apply this before coding each phase and update the phase file when something is missing.
+> Für Phase 19 und später ist der
+> [Remediation-Ausführungsvertrag](./remediation-execution-contract.md)
+> normativ; dieses Dokument fasst dessen Produktgrenzen zusammen.
 
 ## Purpose
 
@@ -23,7 +26,9 @@ For every feature, document or implement all items below:
 - [ ] **Privacy:** identity-bearing fields reviewed; no Talent Radar leakage; no private data in SEO or logs.
 - [ ] **Feature gate:** plan/product/credit limit enforced server-side where monetized.
 - [ ] **Audit:** sensitive action writes `AuditLog` with actor, entity, metadata, and hashed IP where useful.
-- [ ] **Notifications:** mock email/log created where a real product would notify a user.
+- [ ] **Notifications:** LC1 records truthful Mock delivery; every activated
+  real flow commits a durable classified Outbox entry atomically and uses
+  only the explicitly approved environment/provider.
 - [ ] **UX states:** default, loading, empty, success, validation error, permission error, rate-limit error, and offline/server error.
 - [ ] **Mobile:** usable at 360 px width; forms, tables, filters, modals, and dashboards do not overflow.
 - [ ] **Accessibility:** semantic HTML, labels, focus states, keyboard-operable dialogs/menus, sufficient contrast.
@@ -58,7 +63,9 @@ Every route must deliberately handle these states.
 ### Candidate Flows
 
 - [ ] Register/login/logout works and preserves intended `next` redirect safely.
-- [ ] SwissJobPass edit writes profile, skills, languages, consent, and CV metadata.
+- [ ] SwissJobPass edit writes profile, skills, languages and consent. LC1
+  keeps truthful CV metadata-only behavior; a real-CV scope uses only the
+  Phase-21 quarantined Vault lifecycle.
 - [ ] Search/save/apply flow dedupes applications and records an application event.
 - [ ] Jobabo create/edit/delete has email preview and mock email log.
 - [ ] Application cockpit supports list + Kanban, notes, withdraw, messages, abuse report.
@@ -75,7 +82,10 @@ Every route must deliberately handle these states.
 - [ ] Applicant pipeline never exposes Talent Radar identity unless reveal/application permits it.
 - [ ] Talent Radar locked preview does not query anonymous candidate data.
 - [ ] Radar requires ACTIVE+VERIFIED Company; Contact consumes source-separated plan→purchased→admin credit atomically, enforces 14-day expiry/pending duplicate/30-day recontact and performs no automatic refund.
-- [ ] Billing checkout requires authorized complete BillingProfile, line PlanVersion/ProductVersion XOR and typed target; it creates immutable local `Order`/`Invoice`/subscription/credit state via mock provider.
+- [ ] Billing checkout requires authorized complete BillingProfile, fresh
+  risk-based step-up, line PlanVersion/ProductVersion XOR and typed target.
+  LC1 uses the labelled Mock provider; LC5/LC6 use only the Phase-24
+  WTP-/Finance-/Provider-gated real flow.
 - [ ] Analytics only shows levels allowed by the plan.
 
 ### Platform Admin / Operations Flows
@@ -115,7 +125,10 @@ Handle or document these before billing implementation:
 - [ ] Employer can see candidate identity only after direct application or candidate reveal for that company.
 - [ ] Message bodies, cover letters, job text, guide content, and abuse descriptions render as sanitized text.
 - [ ] No private route is indexable; sitemap excludes dashboards and API routes.
-- [ ] File metadata validates MIME, size, and traversal; MVP stores no file bytes.
+- [ ] Der historische Demo-MVP speichert nur validierte Metadaten. Ein
+  aktivierter realer Upload speichert Bytes ausschliesslich im
+  Phase-21-Quarantäne-Vault mit Streaming-Limits, Magic-Byte-/Polyglot- und
+  Malware-Prüfung, autorisiertem Download, Retention und Löschung.
 - [ ] The exact `RATE_LIMIT_PRESETS_V1` covers login, register, reset, apply, privacy intake/challenge, Radar list, contact request, lead form and abuse report; Production/Staging use the shared PostgreSQL bucket store and fail closed on a memory backend.
 - [ ] Logs never include passwords, tokens, raw CV content, full message bodies, or payment secrets.
 
@@ -135,25 +148,63 @@ When finishing a phase, capture:
 
 ## Phase Execution Contract
 
-Every phase file must explicitly contain or link to all of the following before implementation begins:
+Every phase file from Phase 19 onward must instantiate, for its own scope,
+all 28 fields below. A link is context, not a substitute:
 
-- [ ] Goal and business/user value.
-- [ ] In-scope and explicitly out-of-scope behavior.
-- [ ] Affected roles and capabilities.
-- [ ] Hard prerequisites and downstream consumers.
-- [ ] Requirement IDs and concrete deliverables.
-- [ ] Routes/entry CTAs/navigation behavior.
-- [ ] Data models, constraints, indexes, migrations and seed impact.
-- [ ] Queries, server actions, route handlers, background/command behavior.
-- [ ] Zod validation, status transitions and conflict/idempotency rules.
-- [ ] Global role, company membership, assignment, ownership and entitlement checks.
-- [ ] Audit, notifications, analytics and sensitive-data redaction.
-- [ ] Desktop/mobile/A11y behavior and every relevant UX state.
-- [ ] Unit, PostgreSQL integration and E2E ownership for the phase.
-- [ ] Verification commands with expected assertions, not only command names.
-- [ ] Risks, known limitations, rollback/migration notes and Definition of Done.
+1. Statusquartett (Plan/Technical/Quality/Activation).
+2. Ziel und messbarer Business-/Nutzerwert.
+3. tatsächlicher Repositoryzustand samt Code-/Schema-/Test-/Planfundstellen.
+4. Findings und Requirements.
+5. In Scope.
+6. Out of Scope und deaktivierte Nachbarfunktionen.
+7. Benutzerrollen und organisatorische Owner.
+8. Portale, Routen, Services, Provider und Worker.
+9. Datenmodelle, Constraints, Indizes und Datenklassifikation.
+10. Migration, Backfill, Kompatibilität und Datenprüfung.
+11. Serverlogik, Queue-/Lease-/Retry-/Idempotenz- und Providervertrag.
+12. Loading, Empty, Locked, Pending, Error, Retry, Conflict, Expired,
+    Cancelled und Success.
+13. 360-px-/Touch-/Keyboard-/Screenreader-/Accessibility-Vertrag.
+14. Authentisierung, Step-up, Autorisierung, Ownership, Assignment,
+    Capability und Tenantgrenze.
+15. Datenschutz, Zweck, Minimierung, Retention, Export, Löschung und Audit.
+16. Abuse-, Fraud-, ATO-, Enumeration-, Replay- und Insider-Szenarien.
+17. externe/organisatorische Voraussetzungen mit Owner und Gate.
+18. harte Implementierungs- und Aktivierungsabhängigkeiten.
+19. geordnete, einzeln integrierbare Implementierungsschritte.
+20. Feature-/Provider-/Cohort-Flag, Kill Switch und Aktivierungsreihenfolge.
+21. Akzeptanzkriterien und vollständige Testmatrix.
+22. Performance-, Query-, Queue-, Datei-, Latenz- und Lastgrenzen.
+23. geschützte Phase-01–18-Invarianten und Owning-Regressionen.
+24. Rollback oder begründetes Roll-forward-only.
+25. benötigte Evidence und Artefakte.
+26. Definition of Done für Technik und Quality-Gate.
+27. Gate, bevor eine abhängige Folgephase integriert oder aktiviert wird.
+28. ausdrücklich nicht bewiesene Aussagen.
 
-Linking to the current [architecture blueprint](./architecture-blueprint.md), [requirements matrix](./requirements-matrix.md) and [implementation plan](./implementation-plan.md) is acceptable; inherited source-code evidence is not.
+The AC→test matrix has separate columns for criterion/requirement, risk,
+test type, test case, positive case, negative/abuse case, role,
+portal/system, test data, environment, exact command/manual flow, measurable
+expected result, evidence, owner and status. “Test exists”, an inherited
+green run or an unchecked command is not passed evidence.
+
+## Launch-class Gate
+
+Every release and every P0–P4 decision names exactly one or more target
+classes:
+
+- **LC1** local demo;
+- **LC2** supervised design-partner test;
+- **LC3** invite-only pilot;
+- **LC4** public free launch;
+- **LC5** paid self-service;
+- **LC6** scaled production.
+
+Higher classes inherit safety/evidence requirements; optional product
+features do not become mandatory unless the chosen offer promises them.
+Phase 26 is mandatory before any public verified-company badge, public
+company job or Radar trust claim. Phase 28 is not a universal launch
+dependency.
 
 ## Route Evidence Record
 
@@ -176,6 +227,9 @@ Use one record for every important page before checking its route deliverable:
 ## Marketplace and Commercial Gates
 
 - [ ] Production-like data has documented provenance and permission; no scraping or hidden demo data.
+- [ ] Exactly one first Region×Occupation cluster is selected through a
+  pre-registered Go/No-go; Pflege and Engineering use independent corpora and
+  cannot prove each other.
 - [ ] A promoted/indexed cluster passes its documented liquidity/content gate.
 - [ ] Free-to-paid restrictions correspond to additional economic value, not an intentionally broken basic flow.
 - [ ] Pricing, period, VAT, renewal, cancellation and downgrade effects are visible before confirmation.
@@ -183,6 +237,12 @@ Use one record for every important page before checking its route deliverable:
 - [ ] Sponsored inventory is capped, clearly labelled and never changes fairness scores.
 - [ ] Mock checkout completion is labelled as product-mechanics evidence, never paid conversion, collected revenue or willingness-to-pay.
 - [ ] Pricing/packaging approval uses a pre-registered real-money KMU offer test; monthly, hiring-sprint and retainer/credit options are compared on normalized value.
+- [ ] Base workflow, Hiring Sprint, Retainer, Concierge and approved Import
+  are tested before Boost/Radar upsells; Boost proves only reach value and
+  Radar requires density.
+- [ ] Each paid service has scope, deadline, customer duties, capacity,
+  unit cost and platform-failure remedy; refund, credit restoration and
+  invoice correction cannot drift.
 - [ ] Episodic pause/reactivation is measured separately from durable logo churn.
 - [ ] A monthly cashflow/runway model covers hiring, CAC timing, support, infrastructure, churn/reactivation, cumulative burn and peak funding without double-counting Sales/CAC.
 - [ ] Any indexed salary orientation uses a versioned, lawful, reviewed LIVE source with honest occupation/region granularity, uncertainty, attribution and refresh owner; otherwise it is unavailable, `noindex` and absent from the sitemap.
@@ -190,6 +250,39 @@ Use one record for every important page before checking its route deliverable:
 - [ ] Product analytics can measure activation, application response, employer value, conversion and churn without content/PII.
 - [ ] Business Cockpit recommendations contain evidence period, reason, next action, owner and outcome.
 - [ ] Unsupported products/claims are removed or explicitly labelled as future; Success Fee cannot be activated.
+
+## Identity, Trust, Fraud and Freshness Gates
+
+- [ ] Registration, invite, reset and email change use verified,
+  purpose-bound, expiring single-use identities; email change re-verifies and
+  invalidates risky sessions as defined.
+- [ ] Non-admin high-risk actions (checkout, bulk export/download, identity
+  reveal administration, account/security changes) use risk-based step-up,
+  not merely an admin-only MFA assumption.
+- [ ] Admin capabilities are least-privilege; sensitive actions have SoD or
+  dual control, audited break-glass and recovery.
+- [ ] Credential stuffing, ATO, compromised company, scam job, mass
+  messaging/contact, reveal/export anomaly and payment fraud have detection,
+  containment, appeal/recovery and evidence.
+- [ ] Company verification has evidence provenance, reviewer separation,
+  expiry/re-review and rapid revocation. Public trust surfaces disappear
+  consistently on loss.
+- [ ] Job reconfirmation, expiry, duplicate/copied-job detection and
+  “filled/unavailable” reporting feed one canonical freshness state.
+  Ineligible jobs disappear from Search, Alerts, Recommendations, Radar/
+  Matching, Feeds, Exports and Sitemap within the defined SLO.
+- [ ] Unknown/zero-result search feedback stores no raw sensitive query or
+  stable user fingerprint; only thresholded, retention-limited aggregates
+  enter a reviewed taxonomy backlog.
+
+## Research, Support Capacity and Service-Recovery Gates
+
+- [ ] Moderated candidate, employer and operator studies measure task
+  success, time, errors, abandonment and comprehension on named flows.
+- [ ] Pilot capacity names concurrent customers/cases, minutes per flow,
+  fully loaded cost, backlog SLO, escalation budget and overload behavior.
+- [ ] A successful automated test does not replace legal, privacy, finance,
+  provider or target-user evidence.
 
 ## Data and Concurrency Gates
 

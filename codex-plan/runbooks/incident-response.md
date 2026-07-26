@@ -5,6 +5,9 @@
 > keinen verbundenen Pager, kein externes Monitoring und noch keinen
 > benannten Incident Owner. Ohne diese Freigaben besteht keine
 > Production-Bereitschaft.
+> Das geplante Phase-19+-Incident-, Fraud-/ATO-, Worker-, Freshness- und
+> Service-Recovery-Ziel steht im
+> [Remediation-Runbookziel](./remediation-production-target.md).
 
 ## Schweregrade
 

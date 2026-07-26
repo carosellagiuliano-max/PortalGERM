@@ -125,14 +125,39 @@ Diese Punkte dürfen nicht durch einen lokalen Test auf `[x]` wechseln:
 
 > Diese offenen Gates ergänzen den historischen Phase-18-Record. Sie sind keine
 > rückwirkende Phase-18-Evidence und werden erst auf dem künftigen
-> Releasekandidaten bewertet.
+> Releasekandidaten bewertet. Für Phase 19–32 gilt der
+> [Remediation-Ausführungsvertrag](./remediation-execution-contract.md);
+> Zielcommit, Artefakt und Evidence dürfen nicht auseinanderfallen.
+
+### Zielklasse und Finding-Scope
+
+- [ ] Genau eine Zielklasse ist benannt: LC1 lokale Demo, LC2 beaufsichtigter
+  Design-Partner-Test, LC3 Invite-only Pilot, LC4 öffentlicher kostenloser
+  Launch, LC5 bezahlter Self-Service oder LC6 skalierter Betrieb.
+- [ ] Die zielklassenspezifische P0–P4-Matrix für `STH-001`–`STH-037`
+  besitzt für jede Zeile Status, Owner und Evidence beziehungsweise einen
+  zulässigen Deferred-/External-Gate-Entscheid.
+- [ ] Plan-, Technical-, Quality- und Activation-Status sind getrennt.
+  Ein implementierter Adapter oder ein grüner Test ist keine LIVE-Freigabe.
+- [ ] Phase 26 ist vor öffentlichem Trust-Badge, öffentlichem Firmenjob oder
+  Radar-Vertrauensbehauptung grün. Phase 28 ist nur Pflicht, wenn Tracker oder
+  Scheduler Bestandteil des konkret verkauften/kommunizierten Scopes ist.
+- [ ] G0–G4 sind nachweislich auf dem vorgesehenen Commit durchlaufen; Seed
+  lief zweimal deterministisch und alle Änderungen nach Freeze lösten den
+  erforderlichen Neulauf aus.
 
 ### Zwingend vor Start eines öffentlichen Kandidatenclusters
 
+- [ ] Phase 31A hat aus Pflege/Gesundheit und Engineering/Technik genau einen
+  ersten Cluster gewählt; das jeweils separate Korpus des nichtgewählten
+  Clusters erteilt keine Freigabe und dessen Oberfläche bleibt fail-closed.
 - [ ] Die wichtigsten Berufsbezeichnungen, Schweizer Synonyme, Abkürzungen,
   neutralen/geschlechtsspezifischen Formen, Schreib-, regionalen und
   Singular-/Pluralvarianten sowie kontrollierten häufigen Tippfehler des
   Startclusters sind versioniert und fachlich freigegeben.
+- [ ] Ort/erreichbare Region, Qualifikation, Zertifikat, Skill und Branche
+  verwenden kontrollierte gemeinsame Konzepte; Search, Alert, Preferences,
+  Recommendation, Matching und Cluster-Assessment driften nicht.
 - [ ] Fachlich gleichwertige Berufsbezeichnungen liefern konsistente relevante
   Resultate; dokumentierte Gegenbeispiele verhindern eine unkontrollierte
   Ausweitung auf verwandte oder falsch qualifizierte Berufe.
@@ -146,6 +171,44 @@ Diese Punkte dürfen nicht durch einen lokalen Test auf `[x]` wechseln:
 - [ ] Das Cluster-Launch-Assessment bindet Query-Set-, Search-Policy-,
   Ranking- und Taxonomieversion; alte V1-Approvals oder reine
   Location-/Kategorie-/`Stellen`-Treffer genügen nicht.
+- [ ] Nulltreffer-/Unknown-Term-Lernen verwendet nur thresholded,
+  retention-begrenzte Aggregate ohne Raw-PII/stabilen Nutzerfingerprint und
+  führt ausschliesslich über fachlichen Review zu einer Taxonomieänderung.
+- [ ] Reconfirmation, Ablauf, Filled-/Unavailable-Meldung,
+  Duplicate-/Copied-Job-Prüfung und Deaktivierung wirken innerhalb des
+  freigegebenen SLO auf alle öffentlichen/privaten Consumer.
+- [ ] Company-Evidenz, Ablauf/Re-Review und schneller Widerruf sind belegt;
+  kompromittierte Firmen verlieren Badge, Jobs und Radarzugang konsistent.
+- [ ] Credential-Stuffing-/ATO-/Scam-/Mass-Contact-/Reveal-Export-Anomalie
+  besitzt Detection, Containment, Recovery/Appeal und Incident-Runbook.
+- [ ] Moderierte Candidate-/Employer-/Operator-Aufgaben bestehen die
+  vorregistrierten Task-Success-, Zeit-, Fehler-, Abbruch- und
+  Verständnisschwellen.
+
+### Zusätzlich vor LC5 Paid Self-Service
+
+- [ ] Vor Real-Payment-Ausbau bestand ein vorregistrierter WTP-Test für
+  Basisworkflow/Hiring-Sprint/Retainer/Concierge/Import; Mock- und
+  Provider-Testmode zählen null. Boost folgt nur dem Reichweitenbeleg, Radar
+  nur ausreichender Dichte.
+- [ ] Hosted Checkout/Webhook, serverseitiger Betrag, Idempotenz,
+  Reconciliation, Dunning/Dispute, Tax/Invoice und Payment-Fraud sind auf
+  Sandbox und freigegebener LIVE-Konfiguration belegt.
+- [ ] Checkout, Billing-/Security-Änderung sowie risikoreicher Bulk-
+  Download/Export verwenden Non-Admin-Step-up.
+- [ ] Jede bezahlte Leistung besitzt Scope, Frist, Kundenpflichten,
+  Capacity-/Unit-Cost-Limit und eine auditable Plattformfehler-Abhilfe über
+  Refund, Credit-Restoration beziehungsweise Rechnungskorrektur.
+
+### Zusätzlich vor LC6 Scale
+
+- [ ] Autonome Worker belegen Lease/Heartbeat, Retry/Backoff, Dedupe, DLQ,
+  Replay, Backpressure und Providerdegradation ohne manuellen Cron-Vertrag.
+- [ ] Produktionsnahe Last belegt SLO, RPO/RTO, Queue-/Supportkapazität,
+  Vollkosten, Alarmierung, On-call und getestete Recovery.
+- [ ] 30B/30C wurden nur bei ihren Query-/Queue-/Count-/Byte-/Forecast-
+  Triggern aktiviert; andernfalls bestehen datierter Headroom, Owner, Alert
+  und Runbook.
 
 ### Später sinnvoll beziehungsweise vor der Sitemap-Kapazitätsgrenze
 

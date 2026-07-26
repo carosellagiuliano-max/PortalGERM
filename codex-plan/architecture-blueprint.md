@@ -1,6 +1,15 @@
 # SwissTalentHub — Architektur-, Daten-, UX- und Betriebsblueprint
 
-> **Planungsstand:** `PortalGERM` enthält zum Zeitpunkt dieses Audits keine Anwendung. Alle Pfade, Modelle und Befehle in diesem Dokument sind Soll-Vorgaben. Der verifizierte Ist-Zustand steht in [repository-audit.md](./repository-audit.md).
+> **Historische Basis und aktueller Planungsstand:** Dieses Blueprint entstand
+> vor der Implementierung. Die damalige Aussage „keine Anwendung“ ist nur
+> Entstehungskontext: Die Phasen 01–18 sind heute auf ihren jeweiligen
+> Evidence-Commits implementiert. Der am 26. Juli 2026 geprüfte
+> Planungscommit ist
+> `e34262e3074565840e371c336a5d2ba5cf3efbac`; die Remediation-Phasen 19–32
+> sind noch nicht implementiert. Abschnitte 1–16 beschreiben den geschützten
+> MVP-Kern, die prospektive Erweiterung steht ab Abschnitt 17. Ist-Routen
+> kommen aus `route-inventory.json`, geplante Routen dürfen dort nicht
+> vorweggenommen werden.
 
 ## 1. Architekturziele und Leitprinzipien
 
@@ -528,3 +537,152 @@ P1 pre-Production backup contract: a dedicated runner streams `pg_dump --format=
 ## 16. Architektur-Definition-of-Done
 
 Eine Funktion ist nur fertig, wenn Datenmodell/Migration, validierter Use Case, serverseitige Policy, Transaktion/Idempotenz, Audit/Notification, alle UX-Zustände, Mobile/A11y, realistische Seeds, relevante Unit-/Integration-/E2E-Tests, Observability und Dokumentation nachweisbar zusammenarbeiten. „Im Plan“, „Datei vorhanden“ oder „UI klickbar“ genügt nicht.
+
+## 17. Prospektive Remediation-Architektur Phase 19–32
+
+> Dieser Abschnitt ist Zielarchitektur und keine Istbehauptung. Jede Box
+> bleibt hinter ihrem Phase-/Provider-/Legal-/Cohort-Gate, bis Test- und
+> Aktivierungsevidence vorliegt.
+
+```mermaid
+flowchart LR
+  Web["Bestehende Next.js-Portale"] --> Auth["20 Identity + Verification"]
+  Web --> Vault["21 Private Document Vault"]
+  Web --> Privacy["22 Privacy/Legal/Analytics"]
+  Web --> Trust["25/26 Assurance + Trust & Safety"]
+  Web --> Search["30A Concept Search + Learning"]
+  Web --> Fresh["30D Job Freshness"]
+  Auth --> Outbox["Typed Outbox"]
+  Vault --> Objects["Object Store + Scanner"]
+  Privacy --> Inventory["Data Inventory + Legal Holds"]
+  Outbox --> Worker["23 Lease/Retry/DLQ Worker"]
+  Worker --> Mail["Approved Mail Provider"]
+  Worker --> Objects
+  Worker --> Payment["24 Payment/Reconciliation"]
+  Trust --> Risk["Risk Signals + Review Cases"]
+  Search --> Taxonomy["Versioned Concepts/Judgments"]
+  Fresh --> Search
+  Discovery["29A/31A Research, WTP, Capacity"] --> Search
+  Discovery --> Payment
+  Discovery --> Release["31B/32 Launch Decision"]
+```
+
+### 17.1 Identity, assurance and delivery
+
+- `EmailVerificationChallenge` or an equivalent versioned token model:
+  hashed token, purpose, expiry, used/superseded timestamps, actor and
+  normalized target.
+- `StepUpGrant` or equivalent: actor, session, purpose, tenant/resource
+  binding, assurance method, issued/expires/used/revoked and risk version.
+- typed NotificationOutbox, Attempt, ProviderReceipt/Suppression and
+  DeadLetter contracts; business transaction and outbox commit atomically.
+- Low-Assurance Registrierung, email-change Reverification, recovery and
+  session/device revocation remain distinct status machines.
+
+### 17.2 Private object and privacy lifecycle
+
+- canonical DocumentVersion links owner/purpose/classification/object key,
+  detected MIME, size/hash, quarantine/scan status, retention, legal hold and
+  deletion state;
+- direct upload/download uses short-lived intents; object keys and URLs never
+  authorize;
+- `DataInventoryVersion` enumerates database, object and external-provider
+  processors for EXPORT/CORRECT/DELETE;
+- encrypted ExportArtifact plus expiring single-use access; erasure processors
+  are idempotent and resumable;
+- legal text, consent and DSFA/AVG determinations are versioned and activated
+  separately from technical publication.
+
+### 17.3 Workers, providers and operations
+
+- PostgreSQL-backed queue/lease with claim owner, heartbeat/lease expiry,
+  attempt, next run, last classified error, DLQ and replay evidence;
+- provider activation ledger records environment, adapter/config/secret
+  version, DPA/contract, owner, health, sandbox/LIVE approval and rollback;
+- metrics include queue age/depth/arrival/service rate, retry/DLQ, SLO,
+  handling time and capacity; logs remain redacted;
+- manual Commands call the same use cases but do not count as autonomous
+  operation.
+
+### 17.4 Payment and service delivery
+
+- PSP webhook Inbox stores only the approved minimal raw/signature evidence,
+  provider event id and processing state; server validates amount, currency,
+  order, tenant and transition;
+- reconciliation binds ProviderAttempt/Receipt to immutable
+  Order/Invoice/PaymentEvent/Ledger snapshots;
+- ServiceDeliveryAssessment distinguishes expected recruiting outcome from
+  platform-caused non-delivery and issues at most one approved replacement,
+  extension, credit restoration or refund;
+- real Payment is absent/disabled unless Phase-31A WTP-Go and LC5 external
+  gates are present.
+
+### 17.5 Privileged security, fraud and company trust
+
+- persisted AdminRole/RoleCapabilityAssignment with separation of duties,
+  dual approval and time-bounded break-glass;
+- shared, versioned risk decisions for credential stuffing, ATO,
+  compromised Company, velocity/mass messaging, repeated complaints,
+  Reveal/Export anomaly, duplicate/fake Job and payment fraud;
+- company evidence is structured, sourced, expiring and re-reviewable;
+  verification, Badge, public Jobs and Radar access revoke consistently;
+- review, hold, revoke, appeal and false-positive correction append events and
+  audits without exposing secret risk weights.
+
+### 17.6 Search, learning and freshness
+
+- immutable `OccupationConcept` plus versioned aliases for neutral/gendered,
+  singular/plural, abbreviation, Swiss/regional and controlled typo forms;
+- separate versioned LocationAlias, Qualification/Certificate, Skill and
+  IndustryConcept relationships;
+- Public Search, Alerts, Candidate Preferences, Recommendations and Matching
+  consume the same concept/taxonomy version;
+- Pflege and Engineering use separate professional judgment corpora;
+- privacy-safe low/zero-result observations are redacted/aggregated and
+  require minimum cohorts before a reviewer can propose a new taxonomy
+  version;
+- Reconfirmation/Reminder/Filled-or-Unavailable report/DuplicateEvidence
+  feed the one public Eligibility predicate used by Search, Sitemap, Alerts,
+  Recommendations, Boost and Analytics.
+
+## 18. Planned route and process delta
+
+The actual route inventory remains unchanged until implementation. The
+normative planned delta is maintained in
+[`route-role-matrix.md`](./route-role-matrix.md) and must include phase,
+launchclass, role/capability, tenant/owner guard, data class, UX states,
+feature flag, owning test and activation gate.
+
+Expected route families, subject to the owning ADR and phase:
+
+- email verify/resend, login-email change and security/step-up settings;
+- private document upload/finalize/download/delete;
+- public legal/terms/privacy/imprint pages and secure export artifact access;
+- Admin roles/security/Trust-&-Safety/provider/worker operations;
+- payment webhook only in Phase 24 and only behind explicit PSP config;
+- Employer job reconfirm/fill and public/candidate unavailable-report entry;
+- central notification preferences.
+
+Multi-Persona, external tracker and full scheduler routes remain absent unless
+their explicit moderated-demand gates pass. Sitemap index/shard routes remain
+absent until the measured capacity trigger.
+
+## 19. Migration and compatibility topology
+
+Each cross-cutting change uses `expand → migrate/backfill → dual observe/read
+→ cut over → contract`. Only one major Auth/RBAC, keyring/encryption, Payment,
+Worker or destructive Privacy cutover may activate between two green G3
+Golden Runs. Historical invoices, ledgers, consent/reveal snapshots,
+applications, audits and verification events are never reinterpreted.
+
+Provider and feature flags are multi-dimensional: code capability,
+environment config, provider approval, legal/product approval, tenant/cohort
+rollout and runtime health. A Boolean or `NODE_ENV` cannot skip these gates.
+
+## 20. Remediation architecture acceptance
+
+Architecture is accepted only when the owning detail phase instantiates all
+28 fields and its criterion-level test matrix from
+[`remediation-execution-contract.md`](./remediation-execution-contract.md).
+The six launchclasses select stricter activation gates; they never weaken
+tenant, privacy, security, payment or evidence requirements.
