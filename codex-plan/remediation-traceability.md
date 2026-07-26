@@ -5,13 +5,18 @@
 > **Frühere Analysebaseline:** `eb9b45ae5caca638b558f6a98e406af9ee8be0fc`
 > (`eb9b45a`)
 >
-> **Aktueller Planungscommit:** `e34262e3074565840e371c336a5d2ba5cf3efbac`
+> **Ursprünglicher Planungscommit:** `e34262e3074565840e371c336a5d2ba5cf3efbac`
 > (`e34262e`), bei Prüfungsbeginn identisch mit `origin/main` und sauber.
+>
+> **Ausgeführte Phase-19-Baseline:** Candidate
+> `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c`, vollständiger Golden-Run
+> bestanden; [Evidence](./evidence/2026-07-26-phase-19.md).
 >
 > **Geltungsbereich:** unabhängige Neubewertung der 37 Befunde gegen Schema,
 > Migrationen, Runtime-Code, Provider-Composition, Rollen-/Capability-Grenzen,
-> Tests, Release-Evidence und Runbooks. Dieses Dokument ist Planung, keine
-> Implementierungs- oder Go-live-Evidence.
+> Tests, Release-Evidence und Runbooks. Dieses Dokument steuert die offenen
+> Implementierungen; nur `STH-029` ist durch die verlinkte Phase-19-Evidence
+> geschlossen. Es erteilt keine Go-live-Freigabe.
 
 ## 1. Methodik und Statussemantik
 
@@ -1166,13 +1171,16 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 ## 3A. Ergänzende Dossiers STH-029 bis STH-037
 
-> Diese Dossiers wurden am 26. Juli 2026 gegen den sauberen Planungscommit
-> `e34262e3074565840e371c336a5d2ba5cf3efbac` verifiziert. Sie sind geplant,
-> nicht implementiert. Die Priorität je Launchklasse steht in Abschnitt 3B.
+> Diese Dossiers wurden am 26. Juli 2026 zuerst gegen den sauberen
+> Planungscommit `e34262e3074565840e371c336a5d2ba5cf3efbac` bewertet und auf
+> Candidate `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` revalidiert.
+> `STH-029` ist durch Phase 19 geschlossen; `STH-030`–`STH-037` bleiben nach
+> ihrem jeweiligen Status, Trigger oder externen Gate offen. Die Priorität je
+> Launchklasse steht in Abschnitt 3B.
 
 | ID | Befund und unabhängiger Status | Lead / Mitwirkende | Rollen, Portale und aktuelle Fundstellen | Abhängigkeiten und geschützte Regressionen | Verbindlicher Test-/Evidence-Vertrag | Externer Gate / Abschlussstatus |
 | --- | --- | --- | --- | --- | --- | --- |
-| `STH-029` | **bestätigt:** höher priorisierte Requirements, Architektur, ADRs, Implementation Guidance, Quickref/Glossary und Phasen 19–32 waren nicht synchron; alle offenen Phasen hatten keinen vollständigen 28-Punkte-/AC-Testvertrag. | 19 / alle Phasen 20–32 | Product, Engineering, QA; `00-PLAN.md`, `requirements-matrix.md`, `architecture-blueprint.md`, `decisions.md`, `implementation-plan.md`, alte Phase-19–32-Testabschnitte | aktueller sauberer `main`; Phasen 01–18/Evidence immutable; Ist-Routeinventar nicht vorplanen | 37/37 IDs, sechs LC, vier Statusdimensionen, jede Phase 28 Punkte und vollständige AC-Matrix; G4-Baseline und Diff-Invarianten auf einem Commit; neuer Phase-19-Evidence-Record | kein externes Fachgate; **offen bis Phase-19-Gate** |
+| `STH-029` | **geschlossen:** höher priorisierte Requirements, Architektur, ADRs, Implementation Guidance, Quickref/Glossary und Phasen 19–32 waren nicht synchron; alle offenen Phasen hatten keinen vollständigen 28-Punkte-/AC-Testvertrag. Candidate `769ee62` synchronisiert und versiegelt diesen Vertrag. | 19 abgeschlossen / alle Phasen 20–32 halten den Vertrag | Product, Engineering, QA; `00-PLAN.md`, `requirements-matrix.md`, `architecture-blueprint.md`, `decisions.md`, `implementation-plan.md`, Phase-19–32-Testabschnitte | Candidate `769ee62`; Phasen 01–18/Evidence immutable; Ist-Routeinventar nicht vorplanen | 37/37 IDs, sechs LC, vier Statusdimensionen, jede Phase 28 Punkte und vollständige AC-Matrix; G4-Baseline und Diff-Invarianten auf einem Commit; [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | kein externes Fachgate; **durch Phase-19-Gate geschlossen, Folgeregression weiter geschützt** |
 | `STH-030` | **bestätigt:** Admin-MFA war geplant, aber Employer Owner/Billing/Team, Login-E-Mail, Candidate Export/Delete und kritische Consent-/Reveal-Aktionen besitzen keine risikobasierte frische Step-up-Authentisierung. | 25B / 20, 22, 24, 26 | Candidate, Employer Owner, Billing, Admin; `lib/auth/current-user.ts`, `lib/auth/route-guards.ts`, Candidate-Privacy-/Employer-Team-/Billing-Actions; kein MFA-/StepUp-Modell im Schema | Phase-20 Identity; bestehende Session-, safe-next-, tenant-, candidate-owner-, Reveal- und Billing-Autorisierung bleibt erhalten | AAL-/Action-Matrix; fresh/stale/replay/cross-purpose/cross-tenant/direct-action/recovery/credential-revoke Unit+PostgreSQL+E2E; genau eine Wirkung; G3 | MFA-Verfahren, Recovery-/Supportpolicy, Security Owner; **offen** |
 | `STH-031` | **teilweise bestätigt:** Rate Limits, Abusequeue, Audit und Revocation existieren; ein kohärenter Fraud-/Scam-/ATO-Vertrag für kompromittierte Firmen, Credential Stuffing, Fake-/Duplicate-Jobs, Massennachrichten, Reveal/Export-Anomalien, Payment Fraud und wiederholte Beschwerden fehlt. | 25 Threat-Model / 23, 24, 26, 30D | alle Nutzer, Trust & Safety, Security, Finance; `lib/auth/rate-limit.ts`, `lib/abuse/public-report.ts`, `lib/admin/moderation.ts`, `lib/admin/capabilities.ts`; keine RiskSignal-/ATO-Orchestrierung | 20 Identity, 23 Incidents/Worker, 26 Trust; Session-/Company-/Job-/Radar-/Payment-/Audit-Invarianten | kompromittierte VERIFIED-Firma, Stuffing, Massennachricht, abnormaler Reveal/Export, Payment Fraud, Complaint-Repeat, false positive/Appeal und Incident-Drill; nächste Reads verlieren riskante Rechte; G3 | benannte Trust-&-Safety-/Security-/Finance-Owner, Signal-/Retentionfreigabe; **offen** |
 | `STH-032` | **teilweise bestätigt:** Job-Ablauf und öffentliche Ausblendung sind fail-closed; Reconfirmation, Reminder, „besetzt/nicht verfügbar“-Feedback, Copy-/Dublettenreview und schnelle kanalübergreifende Deaktivierung fehlen. | 30D / 23 Worker, 26 Trust, 31 Cluster | Visitor, Candidate, Employer, Admin; Public Search/Detail, Employer Jobs, Admin Queue; `lib/jobs/effective-status.ts`, `lib/jobs/public-eligibility.ts`, Alerts/Sitemap/Recommendations | 23 Notifications/Worker und 26 Trust; bestehende Publish-/Revision-/Quota-/Slug-/Boost-/Eligibility-Verträge | Time-travel, concurrency, filled/report, exact/near-duplicate, appeal; identische Ausblendung aus Search, Sitemap, Alerts, Recommendations und Analytics; keine Promotion veralteter Dublette; G2/G3 vor Public | fachliche Freshness-/Duplicate-Policy, Moderationskapazität; **offen** |

@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** Stand 26. Juli 2026. **Phasen 01 bis 18 sind im Zielrepository implementiert und auf ihren unveränderlichen Evidence-Commits verifiziert.** Der technische Abschluss umfasst E2E-01–08, den Clean Clone, zwei identische Seeds, Production-Demo-Guard, die vollständige 100-Seiten-Desktop-/360px-Matrix sowie den verschlüsselten Backup-/Restore-Drill. Die Befunde `STH-001` bis `STH-037` sind in die offenen Remediation-Phasen 19 bis 32 eingeordnet; keine davon ist implementiert oder verifiziert und alle bleiben `[ ]`. Phase 19 muss bei ihrem tatsächlichen Start den dann aktuellen sauberen `main`-Commit wählen und frisch testen; der Planungscommit `e34262e3074565840e371c336a5d2ba5cf3efbac` besitzt keinen automatisch geerbten Golden Run. Weder historische Evidence noch Planung ist eine Pilot- oder Produktionsfreigabe. Staging, ausgewählte reale Provider, produktiver Backup-Lifecycle und autonome Worker sind noch umzusetzende beziehungsweise real zu betreibende Lieferobjekte; AVG/Legal/Privacy/Tax, Providerverträge, bezahlte Marktvalidierung, Cashflow/Runway, LIVE-Daten, RPO/RTO, Incident Ownership und Operationskapazität benötigen zusätzlich externe oder organisatorische Freigaben. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete REQ-REC-002-Paket bleibt offen.
+> **Planstatus:** Stand 26. Juli 2026. **Phasen 01 bis 19 sind im Zielrepository implementiert und commitgebunden verifiziert.** Phase 19 versiegelt auf `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` den aktuellen Clean-Clone-/Golden-Stand, die 37-ID-Traceability und den verbindlichen Remediation-Vertrag; siehe [Evidence](./evidence/2026-07-26-phase-19.md). Damit ist der Governance-Befund `STH-029` geschlossen. Die fachlichen Befunde `STH-001`–`STH-028` und `STH-030`–`STH-037` bleiben nach Status, Trigger oder externem Gate in den offenen Phasen 20 bis 32. Weder historische Evidence noch die grüne LC1-Baseline ist eine Pilot- oder Produktionsfreigabe. Staging, ausgewählte reale Provider, produktiver Backup-Lifecycle und autonome Worker sind noch umzusetzende beziehungsweise real zu betreibende Lieferobjekte; AVG/Legal/Privacy/Tax, Providerverträge, bezahlte Marktvalidierung, Cashflow/Runway, LIVE-Daten, RPO/RTO, Incident Ownership und Operationskapazität benötigen zusätzlich externe oder organisatorische Freigaben. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete REQ-REC-002-Paket bleibt offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -183,9 +183,9 @@ Security-, Privacy-, Payment- oder Tenant-Negativtests nicht auf.
 
 [`18-documentation-final-audit.md`](./18-documentation-final-audit.md) · E2E-08 Clean Clone, Migration/Seed, Production-Demo-Guard, Backup/isolierter Restore/Smoke, vollständige Route-/Requirement-Evidence und Abschlussbericht sind auf `a9f24e7190681c23886de84add321db32b43651e` verifiziert; siehe [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). Externe Pilot-/Go-live-Gates bleiben offen.
 
-### [ ] 19 — Remediation-Baseline und Regression
+### [x] 19 — Remediation-Baseline und Regression
 
-[`19-remediation-baseline-regression.md`](./19-remediation-baseline-regression.md) · aktuellen Ausgangscommit, Governance, Regressionvertrag, Inventare und alle 37 Befunde reproduzierbar einfrieren.
+[`19-remediation-baseline-regression.md`](./19-remediation-baseline-regression.md) · Candidate `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c`, Governance, Regressionvertrag, Inventare und alle 37 Befunde reproduzierbar eingefroren; 1.974 Unit-, 369 PostgreSQL- und 219 Browsertests sowie Recovery grün, siehe [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md).
 
 ### [ ] 20 — Identity, E-Mail und Notifications
 
@@ -243,7 +243,7 @@ triggerbasiertes Sharding statt unnötigem Sofortumbau.
 
 [`32-production-release-audit.md`](./32-production-release-audit.md) · vollständige automatische, manuelle, betriebliche und externe Evidence auf exakt einem Releasecommit/Artefakt.
 
-Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in [`implementation-plan.md`](./implementation-plan.md). Für die offenen Phasen 19 bis 32 sind Reihenfolge, Parallelisierung und Konfliktgrenzen verbindlich in [`remediation-masterplan.md`](./remediation-masterplan.md) festgelegt.
+Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in [`implementation-plan.md`](./implementation-plan.md). Für die abgeschlossene Baseline-Phase 19 und die offenen Phasen 20 bis 32 sind Reihenfolge, Parallelisierung und Konfliktgrenzen verbindlich in [`remediation-masterplan.md`](./remediation-masterplan.md) festgelegt.
 
 ## 7. Verantwortungsauflösung alter Konflikte
 
@@ -300,7 +300,8 @@ npm run test:e2e:hsts
 - jede Phase hat Ziel, Nutzen, Rollen, Voraussetzungen, Deliverables, Daten/Actions, Policies, UX, Seed, Tests, Befehle, Risiken und DoD;
 - offene Rechts-/Steuer-/Provider-/Markthypothesen sind als solche markiert;
 - Die historische Umsetzung begann mit Schritt 01; der Remediation-Strang
-  beginnt zwingend mit Phase 19 und nicht mit einem Feature-Sprung.
+  begann zwingend mit der inzwischen verifizierten Phase 19 und nicht mit
+  einem Feature-Sprung.
 
 ### Zielklassenspezifische Aktivierung (später durch Code und externe Evidence)
 
@@ -388,4 +389,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 18 wurden gemäss ihren Detailverträgen auf ihren jeweiligen Evidence-Commits umgesetzt und verifiziert. Der nächste technische Arbeitsschritt ist die ausdrücklich freizugebende Phase 19; danach gilt die Abhängigkeits- und Aktivierungslogik des [`remediation-masterplan.md`](./remediation-masterplan.md). Provider-, Legal-, Markt- und Operations-Gates bleiben separat und können nur für die jeweilige Launchklasse geschlossen werden; insbesondere bleibt REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 19 wurden gemäss ihren Detailverträgen auf ihren jeweiligen Evidence-Commits umgesetzt und verifiziert. Der nächste technische Arbeitsschritt ist Phase 20; nichtaktivierende frühe Research-Tracks 29A/31A dürfen gemäss der Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md) parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates bleiben separat und können nur für die jeweilige Launchklasse geschlossen werden; insbesondere bleibt REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

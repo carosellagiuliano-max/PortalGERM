@@ -1,11 +1,12 @@
 # SwissTalentHub — Remediation-Masterplan
 
-> **Planungsstand:** 26. Juli 2026. Dieses Dokument plant die
-> Remediation-Phasen 19 bis 32. Es implementiert keine dieser Phasen und
-> erteilt weder Pilot- noch Produktionsfreigabe. Alle neuen Phasen bleiben
-> offen, bis ihre eigene unveränderliche Code-Evidence vorliegt. Die
-> abgeschlossenen Phasen 01 bis 18 und ihre historischen Nachweise werden
-> nicht rückwirkend umgedeutet.
+> **Planungsstand:** 26. Juli 2026. Dieses Dokument steuert die
+> Remediation-Phasen 19 bis 32. Phase 19 ist auf
+> `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` abgeschlossen und verifiziert;
+> Phasen 20 bis 32 bleiben offen, bis ihre eigene unveränderliche
+> Code-Evidence vorliegt. Daraus folgt weder Pilot- noch
+> Produktionsfreigabe. Die abgeschlossenen Phasen 01 bis 18 und ihre
+> historischen Nachweise werden nicht rückwirkend umgedeutet.
 
 ## 1. Auftrag, Geltungsbereich und Status
 
@@ -45,17 +46,18 @@ instanziieren.
 | Repository | `PortalGERM` |
 | frühere Analyseidentität | `eb9b45ae5caca638b558f6a98e406af9ee8be0fc` (`eb9b45a`) |
 | aktueller geprüfter Branch | `codex/phase-18-release-audit` |
-| aktueller Planungscommit | `e34262e3074565840e371c336a5d2ba5cf3efbac` (`e34262e`) |
+| ursprünglicher Planungscommit | `e34262e3074565840e371c336a5d2ba5cf3efbac` (`e34262e`) |
 | Remote-Stand bei Prüfungsbeginn 26. Juli | `origin/main` und `origin/codex/phase-18-release-audit` zeigten auf `e34262e` |
 | Arbeitsbaum bei Prüfungsbeginn | sauber; `brand-link.tsx` und `.claude/launch.json` sind bereits in `e34262e` committed |
-| heutige Aktivität | Repository-, Plan-, Schema-, Code-, Test- und Evidence-Analyse sowie Plan-Governance; keine Produktimplementierung und keine erneute vollständige Testausführung |
+| Aktivität der ursprünglichen Planprüfung | Repository-, Plan-, Schema-, Code-, Test- und Evidence-Analyse sowie Plan-Governance; damals noch keine Produktimplementierung und keine erneute vollständige Testausführung |
+| gewählter Phase-19-Candidate | `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` (`769ee62`), beim Golden-Start/-Ende identisch mit `origin/main` |
+| Phase-19-Evidence | [`evidence/2026-07-26-phase-19.md`](./evidence/2026-07-26-phase-19.md): vollständiger Clean Clone, 43 Migrationen, Seed×2, 1.974 Unit-, 369 PostgreSQL- und 219 Browsertests, Build/HTTP/HSTS sowie Recovery bestanden |
 
-Beide Baselines sind Prüfidentitäten, keine neuen Releasekandidaten. Phase 19
-wählt bei ihrem tatsächlichen Start erneut den dann aktuellen sauberen
-`origin/main`-Commit. Insbesondere
-darf die historische grüne Evidence nicht so dargestellt werden, als wäre
-sie am 26. Juli 2026 nochmals auf `e34262e` oder auf dem später durch diese
-Planänderungen veränderten Arbeitsbaum gelaufen.
+`eb9b45a` und `e34262e` bleiben historische Analyse-/Planungsidentitäten,
+keine Releasekandidaten. Phase 19 wählte bei ihrem tatsächlichen Start den
+damals aktuellen sauberen `origin/main`-Commit `769ee62` und testete genau
+diesen neu. Die historische Evidence wird dadurch weder vererbt noch
+umgeschrieben.
 
 ### 1.2 Präzise historische Evidence-Grenze
 
@@ -328,16 +330,17 @@ Infrastruktur, benannte Owner und bestätigte Betriebsziele.
 
 ## 6. Phasenübersicht 19–32
 
-Alle Kästchen bleiben offen. Ein Planartefakt oder ein vorhandener
-Teilmechanismus schliesst keine Phase. Bei gemischt priorisierten Phasen erhält
-jeder Track eigene Evidence. Ein grüner P1-Track darf freigegeben werden, ohne
-einen nicht ausgelösten P3-Befund fälschlich zu schließen; dieser benötigt
-stattdessen einen datierten Deferred-Entscheid mit Headroom, Forecast, Alert
-und Owner.
+Phase 19 ist durch ihre verlinkte Candidate-Evidence geschlossen; alle
+Kästchen 20–32 bleiben offen. Ein Planartefakt oder ein vorhandener
+Teilmechanismus schliesst keine weitere Phase. Bei gemischt priorisierten
+Phasen erhält jeder Track eigene Evidence. Ein grüner P1-Track darf
+freigegeben werden, ohne einen nicht ausgelösten P3-Befund fälschlich zu
+schließen; dieser benötigt stattdessen einen datierten Deferred-Entscheid mit
+Headroom, Forecast, Alert und Owner.
 
 | Phase | Titel | Primäre Befunde | Hauptziel |
 | --- | --- | --- | --- |
-| [ ] 19 | [Remediation-Baseline und Regression](./19-remediation-baseline-regression.md) | alle `STH-*` als Steuerung | reproduzierbare aktuelle Baseline, Regressionvertrag, Test-/Migrationsinventar und Gate-Backlog |
+| [x] 19 | [Remediation-Baseline und Regression](./19-remediation-baseline-regression.md) | alle `STH-*` als Steuerung | Candidate `769ee62`, vollständige aktuelle Golden-Baseline, Regressionvertrag, Test-/Migrationsinventar und Gate-Backlog verifiziert |
 | [ ] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md) | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | verifizierte E-Mail-Identität, erreichbare Step-up-Challenge, atomare Outbox, dauerhafte Zustellung und zentrale Präferenzen |
 | [ ] 21 | [Document-/CV-Vault](./21-document-cv-vault.md) | `STH-003`; Storage-Anteil `STH-004` | echte CV-/Evidenzdateien mit Quarantäne, Zugriff, Retention und Audit |
 | [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md) | `STH-006`, `STH-007`, `STH-017` | vollständiges Dateninventar, reale Export-/Korrektur-/Löschprozesse, Legal Holds, versionierte Rechtstexte und consent-bewusste LIVE-Analytics |
@@ -354,7 +357,7 @@ und Owner.
 
 ## 7. Ausführungsplan je Phase
 
-### [ ] 19 — Remediation-Baseline und Regression
+### [x] 19 — Remediation-Baseline und Regression
 
 **Zweck:** Die aktuelle Anwendung wird auf einem sauberen, unveränderlichen
 Commit erneut inventarisiert, ohne die Phase-01–18-Evidence umzuschreiben.
@@ -362,6 +365,12 @@ Test-, Route-, Schema-, Provider-, Env-, Capability-, Datenklassifikations-
 und Operationsverträge werden als Ausgangspunkt eingefroren. Jeder
 `STH-*`-Befund erhält Owner, Priorität, Abnahme, Abhängigkeiten und
 Nicht-Ziele.
+
+**Abschluss:** Der Vertrag ist auf Candidate `769ee62` vollständig bestanden;
+Resultate, Baseline-Metriken und offene Grenzen stehen im
+[Phase-19-Evidence-Record](./evidence/2026-07-26-phase-19.md). Phase 20 darf
+beginnen; sämtliche Produkt- und Aktivierungsgates bleiben bei ihren owning
+Phasen offen.
 
 **Abhängigkeiten:** keine neue Produktphase; die historischen Phasen 01–18
 sind die fachliche Basis.
@@ -1105,7 +1114,8 @@ betroffenen Ergebnisse erneut offen.
 
 ### 12.1 Branch- und Commitdisziplin
 
-1. Phase 19 startet erst nach bestätigter, sauber isolierter Baseline.
+1. Phase 19 startete erst nach bestätigter, sauber isolierter Baseline; ihr
+   Abschlusscommit und Record bleiben die Basis aller Folgephasen.
 2. Jede Phase nutzt einen eigenen `codex/phase-XX-*`-Branch und enthält nur
    ihren freigegebenen Scope.
 3. Vorhandene Nutzeränderungen werden weder gestaget noch überschrieben.

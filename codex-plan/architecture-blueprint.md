@@ -5,11 +5,13 @@
 > Entstehungskontext: Die Phasen 01–18 sind heute auf ihren jeweiligen
 > Evidence-Commits implementiert. Der am 26. Juli 2026 geprüfte
 > Planungscommit ist
-> `e34262e3074565840e371c336a5d2ba5cf3efbac`; die Remediation-Phasen 19–32
-> sind noch nicht implementiert. Abschnitte 1–16 beschreiben den geschützten
-> MVP-Kern, die prospektive Erweiterung steht ab Abschnitt 17. Ist-Routen
-> kommen aus `route-inventory.json`, geplante Routen dürfen dort nicht
-> vorweggenommen werden.
+> `e34262e3074565840e371c336a5d2ba5cf3efbac`. Phase 19 hat die aktuelle
+> Architektur-/Governance-Baseline anschliessend auf Candidate
+> `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` verifiziert; die
+> Remediation-Phasen 20–32 sind noch nicht implementiert. Abschnitte 1–16
+> beschreiben den geschützten MVP-Kern, die prospektive Erweiterung steht ab
+> Abschnitt 17. Ist-Routen kommen aus `route-inventory.json`, geplante Routen
+> dürfen dort nicht vorweggenommen werden.
 
 ## 1. Architekturziele und Leitprinzipien
 

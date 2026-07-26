@@ -1,28 +1,28 @@
 # Phase 19 — Aktuelle Remediation-Baseline, Governance und Regressionsschutz
 
-> **Planstatus:** GEPLANT / NICHT BEGONNEN
-> **Technikstatus:** NICHT IMPLEMENTIERT
-> **Quality-Gate:** NICHT GELAUFEN
+> **Planstatus:** ABGESCHLOSSEN
+> **Technikstatus:** IMPLEMENTIERT — Governance-/Baseline-Versiegelung ohne Runtimeänderung
+> **Quality-Gate:** BESTANDEN auf `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c`
 > **Aktivierung:** DISABLED
 >
-> Phase 19 ist die zwingende Ausführungsschranke vor jeder Änderung an
-> Produkt-, Runtime-, Schema- oder Testcode ab Phase 20. Die Planprüfung vom
-> 26. Juli 2026 lief auf `e34262e3074565840e371c336a5d2ba5cf3efbac`;
-> dieser Planungscommit ist noch kein frisch getesteter Implementierungs-
-> baseline-Commit.
+> Phase 19 hat die zwingende Ausführungsschranke vor jeder Änderung an
+> Produkt-, Runtime-, Schema- oder Testcode ab Phase 20 geschlossen. Der
+> vollständige Clean-Clone-/G4-Baselinelauf ist im
+> [Phase-19-Evidence-Record](./evidence/2026-07-26-phase-19.md) dokumentiert.
+> Die Aktivierungsgrenzen der Phasen 20–32 bleiben unverändert geschlossen.
 
 ## 1. Status
 
 | Dimension | Status |
 | --- | --- |
-| Planstatus | `GEPLANT / NICHT BEGONNEN` |
-| Technikstatus | `NICHT IMPLEMENTIERT` |
-| Quality-Gate | `NICHT GELAUFEN` |
+| Planstatus | `ABGESCHLOSSEN` |
+| Technikstatus | `IMPLEMENTIERT — Governance-/Baseline-Versiegelung ohne Runtimeänderung` |
+| Quality-Gate | `BESTANDEN` auf `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` |
 | Aktivierung | `DISABLED` |
 
-Der Vorspann und diese Tabelle beschreiben denselben Planungsstand. Keine
-Dimension darf aus einer anderen abgeleitet oder vor bestandenem Gate
-hochgestuft werden.
+Der Vorspann und diese Tabelle beschreiben denselben Abschlussstand. Die
+technische Phase ist abgeschlossen, ohne daraus eine Produkt- oder
+Launchaktivierung abzuleiten.
 
 ## 2. Ziel und Business Value
 
@@ -45,10 +45,19 @@ widersprüchlichen Grundlage.
 - `e34262e` enthält die Phasen 19–32, `.claude/launch.json` und die Änderung
   an `components/layout/brand-link.tsx`. Die alte Aussage, diese seien lokale
   Fremdänderungen, ist veraltet.
+- Der für Phase 19 gewählte Candidate
+  `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` war beim Start und Ende des
+  Golden-Runs identisch mit `origin/main`; sein Parent ist `e34262e`.
+- Der Candidate enthält ausschliesslich die synchronisierte Governance- und
+  Planbaseline. Runtime-, Schema-, Migrations- und Testcode blieben
+  unverändert.
 - Die Testarchitektur ist stark: Vitest Unit, isolierte reale PostgreSQL-
   Integration, Production-Build/HTTP, Playwright Desktop/360 px, Linux- und
   Windows-CI sowie ein isolierter Release-/Recovery-Drill.
-- Es wurde in diesem Planungsauftrag kein neuer Golden Run ausgeführt.
+- Der neue Golden Run bestand 1.974 Unit-, 369 PostgreSQL- und 219
+  Browsertests mit Retry `0`, 43 Migrationen, Seed×2, Build, HTTP/HSTS sowie
+  verschlüsselten Backup-/Restore-Drill. Die vollständigen Resultate und
+  offenen Grenzen stehen im Phase-19-Evidence-Record.
 
 ## 4. Findings und Requirements
 
@@ -217,10 +226,11 @@ runtime health` und verlangt Kill Switches; sie erstellt keine impliziten
 
 ### Ausgangsbaseline
 
-Die am 26. Juli geprüfte Planungsidentität ist `e34262e`; beim
-Implementierungsstart ist der dann aktuelle `origin/main`-Commit maßgeblich.
-Historische Zahlen sind Vergleichswerte. Der erste neue Pass entsteht erst
-durch die folgenden Befehle auf dem gewählten Commit.
+Die ursprüngliche Planungsidentität war `e34262e`. Beim
+Implementierungsstart wurde der damalige saubere `origin/main`-Commit
+`769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` als Candidate gewählt.
+Historische Zahlen blieben Vergleichswerte; der neue Pass entstand durch die
+folgenden Befehle exakt auf diesem Commit.
 
 ### Exakte Phase-19-/G4-Befehlsfolge
 
@@ -266,14 +276,14 @@ beide Manifeste müssen bytegleich sein. Browser-Evidence hat Retry `0`.
 
 | AC/Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Testumgebung | Exakter Befehl/Ablauf | Erwartung und Schwelle | Evidence | Owner | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `19-AC-01`, `REQ-GOV-001` | falscher Commit/Evidence | Repository-Preflight | Startidentität | sauberer HEAD entspricht dokumentiertem Commit | Dirty Tree oder Remoteabweichung blockiert | Engineering | Git | aktueller Clone | lokales Repository | `git status --short`; `git rev-parse HEAD`; `git rev-parse origin/main` | Status leer; erwartete Commitwerte identisch | Befehlstabelle | QA | PLANNED |
-| `19-AC-02`, `REQ-QA-003` | gebrochene Planung | Contract-Audit | Plan/Route/Secret/License | Links und Istinventare grün | fehlender Link oder vorgeplante Route rot | Engineering | Plan/Repository | Markdown und App-Baum | Clean Clone | `npm run plan:audit`; `npm run route:audit`; `npm run security:release-scan`; `npm run license:audit` | vier Exit Codes `0` | Auditoutputs | Engineering | PLANNED |
-| `19-AC-03` | nicht reproduzierbare DB | PostgreSQL/Recovery | leer, Upgrade, Seed×2, Restore | alle Zustände migrieren und Seedmanifest identisch | Partial-/Production-Seed oder fremde Restore-DB blockiert | System | PostgreSQL/Recovery | leere, Bestands-, Guard- und Restore-DB | isoliertes PostgreSQL 16 | `npm run db:migrate`; `npm run db:migrate:status`; `npm run db:seed` zweimal; `npm run seed:verify`; `npm run db:smoke`; `npm run test:release` | Exit `0`; Seedmanifeste identisch; Restore-DB verschieden; Cleanup vollständig | Release-Manifest | Data/Ops | PLANNED |
-| `19-AC-04` | verdeckte Regression | G3/G4 Golden | vollständiger Altvertrag | alle vorhandenen Suites bestehen | Skip, Retry, Flake oder anderer Commit blockiert | alle Rollen | alle Portale | deterministischer Seed | PostgreSQL 16, Production Build, Desktop/360 | die lokale „Exakte Phase-19-/G4-Befehlsfolge“ unmittelbar oberhalb dieser Matrix, ohne Auslassung | alle Exit `0`; Seedmanifest A=B; Browser Retry `0`; keine unerklärten Skips; Start-/End-HEAD identisch | Test-/Playwright-/Release-Manifeste | QA | PLANNED |
-| `19-AC-05`, `STH-019`, `STH-036` | falsche Searchbaseline | Read/Analytics/Performance | Query-/Consumer-Istzustand | reproduzierbare Resultsets und Ergebnis-Buckets | Rohquery-PII oder vermischte Taxonomieversion blockiert | Visitor/Candidate | Search/Alerts/Recommendations/Analytics | Startcluster-Demoqueries plus freigegebene Zielmessung | Demo und Zielmessung getrennt | manuelle SQL-/HTTP-Messung plus bestehende Search-/Analytics-Suites | Resultsets, Queryplan, p50/p95 und Consumer-Deltas versioniert; null Rohtext in Evidence | Benchmark-Manifest | Search/Data | PLANNED |
-| `19-AC-06`, `STH-020/021/027` | falsche Scalepriorität | Capacity/Query-Messung | Caps/Fan-out/Sitemap | reale Counts, Bytes und Queryanzahl erfasst | DEMO wird nicht als LIVE ausgegeben; Capacity Error darf nicht truncieren | Admin/Candidate/Visitor | Queues/Dashboard/Sitemap | Demo und freigegebene Zielwerte | getrennte Umgebungen | bestehende Admin-/Dashboard-/Sitemap-Tests plus dokumentierte Messqueries | Istwert, Headroom, Forecast, Trigger und Owner; Sitemap fail-closed | Capacity-Report | Ops/Data | PLANNED |
-| `19-AC-07`, `STH-001`–`037` | verlorener Befund | Governance-Review | Traceability-Vollständigkeit | jede ID hat genau einen Lead-Owner und LC-/Testmatrix | unowned, doppelt oder widersprüchlich ist rot | Product/Engineering | Plan | alle STH-/REQ-Zeilen | Clean Clone + zweiter Reviewer | manueller zweiter Review plus `npm run plan:audit` | 37/37 IDs mit Status, Phase, LC-Matrix, Tests, Evidence und externem Gate | signierte Reviewtabelle | Product + QA | PLANNED |
-| `19-AC-08` | historische Umschreibung | Diff-Invariantenprüfung | Phase-01–18-Historie | 01–18/Evidence bytegleich | jede Änderung blockiert | Governance | Git/Plan | Start- und Endcommit | Clean Clone | `git diff --name-only <start>...<end> -- codex-plan/01-*.md codex-plan/02-*.md codex-plan/03-*.md codex-plan/04-*.md codex-plan/05-*.md codex-plan/06-*.md codex-plan/07-*.md codex-plan/08-*.md codex-plan/09-*.md codex-plan/10-*.md codex-plan/11-*.md codex-plan/12-*.md codex-plan/13-*.md codex-plan/14-*.md codex-plan/15-*.md codex-plan/16-*.md codex-plan/17-*.md codex-plan/18-*.md codex-plan/evidence` | keine Ausgabe | Diffmanifest | Governance | PLANNED |
+| `19-AC-01`, `REQ-GOV-001` | falscher Commit/Evidence | Repository-Preflight | Startidentität | sauberer HEAD entspricht dokumentiertem Commit | Dirty Tree oder Remoteabweichung blockiert | Engineering | Git | aktueller Clone | lokales Repository | `git status --short`; `git rev-parse HEAD`; `git rev-parse origin/main` | Status leer; erwartete Commitwerte identisch | [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | QA | PASS |
+| `19-AC-02`, `REQ-QA-003` | gebrochene Planung | Contract-Audit | Plan/Route/Secret/License | Links und Istinventare grün | fehlender Link oder vorgeplante Route rot | Engineering | Plan/Repository | Markdown und App-Baum | Clean Clone | `npm run plan:audit`; `npm run route:audit`; `npm run security:release-scan`; `npm run license:audit` | vier Exit Codes `0` | [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | Engineering | PASS |
+| `19-AC-03` | nicht reproduzierbare DB | PostgreSQL/Recovery | leer, Upgrade, Seed×2, Restore | alle Zustände migrieren und Seedmanifest identisch | Partial-/Production-Seed oder fremde Restore-DB blockiert | System | PostgreSQL/Recovery | leere, Bestands-, Guard- und Restore-DB | isoliertes PostgreSQL 16 | `npm run db:migrate`; `npm run db:migrate:status`; `npm run db:seed` zweimal; `npm run seed:verify`; `npm run db:smoke`; `npm run test:release` | Exit `0`; Seedmanifeste identisch; Restore-DB verschieden; Cleanup vollständig | [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | Data/Ops | PASS |
+| `19-AC-04` | verdeckte Regression | G3/G4 Golden | vollständiger Altvertrag | alle vorhandenen Suites bestehen | Skip, Retry, Flake oder anderer Commit blockiert | alle Rollen | alle Portale | deterministischer Seed | PostgreSQL 16, Production Build, Desktop/360 | die lokale „Exakte Phase-19-/G4-Befehlsfolge“ unmittelbar oberhalb dieser Matrix, ohne Auslassung | alle Exit `0`; Seedmanifest A=B; Browser Retry `0`; keine unerklärten Skips; Start-/End-HEAD identisch | [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | QA | PASS |
+| `19-AC-05`, `STH-019`, `STH-036` | falsche Searchbaseline | Read/Analytics/Performance | Query-/Consumer-Istzustand | reproduzierbare Resultsets und Ergebnis-Buckets | Rohquery-PII oder vermischte Taxonomieversion blockiert | Visitor/Candidate | Search/Alerts/Recommendations/Analytics | Startcluster-Demoqueries plus freigegebene Zielmessung | Demo und Zielmessung getrennt | manuelle SQL-/HTTP-Messung plus bestehende Search-/Analytics-Suites | Resultsets, Queryplan, p50/p95 und Consumer-Deltas versioniert; null Rohtext in Evidence | [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | Search/Data | PASS |
+| `19-AC-06`, `STH-020/021/027` | falsche Scalepriorität | Capacity/Query-Messung | Caps/Fan-out/Sitemap | reale Counts, Bytes und Queryanzahl erfasst | DEMO wird nicht als LIVE ausgegeben; Capacity Error darf nicht truncieren | Admin/Candidate/Visitor | Queues/Dashboard/Sitemap | Demo und freigegebene Zielwerte | getrennte Umgebungen | bestehende Admin-/Dashboard-/Sitemap-Tests plus dokumentierte Messqueries | Istwert, Headroom, Forecast, Trigger und Owner; Sitemap fail-closed | [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | Ops/Data | PASS |
+| `19-AC-07`, `STH-001`–`037` | verlorener Befund | Governance-Review | Traceability-Vollständigkeit | jede ID hat genau einen Lead-Owner und LC-/Testmatrix | unowned, doppelt oder widersprüchlich ist rot | Product/Engineering | Plan | alle STH-/REQ-Zeilen | Clean Clone + zweiter Reviewer | manueller zweiter Review plus `npm run plan:audit` | 37/37 IDs mit Status, Phase, LC-Matrix, Tests, Evidence und externem Gate | [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | Product + QA | PASS |
+| `19-AC-08` | historische Umschreibung | Diff-Invariantenprüfung | Phase-01–18-Historie | 01–18/Evidence bytegleich | jede Änderung blockiert | Governance | Git/Plan | Start- und Endcommit | Clean Clone | `git diff --name-only <start>...<end> -- codex-plan/01-*.md codex-plan/02-*.md codex-plan/03-*.md codex-plan/04-*.md codex-plan/05-*.md codex-plan/06-*.md codex-plan/07-*.md codex-plan/08-*.md codex-plan/09-*.md codex-plan/10-*.md codex-plan/11-*.md codex-plan/12-*.md codex-plan/13-*.md codex-plan/14-*.md codex-plan/15-*.md codex-plan/16-*.md codex-plan/17-*.md codex-plan/18-*.md codex-plan/evidence` | keine Ausgabe | [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | Governance | PASS |
 
 `N/A` ist für Unit-, PostgreSQL-, E2E-, Mobile-, A11y-, Security- oder
 Release-Gates dieser Phase nicht zulässig. Moderierte Nutzerforschung und
@@ -282,11 +292,13 @@ späteren Owner bleiben sichtbar.
 
 ## 22. Performance- und Skalierungsgrenzen
 
-Phase 19 friert Istwerte ein, erteilt aber keine Performancefreigabe.
-Mindestens erfasst werden Search p50/p95 und Query Plan, Candidate-
-Recommendation-Querycount, Adminlisten-Caps/Erreichbarkeit, Sitemap-Count/
-unkomprimierte Bytes/Laufzeit/7-/30-Tage-Wachstum/90-Tage-Prognose sowie
-Release-Gate-Laufzeiten. STH-027 bleibt unter dokumentiertem Trigger P3.
+Phase 19 hat die Istwerte im Evidence-Record eingefroren, erteilt aber keine
+Performancefreigabe. Erfasst sind Search p50/p95 und Query Plan,
+Candidate-Recommendation-Querycount, Adminlisten-Caps/Erreichbarkeit,
+Sitemap-Count/unkomprimierte Bytes/Laufzeit sowie Release-Gate-Laufzeiten.
+Mangels freigegebener LIVE-Zielumgebung existieren ehrlich keine 7-/30-Tage-
+Historie oder 90-Tage-LIVE-Prognose. `STH-020`, `STH-021` und `STH-027`
+bleiben mit dokumentierten Triggern offen.
 
 ## 23. Zu verhindernde Regressionen
 
@@ -308,7 +320,8 @@ getestet; historische Evidence wird nicht umgeschrieben.
 
 ## 25. Benötigte Evidence
 
-Ein neuer `evidence/YYYY-MM-DD-phase-19.md`-Record nach
+Der neue [`evidence/2026-07-26-phase-19.md`](./evidence/2026-07-26-phase-19.md)
+folgt
 [`remediation-execution-contract.md`](./remediation-execution-contract.md)
 §12, einschließlich Start-/Endcommit, Umgebung, vollständiger Befehlstabelle,
 Migration-/Recovery-Manifest, 37-ID-Traceability, Route-/Testinventar,
@@ -316,21 +329,22 @@ Baseline-Metriken, Diff-Invarianten und Go/No-go.
 
 ## 26. Definition of Done
 
-- `19-AC-01` bis `19-AC-08` sind auf demselben Commit grün.
-- Keine Pflichtprüfung ist geerbt, übersprungen, flakig oder abgeschwächt.
-- 37/37 STH-IDs und alle Phase-19+-Requirements sind widerspruchsfrei
+- [x] `19-AC-01` bis `19-AC-08` sind auf demselben Commit grün.
+- [x] Keine Pflichtprüfung ist geerbt, übersprungen, flakig oder abgeschwächt.
+- [x] 37/37 STH-IDs und alle Phase-19+-Requirements sind widerspruchsfrei
   zugeordnet.
-- Phasen 01–18 und historische Evidence sind unverändert.
-- alle offenen Phasen besitzen ihren 28-Punkte- und Testvertrag.
-- es besteht keine ungeklärte Regression des historischen Vertrags; offene
+- [x] Phasen 01–18 und historische Evidence sind unverändert.
+- [x] Alle offenen Phasen besitzen ihren 28-Punkte- und Testvertrag.
+- [x] Es besteht keine ungeklärte Regression des historischen Vertrags; offene
   Remediation-P0s bleiben erwartungsgemäß offen und deaktiviert.
 
 ## 27. Quality-Gate für Folgephasen
 
-Erst nach verlinkter, grüner Phase-19-Evidence dürfen Phase 20 oder andere
-Runtime-Tracks beginnen. 31A und 29A dürfen zuvor nur nichttechnische Research-
-Vorbereitung leisten. Ein späterer Wechsel des Baseline-Commits erfordert
-einen neuen vollständigen Phase-19-Lauf.
+Die verlinkte Phase-19-Evidence ist grün; Phase 20 darf deshalb als nächster
+technischer Track beginnen. 31A und 29A dürfen gemäss Dependency-Graph
+parallel nichtaktivierende Research-Vorbereitung leisten. Ein späterer
+Wechsel des Baseline-Commits erfordert einen neuen vollständigen
+Phase-19-Lauf.
 
 ## 28. Was Phase 19 ausdrücklich nicht beweist
 

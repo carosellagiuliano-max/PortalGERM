@@ -16,7 +16,7 @@ Es gilt der vollständige
 
 | Track | Plan | Technik | Quality-Gate | Aktivierung |
 |---|---|---|---|---|
-| 29A moderierte Research | geplant nach Phase 19 | keine Runtimeimplementierung | externe Evidence offen | Research-only |
+| 29A moderierte Research | nach bestandener Phase 19 zulässig, noch nicht begonnen | keine Runtimeimplementierung | externe Evidence offen | Research-only |
 | 29B UX/Mobile/Cross-Browser/A11y | geplant | nicht implementiert | nicht gelaufen | disabled |
 
 ### 2. Ziel und messbarer Nutzerwert

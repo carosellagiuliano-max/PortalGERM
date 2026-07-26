@@ -18,7 +18,7 @@ vollständig.
 
 | Track | Planstatus | Technikstatus | Quality-Gate | Aktivierung |
 |---|---|---|---|---|
-| 31A WTP-/Delivery-Discovery | geplant nach Phase 19 | externe/manuell kontrollierte Validierung nicht begonnen | nicht gelaufen | keine öffentliche Produktaktivierung |
+| 31A WTP-/Delivery-Discovery | nach bestandener Phase 19 zulässig, noch nicht begonnen | externe/manuell kontrollierte Validierung nicht begonnen | nicht gelaufen | keine öffentliche Produktaktivierung |
 | 31B Product Release | geplant nach grüner 31A-Evidence und Owning-Phasen | nicht implementiert | nicht gelaufen | `DISABLED` |
 | Boost | Hypothese | nicht als bezahlbares Release freigegeben | Reichweiten-Gate offen | `DISABLED` |
 | Talent Radar | Hypothese | bestehender Privacy-Flow ist kein Paid-Market-Beweis | Dichte-/Nutzungs-Gate offen | Paid-Entitlement `DISABLED` |

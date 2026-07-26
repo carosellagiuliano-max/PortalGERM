@@ -2,8 +2,9 @@
 
 > **Historischer Ausführungsplan für Phase 01–18.** Diese Phasen und ihre
 > commitgebundene Evidence bleiben unverändert. Für neue Implementierung ist
-> heute zuerst Phase 19 und danach der prospektive Abschnitt am Ende dieses
-> Dokuments zusammen mit
+> Phase 19 inzwischen auf Candidate `769ee62` abgeschlossen; als nächster
+> technischer Track gilt Phase 20 und danach der prospektive Abschnitt am
+> Ende dieses Dokuments zusammen mit
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md)
 > verbindlich. Der historische Zielzustand war ein kontrollierbares,
 > DSG-freundlich vorbereitetes MVP mit persistierenden Mock-Providern, nicht
@@ -591,8 +592,9 @@ Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert u
 ## Prospektiver Ausführungsplan Phase 19–32
 
 > Dieser Abschnitt ist das ausdrücklich freigegebene Folgepaket auf
-> Planungsebene. Alle Phasen bleiben offen. Jede Phase instanziiert den
-> 28-Punkte-, Test-, Evidence- und Folgephasengate-Vertrag aus
+> Planungsebene. Phase 19 ist abgeschlossen; Phasen 20–32 bleiben offen.
+> Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
+> Folgephasengate-Vertrag aus
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md).
 
 ```mermaid
@@ -628,8 +630,10 @@ flowchart TD
 
 ### Kritischer Standardpfad
 
-1. **Phase 19**: aktueller sauberer `main`, vollständiger Golden Run,
-   Governance/ADRs/Requirements/Architektur/Traceability/Testverträge.
+1. **Phase 19 — abgeschlossen**: Candidate `769ee62`, aktueller sauberer
+   `main`, vollständiger Golden Run,
+   Governance/ADRs/Requirements/Architektur/Traceability/Testverträge; siehe
+   [Evidence](./evidence/2026-07-26-phase-19.md).
 2. **Frühe parallele Discovery**: 31A (ICP, genau ein erstes
    Region×Beruf-Paar, WTP, Cashflow, Operationskosten) und 29A (moderierte
    aktuelle Kernreisen).
