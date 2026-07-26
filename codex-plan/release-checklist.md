@@ -121,6 +121,43 @@ Diese Punkte dürfen nicht durch einen lokalen Test auf `[x]` wechseln:
   Restart-/Concurrency-/Failure-Recovery für Renewal, Alerts und fällige
   Projektionen vor unbeaufsichtigtem öffentlichen Self-Service.
 
+## Remediation-Zusatz für den nächsten öffentlichen Start
+
+> Diese offenen Gates ergänzen den historischen Phase-18-Record. Sie sind keine
+> rückwirkende Phase-18-Evidence und werden erst auf dem künftigen
+> Releasekandidaten bewertet.
+
+### Zwingend vor Start eines öffentlichen Kandidatenclusters
+
+- [ ] Die wichtigsten Berufsbezeichnungen, Schweizer Synonyme, Abkürzungen,
+  neutralen/geschlechtsspezifischen Formen, Schreib-, regionalen und
+  Singular-/Pluralvarianten sowie kontrollierten häufigen Tippfehler des
+  Startclusters sind versioniert und fachlich freigegeben.
+- [ ] Fachlich gleichwertige Berufsbezeichnungen liefern konsistente relevante
+  Resultate; dokumentierte Gegenbeispiele verhindern eine unkontrollierte
+  Ausweitung auf verwandte oder falsch qualifizierte Berufe.
+- [ ] Public Search, Job-Alerts, Candidate Preferences, Recommendations und
+  Matching verwenden dieselben Berufs-Konzept-IDs und dieselbe
+  Taxonomieversion.
+- [ ] Die Suchqualität wurde mit einer dokumentierten Startcluster-Testmenge
+  aus must-find/must-not-find und relevanten Top-K-Urteilen geprüft.
+- [ ] Für zentrale Suchbegriffe existiert bei vorhandener passender
+  indexierbarer Stelle kein bekannter Zero-Result-Fehler.
+- [ ] Das Cluster-Launch-Assessment bindet Query-Set-, Search-Policy-,
+  Ranking- und Taxonomieversion; alte V1-Approvals oder reine
+  Location-/Kategorie-/`Stellen`-Treffer genügen nicht.
+
+### Später sinnvoll beziehungsweise vor der Sitemap-Kapazitätsgrenze
+
+- [ ] Aktuelle LIVE-Counts pro Ressource und gemeinsam, unkomprimierte
+  Sitemap-Bytes, Laufzeit, letzter Erfolg und Wachstum/90-Tage-Prognose werden
+  überwacht; Owner, Alert und Runbook sind benannt.
+- [ ] Ein Sitemap-Index mit getrennten Ressource- und bei Bedarf
+  Cluster-Shards wird nach dem freigegebenen Warnschwellenvertrag und jedenfalls
+  vor Erreichen der 50.000-URL-/Bytegrenze umgesetzt.
+- [ ] Das bestehende no-truncation-/fail-closed-Verhalten bleibt bis zum
+  getesteten Cutover erhalten.
+
 ## Abschlussentscheidung
 
 | Status | Zulässige Aussage |

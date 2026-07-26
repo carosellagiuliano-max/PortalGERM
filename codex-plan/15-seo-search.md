@@ -68,6 +68,14 @@ Polish search and SEO: server-side full-text-ish search via Postgres, URL-driven
 > Indexierbarkeit bestätigt hat. Das ändert nicht den verifizierten
 > Phase-15-SEO-Mechanismus; es schliesst dessen Datenquellen-Gate konsequent.
 
+> **Remediation-Neubewertung 25. Juli 2026:** „vor Erreichen“ bedeutet keinen
+> heutigen P1-Defect. Solange gemessene Count-/Byte-/Performancewerte und die
+> 90-Tage-Prognose deutlich unter dem Trigger liegen, ist STH-027
+> P3-Skalierungsvorbereitung und das bestehende fail-closed/no-truncation-
+> Verhalten bleibt bewusst erhalten. Messung/Alerts sind Pflicht; Index/Shards
+> werden gemäß [Phase 30C](./30-search-scale-operations.md) ab dem
+> Warnschwellenvertrag rechtzeitig vor dem Limit umgesetzt.
+
 ### `/robots.txt`
 
 - [x] Implement `app/robots.ts` exporting mindestens:

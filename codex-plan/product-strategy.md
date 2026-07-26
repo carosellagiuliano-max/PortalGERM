@@ -29,7 +29,7 @@ Menschen in der Schweiz sollen eine berufliche Entscheidung nicht aufgrund einer
 
 - **Primäre Arbeitgeber:** eigenständige Schweizer KMU mit 20–249 Mitarbeitenden, 3–30 Einstellungen pro Jahr und ohne ausgereiftes ATS oder grosses internes Recruiting-Team.
 - **Primäre Kandidaten:** aktiv oder latent wechselbereite Fachkräfte mit Berufserfahrung, die ihren Marktwert verstehen und Kontrolle über ihre Daten behalten wollen.
-- **Startcluster als Hypothese:** deutschsprachige Regionen Zürich/Aargau/Bern; zunächst Pflege/Gesundheit und Engineering/Technik. Vor öffentlichem Launch muss durch Interviews und Angebotsakquise bestätigt werden, dass je Cluster genügend reale Stellen und Kandidateninteresse entstehen.
+- **Startcluster als Hypothese:** deutschsprachige Regionen Zürich/Aargau/Bern; zunächst Pflege/Gesundheit und Engineering/Technik. Vor öffentlichem Launch muss durch Interviews und Angebotsakquise bestätigt werden, dass je Cluster genügend reale Stellen und Kandidateninteresse entstehen. Zusätzlich muss die kontrollierte Startcluster-Berufstaxonomie belegen, dass fachlich gleichwertige Schweizer Berufsbezeichnungen, Abkürzungen, Varianten und häufige Tippfehler dieselben relevanten Stellen erschließen.
 - **Sekundär:** Berufseinsteiger, Quereinsteiger, weitere Kantone/Sprachen, grössere Arbeitgeber und interne Recruiter.
 - **Später:** Agenturen mit mehreren Mandanten, Enterprise-ATS-Integrationen und landesweit optimierte französische/italienische Inhalte.
 
@@ -89,6 +89,25 @@ Liquidität wird pro **Region × Berufsfeld** gemessen. Eine landesweite Gesamtz
 3. **Nachfrage aktivieren:** Salary-Radar- und Karriereinhalte, Hochschul-/Verbandskooperationen, Kandidaten-Warteliste, Jobabos und Empfehlungen. Kandidaten werden nur nach ausdrücklicher Einwilligung in den Talent Radar aufgenommen.
 4. **Kontrollierter öffentlicher Launch:** Clusterweise Landingpages und Sales-Kampagnen; schwache Cluster bleiben `noindex` und erhalten keine irreführende Angebotsbehauptung.
 
+### Verbindlicher Startcluster-Suchvertrag
+
+Ein vorhandenes Stellenangebot ist für Kandidat:innen nur dann liquide, wenn es
+unter ihren tatsächlichen Berufsbezeichnungen auffindbar ist. Deshalb wird vor
+jedem öffentlichen Cluster-Launch ein versioniertes, von Berufsfachpersonen
+freigegebenes Query-/Judgment-Korpus eingefroren. Es umfasst kanonische
+Berufs-Konzepte, Schweizer Titel, Synonyme, Abkürzungen, neutrale und
+geschlechtsspezifische Formen, Singular/Plural, regionale Varianten, häufige
+Tippfehler sowie harte Gegenbeispiele.
+
+Public Search, Job-Alert-Preview/Dispatch, Candidate Preferences,
+Recommendations und Matching verwenden dieselben Berufs-Konzept-IDs und
+Taxonomieversionen. Das Ranking darf je Kontext zusätzliche Faktoren besitzen,
+die fachliche Gleichwertigkeit und Ausschlussmenge dürfen aber nicht driften.
+Eine erklärbare PostgreSQL-Lösung aus kontrollierter Taxonomie, Aliasauflösung,
+Trigramm-/Full-Text-Suche und stabilen Rankingregeln ist ausreichend.
+Embeddings, generische „KI-Suche“ oder ein eigener Search Service sind keine
+Startvoraussetzung.
+
 ### Launch-Gates (interne Hypothesen, keine Marktwerte)
 
 | Gate je Cluster | Ziel vor öffentlicher Akquise | Stop-/Lernsignal |
@@ -98,9 +117,18 @@ Liquidität wird pro **Region × Berufsfeld** gemessen. Eine landesweite Gesamtz
 | aktivierte Kandidaten (`CandidateProfile=COMPLETE` nach dem verbindlichen Mindestfeld-Prädikat) | ≥ 200 | Registrierung ohne Aktivierung > 70 % |
 | Bewerbungen pro Stelle in 30 Tagen | Median ≥ 3 | viele Views, aber Median < 1 |
 | Arbeitgeberantwort | ≥ 70 % binnen zugesagter Frist | Ghosting > 30 % |
-| Suchergebnisabdeckung | ≥ 80 % der beworbenen Suchkombinationen liefern 5+ relevante Stellen | programmatic SEO erzeugt dünne Seiten |
+| zentrale Berufsvarianten | 100 % besitzen positive und negative Fachtests; kein bekannter False-Zero bei vorhandener passender Stelle | Synonyme verbreitern zu verwandten/falschen Berufen oder Qualifikationen |
+| Suchergebnisabdeckung | ≥ 80 % der beworbenen Suchkombinationen liefern 5+ fachlich relevante Top-K-Stellen | reine Location-/Kategorie-/„Stellen“-Substring-Treffer oder programmatic SEO erzeugen Scheinerfolg |
 
-Diese Werte sind Startannahmen und werden nach den ersten zwei Kohorten nur über eine neue versionierte Policy angepasst. `CLUSTER_LAUNCH_POLICY_V1` in Phase 15 definiert Fenster, Denominatoren, Dedupe, LIVE-Ausschluss und die getrennte Product-/Ops-Freigabe; ein Gate ist kein öffentliches Leistungsversprechen.
+Diese Werte sind Startannahmen und werden nach den ersten zwei Kohorten nur
+über eine neue versionierte Policy angepasst. `CLUSTER_LAUNCH_POLICY_V1` in
+Phase 15 definiert Fenster, Denominatoren, Dedupe, LIVE-Ausschluss und die
+getrennte Product-/Ops-Freigabe. Ihr grober Kategorie-/Kanton-Relevanzproxy ist
+jedoch kein Nachweis des neuen Berufsquery-Gates. Phase 30A führt deshalb einen
+V2-Vertrag ein, der Query-Set-, Search-Policy-, Ranking- und
+Taxonomieversion sowie queryweise Top-K-Judgments bindet. Eine alte
+V1-Freigabe aktiviert V2 nicht automatisch; ein Gate ist kein öffentliches
+Leistungsversprechen.
 
 ### Erlaubte Angebotsquellen
 
@@ -212,7 +240,11 @@ Jede Empfehlung enthält `reasonCode`, Evidenzzeitraum, Firma/Job, erwartete Akt
 
 ### Programmatic-SEO-Gate
 
-Eine Seite wird nur indexiert, wenn sie (a) ausreichend aktuelle reale Stellen, (b) einzigartige regionale/berufliche Orientierung, (c) stabile Canonical-Logik und (d) einen hilfreichen Empty-State besitzt. Dünne Kombinationen werden konsolidiert oder `noindex`; Seitenanzahl ist kein Erfolgsindikator.
+Eine Seite wird nur indexiert, wenn sie (a) ausreichend aktuelle reale Stellen,
+(b) einzigartige regionale/berufliche Orientierung, (c) stabile
+Canonical-Logik, (d) einen hilfreichen Empty-State und (e) bestandene
+cluster-/sprachspezifische STH-019-Search-Evidence besitzt. Dünne Kombinationen
+werden konsolidiert oder `noindex`; Seitenanzahl ist kein Erfolgsindikator.
 
 ## 10. Monetarisierung und Paketlogik
 
@@ -349,7 +381,7 @@ Downside. CAC und Sales-Personal dürfen nicht doppelt gezählt werden.
 
 ### KPI-Baum
 
-- **Liquidität:** aktuelle Jobs/Cluster, aktivierte Kandidaten/Cluster, Suchabdeckung, Zeit zur ersten qualifizierten Bewerbung.
+- **Liquidität:** aktuelle Jobs/Cluster, aktivierte Kandidaten/Cluster, fachlich beurteilte Suchabdeckung, False-Zero-/False-Broadening-Rate zentraler Startcluster-Begriffe und Zeit zur ersten qualifizierten Bewerbung.
 - **Kandidat:** Besuch→Suche, Detail→Merken/Bewerben, Registrierung→Aktivierung, Jobabo-Retention, Bewerbungsantwortquote, Radar-Kontaktannahme.
 - **Arbeitgeber:** Registrierung→verifizierte Firma, Draft→Publikation, Zeit bis Publikation, qualifizierte Bewerbungen/Stelle, Antwort-SLA, Free→Paid.
 - **Umsatz:** MRR, ARR-Run-Rate, ARPA, Expansion, Logo-/Revenue-Churn, Produktumsatz, Refund-/Fehlerquote später.
@@ -404,6 +436,10 @@ Events enthalten pseudonyme Actor-/Tenant-IDs, Zweck, Zeit und minimal notwendig
 
 - invite-only Design-Partner-Angebote mit echtem, transparentem Geldfluss nach
   AVG-/Tax-/Vertragsfreigabe; Mock-Abschlüsse zählen nicht als Paid Conversion;
+- kontrollierte Berufstaxonomie und erklärbare Alias-/Trigramm-/FTS-Suche für
+  jeden aktivierten Startcluster; Search, Alerts, Preferences,
+  Recommendations, Matching und Cluster-Launch-Evidence teilen denselben
+  versionierten Berufsvertrag;
 - Business/Enterprise-Verkaufsworkflow, Jahrespläne, zusätzliche Teamrollen;
 - Agenturmandate, Multi-Client-Kontexte und erweiterte Delegation; **P0** umfasst bereits robuste interne Company-Einladung/Annahme/Entfernung/Rollenwechsel sowie job-spezifische Assignment-Erteilung/Widerruf mit sofortiger Wirkung;
 - Growth-Landingpages nur nach Liquiditätsgate, missbrauchsgeschützte Referral-Attribution, Content-Workflow;
@@ -419,7 +455,8 @@ Events enthalten pseudonyme Actor-/Tenant-IDs, Zweck, Zeit und minimal notwendig
 ### P2 / später
 
 - skalierte reale Provider nach ihren separaten ADRs, ATS/API/SSO,
-  vollständige Mehrsprachigkeit, ausgefeilte Volltextsuche;
+  landesweit vollständige Mehrsprachigkeit sowie optionale semantische/
+  hybride Suche oder ein dedizierter Search Service nach belegtem Zusatznutzen;
 - employerseitige Match-Rangfolge nach Prüfung, mobile Apps, Refund-Automation;
 - Success Fee ausschließlich nach Rechts- und Geschäftsmodellprüfung.
 

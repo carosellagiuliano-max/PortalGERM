@@ -20,6 +20,8 @@
 | Salary Radar besitzt keine reale Quelle | **hoch, korrekt** | Der fiktive Datensatz bleibt Demo-only. Die LIVE-Seite ist jetzt fail-closed, `noindex` und nicht in der Sitemap. |
 | Google for Jobs kam erst in Phase 15 | **falsch** | `JobPosting`-JSON-LD entstand bereits in Phase 07; Phase 15 härtete und validierte es. Kein Fix nötig. |
 | AVG fehlt | **kritisches Go-live-Gate** | Ein entgeltlicher Online-Stellenmarkt und insbesondere Radar-Matching/Kontaktfreigabe können bewilligungspflichtige Arbeitsvermittlung sein. Vor realem Betrieb ist eine konkrete behördliche/fachjuristische Beurteilung nötig. |
+| Startcluster-Suche verbindet Berufsvarianten nicht | **P1, korrekt für den Kandidaten-Launch** | Pflege/Gesundheit benötigt vor öffentlicher Aktivierung eine kontrollierte Schweizer Berufstaxonomie, gemeinsame Search-/Alert-/Recommendation-Semantik und fachlich beurteilte Positiv-/Negativtests. Eine spätere allgemeine „KI-Suche“ ersetzt dieses Gate nicht. |
+| Einzel-Sitemap endet bei 50.000 URLs | **P3 solange mit großem Headroom; sichere Mitigation** | Der heutige Abbruch ist fail-closed und schneidet nicht still ab. Count/Bytes/Wachstum werden überwacht; Index/Shards werden vor dem dokumentierten Kapazitätstrigger gebaut, nicht als heutiges P0/P1 behandelt. |
 
 ## 2. Zahlungsbereitschaft statt Mock-Conversion
 
@@ -177,3 +179,47 @@ nicht gescrapt.
   Opt-in-Dichte, eligible Cohort, Search→Contact, Accept, Reveal,
   qualifiziertes Gespräch und bezahlter Zugang/Kontakt. „Moat“ wird erst nach
   belegtem Netzwerkeffekt behauptet.
+
+## 8. Startcluster-Suche und spätere Sitemap-Skalierung
+
+### Zwingend vor öffentlicher Startcluster-Aktivierung
+
+- [ ] Die wichtigsten Berufsbezeichnungen, Schweizer Synonyme, Abkürzungen,
+  neutralen/geschlechtsspezifischen Formen, Schreib- und regionalen Varianten
+  sowie kontrollierten häufigen Tippfehler des konkreten Startclusters sind
+  versioniert und fachlich freigegeben.
+- [ ] Fachlich gleichwertige Berufsbezeichnungen liefern konsistente relevante
+  Resultate; harte Gegenbeispiele belegen, dass verwandte Berufe oder andere
+  Qualifikationen nicht unkontrolliert einbezogen werden.
+- [ ] Public Search, Job-Alert-Preview/Dispatch, Candidate Preferences,
+  Recommendations und Matching verwenden dieselben Berufs-Konzept-IDs und
+  dieselbe Taxonomieversion. Zusätzliche Rankingfaktoren bleiben erklärbar.
+- [ ] Die Suchqualität ist gegen ein dokumentiertes Startcluster-Query-/
+  Judgment-Korpus mit must-find, must-not-find, relevanten Top-K-Urteilen,
+  Recall-/Precision- und Latenzbudget geprüft.
+- [ ] Für zentrale Suchbegriffe existiert bei vorhandener passender
+  indexierbarer Stelle kein bekannter False-Zero.
+- [ ] `ClusterLaunchAssessment V2` bindet Query-Set-, Search-Policy-, Ranking-
+  und Taxonomieversion. Reine Location-/Kategorie-/`Stellen`-Treffer und alte
+  V1-Approvals können den Cluster nicht aktivieren.
+
+Diese Punkte blockieren den öffentlichen Cluster-Launch, seine Indexierung und
+Paid Acquisition. Sie blockieren keine nichtöffentlichen Interviews oder einen
+kontrollierten Concierge-Research-Track.
+
+### Später sinnvoll beziehungsweise vor Erreichen der Kapazitätsgrenze
+
+- [ ] Die reale Sitemap-Kapazität wird pro Ressourcentyp und gemeinsam anhand
+  von Count, unkomprimierten Bytes, Laufzeit, letztem Erfolg und 7-/30-Tage-
+  Wachstum samt 90-Tage-Prognose überwacht.
+- [ ] Unter 70 % Count-/Bytebudget bleibt STH-027 mit Owner, Alert und Runbook
+  `P3 DEFERRED / MONITORED`; das bestehende fail-closed-Verhalten bleibt
+  erhalten.
+- [ ] Ab 70 % beziehungsweise entsprechender 90-Tage-Prognose werden
+  Shard-ADR, Owner und Zielrelease verbindlich; spätestens vor 80 % wird ein
+  Sitemap-Index mit Ressource- und bei Bedarf Cluster-Shards umgesetzt.
+- [ ] Ab 90 %, Capacity Error oder Byte-/Timeout-/p95-Bruch stoppt weitere
+  indexierbare Expansion bis zur sicheren Skalierung.
+- [ ] Index-/Shard-Tests belegen erst beim ausgelösten Ausbau jede eligible URL
+  exakt einmal, keine Lücke/Dublette/private/DEMO-URL, stabile Grenzen sowie
+  Count-/Bytelimits und unveränderte Eligibility.

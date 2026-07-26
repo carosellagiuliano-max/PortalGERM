@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** Stand 24. Juli 2026. **Phasen 01 bis 18 sind im Zielrepository implementiert und lokal verifiziert.** Der technische Abschluss umfasst E2E-01–08, den Clean Clone, zwei identische Seeds, Production-Demo-Guard, die vollständige 100-Seiten-Desktop-/360px-Matrix sowie den verschlüsselten Backup-/Restore-Drill. Das ist keine Pilot- oder Produktionsfreigabe: Staging, echte Provider, AVG/Legal/Privacy/Tax, bezahlte Marktvalidierung, ein monatliches Cashflow-/Runway-Modell, ein fachlich freigegebener LIVE-Lohndatensatz, produktiver Backup-Lifecycle, bestätigte RPO/RTO, Incident Ownership und autonome Worker bleiben externe Gates. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
+> **Planstatus:** Stand 25. Juli 2026. **Phasen 01 bis 18 sind im Zielrepository implementiert und auf ihren unveränderlichen Evidence-Commits verifiziert.** Der technische Abschluss umfasst E2E-01–08, den Clean Clone, zwei identische Seeds, Production-Demo-Guard, die vollständige 100-Seiten-Desktop-/360px-Matrix sowie den verschlüsselten Backup-/Restore-Drill. Eine unabhängige Neubewertung der Befunde `STH-001` bis `STH-028` hat daraus die Remediation-Phasen 19 bis 32 abgeleitet; sie sind vollständig geplant, aber noch nicht implementiert oder verifiziert und bleiben deshalb `[ ]`. Weder die historische Evidence noch diese Planung ist eine Pilot- oder Produktionsfreigabe: Staging, ausgewählte reale Provider, produktiver Backup-Lifecycle und autonome Worker sind noch umzusetzende beziehungsweise real zu betreibende Remediation-Lieferobjekte; AVG/Legal/Privacy/Tax, Providerverträge, bezahlte Marktvalidierung, Cashflow/Runway, erforderliche LIVE-Daten, RPO/RTO und Incident Ownership benötigen zusätzlich externe oder organisatorische Freigaben. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete P1-Paket REQ-REC-002 (externe Agenturmandate) bleibt ausdrücklich offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -9,13 +9,16 @@ Die folgende Liste ist die empfohlene **Lesereihenfolge**, nicht die Konflikthie
 1. [`../AGENTS.md`](../AGENTS.md) — verbindliche Arbeits- und Evidence-Regeln.
 2. [`99-rules-quickref.md`](./99-rules-quickref.md) — nicht verhandelbare Produkt-/Technikregeln.
 3. [`product-strategy.md`](./product-strategy.md) — Zielgruppen, Positionierung, Marketplace, Journeys, Growth, Monetarisierung und KPIs.
-4. [`commercial-go-live-gates.md`](./commercial-go-live-gates.md) — bezahlte Marktvalidierung, Cashflow, Packaging, AVG, LIVE-Lohndaten und Worker-Gates.
-5. [`architecture-blueprint.md`](./architecture-blueprint.md) — Rollen, Routen, Daten, Use Cases, Security, UX, Test und Betrieb.
-6. [`requirements-matrix.md`](./requirements-matrix.md) — Anforderung → Phase → Modell → Policy → UX → Test → Abnahme.
-7. [`decisions.md`](./decisions.md) und [`glossary.md`](./glossary.md) — verbindliche ADRs und Begriffe.
-8. [`plan-audit.md`](./plan-audit.md) — Konflikte, Klassifizierung, offene Entscheidungen und verworfener Scope.
-9. [`implementation-plan.md`](./implementation-plan.md) — ausführbare Schritte und Definition of Done.
-10. Die Detailphase `01` bis `18` — technische Deliverables und Evidence je Schritt.
+4. [`commercial-go-live-gates.md`](./commercial-go-live-gates.md) — bezahlte Marktvalidierung, Cashflow, Packaging, AVG, LIVE-Lohndaten, Worker, Startcluster-Suchqualität und Sitemap-Kapazitätsgates.
+5. [`remediation-masterplan.md`](./remediation-masterplan.md) — verbindlicher Ausführungs-, Abhängigkeits-, Risiko- und Evidence-Rahmen für die offenen Phasen 19 bis 32.
+6. [`remediation-traceability.md`](./remediation-traceability.md) — unabhängige Einzelbewertung und lückenlose Zuordnung aller Befunde `STH-001` bis `STH-028`.
+7. [`architecture-blueprint.md`](./architecture-blueprint.md) — Rollen, Routen, Daten, Use Cases, Security, UX, Test und Betrieb.
+8. [`requirements-matrix.md`](./requirements-matrix.md) — Anforderung → Phase → Modell → Policy → UX → Test → Abnahme.
+9. [`decisions.md`](./decisions.md) und [`glossary.md`](./glossary.md) — verbindliche ADRs und Begriffe.
+10. [`plan-audit.md`](./plan-audit.md) — Konflikte, Klassifizierung, offene Entscheidungen und verworfener Scope.
+11. [`implementation-plan.md`](./implementation-plan.md) — historischer Ausführungsplan für die Phasen 01 bis 18.
+12. Die Detailphasen `01` bis `18` — implementierte technische Deliverables und ihre Evidence.
+13. Die Detailphasen `19` bis `32` — offene Remediation-Arbeitspakete; ein Plandokument ist keine Erledigung.
 
 Das historisch referenzierte `../plan.md` existiert nicht. Diese lokale Dokumentgruppe ist deshalb die alleinige Planungsquelle. Tote `plan.md §…`-Verweise begründen keine zusätzliche oder abweichende Anforderung.
 
@@ -23,7 +26,7 @@ Das historisch referenzierte `../plan.md` existiert nicht. Diese lokale Dokument
 
 SwissTalentHub ist eine Schweizer Karriere-Entscheidungsplattform mit Stellenmarktplatz. Kandidaten erhalten vor Registrierung Transparenz über Stelle, Lohn und Inseratqualität und bauen danach mit SwissJobPass, Jobabos, Bewerbungsstatus und freiwilligem anonymem Talent Radar wiederkehrenden Nutzen auf. Arbeitgeber erhalten einen geführten Jobprozess, Bewerberpipeline, resultatbezogene Analytics und klar bepreiste Kontingente/Workflows. Admins betreiben Moderation, Verifizierung, Import, Billing, Datenschutzfälle, Sales und Marketplace-Liquidität über handlungsorientierte Queues.
 
-Der Markteintritt ist bewusst fokussiert: Als validierbare Hypothese startet SwissTalentHub in deutschsprachigen Clustern Zürich/Aargau/Bern für Pflege/Gesundheit und Engineering/Technik mit Schweizer KMU, nicht als sofort flächendeckend liquider Marktplatz. Breite, Regionen und Sprachen werden anhand echter Angebots-/Nachfrage-Gates erweitert.
+Der Markteintritt ist bewusst fokussiert: Als validierbare Hypothese startet SwissTalentHub in deutschsprachigen Clustern Zürich/Aargau/Bern für Pflege/Gesundheit und Engineering/Technik mit Schweizer KMU, nicht als sofort flächendeckend liquider Marktplatz. Breite, Regionen und Sprachen werden anhand echter Angebots-/Nachfrage-Gates **und** eines fachlich bestandenen, cluster-/sprachspezifischen STH-019-Suchqualitätsgates erweitert.
 
 Die wichtigsten Differenzierungen sind:
 
@@ -49,7 +52,7 @@ Der Phase-17-Code-Commit `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` ergänzt dar
 - Credit-/Allowance-Verbrauch und Fulfillment sind atomar, idempotent und ledgerbasiert.
 - Boosts sind immer „Geboostet“ und beeinflussen niemals den Fair-Job-Score.
 - Match-Score ist P0 eine kandidatenorientierte Entscheidungshilfe, keine automatische Arbeitgeberentscheidung.
-- Externe Systeme bleiben persistierende Mock-Adapter; kein realer API-Zugriff und kein automatischer Env-Switch.
+- Externe Systeme bleiben bis zur expliziten Freigabe ihrer besitzenden Remediation-Phase persistierende Mock-Adapter. Reale Adapter benötigen einen eigenen ADR sowie Provider-, Legal-, Operations- und Release-Gates; ein automatischer Env-Switch bleibt verboten.
 - Keine fremden Portale scrapen/kopieren; Import braucht Nutzungsgrundlage und Preview.
 - Keine volle DSG-/Rechts-/Steuer- oder Produktionsreife behaupten. Success Fee bleibt deaktiviert.
 - Kein UI-only Feature, keine harte Demozahl als Marktnachweis und kein `[x]` ohne neue Evidence im Ziel.
@@ -64,9 +67,24 @@ Der Phase-17-Code-Commit `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` ergänzt dar
 | später    | explizites Folgeprojekt                    | skalierte reale Provider nach separaten ADRs, ATS/API/SSO, Enterprise Billing, employerseitige Match-Sortierung nach Prüfung, Success Fee nach AVG-/Legal Review |
 | verworfen | nicht bauen                                | Scraping, globale Reveals, bezahlte Fairness, Fake-Aktivität, automatische Ablehnung, dünne SEO-Massenpages                                            |
 
+Diese Tabelle beschreibt die historische Produktpriorisierung der Phasen 01 bis
+18. Für einen realen Pilot oder Produktionsbetrieb gelten zusätzlich die neu
+bewerteten Prioritäten und Launchklassen aus
+[`remediation-traceability.md`](./remediation-traceability.md) und
+[`remediation-masterplan.md`](./remediation-masterplan.md). Insbesondere sind
+dort E-Mail-Identität, Dokumente, Privacy, ausgewählte reale Provider, autonome
+Worker, Admin-Security, Company Trust und der exakte Release-Audit als P0-Gates
+eingestuft. Die kontrollierte Taxonomie-/Synonym-/Typo-Suche für jeden
+beworbenen Startcluster ist P1; „fortgeschrittene Suche“ unter P2 meint nur
+Breite außerhalb des Launchscopes, landesweite Mehrsprachigkeit oder optionale
+semantische/Hybrid-Komponenten. Nicht ausgelöste Kapazitätsvorsorge wie
+STH-027 ist P3 und wird mit Headroom, Forecast, Alert und Owner deferred, nicht
+mit einem heutigen P0/P1-Defect gleichgesetzt. „Später“ meint nur Provider und
+Integrationen außerhalb des konkret freigegebenen Launchumfangs.
+
 ## 6. Phasen und Verantwortungsgrenzen
 
-> Jede Phase bleibt `[ ]`, bis Code, Persistenz, Server-Policies, UX-Zustände, Seeds, Tests und Evidence im **Zielrepository** vollständig vorhanden sind.
+> Jede neue oder noch offene Phase bleibt `[ ]`, bis Code, Persistenz, Server-Policies, UX-Zustände, Seeds, Tests und Evidence im **Zielrepository** vollständig vorhanden sind. Ein technisch abgeschlossener Phasen-Commit ist weiterhin keine LIVE-Freigabe, solange ein ausdrücklich ausgewiesenes Provider-, Legal-, Markt- oder Operations-Gate offen ist.
 
 ### [x] 01 — Foundation und Governance
 
@@ -140,7 +158,67 @@ Der Phase-17-Code-Commit `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` ergänzt dar
 
 [`18-documentation-final-audit.md`](./18-documentation-final-audit.md) · E2E-08 Clean Clone, Migration/Seed, Production-Demo-Guard, Backup/isolierter Restore/Smoke, vollständige Route-/Requirement-Evidence und Abschlussbericht sind auf `a9f24e7190681c23886de84add321db32b43651e` verifiziert; siehe [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md). Externe Pilot-/Go-live-Gates bleiben offen.
 
-Die genaue Abhängigkeitsgrafik und jedes ausführbare Arbeitspaket stehen in [`implementation-plan.md`](./implementation-plan.md).
+### [ ] 19 — Remediation-Baseline und Regression
+
+[`19-remediation-baseline-regression.md`](./19-remediation-baseline-regression.md) · aktuellen Ausgangscommit, Regressionvertrag, Inventare und alle 28 Befunde reproduzierbar einfrieren.
+
+### [ ] 20 — Identity, E-Mail und Notifications
+
+[`20-identity-email-notifications.md`](./20-identity-email-notifications.md) · E-Mail-Verifikation, Privacy-Step-up, dauerhafte Zustellung und zentrale Notification Preferences.
+
+### [ ] 21 — Document-/CV-Vault
+
+[`21-document-cv-vault.md`](./21-document-cv-vault.md) · echte, quarantänisierte und autorisierte Dokumentbytes mit Retention und Löschung.
+
+### [ ] 22 — Privacy, Legal und Analytics
+
+[`22-privacy-legal-analytics.md`](./22-privacy-legal-analytics.md) · reale Betroffenenprozesse, versionierte Rechtstexte und consent-bewusste LIVE-Analytics.
+
+### [ ] 23 — Production Operations und Worker
+
+[`23-production-operations-workers.md`](./23-production-operations-workers.md) · reale Provider-Governance, autonome Worker, Staging, Monitoring und Recovery.
+
+### [ ] 24 — Reales Billing und Finance
+
+[`24-real-billing-finance.md`](./24-real-billing-finance.md) · echter Checkout, Webhooks, Reconciliation, Refund/Dunning und freigegebene Rechnungen.
+
+### [ ] 25 — Admin-Security
+
+[`25-admin-security.md`](./25-admin-security.md) · Least-Privilege-Adminrollen, Separation of Duties sowie MFA/Step-up.
+
+### [ ] 26 — Company Trust und Verifikation
+
+[`26-company-trust-verification.md`](./26-company-trust-verification.md) · strukturierte Evidenz, Vier-Augen-Freigabe, Ablauf und Widerruf.
+
+### [ ] 27 — Multi-Persona Identity
+
+[`27-multi-persona-identity.md`](./27-multi-persona-identity.md) · additive Plattform-/Company-Personas mit explizitem aktivem Kontext.
+
+### [ ] 28 — Recruiting-Workflows
+
+[`28-recruiting-workflows.md`](./28-recruiting-workflows.md) · ehrlicher externer Bewerbungsstatus und persistente Interviewplanung.
+
+### [ ] 29 — UX, Mobile und Accessibility
+
+[`29-ux-mobile-accessibility.md`](./29-ux-mobile-accessibility.md) · Cross-Browser-/Assistive-Technology-Abnahme und mobile Action-Parität.
+
+### [ ] 30 — Startcluster-Suche und Scale Operations
+
+[`30-search-scale-operations.md`](./30-search-scale-operations.md) · früher
+P1-Track 30A für kontrollierte Startcluster-Berufstaxonomie samt
+Search-/Alert-/Recommendation-/Cluster-Gate-Parität; später skalierbare
+Admin-/Dashboard-Reads sowie Sitemap-Kapazitätsmonitoring und
+triggerbasiertes Sharding statt unnötigem Sofortumbau.
+
+### [ ] 31 — Monetarisierung und Marktvalidierung
+
+[`31-monetization-market-validation.md`](./31-monetization-market-validation.md) · früh startender ICP-/WTP-/Cashflow-Discovery-Track, reale Liquidität und spätere Freigabe nur tatsächlich lieferbarer Pakete.
+
+### [ ] 32 — Finaler Production-Release-Audit
+
+[`32-production-release-audit.md`](./32-production-release-audit.md) · vollständige automatische, manuelle, betriebliche und externe Evidence auf exakt einem Releasecommit/Artefakt.
+
+Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in [`implementation-plan.md`](./implementation-plan.md). Für die offenen Phasen 19 bis 32 sind Reihenfolge, Parallelisierung und Konfliktgrenzen verbindlich in [`remediation-masterplan.md`](./remediation-masterplan.md) festgelegt.
 
 ## 7. Verantwortungsauflösung alter Konflikte
 
@@ -196,7 +274,8 @@ npm run test:e2e:hsts
 - jede wichtige Anforderung hat Requirement-ID, Phase und Testweg;
 - jede Phase hat Ziel, Nutzen, Rollen, Voraussetzungen, Deliverables, Daten/Actions, Policies, UX, Seed, Tests, Befehle, Risiken und DoD;
 - offene Rechts-/Steuer-/Provider-/Markthypothesen sind als solche markiert;
-- Start erfolgt mit Schritt 01, nicht mit einem Feature-Sprung.
+- Die historische Umsetzung begann mit Schritt 01; der Remediation-Strang
+  beginnt zwingend mit Phase 19 und nicht mit einem Feature-Sprung.
 
 ### Öffentlicher Produktpilot bereit (später, durch Code und externe Evidence zu belegen)
 
@@ -205,16 +284,39 @@ Produktpilot. Ein eng beaufsichtigter Design-Partner-/WTP-Test mit manueller
 Rechnung ist kein öffentlicher Produktpilot und darf nur nach seinen eigenen
 AVG-, Vertrags-, Tax-, Datenschutz- und Operations-Gates stattfinden.
 
-- E2E-01 bis E2E-08 grün;
-- 0 offene P0 Auditpunkte und 0 kritische Accessibility-/Security-Funde;
+- Phase 32 belegt auf exakt demselben aktuellen Releasecommit und
+  Deploymentartefakt die zielrelevante vollständige Unit-/Integration-/HTTP-/
+  Browser-/Security-/Accessibility-/Recovery-Suite sowie den manuellen
+  Rollen-Walkthrough; historische E2E-01–08-Evidence allein genügt nicht;
+- 0 offene P0 und 0 zielscope-relevante P1-Auditpunkte sowie 0 kritische
+  Accessibility-/Security-Funde;
 - Cross-Tenant- und Talent-PII-Leak-Tests grün;
-- Mock-Billing exakt einmal, Ledger nicht negativ, Rechnung in Rappen korrekt;
+- für einen kostenlosen Pilot sind sämtliche Kauf-CTAs fail-closed; für einen
+  bezahlten Pilot sind realer Payment-/Rechnungs-/Reconciliation-Flow und
+  Finance-Gates aus Phase 24 belegt. Mock-Billing zählt in keinem Fall;
 - AVG/AVV-Einordnung und erforderliche Bewilligung des konkreten
   Stellenmarkt-/Radar-/Entgeltflows liegen vor;
-- echte bezahlte Design-Partner-Evidence und ein freigegebenes
-  Cashflow-/Runway-Modell liegen vor; Mock-Abschlüsse zählen null;
+- für einen bezahlten oder kommerziell beworbenen Pilot liegen echte
+  Paid-WTP-Evidence und ein freigegebenes Cashflow-/Runway-Modell vor;
+  Mock-Abschlüsse zählen null. Ein ausdrücklich kostenloser Lernpilot darf
+  keine WTP behaupten und benötigt stattdessen freigegebenes Budget,
+  Lernziel, Stopregel und weiterhin geschlossene Kauf-CTAs;
 - Salary Radar bleibt ohne fachlich geprüften LIVE-Datensatz `noindex` und
   ausserhalb der Sitemap;
+- jeder öffentlich freizugebende Startcluster besitzt eine versionierte,
+  fachlich freigegebene Schweizer Berufstaxonomie mit Synonymen,
+  Abkürzungen, neutralen/geschlechtsspezifischen und Schreibvarianten sowie
+  kontrollierter Tippfehlertoleranz;
+- fachlich gleichwertige Berufsqueries liefern konsistente relevante
+  Resultate; Search, Job-Alerts, Candidate Preferences, Recommendations,
+  Matching und `ClusterLaunchAssessment V2` teilen den Taxonomie-/Search-
+  Release. Das dokumentierte Golden-/Negativkorpus enthält für zentrale
+  Begriffe keinen bekannten False-Zero bei vorhandener passender Stelle;
+- STH-027 blockiert nur, wenn reale Count-/Byte-/Laufzeitmessung oder
+  90-Tage-Prognose den freigegebenen Sitemap-Trigger erreicht. Unterhalb davon
+  bleiben Single-Sitemap, fail-closed-Verhalten, Headroom-Monitoring, Alert,
+  Runbook und Owner Pflicht; Index/Shards werden rechtzeitig vor dem Limit,
+  aber nicht pauschal sofort gebaut;
 - alle wichtigen mobilen States geprüft;
 - Migration, Clean Seed, Build, Backup/Restore, Staging-Smoke sowie
   Worker/Outbox-Failure-Recovery belegt;
@@ -235,4 +337,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 18 wurden gemäss ihren Detailverträgen umgesetzt und lokal verifiziert. Weitere Arbeit beginnt nur über ein ausdrücklich freigegebenes Folgepaket oder durch Schliessen der separat dokumentierten externen Pilot-/Go-live-Gates; insbesondere bleibt REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 18 wurden gemäss ihren Detailverträgen auf ihren jeweiligen Evidence-Commits umgesetzt und verifiziert. Der nächste technische Arbeitsschritt ist die ausdrücklich freizugebende Phase 19; danach gilt die Abhängigkeits- und Aktivierungslogik des [`remediation-masterplan.md`](./remediation-masterplan.md). Provider-, Legal-, Markt- und Operations-Gates bleiben separat und können nur für die jeweilige Launchklasse geschlossen werden; insbesondere bleibt REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
