@@ -30,6 +30,8 @@ const SHA256 = z.string().regex(/^[a-f0-9]{64}$/u);
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1_000;
 const AUDIT_RETENTION_DAYS = 400;
 const MAX_EXPORT_ATTEMPTS = 5;
+const EXPORT_PAGE_SIZE = 250;
+const UTF8_ENCODER = new TextEncoder();
 const PRIVACY_EXPORT_POLICY_VERSION = "privacy-export-v2";
 const SUPPORTED_EXPORT_PROCESSORS = Object.freeze([
   "postgres-primary",
@@ -147,6 +149,21 @@ type ExportSection = Readonly<{
   processorKey: string;
   records: readonly unknown[];
 }>;
+type PreparedExportSection = Readonly<{
+  category: string;
+  processorKey: string;
+  count: number;
+  byteLength: number;
+  sha256: string;
+  recordLines: readonly Uint8Array[] | null;
+  streamRecordLines: (() => AsyncIterable<Uint8Array>) | null;
+}>;
+type NotificationOutboxChunkRow = Readonly<{
+  body: Uint8Array;
+  rowCount: bigint;
+  lastCreatedAt: Date;
+  lastId: string;
+}>;
 type ExportDocument = Readonly<{
   category: "documentBytes";
   processorKey: "document-object-store";
@@ -161,7 +178,7 @@ type PreparedPackage = Readonly<{
   manifest: PrivacyExportManifestV2;
   manifestHash: string;
   expectedSizeBytes: number;
-  sections: readonly ExportSection[];
+  sections: readonly PreparedExportSection[];
   documents: readonly ExportDocument[];
 }>;
 
@@ -753,7 +770,6 @@ async function prepareOwnedPackage(
   const [
     userConsents,
     notificationPreferences,
-    notificationOutbox,
     supportCases,
     reports,
     memberships,
@@ -785,23 +801,6 @@ async function prepareOwnedPackage(
         enabled: true,
         version: true,
         updatedAt: true,
-      },
-    }),
-    database.notificationOutbox.findMany({
-      where: { recipientUserId: ownerUserId },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: {
-        id: true,
-        purpose: true,
-        purposeClass: true,
-        channel: true,
-        templateKey: true,
-        status: true,
-        attemptCount: true,
-        deliveredAt: true,
-        suppressedAt: true,
-        deadLetteredAt: true,
-        createdAt: true,
       },
     }),
     database.supportCase.findMany({
@@ -1005,7 +1004,6 @@ async function prepareOwnedPackage(
       "notification-outbox",
       notificationPreferences,
     ),
-    section("notificationDelivery", "notification-outbox", notificationOutbox),
     section("emailDeliveryReceipts", "email-provider", emailLogs),
     section("billingEvidence", "payment-ledger", []),
   ].filter((item) => requiredProcessors.includes(item.processorKey));
@@ -1030,8 +1028,19 @@ async function prepareOwnedPackage(
         }),
       )
     : [];
+  const preparedSections = sections.map(prepareExportSection);
+  if (requiredProcessors.includes("notification-outbox")) {
+    const notificationPreferencesIndex = preparedSections.findIndex(
+      ({ category }) => category === "notificationPreferences",
+    );
+    preparedSections.splice(
+      notificationPreferencesIndex + 1,
+      0,
+      await prepareNotificationOutboxSection(database, ownerUserId, now),
+    );
+  }
   const manifestSections = [
-    ...sections.map(manifestSectionForRecords),
+    ...preparedSections.map(manifestSectionForPreparedRecords),
     manifestSectionForDocuments(documents),
   ].filter(
     (item) =>
@@ -1052,20 +1061,8 @@ async function prepareOwnedPackage(
   const manifestLine = encodeLine({ kind: "manifest", manifest });
   const expectedSizeBytes =
     manifestLine.byteLength +
-    sections.reduce<number>(
-      (total, item) =>
-        total +
-        item.records.reduce<number>(
-          (sectionTotal, record) =>
-            sectionTotal +
-            encodeLine({
-              kind: "record",
-              category: item.category,
-              processorKey: item.processorKey,
-              data: record,
-            }).byteLength,
-          0,
-        ),
+    preparedSections.reduce<number>(
+      (total, item) => total + item.byteLength,
       0,
     ) +
     documents.reduce<number>(
@@ -1093,7 +1090,7 @@ async function prepareOwnedPackage(
     manifest,
     manifestHash: sha256(stableJson(manifest)),
     expectedSizeBytes,
-    sections: Object.freeze(sections),
+    sections: Object.freeze(preparedSections),
     documents: Object.freeze(documents),
   });
 }
@@ -1104,13 +1101,12 @@ async function* packageBody(
 ): AsyncGenerator<Uint8Array> {
   yield encodeLine({ kind: "manifest", manifest: prepared.manifest });
   for (const item of prepared.sections) {
-    for (const record of item.records) {
-      yield encodeLine({
-        kind: "record",
-        category: item.category,
-        processorKey: item.processorKey,
-        data: record,
-      });
+    if (item.recordLines !== null) {
+      for (const line of item.recordLines) yield line;
+    } else if (item.streamRecordLines !== null) {
+      for await (const line of item.streamRecordLines()) yield line;
+    } else {
+      throw new Error("prepared export section has no record source");
     }
   }
   for (const document of prepared.documents) {
@@ -1387,9 +1383,10 @@ function section(
   });
 }
 
-function manifestSectionForRecords(
+function prepareExportSection(
   item: ExportSection,
-): PrivacyExportManifestSectionV2 {
+): PreparedExportSection {
+  const digest = createHash("sha256");
   const lines = item.records.map((record) =>
     encodeLine({
       kind: "record",
@@ -1398,12 +1395,271 @@ function manifestSectionForRecords(
       data: record,
     }),
   );
+  let byteLength = 0;
+  for (const line of lines) {
+    byteLength += line.byteLength;
+    digest.update(line);
+  }
   return Object.freeze({
     category: item.category,
     processorKey: item.processorKey,
     count: item.records.length,
-    byteLength: lines.reduce((total, line) => total + line.byteLength, 0),
-    sha256: hashChunks(lines),
+    byteLength,
+    sha256: digest.digest("hex"),
+    recordLines: Object.freeze(lines),
+    streamRecordLines: null,
+  });
+}
+
+async function prepareNotificationOutboxSection(
+  database: DatabaseClient,
+  ownerUserId: string,
+  snapshotAt: Date,
+): Promise<PreparedExportSection> {
+  const measured = await measureNotificationOutboxLines(
+    database,
+    ownerUserId,
+    snapshotAt,
+  );
+  return Object.freeze({
+    category: "notificationDelivery",
+    processorKey: "notification-outbox",
+    ...measured,
+    recordLines: null,
+    streamRecordLines: () =>
+      streamVerifiedNotificationOutboxLines(
+        database,
+        ownerUserId,
+        snapshotAt,
+        measured,
+      ),
+  });
+}
+
+function notificationOutboxLineSql() {
+  return Prisma.sql`
+    concat(
+      '{"category":"notificationDelivery","data":{"attemptCount":',
+      outbox."attemptCount"::text,
+      ',"channel":',
+      to_jsonb(outbox."channel"::text)::text,
+      ',"createdAt":',
+      to_jsonb(
+        to_char(
+          outbox."createdAt" AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        )
+      )::text,
+      ',"deadLetteredAt":',
+      CASE
+        WHEN outbox."deadLetteredAt" IS NULL THEN 'null'
+        ELSE to_jsonb(
+          to_char(
+            outbox."deadLetteredAt" AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+          )
+        )::text
+      END,
+      ',"deliveredAt":',
+      CASE
+        WHEN outbox."deliveredAt" IS NULL THEN 'null'
+        ELSE to_jsonb(
+          to_char(
+            outbox."deliveredAt" AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+          )
+        )::text
+      END,
+      ',"id":',
+      to_jsonb(outbox."id"::text)::text,
+      ',"purpose":',
+      to_jsonb(outbox."purpose"::text)::text,
+      ',"purposeClass":',
+      to_jsonb(outbox."purposeClass"::text)::text,
+      ',"status":',
+      to_jsonb(outbox."status"::text)::text,
+      ',"suppressedAt":',
+      CASE
+        WHEN outbox."suppressedAt" IS NULL THEN 'null'
+        ELSE to_jsonb(
+          to_char(
+            outbox."suppressedAt" AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+          )
+        )::text
+      END,
+      ',"templateKey":',
+      to_jsonb(outbox."templateKey")::text,
+      '},"kind":"record","processorKey":"notification-outbox"}',
+      chr(10)
+    )
+  `;
+}
+
+async function measureNotificationOutboxLines(
+  database: DatabaseClient,
+  ownerUserId: string,
+  snapshotAt: Date,
+) {
+  const rows = await database.$queryRaw<
+    readonly Readonly<{
+      count: bigint;
+      byteLength: bigint;
+      sha256: string;
+    }>[]
+  >`
+    WITH encoded AS (
+      SELECT
+        outbox."createdAt",
+        outbox."id",
+        ${notificationOutboxLineSql()} AS line
+      FROM "NotificationOutbox" AS outbox
+      WHERE outbox."recipientUserId" = ${ownerUserId}::uuid
+        AND outbox."createdAt" <= ${snapshotAt}
+    ),
+    aggregate AS (
+      SELECT
+        count(*)::bigint AS count,
+        coalesce(sum(octet_length(line)), 0)::bigint AS "byteLength",
+        coalesce(
+          string_agg(line, '' ORDER BY "createdAt" ASC, "id" ASC),
+          ''
+        ) AS body
+      FROM encoded
+    )
+    SELECT
+      count,
+      "byteLength",
+      encode(digest(convert_to(body, 'UTF8'), 'sha256'), 'hex') AS sha256
+    FROM aggregate
+  `;
+  const measured = rows[0];
+  if (
+    measured === undefined ||
+    measured.count < 0n ||
+    measured.byteLength < 0n ||
+    measured.count > BigInt(Number.MAX_SAFE_INTEGER) ||
+    measured.byteLength > BigInt(Number.MAX_SAFE_INTEGER) ||
+    !SHA256.safeParse(measured.sha256).success
+  ) {
+    throw new Error("notification export measurement is invalid");
+  }
+  return Object.freeze({
+    count: Number(measured.count),
+    byteLength: Number(measured.byteLength),
+    sha256: measured.sha256,
+  });
+}
+
+async function* streamVerifiedNotificationOutboxLines(
+  database: DatabaseClient,
+  ownerUserId: string,
+  snapshotAt: Date,
+  expected: Readonly<{
+    count: number;
+    byteLength: number;
+    sha256: string;
+  }>,
+): AsyncGenerator<Uint8Array> {
+  const digest = createHash("sha256");
+  let count = 0;
+  let byteLength = 0;
+  for await (const chunk of notificationOutboxChunks(
+    database,
+    ownerUserId,
+    snapshotAt,
+  )) {
+    count += chunk.rowCount;
+    byteLength += chunk.body.byteLength;
+    digest.update(chunk.body);
+    yield chunk.body;
+  }
+  const sha256 = digest.digest("hex");
+  if (
+    count !== expected.count ||
+    byteLength !== expected.byteLength ||
+    sha256 !== expected.sha256
+  ) {
+    throw new Error("notification export snapshot changed during streaming");
+  }
+}
+
+async function* notificationOutboxChunks(
+  database: DatabaseClient,
+  ownerUserId: string,
+  snapshotAt: Date,
+): AsyncGenerator<Readonly<{ body: Uint8Array; rowCount: number }>> {
+  let cursorId: string | null = null;
+  let cursorCreatedAt: Date | null = null;
+  while (true) {
+    const cursor: ReturnType<typeof Prisma.sql> =
+      cursorId === null || cursorCreatedAt === null
+        ? Prisma.empty
+        : Prisma.sql`
+          AND (
+            outbox."createdAt" > ${cursorCreatedAt}
+            OR (
+              outbox."createdAt" = ${cursorCreatedAt}
+              AND outbox."id" > ${cursorId}::uuid
+            )
+          )
+        `;
+    const rows: readonly NotificationOutboxChunkRow[] =
+      await database.$queryRaw<readonly NotificationOutboxChunkRow[]>(Prisma.sql`
+      WITH page AS (
+        SELECT
+          outbox."createdAt",
+          outbox."id",
+          ${notificationOutboxLineSql()} AS line
+        FROM "NotificationOutbox" AS outbox
+        WHERE outbox."recipientUserId" = ${ownerUserId}::uuid
+          AND outbox."createdAt" <= ${snapshotAt}
+          ${cursor}
+        ORDER BY outbox."createdAt" ASC, outbox."id" ASC
+        LIMIT ${EXPORT_PAGE_SIZE}
+      )
+      SELECT
+        convert_to(
+          string_agg(line, '' ORDER BY "createdAt" ASC, "id" ASC),
+          'UTF8'
+        ) AS body,
+        count(*)::bigint AS "rowCount",
+        (array_agg("createdAt" ORDER BY "createdAt" DESC, "id" DESC))[1]
+          AS "lastCreatedAt",
+        (array_agg("id" ORDER BY "createdAt" DESC, "id" DESC))[1]::text
+          AS "lastId"
+      FROM page
+      HAVING count(*) > 0
+    `);
+    const page: NotificationOutboxChunkRow | undefined = rows[0];
+    if (page === undefined) break;
+    if (
+      page.rowCount <= 0n ||
+      page.rowCount > BigInt(EXPORT_PAGE_SIZE) ||
+      page.body.byteLength <= 0 ||
+      !isValidDate(page.lastCreatedAt) ||
+      !UUID.safeParse(page.lastId).success
+    ) {
+      throw new Error("notification export page is invalid");
+    }
+    yield Object.freeze({
+      body: page.body,
+      rowCount: Number(page.rowCount),
+    });
+    cursorCreatedAt = page.lastCreatedAt;
+    cursorId = page.lastId;
+  }
+}
+
+function manifestSectionForPreparedRecords(
+  item: PreparedExportSection,
+): PrivacyExportManifestSectionV2 {
+  return Object.freeze({
+    category: item.category,
+    processorKey: item.processorKey,
+    count: item.count,
+    byteLength: item.byteLength,
+    sha256: item.sha256,
     outcome: "INCLUDED",
   });
 }
@@ -1438,30 +1694,38 @@ function subjectClassForRole(role: string) {
 }
 
 function encodeLine(value: unknown) {
-  return new TextEncoder().encode(`${stableJson(value)}\n`);
+  return UTF8_ENCODER.encode(`${stableJson(value)}\n`);
 }
 
 function stableJson(value: unknown): string {
-  return JSON.stringify(sortJson(value));
-}
-
-function sortJson(value: unknown): unknown {
-  if (value instanceof Date) return value.toISOString();
-  if (Array.isArray(value)) return value.map(sortJson);
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, sortJson(item)]),
-    );
+  const encoded = encodeStableJson(value);
+  if (encoded === undefined) {
+    throw new Error("privacy export value is not JSON serializable");
   }
-  return value;
+  return encoded;
 }
 
-function hashChunks(chunks: readonly Uint8Array[]) {
-  const digest = createHash("sha256");
-  for (const chunk of chunks) digest.update(chunk);
-  return digest.digest("hex");
+function encodeStableJson(value: unknown): string | undefined {
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  if (Array.isArray(value)) {
+    return `[${value
+      .map((item) => encodeStableJson(item) ?? "null")
+      .join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const properties: string[] = [];
+    for (const key of Object.keys(record).sort((left, right) =>
+      left.localeCompare(right),
+    )) {
+      const encoded = encodeStableJson(record[key]);
+      if (encoded !== undefined) {
+        properties.push(`${JSON.stringify(key)}:${encoded}`);
+      }
+    }
+    return `{${properties.join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function sha256(value: string) {

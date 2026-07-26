@@ -50,12 +50,14 @@ describe("Phase-22 privacy export V2", () => {
       },
     });
     const legal = await seedPublishedPrivacyNotice(client, users, "export");
-    await seedActiveInventory(client, "export", [
+    const exportProcessors = [
       "postgres-primary",
       "document-object-store",
-    ]);
+      "notification-outbox",
+    ] as const;
+    await seedActiveInventory(client, "export", exportProcessors);
     await Promise.all(
-      ["postgres-primary", "document-object-store"].map((processorKey) =>
+      exportProcessors.map((processorKey) =>
         seedProcessingApproval(client, legal.publication.id, {
           suffix: `export-${processorKey}`,
           scope: "PRIVACY_EXPORT",
@@ -200,6 +202,27 @@ describe("Phase-22 privacy export V2", () => {
         },
       }),
     ]);
+    await client.notificationOutbox.createMany({
+      data: Array.from({ length: 251 }, (_, index) => ({
+        recipientUserId: users.requester.id,
+        purpose: "PRIVACY_REQUEST" as const,
+        purposeClass: "MANDATORY" as const,
+        channel: "EMAIL" as const,
+        templateKey:
+          index === 250
+            ? 'phase22-export-"unicode-ü'
+            : "phase22-export-notification",
+        payloadSchemaVersion: "1",
+        payload: { index },
+        dedupeKey: `phase22-export-notification-${users.requester.id}-${index}`,
+        providerDedupeKey:
+          `phase22-export-provider-${users.requester.id}-${index}`,
+        status: "PENDING" as const,
+        availableAt: PHASE22_NOW,
+        createdAt: PHASE22_NOW,
+        updatedAt: PHASE22_NOW,
+      })),
+    });
     const request = await seedPrivacyRequest(client, users, "EXPORT");
     const command = privacyExecutionCommand(request.id, users);
 
@@ -227,10 +250,10 @@ describe("Phase-22 privacy export V2", () => {
       storageRegion: "ch-sandbox",
       privacyExecution: {
         status: "COMPLETED",
-        checkpoint: 2,
+        checkpoint: 3,
       },
     });
-    expect(artifact.privacyExecution.processorOutcomes).toHaveLength(2);
+    expect(artifact.privacyExecution.processorOutcomes).toHaveLength(3);
     expect(
       artifact.privacyExecution.processorOutcomes.map(
         ({ processorKey, status, outcomeCode }) => ({
@@ -248,6 +271,11 @@ describe("Phase-22 privacy export V2", () => {
         },
         {
           processorKey: "document-object-store",
+          status: "SUCCEEDED",
+          outcomeCode: "EXPORTED",
+        },
+        {
+          processorKey: "notification-outbox",
           status: "SUCCEEDED",
           outcomeCode: "EXPORTED",
         },
@@ -303,6 +331,7 @@ describe("Phase-22 privacy export V2", () => {
     expect(packageText).toContain(documentHash);
     expect(packageText).toContain("OWN_LEAD_CANARY");
     expect(packageText).toContain("OWN_REPORT_CANARY");
+    expect(packageText).toContain('phase22-export-\\"unicode-ü');
     expect(packageText).not.toContain(foreign.email);
     expect(packageText).not.toContain("FOREIGN_EXPORT_NAME_CANARY");
     expect(packageText).not.toContain("FOREIGN_LEAD_CANARY");
@@ -409,6 +438,10 @@ describe("Phase-22 privacy export V2", () => {
         status: "COMPLETED",
         attemptCount: 2,
         processorOutcomes: [
+          {
+            status: "SUCCEEDED",
+            attemptCount: 2,
+          },
           {
             status: "SUCCEEDED",
             attemptCount: 2,

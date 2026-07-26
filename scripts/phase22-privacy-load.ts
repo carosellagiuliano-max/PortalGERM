@@ -2,6 +2,9 @@ import "server-only";
 
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import {
@@ -10,7 +13,12 @@ import {
 } from "@/lib/analytics/live-consent-policy";
 import { createPrivacyExportV2 } from "@/lib/privacy/export-v2";
 import {
-  createMemoryDocumentStore,
+  LocalEncryptedDocumentObjectStore,
+} from "@/lib/providers/storage/local-encrypted-object-store";
+import {
+  PRIVACY_EXPORT_STORAGE_POLICY_V1,
+} from "@/lib/providers/storage/privacy-export-storage";
+import {
   createPhase22Harness,
   phase22ExportKeyring,
   PHASE22_NOW,
@@ -29,6 +37,7 @@ const ANALYTICS_CONCURRENCY = 50;
 const MAX_ANALYTICS_P95_MS = 250;
 
 const harness = await createPhase22Harness("phase22_privacy_load");
+const exportRoot = await mkdtemp(join(tmpdir(), "phase22-privacy-load-"));
 
 try {
   const actors = await seedPhase22Actors(harness.client, "load");
@@ -54,7 +63,30 @@ try {
     ),
   );
 
-  const store = createMemoryDocumentStore();
+  const exportKeyring = phase22ExportKeyring();
+  const documentStore = new LocalEncryptedDocumentObjectStore({
+    root: join(exportRoot, "documents"),
+    storageRegion: "ch-sandbox",
+    keyring: exportKeyring,
+    maximumBytes: DOCUMENT_BYTES,
+    maximumChunkBytes: PRIVACY_EXPORT_STORAGE_POLICY_V1.maximumChunkBytes,
+    streamTimeoutMilliseconds:
+      PRIVACY_EXPORT_STORAGE_POLICY_V1.streamTimeoutMilliseconds,
+    objectKeyPattern:
+      /^phase22\/load\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/cv$/iu,
+    providerClass: "phase22-load-document-filesystem-sandbox",
+  });
+  const exportStore = new LocalEncryptedDocumentObjectStore({
+    root: join(exportRoot, "exports"),
+    storageRegion: "ch-sandbox",
+    keyring: exportKeyring,
+    maximumBytes: PRIVACY_EXPORT_STORAGE_POLICY_V1.maximumBytes,
+    maximumChunkBytes: PRIVACY_EXPORT_STORAGE_POLICY_V1.maximumChunkBytes,
+    streamTimeoutMilliseconds:
+      PRIVACY_EXPORT_STORAGE_POLICY_V1.streamTimeoutMilliseconds,
+    objectKeyPattern: PRIVACY_EXPORT_STORAGE_POLICY_V1.objectKeyPattern,
+    providerClass: "phase22-load-encrypted-filesystem-sandbox",
+  });
   const profile = await harness.client.candidateProfile.create({
     data: {
       userId: actors.requester.id,
@@ -70,7 +102,7 @@ try {
   const objectKey = `phase22/load/${actors.requester.id}/cv`;
   const objectVersion = "phase22-load-document-v1";
 
-  await store.putQuarantined({
+  await documentStore.putQuarantined({
     objectKey,
     objectVersion,
     expectedSizeBytes: bytes.byteLength,
@@ -124,6 +156,8 @@ try {
             providerDedupeKey: `phase22-load-provider-${sequence}`,
             status: "PENDING" as const,
             availableAt: PHASE22_NOW,
+            createdAt: PHASE22_NOW,
+            updatedAt: PHASE22_NOW,
           };
         },
       ),
@@ -131,6 +165,16 @@ try {
   }
 
   const request = await seedPrivacyRequest(harness.client, actors, "EXPORT");
+  const collectGarbage = (
+    globalThis as typeof globalThis & { gc?: () => void }
+  ).gc;
+  if (collectGarbage === undefined) {
+    throw new Error(
+      "Phase-22 load contract requires Node --expose-gc for a stable heap baseline.",
+    );
+  }
+  collectGarbage();
+  collectGarbage();
   const heapBaseline = process.memoryUsage().heapUsed;
   let peakHeap = heapBaseline;
   const sampler = setInterval(() => {
@@ -142,9 +186,9 @@ try {
     privacyExecutionCommand(request.id, actors),
     {
       database: harness.client,
-      exportStore: store,
-      documentStore: store,
-      exportKeyring: phase22ExportKeyring(),
+      exportStore,
+      documentStore,
+      exportKeyring,
       featureEnabled: true,
       cohortAllowed: true,
       processingMode: "sandbox_command",
@@ -179,7 +223,15 @@ try {
     heapDeltaBytes > MAX_HEAP_DELTA_BYTES
   ) {
     throw new Error(
-      "Phase-22 export load contract exceeded a row, byte, status or heap boundary.",
+      `Phase-22 export load contract failed: ${JSON.stringify({
+        status: artifact.status,
+        notificationRows: notificationSection?.count ?? null,
+        expectedNotificationRows: EXPORT_ROW_COUNT,
+        documentBytes: documentSection?.byteLength ?? null,
+        expectedDocumentBytes: DOCUMENT_BYTES,
+        heapDeltaBytes,
+        maximumHeapDeltaBytes: MAX_HEAP_DELTA_BYTES,
+      })}.`,
     );
   }
 
@@ -279,6 +331,7 @@ try {
   );
 } finally {
   await harness.dispose();
+  await rm(exportRoot, { recursive: true, force: true });
 }
 
 function readManifestSections(value: unknown) {
