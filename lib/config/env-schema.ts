@@ -12,11 +12,11 @@ const KEYRING_VARIABLES = [
   "RADAR_OPAQUE_ENCRYPTION_KEYS",
   "REVEAL_CONFIRMATION_KEYS",
   "PII_REVEAL_KEYS",
+  "NOTIFICATION_DELIVERY_KEYS",
 ] as const;
 
 const FUTURE_PROVIDER_VARIABLES = [
   "STRIPE_SECRET_KEY",
-  "EMAIL_PROVIDER_API_KEY",
   "OPENAI_API_KEY",
   "STORAGE_ENDPOINT",
   "JOBROOM_API_URL",
@@ -30,6 +30,7 @@ const SENSITIVE_VARIABLES = [
   "DEV_MAILBOX_SECRET",
   ...KEYRING_VARIABLES,
   ...FUTURE_PROVIDER_VARIABLES,
+  "EMAIL_PROVIDER_API_KEY",
 ] as const;
 
 const PLACEHOLDER_PATTERN =
@@ -94,6 +95,7 @@ const rawEnvironmentSchema = z
     RADAR_OPAQUE_ENCRYPTION_KEYS: z.string({ error: "is required" }),
     REVEAL_CONFIRMATION_KEYS: z.string({ error: "is required" }),
     PII_REVEAL_KEYS: z.string({ error: "is required" }),
+    NOTIFICATION_DELIVERY_KEYS: optionalString,
     RATE_LIMIT_BACKEND: z.enum(["postgres", "memory"]).default("postgres"),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(8).default(0),
     ENABLE_LOCAL_MOCK_MAILBOX: z
@@ -101,6 +103,39 @@ const rawEnvironmentSchema = z
       .default("false")
       .transform((value) => value === "true"),
     DEV_MAILBOX_SECRET: optionalString,
+    IDENTITY_VERIFICATION_ENFORCEMENT: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    LOGIN_EMAIL_CHANGE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    NOTIFICATION_OUTBOX_PRODUCERS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    EMAIL_PROVIDER_MODE: z
+      .enum(["disabled", "local_mock", "resend_sandbox"])
+      .default("disabled"),
+    NOTIFICATION_DISPATCH: z
+      .enum(["paused", "command"])
+      .default("paused"),
+    OPTIONAL_EMAIL: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    DELIVERY_REPLAY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    EMAIL_FROM: optionalString.refine(
+      (value) =>
+        value === undefined ||
+        /^[^<>\r\n]{1,120}<[^<>\s@]+@[^<>\s@]+>$/.test(value) ||
+        /^[^<>\s@]+@[^<>\s@]+$/.test(value),
+      "must be a bounded mailbox or display-name mailbox",
+    ),
     ABUSE_REPORT_ADMIN_EMAILS: adminEmailDistribution,
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
     BACKUP_AGE_RECIPIENT: optionalString,
@@ -128,7 +163,9 @@ const rawEnvironmentSchema = z
     );
 
     for (const variable of KEYRING_VARIABLES) {
-      const entries = parseKeyring(variable, environment[variable], context);
+      const value = environment[variable];
+      if (value === undefined) continue;
+      const entries = parseKeyring(variable, value, context);
       for (const entry of entries) {
         registerUniqueKeyMaterial(
           `${variable}.${entry.version}`,
@@ -172,6 +209,113 @@ const rawEnvironmentSchema = z
         code: "custom",
         path: ["ENABLE_LOCAL_MOCK_MAILBOX"],
         message: "must be false in a production runtime",
+      });
+    }
+
+    if (
+      environment.NOTIFICATION_OUTBOX_PRODUCERS &&
+      environment.NOTIFICATION_DELIVERY_KEYS === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["NOTIFICATION_DELIVERY_KEYS"],
+        message: "is required when notification outbox producers are enabled",
+      });
+    }
+
+    if (
+      environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+      !environment.NOTIFICATION_OUTBOX_PRODUCERS
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["IDENTITY_VERIFICATION_ENFORCEMENT"],
+        message:
+          "requires notification outbox producers so users cannot be locked without a verification message",
+      });
+    }
+
+    if (
+      environment.LOGIN_EMAIL_CHANGE &&
+      (!environment.IDENTITY_VERIFICATION_ENFORCEMENT ||
+        !environment.NOTIFICATION_OUTBOX_PRODUCERS)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["LOGIN_EMAIL_CHANGE"],
+        message:
+          "requires verified-identity enforcement and notification outbox producers",
+      });
+    }
+
+    if (
+      environment.EMAIL_PROVIDER_MODE === "local_mock" &&
+      productionRuntime
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["EMAIL_PROVIDER_MODE"],
+        message: "local_mock is forbidden in production runtimes",
+      });
+    }
+
+    if (environment.EMAIL_PROVIDER_MODE === "resend_sandbox") {
+      if (
+        environment.EMAIL_PROVIDER_API_KEY === undefined ||
+        environment.EMAIL_FROM === undefined
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["EMAIL_PROVIDER_MODE"],
+          message:
+            "resend_sandbox requires EMAIL_PROVIDER_API_KEY and EMAIL_FROM",
+        });
+      }
+      if (environment.NOTIFICATION_DELIVERY_KEYS === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["NOTIFICATION_DELIVERY_KEYS"],
+          message: "is required for sandbox delivery",
+        });
+      }
+    } else if (environment.EMAIL_PROVIDER_API_KEY !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["EMAIL_PROVIDER_API_KEY"],
+        message: "must remain empty unless resend_sandbox is selected",
+      });
+    }
+
+    if (
+      environment.NOTIFICATION_DISPATCH === "command" &&
+      environment.EMAIL_PROVIDER_MODE === "disabled"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["NOTIFICATION_DISPATCH"],
+        message: "command dispatch requires an explicit provider mode",
+      });
+    }
+
+    if (
+      environment.DELIVERY_REPLAY &&
+      (environment.APP_ENV !== "local" ||
+        environment.EMAIL_PROVIDER_MODE !== "local_mock")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["DELIVERY_REPLAY"],
+        message:
+          "is allowed only with the isolated local_mock sandbox until Phase 25",
+      });
+    }
+
+    if (environment.OPTIONAL_EMAIL && productionLike) {
+      context.addIssue({
+        code: "custom",
+        path: ["OPTIONAL_EMAIL"],
+        message:
+          "must remain false until the Phase-22 purpose decision is approved",
       });
     }
 
@@ -295,6 +439,7 @@ export type ServerEnvironment = Readonly<
       testDatabase?: SecretHandle<"TEST_DATABASE_URL">;
       session: SecretHandle<"SESSION_SECRET">;
       localMailbox?: SecretHandle<"DEV_MAILBOX_SECRET">;
+      emailProvider?: SecretHandle<"EMAIL_PROVIDER_API_KEY">;
       keyrings: Readonly<{
         readonly [Purpose in KeyringVariable]: readonly KeyringEntry<Purpose>[];
       }>;
@@ -359,6 +504,14 @@ export function parseEnvironment(
               result.data.DEV_MAILBOX_SECRET,
             ),
           }),
+      ...(result.data.EMAIL_PROVIDER_API_KEY === undefined
+        ? {}
+        : {
+            emailProvider: createSecretHandle(
+              "EMAIL_PROVIDER_API_KEY",
+              result.data.EMAIL_PROVIDER_API_KEY,
+            ),
+          }),
       keyrings,
     }),
   });
@@ -375,6 +528,15 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     rateLimitBackend: environment.RATE_LIMIT_BACKEND,
     trustedProxyHops: environment.TRUSTED_PROXY_HOPS,
     mailboxEnabled: environment.ENABLE_LOCAL_MOCK_MAILBOX,
+    identityVerificationEnforced:
+      environment.IDENTITY_VERIFICATION_ENFORCEMENT,
+    loginEmailChangeEnabled: environment.LOGIN_EMAIL_CHANGE,
+    notificationOutboxProducersEnabled:
+      environment.NOTIFICATION_OUTBOX_PRODUCERS,
+    emailProviderMode: environment.EMAIL_PROVIDER_MODE,
+    notificationDispatch: environment.NOTIFICATION_DISPATCH,
+    optionalEmailEnabled: environment.OPTIONAL_EMAIL,
+    deliveryReplayEnabled: environment.DELIVERY_REPLAY,
     abuseReportAdminRecipientCount:
       environment.ABUSE_REPORT_ADMIN_EMAILS?.length ?? 0,
     keyringWriterVersions: Object.fromEntries(
@@ -582,8 +744,9 @@ function parseKeyring(
 
 function parseValidatedKeyring<TPurpose extends KeyringVariable>(
   purpose: TPurpose,
-  value: string,
+  value: string | undefined,
 ): readonly KeyringEntry<TPurpose>[] {
+  if (value === undefined) return Object.freeze([]);
   return Object.freeze(
     value.split(",").map((rawEntry) => {
       const separatorIndex = rawEntry.indexOf(":");

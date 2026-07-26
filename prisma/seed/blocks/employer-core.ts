@@ -105,6 +105,7 @@ async function ensurePrincipal(
     status: principal.status,
     dataProvenance: "DEMO" as const,
     emailVerifiedAt: principal.emailVerifiedAt.toISOString(),
+    identityAssurance: "VERIFIED_EMAIL" as const,
     createdAt: principal.createdAt.toISOString(),
   };
   await createOrVerifySeedRecord({
@@ -129,6 +130,7 @@ async function ensurePrincipal(
       status: row.status,
       dataProvenance: row.dataProvenance,
       emailVerifiedAt: iso(row.emailVerifiedAt),
+      identityAssurance: row.identityAssurance,
       createdAt: row.createdAt.toISOString(),
     }),
     expected: userExpected,

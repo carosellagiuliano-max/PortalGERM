@@ -1,4 +1,7 @@
 export const EMAIL_TEMPLATE_KEYS = [
+  "identity_verification",
+  "login_email_change_verification",
+  "login_email_changed_notice",
   "registration_welcome",
   "password_reset_mock",
   "company_invitation",

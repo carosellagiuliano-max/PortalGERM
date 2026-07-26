@@ -74,7 +74,7 @@ describe("Phase 17 manifest contract", () => {
     expect(() =>
       validatePhase17RunManifest(incomplete, validationOptions(manifest)),
     ).toThrow(
-      /chromium-mobile-360 \/ quality\/all-routes\.spec\.ts has 100 quality result/u,
+      /chromium-mobile-360 \/ quality\/phase20-identity-email-quality\.spec\.ts has 2 quality result/u,
     );
   });
 
@@ -284,6 +284,12 @@ describe("Phase 17 reporter evidence helpers", () => {
       classifyPhase17Result(
         "@quality-desktop exhaustive route",
         PHASE18_ALL_ROUTES_QUALITY_FILE,
+      ),
+    ).toBe("QUALITY");
+    expect(
+      classifyPhase17Result(
+        "[20-AC-03] @journey identity flow",
+        "flows/phase20-identity-email.spec.ts",
       ),
     ).toBe("QUALITY");
     expect(

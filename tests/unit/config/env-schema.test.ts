@@ -238,6 +238,24 @@ describe("parseEnvironment", () => {
     expect(environment.ENABLE_LOCAL_MOCK_MAILBOX).toBe(true);
   });
 
+  it("fails closed when identity gates could lock users without durable delivery", () => {
+    expectValidationFailure(
+      {
+        IDENTITY_VERIFICATION_ENFORCEMENT: "true",
+        NOTIFICATION_OUTBOX_PRODUCERS: "false",
+      },
+      "IDENTITY_VERIFICATION_ENFORCEMENT",
+    );
+    expectValidationFailure(
+      {
+        LOGIN_EMAIL_CHANGE: "true",
+        IDENTITY_VERIFICATION_ENFORCEMENT: "false",
+        NOTIFICATION_OUTBOX_PRODUCERS: "true",
+      },
+      "LOGIN_EMAIL_CHANGE",
+    );
+  });
+
   it("normalizes, freezes and safely summarizes the abuse-report distribution", () => {
     const environment = parseEnvironment(
       createValidEnvironment({

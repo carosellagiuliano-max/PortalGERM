@@ -158,19 +158,43 @@ describe("Phase-04 external-network boundary", () => {
     }
   });
 
-  it("contains no direct external transport import or real-provider endpoint", () => {
+  it("keeps direct external transport confined to the explicit Resend sandbox adapter", () => {
     const sourceRoot = join(process.cwd(), "lib", "providers");
-    const sources = listTypeScriptFiles(sourceRoot)
+    const providerFiles = listTypeScriptFiles(sourceRoot);
+    const resendAdapterPath = providerFiles.find((path) =>
+      path.endsWith("resend-email-provider.ts"),
+    );
+    expect(resendAdapterPath).toBeDefined();
+
+    const nonNetworkSources = providerFiles
+      .filter((path) => path !== resendAdapterPath)
       .map((path) => readFileSync(path, "utf8"))
       .join("\n");
+    const resendAdapter = readFileSync(resendAdapterPath!, "utf8");
+    const composition = readFileSync(
+      join(sourceRoot, "email", "delivery-composition.ts"),
+      "utf8",
+    );
 
-    expect(sources).not.toMatch(
+    expect(nonNetworkSources).not.toMatch(
       /(?:from|import\s*)\s*\(?["']node:(?:http|https|net|tls)["']/u,
     );
-    expect(sources).not.toMatch(/\bfetch\s*\(/u);
-    expect(sources).not.toMatch(
+    expect(nonNetworkSources).not.toMatch(/\bfetch\s*\(/u);
+    expect(nonNetworkSources).not.toMatch(
+      /(?:api\.openai\.com|api\.stripe\.com|hooks\.stripe\.com|api\.resend\.com)/iu,
+    );
+    expect(resendAdapter).toContain('import "server-only";');
+    expect(resendAdapter).toContain(
+      'const DEFAULT_ENDPOINT = "https://api.resend.com/emails";',
+    );
+    expect(resendAdapter).not.toMatch(
+      /(?:from|import\s*)\s*\(?["']node:(?:http|https|net|tls)["']/u,
+    );
+    expect(resendAdapter).not.toMatch(
       /(?:api\.openai\.com|api\.stripe\.com|hooks\.stripe\.com)/iu,
     );
+    expect(composition).toContain('case "resend_sandbox":');
+    expect(composition).toContain("new ResendSandboxEmailProvider");
   });
 });
 

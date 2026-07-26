@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { hasVerifiedEmailIdentity } from "@/lib/auth/email-verification-policy";
 import {
   getAuthRequestContext,
   isValidAuthMutationOrigin,
@@ -33,6 +34,15 @@ export async function confirmSaveJobAction(
   const signedIntent = formData.get("signedIntent");
   if (typeof signedIntent !== "string") return errorState(GENERIC_SAVE_ERROR);
   const environment = getServerEnvironment();
+  if (
+    environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+    !hasVerifiedEmailIdentity({
+      assurance: user.identityAssurance,
+      emailVerifiedAt: user.emailVerifiedAt,
+    })
+  ) {
+    return errorState(GENERIC_SAVE_ERROR);
+  }
   const result = await saveJobFromSignedIntent(
     { signedIntent, candidateUserId: user.id },
     {
@@ -59,6 +69,14 @@ export async function removeSavedJobAction(formData: FormData): Promise<void> {
     getAuthRequestContext(),
   ]);
   if (user?.role !== "CANDIDATE" || !isValidAuthMutationOrigin(request)) return;
+  const environment = getServerEnvironment();
+  if (
+    environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+    !hasVerifiedEmailIdentity({
+      assurance: user.identityAssurance,
+      emailVerifiedAt: user.emailVerifiedAt,
+    })
+  ) return;
   const savedJobId = formData.get("savedJobId");
   if (typeof savedJobId !== "string") return;
   await removeSavedJob(

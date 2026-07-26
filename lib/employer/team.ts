@@ -1,14 +1,16 @@
 import "server-only";
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { hashPassword, PASSWORD_HASH_POLICY_V1 } from "@/lib/auth/password";
+import { createCompanyInvitationToken } from "@/lib/auth/invitation-token";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
+import { writeAuthSecurityEvent } from "@/lib/auth/security-events";
 import { issueSession } from "@/lib/auth/session-issuance";
 import {
   getEffectiveEntitlements,
@@ -20,6 +22,7 @@ import type { DatabaseClient } from "@/lib/db/factory";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import type { EmailProvider } from "@/lib/providers/email/email-provider";
 import { passwordSchema } from "@/lib/validation/auth";
 import {
@@ -171,7 +174,12 @@ export async function sendCompanyInvitation(
   const parsed = teamInvitationSchema.safeParse(rawInput);
   if (!parsed.success) return { ok: false, code: "INVALID_INPUT" };
   const now = dependencies.now ?? new Date();
-  const rawToken = randomBytes(32).toString("base64url");
+  const invitationId = randomUUID();
+  const rawToken = createCompanyInvitationToken(
+    invitationId,
+    1,
+    dependencies.environment.secrets.session,
+  );
   const tokenHash = hashInvitationToken(rawToken);
   let committed:
     | { id: string; companyName: string; inviterName: string; version: number }
@@ -221,6 +229,7 @@ export async function sendCompanyInvitation(
         }
         const invitation = await tx.companyInvitation.create({
           data: {
+            id: invitationId,
             companyId, inviterUserId: actor.userId,
             inviteeEmailNormalized: parsed.data.email,
             intendedRole: parsed.data.role,
@@ -231,6 +240,15 @@ export async function sendCompanyInvitation(
           },
           select: { id: true, tokenVersion: true },
         });
+        if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+          await enqueueInvitationNotification(tx, {
+            email: parsed.data.email,
+            invitationId: invitation.id,
+            version: invitation.tokenVersion,
+            now,
+            environment: dependencies.environment,
+          });
+        }
         await writeTeamAudit(tx, "INVITATION_SENT", actor.userId, companyId, invitation.id, "INVITATION", "COMPANY_TEAM_INVITE", dependencies.request, now);
         return { ok: true as const, value: { id: invitation.id, companyName: access.company.name, inviterName: access.user.name ?? "Ein Teammitglied", version: invitation.tokenVersion } };
       }, { isolationLevel: "Serializable" });
@@ -250,7 +268,14 @@ export async function sendCompanyInvitation(
   if (committed === undefined) {
     return { ok: false, code: "WRITE_FAILED" };
   }
-  const emailRecorded = await sendInvitationEmail(dependencies, parsed.data.email, rawToken, committed);
+  const emailRecorded = dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS
+    ? true
+    : await sendInvitationEmail(
+        dependencies,
+        parsed.data.email,
+        rawToken,
+        committed,
+      );
   return { ok: true, invitationId: committed.id, emailRecorded };
 }
 
@@ -262,15 +287,15 @@ export async function resendCompanyInvitation(
 ): Promise<CommandResult<{ invitationId: string; emailRecorded: boolean }>> {
   if (!z.uuid().safeParse(invitationId).success) return { ok: false, code: "INVALID_INPUT" };
   const now = dependencies.now ?? new Date();
-  const rawToken = randomBytes(32).toString("base64url");
+  let rawToken = "";
   let committed: { id: string; email: string; companyName: string; inviterName: string; version: number };
   try {
     const result = await runInvitationTransaction(dependencies.database, async (tx) => {
       await lockCompany(tx, companyId);
       const access = await loadTeamManager(tx, companyId, actor.userId);
       if (access === null || access.company.status !== "ACTIVE") return { ok: false as const, code: "NOT_FOUND" };
-      const rows = await tx.$queryRaw<Array<{ id: string; status: string; expiresAt: Date; inviteeEmailNormalized: string }>>`
-        SELECT "id", "status"::text, "expiresAt", "inviteeEmailNormalized" FROM "CompanyInvitation"
+      const rows = await tx.$queryRaw<Array<{ id: string; status: string; expiresAt: Date; inviteeEmailNormalized: string; tokenVersion: number }>>`
+        SELECT "id", "status"::text, "expiresAt", "inviteeEmailNormalized", "tokenVersion" FROM "CompanyInvitation"
         WHERE "id" = ${invitationId}::uuid AND "companyId" = ${companyId}::uuid FOR UPDATE
       `;
       const invitation = rows[0];
@@ -297,11 +322,26 @@ export async function resendCompanyInvitation(
             : { suggestedPlanSlug: seatGate.suggestedPlanSlug }),
         };
       }
+      const nextVersion = invitation.tokenVersion + 1;
+      rawToken = createCompanyInvitationToken(
+        invitation.id,
+        nextVersion,
+        dependencies.environment.secrets.session,
+      );
       const updated = await tx.companyInvitation.update({
         where: { id: invitation.id },
-        data: { tokenHash: hashInvitationToken(rawToken), tokenVersion: { increment: 1 }, expiresAt: new Date(now.getTime() + INVITATION_TTL), updatedAt: now },
+        data: { tokenHash: hashInvitationToken(rawToken), tokenVersion: nextVersion, expiresAt: new Date(now.getTime() + INVITATION_TTL), updatedAt: now },
         select: { id: true, tokenVersion: true },
       });
+      if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+        await enqueueInvitationNotification(tx, {
+          email: invitation.inviteeEmailNormalized,
+          invitationId: updated.id,
+          version: updated.tokenVersion,
+          now,
+          environment: dependencies.environment,
+        });
+      }
       await tx.companyInvitationEvent.create({ data: { invitationId: invitation.id, kind: "RESENT", actorUserId: actor.userId, correlationId: dependencies.request.correlationId, createdAt: now } });
       await writeTeamAudit(tx, "INVITATION_SENT", actor.userId, companyId, invitation.id, "INVITATION", "COMPANY_TEAM_INVITE_RESEND", dependencies.request, now);
       return { ok: true as const, value: { id: updated.id, email: invitation.inviteeEmailNormalized, companyName: access.company.name, inviterName: access.user.name ?? "Ein Teammitglied", version: updated.tokenVersion } };
@@ -311,7 +351,14 @@ export async function resendCompanyInvitation(
   } catch {
     return { ok: false, code: "WRITE_FAILED" };
   }
-  const emailRecorded = await sendInvitationEmail(dependencies, committed.email, rawToken, committed);
+  const emailRecorded = dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS
+    ? true
+    : await sendInvitationEmail(
+        dependencies,
+        committed.email,
+        rawToken,
+        committed,
+      );
   return { ok: true, invitationId: committed.id, emailRecorded };
 }
 
@@ -760,6 +807,53 @@ async function acceptLockedInvitation(tx: Prisma.TransactionClient, invitation: 
   } else return { ok: false, code: "ALREADY_MEMBER" };
   await tx.companyInvitation.update({ where: { id: invitation.id }, data: { status: "ACCEPTED", acceptedAt: now, acceptedByUserId: user.id, updatedAt: now } });
   await tx.companyInvitationEvent.create({ data: { invitationId: invitation.id, kind: "ACCEPTED", actorUserId: user.id, correlationId: dependencies.request.correlationId, createdAt: now } });
+  const verifiedIdentity = await tx.user.updateMany({
+    where: {
+      id: user.id,
+      emailNormalized: invitation.inviteeEmailNormalized,
+      status: "ACTIVE",
+      OR: [
+        { emailVerifiedAt: null },
+        { identityAssurance: { not: "VERIFIED_EMAIL" } },
+      ],
+    },
+    data: {
+      emailVerifiedAt: now,
+      identityAssurance: "VERIFIED_EMAIL",
+    },
+  });
+  if (verifiedIdentity.count === 1) {
+    await tx.authAssuranceEvidence.create({
+      data: {
+        userId: user.id,
+        purpose: "EMAIL_VERIFICATION",
+        action: "INVITATION_IDENTITY_BASELINE",
+        tenantId: invitation.companyId,
+        method: "EMAIL_LINK",
+        issuedAt: now,
+        expiresAt: new Date(now.getTime() + 30 * 60_000),
+      },
+      select: { id: true },
+    });
+    await writeAuthSecurityEvent(tx, {
+      userId: user.id,
+      kind: "VERIFICATION_SUCCEEDED",
+      correlationId: dependencies.request.correlationId,
+      outcomeCode: "INVITATION_ACCEPTED",
+      occurredAt: now,
+    });
+    await writeTeamAudit(
+      tx,
+      "EMAIL_VERIFICATION_COMPLETED",
+      user.id,
+      invitation.companyId,
+      invitation.id,
+      "INVITATION",
+      "AUTH_INVITATION_IDENTITY",
+      dependencies.request,
+      now,
+    );
+  }
   await writeTeamAudit(tx, "INVITATION_ACCEPTED", user.id, invitation.companyId, invitation.id, "INVITATION", "COMPANY_TEAM_INVITE_ACCEPT", dependencies.request, now);
   return { ok: true, companyId: invitation.companyId, membershipId };
 }
@@ -852,6 +946,32 @@ async function sendInvitationEmail(dependencies: CommandDependencies, email: str
     await dependencies.emailProvider.send({ to: email, templateKey: "company_invitation", subject: "Einladung zu einem Unternehmen auf SwissTalentHub", data: { companyName: invitation.companyName, inviterName: invitation.inviterName, invitationUrl: `${dependencies.environment.APP_URL}/invite/${rawToken}`, invitationVersion: `${invitation.id}:${invitation.version}` } });
     return true;
   } catch { return false; }
+}
+async function enqueueInvitationNotification(
+  tx: Prisma.TransactionClient,
+  input: Readonly<{
+    email: string;
+    invitationId: string;
+    version: number;
+    now: Date;
+    environment: ServerEnvironment;
+  }>,
+) {
+  return enqueueNotification(tx, {
+    recipient: {
+      address: input.email,
+      keyring:
+        input.environment.secrets.keyrings.NOTIFICATION_DELIVERY_KEYS,
+    },
+    templateKey: "company_invitation",
+    payloadSchemaVersion: "company-invitation-v2",
+    payload: {
+      invitationId: input.invitationId,
+      invitationVersion: input.version,
+    },
+    dedupeKey: `company-invitation:${input.invitationId}:${input.version}`,
+    availableAt: input.now,
+  });
 }
 async function notifyMembership(database: DatabaseClient, recipientUserId: string, membershipId: string, status: "ACTIVE" | "SUSPENDED" | "REMOVED", dedupeIdentity: string, reasonCode?: "ROLE_CHANGED" | "REMOVED") {
   try { await writeNotificationExactlyOnce(createPrismaNotificationPort(database), { recipientUserId, kind: "TEAM_MEMBERSHIP_CHANGED", dedupeKey: dedupeIdentity, payload: { membershipId, status, ...(reasonCode === undefined ? {} : { reasonCode }) } }); } catch { /* committed team mutation remains authoritative */ }

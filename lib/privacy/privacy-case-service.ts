@@ -559,7 +559,7 @@ async function executeOwnerCommand(
       toCaseState(loaded, stored.result),
       {
         userId: actor.data.userId,
-        emailVerified: loaded.requester.emailVerifiedAt !== null,
+        emailVerified: requesterHasVerifiedEmail(loaded.requester),
         capabilities: [],
       },
       cancelCommand,
@@ -643,7 +643,7 @@ async function completeIdentityChallenge(
       toCaseState(loaded),
       {
         userId: actor.data.userId,
-        emailVerified: loaded.requester.emailVerifiedAt !== null,
+        emailVerified: requesterHasVerifiedEmail(loaded.requester),
         capabilities: [],
       },
       command.data,
@@ -1223,7 +1223,7 @@ function toDecisionActor(
 ): PrivacyCaseActor {
   return Object.freeze({
     userId: actor.userId,
-    emailVerified: loaded.requester.emailVerifiedAt !== null,
+    emailVerified: requesterHasVerifiedEmail(loaded.requester),
     capabilities: Object.freeze(
       actor.capabilities.filter(
         (capability): capability is "PRIVACY_CASE_VERIFY" | "PRIVACY_CASE_PROCESS" =>
@@ -1365,6 +1365,16 @@ async function isActiveAdmin(transaction: TransactionClient, userId: string) {
   );
 }
 
+function requesterHasVerifiedEmail(requester: Readonly<{
+  emailVerifiedAt: Date | null;
+  identityAssurance: string;
+}>) {
+  return (
+    requester.emailVerifiedAt !== null &&
+    requester.identityAssurance === "VERIFIED_EMAIL"
+  );
+}
+
 function canRecordChallengeAttempt(
   loaded: NonNullable<LoadedCase>,
   now: Date,
@@ -1373,7 +1383,7 @@ function canRecordChallengeAttempt(
   return (
     loaded.status === PrivacyRequestStatus.IDENTITY_CHECK &&
     loaded.requester.status === "ACTIVE" &&
-    loaded.requester.emailVerifiedAt !== null &&
+    requesterHasVerifiedEmail(loaded.requester) &&
     challenge !== undefined &&
     challenge.expiresAt.getTime() > now.getTime() &&
     challenge.verifiedAt === null &&
@@ -1610,7 +1620,11 @@ const mutationSelect = {
   version: true,
   assignedAdminUserId: true,
   requester: {
-    select: { status: true, emailVerifiedAt: true },
+    select: {
+      status: true,
+      emailVerifiedAt: true,
+      identityAssurance: true,
+    },
   },
   correctionFields: {
     orderBy: { fieldCode: "asc" },

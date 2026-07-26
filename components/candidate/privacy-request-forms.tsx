@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import {
@@ -176,9 +176,19 @@ export function PrivacyCorrectionRequestForm({
 function PrivacyActionFeedback({
   state,
 }: Readonly<{ state: CandidatePrivacyActionState }>) {
-  if (state.status === "idle") return null;
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  const visible = state.status !== "idle";
+  useEffect(() => {
+    if (visible) feedbackRef.current?.focus();
+  }, [state.message, state.status, visible]);
+  if (!visible) return null;
   return (
-    <Alert variant={state.status === "error" ? "destructive" : "default"} aria-live="polite">
+    <Alert
+      ref={feedbackRef}
+      tabIndex={-1}
+      variant={state.status === "error" ? "destructive" : "default"}
+      aria-live="polite"
+    >
       <AlertTitle>
         {state.status === "success" ? "Anfrage erfasst" : "Anfrage nicht möglich"}
       </AlertTitle>

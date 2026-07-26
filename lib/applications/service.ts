@@ -32,6 +32,7 @@ import {
   writeNotificationExactlyOnce,
   type NotificationWritePort,
 } from "@/lib/notifications/writer";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import type { EmailProvider } from "@/lib/providers/email/email-provider";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
@@ -57,6 +58,7 @@ export type ApplyToJobResult =
         | "RATE_LIMITED"
         | "NOT_ELIGIBLE"
         | "PROFILE_IDENTITY_REQUIRED"
+        | "IDENTITY_VERIFICATION_REQUIRED"
         | "CONFIRMATION_CHANGED"
         | "DOCUMENT_REQUIRED"
         | "COVER_LETTER_REQUIRED"
@@ -90,6 +92,16 @@ export async function applyToJob(
 ): Promise<ApplyToJobResult> {
   if (dependencies.currentUser?.role !== "CANDIDATE") {
     return Object.freeze({ ok: false, code: "UNAUTHORIZED" });
+  }
+  if (
+    dependencies.environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+    (dependencies.currentUser.emailVerifiedAt === null ||
+      dependencies.currentUser.identityAssurance !== "VERIFIED_EMAIL")
+  ) {
+    return Object.freeze({
+      ok: false,
+      code: "IDENTITY_VERIFICATION_REQUIRED",
+    });
   }
   const parsed = applyToJobInputSchema.safeParse(rawInput);
   if (!parsed.success) return Object.freeze({ ok: false, code: "INVALID_INPUT" });
@@ -309,25 +321,28 @@ export async function applyToJob(
     return Object.freeze({ ok: false, code: "WRITE_FAILED" });
   }
 
-  let emailRecorded = false;
-  try {
-    await dependencies.emailProvider.send({
-      to: committed.candidateEmail,
-      templateKey: "application_submitted",
-      subject: "Deine Bewerbung wurde erfasst",
-      data: {
-        jobTitle: committed.jobTitle,
-        companyName: committed.companyName,
-        idempotencyKey: `application-submitted:${committed.applicationId}`,
-      },
-    });
-    emailRecorded = true;
-  } catch (error) {
-    logger.error(
-      "candidate_application.email_retryable",
-      { error, applicationId: committed.applicationId },
-      dependencies.request.correlationId,
-    );
+  let emailRecorded =
+    dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS;
+  if (!dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+    try {
+      await dependencies.emailProvider.send({
+        to: committed.candidateEmail,
+        templateKey: "application_submitted",
+        subject: "Deine Bewerbung wurde erfasst",
+        data: {
+          jobTitle: committed.jobTitle,
+          companyName: committed.companyName,
+          idempotencyKey: `application-submitted:${committed.applicationId}`,
+        },
+      });
+      emailRecorded = true;
+    } catch (error) {
+      logger.error(
+        "candidate_application.email_retryable",
+        { error, applicationId: committed.applicationId },
+        dependencies.request.correlationId,
+      );
+    }
   }
 
   return Object.freeze({
@@ -461,6 +476,20 @@ async function createApplicationTransaction(
       kind: "APPLICATION_SUBMITTED",
       dedupeKey: `application-submitted:${application.id}`,
       payload: { applicationId: application.id, status: "SUBMITTED" },
+    });
+  }
+  if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+    await enqueueNotification(transaction, {
+      recipient: { userId: dependencies.currentUser!.id },
+      templateKey: "application_submitted",
+      payloadSchemaVersion: "application-submitted-v1",
+      payload: {
+        applicationId: application.id,
+        jobTitle: context.projection.job.title,
+        companyName: context.projection.recipient.companyName,
+      },
+      dedupeKey: `application-submitted:${application.id}`,
+      availableAt: now,
     });
   }
 

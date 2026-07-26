@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { writeBestEffortAudit, writeRequiredAudit } from "@/lib/audit/log";
 import { candidateAnalyticsSubjectV1 } from "@/lib/analytics/pseudonyms";
@@ -20,12 +20,14 @@ import {
   type ClaimSignalCode,
 } from "@/lib/auth/employer-registration-signals";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { createPasswordResetToken } from "@/lib/auth/password-reset-token";
 import { consumeAuthRateLimit, hashAuthIdentifier } from "@/lib/auth/rate-limit-runtime";
 import type { RateLimitScope } from "@/lib/auth/rate-limit";
 import {
   createRegistrationMarketingConsent,
   createRegistrationTermsConsent,
 } from "@/lib/auth/registration-consent";
+import { createInitialEmailVerification } from "@/lib/auth/email-verification-service";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { resolveSafeNext, type AuthRoleV1 } from "@/lib/auth/safe-next";
 import { issueSession } from "@/lib/auth/session-issuance";
@@ -34,6 +36,7 @@ import { PASSWORD_HASH_POLICY_V1 } from "@/lib/auth/password";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import type { EmailProvider } from "@/lib/providers/email/email-provider";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { hashIpWithFirstKey } from "@/lib/utils/hash";
@@ -47,7 +50,6 @@ import type {
 
 const AUTH_AUDIT_RETENTION_MILLISECONDS = 365 * 24 * 60 * 60 * 1_000;
 const PASSWORD_RESET_TTL_MILLISECONDS = 15 * 60 * 1_000;
-const PASSWORD_RESET_TOKEN_BYTES = 32;
 const FORGOT_TIMING_FLOOR_MILLISECONDS = 650;
 
 // A fixed cost-12 hash makes an unknown account follow the same single bcrypt
@@ -115,6 +117,15 @@ export async function loginWithPassword(
   );
   if (!rate.allowed) {
     await auditRateLimit(dependencies, "LOGIN", rate.audit.scope, now);
+    await recordAuthSecuritySignal(dependencies, {
+      kind: "LOGIN_RATE_LIMITED",
+      targetHash: hashAuthIdentifier(
+        input.email,
+        dependencies.environment,
+      ),
+      outcomeCode: "RATE_LIMITED",
+      now,
+    });
     return Object.freeze({
       ok: false,
       code: "RATE_LIMITED",
@@ -128,6 +139,8 @@ export async function loginWithPassword(
       id: true,
       role: true,
       status: true,
+      emailVerifiedAt: true,
+      identityAssurance: true,
       credential: {
         select: { passwordHash: true, passwordChangedAt: true },
       },
@@ -162,6 +175,8 @@ export async function loginWithPassword(
             select: {
               role: true,
               status: true,
+              emailVerifiedAt: true,
+              identityAssurance: true,
               credential: {
                 select: {
                   passwordHash: true,
@@ -210,7 +225,12 @@ export async function loginWithPassword(
       },
       auditIpContext(dependencies),
     );
-    return Object.freeze({ role: lockedUser.role, session: created });
+    return Object.freeze({
+      role: lockedUser.role,
+      session: created,
+      emailVerifiedAt: lockedUser.emailVerifiedAt,
+      identityAssurance: lockedUser.identityAssurance,
+    });
   });
   if (authentication === null) {
     await auditFailedLogin(dependencies, input.email, user.id, now);
@@ -221,7 +241,12 @@ export async function loginWithPassword(
     ok: true,
     session: authentication.session,
     role: authentication.role,
-    destination: resolveSafeNext(input.next, authentication.role),
+    destination:
+      dependencies.environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+      (authentication.emailVerifiedAt === null ||
+        authentication.identityAssurance !== "VERIFIED_EMAIL")
+        ? "/verify-email"
+        : resolveSafeNext(input.next, authentication.role),
   });
 }
 
@@ -278,6 +303,15 @@ export async function registerCandidate(
           input.marketingConsent,
           now,
         );
+        if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+          await createInitialEmailVerification(transaction, {
+            userId: user.id,
+            emailNormalized: input.email,
+            now,
+            correlationId: dependencies.request.correlationId,
+            environment: dependencies.environment,
+          });
+        }
         await writeRequiredAudit(
           createPrismaTransactionAuditPort(transaction),
           {
@@ -324,8 +358,9 @@ export async function registerCandidate(
     return Object.freeze({
       ok: true,
       session,
-      destination:
-        input.next == null
+      destination: dependencies.environment.IDENTITY_VERIFICATION_ENFORCEMENT
+        ? "/verify-email?registered=1"
+        : input.next == null
           ? "/candidate/jobpass"
           : resolveSafeNext(input.next, "CANDIDATE"),
       branch: "CANDIDATE",
@@ -441,6 +476,15 @@ export async function registerEmployer(
           input.marketingConsent,
           now,
         );
+        if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+          await createInitialEmailVerification(transaction, {
+            userId: user.id,
+            emailNormalized: input.email,
+            now,
+            correlationId: dependencies.request.correlationId,
+            environment: dependencies.environment,
+          });
+        }
         await writeRequiredAudit(
           createPrismaTransactionAuditPort(transaction),
           {
@@ -590,7 +634,14 @@ export async function registerEmployer(
           auditIpKeyring:
             dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
         });
-        return Object.freeze({ branch, destination, session });
+        return Object.freeze({
+          branch,
+          destination: dependencies.environment
+            .IDENTITY_VERIFICATION_ENFORCEMENT
+            ? ("/verify-email?registered=1" as const)
+            : destination,
+          session,
+        });
       },
     );
 
@@ -629,18 +680,51 @@ export async function requestPasswordReset(
       select: { id: true, email: true, status: true, credential: { select: { id: true } } },
     });
     if (user?.status === "ACTIVE" && user.credential !== null) {
-      const rawToken = randomBytes(PASSWORD_RESET_TOKEN_BYTES).toString("base64url");
+      const resetId = randomUUID();
+      const rawToken = createPasswordResetToken(
+        resetId,
+        dependencies.environment.secrets.session,
+      );
       const tokenHash = hashPasswordResetToken(rawToken);
       const expiresAt = new Date(now.getTime() + PASSWORD_RESET_TTL_MILLISECONDS);
       const reset = await dependencies.database.$transaction(async (transaction) => {
         const created = await transaction.passwordResetToken.create({
           data: {
+            id: resetId,
             userId: user.id,
             tokenHash,
             expiresAt,
             requestedIpHash: auditIpHash(dependencies),
             requestedUserAgent: dependencies.request.userAgent,
             createdAt: now,
+          },
+          select: { id: true },
+        });
+        if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+          await enqueueNotification(transaction, {
+            recipient: { userId: user.id },
+            templateKey: "password_reset_mock",
+            payloadSchemaVersion: "password-reset-v2",
+            payload: {
+              resetId: created.id,
+              expiresInMinutes: 15,
+            },
+            dedupeKey: `password-reset:${created.id}`,
+            availableAt: now,
+          });
+        }
+        await transaction.authSecurityEvent.create({
+          data: {
+            userId: user.id,
+            kind: "PASSWORD_RECOVERY_REQUESTED",
+            targetHash: hashAuthIdentifier(
+              input.email,
+              dependencies.environment,
+            ),
+            correlationId: dependencies.request.correlationId,
+            outcomeCode: "GENERIC_REQUEST_ACCEPTED",
+            occurredAt: now,
+            retainUntil: securityRetainUntil(now),
           },
           select: { id: true },
         });
@@ -660,20 +744,35 @@ export async function requestPasswordReset(
         );
         return created;
       });
-      const resetUrl = new URL("/reset-password", dependencies.environment.APP_URL);
-      // Keep the bearer secret out of the HTTP request target. URL fragments are
-      // not sent to Next.js, reverse proxies or access logs; the reset page reads
-      // the token in the browser, removes the fragment, and submits it by POST.
-      resetUrl.hash = new URLSearchParams({ token: rawToken }).toString();
-      await dependencies.emailProvider.send({
-        to: user.email,
-        templateKey: "password_reset_mock",
-        subject: "Passwort für SwissTalentHub zurücksetzen",
-        data: {
-          resetUrl: resetUrl.toString(),
-          expiresInMinutes: 15,
-          idempotencyKey: reset.id,
-        },
+      if (!dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+        const resetUrl = new URL(
+          "/reset-password",
+          dependencies.environment.APP_URL,
+        );
+        // Legacy local comparison path only. Real/sandbox provider delivery is
+        // hydrated from the durable outbox and never receives this raw bearer
+        // through persistence.
+        resetUrl.hash = new URLSearchParams({ token: rawToken }).toString();
+        await dependencies.emailProvider.send({
+          to: user.email,
+          templateKey: "password_reset_mock",
+          subject: "Passwort für SwissTalentHub zurücksetzen",
+          data: {
+            resetUrl: resetUrl.toString(),
+            expiresInMinutes: 15,
+            idempotencyKey: reset.id,
+          },
+        });
+      }
+    } else {
+      await recordAuthSecuritySignal(dependencies, {
+        kind: "PASSWORD_RECOVERY_REQUESTED",
+        targetHash: hashAuthIdentifier(
+          input.email,
+          dependencies.environment,
+        ),
+        outcomeCode: "GENERIC_NO_ACTION",
+        now,
       });
     }
   } catch {
@@ -911,6 +1010,16 @@ async function auditFailedLogin(
     undefined,
     auditIpContext(dependencies),
   );
+  await recordAuthSecuritySignal(dependencies, {
+    kind: "LOGIN_FAILED",
+    ...(existingUserId === undefined ? {} : { userId: existingUserId }),
+    targetHash: hashAuthIdentifier(
+      normalizedEmail,
+      dependencies.environment,
+    ),
+    outcomeCode: "INVALID_CREDENTIALS",
+    now,
+  });
 }
 
 async function auditFailedPasswordReset(
@@ -960,6 +1069,47 @@ async function auditRateLimit(
       now,
     },
   );
+  if (preset === "FORGOT_PASSWORD") {
+    await recordAuthSecuritySignal(dependencies, {
+      kind: "PASSWORD_RECOVERY_RATE_LIMITED",
+      outcomeCode: "RATE_LIMITED",
+      now,
+    });
+  }
+}
+
+async function recordAuthSecuritySignal(
+  dependencies: AuthServiceDependencies,
+  input: Readonly<{
+    userId?: string;
+    kind:
+      | "LOGIN_FAILED"
+      | "LOGIN_RATE_LIMITED"
+      | "PASSWORD_RECOVERY_REQUESTED"
+      | "PASSWORD_RECOVERY_RATE_LIMITED";
+    targetHash?: string;
+    outcomeCode: string;
+    now: Date;
+  }>,
+) {
+  try {
+    await dependencies.database.authSecurityEvent.create({
+      data: {
+        ...(input.userId === undefined ? {} : { userId: input.userId }),
+        kind: input.kind,
+        ...(input.targetHash === undefined
+          ? {}
+          : { targetHash: input.targetHash }),
+        correlationId: dependencies.request.correlationId,
+        outcomeCode: input.outcomeCode,
+        occurredAt: input.now,
+        retainUntil: securityRetainUntil(input.now),
+      },
+      select: { id: true },
+    });
+  } catch {
+    // A minimized anomaly signal must never change enumeration-safe results.
+  }
 }
 
 function auditIpContext(dependencies: AuthServiceDependencies) {
@@ -980,6 +1130,10 @@ function auditIpHash(dependencies: AuthServiceDependencies): string {
 
 function auditRetainUntil(now: Date) {
   return new Date(now.getTime() + AUTH_AUDIT_RETENTION_MILLISECONDS);
+}
+
+function securityRetainUntil(now: Date) {
+  return new Date(now.getTime() + 90 * 24 * 60 * 60 * 1_000);
 }
 
 function submittedSignalCodes(hasUid: boolean): readonly ClaimSignalCode[] {

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -23,11 +25,21 @@ export function FieldError({
 }
 
 export function FormFeedback({ state }: Readonly<{ state: AuthActionState }>) {
-  if (state.status === "idle" || state.message === undefined) return null;
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  const visible = state.status !== "idle" && state.message !== undefined;
+  useEffect(() => {
+    if (visible) feedbackRef.current?.focus();
+  }, [state.message, state.status, visible]);
+  if (!visible) return null;
   const failed = state.status === "error" || state.status === "rate_limited";
 
   return (
-    <Alert variant={failed ? "destructive" : "default"} aria-live="polite">
+    <Alert
+      ref={feedbackRef}
+      tabIndex={-1}
+      variant={failed ? "destructive" : "default"}
+      aria-live="polite"
+    >
       <AlertTitle>
         {state.status === "success"
           ? "Erledigt"

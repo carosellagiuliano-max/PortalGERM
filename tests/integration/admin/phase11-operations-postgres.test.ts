@@ -57,6 +57,8 @@ import { MockEmailProvider, type EmailProvider } from "@/lib/providers/email";
 import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
 import { salesLeadAnalyticsKeyV1 } from "@/lib/sales/lead-policy";
 import { ADMIN_IMPORT_DEMO_FIXTURES } from "@/prisma/seed/fixtures";
+import { buildSeedPlanningGraph } from "@/prisma/seed/contract-identities";
+import { beginSeedRun } from "@/prisma/seed/lifecycle";
 import { orchestrateDemoSeed } from "@/prisma/seed/orchestrator";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
@@ -70,6 +72,11 @@ let adminUserId = "";
 beforeAll(async () => {
   migrated = await createMigratedTestDatabase("phase11_admin_operations");
   database = createDatabaseClient(migrated.connectionString);
+  await beginSeedRun(
+    database,
+    buildSeedPlanningGraph().identities,
+    () => NOW,
+  );
   await orchestrateDemoSeed(database);
   adminUserId = (
     await database.user.findFirstOrThrow({

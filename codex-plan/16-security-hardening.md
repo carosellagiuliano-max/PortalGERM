@@ -71,8 +71,9 @@ Confirm `AuditLog` rows are written for every canonical sensitive event below. A
 
 | Action | Where it fires |
 |---|---|
-| `USER_REGISTERED` / `USER_LOGIN` / `USER_LOGIN_FAILED` / `USER_LOGOUT` / `PASSWORD_RESET_REQUESTED` / `PASSWORD_RESET_COMPLETED` / `SESSION_REVOKED` | auth flows |
-| `USER_SUSPENDED` / `USER_REACTIVATED` / `SESSION_REVOKED` | P0 admin user lifecycle; global role mutation has no P0 action |
+| `USER_REGISTERED` / `USER_LOGIN` / `USER_LOGIN_FAILED` / `USER_LOGOUT` / `PASSWORD_RESET_REQUESTED` / `PASSWORD_RESET_COMPLETED` | auth flows |
+| `EMAIL_VERIFICATION_REQUESTED` / `EMAIL_VERIFICATION_COMPLETED` / `LOGIN_EMAIL_CHANGE_REQUESTED` / `LOGIN_EMAIL_CHANGE_COMPLETED` / `LOGIN_EMAIL_CHANGE_CANCELLED` / `NOTIFICATION_PREFERENCE_CHANGED` / `NOTIFICATION_DELIVERY_REPLAYED` | Phase 20 identity, login-email change, notification preferences and audited local replay |
+| `SESSION_REVOKED` / `USER_SUSPENDED` / `USER_REACTIVATED` | session and P0 admin user lifecycle; global role mutation has no P0 action |
 | `COMPANY_CREATED_WITH_OWNER` / `COMPANY_CLAIM_REQUESTED` / `COMPANY_CLAIM_EVIDENCE_REQUESTED` / `COMPANY_CLAIM_EVIDENCE_ADDED` / `COMPANY_CLAIM_CANCELLED` / `COMPANY_CLAIM_APPROVED` / `COMPANY_CLAIM_REJECTED` / `COMPANY_PROFILE_UPDATED` / `BILLING_PROFILE_UPDATED` / `COMPANY_ONBOARDING_COMPLETED` / `COMPANY_VERIFICATION_SUBMITTED` / `COMPANY_VERIFICATION_CHANGES_REQUESTED` / `COMPANY_VERIFIED` / `COMPANY_VERIFICATION_REJECTED` / `COMPANY_VERIFICATION_REVOKED` / `COMPANY_SUSPENDED` / `COMPANY_REACTIVATED` | company + claim + verification + billing profile |
 | `INVITATION_SENT` / `INVITATION_REVOKED` / `INVITATION_ACCEPTED` / `MEMBERSHIP_ROLE_CHANGED` / `MEMBERSHIP_REMOVED` / `JOB_ASSIGNMENT_CREATED` / `JOB_ASSIGNMENT_REVOKED` | team/membership/assignment |
 | `JOB_DRAFT_UPDATED` / `JOB_SUBMITTED` / `JOB_REVIEW_STARTED` / `JOB_CHANGES_REQUESTED` / `JOB_APPROVED` / `JOB_PUBLISHED` / `JOB_REJECTED` / `JOB_FLAGGED` / `JOB_PAUSED` / `JOB_REACTIVATED` / `JOB_EXPIRED` / `JOB_CLOSED` / `JOB_REPORTING_CHECKED` | employer + moderation/system lifecycle |
@@ -91,7 +92,7 @@ Confirm `AuditLog` rows are written for every canonical sensitive event below. A
 
 - [x] Each entry stores nullable `actorUserId`, explicit `actorKind: USER|SYSTEM|ANONYMOUS`, capability, entity type/id, result/reason/correlation and schema-allowlisted redacted metadata plus `version:HMAC-SHA-256(normalizedIp)` under the first active writer version from the dedicated rotating `AUDIT_IP_HASH_KEYS` keyring. Plain SHA/salt, raw IP and reuse of SESSION_SECRET are forbidden; event hash retention is 30 days. Anonymous login/rate/abuse events never fabricate a User actor.
 
-> The full typed matrix is verified against owning PostgreSQL workflow fixtures: all 122 canonical `AUDIT_ACTIONS_V1` members have an owning workflow assertion, with no source-grep-only substitute. Anonymous/system actors, reset/revocation, import decisions, Radar consent/contact/reveal, Credit consumption, Support/Content and maintenance projection events are included.
+> The full typed matrix is verified against owning PostgreSQL workflow fixtures: all 129 canonical `AUDIT_ACTIONS_V1` members have an owning workflow assertion, with no source-grep-only substitute. Anonymous/system actors, reset/revocation, identity verification, login-email change, notification preferences/replay, import decisions, Radar consent/contact/reveal, Credit consumption, Support/Content and maintenance projection events are included.
 
 ### Abuse reporting
 

@@ -1,4 +1,11 @@
-import { test, expect, openActor, PHASE17_CANDIDATE, phase17Database } from "@/tests/e2e/fixtures/phase17-test";
+import {
+  test,
+  expect,
+  openActor,
+  PHASE17_CANDIDATE,
+  phase17Database,
+  verificationTokenForEmail,
+} from "@/tests/e2e/fixtures/phase17-test";
 
 test.describe.configure({ mode: "serial" });
 
@@ -55,7 +62,17 @@ test("[E2E-01] @journey candidate search to employer status update", async ({
       .getByLabel(/Ich akzeptiere die aktuellen Nutzungsbedingungen/u)
       .check();
     await page.getByRole("button", { name: "Konto erstellen" }).click();
-    await expect(page).toHaveURL(new RegExp(`/jobs/${job.slug}\\?intent=`, "u"));
+    await expect(page).toHaveURL(/\/verify-email\?registered=1/u);
+    const verificationToken = await verificationTokenForEmail(
+      PHASE17_CANDIDATE.email,
+    );
+    await page.goto(`/verify-email#token=${verificationToken}`);
+    await page
+      .getByRole("button", { name: "E-Mail jetzt bestätigen" })
+      .click();
+    await expect(
+      page.getByText("Deine E-Mail-Adresse wurde bestätigt."),
+    ).toBeVisible();
 
     await completeSwissJobPass(page);
 

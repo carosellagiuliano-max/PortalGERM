@@ -70,13 +70,25 @@ async function runAtomicPrivacyIntake(
         input.userId,
       );
 
-      const users = await transaction.$queryRaw<Array<{ status: string }>>`
-        SELECT "status"::text AS "status"
+      const users = await transaction.$queryRaw<
+        Array<{
+          status: string;
+          emailVerifiedAt: Date | null;
+          identityAssurance: string;
+        }>
+      >`
+        SELECT "status"::text AS "status",
+               "emailVerifiedAt",
+               "identityAssurance"::text AS "identityAssurance"
         FROM "User"
         WHERE "id" = ${input.userId}::uuid
         FOR UPDATE
       `;
-      if (users[0]?.status !== "ACTIVE") {
+      if (
+        users[0]?.status !== "ACTIVE" ||
+        users[0].emailVerifiedAt === null ||
+        users[0].identityAssurance !== "VERIFIED_EMAIL"
+      ) {
         return Object.freeze({ outcome: "UNAUTHORIZED" as const });
       }
 

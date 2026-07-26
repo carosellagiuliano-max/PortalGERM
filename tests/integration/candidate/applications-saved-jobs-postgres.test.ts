@@ -1747,6 +1747,8 @@ function candidateUser(): CurrentUser {
     name: "Mara Muster",
     status: "ACTIVE",
     emailVerifiedAt: null,
+    emailAddressEpoch: 1,
+    identityAssurance: "LOW_ASSURANCE",
   });
 }
 
@@ -1758,6 +1760,8 @@ function otherCandidateUser(): CurrentUser {
     name: "Noah Neben",
     status: "ACTIVE",
     emailVerifiedAt: null,
+    emailAddressEpoch: 1,
+    identityAssurance: "LOW_ASSURANCE",
   });
 }
 

@@ -18,6 +18,7 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import {
   writeNotificationExactlyOnce,
 } from "@/lib/notifications/writer";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
 import { isConversationMessageBlocked } from "@/lib/admin/moderation";
 import {
@@ -177,6 +178,20 @@ export async function transitionEmployerApplication(access: EmployerApplicationA
       await tx.applicationEvent.create({ data: { applicationId: application.id, actorUserId: access.userId, kind: "STATUS_CHANGE", fromStatus: current.status, toStatus: decision.value.nextStatus, idempotencyKey: eventKey("status", parsed.data.idempotencyKey), correlationId: dependencies.request.correlationId, metadata: parsed.data.rejectionReason === undefined ? undefined : { reasonCode: parsed.data.rejectionReason }, createdAt: now } });
       await writeRequiredAudit(createPrismaTransactionAuditPort(tx), { action: "APPLICATION_STATUS_CHANGED", actorKind: "USER", actorUserId: access.userId, capability: "COMPANY_APPLICATION_TRANSITION", companyId: access.companyId, correlationId: dependencies.request.correlationId, result: "SUCCEEDED", retainUntil: new Date(now.getTime() + AUDIT_TTL), targetId: application.id, targetType: "APPLICATION" });
       await writeNotificationExactlyOnce(createPrismaNotificationPort(tx), { recipientUserId: application.candidateUserId, kind: "APPLICATION_STATUS_CHANGED", dedupeKey: eventKey("status", parsed.data.idempotencyKey), payload: { applicationId: application.id, status: decision.value.nextStatus, ...(parsed.data.rejectionReason === undefined ? {} : { reasonCode: parsed.data.rejectionReason }) } });
+      if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+        await enqueueNotification(tx, {
+          recipient: { userId: application.candidateUserId },
+          templateKey: "application_status_changed",
+          payloadSchemaVersion: "application-status-v1",
+          payload: {
+            applicationId: application.id,
+            jobTitle: application.jobTitle,
+            statusLabel: statusLabel(decision.value.nextStatus),
+          },
+          dedupeKey: `email:${eventKey("status", parsed.data.idempotencyKey)}`,
+          availableAt: now,
+        });
+      }
       if (isQualifyingEmployerResponseStatus(decision.value.nextStatus)) {
         await trackAnalyticsEventV1(
           {
@@ -212,7 +227,11 @@ export async function transitionEmployerApplication(access: EmployerApplicationA
     });
     if (!result.ok) return result;
     const publicResult = { ok: true as const, duplicate: result.duplicate };
-    if (result.email === null || dependencies.emailProvider === undefined) return publicResult;
+    if (
+      dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS ||
+      result.email === null ||
+      dependencies.emailProvider === undefined
+    ) return publicResult;
     try { await dependencies.emailProvider.send({ to: result.email.to, templateKey: "application_status_changed", subject: "Neuer Status deiner Bewerbung", data: { jobTitle: result.email.title, statusLabel: statusLabel(result.email.status), idempotencyKey: eventKey("status", parsed.data.idempotencyKey) } }); } catch { /* committed event remains authoritative */ }
     return publicResult;
   } catch { return { ok: false as const, code: "WRITE_FAILED" }; }
@@ -285,6 +304,21 @@ export async function sendEmployerApplicationMessage(access: EmployerApplication
       const message = await tx.message.create({ data: { conversationId, senderUserId: access.userId, idempotencyKey: parsed.data.idempotencyKey, body, createdAt: now }, select: { id: true } });
       await tx.applicationEvent.create({ data: { applicationId: application.id, actorUserId: access.userId, kind: "MESSAGE_SENT", idempotencyKey: eventKey("message", parsed.data.idempotencyKey), correlationId: dependencies.request.correlationId, createdAt: now } });
       await writeNotificationExactlyOnce(createPrismaNotificationPort(tx), { recipientUserId: application.candidateUserId, kind: "MESSAGE_RECEIVED", dedupeKey: `message:${message.id}`, payload: { conversationId, status: "UNREAD" } });
+      if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+        await enqueueNotification(tx, {
+          recipient: { userId: application.candidateUserId },
+          templateKey: "employer_message_received",
+          payloadSchemaVersion: "employer-message-v1",
+          payload: {
+            applicationId: application.id,
+            messageId: message.id,
+            companyName: application.companyName,
+            jobTitle: application.jobTitle,
+          },
+          dedupeKey: `employer-message:${message.id}`,
+          availableAt: now,
+        });
+      }
       await writeRequiredAudit(createPrismaTransactionAuditPort(tx), { action: "MESSAGE_SENT", actorKind: "USER", actorUserId: access.userId, capability: "COMPANY_APPLICATION_MESSAGE", companyId: access.companyId, correlationId: dependencies.request.correlationId, result: "SUCCEEDED", retainUntil: new Date(now.getTime() + AUDIT_TTL), targetId: message.id, targetType: "MESSAGE" });
       await trackAnalyticsEventV1(
         {
@@ -319,7 +353,11 @@ export async function sendEmployerApplicationMessage(access: EmployerApplication
     });
     if (!result.ok) return result;
     const publicResult = { ok: true as const, duplicate: result.duplicate };
-    if (result.email === null || dependencies.emailProvider === undefined) return publicResult;
+    if (
+      dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS ||
+      result.email === null ||
+      dependencies.emailProvider === undefined
+    ) return publicResult;
     try { await dependencies.emailProvider.send({ to: result.email.to, templateKey: "employer_message_received", subject: "Neue Nachricht zu deiner Bewerbung", data: { companyName: result.email.companyName, jobTitle: result.email.title, idempotencyKey: parsed.data.idempotencyKey } }); } catch { /* post-commit delivery is retryable */ }
     return publicResult;
   } catch { return { ok: false as const, code: "WRITE_FAILED" }; }

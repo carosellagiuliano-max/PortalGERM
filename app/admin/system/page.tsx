@@ -4,14 +4,15 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { listOpenSystemTasks } from "@/lib/admin/system-governance";
 import { requireAdminPage } from "@/lib/auth/route-guards";
+import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
+import { getNotificationDeliverySummary } from "@/lib/notifications/admin-read";
 import { formatDateTime } from "@/lib/utils/format";
 
 export const metadata: Metadata = { title: "Systemstatus" };
 
 const providers = [
   ["Zahlung", "Lokaler persistierender Mock"],
-  ["E-Mail", "EmailLog + geschützte lokale Mailbox"],
   ["KI", "Deterministischer Regel-Mock"],
   ["Job-Room", "Versionierter lokaler Lookup"],
   ["Storage", "Metadaten-Mock, keine Bytes"],
@@ -21,7 +22,8 @@ const providers = [
 export default async function AdminSystemPage() {
   const admin = await requireAdminPage();
   const now = new Date();
-  const tasks = await listOpenSystemTasks({
+  const database = getDatabase();
+  const dependencies = {
     actor: {
       userId: admin.id,
       email: admin.email,
@@ -29,10 +31,15 @@ export default async function AdminSystemPage() {
       status: admin.status,
     },
     correlationId: "admin-system-read",
-    database: getDatabase(),
+    database,
     now,
-  });
-  if (tasks === null) return null;
+  } as const;
+  const [tasks, delivery] = await Promise.all([
+    listOpenSystemTasks(dependencies),
+    getNotificationDeliverySummary(dependencies),
+  ]);
+  if (tasks === null || delivery === null) return null;
+  const environment = getServerEnvironment();
 
   const overdue = tasks.filter((task) => task.dueAt <= now).length;
   return (
@@ -68,10 +75,26 @@ export default async function AdminSystemPage() {
       <section>
         <h2 className="text-xl font-semibold">Provider-Grenzen</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Alle Adapter sind netzwerkfreie Mocks. Ein gesetzter API-Key
-          aktiviert keinen realen Provider.
+          Kein Provider wird implizit aktiviert und es gibt keinen
+          Real→Mock-Fallback. Der E-Mail-Adapter bleibt ohne externe
+          Freigaben höchstens Sandbox.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <article className="rounded-lg border bg-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-medium">E-Mail</h3>
+              <Badge variant="outline">
+                {environment.EMAIL_PROVIDER_MODE === "disabled"
+                  ? "DISABLED"
+                  : "SANDBOX"}
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Provider {environment.EMAIL_PROVIDER_MODE}; Dispatch{" "}
+              {environment.NOTIFICATION_DISPATCH}. Keine LIVE-Zustellung und
+              kein autonomer Worker werden behauptet.
+            </p>
+          </article>
           {providers.map(([name, status]) => (
             <article className="rounded-lg border bg-card p-4" key={name}>
               <div className="flex items-center justify-between gap-3">
@@ -82,6 +105,37 @@ export default async function AdminSystemPage() {
             </article>
           ))}
         </div>
+      </section>
+
+      <section aria-labelledby="notification-delivery-heading">
+        <h2 id="notification-delivery-heading" className="text-xl font-semibold">
+          Benachrichtigungszustellung
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Redigierte Zähler ohne Empfänger, Payload, Token oder
+          Template-Inhalt. Production-Replay bleibt bis zum Phase-25-Step-up
+          gesperrt.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Object.entries(delivery.statuses).map(([status, count]) => (
+            <article className="rounded-lg border bg-card p-4" key={status}>
+              <p className="text-sm text-muted-foreground">
+                {deliveryStatusLabel(status)}
+              </p>
+              <p className="mt-2 text-2xl font-semibold">{count}</p>
+            </article>
+          ))}
+          <article className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Hard Bounces</p>
+            <p className="mt-2 text-2xl font-semibold">{delivery.bounced}</p>
+          </article>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Älteste offene Nachricht:{" "}
+          {delivery.oldestQueuedAt === null
+            ? "keine"
+            : formatDateTime(delivery.oldestQueuedAt)}
+        </p>
       </section>
 
       <section>
@@ -135,6 +189,20 @@ export default async function AdminSystemPage() {
         Go-live-Gates.
       </section>
     </div>
+  );
+}
+
+function deliveryStatusLabel(status: string) {
+  return (
+    {
+      PENDING: "Ausstehend",
+      LEASED: "In Verarbeitung",
+      RETRY: "Wiederholung geplant",
+      DELIVERED: "Angenommen",
+      SUPPRESSED: "Unterdrückt / Bounce",
+      DEAD_LETTER: "DLQ",
+      PAUSED: "Provider degradiert / pausiert",
+    }[status] ?? status
   );
 }
 

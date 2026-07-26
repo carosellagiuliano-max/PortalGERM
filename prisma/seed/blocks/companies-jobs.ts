@@ -190,6 +190,7 @@ async function ensureUser(
     status: "ACTIVE",
     dataProvenance: "DEMO",
     emailVerifiedAt: emailVerifiedAt.toISOString(),
+    identityAssurance: "VERIFIED_EMAIL",
     createdAt: createdAt.toISOString(),
   } as const;
   await createOrVerifySeedRecord({
@@ -207,6 +208,7 @@ async function ensureUser(
           status: "ACTIVE",
           dataProvenance: "DEMO",
           emailVerifiedAt,
+          identityAssurance: "VERIFIED_EMAIL",
           createdAt,
         },
       }),
@@ -219,6 +221,7 @@ async function ensureUser(
       status: row.status,
       dataProvenance: row.dataProvenance,
       emailVerifiedAt: iso(row.emailVerifiedAt),
+      identityAssurance: row.identityAssurance,
       createdAt: row.createdAt.toISOString(),
     }),
     expected,

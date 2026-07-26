@@ -13,7 +13,11 @@ export const LOCAL_MOCK_MAILBOX_TTL_MS = 15 * 60 * 1_000;
 
 export type LocalMockMailboxTemplateKey = Extract<
   EmailTemplateKey,
-  "password_reset_mock" | "company_invitation" | "job_alert_digest_mock"
+  | "password_reset_mock"
+  | "company_invitation"
+  | "job_alert_digest_mock"
+  | "identity_verification"
+  | "login_email_change_verification"
 >;
 
 export type LocalMockMailboxEnvelope = Readonly<{
@@ -182,7 +186,9 @@ function normalizeCaptureInput(
   if (
     input.templateKey !== "password_reset_mock" &&
     input.templateKey !== "company_invitation" &&
-    input.templateKey !== "job_alert_digest_mock"
+    input.templateKey !== "job_alert_digest_mock" &&
+    input.templateKey !== "identity_verification" &&
+    input.templateKey !== "login_email_change_verification"
   ) {
     throw new LocalMockMailboxInputError("template_not_allowed");
   }
@@ -233,11 +239,18 @@ function parseActionUrl(
     ) {
       throw new LocalMockMailboxInputError("action_url_invalid");
     }
-    if (templateKey === "password_reset_mock") {
+    if (
+      templateKey === "password_reset_mock" ||
+      templateKey === "identity_verification" ||
+      templateKey === "login_email_change_verification"
+    ) {
       const fragment = new URLSearchParams(url.hash.replace(/^#/u, ""));
       const tokenValues = fragment.getAll("token");
       if (
-        url.pathname !== "/reset-password" ||
+        url.pathname !==
+          (templateKey === "password_reset_mock"
+            ? "/reset-password"
+            : "/verify-email") ||
         url.search !== "" ||
         [...fragment.keys()].length !== 1 ||
         tokenValues.length !== 1 ||

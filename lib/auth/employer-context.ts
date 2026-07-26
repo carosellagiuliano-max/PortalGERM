@@ -9,6 +9,7 @@ import {
   verifyCompanyContextCookie,
 } from "@/lib/auth/company-context-cookie";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth/current-user";
+import { isIdentityActionAllowed } from "@/lib/auth/email-verification-policy";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/request-context";
 import { listBoundaryAccessibleMembershipIds } from "@/lib/billing/membership-access";
 import { getServerEnvironment } from "@/lib/config/env";
@@ -32,9 +33,16 @@ export type EmployerContext = Readonly<{
 
 export async function getEmployerContext(): Promise<EmployerContext | null> {
   const user = await getCurrentUser();
+  const environment = getServerEnvironment();
   if (
     user === null ||
-    (user.role !== "EMPLOYER" && user.role !== "RECRUITER")
+    (user.role !== "EMPLOYER" && user.role !== "RECRUITER") ||
+    (environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+      !isIdentityActionAllowed({
+        action: "TEAM_ROLE_WRITE",
+        assurance: user.identityAssurance,
+        emailVerifiedAt: user.emailVerifiedAt,
+      }))
   ) {
     return null;
   }
@@ -88,7 +96,6 @@ export async function getEmployerContext(): Promise<EmployerContext | null> {
       ),
   );
   const cookieStore = await cookies();
-  const environment = getServerEnvironment();
   const signed = cookieStore.get(
     COMPANY_CONTEXT_COOKIE_POLICY_V1.cookieName,
   )?.value;
@@ -126,9 +133,16 @@ export async function setEmployerCompanyContext(
 ): Promise<boolean> {
   if (!z.uuid().safeParse(companyId).success) return false;
   const user = await getCurrentUser();
+  const environment = getServerEnvironment();
   if (
     user === null ||
-    (user.role !== "EMPLOYER" && user.role !== "RECRUITER")
+    (user.role !== "EMPLOYER" && user.role !== "RECRUITER") ||
+    (environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+      !isIdentityActionAllowed({
+        action: "TEAM_ROLE_WRITE",
+        assurance: user.identityAssurance,
+        emailVerifiedAt: user.emailVerifiedAt,
+      }))
   ) {
     return false;
   }
@@ -154,8 +168,6 @@ export async function setEmployerCompanyContext(
   ) {
     return false;
   }
-
-  const environment = getServerEnvironment();
   const value = createCompanyContextCookie(
     {
       userId: user.id,

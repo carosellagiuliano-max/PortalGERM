@@ -21,6 +21,7 @@ import {
 } from "@/lib/applications/contracts";
 import { applyToJob } from "@/lib/applications/service";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { hasVerifiedEmailIdentity } from "@/lib/auth/email-verification-policy";
 import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import {
   getAuthRequestContext,
@@ -267,14 +268,20 @@ async function commandDependencies() {
     getCurrentUser(),
     getAuthRequestContext(),
   ]);
+  const environment = getServerEnvironment();
   if (
     currentUser?.role !== "CANDIDATE" ||
-    !isValidAuthMutationOrigin(request)
+    !isValidAuthMutationOrigin(request) ||
+    (environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+      !hasVerifiedEmailIdentity({
+        assurance: currentUser.identityAssurance,
+        emailVerifiedAt: currentUser.emailVerifiedAt,
+      }))
   ) return null;
   return Object.freeze({
     currentUser,
     request,
-    environment: getServerEnvironment(),
+    environment,
     database: getDatabase(),
   });
 }
@@ -287,6 +294,8 @@ function applicationErrorMessage(code: string): string {
     NOT_ELIGIBLE: "Diese Stelle ist nicht mehr für Bewerbungen verfügbar.",
     PROFILE_IDENTITY_REQUIRED:
       "Bitte ergänze zuerst Vor- und Nachname im SwissJobPass.",
+    IDENTITY_VERIFICATION_REQUIRED:
+      "Bitte bestätige zuerst deine Login-E-Mail-Adresse.",
     CONFIRMATION_CHANGED:
       "Die Empfänger- oder Stellendaten haben sich geändert. Bitte lade die Seite neu und bestätige erneut.",
     DOCUMENT_REQUIRED: "Bitte wähle genau einen aktiven Lebenslauf aus.",

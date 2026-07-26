@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { createHmac } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
 import {
@@ -132,6 +133,42 @@ export async function login(page: Page, email: string, password: string) {
 
 export function phase17Database() {
   return createDatabaseClient(requiredEnvironment("DATABASE_URL"));
+}
+
+export async function verificationTokenForEmail(email: string) {
+  const database = phase17Database();
+  try {
+    const challenge =
+      await database.emailVerificationChallenge.findFirstOrThrow({
+        where: {
+          user: { emailNormalized: email.trim().toLowerCase() },
+          usedAt: null,
+          supersededAt: null,
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          purpose: true,
+          addressEpoch: true,
+        },
+      });
+    const sessionSecret = requiredEnvironment("SESSION_SECRET");
+    const signature = createHmac(
+      "sha256",
+      Buffer.from(sessionSecret, "base64"),
+    )
+      .update("swisstalenthub.email-verification-token.v1", "utf8")
+      .update("\0", "utf8")
+      .update(challenge.id, "utf8")
+      .update("\0", "utf8")
+      .update(challenge.purpose, "utf8")
+      .update("\0", "utf8")
+      .update(String(challenge.addressEpoch), "utf8")
+      .digest("base64url");
+    return `v1.${challenge.id}.${signature}`;
+  } finally {
+    await database.$disconnect();
+  }
 }
 
 export async function advanceServerClock(days: number) {

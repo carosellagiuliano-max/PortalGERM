@@ -13,6 +13,8 @@ export const CURRENT_USER_SELECT = Object.freeze({
   name: true,
   status: true,
   emailVerifiedAt: true,
+  emailAddressEpoch: true,
+  identityAssurance: true,
 } as const);
 
 export type CurrentUser = Readonly<{
@@ -22,6 +24,11 @@ export type CurrentUser = Readonly<{
   name: string | null;
   status: "ACTIVE";
   emailVerifiedAt: Date | null;
+  emailAddressEpoch: number;
+  identityAssurance:
+    | "LOW_ASSURANCE"
+    | "VERIFIED_EMAIL"
+    | "LEGACY_ASSURANCE";
 }>;
 
 export interface CurrentUserRepository {

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import {
   captureLocalMockEmail,
@@ -38,8 +39,12 @@ function getExplicitMockProvider() {
 
 /** Explicit mock-only composition root. No provider env key can switch it. */
 export const emailProvider: EmailProvider = Object.freeze({
-  send: (input: Parameters<EmailProvider["send"]>[0]) =>
-    getExplicitMockProvider().send(input),
+  send: (input: Parameters<EmailProvider["send"]>[0]) => {
+    if (getServerEnvironment().EMAIL_PROVIDER_MODE === "resend_sandbox") {
+      return Promise.reject(new Error("LEGACY_EMAIL_PATH_DISABLED"));
+    }
+    return getExplicitMockProvider().send(input);
+  },
 });
 
 export { MockEmailProvider } from "./mock-email-provider";

@@ -851,6 +851,7 @@ async function createUser(
       status: "ACTIVE",
       dataProvenance: "TEST",
       emailVerifiedAt: NOW,
+      identityAssurance: "VERIFIED_EMAIL",
     },
   });
 }

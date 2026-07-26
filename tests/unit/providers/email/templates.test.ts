@@ -18,6 +18,7 @@ const EXPECTED_SUBJECTS = {
   demo_request_received: "Neue Demo-Anfrage eingegangen",
   employer_message_received: "Neue Nachricht zu deiner Bewerbung",
   identity_revealed: "Bestätigung deiner Identitätsfreigabe",
+  identity_verification: "E-Mail-Adresse bei SwissTalentHub bestätigen",
   invoice_issued: "Neue Rechnung von SwissTalentHub",
   job_alert_digest_mock: "Neue Stellen aus deinem Jobabo",
   job_alert_preview: "Vorschau deines Jobabos",
@@ -26,6 +27,10 @@ const EXPECTED_SUBJECTS = {
   job_boost_expired: "Job-Boost ist abgelaufen",
   job_rejected: "Dein Stelleninserat benötigt Anpassungen",
   lead_follow_up_reminder: "Erinnerung an eine offene Demo-Anfrage",
+  login_email_changed_notice:
+    "Deine Login-E-Mail bei SwissTalentHub wurde geändert",
+  login_email_change_verification:
+    "Neue Login-E-Mail bei SwissTalentHub bestätigen",
   password_reset_mock: "Passwort für SwissTalentHub zurücksetzen",
   payment_received: "Zahlung im Mock-Checkout bestätigt",
   plan_limit_reached: "Nutzungslimit deines Plans erreicht",
@@ -64,6 +69,8 @@ const TEMPLATE_DATA = Object.freeze({
   remainingCredits: 2,
   renewalDate: "01.08.2026",
   resetUrl: "http://127.0.0.1:3000/reset-password#token=secret",
+  verificationUrl:
+    "http://127.0.0.1:3000/verify-email#token=secret",
   statusLabel: "freigegeben",
   signalLabel: "Verlängerung prüfen",
   used: 4,
@@ -71,7 +78,7 @@ const TEMPLATE_DATA = Object.freeze({
 
 describe("German email template registry", () => {
   it("renders every declared key with its authoritative German subject", () => {
-    expect(EMAIL_TEMPLATE_KEYS).toHaveLength(29);
+    expect(EMAIL_TEMPLATE_KEYS).toHaveLength(32);
     expect(Object.keys(EXPECTED_SUBJECTS).sort()).toEqual(
       [...EMAIL_TEMPLATE_KEYS].sort(),
     );

@@ -416,16 +416,19 @@ Referenced by: Phase 19–32,
 
 ## ADR-031 — Identity assurance and durable notification delivery are separate layers
 
-**Status:** prospective; supersedes ADR-014 only for the explicitly approved
-Phase-20/23 scope. The historical Mock-MVP decision remains true.
+**Status:** accepted and technically implemented for Phase 20; activation
+remains `DISABLED` beziehungsweise isolated `SANDBOX`. Supersedes ADR-014 only
+for the explicitly approved Phase-20/23 scope. The historical Mock-MVP
+decision remains true for nicht umgestellte Altpfade.
 
 **Decision:** Registration produces a bounded low-assurance state until a
 single-use, expiring, supersedable email-verification token is consumed.
 Login-email change re-verifies the new address and notifies the old address.
 Domain state and a typed NotificationOutbox record commit atomically.
-Attempts, provider idempotency, bounce/suppression and DLQ are durable; Phase
-20 may drive the same contract synchronously or by explicit command, while
-Phase 23 owns autonomous leases, retry, monitoring and recovery.
+Attempts, provider idempotency, bounce/suppression and DLQ are durable. Phase
+20 liefert den bounded Command-Dispatcher samt Lease, Heartbeat, Retry und
+auditiertem Local-Sandbox-Replay; Phase 23 besitzt autonomes Scheduling,
+Production-Monitoring, Pager, Recovery und das Aktivierungsledger.
 
 Authentication assurance is distinct from delivery: privileged actions use
 a short-lived, actor/purpose/tenant/action-bound StepUpGrant and never infer

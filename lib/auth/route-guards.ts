@@ -5,6 +5,7 @@ import { forbidden, redirect } from "next/navigation";
 
 import { getCurrentUser, type CurrentUser } from "@/lib/auth/current-user";
 import { INTERNAL_REQUEST_PATH_HEADER } from "@/lib/auth/request-context";
+import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 
 export function requireCandidatePage(): Promise<CurrentUser> {
@@ -39,9 +40,9 @@ export async function requirePendingCompanyClaimPage(): Promise<CurrentUser> {
 async function requirePageRole(
   allowedRoles: readonly CurrentUser["role"][],
 ): Promise<CurrentUser> {
+  const requestHeaders = await headers();
   const user = await getCurrentUser();
   if (user === null) {
-    const requestHeaders = await headers();
     const next = sanitizePrivateRequestPath(
       requestHeaders.get(INTERNAL_REQUEST_PATH_HEADER),
     );
@@ -52,7 +53,34 @@ async function requirePageRole(
     );
   }
   if (!allowedRoles.includes(user.role)) forbidden();
+  const environment = getServerEnvironment();
+  if (
+    environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+    (user.identityAssurance !== "VERIFIED_EMAIL" ||
+      user.emailVerifiedAt === null)
+  ) {
+    const requestedPath = sanitizePrivateRequestPath(
+      requestHeaders.get(INTERNAL_REQUEST_PATH_HEADER),
+    );
+    if (!isLowAssurancePage(requestedPath)) {
+      redirect(
+        requestedPath === null
+          ? "/verify-email"
+          : `/verify-email?next=${encodeURIComponent(requestedPath)}`,
+      );
+    }
+  }
   return user;
+}
+
+function isLowAssurancePage(path: string | null) {
+  if (path === null) return false;
+  const pathname = new URL(path, "https://private-route.invalid").pathname;
+  return (
+    pathname === "/candidate/notifications" ||
+    pathname === "/employer/notifications" ||
+    pathname === "/support"
+  );
 }
 
 export function sanitizePrivateRequestPath(value: string | null): string | null {

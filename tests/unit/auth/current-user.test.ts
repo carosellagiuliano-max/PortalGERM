@@ -22,6 +22,8 @@ describe("current user safe select", () => {
       name: true,
       status: true,
       emailVerifiedAt: true,
+      emailAddressEpoch: true,
+      identityAssurance: true,
     });
     expect(JSON.stringify(CURRENT_USER_SELECT)).not.toMatch(/credential|password/i);
   });
@@ -34,6 +36,7 @@ describe("current user safe select", () => {
     const user: CurrentUser = {
       id: "user-1", email: "user@example.ch", role: "CANDIDATE", name: "Ada",
       status: "ACTIVE", emailVerifiedAt: null,
+      emailAddressEpoch: 1, identityAssurance: "LOW_ASSURANCE",
     };
     findBySessionTokenHash.mockResolvedValue(user);
     const token = "a".repeat(43);

@@ -21,7 +21,15 @@ let memoryStore: RateLimitStore | undefined;
 let postgresStore: RateLimitStore | undefined;
 
 export async function consumeAuthRateLimit(
-  preset: Extract<RateLimitPresetName, "LOGIN" | "REGISTER" | "FORGOT_PASSWORD">,
+  preset: Extract<
+    RateLimitPresetName,
+    | "LOGIN"
+    | "REGISTER"
+    | "FORGOT_PASSWORD"
+    | "EMAIL_VERIFICATION_RESEND"
+    | "EMAIL_VERIFICATION_CONSUME"
+    | "LOGIN_EMAIL_CHANGE"
+  >,
   identity: Omit<ServerRateLimitIdentity, "sourceIp">,
   context: Pick<AuthRequestContext, "sourceIp">,
   now = new Date(),

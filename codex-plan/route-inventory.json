@@ -288,6 +288,13 @@
   },
   {
     "kind": "page",
+    "path": "/candidate/notifications",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
     "path": "/candidate/privacy",
     "roles": [
       "CANDIDATE"
@@ -501,6 +508,14 @@
   {
     "kind": "page",
     "path": "/employer/jobs/new",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/notifications",
     "roles": [
       "EMPLOYER",
       "RECRUITER"
@@ -774,6 +789,13 @@
       "EMPLOYER",
       "RECRUITER",
       "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/verify-email",
+    "roles": [
+      "PUBLIC"
     ]
   }
 ]

@@ -3,7 +3,7 @@ import {
   execFileSync,
   type ChildProcessByStdio,
 } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -75,6 +75,8 @@ async function main() {
   loadLocalEnvironment();
   const database = await createMigratedTestDatabase("phase17_browser");
   try {
+    const notificationDeliveryKeys =
+      `phase20-browser-v1:${randomBytes(32).toString("base64")}`;
     const runIdentity = createRunIdentity(database.databaseName);
     const port = await allocatePort();
     const baseUrl = `http://${HOST}:${port}`;
@@ -86,6 +88,14 @@ async function main() {
       APP_BUILD_ID: "phase17-browser-gate",
       DATABASE_URL: database.connectionString,
       TEST_DATABASE_URL: undefined,
+      IDENTITY_VERIFICATION_ENFORCEMENT: "true",
+      LOGIN_EMAIL_CHANGE: "true",
+      NOTIFICATION_OUTBOX_PRODUCERS: "true",
+      EMAIL_PROVIDER_MODE: "disabled",
+      NOTIFICATION_DISPATCH: "paused",
+      OPTIONAL_EMAIL: "false",
+      DELIVERY_REPLAY: "false",
+      NOTIFICATION_DELIVERY_KEYS: notificationDeliveryKeys,
     });
     await runDemoSeed({
       APP_ENV: "local",
@@ -95,7 +105,12 @@ async function main() {
       candidateWorkflowCrypto:
         candidateWorkflowSeedCryptoFromEnvironment(runtimeEnvironment),
     });
-    const runtime = await startServer(database.connectionString, baseUrl, port);
+    const runtime = await startServer(
+      database.connectionString,
+      baseUrl,
+      port,
+      notificationDeliveryKeys,
+    );
     let playwrightExit: ChildExit;
     try {
       await waitUntilReady(baseUrl, runtime);
@@ -131,6 +146,7 @@ async function startServer(
   databaseUrl: string,
   baseUrl: string,
   port: number,
+  notificationDeliveryKeys: string,
 ) {
   const nextBinary = resolve(
     process.cwd(),
@@ -175,6 +191,14 @@ async function startServer(
         TRUSTED_PROXY_HOPS: "0",
         ENABLE_LOCAL_MOCK_MAILBOX: "false",
         DEV_MAILBOX_SECRET: "",
+        IDENTITY_VERIFICATION_ENFORCEMENT: "true",
+        LOGIN_EMAIL_CHANGE: "true",
+        NOTIFICATION_OUTBOX_PRODUCERS: "true",
+        EMAIL_PROVIDER_MODE: "disabled",
+        NOTIFICATION_DISPATCH: "paused",
+        OPTIONAL_EMAIL: "false",
+        DELIVERY_REPLAY: "false",
+        NOTIFICATION_DELIVERY_KEYS: notificationDeliveryKeys,
         STRIPE_SECRET_KEY: "",
         EMAIL_PROVIDER_API_KEY: "",
         OPENAI_API_KEY: "",

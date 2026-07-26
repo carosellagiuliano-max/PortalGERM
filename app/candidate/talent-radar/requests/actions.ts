@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { hasVerifiedEmailIdentity } from "@/lib/auth/email-verification-policy";
 import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import {
   getAuthRequestContext,
@@ -290,14 +291,23 @@ async function actionDependencies() {
     getCurrentUser(),
     getAuthRequestContext(),
   ]);
-  if (user?.role !== "CANDIDATE" || !isValidAuthMutationOrigin(request)) {
+  const environment = getServerEnvironment();
+  if (
+    user?.role !== "CANDIDATE" ||
+    !isValidAuthMutationOrigin(request) ||
+    (environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+      !hasVerifiedEmailIdentity({
+        assurance: user.identityAssurance,
+        emailVerifiedAt: user.emailVerifiedAt,
+      }))
+  ) {
     return null;
   }
   return Object.freeze({
     userId: user.id,
     correlationId: request.correlationId,
     request,
-    environment: getServerEnvironment(),
+    environment,
     database: getDatabase(),
   });
 }

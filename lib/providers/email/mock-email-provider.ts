@@ -42,6 +42,7 @@ const PERSISTED_TEMPLATE_DATA_KEYS = {
   demo_request_received: [],
   employer_message_received: ["companyName", "jobTitle"],
   identity_revealed: ["companyName"],
+  identity_verification: [],
   invoice_issued: ["invoiceNumber"],
   job_alert_digest_mock: ["alertName", "jobCount"],
   job_alert_preview: ["alertName", "jobCount"],
@@ -50,6 +51,8 @@ const PERSISTED_TEMPLATE_DATA_KEYS = {
   job_boost_expired: ["jobTitle"],
   job_rejected: ["jobTitle"],
   lead_follow_up_reminder: ["companyName"],
+  login_email_changed_notice: [],
+  login_email_change_verification: [],
   password_reset_mock: ["expiresInMinutes"],
   payment_received: ["orderReference"],
   plan_limit_reached: ["featureName"],
@@ -216,7 +219,11 @@ export class MockEmailProvider implements EmailProvider {
 
 type SensitiveAction = Readonly<{
   templateKey:
-    "password_reset_mock" | "company_invitation" | "job_alert_digest_mock";
+    | "password_reset_mock"
+    | "company_invitation"
+    | "job_alert_digest_mock"
+    | "identity_verification"
+    | "login_email_change_verification";
   url: string;
   taints: readonly string[];
 }>;
@@ -227,6 +234,12 @@ function getSensitiveAction(
 ): SensitiveAction | undefined {
   if (templateKey === "password_reset_mock") {
     return parseSensitiveAction(templateKey, data, "resetUrl", true);
+  }
+  if (
+    templateKey === "identity_verification" ||
+    templateKey === "login_email_change_verification"
+  ) {
+    return parseSensitiveAction(templateKey, data, "verificationUrl", true);
   }
   if (templateKey === "company_invitation") {
     return parseSensitiveAction(templateKey, data, "invitationUrl", false);
@@ -240,7 +253,7 @@ function getSensitiveAction(
 function parseSensitiveAction(
   templateKey: SensitiveAction["templateKey"],
   data: Readonly<Record<string, unknown>>,
-  dataKey: "resetUrl" | "invitationUrl",
+  dataKey: "resetUrl" | "invitationUrl" | "verificationUrl",
   requireFragmentToken: boolean,
 ): SensitiveAction {
   const value = actionUrl(data, dataKey);
@@ -260,7 +273,8 @@ function parseSensitiveAction(
   const pathToken = pathSegments.at(-1);
   if (
     requireFragmentToken
-      ? url.pathname !== "/reset-password" ||
+      ? url.pathname !==
+          (dataKey === "resetUrl" ? "/reset-password" : "/verify-email") ||
         url.search !== "" ||
         queryToken !== undefined ||
         fragmentKeys.length !== 1 ||

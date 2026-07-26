@@ -1,6 +1,6 @@
 # Route- und Rollenmatrix
 
-> **Stand:** Phase-18-Arbeitsbaum, 100 Seiten und 7 Route Handler. Die
+> **Stand:** Phase-20-Abschlussbaum, 103 Seiten und 7 Route Handler. Die
 > maschinenlesbare Inventarbasis ist
 > [`route-inventory.json`](./route-inventory.json); `npm run route:audit`
 > vergleicht sie mit dem tatsächlichen `app/`-Baum. Diese Matrix dokumentiert
@@ -28,7 +28,7 @@ Pending-Zustände. Über den privaten Root-Segmenten liegt bewusst keine
 HTTP-404-Status setzen können, bevor Antwort-Header gesendet werden.
 Root-Error und Root-404 bleiben generisch.
 
-## Öffentliche und Auth-Seiten — 27
+## Öffentliche und Auth-Seiten — 28
 
 | Route(n) | Eintritt | Server-/Privacy-Grenze |
 | --- | --- | --- |
@@ -56,6 +56,7 @@ Root-Error und Root-404 bleiben generisch.
 | `/register/employer` | Public | Terms; atomare New-Company-oder-Claim-Verzweigung |
 | `/forgot-password` | Public | generische Antwort, Rate Limit, Mock-Mail |
 | `/reset-password` | Public | Fragment-/POST-Token, no-store/noindex/no-referrer |
+| `/verify-email` | Public Token | Fragment-Token wird vor Submit aus der URL entfernt; Verify/Resend enumeration-safe, rate-limited, single-use und supersedable |
 | `/invite/resume` | Public | kurzlebiger geschützter Resume-Cookie, Revalidierung |
 | `/alerts/unsubscribe/[token]` | Public Token | gehashter, begrenzter Token; no-store/noindex |
 | `/forbidden` | Public | generische 403-Oberfläche ohne Objektdetail |
@@ -69,7 +70,7 @@ Root-Error und Root-404 bleiben generisch.
 | `/session/clear` | Authenticated/abgelaufene Session | ungültigen Cookie sicher entfernen, erlaubtes `next` |
 | `/session/refresh` | Authenticated | rotierter gehashter Sessiontoken, Parallelitätsgrenze |
 
-## Candidate — 16
+## Candidate — 17
 
 Alle Routen verlangen eine aktive `CANDIDATE`-Session. Detailobjekte werden
 bereits in der ersten Query auf Candidate/User/Conversation-Eigentum
@@ -83,6 +84,7 @@ eingeschränkt.
 | `/candidate/applications` | eigene Applications |
 | `/candidate/applications/[id]` | Candidate-scoped Safe 404; Timeline/Withdraw/Message |
 | `/candidate/alerts` | eigene Alerts und separater Delivery-Consent |
+| `/candidate/notifications` | Low-Assurance-Security-Einstieg oder eigenes Preference Center; Pflichtzwecke unveränderbar, optionale Zustellung separat gegatet |
 | `/candidate/messages` | participant-scoped Conversations |
 | `/candidate/messages/[threadId]` | Participant-Query; no-store, Abuse-Pfad |
 | `/candidate/talent-radar` | COMPLETE + aktueller Opt-in; Default off |
@@ -101,7 +103,7 @@ eingeschränkt.
 | `/support` | Authenticated | nur eigene Cases; Company-Auswahl nur aus aktiven Memberships |
 | `/support/[id]` | Authenticated | requester-scoped Safe 404; Reply nur im erlaubten Status |
 
-## Employer und Recruiter — 22
+## Employer und Recruiter — 23
 
 Das `/employer`-Layout akzeptiert globale Rollen `EMPLOYER` und `RECRUITER`.
 Firmenbezogene Daten verlangen eine aktive Membership im aktuell
@@ -126,6 +128,7 @@ erhalten einen sicheren Locked/404-Zustand.
 | `/employer/talent-radar/requests` | Owner/Admin/Recruiter; Viewer 404 |
 | `/employer/talent-radar/requests/[id]` | Company-scoped Request; Identität nur nach gültigem Reveal |
 | `/employer/analytics` | Company scope, Planlevel und Small-count-Suppression |
+| `/employer/notifications` | Low-Assurance-Security-Einstieg oder eigenes Preference Center; keine fremden Company-/User-Präferenzen |
 | `/employer/billing` | Owner/Admin read; Planwechsel/Kündigung Owner |
 | `/employer/billing/profile` | Owner/Admin; vollständiges Billingprofil |
 | `/employer/billing/checkout` | Plan Owner; One-time Product Owner/Admin |
@@ -198,7 +201,7 @@ Audit-Metadaten redigiert.
 - Es gibt keine realen Provider-Webhook-, Datei-Download-, PDF-Invoice-,
   Scraping- oder Success-Fee-Routen.
 
-## Geplantes Route-/Prozessdelta Phase 19–32
+## Verbleibendes geplantes Route-/Prozessdelta Phase 21–32
 
 > **Nicht implementiert und nicht Bestandteil von `route-inventory.json`.**
 > Diese Tabelle ist ein Zielregister. Eine Zeile wird erst nach vorhandener
@@ -208,9 +211,7 @@ Audit-Metadaten redigiert.
 
 | Phase / Requirement | Geplanter Einstieg | Rollen / Capability und Tenantgrenze | Zustände / Datenklasse | Flag, Test und Aktivierung |
 | --- | --- | --- | --- | --- |
-| 20 · `REQ-ID-005` | `/verify-email`, `/verify-email/resend`; Login-E-Mail-Änderung unter Security Settings | Public Token beziehungsweise aktiver Actor; Token an User/Purpose/normalized target gebunden | Pending, sent, expired, superseded, used, rate-limited, provider-degraded; Identity data | identity provider/config + cohort flag; Verify/resend/replay/race E2E; LC2+ erst nach realer Delivery |
-| 20/25 · `REQ-ID-004` | gemeinsame `/security`-/Step-up-Challenge, keine Query-Token-Weitergabe | Candidate, Employer Owner, Billing, Admin; purpose/action/tenant/resource/session-bound | challenge, success, stale, cancelled, recovery, revoked; Security-sensitive | risk/assurance policy; direct-action/tenant/replay tests; High-risk actions fail-closed |
-| 20 · `REQ-NOT-001` | `/candidate|employer/notifications` oder konsolidiertes Preference Center | eigener Actor beziehungsweise Company Owner für zulässige Tenantpräferenzen | loading/empty/conflict/success; Pflicht- vs optionaler Zweck getrennt | Delivery-/Preference-Version; opt-out darf Pflichtmail nicht deaktivieren |
+| 25 · `REQ-ID-004` | gemeinsame `/security`-/Step-up-Challenge; Phase-20-E-Mail-Assurance bleibt Basis, keine Query-Token-Weitergabe | Candidate, Employer Owner, Billing, Admin; purpose/action/tenant/resource/session-bound | challenge, success, stale, cancelled, recovery, revoked; Security-sensitive | risk/assurance policy; direct-action/tenant/replay tests; High-risk actions fail-closed |
 | 21 · `REQ-DOC-002` | Dokument-Intent/finalize in JobPass; autorisierter Download/Delete aus Application/Privacy | Candidate owner; Employer nur Application-/Reveal-spezifisch; Admin nur benannte Need-to-know-Capability | uploading, quarantined, scanning, clean, rejected, failed, expired, deleted; besonders schützenswert | Storage+Scanner approved; object key nie Auth; cross-tenant/polyglot/expiry E2E |
 | 22 · `REQ-PRIV-004` | public `/legal/*`/Impressum; bestehende Privacy Cases plus expiring Export-Download | Public legal read; Candidate owner; Privacy Read/Verify/Process getrennt | versioned/pending/hold/partial/retry/ready/expired/erased; PII/Legal | Counsel/version flags; Step-up; processor/retention/export/delete E2E |
 | 23 · `REQ-OPS-005` | Admin/Ops Worker-, DLQ-, Provider- und Health-Details; keine Public Controls | Operations/Support/Security per least privilege; Local Token nicht Production-Ersatz | healthy/degraded/paused/backpressured/DLQ/replay; redigierte Opsdaten | environment/provider activation ledger; load/crash/restart/runbook tests |

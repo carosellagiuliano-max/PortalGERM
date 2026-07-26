@@ -15,8 +15,11 @@
 > **Geltungsbereich:** unabhängige Neubewertung der 37 Befunde gegen Schema,
 > Migrationen, Runtime-Code, Provider-Composition, Rollen-/Capability-Grenzen,
 > Tests, Release-Evidence und Runbooks. Dieses Dokument steuert die offenen
-> Implementierungen; nur `STH-029` ist durch die verlinkte Phase-19-Evidence
-> geschlossen. Es erteilt keine Go-live-Freigabe.
+> Implementierungen. `STH-029` ist governance-seitig geschlossen;
+> `STH-001`, `STH-002` und `STH-013` sind durch Phase 20 technisch
+> geschlossen, `STH-026` im fachlichen Kern umgesetzt. Reale Zustellung,
+> autonome Worker, Legal-/Providerfreigabe und die Phase-29-Breite bleiben
+> offen. Dieses Dokument erteilt keine Go-live-Freigabe.
 
 ## 1. Methodik und Statussemantik
 
@@ -46,8 +49,8 @@ Die Statuswerte bedeuten:
   seine aktivierte Klasse P0.
 
 `Implementierungsstatus` beschreibt ausschließlich Remediation-Arbeit nach
-Phase 18. Keine offene Phase und kein offener Test wird hier als erledigt
-markiert. Zeilenanker beziehen sich auf die geprüfte Baseline und müssen bei
+Phase 18. Nur commitgebunden belegte Arbeit wird als erledigt markiert.
+Zeilenanker beziehen sich auf die geprüfte Baseline und müssen bei
 Codeverschiebungen im jeweiligen Phasenabschluss aktualisiert werden.
 Technischer Phasenabschluss und LIVE-Aktivierung sind getrennt: Ein
 implementierter Handler oder Adapter darf als technisch belegt gelten, während
@@ -59,19 +62,19 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 | ID | Kurzbeschreibung | Unabhängiger Status | Neu eingeordnete Priorität | Bereich | Verantwortliche Phase | Abhängigkeiten | Implementierungsstatus | Teststatus auf Baseline | Aktuelle Fundstelle / Evidence | Externer Blocker |
 |---|---|---|---|---|---|---|---|---|---|---|
-| STH-001 | Keine E-Mail-Verifikation | bestätigt | P0 vor personenbezogenem LIVE-Betrieb | Identity/E-Mail | 20 | 19, Provider- und Outbox-Entscheid | offen; `emailVerifiedAt` existiert, Workflow fehlt | Auth-Tests vorhanden, kein Verify-Flow | `prisma/schema.prisma:1129-1158`; `lib/auth/auth-service.ts:243-259,420-437` | Absenderdomain, DPA, Zustellprovider |
-| STH-002 | Privacy-Identitätschallenge für normale Registrierungen unerreichbar | bestätigt; Challenge selbst ist implementiert | P0 | Privacy/Identity | 20 | STH-001, STH-013 | offen; Passwort-Challenge vorhanden, Verifikationsprädikat blockiert | Challenge-Tests stark, kein Registration→Verify→Privacy-E2E | `app/candidate/privacy/requests/[id]/verify/page.tsx:21-45`; `lib/privacy/privacy-case-service.ts:642-652` | wie STH-001 |
+| STH-001 | Keine E-Mail-Verifikation | technisch gelöst; LIVE-Aktivierung extern blockiert | P0 vor personenbezogenem LIVE-Betrieb | Identity/E-Mail | 20 | 19, Provider- und Outbox-Entscheid | Phase-20-Workflow, Low-Assurance, Reverification und E-Mail-Change implementiert | Unit/PostgreSQL/Race/Browser `PASS`; Retry 0 | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `lib/auth/email-verification-service.ts`; `lib/auth/email-change-service.ts` | Absenderdomain, DPA, Zustellprovider |
+| STH-002 | Privacy-Identitätschallenge für normale Registrierungen unerreichbar | technisch gelöst; reale Privacy-Ausführung bleibt Phase 22 | P0 | Privacy/Identity | 20 | STH-001, STH-013 | Registration→Verify→Privacy-Brücke implementiert, unabhängige Passwort-Challenge bleibt fail-closed | PostgreSQL plus Browser positiv/negativ `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `tests/integration/privacy/privacy-verified-identity-postgres.test.ts` | reale Export-/Erasure-/Legal-Freigabe Phase 22 |
 | STH-003 | CV nur als Metadaten, keine nutzbaren Bytes | bestätigt; bewusstes Mock-Verhalten | P0 vor realer Bewerbung | Dokumente/Storage | 21 | 19, STH-004, Malware-/Retention-Entscheid | offen; Metadatenmodell und Port vorhanden | Mock-Storage-/Profiltests vorhanden, kein realer Upload/Download | `lib/providers/storage/mock-storage-provider.ts:56-107`; `lib/candidate/profile.ts:336-376` | Storage-Region/DPA, Scanner, Retention |
-| STH-004 | Produktive externe Provider fehlen | bestätigt; historisch bewusst deferred | P0-Programm, je Provider separat | Provider | 20/21/23/24, Lead 23 | 19 sowie Legal, Secrets, Monitoring | offen; Ports/Mocks vorhanden | No-network-/Mock-Tests, keine Provider-Contract-Suites | `codex-plan/decisions.md:156-177`; `lib/config/env-schema.ts:237-243` | Providerwahl, DPA, Zugänge, Budget |
+| STH-004 | Produktive externe Provider fehlen | teilweise gelöst; E-Mail-Sandbox technisch, LIVE und andere Provider offen | P0-Programm, je Provider separat | Provider | 20/21/23/24, Lead 23 | 19 sowie Legal, Secrets, Monitoring | E-Mail-Port/Resend-Sandbox fail-closed; Storage/Payment/Ops weiter offen | E-Mail-Contract/Failure-Smoke `PASS`; keine LIVE-Evidence | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `lib/providers/email/resend-email-provider.ts` | Providerwahl, DPA, DNS, Zugänge, Budget |
 | STH-005 | Keine reale Zahlung/Billing-Abwicklung | bestätigt; Mock-Billing fachlich umfangreich | P0 für Paid Self-Service | Billing/Finance | 24 | 19, STH-004, Worker, Tax/Legal, früher Phase-31A-Go/No-go | offen; Orders/Invoices/Entitlements bleiben erhalten | starke Mock-/DB-Tests, keine Webhook/Reconciliation-E2E | `lib/providers/payments/index.ts:1-16`; `lib/providers/payments/stripe-payment-provider.ts:7-40`; `lib/billing/orders.ts:248-263` | PSP-Vertrag, Steuer-/Refund-/Dunning-Freigabe |
 | STH-006 | Kein realer Datenexport und keine reale Löschung | bestätigt; Case-Orchestrierung ist vorhanden | P0 | Privacy/Legal | 22 | 19, STH-001/002, Storage, Retention-/Legal-Matrix | offen; Export ist Manifest, Delete ist Assessment | starke Case-/Manifesttests, bewusst kein Erasure-Test | `lib/privacy/export-mock.ts:15-20,99-102`; `lib/privacy/privacy-case-service.ts:842-890`; `tests/integration/privacy/privacy-case-service.test.ts:149-160,281-290` | Counsel, Aufbewahrungspflichten, Dateninventar |
 | STH-007 | Keine öffentlichen Rechtsseiten/kanonischen Rechtstexte | bestätigt | P0 vor öffentlichem LIVE | Legal/Consent | 22 | 19, Counsel, STH-006/017/026 | offen; nur Notice-Identifier und Kurztexte | Consent-Hash-Tests vorhanden, keine Legal-Routen/Version-Regression | `components/shared/app-footer.tsx:5-26,68-84`; `lib/privacy/user-consent.ts:8-19`; `codex-plan/route-inventory.json:1-399` | freigegebene CH-Texte, AVG/DSG/AGB |
 | STH-008 | Produktionsbetrieb extern/offen | externe Voraussetzung; lokale Runbooks vorhanden | P0 Go-live-Gate | Operations/Release | 23 | 19, Infrastruktur, STH-004/009 | offen; Preview/Staging/Production unverbunden | lokaler Release-/Recovery-Drill grün, kein Staging-Smoke | `codex-plan/runbooks/deployment.md:28-48,124-132`; `codex-plan/release-checklist.md:96-120` | Infrastruktur, Secrets, Pager/Owner, Backup-Lifecycle |
-| STH-009 | Kein autonomer Worker | bestätigt | P0 für unbeaufsichtigten Self-Service | Worker/Outbox/Ops | 23 | 19, STH-013, Monitoring | offen; idempotente Runner existieren, Scheduler/Queue/DLQ fehlen | einzelne Runner getestet, kein Restart-/DLQ-Systemtest | `lib/candidate/job-alerts.ts:535`; `lib/jobs/effective-status.ts:95`; `lib/talentradar/contact-requests.ts:264`; `package.json:11-46` | Queue/Scheduler-Hosting, Alerting |
+| STH-009 | Kein autonomer Worker | bestätigt; Phase 20 liefert nur bounded Command-Dispatcher | P0 für unbeaufsichtigten Self-Service | Worker/Outbox/Ops | 23 | 19, STH-013, Monitoring | durable Lease/Retry/DLQ vorhanden; autonomes Scheduling, Pager und Production-Recovery offen | Command-Restart-/Concurrency-/DLQ-Test `PASS`; kein autonomer Systemtest | `lib/notifications/dispatcher.ts`; [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md) | Queue/Scheduler-Hosting, Alerting |
 | STH-010 | Alle Admin-Capabilities hängen am globalen ADMIN | bestätigt; Capability-Namen sind gute Vorarbeit | P0 vor Admin-LIVE | Admin-RBAC | 25 | 19, Rollen-/Duties-Matrix | offen; jede Capability wird demselben Actor erteilt | Test beweist gerade die globale Vollmacht | `lib/admin/capabilities.ts:1-60`; `tests/unit/admin/phase11-policies.test.ts:29-47` | benannte Support/Moderation/Finance/Privacy-Owner |
 | STH-011 | Kein Admin-MFA/Step-up | bestätigt | P0 vor privilegiertem LIVE-Zugriff | Admin Security | 25 | 19, STH-001/013, Identity-Provider-Entscheid | offen; Password+Session ohne zweiten Faktor | Session/Auth-Tests, keine MFA-/Recovery-/Step-up-Tests | `prisma/schema.prisma:1181-1208`; `lib/auth/route-guards.ts:18-23,39-55` | MFA-Verfahren, Recovery- und Supportprozess |
 | STH-012 | Exklusive globale Rolle verhindert Multi-Persona | bestätigt | P3 default/deferred; P0 nur bei explizitem Persona-Scope | Identity/Persona | 27 | 19, STH-010/011, Tenant-RBAC, Bedarfsgate | offen; CompanyMembership löst nur Unternehmenskontext | Rollen-/Company-Tests vorhanden, keine Persona-Kombination | `prisma/schema.prisma:10-15,1129-1137`; `lib/auth/route-guards.ts:10-23`; `prisma/schema.prisma:1536-1555` | Produktentscheidung und moderierter Bedarf |
-| STH-013 | Kein dauerhafter E-Mail-Outbox-/Retry-Vertrag | bestätigt | P0 | E-Mail/Worker | 20 | 19, STH-004/009 | offen; `EmailLog` ist Log, keine Lease-/Attempt-/DLQ-Queue | Idempotenz des Mocks getestet, keine Provider-Ausfallkette | `prisma/schema.prisma:596-601,2250-2264`; `lib/providers/email/mock-email-provider.ts:190-213` | Zustellprovider, Bounce/Suppression, Monitoring |
+| STH-013 | Kein dauerhafter E-Mail-Outbox-/Retry-Vertrag | technisch gelöst; autonome Productionausführung bleibt offen | P0 | E-Mail/Worker | 20 | 19, STH-004/009 | atomare Outbox, Attempts, Lease, Heartbeat, Retry, Suppression, DLQ und auditiertes Sandbox-Replay implementiert | 105-Message-Two-Worker-, Crash-, Restart-, Bounce-, Poison- und DLQ-Tests `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `lib/notifications/outbox.ts`; `lib/notifications/dispatcher.ts` | Zustellprovider, Phase-23-Monitoring/Pager |
 | STH-014 | Company Verification beruht auf Text/Referenz | bestätigt; Lifecycle selbst ist robust | P0 für Trust-/Publish-Gate | Company Trust | 26 | 19, STH-003/004, Legal/Operations | offen; keine Dokumentbytes/Registry-Validierung | Cycle-/Concurrency-Tests vorhanden, keine Evidenzvalidierung | `prisma/schema.prisma:1665-1699`; `components/employer/verification-panel.tsx:160-195`; `lib/employer/company.ts:1120-1144` | Registerzugang, Prüfpolicy, Reviewer |
 | STH-015 | Externe Bewerbung endet beim Klick | bestätigt | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Application | 28A | 19, 29A-Bedarf, STH-009/013/026, Phase-22-Privacy-Lifecycle | offen; nur Analytics-Klick, keine Candidate-owned Journey | Redirect/Privacy-Test vorhanden, kein Outcome-/Export/Delete/Correct-E2E | `app/(public)/jobs/actions.ts:92-110,251-278`; `lib/applications/service.ts:193-197` | moderierter Bedarf; optional ATS-/Mail-Signale |
 | STH-016 | Keine persistente Interviewplanung | bestätigt | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Scheduling | 28B | 19, 29A-Bedarf, STH-009/013, Application-RBAC, Phase-22-Privacy-Lifecycle | offen; Pipeline-Status/Mock-Text statt Termin | Status-Tests vorhanden, keine Slot/DST/ICS-/Privacy-Lifecycle-Tests | `prisma/schema.prisma:264-288`; `lib/policies/status/application.ts:105-113`; `lib/employer/applications.ts:328-335` | moderierter Bedarf; optional Kalenderprovider |
@@ -84,7 +87,7 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | STH-023 | Browser-/Accessibility-Matrix unvollständig | teilweise bestätigt; Chromium-Breite vorhanden | P1 | UX/A11y/Browser | 29 | 19, CI-Browser, manuelle AT-Matrix | offen | Desktop/Mobile Chromium und Critical-Axe; Firefox/WebKit/Serious/AT fehlen | `playwright.config.ts:28-57`; `tests/e2e/fixtures/phase17-test.ts:155-175,224-260` | NVDA/VoiceOver-Geräte/Tester |
 | STH-024 | Manueller Walkthrough nicht auf aktuellem Release-Commit | bestätigt | P0 Release-Gate | Release Evidence | 32 | alle Remediation-Phasen, sauberes Artefakt | offen; Walkthrough muss auf finalem Commit neu laufen | Automation auf neueren Commits, manueller Lauf auf Vorgänger | `BUILD_REPORT.md:3-19,141-165`; `codex-plan/evidence/2026-07-24-commercial-launch-follow-up.md:46-69` | Staging/Release-Artefakt und Rollen-Tester |
 | STH-025 | Mobile Tabellen bleiben horizontale Desktoptabellen | bestätigt, technisch mitigiert | P2; P1 für häufige mobile Aufgaben | Mobile UX | 29 | 19, Responsive-List-Pattern | offen; Scrollregionen sind bounded/fokusfähig | Overflow-Allowlist/Teiltests, keine mobile Action-Parität | `app/admin/invoices/page.tsx:17`; `app/admin/audit/page.tsx:96-103`; `components/employer/jobs-table.tsx:51-60` | mobile Nutzungsprioritäten |
-| STH-026 | Kein zentrales Notification Preference Center | bestätigt | P1, vor realer Zustellung | Notification/Consent | 20, UX-Regression 29 | 19, STH-007/009/013/017 | offen; domänenspezifische Opt-outs vorhanden | Einzelkontrollen getestet, keine zentrale Matrix | `prisma/schema.prisma:1395-1412,2235-2297` | Legal-Klassifikation verpflichtend vs. optional |
+| STH-026 | Kein zentrales Notification Preference Center | fachlicher Kern gelöst; Phase-29-Gesamtregression und Legalaktivierung offen | P1, vor realer Zustellung | Notification/Consent | 20, UX-Regression 29 | 19, STH-007/009/013/017 | Candidate-/Employer-Center, versionierte Projection/Event-Historie und geschlossene Mandatory/Optional-Matrix implementiert | Unit/PostgreSQL/Desktop/360px/Axe `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `/candidate/notifications`; `/employer/notifications` | Legal-Klassifikation und optionale LIVE-Freigabe |
 | STH-027 | Einzelne Sitemap stoppt bei 50.000 URLs | bestätigte spätere Kapazitätsgrenze; aktuelles fail-closed ist korrekt/sicher | P3 kapazitätsabhängige Skalierung; Eskalation nur nach Mess-/Forecast-Gate | SEO/Scale | 30C | 19, LIVE-Count-/Byte-/Wachstumsbaseline und Monitoring; Shardstrategie erst bei Trigger | mitigiert solange unter Trigger; Messung/Alerts offen, Index/Shards konditional deferred | Capacity-Error/no-truncation getestet; kein LIVE-Monitoring, kein Index-/Shard-Test | `lib/seo/public-sitemap.ts:20,85-136,428-435`; `app/sitemap.ts:7-18` | reale Zielumgebungszahl, Growth Forecast, Search Console/Ops Owner |
 | STH-028 | Demo-/Preis-Copy nennt Hypothesen | bewusst anders / aktuell korrekt | Schutz-Gate, kein Defect-Prioritätswert | Commercial Copy | 31 | STH-005/007/018/022, WTP/Legal | keine Entfernung vor Gates; später mode-getrennte Copy | aktuelle Mock-/Pricing-Copy getestet | `app/(public)/pricing/page.tsx:16-19,80-143`; `components/marketing/pricing-card.tsx:24-32,113-124` | echter Geldtest, Legal/Tax, freigegebener Katalog |
 
@@ -94,6 +97,11 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 - **Status / Priorität / Phase:** bestätigt; P0; Phase 20
   `20-identity-email-notifications.md`.
+- **Phase-20-Abschluss:** technisch geschlossen. Low-Assurance,
+  Candidate-/Employer-/Invitation-Verify, Resend/Supersession, Reverification,
+  Login-E-Mail-Change, Sessionrotation und negative Race-/Replay-Fälle sind in
+  der [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md) belegt.
+  Aktivierung bleibt ohne Provider-/DNS-/DPA-Gate `DISABLED`/`SANDBOX`.
 - **Fundstellen:** `prisma/schema.prisma:1129-1158` enthält
   `emailVerifiedAt`; Kandidaten- und Arbeitgeberregistrierung schreiben in
   `lib/auth/auth-service.ts:243-259` beziehungsweise `420-437` keinen Wert und
@@ -130,6 +138,9 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 - **Status / Priorität / Phase:** bestätigt, wobei die Challenge selbst
   implementiert ist; P0; Phase 20.
+- **Phase-20-Abschluss:** die Registration→Verify→Privacy-Brücke ist technisch
+  geschlossen; unverifizierte, fremde und abgelaufene Fälle bleiben
+  fail-closed. Reale Export-/Erasure-Ausführung bleibt Phase 22.
 - **Fundstellen:** Die Verify-Seite fordert
   `requester.emailVerifiedAt != null` in
   `app/candidate/privacy/requests/[id]/verify/page.tsx:21-45`. Derselbe
@@ -532,6 +543,11 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 ### STH-013 — Keine dauerhafte E-Mail-Outbox mit Retry
 
 - **Status / Priorität / Phase:** bestätigt; P0; Phase 20.
+- **Phase-20-Abschluss:** technisch geschlossen durch atomare typisierte
+  Outbox, verschlüsseltes Delivery-Material, Attempts, bounded Lease/
+  Heartbeat, Retry/Backoff, Suppression, DLQ und auditiertes Local-Sandbox-
+  Replay. Phase 23 bleibt Owner für autonome Production-Ausführung,
+  Monitoring, Pager und Aktivierungsledger.
 - **Fundstellen:** `EmailLogStatus` kennt zwar `QUEUED/SENT/FAILED`
   (`prisma/schema.prisma:596-601`), das Modell
   `prisma/schema.prisma:2250-2264` hat jedoch keine Attempt-, Lease-,
@@ -1034,6 +1050,11 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 - **Status / Priorität / Phase:** bestätigt; P1 vor realer E-Mail-Zustellung;
   Kern in Phase 20, UX-Regression in Phase 29.
+- **Phase-20-Abschluss:** fachlicher Kern technisch geschlossen. Candidate und
+  Employer besitzen owner-scoped Preference Center; eine geschlossene
+  Purpose-Matrix trennt Pflicht- von optionaler Kommunikation und der
+  Dispatcher prüft die aktuelle Version vor Send erneut. Breite Phase-29-
+  Browser-/AT-Regression und Legalaktivierung bleiben offen.
 - **Fundstellen:** `CandidatePreference` betrifft nur Jobsuche
   (`prisma/schema.prisma:1395-1412`); Frequenz ist je Job Alert
   (`2097-2178`). `Notification` (`2235-2248`), `EmailLog` (`2250-2264`) und

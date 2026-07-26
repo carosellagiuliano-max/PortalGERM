@@ -118,6 +118,7 @@ async function ensureSuspendedActor(
           status: actor.status,
           dataProvenance: "DEMO",
           emailVerifiedAt: actor.emailVerifiedAt,
+          identityAssurance: "VERIFIED_EMAIL",
           createdAt: actor.createdAt,
         },
       }),
@@ -130,6 +131,7 @@ async function ensureSuspendedActor(
       status: row.status,
       dataProvenance: row.dataProvenance,
       emailVerifiedAt: iso(row.emailVerifiedAt),
+      identityAssurance: row.identityAssurance,
       createdAt: row.createdAt.toISOString(),
     }),
     expected: {
@@ -141,6 +143,7 @@ async function ensureSuspendedActor(
       status: actor.status,
       dataProvenance: "DEMO",
       emailVerifiedAt: actor.emailVerifiedAt.toISOString(),
+      identityAssurance: "VERIFIED_EMAIL",
       createdAt: actor.createdAt.toISOString(),
     },
   });

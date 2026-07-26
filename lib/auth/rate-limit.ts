@@ -11,6 +11,9 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
   "LOGIN",
   "REGISTER",
   "FORGOT_PASSWORD",
+  "EMAIL_VERIFICATION_RESEND",
+  "EMAIL_VERIFICATION_CONSUME",
+  "LOGIN_EMAIL_CHANGE",
   "APPLICATION_SUBMIT",
   "APPLICATION_CANDIDATE_MUTATION",
   "CANDIDATE_PROFILE_MUTATION",
@@ -52,6 +55,21 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
   REGISTER: { buckets: [{ scope: "IP", limit: 10, windowMs: HOUR }] },
   FORGOT_PASSWORD: {
     buckets: [{ scope: "IP_EMAIL", limit: 5, windowMs: HOUR }],
+  },
+  EMAIL_VERIFICATION_RESEND: {
+    buckets: [
+      { scope: "IP_EMAIL", limit: 5, windowMs: HOUR },
+      { scope: "IP", limit: 20, windowMs: HOUR },
+    ],
+  },
+  EMAIL_VERIFICATION_CONSUME: {
+    buckets: [{ scope: "IP", limit: 30, windowMs: HOUR }],
+  },
+  LOGIN_EMAIL_CHANGE: {
+    buckets: [
+      { scope: "USER", limit: 5, windowMs: HOUR },
+      { scope: "IP", limit: 20, windowMs: HOUR },
+    ],
   },
   APPLICATION_SUBMIT: {
     buckets: [

@@ -11,6 +11,7 @@ import { creditsGrantedTemplate } from "./credits-granted";
 import { demoRequestReceivedTemplate } from "./demo-request-received";
 import { employerMessageReceivedTemplate } from "./employer-message-received";
 import { identityRevealedTemplate } from "./identity-revealed";
+import { identityVerificationTemplate } from "./identity-verification";
 import { invoiceIssuedTemplate } from "./invoice-issued";
 import { jobAlertDigestMockTemplate } from "./job-alert-digest-mock";
 import { jobAlertPreviewTemplate } from "./job-alert-preview";
@@ -19,6 +20,8 @@ import { jobBoostActivatedTemplate } from "./job-boost-activated";
 import { jobBoostExpiredTemplate } from "./job-boost-expired";
 import { jobRejectedTemplate } from "./job-rejected";
 import { leadFollowUpReminderTemplate } from "./lead-follow-up-reminder";
+import { loginEmailChangedNoticeTemplate } from "./login-email-changed-notice";
+import { loginEmailChangeVerificationTemplate } from "./login-email-change-verification";
 import { passwordResetMockTemplate } from "./password-reset-mock";
 import { paymentReceivedTemplate } from "./payment-received";
 import { planLimitReachedTemplate } from "./plan-limit-reached";
@@ -46,6 +49,7 @@ const TEMPLATE_REGISTRY = assertTemplateRegistryComplete({
   demo_request_received: demoRequestReceivedTemplate,
   employer_message_received: employerMessageReceivedTemplate,
   identity_revealed: identityRevealedTemplate,
+  identity_verification: identityVerificationTemplate,
   invoice_issued: invoiceIssuedTemplate,
   job_alert_digest_mock: jobAlertDigestMockTemplate,
   job_alert_preview: jobAlertPreviewTemplate,
@@ -54,6 +58,8 @@ const TEMPLATE_REGISTRY = assertTemplateRegistryComplete({
   job_boost_expired: jobBoostExpiredTemplate,
   job_rejected: jobRejectedTemplate,
   lead_follow_up_reminder: leadFollowUpReminderTemplate,
+  login_email_changed_notice: loginEmailChangedNoticeTemplate,
+  login_email_change_verification: loginEmailChangeVerificationTemplate,
   password_reset_mock: passwordResetMockTemplate,
   payment_received: paymentReceivedTemplate,
   plan_limit_reached: planLimitReachedTemplate,

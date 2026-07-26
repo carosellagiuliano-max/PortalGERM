@@ -22,6 +22,7 @@ export function createValidEnvironment(
     RADAR_OPAQUE_ENCRYPTION_KEYS: `opaque-v1:${keyMaterial(4)}`,
     REVEAL_CONFIRMATION_KEYS: `confirm-v1:${keyMaterial(5)}`,
     PII_REVEAL_KEYS: `reveal-v1:${keyMaterial(6)}`,
+    NOTIFICATION_DELIVERY_KEYS: `notification-v1:${keyMaterial(8)}`,
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",

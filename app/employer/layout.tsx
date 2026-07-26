@@ -5,6 +5,7 @@ import { CompanyContextPicker } from "@/components/employer/company-context-pick
 import { getEmployerContext } from "@/lib/auth/employer-context";
 import { requireEmployerPage } from "@/lib/auth/route-guards";
 import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quota";
+import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { planLabel as formatPlanLabel } from "@/lib/employer/dashboard";
 
@@ -24,12 +25,38 @@ const navigation = [
   { href: "/employer/talent-radar", label: "Talent Radar" },
   { href: "/employer/analytics", label: "Analytics" },
   { href: "/employer/billing", label: "Billing" },
+  { href: "/employer/notifications", label: "Benachrichtigungen" },
 ] as const;
 
 export default async function EmployerLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireEmployerPage();
+  const environment = getServerEnvironment();
+  if (
+    environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+    (user.emailVerifiedAt === null ||
+      user.identityAssurance !== "VERIFIED_EMAIL")
+  ) {
+    return (
+      <PrivateShell
+        area="Arbeitgeberportal"
+        navigation={[
+          {
+            href: "/employer/notifications",
+            label: "Identität & Benachrichtigungen",
+          },
+        ]}
+        navigationVariant="top"
+        identity={{
+          displayName: user.name ?? user.email,
+          secondaryLabel: "E-Mail-Bestätigung ausstehend",
+        }}
+      >
+        {children}
+      </PrivateShell>
+    );
+  }
   const context = await getEmployerContext();
   const current = context?.current ?? null;
   let planLabel = "Free Basic";

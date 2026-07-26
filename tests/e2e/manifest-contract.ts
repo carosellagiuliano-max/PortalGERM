@@ -15,9 +15,15 @@ export const PHASE17_QUALITY_FILE =
   "quality/critical-routes.spec.ts" as const;
 export const PHASE18_ALL_ROUTES_QUALITY_FILE =
   "quality/all-routes.spec.ts" as const;
+export const PHASE20_IDENTITY_FLOW_FILE =
+  "flows/phase20-identity-email.spec.ts" as const;
+export const PHASE20_IDENTITY_QUALITY_FILE =
+  "quality/phase20-identity-email-quality.spec.ts" as const;
 export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE17_QUALITY_FILE,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
+  PHASE20_IDENTITY_FLOW_FILE,
+  PHASE20_IDENTITY_QUALITY_FILE,
 ] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
@@ -37,13 +43,31 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     project: PHASE17_JOURNEY_PROJECT,
     tag: "@quality-desktop",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 101,
+    expectedCount: 104,
   }),
   Object.freeze({
     project: PHASE17_MOBILE_PROJECT,
     tag: "@quality-mobile",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 101,
+    expectedCount: 104,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE20_IDENTITY_FLOW_FILE,
+    expectedCount: 2,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@quality-desktop",
+    file: PHASE20_IDENTITY_QUALITY_FILE,
+    expectedCount: 3,
+  }),
+  Object.freeze({
+    project: PHASE17_MOBILE_PROJECT,
+    tag: "@quality-mobile",
+    file: PHASE20_IDENTITY_QUALITY_FILE,
+    expectedCount: 3,
   }),
 ] as const);
 
@@ -157,7 +181,7 @@ export function classifyPhase17Result(
     PHASE17_QUALITY_FILES.includes(
       normalizedRelativeFile as (typeof PHASE17_QUALITY_FILES)[number],
     ) &&
-    /(?:^|\s)@quality-(?:desktop|mobile)(?:\s|$)/u.test(title)
+    /(?:^|\s)@(?:quality-(?:desktop|mobile)|journey)(?:\s|$)/u.test(title)
   ) {
     return "QUALITY";
   }

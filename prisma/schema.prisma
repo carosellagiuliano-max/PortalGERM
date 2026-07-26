@@ -600,6 +600,97 @@ enum EmailLogStatus {
   FAILED
 }
 
+enum IdentityAssuranceLevel {
+  LOW_ASSURANCE
+  VERIFIED_EMAIL
+  LEGACY_ASSURANCE
+}
+
+enum EmailVerificationPurpose {
+  REGISTRATION
+  INVITATION
+  LOGIN_EMAIL_CHANGE
+}
+
+enum PendingEmailChangeStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum NotificationPurpose {
+  IDENTITY_VERIFICATION
+  LOGIN_EMAIL_CHANGE_VERIFICATION
+  LOGIN_EMAIL_CHANGED_NOTICE
+  PASSWORD_RESET
+  COMPANY_INVITATION
+  COMPANY_VERIFICATION
+  APPLICATION_SUBMITTED
+  APPLICATION_STATUS_CHANGED
+  EMPLOYER_MESSAGE
+  TALENT_CONTACT_REQUEST
+  IDENTITY_REVEAL
+  JOB_ALERT
+  SUBSCRIPTION_TRANSACTIONAL
+  BILLING_TRANSACTIONAL
+  USAGE_OPERATIONAL
+  JOB_MODERATION
+  ABUSE_REPORT
+  PRIVACY_REQUEST
+  COMMERCIAL_OPTIONAL
+}
+
+enum NotificationPurposeClass {
+  MANDATORY
+  OPTIONAL
+}
+
+enum NotificationChannel {
+  EMAIL
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  LEASED
+  RETRY
+  DELIVERED
+  SUPPRESSED
+  DEAD_LETTER
+  PAUSED
+}
+
+enum NotificationDeliveryOutcome {
+  ACCEPTED
+  TRANSIENT_FAILURE
+  PERMANENT_FAILURE
+  BOUNCED
+  SUPPRESSED
+  TIMED_OUT
+  CONFIGURATION_ERROR
+}
+
+enum NotificationSuppressionReason {
+  HARD_BOUNCE
+  MANUAL_SECURITY
+  USER_OPT_OUT
+}
+
+enum AuthSecurityEventKind {
+  LOGIN_FAILED
+  LOGIN_RATE_LIMITED
+  VERIFICATION_REQUESTED
+  VERIFICATION_RATE_LIMITED
+  VERIFICATION_SUCCEEDED
+  VERIFICATION_REJECTED
+  EMAIL_CHANGE_REQUESTED
+  EMAIL_CHANGE_REJECTED
+  EMAIL_CHANGE_COMPLETED
+  PASSWORD_RECOVERY_REQUESTED
+  PASSWORD_RECOVERY_RATE_LIMITED
+  SESSIONS_REVOKED
+}
+
 enum ContactRequestStatus {
   PENDING
   ACCEPTED
@@ -894,6 +985,13 @@ enum AuditAction {
   USER_LOGOUT
   PASSWORD_RESET_REQUESTED
   PASSWORD_RESET_COMPLETED
+  EMAIL_VERIFICATION_REQUESTED
+  EMAIL_VERIFICATION_COMPLETED
+  LOGIN_EMAIL_CHANGE_REQUESTED
+  LOGIN_EMAIL_CHANGE_COMPLETED
+  LOGIN_EMAIL_CHANGE_CANCELLED
+  NOTIFICATION_PREFERENCE_CHANGED
+  NOTIFICATION_DELIVERY_REPLAYED
   SESSION_REVOKED
   USER_SUSPENDED
   USER_REACTIVATED
@@ -1127,52 +1225,62 @@ enum ReferralAttributionKind {
 }
 
 model User {
-  id                       String                       @id @default(uuid()) @db.Uuid
-  email                    String                       @db.VarChar(320)
-  emailNormalized          String                       @unique @db.VarChar(320)
-  role                     Role
-  name                     String?                      @db.VarChar(160)
-  status                   UserStatus                   @default(ACTIVE)
-  dataProvenance           DataProvenance               @default(LIVE)
-  emailVerifiedAt          DateTime?                    @db.Timestamptz(3)
-  lastLoginAt              DateTime?                    @db.Timestamptz(3)
-  createdAt                DateTime                     @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime                     @updatedAt @db.Timestamptz(3)
-  credential               Credential?
-  sessions                 Session[]
-  passwordResetTokens      PasswordResetToken[]
-  candidateProfile         CandidateProfile?
-  employerProfile          EmployerProfile?
-  companyMemberships       CompanyMembership[]
-  claimRequests            CompanyClaimRequest[]        @relation("ClaimRequester")
-  verificationRequests     CompanyVerificationRequest[] @relation("VerificationRequester")
-  invitationsSent          CompanyInvitation[]          @relation("InvitationInviter")
-  invitationsAccepted      CompanyInvitation[]          @relation("InvitationAcceptor")
-  notifications            Notification[]
-  userConsents             UserConsentEvent[]           @relation("ConsentOwner")
-  userConsentsActed        UserConsentEvent[]           @relation("UserConsentActor")
-  candidateConsentsActed   CandidateConsent[]           @relation("CandidateConsentActor")
-  privacyRequests          PrivacyRequest[]             @relation("PrivacyRequester")
-  privacyRequestsAssigned  PrivacyRequest[]             @relation("PrivacyAssignee")
-  privacyChallenges        PrivacyIdentityChallenge[]
-  conversationParticipants ConversationParticipant[]
-  revealConfirmations      IdentityRevealConfirmation[]
-  revealGrantsRevoked      IdentityRevealGrant[]        @relation("RevealGrantRevoker")
-  messages                 Message[]
-  contactRequestsMade      EmployerContactRequest[]
-  ordersCreated            Order[]
-  abuseReportsFiled        AbuseReport[]                @relation("AbuseReporter")
-  abuseReportsAssigned     AbuseReport[]                @relation("AbuseAssignee")
-  auditLogs                AuditLog[]
-  salesLeadsOwned          SalesLead[]
-  systemTasksOwned         SystemTask[]
-  supportCasesRequested    SupportCase[]                @relation("SupportRequester")
-  supportCasesAssigned     SupportCase[]                @relation("SupportAssignee")
-  recruiterMandates        RecruiterMandate[]           @relation("MandateRecruiter")
-  recruiterMandatesGranted RecruiterMandate[]           @relation("MandateGrantor")
-  jobAssignmentsCreated    JobAssignment[]              @relation("JobAssignmentAssigner")
-  taxRatesReviewed         TaxRateVersion[]             @relation("TaxRateReviewer")
-  productReleaseDecisions  ProductReleaseDecision[]
+  id                                String                        @id @default(uuid()) @db.Uuid
+  email                             String                        @db.VarChar(320)
+  emailNormalized                   String                        @unique @db.VarChar(320)
+  emailAddressEpoch                 Int                           @default(1)
+  identityAssurance                 IdentityAssuranceLevel        @default(LOW_ASSURANCE)
+  role                              Role
+  name                              String?                       @db.VarChar(160)
+  status                            UserStatus                    @default(ACTIVE)
+  dataProvenance                    DataProvenance                @default(LIVE)
+  emailVerifiedAt                   DateTime?                     @db.Timestamptz(3)
+  lastLoginAt                       DateTime?                     @db.Timestamptz(3)
+  createdAt                         DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                         DateTime                      @updatedAt @db.Timestamptz(3)
+  credential                        Credential?
+  sessions                          Session[]
+  passwordResetTokens               PasswordResetToken[]
+  emailVerificationChallenges       EmailVerificationChallenge[]
+  pendingEmailChanges               PendingEmailChange[]
+  authAssuranceEvidence             AuthAssuranceEvidence[]
+  notificationOutbox                NotificationOutbox[]
+  notificationPreferences           NotificationPreference[]
+  notificationPreferenceEvents      NotificationPreferenceEvent[] @relation("NotificationPreferenceOwner")
+  notificationPreferenceEventsActed NotificationPreferenceEvent[] @relation("NotificationPreferenceActor")
+  authSecurityEvents                AuthSecurityEvent[]
+  candidateProfile                  CandidateProfile?
+  employerProfile                   EmployerProfile?
+  companyMemberships                CompanyMembership[]
+  claimRequests                     CompanyClaimRequest[]         @relation("ClaimRequester")
+  verificationRequests              CompanyVerificationRequest[]  @relation("VerificationRequester")
+  invitationsSent                   CompanyInvitation[]           @relation("InvitationInviter")
+  invitationsAccepted               CompanyInvitation[]           @relation("InvitationAcceptor")
+  notifications                     Notification[]
+  userConsents                      UserConsentEvent[]            @relation("ConsentOwner")
+  userConsentsActed                 UserConsentEvent[]            @relation("UserConsentActor")
+  candidateConsentsActed            CandidateConsent[]            @relation("CandidateConsentActor")
+  privacyRequests                   PrivacyRequest[]              @relation("PrivacyRequester")
+  privacyRequestsAssigned           PrivacyRequest[]              @relation("PrivacyAssignee")
+  privacyChallenges                 PrivacyIdentityChallenge[]
+  conversationParticipants          ConversationParticipant[]
+  revealConfirmations               IdentityRevealConfirmation[]
+  revealGrantsRevoked               IdentityRevealGrant[]         @relation("RevealGrantRevoker")
+  messages                          Message[]
+  contactRequestsMade               EmployerContactRequest[]
+  ordersCreated                     Order[]
+  abuseReportsFiled                 AbuseReport[]                 @relation("AbuseReporter")
+  abuseReportsAssigned              AbuseReport[]                 @relation("AbuseAssignee")
+  auditLogs                         AuditLog[]
+  salesLeadsOwned                   SalesLead[]
+  systemTasksOwned                  SystemTask[]
+  supportCasesRequested             SupportCase[]                 @relation("SupportRequester")
+  supportCasesAssigned              SupportCase[]                 @relation("SupportAssignee")
+  recruiterMandates                 RecruiterMandate[]            @relation("MandateRecruiter")
+  recruiterMandatesGranted          RecruiterMandate[]            @relation("MandateGrantor")
+  jobAssignmentsCreated             JobAssignment[]               @relation("JobAssignmentAssigner")
+  taxRatesReviewed                  TaxRateVersion[]              @relation("TaxRateReviewer")
+  productReleaseDecisions           ProductReleaseDecision[]
 
   @@index([status, role])
   @@index([dataProvenance, status])
@@ -1191,17 +1299,19 @@ model Credential {
 }
 
 model Session {
-  id                String    @id @default(uuid()) @db.Uuid
-  userId            String    @db.Uuid
-  tokenHash         String    @unique @db.VarChar(64)
-  expiresAt         DateTime  @db.Timestamptz(3)
-  absoluteExpiresAt DateTime  @db.Timestamptz(3)
-  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
-  rotatedAt         DateTime? @db.Timestamptz(3)
-  revokedAt         DateTime? @db.Timestamptz(3)
-  userAgent         String?   @db.VarChar(512)
-  ipHash            String?   @db.VarChar(128)
-  user              User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id                  String                  @id @default(uuid()) @db.Uuid
+  userId              String                  @db.Uuid
+  tokenHash           String                  @unique @db.VarChar(64)
+  expiresAt           DateTime                @db.Timestamptz(3)
+  absoluteExpiresAt   DateTime                @db.Timestamptz(3)
+  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
+  rotatedAt           DateTime?               @db.Timestamptz(3)
+  revokedAt           DateTime?               @db.Timestamptz(3)
+  userAgent           String?                 @db.VarChar(512)
+  ipHash              String?                 @db.VarChar(128)
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  pendingEmailChanges PendingEmailChange[]
+  assuranceEvidence   AuthAssuranceEvidence[]
 
   @@index([userId])
   @@index([tokenHash])
@@ -2261,6 +2371,183 @@ model EmailLog {
 
   @@index([status, createdAt])
   @@index([recipient, createdAt])
+}
+
+model EmailVerificationChallenge {
+  id                   String                   @id @default(uuid()) @db.Uuid
+  userId               String                   @db.Uuid
+  purpose              EmailVerificationPurpose
+  addressEpoch         Int
+  targetNormalizedHash String                   @db.VarChar(64)
+  tokenHash            String                   @unique @db.VarChar(64)
+  expiresAt            DateTime                 @db.Timestamptz(3)
+  usedAt               DateTime?                @db.Timestamptz(3)
+  supersededAt         DateTime?                @db.Timestamptz(3)
+  createdAt            DateTime                 @default(now()) @db.Timestamptz(3)
+  user                 User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  pendingEmailChange   PendingEmailChange?
+
+  @@index([userId, purpose, addressEpoch, createdAt])
+  @@index([expiresAt, usedAt, supersededAt])
+}
+
+model PendingEmailChange {
+  id                    String                     @id @default(uuid()) @db.Uuid
+  userId                String                     @db.Uuid
+  challengeId           String                     @unique @db.Uuid
+  initiatedBySessionId  String                     @db.Uuid
+  targetEmail           String                     @db.VarChar(320)
+  targetEmailNormalized String                     @db.VarChar(320)
+  addressEpoch          Int
+  status                PendingEmailChangeStatus   @default(PENDING)
+  expiresAt             DateTime                   @db.Timestamptz(3)
+  completedAt           DateTime?                  @db.Timestamptz(3)
+  cancelledAt           DateTime?                  @db.Timestamptz(3)
+  createdAt             DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                   @updatedAt @db.Timestamptz(3)
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  challenge             EmailVerificationChallenge @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  initiatedBySession    Session                    @relation(fields: [initiatedBySessionId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, createdAt])
+  @@index([targetEmailNormalized, status])
+}
+
+model AuthAssuranceEvidence {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  sessionId String?   @db.Uuid
+  purpose   String    @db.VarChar(64)
+  action    String    @db.VarChar(96)
+  tenantId  String?   @db.Uuid
+  method    String    @db.VarChar(32)
+  issuedAt  DateTime  @db.Timestamptz(3)
+  expiresAt DateTime  @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  session   Session?  @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  @@index([userId, purpose, action, expiresAt])
+  @@index([sessionId, expiresAt])
+}
+
+model NotificationOutbox {
+  id                         String                        @id @default(uuid()) @db.Uuid
+  recipientUserId            String?                       @db.Uuid
+  recipientAddressCiphertext Bytes?
+  recipientAddressNonce      Bytes?
+  recipientAddressTag        Bytes?
+  recipientAddressKeyVersion String?                       @db.VarChar(32)
+  purpose                    NotificationPurpose
+  purposeClass               NotificationPurposeClass
+  channel                    NotificationChannel           @default(EMAIL)
+  templateKey                String                        @db.VarChar(64)
+  payloadSchemaVersion       String                        @db.VarChar(32)
+  payload                    Json
+  dedupeKey                  String                        @unique @db.VarChar(160)
+  providerDedupeKey          String                        @unique @db.VarChar(160)
+  status                     NotificationDeliveryStatus    @default(PENDING)
+  availableAt                DateTime                      @db.Timestamptz(3)
+  leaseOwner                 String?                       @db.VarChar(96)
+  leaseExpiresAt             DateTime?                     @db.Timestamptz(3)
+  attemptCount               Int                           @default(0)
+  maxAttempts                Int                           @default(5)
+  lastErrorCode              String?                       @db.VarChar(64)
+  deliveredAt                DateTime?                     @db.Timestamptz(3)
+  suppressedAt               DateTime?                     @db.Timestamptz(3)
+  deadLetteredAt             DateTime?                     @db.Timestamptz(3)
+  createdAt                  DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                      @updatedAt @db.Timestamptz(3)
+  recipient                  User?                         @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
+  attempts                   NotificationDeliveryAttempt[]
+
+  @@index([status, availableAt, createdAt])
+  @@index([leaseExpiresAt])
+  @@index([recipientUserId, purpose, createdAt])
+}
+
+model NotificationDeliveryAttempt {
+  id              String                      @id @default(uuid()) @db.Uuid
+  outboxId        String                      @db.Uuid
+  attemptNumber   Int
+  leaseOwner      String                      @db.VarChar(96)
+  leaseExpiresAt  DateTime                    @db.Timestamptz(3)
+  providerClass   String                      @db.VarChar(64)
+  outcome         NotificationDeliveryOutcome
+  providerReceipt String?                     @db.VarChar(255)
+  errorCode       String?                     @db.VarChar(64)
+  nextAvailableAt DateTime?                   @db.Timestamptz(3)
+  startedAt       DateTime                    @db.Timestamptz(3)
+  completedAt     DateTime                    @db.Timestamptz(3)
+  createdAt       DateTime                    @default(now()) @db.Timestamptz(3)
+  outbox          NotificationOutbox          @relation(fields: [outboxId], references: [id], onDelete: Restrict)
+
+  @@unique([outboxId, attemptNumber])
+  @@index([outboxId, startedAt])
+  @@index([leaseExpiresAt, completedAt])
+}
+
+model NotificationSuppression {
+  id            String                        @id @default(uuid()) @db.Uuid
+  recipientHash String                        @db.VarChar(64)
+  reason        NotificationSuppressionReason
+  source        String                        @db.VarChar(64)
+  createdAt     DateTime                      @default(now()) @db.Timestamptz(3)
+  releasedAt    DateTime?                     @db.Timestamptz(3)
+
+  @@index([recipientHash, releasedAt])
+}
+
+model NotificationPreference {
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String              @db.Uuid
+  purpose   NotificationPurpose
+  channel   NotificationChannel @default(EMAIL)
+  enabled   Boolean
+  version   Int                 @default(1)
+  createdAt DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime            @updatedAt @db.Timestamptz(3)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, purpose, channel])
+  @@index([userId, updatedAt])
+}
+
+model NotificationPreferenceEvent {
+  id          String              @id @default(uuid()) @db.Uuid
+  userId      String              @db.Uuid
+  purpose     NotificationPurpose
+  channel     NotificationChannel
+  enabled     Boolean
+  version     Int
+  actorUserId String?             @db.Uuid
+  reasonCode  String              @db.VarChar(64)
+  createdAt   DateTime            @default(now()) @db.Timestamptz(3)
+  user        User                @relation("NotificationPreferenceOwner", fields: [userId], references: [id], onDelete: Restrict)
+  actor       User?               @relation("NotificationPreferenceActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, purpose, channel, version])
+  @@index([userId, createdAt])
+}
+
+model AuthSecurityEvent {
+  id            String                @id @default(uuid()) @db.Uuid
+  userId        String?               @db.Uuid
+  kind          AuthSecurityEventKind
+  actorHash     String?               @db.VarChar(128)
+  targetHash    String?               @db.VarChar(128)
+  correlationId String                @db.VarChar(128)
+  outcomeCode   String                @db.VarChar(64)
+  occurredAt    DateTime              @db.Timestamptz(3)
+  retainUntil   DateTime              @db.Timestamptz(3)
+  createdAt     DateTime              @default(now()) @db.Timestamptz(3)
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([kind, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([retainUntil])
 }
 
 model CandidateConsent {

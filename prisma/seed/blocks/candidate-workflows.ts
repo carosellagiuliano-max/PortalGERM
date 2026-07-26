@@ -428,6 +428,7 @@ async function seedCandidate(
     role: Role.CANDIDATE,
     status: enumValue(UserStatus, fixture.userStatus),
     dataProvenance: DataProvenance.DEMO,
+    identityAssurance: "VERIFIED_EMAIL" as const,
   };
   const existingUser = await tx.user.findUnique({ where: { id: userId } });
   if (

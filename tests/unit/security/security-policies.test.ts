@@ -43,6 +43,8 @@ const USER = {
   name: "Ada",
   status: "ACTIVE" as const,
   emailVerifiedAt: null,
+  emailAddressEpoch: 1,
+  identityAssurance: "LOW_ASSURANCE" as const,
 };
 const ACCESS: CompanyAccess = {
   companyId: "company-a",

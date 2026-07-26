@@ -43,6 +43,21 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
       FORGOT_PASSWORD: {
         buckets: [{ scope: "IP_EMAIL", limit: 5, windowMs: HOUR }],
       },
+      EMAIL_VERIFICATION_RESEND: {
+        buckets: [
+          { scope: "IP_EMAIL", limit: 5, windowMs: HOUR },
+          { scope: "IP", limit: 20, windowMs: HOUR },
+        ],
+      },
+      EMAIL_VERIFICATION_CONSUME: {
+        buckets: [{ scope: "IP", limit: 30, windowMs: HOUR }],
+      },
+      LOGIN_EMAIL_CHANGE: {
+        buckets: [
+          { scope: "USER", limit: 5, windowMs: HOUR },
+          { scope: "IP", limit: 20, windowMs: HOUR },
+        ],
+      },
       APPLICATION_SUBMIT: {
         buckets: [
           { scope: "USER", limit: 30, windowMs: HOUR },

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { PrivateShell } from "@/components/auth/private-shell";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
+import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
@@ -19,12 +20,38 @@ const navigation = [
   { href: "/candidate/alerts", label: "Jobabos" },
   { href: "/candidate/messages", label: "Nachrichten" },
   { href: "/candidate/privacy", label: "Privatsphäre" },
+  { href: "/candidate/notifications", label: "Benachrichtigungen" },
 ] as const;
 
 export default async function CandidateLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireCandidatePage();
+  const environment = getServerEnvironment();
+  if (
+    environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
+    (user.emailVerifiedAt === null ||
+      user.identityAssurance !== "VERIFIED_EMAIL")
+  ) {
+    return (
+      <PrivateShell
+        area="Kandidatenportal"
+        navigation={[
+          {
+            href: "/candidate/notifications",
+            label: "Identität & Benachrichtigungen",
+          },
+        ]}
+        navigationVariant="top"
+        identity={{
+          displayName: user.name ?? user.email,
+          secondaryLabel: "E-Mail-Bestätigung ausstehend",
+        }}
+      >
+        {children}
+      </PrivateShell>
+    );
+  }
   const profile = await getDatabase().candidateProfile.findUnique({
     where: { userId: user.id },
     select: { firstName: true, lastName: true, publicDisplayName: true },

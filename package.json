@@ -34,6 +34,7 @@
     "seed:verify": "npm run env:validate && tsx scripts/seed-verify.ts",
     "db:smoke": "npm run env:validate && tsx scripts/db-smoke.ts",
     "security:maintenance": "npm run env:validate && tsx scripts/security-maintenance.ts",
+    "notifications:dispatch": "tsx --conditions react-server scripts/phase20-notification-dispatch.ts",
     "ops:backup": "tsx scripts/ops/backup.ts",
     "ops:restore": "tsx scripts/ops/restore.ts",
     "ops:release-smoke": "tsx scripts/ops/release-smoke.ts",

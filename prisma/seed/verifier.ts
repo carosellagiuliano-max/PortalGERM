@@ -351,6 +351,7 @@ export async function verifyDemoSeedDatabase(
   const counts = verifyGoldenCounts(context, observed);
   verifyReferenceCatalog(context, observed, expected);
   await verifyDemoCredentials(context, observed.demoAccounts);
+  verifySeedIdentityAssurance(context, observed);
   verifyCompanies(context, observed, expected, anchorAt);
   await verifyAuthRbac(context, observed, anchorAt);
   verifyEmployerCore(context, observed, anchorAt);
@@ -373,6 +374,41 @@ export async function verifyDemoSeedDatabase(
   });
 
   return Object.freeze({ blockDigest, counts, report });
+}
+
+function verifySeedIdentityAssurance(
+  context: VerificationContext,
+  observed: Awaited<ReturnType<typeof loadObservedSeedState>>,
+) {
+  const users = new Map<
+    string,
+    Readonly<{
+      emailVerifiedAt: Date | null;
+      identityAssurance: string;
+      dataProvenance: string;
+    }>
+  >();
+  for (const user of [
+    ...observed.demoAccounts,
+    ...observed.employerCorePrincipals,
+    ...observed.candidates.map(({ user }) => user),
+    ...(observed.suspendedAuthActor === null
+      ? []
+      : [observed.suspendedAuthActor]),
+  ]) {
+    users.set(user.id, user);
+  }
+  check(
+    context,
+    "demo identity assurance is explicit",
+    [...users.values()].every(
+      (user) =>
+        user.dataProvenance === "DEMO" &&
+        user.emailVerifiedAt !== null &&
+        user.identityAssurance === "VERIFIED_EMAIL",
+    ),
+    true,
+  );
 }
 
 function buildExpectedScope(anchorAt: Date) {

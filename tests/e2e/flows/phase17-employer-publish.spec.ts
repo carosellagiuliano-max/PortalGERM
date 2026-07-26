@@ -3,6 +3,7 @@ import {
   openActor,
   phase17Database,
   test,
+  verificationTokenForEmail,
 } from "@/tests/e2e/fixtures/phase17-test";
 
 const EMPLOYER = Object.freeze({
@@ -40,7 +41,15 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
     await page
       .getByRole("button", { name: "Arbeitgeberkonto erstellen" })
       .click();
-    await expect(page).toHaveURL(/\/employer\/dashboard(?:\?|$)/u);
+    await expect(page).toHaveURL(/\/verify-email\?registered=1/u);
+    const verificationToken = await verificationTokenForEmail(EMPLOYER.email);
+    await page.goto(`/verify-email#token=${verificationToken}`);
+    await page
+      .getByRole("button", { name: "E-Mail jetzt bestätigen" })
+      .click();
+    await expect(
+      page.getByText("Deine E-Mail-Adresse wurde bestätigt."),
+    ).toBeVisible();
     await page.goto("/employer/company");
 
     const company = await database.company.findFirstOrThrow({

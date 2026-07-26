@@ -25,6 +25,8 @@ const EMPLOYER: CurrentUser = Object.freeze({
   name: "Employer",
   status: "ACTIVE",
   emailVerifiedAt: null,
+  emailAddressEpoch: 1,
+  identityAssurance: "LOW_ASSURANCE",
 });
 
 const CANDIDATE: CurrentUser = Object.freeze({

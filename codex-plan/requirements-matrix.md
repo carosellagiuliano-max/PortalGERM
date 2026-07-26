@@ -144,7 +144,14 @@
 | E2E-07 | REQ-BST-001, REQ-SCORE-001, REQ-MKT-001 | aktiver/abgelaufener Boost, Scorevergleich und Cursor-Pagination; Label/Rang korrekt, Score unverändert, keine Duplikate | `tests/e2e/flows/phase17-security-search.spec.ts`; Seed-Anker-Uhr, zwei Seiten, Score-/Boost-/Relevance-Fingerprint | bestanden; Retry 0 |
 | E2E-08 | REQ-OPS-001–003 | Clean clone → Migration/Seed/Build → Backup/Restore → Smoke | `npm run test:release`; [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md) mit Run-ID, Checksummen, getrennten DBs, RPO/RTO und Cleanup | bestanden; lokale technische Probe, externe Ops-Freigaben offen |
 
-`tests/e2e/quality/all-routes.spec.ts` prüft je Viewport einen exakten Inventarvertrag plus alle 100 Seiten; zusammen sind das 202 exhaustive Fälle. `critical-routes.spec.ts` ergänzt je fünf vertiefte Desktop-/360px-Gruppen mit repräsentativen Success-/Empty-/Locked-Zuständen und Performancebudgets. Der finale Browserlauf umfasst damit 219/219 Fälle: sieben Journeys, 202 exhaustive Route-Fälle und zehn Critical-Route-Fälle, jeweils Retry `0`.
+`tests/e2e/quality/all-routes.spec.ts` prüft je Viewport einen exakten
+Inventarvertrag plus alle 103 Seiten; zusammen sind das 208 exhaustive Fälle.
+`critical-routes.spec.ts` ergänzt je fünf vertiefte Desktop-/360px-Gruppen.
+Phase 20 ergänzt zwei Identity-Journeys sowie je drei Desktop-/Mobile-
+Identity-/Notification-Qualitätsfälle. Der vollständige Browservertrag
+umfasst damit 233 Fälle: sieben historische Journeys, 208 exhaustive
+Route-Fälle, zehn Critical-Route-Fälle und acht Phase-20-Fälle, jeweils Retry
+`0`.
 
 ## 10. Änderungsdisziplin
 
@@ -152,7 +159,9 @@ Neue oder geänderte Anforderungen erhalten eine stabile ID, Owner, Priorität u
 
 ## 11. Prospektive Requirements für Phase 19–32
 
-> **Status:** geplant und noch nicht implementiert. Diese Zeilen erweitern den
+> **Status:** Phase 19 ist governance-seitig und Phase 20 technisch
+> implementiert; Phase 20 bleibt aktivierungsseitig `DISABLED`/isolierte
+> `SANDBOX`. Die übrigen Zeilen sind geplant. Diese Requirements erweitern den
 > historischen Phase-01–18-Vertrag, ohne dessen Evidence rückwirkend zu
 > verändern. Prioritäten sind launchklassenspezifisch; die vollständige
 > LC1–LC6-Matrix steht in
@@ -178,8 +187,8 @@ Neue oder geänderte Anforderungen erhalten eine stabile ID, Owner, Priorität u
 
 | ID | Anforderung | Lead-Phase | Messbare Abnahme |
 | --- | --- | --- | --- |
-| `REQ-ID-005` | E-Mail-Verifikation, Reverification, Änderung der Login-E-Mail und Recovery sind versioniert, enumeration-safe und race-/replayfest. | 20 | neue Registrierung bleibt bis Verify in definiertem Low-Assurance-State; Token single-use/expiry/supersession; Candidate-/Employer-/Invite-E2E |
-| `REQ-NOT-001` | Domainwrite und Notification-Outbox committen atomar; Preference-/Pflichtklassifikation, Attempt, Retry, Bounce/Suppression und DLQ sind dauerhaft. | 20 fachlich, 23 autonom | Crash zwischen Domaincommit/Send verliert keine Nachricht; Duplicate Delivery bewirkt genau eine fachliche Zustellung; Pflichtmail nicht durch Marketingopt-out unterdrückt |
+| `REQ-ID-005` | E-Mail-Verifikation, Reverification, Änderung der Login-E-Mail und Recovery sind versioniert, enumeration-safe und race-/replayfest. | 20 · technisch `PASS`; Aktivierung `DISABLED`/`SANDBOX` | neue Registrierung bleibt bis Verify in definiertem Low-Assurance-State; Token single-use/expiry/supersession; Candidate-/Employer-/Invite-E2E; Phase-20-Evidence |
+| `REQ-NOT-001` | Domainwrite und Notification-Outbox committen atomar; Preference-/Pflichtklassifikation, Attempt, Retry, Bounce/Suppression und DLQ sind dauerhaft. | 20 fachlich `PASS`, 23 autonom offen | Crash zwischen Domaincommit/Send verliert keine Nachricht; Duplicate Delivery bewirkt genau eine fachliche Zustellung; Pflichtmail nicht durch Marketingopt-out unterdrückt; Phase-20-Evidence |
 | `REQ-DOC-002` | Reale CV-/Dokumentbytes werden direkt, quarantänisiert, gescannt, versioniert und nur nach aktueller Authorization ausgeliefert. | 21 | MIME/Size/Hash/AV, traversal/polyglot, incomplete upload, expired URL, revoked reveal und cross-tenant Download negativ; Retention/Export/Erasure konsistent |
 | `REQ-PRIV-004` | Export, Correction und Erasure arbeiten über vollständiges Daten-/Providerinventar mit Legal Holds und wiederaufnehmbaren Teilfehlern. | 22 | verschlüsseltes Exportartefakt, single-use Download, 30-Tage-/freigegebene SLA, Erasure-/Anonymisierungschecks und Drittprovider-Reconciliation |
 | `REQ-OPS-005` | Autonome Worker/Outbox besitzen Lease, Heartbeat, Retry/Backoff, DLQ, Replay, Monitoring, SLO und Restart-/Concurrency-Evidence. | 23 | parallel/restart/crash/poison/provider-outage erzeugt keine verlorene oder doppelte fachliche Wirkung; Alarm und Runbookprobe grün |
