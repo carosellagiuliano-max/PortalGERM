@@ -2,8 +2,9 @@
 
 > **Planungsstand:** 26. Juli 2026. Dieses Dokument steuert die
 > Remediation-Phasen 19 bis 32. Phase 19 ist auf
-> `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` abgeschlossen und verifiziert;
-> Phasen 20 bis 32 bleiben offen, bis ihre eigene unveränderliche
+> `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c`, Phase 20 auf
+> `59089009f54312a4c10989b7efde2d5fda9a2b8d` abgeschlossen und verifiziert;
+> Phasen 21 bis 32 bleiben offen, bis ihre eigene unveränderliche
 > Code-Evidence vorliegt. Daraus folgt weder Pilot- noch
 > Produktionsfreigabe. Die abgeschlossenen Phasen 01 bis 18 und ihre
 > historischen Nachweise werden nicht rückwirkend umgedeutet.
@@ -52,6 +53,8 @@ instanziieren.
 | Aktivität der ursprünglichen Planprüfung | Repository-, Plan-, Schema-, Code-, Test- und Evidence-Analyse sowie Plan-Governance; damals noch keine Produktimplementierung und keine erneute vollständige Testausführung |
 | gewählter Phase-19-Candidate | `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` (`769ee62`), beim Golden-Start/-Ende identisch mit `origin/main` |
 | Phase-19-Evidence | [`evidence/2026-07-26-phase-19.md`](./evidence/2026-07-26-phase-19.md): vollständiger Clean Clone, 43 Migrationen, Seed×2, 1.974 Unit-, 369 PostgreSQL- und 219 Browsertests, Build/HTTP/HSTS sowie Recovery bestanden |
+| Phase-20-Candidate | `59089009f54312a4c10989b7efde2d5fda9a2b8d` (`5908900`), Parent `8087c0c` |
+| Phase-20-Evidence | [`evidence/2026-07-26-phase-20.md`](./evidence/2026-07-26-phase-20.md): 45 Migrationen, Seed×2, 1.984 Unit-, 408 PostgreSQL- und 233 Browsertests, Build/HTTP/HSTS sowie Provider-/Dispatcher-Failure-Gates bestanden; LIVE bleibt deaktiviert |
 
 `eb9b45a` und `e34262e` bleiben historische Analyse-/Planungsidentitäten,
 keine Releasekandidaten. Phase 19 wählte bei ihrem tatsächlichen Start den
@@ -330,8 +333,8 @@ Infrastruktur, benannte Owner und bestätigte Betriebsziele.
 
 ## 6. Phasenübersicht 19–32
 
-Phase 19 ist durch ihre verlinkte Candidate-Evidence geschlossen; alle
-Kästchen 20–32 bleiben offen. Ein Planartefakt oder ein vorhandener
+Phasen 19 und 20 sind durch ihre verlinkte Candidate-Evidence geschlossen;
+alle Kästchen 21–32 bleiben offen. Ein Planartefakt oder ein vorhandener
 Teilmechanismus schliesst keine weitere Phase. Bei gemischt priorisierten
 Phasen erhält jeder Track eigene Evidence. Ein grüner P1-Track darf
 freigegeben werden, ohne einen nicht ausgelösten P3-Befund fälschlich zu
@@ -341,7 +344,7 @@ Headroom, Forecast, Alert und Owner.
 | Phase | Titel | Primäre Befunde | Hauptziel |
 | --- | --- | --- | --- |
 | [x] 19 | [Remediation-Baseline und Regression](./19-remediation-baseline-regression.md) | alle `STH-*` als Steuerung | Candidate `769ee62`, vollständige aktuelle Golden-Baseline, Regressionvertrag, Test-/Migrationsinventar und Gate-Backlog verifiziert |
-| [ ] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md) | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | verifizierte E-Mail-Identität, erreichbare Step-up-Challenge, atomare Outbox, dauerhafte Zustellung und zentrale Präferenzen |
+| [x] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md) | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | technischer Verification-/E-Mail-Change-/Outbox-/Dispatcher-/Preference-Vertrag auf Candidate `5908900`; LIVE/Worker/Step-up bleiben gegatet |
 | [ ] 21 | [Document-/CV-Vault](./21-document-cv-vault.md) | `STH-003`; Storage-Anteil `STH-004` | echte CV-/Evidenzdateien mit Quarantäne, Zugriff, Retention und Audit |
 | [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md) | `STH-006`, `STH-007`, `STH-017` | vollständiges Dateninventar, reale Export-/Korrektur-/Löschprozesse, Legal Holds, versionierte Rechtstexte und consent-bewusste LIVE-Analytics |
 | [ ] 23 | [Production Operations und Worker](./23-production-operations-workers.md) | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034` | explizit freigegebene reale Adapter, autonome Ausführung, Kapazitäts-/Stückkostenmodell und belastbare Staging-/Recovery-Grenzen |
@@ -388,7 +391,7 @@ Plan-/Route-/Secret-Audits definieren den neuen Nullpunkt. Die Phase ändert
 keine Produktsemantik; bei Abweichungen wird der Befund dokumentiert statt
 durch einen unautorisierten Schnellfix verdeckt.
 
-### [ ] 20 — Identity, E-Mail und Notifications
+### [x] 20 — Identity, E-Mail und Notifications
 
 **Zweck:** Registration, Invite, Password Recovery, Privacy Challenge und
 geschäftliche Benachrichtigungen erhalten einen gemeinsamen, persistenten
@@ -430,6 +433,15 @@ Identity-Challenge. Rollout erfolgt kompatibel mit `unverified`-Zustand und
 kontrollierter Legacy-Migration. Ein Kill Switch darf Versand stoppen,
 aber weder bestätigte Identität zurücksetzen noch Pflichtfälle still als
 zugestellt markieren.
+
+**Abschluss:** Candidate
+`59089009f54312a4c10989b7efde2d5fda9a2b8d` besteht 45 Migrationen,
+1.984 Unit-, 408 PostgreSQL- und 233 Browserprüfungen sowie Build, HTTP,
+HSTS, Seed×2, Provider-/Dispatcher-Failure- und Governance-Gates. Der
+[Phase-20-Evidence-Record](./evidence/2026-07-26-phase-20.md) trennt diesen
+technischen Abschluss von weiterhin `DISABLED`/`PAUSED` gesetzter
+Productionzustellung, autonomer Phase-23-Ausführung und Phase-25-Step-up.
+Phase 21 darf beginnen.
 
 ### [ ] 21 — Document-/CV-Vault
 

@@ -177,10 +177,11 @@ The listed implementation baselines are executable and may not be paused or rein
 
 ## 10. Abschlussstatus
 
-Phasen 01–18 sind implementiert und durch datierte, commitgebundene
-Ziel-Evidence lokal verifiziert. Das freigegebene Folgepaket ist nun
-ausführlich als Phase 19–32 geplant; **Phase 19 ist der einzige zulässige
-Implementierungsstart**. Die offenen
+Phasen 01–20 sind implementiert und durch datierte, commitgebundene
+Ziel-Evidence lokal verifiziert. Phase 19 versiegelte die verpflichtende
+Baseline; Phase 20 schloss danach auf Candidate `5908900` den technischen
+Identity-/Notification-Vertrag. **Phase 21 ist der nächste sequenzielle
+technische Implementierungsstart.** Die offenen
 Business-/Legal-/Privacy-/Tax-/Provider-/Ops-Entscheidungen besitzen weiterhin
 harte Deadlines vor Pilot oder realem Betrieb; der lokale technische Abschluss
 ersetzt keine dieser Freigaben.
@@ -207,7 +208,7 @@ Plan-Evidence; die Phase bleibt bis zur späteren Implementierung offen.
 
 | Befund | Bewertung am aktuellen Baum | Planauflösung |
 | --- | --- | --- |
-| E-Mail-Verifikation/Delivery | bestätigt; Registrierung erstellt unmittelbar eine Session, Delivery ist Mock/best-effort | Phase 20: Verification-/Email-change-Lifecycle, atomare Outbox, dauerhafte Attempts/Retry/DLQ; LIVE-Aktivierung Phase 23 |
+| E-Mail-Verifikation/Delivery | technisch auf Candidate `5908900` geschlossen: Low-Assurance, Verification, sicherer E-Mail-Change, atomare Outbox, Attempts/Retry/DLQ und Preferences; reale Zustellung/autonomer Betrieb nicht aktiviert | Phase 20 Evidence grün; LIVE-Aktivierung und autonomes Scheduling bleiben Phase 23, MFA/Step-up Phase 25 |
 | CV-/Dokumentbytes | bestätigt; aktuelle Demo speichert Metadaten, keine Bytes | Phase 21: Quarantäne-first Object Vault, Streaming-/Polyglot-/Malware-/IDOR-/Retention-Vertrag |
 | Privacy Export/Delete | bestätigt/teilweise; Export ist Manifest, Assessment kennt keine echte Erasure | Phase 22: versioniertes Dateninventar, Export/Korrektur/Löschung, Legal Holds, DSFA-/AVG-/Consent-Gates |
 | autonome Worker | bestätigt | Phase 23: Lease/Heartbeat/Dedupe/Retry/DLQ/Replay, Provider-Aktivierungsledger, Capacity/Unit Cost |

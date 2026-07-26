@@ -37,6 +37,7 @@ gelten nicht als Nachweis.
 - [`2026-07-24-phase-18.md`](./2026-07-24-phase-18.md) — Dokumentations-/Release-Audit, vollständige 100-Seiten-Desktop-/360px-Matrix, E2E-08 Clean Clone sowie verschlüsselter Backup-/Restore-Drill.
 - [`2026-07-24-commercial-launch-follow-up.md`](./2026-07-24-commercial-launch-follow-up.md) — unabhängig bewertete Commercial-, Cashflow-, Packaging-, Salary-, Worker- und AVG-Befunde samt isolierter Zielcommit-Verifikation.
 - [`2026-07-26-phase-19.md`](./2026-07-26-phase-19.md) — aktuelle Remediation-Governance, vollständige Clean-Clone-/Golden-Baseline, 37-ID-Traceability sowie Search-, Fan-out-, Admin-Cap- und Sitemap-Istwerte.
+- [`2026-07-26-phase-20.md`](./2026-07-26-phase-20.md) — verifizierte E-Mail-Identität, sicherer Login-E-Mail-Wechsel, atomare Notification-Outbox, bounded Dispatcher, Preferences und fail-closed Resend-Sandboxvertrag.
 
 ## Pflichtfelder eines Records
 

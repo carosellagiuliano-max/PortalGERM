@@ -1195,8 +1195,11 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 > Diese Dossiers wurden am 26. Juli 2026 zuerst gegen den sauberen
 > Planungscommit `e34262e3074565840e371c336a5d2ba5cf3efbac` bewertet und auf
 > Candidate `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` revalidiert.
-> `STH-029` ist durch Phase 19 geschlossen; `STH-030`–`STH-037` bleiben nach
-> ihrem jeweiligen Status, Trigger oder externen Gate offen. Die Priorität je
+> `STH-029` ist durch Phase 19 geschlossen. `STH-001`, `STH-002` und
+> `STH-013` sind durch Phase 20 technisch geschlossen, `STH-026` im
+> fachlichen Kern umgesetzt; ihre LIVE-/Worker-/Legal-/UX-Gates sowie
+> `STH-030`–`STH-037` bleiben nach jeweiligem Status, Trigger oder externem
+> Gate offen. Die Priorität je
 > Launchklasse steht in Abschnitt 3B.
 
 | ID | Befund und unabhängiger Status | Lead / Mitwirkende | Rollen, Portale und aktuelle Fundstellen | Abhängigkeiten und geschützte Regressionen | Verbindlicher Test-/Evidence-Vertrag | Externer Gate / Abschlussstatus |

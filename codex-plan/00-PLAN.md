@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** Stand 26. Juli 2026. **Phasen 01 bis 19 sind im Zielrepository implementiert und commitgebunden verifiziert.** Phase 19 versiegelt auf `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` den aktuellen Clean-Clone-/Golden-Stand, die 37-ID-Traceability und den verbindlichen Remediation-Vertrag; siehe [Evidence](./evidence/2026-07-26-phase-19.md). Damit ist der Governance-Befund `STH-029` geschlossen. Die fachlichen Befunde `STH-001`–`STH-028` und `STH-030`–`STH-037` bleiben nach Status, Trigger oder externem Gate in den offenen Phasen 20 bis 32. Weder historische Evidence noch die grüne LC1-Baseline ist eine Pilot- oder Produktionsfreigabe. Staging, ausgewählte reale Provider, produktiver Backup-Lifecycle und autonome Worker sind noch umzusetzende beziehungsweise real zu betreibende Lieferobjekte; AVG/Legal/Privacy/Tax, Providerverträge, bezahlte Marktvalidierung, Cashflow/Runway, LIVE-Daten, RPO/RTO, Incident Ownership und Operationskapazität benötigen zusätzlich externe oder organisatorische Freigaben. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete REQ-REC-002-Paket bleibt offen.
+> **Planstatus:** Stand 26. Juli 2026. **Phasen 01 bis 20 sind im Zielrepository implementiert und commitgebunden verifiziert.** Phase 19 versiegelt auf `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` die Clean-Clone-/Governance-Baseline; Phase 20 schliesst auf Candidate `59089009f54312a4c10989b7efde2d5fda9a2b8d` den technischen Identity-, E-Mail-Change-, Outbox-, Dispatcher- und Preference-Vertrag. Siehe [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) und [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md). Reale E-Mail-Aktivierung, autonome Worker, Production-Replay und MFA/Step-up bleiben ausdrücklich offen. Auch die übrigen fachlichen Befunde bleiben nach Status, Trigger oder externem Gate in den Phasen 21 bis 32. Weder historische Evidence noch die grüne LC1-/Sandbox-Baseline ist eine Pilot- oder Produktionsfreigabe. Staging, ausgewählte reale Provider, produktiver Backup-Lifecycle und autonome Worker sind noch umzusetzende beziehungsweise real zu betreibende Lieferobjekte; AVG/Legal/Privacy/Tax, Providerverträge, bezahlte Marktvalidierung, Cashflow/Runway, LIVE-Daten, RPO/RTO, Incident Ownership und Operationskapazität benötigen zusätzlich externe oder organisatorische Freigaben. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete REQ-REC-002-Paket bleibt offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -27,7 +27,7 @@ Die folgende Liste ist die empfohlene **Lesereihenfolge**, nicht die Konflikthie
 15. [`runbooks/remediation-production-target.md`](./runbooks/remediation-production-target.md)
     — geplanter LC2–LC6-Ops-/Recovery-Vertrag; noch nicht ausgeführt.
 16. Die Detailphasen `01` bis `18` — implementierte technische Deliverables und ihre Evidence.
-17. Die Detailphasen `19` bis `32` — offene Remediation-Arbeitspakete; ein Plandokument ist keine Erledigung.
+17. Die Detailphasen `19` und `20` — abgeschlossene Remediation-Arbeitspakete — sowie `21` bis `32` als offene Arbeitspakete; ein Plandokument ist keine Erledigung.
 18. [`remediation-evidence-template.md`](./remediation-evidence-template.md)
     — leere, nicht rückwirkende Evidence-Vorlage für Phase 19+.
 
@@ -187,9 +187,9 @@ Security-, Privacy-, Payment- oder Tenant-Negativtests nicht auf.
 
 [`19-remediation-baseline-regression.md`](./19-remediation-baseline-regression.md) · Candidate `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c`, Governance, Regressionvertrag, Inventare und alle 37 Befunde reproduzierbar eingefroren; 1.974 Unit-, 369 PostgreSQL- und 219 Browsertests sowie Recovery grün, siehe [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md).
 
-### [ ] 20 — Identity, E-Mail und Notifications
+### [x] 20 — Identity, E-Mail und Notifications
 
-[`20-identity-email-notifications.md`](./20-identity-email-notifications.md) · E-Mail-Verifikation, Privacy-Step-up, dauerhafte Zustellung und zentrale Notification Preferences.
+[`20-identity-email-notifications.md`](./20-identity-email-notifications.md) · E-Mail-Verifikation, sichere Login-E-Mail-Änderung, Privacy-Brücke, atomare Outbox, bounded Dispatcher und zentrale Notification Preferences sind auf Candidate `59089009f54312a4c10989b7efde2d5fda9a2b8d` technisch verifiziert; siehe [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md). LIVE-Zustellung, autonomer Worker und MFA/Step-up bleiben deaktiviert.
 
 ### [ ] 21 — Document-/CV-Vault
 
@@ -243,7 +243,7 @@ triggerbasiertes Sharding statt unnötigem Sofortumbau.
 
 [`32-production-release-audit.md`](./32-production-release-audit.md) · vollständige automatische, manuelle, betriebliche und externe Evidence auf exakt einem Releasecommit/Artefakt.
 
-Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in [`implementation-plan.md`](./implementation-plan.md). Für die abgeschlossene Baseline-Phase 19 und die offenen Phasen 20 bis 32 sind Reihenfolge, Parallelisierung und Konfliktgrenzen verbindlich in [`remediation-masterplan.md`](./remediation-masterplan.md) festgelegt.
+Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in [`implementation-plan.md`](./implementation-plan.md). Für die abgeschlossenen Phasen 19 und 20 sowie die offenen Phasen 21 bis 32 sind Reihenfolge, Parallelisierung und Konfliktgrenzen verbindlich in [`remediation-masterplan.md`](./remediation-masterplan.md) festgelegt.
 
 ## 7. Verantwortungsauflösung alter Konflikte
 
@@ -389,4 +389,4 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 19 wurden gemäss ihren Detailverträgen auf ihren jeweiligen Evidence-Commits umgesetzt und verifiziert. Der nächste technische Arbeitsschritt ist Phase 20; nichtaktivierende frühe Research-Tracks 29A/31A dürfen gemäss der Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md) parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates bleiben separat und können nur für die jeweilige Launchklasse geschlossen werden; insbesondere bleibt REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 20 wurden gemäss ihren Detailverträgen auf ihren jeweiligen Evidence-Commits umgesetzt und verifiziert. Der nächste technische Arbeitsschritt ist Phase 21; nichtaktivierende frühe Research-Tracks 29A/31A dürfen gemäss der Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md) parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates bleiben separat und können nur für die jeweilige Launchklasse geschlossen werden; insbesondere bleiben reale E-Mail-Zustellung, autonome Ausführung, MFA/Step-up und REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

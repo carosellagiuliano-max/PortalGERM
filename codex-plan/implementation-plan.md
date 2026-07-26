@@ -2,8 +2,9 @@
 
 > **Historischer Ausführungsplan für Phase 01–18.** Diese Phasen und ihre
 > commitgebundene Evidence bleiben unverändert. Für neue Implementierung ist
-> Phase 19 inzwischen auf Candidate `769ee62` abgeschlossen; als nächster
-> technischer Track gilt Phase 20 und danach der prospektive Abschnitt am
+> Phasen 19 und 20 sind inzwischen auf den Candidates `769ee62` und
+> `5908900` abgeschlossen; als nächster technischer Track gilt Phase 21 und
+> danach der prospektive Abschnitt am
 > Ende dieses Dokuments zusammen mit
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md)
 > verbindlich. Der historische Zielzustand war ein kontrollierbares,
@@ -592,7 +593,8 @@ Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert u
 ## Prospektiver Ausführungsplan Phase 19–32
 
 > Dieser Abschnitt ist das ausdrücklich freigegebene Folgepaket auf
-> Planungsebene. Phase 19 ist abgeschlossen; Phasen 20–32 bleiben offen.
+> Planungsebene. Phasen 19 und 20 sind abgeschlossen; Phasen 21–32 bleiben
+> offen.
 > Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
 > Folgephasengate-Vertrag aus
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md).
@@ -634,28 +636,33 @@ flowchart TD
    `main`, vollständiger Golden Run,
    Governance/ADRs/Requirements/Architektur/Traceability/Testverträge; siehe
    [Evidence](./evidence/2026-07-26-phase-19.md).
-2. **Frühe parallele Discovery**: 31A (ICP, genau ein erstes
+2. **Phase 20 — abgeschlossen**: Candidate `5908900`, verifizierte
+   E-Mail-Identität, sicherer Login-E-Mail-Wechsel, atomare Outbox,
+   bounded Dispatcher, Preferences und Sandboxprovider-Vertrag; siehe
+   [Evidence](./evidence/2026-07-26-phase-20.md). LIVE-Zustellung und
+   autonome Ausführung bleiben deaktiviert.
+3. **Frühe parallele Discovery**: 31A (ICP, genau ein erstes
    Region×Beruf-Paar, WTP, Cashflow, Operationskosten) und 29A (moderierte
    aktuelle Kernreisen).
-3. **Track 30A**: fachliches Pflege-Korpus und, nur bei Aktivierung,
+4. **Track 30A**: fachliches Pflege-Korpus und, nur bei Aktivierung,
    Engineering-Korpus; gemeinsame Berufs-/Ort-/Qualifikations-/Skill-/
    Branchenkonzepte und privacy-safe Learning.
-4. **Phasen 20→21→22→23**: Identity/Delivery, reale Dokumente,
+5. **Phasen 21→22→23**: reale Dokumente,
    Datenschutz/Legal/Analytics und autonome Operations.
-5. **Phasen 25→26→30D**: privilegierte Assurance/Least Privilege/Fraud,
+6. **Phasen 25→26→30D**: privilegierte Assurance/Least Privilege/Fraud,
    belastbarer Company Trust und Job Freshness.
-6. **Phase 24 nur bei LC5-Go**: reales Billing plus Paid-Service-Recovery.
-7. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
+7. **Phase 24 nur bei LC5-Go**: reales Billing plus Paid-Service-Recovery.
+8. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
    final usability-/mobile-/a11y-prüfen; erst danach genau das lieferbare
    Angebot/den Cluster aktivieren.
-8. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
+9. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
    Artefakt prüfen.
 
 ### Parallel zulässig
 
-- Nach grünem 19-Gate: nichttechnische 31A-/29A-Arbeit und fachliche
+- Nach grünen 19-/20-Gates: nichttechnische 31A-/29A-Arbeit und fachliche
   Korpusvorbereitung.
-- Phase 20/21/22 dürfen entworfen, aber gemeinsame Schema-/Auth-/
+- Phase 21/22 dürfen vorbereitet, aber gemeinsame Schema-/Auth-/
   Verschlüsselungsänderungen nur nacheinander integriert werden.
 - Phase 23 kann Worker-Grundlagen bauen; eine Domainqueue aktiviert erst nach
   deren stabilem fachlichem Contract.
