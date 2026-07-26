@@ -228,7 +228,7 @@ export async function seedVaultApplication(
   });
   const canton = await harness.database.canton.create({
     data: {
-      code: randomCantonCode(),
+      code: nextCantonCode(),
       name: `Phase 21 Canton ${randomUUID().slice(0, 6)}`,
       slug: `phase21-canton-${randomUUID().slice(0, 8)}`,
       language: "DE",
@@ -384,8 +384,13 @@ export async function* chunks(bytes: Buffer, size: number) {
   }
 }
 
-function randomCantonCode() {
+let cantonFixtureSequence = 0;
+
+function nextCantonCode() {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  const seed = randomUUID().replaceAll("-", "");
-  return `${alphabet[Number.parseInt(seed[0]!, 16)]}${alphabet[Number.parseInt(seed[1]!, 16)]}`;
+  if (cantonFixtureSequence >= alphabet.length ** 2) {
+    throw new Error("Phase-21 canton fixture sequence exhausted.");
+  }
+  const sequence = cantonFixtureSequence++;
+  return `${alphabet[Math.floor(sequence / alphabet.length)]}${alphabet[sequence % alphabet.length]}`;
 }
