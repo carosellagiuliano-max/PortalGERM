@@ -48,19 +48,51 @@ function extractMatrixAuditActions(plan: string) {
   return [...new Set(actions)];
 }
 
+function extractPhase22AuditActions(plan: string) {
+  const matrixBlock = plan.match(
+    /### Phase-22 Audit-log extension matrix([\s\S]*?)(?=\r?\n## )/,
+  )?.[1];
+
+  if (!matrixBlock) {
+    throw new Error("Phase 22 audit-log extension matrix was not found");
+  }
+
+  return [
+    ...new Set(
+      matrixBlock
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("| `"))
+        .flatMap((line) => {
+          const actionCell = line.split("|")[1] ?? "";
+
+          return Array.from(
+            actionCell.matchAll(/`([A-Z][A-Z0-9_]*)`/g),
+            (match) => match[1],
+          );
+        }),
+    ),
+  ];
+}
+
 describe("AUDIT_ACTIONS_V1 contract", () => {
-  it("keeps the typed constant, Prisma enum and Phase 16 matrix synchronized", () => {
+  it("keeps the typed constant, Prisma enum and immutable plus remediation matrices synchronized", () => {
     const constantActions = [...AUDIT_ACTIONS_V1];
     const prismaActions = extractPrismaAuditActions(
       readRepositoryFile("prisma/schema.prisma"),
     );
-    const matrixActions = extractMatrixAuditActions(
-      readRepositoryFile("codex-plan/16-security-hardening.md"),
-    );
+    const matrixActions = [
+      ...extractMatrixAuditActions(
+        readRepositoryFile("codex-plan/16-security-hardening.md"),
+      ),
+      ...extractPhase22AuditActions(
+        readRepositoryFile("codex-plan/22-privacy-legal-analytics.md"),
+      ),
+    ];
 
     expect(new Set(constantActions).size).toBe(constantActions.length);
     expect(new Set(prismaActions).size).toBe(prismaActions.length);
     expect(prismaActions).toEqual(constantActions);
-    expect(matrixActions).toEqual(constantActions);
+    expect(new Set(matrixActions).size).toBe(matrixActions.length);
+    expect([...matrixActions].sort()).toEqual([...constantActions].sort());
   });
 });

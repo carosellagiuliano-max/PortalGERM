@@ -10,6 +10,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
+import { derivePrivacyExportDownloadToken } from "@/lib/privacy/export-v2";
 import { formatDateTime } from "@/lib/utils/format";
 
 export const metadata: Metadata = {
@@ -43,6 +45,19 @@ export default async function CandidatePrivacyRequestDetailPage({
       exportManifest: true,
       exportManifestChecksum: true,
       exportExpiresAt: true,
+      exportArtifacts: {
+        where: { status: "READY" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          ownerUserId: true,
+          encryptionKeyVersion: true,
+          expiresAt: true,
+          manifestHash: true,
+          sizeBytes: true,
+        },
+      },
       createdAt: true,
       correctionFields: {
         orderBy: { fieldCode: "asc" },
@@ -69,16 +84,44 @@ export default async function CandidatePrivacyRequestDetailPage({
           consumedAt: true,
         },
       },
+      executions: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          processorOutcomes: {
+            orderBy: { processorKey: "asc" },
+            select: {
+              processorKey: true,
+              status: true,
+              outcomeCode: true,
+              retainedBasisRef: true,
+              attemptCount: true,
+              nextRetryAt: true,
+            },
+          },
+        },
+      },
     },
   });
   if (privacyCase === null) notFound();
   const challenge = privacyCase.challenges[0] ?? null;
+  const artifact = privacyCase.exportArtifacts[0] ?? null;
+  const environment = getServerEnvironment();
+  const downloadToken =
+    artifact === null || artifact.expiresAt <= new Date()
+      ? null
+      : derivePrivacyExportDownloadToken(
+          environment.secrets.keyrings.PRIVACY_EXPORT_KEYS,
+          artifact.encryptionKeyVersion,
+          artifact.id,
+          artifact.ownerUserId,
+          artifact.expiresAt,
+        );
   const cancellable = ["PENDING", "IDENTITY_CHECK"].includes(privacyCase.status);
 
   return (
     <section className="grid gap-6" aria-labelledby="privacy-case-title">
       <header>
-        <p className="eyebrow">Datenschutzfall · Mock</p>
+        <p className="eyebrow">Datenschutzfall</p>
         <div className="mt-2 flex flex-wrap gap-2">
           <Badge>{privacyCase.type}</Badge>
           <Badge variant="outline">{privacyCase.status}</Badge>
@@ -138,19 +181,31 @@ export default async function CandidatePrivacyRequestDetailPage({
           <CardContent className="grid gap-2 text-sm leading-6">
             <p>Abhängigkeiten: {privacyCase.deletionDependencies.join(", ") || "noch nicht geprüft"}</p>
             <p>Ergebnis: {privacyCase.deletionOutcome ?? "noch offen"}</p>
-            <p className="font-medium">COMPLETED bedeutet in diesem MVP: Prüfung abgeschlossen, keine Löschung oder Anonymisierung durchgeführt.</p>
+            <p className="font-medium">Ein Abschluss ist erst zulässig, wenn alle Processor-Outcomes terminal und nachvollziehbar sind.</p>
           </CardContent>
         </Card>
       ) : null}
 
       {privacyCase.type === "EXPORT" && privacyCase.exportManifest !== null ? (
         <Card>
-          <CardHeader><CardTitle as="h2">Exportmanifest · Mock</CardTitle></CardHeader>
+          <CardHeader><CardTitle as="h2">Exportartefakt</CardTitle></CardHeader>
           <CardContent className="grid gap-2 text-sm">
-            <p>Es wurden nur Kategorie-Zähler und Metadaten erstellt — keine Exportdatei und keine Provider-Auslieferung.</p>
-            <pre className="overflow-x-auto rounded-lg bg-muted p-3 text-xs">{JSON.stringify(privacyCase.exportManifest, null, 2)}</pre>
+            <p>Das Manifest beschreibt die tatsächlich verarbeiteten Kategorien. Paketbytes werden weder hier noch im Audit angezeigt.</p>
             <p className="break-all">Prüfsumme: {privacyCase.exportManifestChecksum}</p>
-            <p>Metadaten gültig bis: {privacyCase.exportExpiresAt ? formatDateTime(privacyCase.exportExpiresAt) : "–"}</p>
+            <p>Download gültig bis: {privacyCase.exportExpiresAt ? formatDateTime(privacyCase.exportExpiresAt) : "–"}</p>
+            {artifact !== null ? (
+              <p>{artifact.sizeBytes ?? 0} Bytes · Manifest <span className="break-all font-mono">{artifact.manifestHash}</span></p>
+            ) : null}
+            {artifact !== null && downloadToken !== null ? (
+              <form method="post" action={`/api/privacy/exports/${artifact.id}`}>
+                <input type="hidden" name="token" value={downloadToken} />
+                <button className={buttonVariants()} type="submit">
+                  Export einmalig herunterladen
+                </button>
+              </form>
+            ) : (
+              <p className="font-medium">Der Einmal-Download ist nicht mehr verfügbar.</p>
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -178,6 +233,41 @@ export default async function CandidatePrivacyRequestDetailPage({
           </ol>
         </CardContent>
       </Card>
+
+      {privacyCase.executions.map((execution) => (
+        <Card key={execution.id}>
+          <CardHeader>
+            <CardTitle as="h2">
+              Vollzug · {execution.kind} · {execution.status}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <p className="text-sm leading-6 text-muted-foreground">
+              {execution.checkpoint}/{execution.requiredProcessors.length} Processor
+              terminal. Teilfehler oder Holds bleiben sichtbar und verhindern
+              einen falschen Abschluss.
+            </p>
+            <ol className="grid gap-2">
+              {execution.processorOutcomes.map((outcome) => (
+                <li className="rounded-lg border p-3 text-sm" key={outcome.processorKey}>
+                  <p className="font-medium">
+                    {outcome.processorKey} · {outcome.status}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {outcome.outcomeCode ?? "Outcome offen"} · Versuch {outcome.attemptCount}
+                    {outcome.nextRetryAt ? ` · nächster Lauf ${formatDateTime(outcome.nextRetryAt)}` : ""}
+                  </p>
+                  {outcome.retainedBasisRef ? (
+                    <p className="mt-2 text-sm">
+                      Eng begrenzt behalten: {outcome.retainedBasisRef}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      ))}
 
       {cancellable ? (
         <PrivacyCaseCancelForm

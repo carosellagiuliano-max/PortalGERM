@@ -28,6 +28,12 @@ export const ADMIN_CAPABILITIES_V1 = [
   "ADMIN_CATALOG_MUTATE",
   "ADMIN_INVOICE_MUTATE",
   "ADMIN_ANALYTICS_READ",
+  "ADMIN_LEGAL_READ",
+  "ADMIN_LEGAL_DRAFT",
+  "ADMIN_LEGAL_REVIEW",
+  "ADMIN_LEGAL_PUBLISH",
+  "PRIVACY_EXECUTION_APPROVE",
+  "PRIVACY_HOLD_MANAGE",
   "ADMIN_CREDITS_GRANT",
   "ADMIN_CREDIT_REVERSE",
   "ADMIN_SLA_PROJECT",
@@ -84,6 +90,15 @@ export const PHASE_14_PRIVACY_ADMIN_CAPABILITIES = Object.freeze([
   "PRIVACY_CASE_READ",
   "PRIVACY_CASE_VERIFY",
   "PRIVACY_CASE_PROCESS",
+] as const satisfies readonly AdminCapability[]);
+
+export const PHASE_22_LEGAL_PRIVACY_CAPABILITIES = Object.freeze([
+  "ADMIN_LEGAL_READ",
+  "ADMIN_LEGAL_DRAFT",
+  "ADMIN_LEGAL_REVIEW",
+  "ADMIN_LEGAL_PUBLISH",
+  "PRIVACY_EXECUTION_APPROVE",
+  "PRIVACY_HOLD_MANAGE",
 ] as const satisfies readonly AdminCapability[]);
 
 export function canRunLicensedSupplyImport(actor: AdminCapabilityActor): boolean {

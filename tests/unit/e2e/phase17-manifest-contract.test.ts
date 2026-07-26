@@ -74,7 +74,7 @@ describe("Phase 17 manifest contract", () => {
     expect(() =>
       validatePhase17RunManifest(incomplete, validationOptions(manifest)),
     ).toThrow(
-      /chromium-mobile-360 \/ quality\/phase21-document-vault-quality\.spec\.ts has 1 quality result/u,
+      /chromium-mobile-360 \/ quality\/phase22-privacy-legal-quality\.spec\.ts has 1 quality result/u,
     );
   });
 

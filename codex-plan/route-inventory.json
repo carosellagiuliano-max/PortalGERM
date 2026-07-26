@@ -134,6 +134,13 @@
   },
   {
     "kind": "page",
+    "path": "/admin/legal",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
     "path": "/admin/orders",
     "roles": [
       "ADMIN"
@@ -298,6 +305,13 @@
   {
     "kind": "handler",
     "path": "/api/documents/versions/[id]/scan",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/privacy/exports/[id]",
     "roles": [
       "CANDIDATE"
     ]
@@ -755,6 +769,27 @@
   {
     "kind": "page",
     "path": "/jobs/kategorie/[slug]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/legal/imprint",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/legal/privacy",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/legal/terms",
     "roles": [
       "PUBLIC"
     ]

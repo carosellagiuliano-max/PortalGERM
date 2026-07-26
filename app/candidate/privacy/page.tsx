@@ -4,6 +4,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
+  updateCandidateAnalyticsConsentAction,
+} from "@/app/candidate/privacy/actions";
+import {
   PrivacyCorrectionRequestForm,
   PrivacyDeleteRequestForm,
   PrivacyExportRequestForm,
@@ -15,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getCandidatePrivacyDashboard } from "@/lib/candidate/privacy-dashboard";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
 import { formatDate } from "@/lib/utils/format";
 
 export const metadata: Metadata = { title: "Privatsphäre" };
@@ -37,6 +41,22 @@ export default async function CandidatePrivacyPage() {
   const user = await requireCandidatePage();
   const dashboard = await getCandidatePrivacyDashboard(getDatabase(), user.id);
   if (dashboard === null) return null;
+  const [analyticsConsents, analyticsPublication] = await Promise.all([
+    getDatabase().analyticsConsentEvent.findMany({
+      where: { userId: user.id },
+      orderBy: [{ eventFamily: "asc" }, { effectiveAt: "desc" }],
+      distinct: ["eventFamily"],
+    }),
+    getDatabase().legalPublication.findFirst({
+      where: {
+        status: "CURRENT",
+        effectiveAt: { lte: new Date() },
+        legalDocument: { type: "ANALYTICS", locale: "de-CH" },
+      },
+      select: { id: true, publicationHash: true },
+    }),
+  ]);
+  const environment = getServerEnvironment();
   return (
     <section aria-labelledby="privacy-title">
       <p className="eyebrow">Privatsphäre</p>
@@ -64,6 +84,62 @@ export default async function CandidatePrivacyPage() {
       </div>
 
       <Card className="mt-5">
+        <CardHeader><CardTitle as="h2">Optionale Produktanalyse</CardTitle></CardHeader>
+        <CardContent className="grid gap-4">
+          <p className="text-sm leading-6 text-muted-foreground">
+            Betriebliche Sicherheits- und Workflow-Evidence bleibt davon
+            unberührt. Optionale Navigation und Conversion werden getrennt,
+            standardmässig aus und ohne Werbepixel verwaltet. Ein Widerruf
+            stoppt neue optionale Events sofort.
+          </p>
+          {(["NAVIGATION", "CONVERSION"] as const).map((family) => {
+            const latest = analyticsConsents.find(
+              (consent) => consent.eventFamily === family,
+            );
+            const enabled =
+              family === "NAVIGATION"
+                ? environment.OPTIONAL_ANALYTICS_NAVIGATION
+                : environment.OPTIONAL_ANALYTICS_CONVERSION;
+            const canGrant = enabled && analyticsPublication !== null;
+            return (
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between" key={family}>
+                <div>
+                  <p className="font-medium">
+                    {family === "NAVIGATION" ? "Navigation & Suche" : "Bewerbungs- und Preisinteresse"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Status: {latest?.granted ? "freiwillig aktiviert" : "aus"}
+                    {latest ? ` · Policy ${latest.policyVersion}` : ""}
+                  </p>
+                </div>
+                <form action={updateCandidateAnalyticsConsentAction}>
+                  <input type="hidden" name="eventFamily" value={family} />
+                  <input
+                    type="hidden"
+                    name="granted"
+                    value={latest?.granted ? "false" : "true"}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!latest?.granted && !canGrant}
+                    className={buttonVariants({
+                      variant: latest?.granted ? "outline" : "default",
+                    })}
+                  >
+                    {latest?.granted
+                      ? "Sofort widerrufen"
+                      : canGrant
+                        ? "Freiwillig aktivieren"
+                        : "Noch nicht freigegeben"}
+                  </button>
+                </form>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-5">
         <CardHeader><CardTitle as="h2">Arbeitgeberkontakte</CardTitle></CardHeader>
         <CardContent>
           <p className="mb-4 text-sm leading-6 text-muted-foreground">Gezeigt werden protokollierte Kontaktanfragen und separate Identitätsfreigaben. Unmodellierte Profilaufrufe werden nicht behauptet.</p>
@@ -72,10 +148,10 @@ export default async function CandidatePrivacyPage() {
       </Card>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
-        <PrivacyRequestCard title="Datenexport anfordern" description="Erstellt einen nachverfolgbaren Export-Fall. Im MVP entsteht kein sofortiger, unprotokollierter Download." />
+        <PrivacyRequestCard title="Datenexport anfordern" description="Erstellt einen nachverfolgbaren Export-Fall. Nach Prüfung entsteht ein verschlüsseltes, höchstens 15 Minuten gültiges Einmal-Artefakt." />
         <Card>
           <CardHeader><CardTitle as="h2">Konto-Löschung beantragen</CardTitle></CardHeader>
-          <CardContent><p className="mb-4 text-sm leading-6 text-muted-foreground">Die Anfrage startet eine Fallprüfung. Aufbewahrungspflichten und aktive Vorgänge können berücksichtigt werden; das MVP löscht nicht ungeprüft sofort.</p><PrivacyDeleteRequestForm idempotencyKey={randomUUID()} /></CardContent>
+          <CardContent><p className="mb-4 text-sm leading-6 text-muted-foreground">Die Anfrage startet einen processorweisen Vollzug. Zulässige Daten werden gelöscht oder anonymisiert; eng begrenzte Holds und Aufbewahrung bleiben verständlich sichtbar.</p><PrivacyDeleteRequestForm idempotencyKey={randomUUID()} /></CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle as="h2">Datenkorrektur</CardTitle></CardHeader>

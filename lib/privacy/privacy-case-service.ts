@@ -1438,6 +1438,10 @@ function actionForEvent(
     case PrivacyRequestEventKind.CREATED:
     case PrivacyRequestEventKind.VERIFIED:
     case PrivacyRequestEventKind.MANIFEST_CREATED:
+    case PrivacyRequestEventKind.EXECUTION_STARTED:
+    case PrivacyRequestEventKind.PROCESSOR_UPDATED:
+    case PrivacyRequestEventKind.PARTIAL:
+    case PrivacyRequestEventKind.ARTIFACT_READY:
       return null;
   }
 }

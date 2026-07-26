@@ -1,8 +1,9 @@
 # Phase 22 — Datenschutzvollzug, stabile Rechtsgates und LIVE-Analytics
 
-> **Planstatus:** GEPLANT / NICHT BEGONNEN
-> **Technikstatus:** NICHT IMPLEMENTIERT
-> **Quality-Gate:** NICHT GELAUFEN
+> **Planstatus:** IN UMSETZUNG / TECHNISCHER CANDIDATE IN PRÜFUNG
+> **Technikstatus:** IMPLEMENTIERT; COMMITGEBUNDENES G3 NOCH AUSSTEHEND
+> **Quality-Gate:** AUTOMATISIERT AUF ARBEITSBAUM GRÜN; COUNSEL UND
+> MODERIERTE FORSCHUNG NICHT GELAUFEN
 > **Aktivierung:** DISABLED
 >
 > Die bestehende Privacy-Case-Maschine ist wertvolle Vorarbeit. Export und
@@ -42,24 +43,34 @@ Messbarer Zielzustand:
 
 ## 3. Tatsächlicher Repositoryzustand
 
-- `lib/privacy/export-mock.ts:99-169` erzeugt ausdrücklich nur ein
-  Manifest/Counts, keine vollständigen Rohzeilen oder Dateibytes.
-- `app/admin/privacy-requests/actions.ts:81-90` und
-  `lib/privacy/privacy-case-service.ts:842-862` beenden DELETE als
-  `ASSESSMENT_COMPLETED_NO_ERASURE`.
-- `app/candidate/privacy/requests/[id]/page.tsx:140-153` kommuniziert die
-  Mockgrenze ehrlich.
-- `prisma/schema.prisma:2509-2546` besitzt Case-/Challenge-/Manifestevidence,
-  aber kein echtes Exportartefakt, processorweises Erasure-Outcome oder
-  Legal-Hold-Inventar.
-- `lib/analytics/event-contracts.ts` besitzt bereits eine geschlossene,
-  purpose-/retentiongebundene Event-Allowlist; optionale Product Analytics
-  ist in Production fail-closed. Essentielle Security-/Domain-Events dürfen
-  nicht mit optionaler Analytics vermischt werden.
-- Es fehlen öffentliche kanonische Rechtsrouten und extern freigegebene
-  AVG-/DSG-/DSGVO-/AGB-/AVV-/DSFA-Entscheide. Die vorhandenen
-  Privacy-/Consent-/Radar-Tests beweisen den Mockvertrag, nicht realen Vollzug.
-- Für diese Planung wurden keine Tests ausgeführt.
+- Die additive Phase-22-Migration liefert immutable Inventarversionen,
+  Legal-Revisions/Publikationen, flowspezifische Processing Approvals,
+  processorweise Executions/Outcomes, verschlüsselte Exportartefakte,
+  Legal Holds, Erasure-Proofs/Tombstones und append-only Analytics-Consents.
+- `lib/privacy/export-v2.ts` erstellt ownergebundene, manifestierte
+  Streamingpakete einschließlich eigener zulässiger Dokumentbytes; Download
+  ist step-up-gebunden, höchstens 15 Minuten gültig und single-use.
+- `lib/privacy/execution-v2.ts` vollzieht Korrektur und irreversible
+  Anonymisierung processorweise, bewahrt immutable/retained Evidence, bleibt
+  bei Teilfehlern `RETRY_REQUIRED` und kann checkpointed fortgesetzt werden.
+- `lib/privacy/restore-reconciliation.ts` wendet Tombstones nach einem
+  simulierten Restore erneut an und verhindert die stille PII-Reaktivierung.
+- `/admin/legal`, `/legal/privacy`, `/legal/terms`, `/legal/imprint`,
+  Candidate-Privacy-UX und `/api/privacy/exports/[id]` sind vorhanden. Ohne
+  exakte Publication-/Processing-Gates zeigen öffentliche Seiten einen
+  ehrlichen gesperrten Zustand und mutierende Flows schreiben nichts.
+- `lib/analytics/live-consent-policy.ts` trennt essentielle Domain-/Security-
+  Events von optionalen Eventfamilien und verlangt exakte Publication,
+  Processing Approval, aktuelle Einwilligung, Property-Allowlist, Retention
+  und LIVE-Provenienz.
+- Alle neuen Runtimeflags stehen standardmäßig auf `false`, Mode
+  `disabled` und Cohort `none`. Externe Counsel-/AVG-/DSFA-/DPA-/Region-
+  Entscheide sind nicht freigegeben; der statische Inventoryhash ist daher
+  keine Legal-Signatur.
+- Accountgebundene Candidate-/Employer-/Invitee-/Lead-/Reporter-Daten sind
+  im V2-Export abgedeckt. Ein sicherer Nicht-Kontoinhaber-Intake bleibt
+  fail-closed, bis Phase 25 den alternativen Identity-/Risk-/Step-up-Vertrag
+  liefert; er wird nicht durch ein Schattenkonto simuliert.
 
 ## 4. Findings und Requirements
 
@@ -129,17 +140,17 @@ personell getrennten Grants bereitstellt.
 
 ## 8. Portale, Routen, Services, Provider und Worker
 
-Bestehend: `/candidate/privacy`,
+Bestehend und Phase-22-erweitert: `/candidate/privacy`,
 `/candidate/privacy/requests/[id]`,
 `/candidate/privacy/requests/[id]/verify`,
-`/admin/privacy-requests` und `/admin/privacy-requests/[id]`.
-Geplantes, noch nicht im Ist-Inventar:
+`/admin/privacy-requests`, `/admin/privacy-requests/[id]`, `/admin/legal`,
+`/legal/privacy`, `/legal/terms`, `/legal/imprint` und
+`/api/privacy/exports/[id]`.
+Weiterhin erst nach Folgephasengate:
 
-- `/legal/privacy`, `/legal/terms`, `/legal/imprint` sowie nur tatsächlich
-  benötigte Cookie-/Analytics-/AVG-Hinweise;
-- kurzlebiger Export-Download aus dem eigenen Case;
 - alternative Intake-/Identity-Challenge für Nicht-Kontoinhaber;
-- capability-getrennte Admin-Actions, keine neue globale Adminmacht.
+- personell persistierte statt nur actor-getrennt geprüfte Admin-Grants und
+  risikobasierte echte Step-up-Evidence aus Phase 25.
 
 Services: DataInventory Registry, Legal Publication/Gate Service, Privacy
 Orchestrator, Export Builder, Correction-/Erasure Processors, Hold Resolver,
@@ -255,6 +266,29 @@ Tombstones/Restore-Reconciliation, damit alte PII nicht still reaktiviert
 wird. Search-Learning speichert ohne separate Phase-22-Freigabe keine
 Rohquery, Identifier oder rare-query Cluster.
 
+### Phase-22 Audit-log extension matrix
+
+Die historische Phase-16-Matrix bleibt unverändert. Folgende additive
+Phase-22-Aktionen erweitern ihren kanonischen, typisierten Vertrag; der
+Unit-Contract vergleicht beide Matrizen gemeinsam mit Prisma und
+`AUDIT_ACTIONS_V1`.
+
+| Audit action | Owning workflow |
+| --- | --- |
+| `PRIVACY_INVENTORY_ACTIVATED` | versioniertes Inventory aktivieren oder widerrufen |
+| `LEGAL_REVISION_REVIEWED` | unabhängiges Review einer Legal-Revision |
+| `LEGAL_PUBLICATION_PUBLISHED` | exakte Legal-Version veröffentlichen |
+| `LEGAL_PUBLICATION_REVOKED` | veröffentlichte Legal-Version widerrufen |
+| `PROCESSING_APPROVAL_CHANGED` | flowspezifische Legal-/DSFA-/Processor-Freigabe |
+| `PRIVACY_EXECUTION_STARTED` | Export-/Correction-/Erasure-Execution versiegeln |
+| `PRIVACY_PROCESSOR_OUTCOME_CHANGED` | processorweises Terminal-/Retry-/Retention-Outcome |
+| `PRIVACY_EXECUTION_COMPLETED` | Completion erst nach allen terminalen Outcomes |
+| `PRIVACY_EXPORT_ARTIFACT_CREATED` | verschlüsseltes, manifestiertes Exportartefakt |
+| `PRIVACY_EXPORT_ARTIFACT_DOWNLOADED` | ownergebundener Single-use-Download |
+| `LEGAL_HOLD_CHANGED` | befristeten Hold setzen, reviewen oder freigeben |
+| `ANALYTICS_CONSENT_CHANGED` | versioniertes opt-in/opt-out je Eventfamilie |
+| `PRIVACY_RESTORE_RECONCILED` | Tombstone-basierte Restore-Reconciliation |
+
 ## 16. Abuse-, Fraud-, ATO-, Enumeration-, Replay- und Insider-Szenarien
 
 - Mass Export/Delete, Case-/Artifact-ID Enumeration, fremder Tenant,
@@ -334,15 +368,15 @@ dem Abschlusscommit werden Evidence.
 | Criterion | Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `22-AC-01` | `STH-006/007`, `REQ-PRIV-004` | vergessener Datenort/instabiles Rechtsgate, P0 | Contract + Unit | Inventory×Subject×Processor×Flow und AVG/AVV/DSFA-Gate | jede Zeile hat freigegebenes Outcome/Owner/Version | fehlende Basis, expired/revoked Gate, unbekannter Processor oder Flow blockiert Aktivierung | Legal/Privacy/System | Policy Registry | vollständige Entity-/Providerliste + Canary | Unit | `npx vitest run --config vitest.config.ts tests/unit/privacy/data-inventory-contract.test.ts tests/unit/privacy/legal-gate-policy.test.ts` | 100 % Inventarzeilen vollständig; 0 unbekannte/expired Aktivierungen; Hash stabil | signierte Inventory-/Gate-Matrix | Privacy + Legal + QA | PLANNED |
-| `22-AC-02` | `STH-006`, `REQ-PRIV-004` | unvollständiger/fremder Export, P0 | PostgreSQL + E2E | Candidate/Employer/Invitee/Lead/Reporter Export mit DB + Dokumentbyte | eigenes Paket manifestiert alle freigegebenen Kategorien, decrypt/download einmal | Foreign Canary, expired/replayed URL, falscher Subject/Step-up und manipulierter Digest: 0 Daten | Data Subject | Privacy/DB/Object Store | je Subjectklasse, zwei Tenants, bekannte Bytehashes | PostgreSQL + Production Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/privacy-export-v2-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase22-privacy-rights.spec.ts --project=chromium-journeys` | Kategorie-/Rowcounts exakt; Dokumenthash identisch; 0 Foreign IDs; zweiter Download 0; Manifesthash valide | verschlüsseltes Testmanifest, Trace | Privacy + Data | PLANNED |
-| `22-AC-03` | `STH-006`, `REQ-PRIV-004` | unzulässige Löschung/False Complete, P0 | PostgreSQL + Failure/Restore | Erasure mit Application, Message, Radar, Billing, Audit, Hold und Providerteilfehler | freigegebene Daten gelöscht/anonymisiert, retained minimal begründet | aktiver Hold, Accounting/Audit, Provider timeout, Crash und Retry bleiben sichtbar; kein `COMPLETED` | Data Subject/Privacy/System | Privacy Orchestrator/Provider | Entitymatrix, Hold Canary, Fake Clock | isoliertes PostgreSQL + provider emulator | `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/privacy-erasure-postgres.test.ts`; `npx tsx scripts/phase22-privacy-failure-drill.ts --case=erasure --fail-after=3 --resume`; `npx tsx scripts/phase22-erasure-restore-drill.ts` | je Processor genau 1 terminales Outcome; Teilfehler `PARTIAL`; Hold unverändert; Restore 0 reaktivierte löschpflichtige PII | Processor-Timeline, Restore-Diff | Privacy + Legal + Ops | PLANNED |
-| `22-AC-04` | `REQ-PRIV-004` | inkonsistente Korrektur/fremde Mutation, P0 | PostgreSQL + E2E | CORRECT request→verify→approve→apply→projection→notification | eigene korrigierbare Felder und abhängige Readmodels stimmen | immutable Evidence, Foreign Tenant, invalid value, Providerfehler bleiben unverändert/partial | Candidate + Nicht-Kontoinhaber | Privacy/Domain/Outbox | eigene/Foreign Canaries, downstream projection | PostgreSQL + Production Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/privacy-correction-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase22-privacy-rights.spec.ts --project=chromium-journeys` | genau 1 Correction Event/Notification; alle erlaubten Projektionen gleich; Foreign 0 Writes; Retry ohne Doppelwirkung | Before/After-/Outboxmanifest | Privacy + Domain Owner | PLANNED |
-| `22-AC-05` | `STH-007` | falscher/ungeprüfter Rechtstext oder AVG-Flow, P0 | PostgreSQL + E2E + Manual Legal | Draft→Review→Publish→Revoke/Re-consent; flow-spezifisches Gate | öffentliche Links zeigen exakt veröffentlichte Version/Hash | Draft, self-approval, expired/revoked AVG/AVV/DSFA-Gate und alter Consent aktivieren 0 Flow | Public/Legal/User | Legal CMS/Registration/Footer/Checkout/Radar | zwei Revisionen, alte Consents, revoked Gate | PostgreSQL + Production Browser + Legal Review | `npx vitest run --config vitest.integration.config.ts tests/integration/legal/legal-publication-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase22-legal-consent.spec.ts --project=chromium-journeys`; manueller Abgleich jeder sichtbaren Hash-/Version gegen signierte Counsel-Matrix | 1 current Publication; 0 Draftleak; Re-consent nur wenn Policy verlangt; ungeklärter Flow serverseitig 0 Writes | Publication-/Link-/Counsel-Manifest | Legal + Privacy + QA | PLANNED |
+| `22-AC-02` | `STH-006`, `REQ-PRIV-004` | unvollständiger/fremder Export, P0 | PostgreSQL + E2E | Candidate/Employer/Invitee/Lead/Reporter Export mit DB + Dokumentbyte | eigenes Paket manifestiert alle freigegebenen Kategorien, decrypt/download einmal | Foreign Canary, expired/replayed URL, falscher Subject/Step-up und manipulierter Digest: 0 Daten | Data Subject | Privacy/DB/Object Store | je Subjectklasse, zwei Tenants, bekannte Bytehashes | PostgreSQL + Production Browser | `npm run test:integration -- tests/integration/privacy/privacy-export-v2-postgres.test.ts`; `npm run test:e2e:browser -- tests/e2e/flows/phase22-privacy-rights.spec.ts` | Kategorie-/Rowcounts exakt; Dokumenthash identisch; 0 Foreign IDs; zweiter Download 0; Manifesthash valide | verschlüsseltes Testmanifest, Trace | Privacy + Data | PLANNED |
+| `22-AC-03` | `STH-006`, `REQ-PRIV-004` | unzulässige Löschung/False Complete, P0 | PostgreSQL + Failure/Restore | Erasure mit Application, Message, Radar, Billing, Audit, Hold und Providerteilfehler | freigegebene Daten gelöscht/anonymisiert, retained minimal begründet | aktiver Hold, Accounting/Audit, Provider timeout, Crash und Retry bleiben sichtbar; kein `COMPLETED` | Data Subject/Privacy/System | Privacy Orchestrator/Provider | Entitymatrix, Hold Canary, Fake Clock | isoliertes PostgreSQL + provider emulator | `npm run test:integration -- tests/integration/privacy/privacy-erasure-postgres.test.ts`; `npm run privacy:failure-drill`; `npm run privacy:restore-drill` | je Processor genau 1 terminales Outcome; Teilfehler `PARTIAL`; Hold unverändert; Restore 0 reaktivierte löschpflichtige PII | Processor-Timeline, Restore-Diff | Privacy + Legal + Ops | PLANNED |
+| `22-AC-04` | `REQ-PRIV-004` | inkonsistente Korrektur/fremde Mutation, P0 | PostgreSQL + E2E | CORRECT request→verify→approve→apply→projection→notification | eigene korrigierbare Felder und abhängige Readmodels stimmen | immutable Evidence, Foreign Tenant, invalid value, Providerfehler bleiben unverändert/partial | Candidate + Nicht-Kontoinhaber | Privacy/Domain/Outbox | eigene/Foreign Canaries, downstream projection | PostgreSQL + Production Browser | `npm run test:integration -- tests/integration/privacy/privacy-correction-postgres.test.ts`; `npm run test:e2e:browser -- tests/e2e/flows/phase22-privacy-rights.spec.ts` | genau 1 Correction Event/Notification; alle erlaubten Projektionen gleich; Foreign 0 Writes; Retry ohne Doppelwirkung | Before/After-/Outboxmanifest | Privacy + Domain Owner | PLANNED |
+| `22-AC-05` | `STH-007` | falscher/ungeprüfter Rechtstext oder AVG-Flow, P0 | PostgreSQL + E2E + Manual Legal | Draft→Review→Publish→Revoke/Re-consent; flow-spezifisches Gate | öffentliche Links zeigen exakt veröffentlichte Version/Hash | Draft, self-approval, expired/revoked AVG/AVV/DSFA-Gate und alter Consent aktivieren 0 Flow | Public/Legal/User | Legal CMS/Registration/Footer/Checkout/Radar | zwei Revisionen, alte Consents, revoked Gate | PostgreSQL + Production Browser + Legal Review | `npm run test:integration -- tests/integration/legal/legal-publication-postgres.test.ts`; `npm run test:e2e:browser -- tests/e2e/flows/phase22-legal-consent.spec.ts`; manueller Abgleich jeder sichtbaren Hash-/Version gegen signierte Counsel-Matrix | 1 current Publication; 0 Draftleak; Re-consent nur wenn Policy verlangt; ungeklärter Flow serverseitig 0 Writes | Publication-/Link-/Counsel-Manifest | Legal + Privacy + QA | PLANNED |
 | `22-AC-06` | `STH-017`, `REQ-DATA-001`, Beitrag `REQ-SRCH-002` | Tracking ohne Basis/Reidentifikation, P0 | Unit + PostgreSQL Security | Environment×Event×Purpose×Consent×Retention; revoke und Search-Learning-Gate | nur freigegebene optionale Eventfamilie mit aktuellem Consent | opt-out/revoke, PII property, raw/rare query, DEMO/LIVE mix und unknown event ergeben 0 Writes | Visitor/Candidate/Employer | Analytics/Consent/Search Gate | vollständiger Eventkatalog + PII Canaries | Unit + isoliertes PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/analytics/live-consent-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/analytics/live-consent-postgres.test.ts` | 100 % Policy-Matrix; nach Revoke 0 optionale Events; Essential unverändert; 0 Rawquery/PII | Event-/Retention-/Redactionreport | Privacy + Data | PLANNED |
 | `22-AC-07` | `STH-030`, `REQ-ID-004`, `REQ-PRIV-004` | IDOR/Insider/gestohlene Session, P0 | Security + PostgreSQL | Owner/Subject/Membership/Capability/Assignment/Step-up/Two-Actor Matrix | erlaubter Actor bewirkt genau eine Action | stale/replay/cross-purpose/cross-subject/direct action/self-approval liest/schreibt 0 | Candidate/Employer/Privacy Admin | Privacy Repositories/Actions | zwei Tenants, getrennte Adminactors, stale grants | isoliertes PostgreSQL 16 | `npx vitest run --config vitest.config.ts tests/unit/privacy/privacy-case-capability-matrix.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/privacy-authorization-postgres.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/security/authorized-repositories.test.ts` | alle Denials vor Providerread; 0 Foreign IDs; genau 2 getrennte Actors bei riskanter Execution | Capability-/Provider-call-Manifest | Security + Privacy | PLANNED |
-| `22-AC-08` | `REQ-PRIV-004`, `REQ-NOT-001`, Beitrag `STH-031` | verschluckter Teilfehler/Doppelwirkung, P0 | Failure Injection + PostgreSQL | jeder DB-/Storage-/Email-/Analytics-Processor timeout/429/5xx/crash/restart | Resume ab Checkpoint, Pflichtnotification durable | Failure kann Case nicht Complete markieren; Poison landet bounded DLQ; Repeat erzeugt keine Doppelwirkung | System/Ops | Orchestrator/Outbox/Provider | N Processor, Fail an jeder Grenze | isoliertes PostgreSQL + Provider emulators | `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/privacy-provider-reconciliation-postgres.test.ts`; `npx tsx scripts/phase22-privacy-failure-drill.ts --matrix=all-processors` | 0 False Complete; je Dedupe-Key 1 Outcome; jeder Fehler in Case/Audit/Ops/Outbox sichtbar | Failure-Matrix/Timeline | Privacy + Ops | PLANNED |
-| `22-AC-09` | `STH-033`, `REQ-UX-003`, `REQ-QA-002` | unverstandene irreversible Entscheidung, P0 | E2E + A11y + moderiert | Request, Verify, Download, Hold-Erklärung, Delete und Analytics Opt-out | Nutzer lösen Aufgabe und erklären Wirkung korrekt | kritische Fehlannahme/Abbruch oder unzugänglicher State blockiert Cohort | Candidate/Employer/Invitee | Browser/Research | n≥5 Candidate + n≥5 Employer/Invitee, anonymisierte Fixtures | Desktop/360 + moderierte Session | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase22-privacy-legal-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase22-privacy-legal-quality.spec.ts --project=chromium-mobile-360`; manueller Ablauf nach `codex-plan/research/phase22-privacy-comprehension-protocol.md` | 0 critical/serious Axe; Task Success ≥80 % je Rolle; 0 kritische Fehlannahmen; rote Findings geschlossen/re-scope | Axe-/Researchprotokoll | UX Research + Privacy | PLANNED |
-| `22-AC-10` | ADR-033, `REQ-QA-003` | Migration/Restore reaktiviert PII, P0 | Migration + Recovery | leer, Legacy Consents/Cases, Partial Backfill, Wiederholung, Restore | additive Migration und korrekte Legacyklassifikation | Fake Re-consent, Duplicate Outcome, restored erased PII oder fehlendes Inventory blockiert | System/Data | Prisma/Backup/Privacy | Phase-19-Bestand + erased tombstone | isoliertes PostgreSQL 16 + isolierter Restore | `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase22-privacy-legal-migration-postgres.test.ts`; `npm run db:migrate`; `npm run db:migrate:status`; `npx tsx scripts/phase22-erasure-restore-drill.ts` | 0 gefälschte Consents; 0 Duplicate Outcomes; Restore-Reconcile entfernt/blockiert 100 % Tombstone-Canaries | Migration-/Restoremanifest | Data + Privacy + Ops | PLANNED |
+| `22-AC-08` | `REQ-PRIV-004`, `REQ-NOT-001`, Beitrag `STH-031` | verschluckter Teilfehler/Doppelwirkung, P0 | Failure Injection + PostgreSQL | jeder DB-/Storage-/Email-/Analytics-Processor timeout/429/5xx/crash/restart | Resume ab Checkpoint, Pflichtnotification durable | Failure kann Case nicht Complete markieren; Poison landet bounded DLQ; Repeat erzeugt keine Doppelwirkung | System/Ops | Orchestrator/Outbox/Provider | N Processor, Fail an jeder Grenze | isoliertes PostgreSQL + Provider emulators | `npm run test:integration -- tests/integration/privacy/privacy-provider-reconciliation-postgres.test.ts`; `npm run privacy:failure-drill` | 0 False Complete; je Dedupe-Key 1 Outcome; jeder Fehler in Case/Audit/Ops/Outbox sichtbar | Failure-Matrix/Timeline | Privacy + Ops | PLANNED |
+| `22-AC-09` | `STH-033`, `REQ-UX-003`, `REQ-QA-002` | unverstandene irreversible Entscheidung, P0 | E2E + A11y + moderiert | Request, Verify, Download, Hold-Erklärung, Delete und Analytics Opt-out | Nutzer lösen Aufgabe und erklären Wirkung korrekt | kritische Fehlannahme/Abbruch oder unzugänglicher State blockiert Cohort | Candidate/Employer/Invitee | Browser/Research | n≥5 Candidate + n≥5 Employer/Invitee, anonymisierte Fixtures | Desktop/360 + moderierte Session | `npm run test:e2e:browser -- tests/e2e/quality/phase22-privacy-legal-quality.spec.ts`; manueller Ablauf nach `codex-plan/research/phase22-privacy-comprehension-protocol.md` | 0 critical/serious Axe; Task Success ≥80 % je Rolle; 0 kritische Fehlannahmen; rote Findings geschlossen/re-scope | Axe-/Researchprotokoll | UX Research + Privacy | PLANNED |
+| `22-AC-10` | ADR-033, `REQ-QA-003` | Migration/Restore reaktiviert PII, P0 | Migration + Recovery | leer, Legacy Consents/Cases, Partial Backfill, Wiederholung, Restore | additive Migration und korrekte Legacyklassifikation | Fake Re-consent, Duplicate Outcome, restored erased PII oder fehlendes Inventory blockiert | System/Data | Prisma/Backup/Privacy | Phase-19-Bestand + erased tombstone | isoliertes PostgreSQL 16 + isolierter Restore | `npm run test:integration -- tests/integration/schema/phase22-privacy-legal-migration-postgres.test.ts`; `npm run db:migrate`; `npm run db:migrate:status`; `npm run privacy:restore-drill` | 0 gefälschte Consents; 0 Duplicate Outcomes; Restore-Reconcile entfernt/blockiert 100 % Tombstone-Canaries | Migration-/Restoremanifest | Data + Privacy + Ops | PLANNED |
 | `22-AC-11` | `REQ-QA-001`, `REQ-QA-003` | Radar/Billing/Audit/Privacy-Regression, P0 | G3 Portal-Golden | alle Owning-/Regression-/Browser-/Recovery-Gates | kompletter Vertrag auf identischem Commit | Skip, Retry, anderer Digest oder offene Pflichtzeile blockiert | alle | Repository/Portale | deterministischer Seed | Clean Clone, PostgreSQL 16, Production Browser | nacheinander `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:integration`, `npm run build`, `npm run test:e2e:http`, `npm run test:e2e:browser`, `npm run test:e2e:hsts`, `npm run test:release` | alle Exit 0; Retry 0; keine unerklärten Skips; Restore isoliert; gleicher Commit/Digest | G3-/Recovery-Manifest | QA + Ops | PLANNED |
 
 ## 22. Performance-, Query-, Queue-, Datei-, Latenz- und Lastgrenzen
@@ -357,6 +391,8 @@ dem Abschlusscommit werden Evidence.
   30 Kalendertage; overdue threshold und Eskalation sind deterministisch;
 - Analytics-/Consent-Write p95 ≤250 ms bei 50 parallelen Events in der
   isolierten Referenzumgebung; keine unbounded Properties/Queries;
+- beide Referenzgrenzen werden gemeinsam reproduzierbar mit
+  `npm run privacy:load` geprüft;
 - Production-Kapazität, p95 Handling Time und Unit Cost werden mit Phase 23/
   `STH-034` gemessen, nicht aus Demo-Zeiten behauptet.
 
@@ -391,6 +427,12 @@ Failure-/Resume-/DLQ-Timeline, Providerreceipts, Restore-Diff, Consent-/
 Analyticsreport, Rolle-/Step-up-/Tenantmatrix, Legal-Link-/Hash-Abgleich,
 Mobile/A11y, anonymisiertes moderiertes Researchprotokoll, Flags/Kill-Switch
 und G3. Externe Freigaben bleiben getrennt von Teststatus.
+
+Die maschinenlesbare technische Matrix und alle noch fehlenden
+Fachentscheidungen stehen in
+[`phase22-external-gates.md`](./phase22-external-gates.md). Das
+vorregistrierte, noch nicht durchgeführte Researchverfahren steht in
+[`research/phase22-privacy-comprehension-protocol.md`](./research/phase22-privacy-comprehension-protocol.md).
 
 ## 26. Definition of Done für Technik und Quality-Gate
 

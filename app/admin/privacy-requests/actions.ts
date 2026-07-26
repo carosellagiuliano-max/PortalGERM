@@ -13,14 +13,14 @@ import {
 } from "@/lib/auth/request-context";
 import { requireAdminPage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
-import type {
-  PrivacyCorrectionFieldCode,
-  PrivacyCorrectionOutcomeCode,
-  PrivacyDeletionDependencyCode,
-  PrivacyRequestRejectionCode,
-} from "@/lib/generated/prisma/enums";
+import { getServerEnvironment } from "@/lib/config/env";
+import type { PrivacyRequestRejectionCode } from "@/lib/generated/prisma/enums";
 import { createPostgresPrivacyCaseService } from "@/lib/privacy/privacy-case-service";
+import { createPrivacyExportV2 } from "@/lib/privacy/export-v2";
+import { runPrivacyExecutionV2 } from "@/lib/privacy/execution-v2";
 import { emailProvider } from "@/lib/providers/email";
+import { createDocumentObjectStore } from "@/lib/providers/storage/document-storage-composition";
+import { createPrivacyExportObjectStore } from "@/lib/providers/storage/privacy-export-storage";
 
 export async function adminPrivacyCaseAction(
   _previous: AdminPrivacyCaseActionState,
@@ -62,14 +62,84 @@ export async function adminPrivacyCaseAction(
 
   try {
     if (operation === "privacy-complete-export") {
-      await service.exportCompletion.buildExportManifestForCase(
-        requestId,
-        actor,
-        now,
+      const environment = getServerEnvironment();
+      const result = await createPrivacyExportV2(
+        {
+          privacyRequestId: requestId,
+          actorUserId: admin.id,
+          approvalActorUserId: one(formData, "approvalActorUserId"),
+          idempotencyKey,
+          approvalEvidenceRef: one(formData, "approvalEvidenceRef"),
+          stepUpEvidenceRef: one(formData, "stepUpEvidenceRef"),
+        },
+        {
+          database,
+          exportStore: createPrivacyExportObjectStore(environment),
+          documentStore: createDocumentObjectStore(environment),
+          exportKeyring:
+            environment.secrets.keyrings.PRIVACY_EXPORT_KEYS,
+          featureEnabled: environment.PRIVACY_EXPORT_V2,
+          cohortAllowed: environment.PRIVACY_PROCESSING_COHORT === "test",
+          processingMode: environment.PRIVACY_PROCESSING_MODE,
+          now,
+        },
       );
-      await sendPrivacyStatusEmail(requestId, "COMPLETED", `export:${requestId}`);
+      if (!result.ok) {
+        return failure(
+          result.code === "FEATURE_DISABLED"
+            ? "Export V2 ist serverseitig gesperrt. Es wird kein Mock-Abschluss erzeugt."
+            : "Der reale Export konnte nicht sicher abgeschlossen werden.",
+          result.code,
+        );
+      }
       revalidatePrivacyCasePaths(requestId);
-      return success("Mock-Exportmanifest erstellt; es wurden keine Dateibytes ausgeliefert.");
+      return success(
+        result.replay
+          ? "Das verschlüsselte Exportartefakt war bereits sicher erstellt."
+          : "Verschlüsseltes Exportartefakt erstellt. Der Einmal-Download ist höchstens 15 Minuten verfügbar.",
+      );
+    }
+
+    if (
+      operation === "privacy-complete-delete" ||
+      operation === "privacy-complete-correction"
+    ) {
+      const environment = getServerEnvironment();
+      const result = await runPrivacyExecutionV2(
+        {
+          privacyRequestId: requestId,
+          actorUserId: admin.id,
+          approvalActorUserId: one(formData, "approvalActorUserId"),
+          idempotencyKey,
+          approvalEvidenceRef: one(formData, "approvalEvidenceRef"),
+          stepUpEvidenceRef: one(formData, "stepUpEvidenceRef"),
+        },
+        {
+          database,
+          documentStore: createDocumentObjectStore(environment),
+          correctionEnabled: environment.PRIVACY_CORRECTION_EXECUTION,
+          erasureEnabled: environment.PRIVACY_ERASURE_EXECUTION,
+          cohortAllowed: environment.PRIVACY_PROCESSING_COHORT === "test",
+          processingMode: environment.PRIVACY_PROCESSING_MODE,
+          now,
+        },
+      );
+      if (!result.ok) {
+        return failure(
+          result.code === "FEATURE_DISABLED"
+            ? "Der reale Privacy-Vollzug ist serverseitig gesperrt. Es wird kein Assessment als Löschung oder Korrektur ausgegeben."
+            : result.code === "RETRY_REQUIRED"
+              ? "Ein Processor ist vorübergehend ausgefallen. Der Fall bleibt sichtbar offen und kann sicher fortgesetzt werden."
+              : "Die Privacy-Execution konnte nicht sicher abgeschlossen werden.",
+          result.code,
+        );
+      }
+      revalidatePrivacyCasePaths(requestId);
+      return success(
+        result.replay
+          ? "Diese Privacy-Execution war bereits vollständig verarbeitet."
+          : "Alle erforderlichen Processor-Outcomes sind terminal dokumentiert.",
+      );
     }
 
     const common = { requestId, version, idempotencyKey } as const;
@@ -78,36 +148,7 @@ export async function adminPrivacyCaseAction(
         ? await service.startIdentityCheck(actor, common, now)
         : operation === "privacy-verify-identity"
           ? await service.verifyIdentity(actor, common, now)
-          : operation === "privacy-complete-delete"
-            ? await service.completeDeletionAssessment(
-                actor,
-                {
-                  ...common,
-                  dependencyCodes: many(formData, "dependencyCodes") as PrivacyDeletionDependencyCode[],
-                  outcomeCode: "ASSESSMENT_COMPLETED_NO_ERASURE",
-                  ...optionalText(formData, "safeNote"),
-                },
-                now,
-              )
-            : operation === "privacy-complete-correction"
-              ? await service.completeCorrectionOutcome(
-                  actor,
-                  {
-                    ...common,
-                    reviewedFieldCodes: many(
-                      formData,
-                      "reviewedFieldCodes",
-                    ) as PrivacyCorrectionFieldCode[],
-                    outcomeCode: one(
-                      formData,
-                      "outcomeCode",
-                    ) as PrivacyCorrectionOutcomeCode,
-                    ...optionalArray(formData, "domainEventRefs"),
-                    ...optionalText(formData, "safeNote"),
-                  },
-                  now,
-                )
-              : operation === "privacy-reject"
+          : operation === "privacy-reject"
                 ? await service.rejectRequest(
                     actor,
                     {
@@ -208,7 +249,7 @@ function successMessage(operation: string) {
     : operation === "privacy-verify-identity"
       ? "Identität bestätigt; der Fall ist nun in Bearbeitung."
       : operation === "privacy-complete-delete"
-        ? "Löschungsprüfung abgeschlossen. Es wurden keine Daten automatisch gelöscht."
+        ? "Löschungsprüfung abgeschlossen."
         : operation === "privacy-complete-correction"
           ? "Korrekturergebnis dokumentiert."
           : operation === "privacy-reject"
@@ -237,14 +278,6 @@ function one(formData: FormData, name: string): string | null {
     : null;
 }
 
-function many(formData: FormData, name: string): string[] {
-  return formData
-    .getAll(name)
-    .filter((value): value is string => typeof value === "string")
-    .map((value) => value.trim())
-    .filter(Boolean);
-}
-
 function nonnegativeInteger(value: string | null): number | null {
   if (value === null || !/^\d+$/u.test(value)) return null;
   const parsed = Number(value);
@@ -254,15 +287,4 @@ function nonnegativeInteger(value: string | null): number | null {
 function optionalText(formData: FormData, name: string) {
   const value = one(formData, name);
   return value === null || value === "" ? {} : { [name]: value };
-}
-
-function optionalArray(formData: FormData, name: string) {
-  const value = one(formData, name);
-  if (value === null || value === "") return {};
-  return {
-    [name]: value
-      .split(/[\s,]+/u)
-      .map((part) => part.trim())
-      .filter(Boolean),
-  };
 }

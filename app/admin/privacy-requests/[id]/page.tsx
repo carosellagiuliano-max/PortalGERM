@@ -58,6 +58,14 @@ export default async function AdminPrivacyRequestDetailPage({
   );
   if (!detail.ok) notFound();
   const privacyCase = detail.privacyCase;
+  const executions = await getDatabase().privacyExecution.findMany({
+    where: { privacyRequestId: privacyCase.id },
+    orderBy: { createdAt: "desc" },
+    include: {
+      processorOutcomes: { orderBy: { processorKey: "asc" } },
+      erasureProofs: { orderBy: [{ processorKey: "asc" }, { entityKey: "asc" }] },
+    },
+  });
   const base = {
     requestId: privacyCase.id,
     version: privacyCase.version,
@@ -97,6 +105,43 @@ export default async function AdminPrivacyRequestDetailPage({
             </CardContent>
           </Card>
 
+          {executions.map((execution) => (
+            <Card key={execution.id}>
+              <CardHeader>
+                <CardTitle as="h2">
+                  Processor-Vollzug · {execution.kind} · {execution.status}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3 text-sm">
+                <p>
+                  Checkpoint {execution.checkpoint}/{execution.requiredProcessors.length}
+                  {" · "}Versuche {execution.attemptCount}
+                </p>
+                <ol className="grid gap-2">
+                  {execution.processorOutcomes.map((outcome) => (
+                    <li className="rounded-lg border p-3" key={outcome.id}>
+                      <p className="font-medium">
+                        {outcome.processorKey} · {outcome.status}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {outcome.outcomeCode ?? "offen"} · Versuch {outcome.attemptCount}
+                        {outcome.nextRetryAt ? ` · Retry ${formatDateTime(outcome.nextRetryAt)}` : ""}
+                      </p>
+                      {outcome.retainedBasisRef ? (
+                        <p className="mt-2">Retained-Basis: {outcome.retainedBasisRef}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+                {execution.erasureProofs.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {execution.erasureProofs.length} append-only Erasure-/Retention-Proofs gespeichert.
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ))}
+
           {privacyCase.type === "CORRECT" ? (
             <Card>
               <CardHeader><CardTitle as="h2">Beantragte Korrektur</CardTitle></CardHeader>
@@ -117,11 +162,15 @@ export default async function AdminPrivacyRequestDetailPage({
 
           {privacyCase.type === "DELETE" ? (
             <Card>
-              <CardHeader><CardTitle as="h2">Löschungsprüfung · Mock</CardTitle></CardHeader>
+              <CardHeader><CardTitle as="h2">Löschungs- und Retentionsergebnis</CardTitle></CardHeader>
               <CardContent className="grid gap-2 text-sm">
                 <p>Abhängigkeiten: {privacyCase.deletion.dependencyCodes.join(", ") || "noch nicht geprüft"}</p>
                 <p>Ergebnis: {privacyCase.deletion.outcomeCode ?? "offen"}</p>
-                <p className="text-muted-foreground">COMPLETED bedeutet in P0: Prüfung abgeschlossen. Es erfolgt keine automatische Löschung oder Anonymisierung.</p>
+                <p className="text-muted-foreground">
+                  {executions.some((execution) => execution.kind === "ERASURE")
+                    ? "COMPLETED wird nur nach terminalen Processor-Outcomes und append-only Erasure-/Retention-Proofs gesetzt."
+                    : "Noch kein realer Phase-22-Vollzug. Ein früheres Assessment allein gilt ausdrücklich nicht als Löschung oder Anonymisierung."}
+                </p>
               </CardContent>
             </Card>
           ) : null}
@@ -170,9 +219,31 @@ export default async function AdminPrivacyRequestDetailPage({
               operation="privacy-complete-export"
               {...base}
               idempotencyKey={randomUUID()}
-              label="Mock-Manifest erstellen und abschliessen"
+              label="Verschlüsseltes Exportartefakt erstellen"
             >
-              <p className="text-xs text-muted-foreground">Nur Kategorie-Zähler, Prüfsumme und 7-Tage-Ablauf — keine Datei und keine Rohdaten.</p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Nur im freigegebenen Sandbox-Cohort. Execution-Actor,
+                unabhängiger Approval-Actor und frische Step-up-Evidence werden
+                gebunden; ohne Gate entsteht kein Mock-Abschluss.
+              </p>
+              <input
+                name="approvalActorUserId"
+                className={INPUT_CLASS}
+                placeholder="UUID des unabhängigen Approval-Actors"
+                required
+              />
+              <input
+                name="approvalEvidenceRef"
+                className={INPUT_CLASS}
+                placeholder="sandbox:approval:evidence-reference"
+                required
+              />
+              <input
+                name="stepUpEvidenceRef"
+                className={INPUT_CLASS}
+                placeholder="sandbox:step-up:evidence-reference"
+                required
+              />
             </PrivacyCaseActionForm>
           ) : null}
 
@@ -181,26 +252,9 @@ export default async function AdminPrivacyRequestDetailPage({
               operation="privacy-complete-delete"
               {...base}
               idempotencyKey={randomUUID()}
-              label="Prüfung ohne Löschung abschliessen"
+              label="Löschung/Anonymisierung ausführen"
             >
-              <fieldset className="grid gap-2 text-sm">
-                <legend className="font-medium">Abhängigkeiten</legend>
-                {[
-                  "ACCOUNTING_RETENTION",
-                  "ACTIVE_APPLICATIONS",
-                  "MESSAGES",
-                  "ABUSE_SECURITY_AUDIT",
-                  "LEGAL_HOLD",
-                  "ACTIVE_COMPANY_DUTY",
-                  "NONE",
-                ].map((code) => (
-                  <label key={code} className="flex items-start gap-2">
-                    <input type="checkbox" name="dependencyCodes" value={code} className="mt-1" />
-                    {code}
-                  </label>
-                ))}
-              </fieldset>
-              <textarea name="safeNote" maxLength={500} className={TEXTAREA_CLASS} placeholder="Optionale sichere Ergebnisnotiz" />
+              <PrivacyExecutionApprovalFields />
             </PrivacyCaseActionForm>
           ) : null}
 
@@ -209,24 +263,9 @@ export default async function AdminPrivacyRequestDetailPage({
               operation="privacy-complete-correction"
               {...base}
               idempotencyKey={randomUUID()}
-              label="Korrekturergebnis abschliessen"
+              label="Korrektur kanonisch ausführen"
             >
-              <fieldset className="grid gap-2 text-sm">
-                <legend className="font-medium">Geprüfte Bereiche</legend>
-                {privacyCase.correction.fields.map((field) => (
-                  <label key={field.fieldCode} className="flex items-start gap-2">
-                    <input type="checkbox" name="reviewedFieldCodes" value={field.fieldCode} className="mt-1" />
-                    {field.fieldCode}
-                  </label>
-                ))}
-              </fieldset>
-              <select name="outcomeCode" className={INPUT_CLASS} required>
-                <option value="NO_CHANGE_REQUIRED">Keine Änderung erforderlich</option>
-                <option value="REFERRED_FOR_POLICY">Zur Policy-Prüfung verwiesen</option>
-                <option value="CORRECTED_VIA_CANONICAL_COMMAND">Über kanonischen Befehl korrigiert</option>
-              </select>
-              <textarea name="domainEventRefs" className={TEXTAREA_CLASS} placeholder="Domain-Event-UUIDs (nur bei kanonischer Änderung)" />
-              <textarea name="safeNote" maxLength={500} className={TEXTAREA_CLASS} placeholder="Optionale sichere Ergebnisnotiz" />
+              <PrivacyExecutionApprovalFields />
             </PrivacyCaseActionForm>
           ) : null}
 
@@ -259,6 +298,35 @@ export default async function AdminPrivacyRequestDetailPage({
           </PrivacyCaseActionForm>
         </aside>
       </div>
+    </div>
+  );
+}
+
+function PrivacyExecutionApprovalFields() {
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs leading-5 text-muted-foreground">
+        Ohne unabhängigen Approval-Actor, gültige Processing Approvals und
+        frische Step-up-Evidence bleibt der Fall offen.
+      </p>
+      <input
+        name="approvalActorUserId"
+        className={INPUT_CLASS}
+        placeholder="UUID des unabhängigen Approval-Actors"
+        required
+      />
+      <input
+        name="approvalEvidenceRef"
+        className={INPUT_CLASS}
+        placeholder="sandbox:approval:evidence-reference"
+        required
+      />
+      <input
+        name="stepUpEvidenceRef"
+        className={INPUT_CLASS}
+        placeholder="sandbox:step-up:evidence-reference"
+        required
+      />
     </div>
   );
 }

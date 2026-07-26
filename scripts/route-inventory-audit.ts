@@ -123,6 +123,7 @@ function rolesFor(path: string): readonly string[] {
   if (
     path === "/api/documents/status" ||
     isAtOrBelow(path, "/api/documents/upload-intents") ||
+    isAtOrBelow(path, "/api/privacy/exports") ||
     path.endsWith("/delete-request") ||
     path.endsWith("/scan")
   ) {

@@ -25,6 +25,12 @@ const employerLinks = [
   { href: "/employers/demo", label: "Demo anfragen" },
 ] as const;
 
+const legalLinks = [
+  { href: "/legal/privacy", label: "Datenschutz" },
+  { href: "/legal/terms", label: "Nutzungsbedingungen" },
+  { href: "/legal/imprint", label: "Impressum" },
+] as const;
+
 export function AppFooter() {
   const salaryRadarAvailable = !getPublicDataContext().liveOnly;
   const visibleDiscoveryLinks = salaryRadarAvailable
@@ -34,7 +40,7 @@ export function AppFooter() {
   return (
     <footer className="mt-auto border-t bg-muted/35">
       <div className="page-shell py-10 sm:py-12">
-        <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_1fr_1.15fr]">
+        <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_1fr_1fr_1.15fr]">
           <div>
             <Link
               href="/"
@@ -63,6 +69,11 @@ export function AppFooter() {
             id="footer-employers"
             title="Arbeitgeber"
             links={employerLinks}
+          />
+          <FooterNavigation
+            id="footer-legal"
+            title="Rechtliches"
+            links={legalLinks}
           />
 
           <div>

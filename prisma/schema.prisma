@@ -822,6 +822,10 @@ enum PrivacyRequestEventKind {
   REJECTED
   CANCELLED
   NOTE_ADDED
+  EXECUTION_STARTED
+  PROCESSOR_UPDATED
+  PARTIAL
+  ARTIFACT_READY
 }
 
 enum PrivacyCorrectionFieldCode {
@@ -854,6 +858,8 @@ enum PrivacyDeletionDependencyCode {
 
 enum PrivacyDeletionOutcomeCode {
   ASSESSMENT_COMPLETED_NO_ERASURE
+  ERASURE_OR_ANONYMIZATION_COMPLETED
+  PARTIALLY_RETAINED_WITH_BASIS
 }
 
 enum PrivacyRequestRejectionCode {
@@ -862,6 +868,109 @@ enum PrivacyRequestRejectionCode {
   OUT_OF_SCOPE
   INSUFFICIENT_INFORMATION
   ABUSIVE_REQUEST
+}
+
+enum PrivacySubjectClass {
+  USER
+  CANDIDATE
+  EMPLOYER_MEMBER
+  INVITEE
+  LEAD
+  REPORTER
+  NON_ACCOUNT_HOLDER
+}
+
+enum PrivacyInventoryStatus {
+  DRAFT
+  REVIEWED
+  ACTIVE
+  REVOKED
+}
+
+enum PrivacyInventoryOutcome {
+  INCLUDE
+  EXCLUDE
+  CORRECT
+  DELETE
+  ANONYMIZE
+  RETAIN
+}
+
+enum LegalDocumentType {
+  PRIVACY
+  TERMS
+  IMPRINT
+  COOKIE
+  ANALYTICS
+  AVG_NOTICE
+  DPA
+  DSFA
+}
+
+enum LegalRevisionStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum LegalPublicationStatus {
+  CURRENT
+  REVOKED
+  EXPIRED
+}
+
+enum ProcessingApprovalStatus {
+  DRAFT
+  APPROVED
+  REVOKED
+  EXPIRED
+}
+
+enum PrivacyExecutionKind {
+  EXPORT
+  CORRECTION
+  ERASURE
+}
+
+enum PrivacyExecutionStatus {
+  PENDING
+  PROCESSING
+  PARTIAL
+  RETRY_REQUIRED
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+enum PrivacyProcessorOutcomeStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  RETAINED
+  RETRY_REQUIRED
+  FAILED_TERMINAL
+}
+
+enum PrivacyExportArtifactStatus {
+  BUILDING
+  READY
+  CONSUMED
+  EXPIRED
+  REVOKED
+  FAILED
+}
+
+enum LegalHoldStatus {
+  ACTIVE
+  RELEASED
+  EXPIRED
+}
+
+enum PrivacyErasureAction {
+  ERASED
+  ANONYMIZED
+  RETAINED
 }
 
 enum IdentityRevealRevokeReason {
@@ -1039,6 +1148,15 @@ enum AuditTargetType {
   CONTACT_REQUEST
   IDENTITY_REVEAL_GRANT
   PRIVACY_REQUEST
+  PRIVACY_INVENTORY
+  PRIVACY_EXECUTION
+  PRIVACY_EXPORT_ARTIFACT
+  PRIVACY_TOMBSTONE
+  LEGAL_DOCUMENT
+  LEGAL_PUBLICATION
+  PROCESSING_APPROVAL
+  LEGAL_HOLD
+  ANALYTICS_CONSENT
   ABUSE_REPORT
   MODERATION_RESTRICTION
   PLAN_VERSION
@@ -1138,6 +1256,19 @@ enum AuditAction {
   PRIVACY_REQUEST_CREATED
   PRIVACY_REQUEST_STATUS_CHANGED
   PRIVACY_EXPORT_MANIFEST_CREATED
+  PRIVACY_INVENTORY_ACTIVATED
+  LEGAL_REVISION_REVIEWED
+  LEGAL_PUBLICATION_PUBLISHED
+  LEGAL_PUBLICATION_REVOKED
+  PROCESSING_APPROVAL_CHANGED
+  PRIVACY_EXECUTION_STARTED
+  PRIVACY_PROCESSOR_OUTCOME_CHANGED
+  PRIVACY_EXECUTION_COMPLETED
+  PRIVACY_EXPORT_ARTIFACT_CREATED
+  PRIVACY_EXPORT_ARTIFACT_DOWNLOADED
+  LEGAL_HOLD_CHANGED
+  ANALYTICS_CONSENT_CHANGED
+  PRIVACY_RESTORE_RECONCILED
   CHECKOUT_CREATED
   ORDER_PAID
   ORDER_FAILED
@@ -1357,6 +1488,13 @@ model User {
   privacyRequests                   PrivacyRequest[]              @relation("PrivacyRequester")
   privacyRequestsAssigned           PrivacyRequest[]              @relation("PrivacyAssignee")
   privacyChallenges                 PrivacyIdentityChallenge[]
+  privacyExecutionsApproved         PrivacyExecution[]            @relation("PrivacyExecutionApprover")
+  privacyExportArtifacts            PrivacyExportArtifact[]
+  privacyLegalHolds                 LegalHold[]                    @relation("LegalHoldSubject")
+  privacyLegalHoldsCreated          LegalHold[]                    @relation("LegalHoldCreator")
+  privacyLegalHoldsReviewed         LegalHold[]                    @relation("LegalHoldReviewer")
+  analyticsConsentEvents            AnalyticsConsentEvent[]       @relation("AnalyticsConsentOwner")
+  analyticsConsentEventsActed       AnalyticsConsentEvent[]       @relation("AnalyticsConsentActor")
   conversationParticipants          ConversationParticipant[]
   revealConfirmations               IdentityRevealConfirmation[]
   revealGrantsRevoked               IdentityRevealGrant[]         @relation("RevealGrantRevoker")
@@ -3103,6 +3241,8 @@ model PrivacyRequest {
   correctionFields       PrivacyRequestCorrectionField[]
   events                 PrivacyRequestEvent[]
   challenges             PrivacyIdentityChallenge[]
+  executions             PrivacyExecution[]
+  exportArtifacts        PrivacyExportArtifact[]
 
   @@unique([id, requesterUserId])
   @@unique([requesterUserId, idempotencyKey])
@@ -3153,6 +3293,298 @@ model PrivacyIdentityChallenge {
   user             User           @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([privacyRequestId, expiresAt])
+}
+
+model PrivacyDataInventoryVersion {
+  id            String                         @id @default(uuid()) @db.Uuid
+  version       String                         @unique @db.VarChar(32)
+  status        PrivacyInventoryStatus         @default(DRAFT)
+  contentHash   String                         @unique @db.Char(64)
+  owner         String                         @db.VarChar(160)
+  reviewRef     String?                        @db.VarChar(255)
+  effectiveAt   DateTime?                      @db.Timestamptz(3)
+  revokedAt     DateTime?                      @db.Timestamptz(3)
+  createdAt     DateTime                       @default(now()) @db.Timestamptz(3)
+  entries       PrivacyDataInventoryEntry[]
+  executions    PrivacyExecution[]
+
+  @@index([status, effectiveAt])
+}
+
+model PrivacyDataInventoryEntry {
+  id                  String                       @id @default(uuid()) @db.Uuid
+  inventoryVersionId  String                       @db.Uuid
+  entityKey           String                       @db.VarChar(96)
+  fieldScope          String                       @db.VarChar(255)
+  subjectClass        PrivacySubjectClass
+  purposeCode         String                       @db.VarChar(96)
+  legalBasisCode      String                       @db.VarChar(96)
+  processorKey        String                       @db.VarChar(96)
+  storageRegion       String                       @db.VarChar(64)
+  retentionDays       Int?
+  exportOutcome       PrivacyInventoryOutcome
+  correctionOutcome   PrivacyInventoryOutcome
+  erasureOutcome      PrivacyInventoryOutcome
+  holdRuleCode        String                       @db.VarChar(96)
+  owner               String                       @db.VarChar(160)
+  createdAt           DateTime                     @default(now()) @db.Timestamptz(3)
+  inventoryVersion    PrivacyDataInventoryVersion  @relation(fields: [inventoryVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([inventoryVersionId, entityKey, fieldScope, subjectClass, processorKey])
+  @@index([inventoryVersionId, subjectClass, processorKey])
+}
+
+model LegalDocument {
+  id            String                 @id @default(uuid()) @db.Uuid
+  type          LegalDocumentType
+  locale        String                 @default("de-CH") @db.VarChar(16)
+  slug          String                 @unique @db.VarChar(96)
+  title         String                 @db.VarChar(200)
+  createdAt     DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime               @updatedAt @db.Timestamptz(3)
+  revisions     LegalRevision[]
+  publications  LegalPublication[]
+
+  @@unique([type, locale])
+}
+
+model LegalRevision {
+  id                String                 @id @default(uuid()) @db.Uuid
+  legalDocumentId   String                 @db.Uuid
+  revisionNumber    Int
+  status            LegalRevisionStatus    @default(DRAFT)
+  versionLabel      String                 @db.VarChar(32)
+  contentMarkdown   String                 @db.Text
+  contentHash       String                 @db.Char(64)
+  changeSummary     String                 @db.VarChar(1000)
+  requiresReconsent Boolean                @default(false)
+  createdByUserId   String                 @db.Uuid
+  reviewedByUserId  String?                @db.Uuid
+  reviewedAt        DateTime?              @db.Timestamptz(3)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  legalDocument     LegalDocument          @relation(fields: [legalDocumentId], references: [id], onDelete: Restrict)
+  publications      LegalPublication[]
+
+  @@unique([legalDocumentId, revisionNumber])
+  @@unique([legalDocumentId, versionLabel])
+  @@index([legalDocumentId, status, createdAt])
+}
+
+model LegalPublication {
+  id                String                  @id @default(uuid()) @db.Uuid
+  legalDocumentId   String                  @db.Uuid
+  legalRevisionId   String                  @db.Uuid
+  status            LegalPublicationStatus  @default(CURRENT)
+  publicationHash   String                  @db.Char(64)
+  publishedByUserId String                  @db.Uuid
+  effectiveAt       DateTime                @db.Timestamptz(3)
+  expiresAt         DateTime?               @db.Timestamptz(3)
+  revokedAt         DateTime?               @db.Timestamptz(3)
+  revokeReasonCode  String?                 @db.VarChar(96)
+  createdAt         DateTime                @default(now()) @db.Timestamptz(3)
+  legalDocument     LegalDocument           @relation(fields: [legalDocumentId], references: [id], onDelete: Restrict)
+  legalRevision     LegalRevision           @relation(fields: [legalRevisionId], references: [id], onDelete: Restrict)
+  processingApprovals ProcessingApproval[]
+  analyticsConsents AnalyticsConsentEvent[]
+
+  @@unique([legalRevisionId])
+  @@index([legalDocumentId, status, effectiveAt])
+}
+
+model ProcessingApproval {
+  id                    String                    @id @default(uuid()) @db.Uuid
+  scope                 String                    @db.VarChar(128)
+  region                String                    @db.VarChar(64)
+  processorKey          String                    @db.VarChar(96)
+  version               String                    @db.VarChar(32)
+  status                ProcessingApprovalStatus  @default(DRAFT)
+  legalPublicationId    String?                   @db.Uuid
+  legalBasisRef         String                    @db.VarChar(255)
+  avgDecisionRef        String?                   @db.VarChar(255)
+  dpaRef                String?                   @db.VarChar(255)
+  dsfaDecision          String                    @db.VarChar(32)
+  dsfaDecisionRef       String?                   @db.VarChar(255)
+  owner                 String                    @db.VarChar(160)
+  approvedBy            String?                   @db.VarChar(160)
+  effectiveAt           DateTime?                 @db.Timestamptz(3)
+  expiresAt             DateTime?                 @db.Timestamptz(3)
+  reviewAt              DateTime                  @db.Timestamptz(3)
+  revokedAt             DateTime?                 @db.Timestamptz(3)
+  revokeReasonCode      String?                   @db.VarChar(96)
+  createdAt             DateTime                  @default(now()) @db.Timestamptz(3)
+  legalPublication      LegalPublication?         @relation(fields: [legalPublicationId], references: [id], onDelete: Restrict)
+  executions            PrivacyExecution[]
+  analyticsConsents     AnalyticsConsentEvent[]
+
+  @@unique([scope, region, processorKey, version])
+  @@index([scope, processorKey, status, effectiveAt, expiresAt])
+}
+
+model PrivacyExecution {
+  id                    String                         @id @default(uuid()) @db.Uuid
+  privacyRequestId      String                         @db.Uuid
+  inventoryVersionId    String                         @db.Uuid
+  processingApprovalId  String?                        @db.Uuid
+  kind                  PrivacyExecutionKind
+  status                PrivacyExecutionStatus         @default(PENDING)
+  subjectClass          PrivacySubjectClass
+  subjectReferenceHash  String                         @db.Char(64)
+  policyVersion         String                         @db.VarChar(32)
+  requiredProcessors    String[]
+  checkpoint            Int                            @default(0)
+  attemptCount          Int                            @default(0)
+  approvedByUserId      String?                        @db.Uuid
+  approvalEvidenceRef   String?                        @db.VarChar(255)
+  stepUpEvidenceRef     String?                        @db.VarChar(255)
+  lastErrorClass        String?                        @db.VarChar(64)
+  nextRetryAt           DateTime?                      @db.Timestamptz(3)
+  startedAt             DateTime?                      @db.Timestamptz(3)
+  completedAt           DateTime?                      @db.Timestamptz(3)
+  createdAt             DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                       @updatedAt @db.Timestamptz(3)
+  privacyRequest        PrivacyRequest                 @relation(fields: [privacyRequestId], references: [id], onDelete: Restrict)
+  inventoryVersion      PrivacyDataInventoryVersion    @relation(fields: [inventoryVersionId], references: [id], onDelete: Restrict)
+  processingApproval    ProcessingApproval?            @relation(fields: [processingApprovalId], references: [id], onDelete: Restrict)
+  approvedByUser        User?                          @relation("PrivacyExecutionApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  processorOutcomes     PrivacyProcessorOutcome[]
+  exportArtifact        PrivacyExportArtifact?
+  erasureProofs         ErasureProof[]
+
+  @@unique([privacyRequestId, kind])
+  @@index([status, nextRetryAt, createdAt])
+  @@index([inventoryVersionId, kind, status])
+}
+
+model PrivacyProcessorOutcome {
+  id                    String                         @id @default(uuid()) @db.Uuid
+  privacyExecutionId    String                         @db.Uuid
+  processorKey          String                         @db.VarChar(96)
+  dedupeKey             String                         @unique @db.VarChar(160)
+  status                PrivacyProcessorOutcomeStatus  @default(PENDING)
+  checkpoint            String?                        @db.VarChar(255)
+  attemptCount          Int                            @default(0)
+  outcomeCode           String?                        @db.VarChar(96)
+  retainedBasisRef      String?                        @db.VarChar(255)
+  providerReceiptHash   String?                        @db.Char(64)
+  lastErrorClass        String?                        @db.VarChar(64)
+  nextRetryAt           DateTime?                      @db.Timestamptz(3)
+  startedAt             DateTime?                      @db.Timestamptz(3)
+  completedAt           DateTime?                      @db.Timestamptz(3)
+  createdAt             DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                       @updatedAt @db.Timestamptz(3)
+  privacyExecution      PrivacyExecution               @relation(fields: [privacyExecutionId], references: [id], onDelete: Restrict)
+
+  @@unique([privacyExecutionId, processorKey])
+  @@index([status, nextRetryAt, createdAt])
+}
+
+model PrivacyExportArtifact {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  privacyRequestId      String                       @db.Uuid
+  privacyExecutionId    String                       @unique @db.Uuid
+  ownerUserId           String                       @db.Uuid
+  status                PrivacyExportArtifactStatus  @default(BUILDING)
+  objectKey             String                       @unique @db.VarChar(512)
+  objectVersion         String                       @db.VarChar(128)
+  encryptionKeyVersion  String                       @db.VarChar(32)
+  storageRegion         String                       @db.VarChar(64)
+  manifest              Json
+  manifestHash          String                       @db.Char(64)
+  packageSha256         String?                      @db.Char(64)
+  sizeBytes             Int?
+  downloadTokenHash     String                       @unique @db.Char(64)
+  expiresAt             DateTime                     @db.Timestamptz(3)
+  consumedAt            DateTime?                    @db.Timestamptz(3)
+  revokedAt             DateTime?                    @db.Timestamptz(3)
+  createdAt             DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                     @updatedAt @db.Timestamptz(3)
+  privacyRequest        PrivacyRequest               @relation(fields: [privacyRequestId], references: [id], onDelete: Restrict)
+  privacyExecution      PrivacyExecution             @relation(fields: [privacyExecutionId], references: [id], onDelete: Restrict)
+  ownerUser             User                         @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  @@unique([id, ownerUserId])
+  @@index([ownerUserId, status, expiresAt])
+  @@index([privacyRequestId, createdAt])
+}
+
+model LegalHold {
+  id                    String            @id @default(uuid()) @db.Uuid
+  subjectUserId         String?           @db.Uuid
+  subjectReferenceHash  String            @db.Char(64)
+  entityType            String            @db.VarChar(96)
+  entityReferenceHash   String            @db.Char(64)
+  scope                 String            @db.VarChar(128)
+  status                LegalHoldStatus   @default(ACTIVE)
+  basisRef              String            @db.VarChar(255)
+  safeReasonCode        String            @db.VarChar(96)
+  createdByUserId       String            @db.Uuid
+  reviewedByUserId      String?           @db.Uuid
+  startsAt              DateTime          @db.Timestamptz(3)
+  reviewAt              DateTime          @db.Timestamptz(3)
+  endsAt                DateTime?         @db.Timestamptz(3)
+  releasedAt            DateTime?         @db.Timestamptz(3)
+  createdAt             DateTime          @default(now()) @db.Timestamptz(3)
+  subjectUser           User?             @relation("LegalHoldSubject", fields: [subjectUserId], references: [id], onDelete: Restrict)
+  createdByUser         User              @relation("LegalHoldCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  reviewedByUser        User?             @relation("LegalHoldReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([subjectReferenceHash, status, reviewAt])
+  @@index([entityType, entityReferenceHash, status])
+}
+
+model ErasureProof {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  privacyExecutionId    String                 @db.Uuid
+  processorKey          String                 @db.VarChar(96)
+  entityKey             String                 @db.VarChar(96)
+  subjectReferenceHash  String                 @db.Char(64)
+  action                PrivacyErasureAction
+  proofDigest           String                 @db.Char(64)
+  retainedBasisRef      String?                @db.VarChar(255)
+  occurredAt            DateTime               @db.Timestamptz(3)
+  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+  privacyExecution      PrivacyExecution       @relation(fields: [privacyExecutionId], references: [id], onDelete: Restrict)
+
+  @@unique([privacyExecutionId, processorKey, entityKey])
+  @@index([subjectReferenceHash, occurredAt])
+}
+
+model PrivacyTombstone {
+  id                    String    @id @default(uuid()) @db.Uuid
+  subjectReferenceHash  String    @db.Char(64)
+  processorKey          String    @db.VarChar(96)
+  entityKey             String    @db.VarChar(96)
+  erasureProofDigest    String    @db.Char(64)
+  effectiveAt           DateTime  @db.Timestamptz(3)
+  reconciledAt          DateTime? @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([subjectReferenceHash, processorKey, entityKey])
+  @@index([reconciledAt, effectiveAt])
+}
+
+model AnalyticsConsentEvent {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  userId                String?                @db.Uuid
+  pseudonymousSubjectId String?                @db.VarChar(128)
+  eventFamily           String                 @db.VarChar(96)
+  granted               Boolean
+  policyVersion         String                 @db.VarChar(32)
+  noticeHash            String                 @db.Char(64)
+  legalPublicationId    String                 @db.Uuid
+  processingApprovalId  String                 @db.Uuid
+  pseudonymEpoch        Int
+  actorUserId           String?                @db.Uuid
+  reasonCode            String                 @db.VarChar(96)
+  effectiveAt           DateTime               @db.Timestamptz(3)
+  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+  user                   User?                  @relation("AnalyticsConsentOwner", fields: [userId], references: [id], onDelete: Restrict)
+  actor                  User?                  @relation("AnalyticsConsentActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  legalPublication      LegalPublication       @relation(fields: [legalPublicationId], references: [id], onDelete: Restrict)
+  processingApproval    ProcessingApproval     @relation(fields: [processingApprovalId], references: [id], onDelete: Restrict)
+
+  @@index([userId, eventFamily, effectiveAt])
+  @@index([pseudonymousSubjectId, eventFamily, effectiveAt])
 }
 
 model AbuseReport {

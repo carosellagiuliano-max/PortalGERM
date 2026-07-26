@@ -14,6 +14,7 @@ const KEYRING_VARIABLES = [
   "PII_REVEAL_KEYS",
   "NOTIFICATION_DELIVERY_KEYS",
   "DOCUMENT_STORAGE_KEYS",
+  "PRIVACY_EXPORT_KEYS",
 ] as const;
 
 const FUTURE_PROVIDER_VARIABLES = [
@@ -98,6 +99,7 @@ const rawEnvironmentSchema = z
     PII_REVEAL_KEYS: z.string({ error: "is required" }),
     NOTIFICATION_DELIVERY_KEYS: optionalString,
     DOCUMENT_STORAGE_KEYS: optionalString,
+    PRIVACY_EXPORT_KEYS: optionalString,
     RATE_LIMIT_BACKEND: z.enum(["postgres", "memory"]).default("postgres"),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(8).default(0),
     ENABLE_LOCAL_MOCK_MAILBOX: z
@@ -159,6 +161,79 @@ const rawEnvironmentSchema = z
       .trim()
       .regex(/^[a-z0-9][a-z0-9-]{1,31}$/u)
       .default("local-test"),
+    LEGAL_PUBLICATION_PRIVACY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    LEGAL_PUBLICATION_TERMS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    LEGAL_PUBLICATION_IMPRINT: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVACY_EXPORT_V2: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVACY_CORRECTION_EXECUTION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVACY_ERASURE_EXECUTION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVACY_PROCESSING_MODE: z
+      .enum(["disabled", "sandbox_command"])
+      .default("disabled"),
+    PRIVACY_PROCESSING_COHORT: z.enum(["none", "test"]).default("none"),
+    PRIVACY_EXPORT_STORAGE_MODE: z
+      .enum(["disabled", "filesystem_sandbox"])
+      .default("disabled"),
+    PRIVACY_EXPORT_STORAGE_ROOT: optionalString,
+    PRIVACY_EXPORT_STORAGE_REGION: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9][a-z0-9-]{1,31}$/u)
+      .default("local-test"),
+    PRIVACY_PROVIDER_POSTGRES: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVACY_PROVIDER_DOCUMENTS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVACY_PROVIDER_EMAIL: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVACY_PROVIDER_PAYMENT: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVACY_PROVIDER_ANALYTICS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVACY_PROVIDER_BACKUP: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    OPTIONAL_ANALYTICS_NAVIGATION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    OPTIONAL_ANALYTICS_CONVERSION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    SEARCH_LEARNING_COLLECTION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     EMAIL_FROM: optionalString.refine(
       (value) =>
         value === undefined ||
@@ -434,6 +509,92 @@ const rawEnvironmentSchema = z
       });
     }
 
+    const privacyExecutionEnabled =
+      environment.PRIVACY_EXPORT_V2 ||
+      environment.PRIVACY_CORRECTION_EXECUTION ||
+      environment.PRIVACY_ERASURE_EXECUTION;
+    const privacyProviderEnabled =
+      environment.PRIVACY_PROVIDER_POSTGRES ||
+      environment.PRIVACY_PROVIDER_DOCUMENTS ||
+      environment.PRIVACY_PROVIDER_EMAIL ||
+      environment.PRIVACY_PROVIDER_PAYMENT ||
+      environment.PRIVACY_PROVIDER_ANALYTICS ||
+      environment.PRIVACY_PROVIDER_BACKUP;
+    const privacySandboxSelected =
+      environment.PRIVACY_EXPORT_STORAGE_MODE === "filesystem_sandbox" ||
+      environment.PRIVACY_PROCESSING_MODE === "sandbox_command";
+
+    if (
+      privacySandboxSelected &&
+      environment.APP_ENV !== "local" &&
+      environment.APP_ENV !== "ci"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_PROCESSING_MODE"],
+        message: "Phase-22 sandbox processing is allowed only in local or CI",
+      });
+    }
+    if (
+      privacyExecutionEnabled &&
+      (
+        environment.PRIVACY_PROCESSING_MODE !== "sandbox_command" ||
+        environment.PRIVACY_PROCESSING_COHORT !== "test" ||
+        !environment.PRIVACY_PROVIDER_POSTGRES
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_PROCESSING_MODE"],
+        message:
+          "privacy execution requires sandbox_command, the test cohort and the PostgreSQL processor",
+      });
+    }
+    if (
+      (environment.PRIVACY_EXPORT_V2 ||
+        environment.PRIVACY_EXPORT_STORAGE_MODE === "filesystem_sandbox") &&
+      (
+        environment.PRIVACY_EXPORT_STORAGE_MODE !== "filesystem_sandbox" ||
+        environment.PRIVACY_EXPORT_STORAGE_ROOT === undefined ||
+        !isAbsolutePathOutsideRepository(
+          environment.PRIVACY_EXPORT_STORAGE_ROOT,
+        ) ||
+        environment.PRIVACY_EXPORT_KEYS === undefined
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_EXPORT_STORAGE_MODE"],
+        message:
+          "export V2 requires encrypted filesystem sandbox storage outside the repository and a dedicated keyring",
+      });
+    }
+    if (
+      privacyProviderEnabled &&
+      environment.PRIVACY_PROCESSING_MODE === "disabled"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_PROVIDER_POSTGRES"],
+        message: "privacy providers require an explicit processing mode",
+      });
+    }
+    if (productionLike && (privacyExecutionEnabled || privacySandboxSelected)) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_PROCESSING_MODE"],
+        message:
+          "Phase-22 execution remains disabled in staging and production until Phase-25 step-up and separated grants",
+      });
+    }
+    if (environment.SEARCH_LEARNING_COLLECTION) {
+      context.addIssue({
+        code: "custom",
+        path: ["SEARCH_LEARNING_COLLECTION"],
+        message: "must remain false until the Phase-30A learning gate",
+      });
+    }
+
     if (
       productionLike &&
       environment.ABUSE_REPORT_ADMIN_EMAILS === undefined
@@ -660,6 +821,21 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     documentBulkAccess: environment.DOCUMENT_BULK_ACCESS,
     documentVaultCohort: environment.DOCUMENT_VAULT_COHORT,
     documentStorageRegion: environment.DOCUMENT_STORAGE_REGION,
+    legalPublicationFlags: Object.freeze({
+      privacy: environment.LEGAL_PUBLICATION_PRIVACY,
+      terms: environment.LEGAL_PUBLICATION_TERMS,
+      imprint: environment.LEGAL_PUBLICATION_IMPRINT,
+    }),
+    privacyExportV2: environment.PRIVACY_EXPORT_V2,
+    privacyCorrectionExecution: environment.PRIVACY_CORRECTION_EXECUTION,
+    privacyErasureExecution: environment.PRIVACY_ERASURE_EXECUTION,
+    privacyProcessingMode: environment.PRIVACY_PROCESSING_MODE,
+    privacyProcessingCohort: environment.PRIVACY_PROCESSING_COHORT,
+    privacyExportStorageMode: environment.PRIVACY_EXPORT_STORAGE_MODE,
+    privacyExportStorageRegion: environment.PRIVACY_EXPORT_STORAGE_REGION,
+    optionalAnalyticsNavigation: environment.OPTIONAL_ANALYTICS_NAVIGATION,
+    optionalAnalyticsConversion: environment.OPTIONAL_ANALYTICS_CONVERSION,
+    searchLearningCollection: environment.SEARCH_LEARNING_COLLECTION,
     abuseReportAdminRecipientCount:
       environment.ABUSE_REPORT_ADMIN_EMAILS?.length ?? 0,
     keyringWriterVersions: Object.fromEntries(

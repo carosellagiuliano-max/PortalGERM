@@ -82,6 +82,16 @@ export const PHASE17_CASES = Object.freeze([
     summary:
       "Quarantined CV upload, immutable application version, replacement and authorized single-use employer download.",
   }),
+  Object.freeze({
+    id: "E2E-22",
+    requirements: Object.freeze([
+      "REQ-PRIV-004",
+      "REQ-DATA-001",
+      "REQ-QA-003",
+    ]),
+    summary:
+      "Owner-only privacy case, fail-closed V2 execution and absence of mock completion while activation gates are disabled.",
+  }),
 ] as const);
 
 export type Phase17CaseId = (typeof PHASE17_CASES)[number]["id"];

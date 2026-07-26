@@ -18,6 +18,10 @@ import {
   privacyRequestInputSchema,
 } from "@/lib/privacy/requests";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
+import {
+  OPTIONAL_ANALYTICS_FAMILIES_V1,
+  recordAnalyticsConsentV1,
+} from "@/lib/analytics/live-consent-policy";
 
 export async function createCandidatePrivacyRequestAction(
   _previous: CandidatePrivacyActionState,
@@ -139,6 +143,87 @@ export async function createCandidatePrivacyRequestAction(
       "Die Datenschutzanfrage konnte nicht vollständig bestätigt werden. Bitte prüfe deine Fälle und versuche es bei Bedarf erneut.",
     );
   }
+}
+
+export async function updateCandidateAnalyticsConsentAction(
+  formData: FormData,
+): Promise<void> {
+  const request = await getAuthRequestContext();
+  if (!isValidAuthMutationOrigin(request)) return;
+  const user = await requireCandidatePage();
+  const family = formData.get("eventFamily");
+  const granted = formData.get("granted") === "true";
+  if (
+    typeof family !== "string" ||
+    !OPTIONAL_ANALYTICS_FAMILIES_V1.includes(
+      family as (typeof OPTIONAL_ANALYTICS_FAMILIES_V1)[number],
+    )
+  ) {
+    return;
+  }
+  const database = getDatabase();
+  const environment = getServerEnvironment();
+  const now = new Date();
+  const latest = await database.analyticsConsentEvent.findFirst({
+    where: { userId: user.id, eventFamily: family },
+    orderBy: [{ effectiveAt: "desc" }, { id: "desc" }],
+  });
+  const publication = granted
+    ? await database.legalPublication.findFirst({
+        where: {
+          status: "CURRENT",
+          effectiveAt: { lte: now },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          legalDocument: { type: "ANALYTICS", locale: "de-CH" },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : latest === null
+      ? null
+      : await database.legalPublication.findUnique({
+          where: { id: latest.legalPublicationId },
+        });
+  const approval = granted
+    ? await database.processingApproval.findFirst({
+        where: {
+          scope: `OPTIONAL_ANALYTICS_${family}`,
+          processorKey: "analytics-store",
+          status: "APPROVED",
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : latest === null
+      ? null
+      : await database.processingApproval.findUnique({
+          where: { id: latest.processingApprovalId },
+        });
+  if (publication === null || approval === null) return;
+  const familyEnabled =
+    family === "NAVIGATION"
+      ? environment.OPTIONAL_ANALYTICS_NAVIGATION
+      : environment.OPTIONAL_ANALYTICS_CONVERSION;
+  await recordAnalyticsConsentV1(
+    {
+      userId: user.id,
+      eventFamily: family,
+      granted,
+      policyVersion: "optional-analytics-v1",
+      noticeHash: publication.publicationHash,
+      legalPublicationId: publication.id,
+      processingApprovalId: approval.id,
+      pseudonymEpoch: (latest?.pseudonymEpoch ?? 0) + 1,
+      actorUserId: user.id,
+      reasonCode: granted ? "USER_OPT_IN" : "USER_OPT_OUT",
+      effectiveAt: now,
+    },
+    {
+      database,
+      region: approval.region,
+      familyEnabled: granted ? familyEnabled : true,
+      now,
+    },
+  );
+  revalidatePath("/candidate/privacy");
 }
 
 export async function cancelCandidatePrivacyRequestAction(

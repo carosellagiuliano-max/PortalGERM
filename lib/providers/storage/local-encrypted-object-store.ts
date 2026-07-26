@@ -31,7 +31,7 @@ const AUTH_TAG_BYTES = 16;
 const SIZE_BYTES = 8;
 const HASH_BYTES = 32;
 const FOOTER_BYTES = AUTH_TAG_BYTES + SIZE_BYTES + HASH_BYTES;
-const OBJECT_KEY_PATTERN =
+const DOCUMENT_OBJECT_KEY_PATTERN =
   /^candidate-cv\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const OBJECT_FILE_PATTERN = /^[a-f0-9]{64}\.sthobj$/u;
 
@@ -48,17 +48,24 @@ type ParsedObjectFile = Readonly<{
 export class LocalEncryptedDocumentObjectStore
   implements DocumentObjectStore
 {
-  readonly providerClass = "filesystem-encrypted-sandbox-v1";
+  readonly providerClass: string;
   readonly storageRegion: string;
   readonly #root: string;
-  readonly #keyring: readonly KeyringEntry<"DOCUMENT_STORAGE_KEYS">[];
+  readonly #keyring: readonly KeyringEntry[];
   readonly #streamTimeoutMilliseconds: number;
+  readonly #maximumBytes: number;
+  readonly #maximumChunkBytes: number;
+  readonly #objectKeyPattern: RegExp;
 
   constructor(input: Readonly<{
     root: string;
     storageRegion: string;
-    keyring: readonly KeyringEntry<"DOCUMENT_STORAGE_KEYS">[];
+    keyring: readonly KeyringEntry[];
     streamTimeoutMilliseconds?: number;
+    maximumBytes?: number;
+    maximumChunkBytes?: number;
+    objectKeyPattern?: RegExp;
+    providerClass?: string;
   }>) {
     const root = resolve(input.root);
     if (
@@ -74,11 +81,20 @@ export class LocalEncryptedDocumentObjectStore
     const streamTimeoutMilliseconds =
       input.streamTimeoutMilliseconds ??
       DOCUMENT_UPLOAD_POLICY_V1.uploadStreamTimeoutMilliseconds;
+    const maximumBytes =
+      input.maximumBytes ?? DOCUMENT_UPLOAD_POLICY_V1.maximumBytes;
+    const maximumChunkBytes =
+      input.maximumChunkBytes ?? DOCUMENT_UPLOAD_POLICY_V1.maximumChunkBytes;
     if (
       !Number.isSafeInteger(streamTimeoutMilliseconds) ||
       streamTimeoutMilliseconds < 1 ||
-      streamTimeoutMilliseconds >
-        DOCUMENT_UPLOAD_POLICY_V1.uploadStreamTimeoutMilliseconds
+      streamTimeoutMilliseconds > 30 * 60 * 1_000 ||
+      !Number.isSafeInteger(maximumBytes) ||
+      maximumBytes < 1 ||
+      maximumBytes > 1024 * 1024 * 1024 ||
+      !Number.isSafeInteger(maximumChunkBytes) ||
+      maximumChunkBytes < 1 ||
+      maximumChunkBytes > 8 * 1024 * 1024
     ) {
       throw new DocumentObjectStoreFailure("CONFIGURATION_INVALID");
     }
@@ -86,6 +102,12 @@ export class LocalEncryptedDocumentObjectStore
     this.storageRegion = input.storageRegion;
     this.#keyring = Object.freeze([...input.keyring]);
     this.#streamTimeoutMilliseconds = streamTimeoutMilliseconds;
+    this.#maximumBytes = maximumBytes;
+    this.#maximumChunkBytes = maximumChunkBytes;
+    this.#objectKeyPattern =
+      input.objectKeyPattern ?? DOCUMENT_OBJECT_KEY_PATTERN;
+    this.providerClass =
+      input.providerClass ?? "filesystem-encrypted-sandbox-v1";
   }
 
   async putQuarantined(
@@ -101,7 +123,7 @@ export class LocalEncryptedDocumentObjectStore
     if (
       !Number.isSafeInteger(input.expectedSizeBytes) ||
       input.expectedSizeBytes <= 0 ||
-      input.expectedSizeBytes > DOCUMENT_UPLOAD_POLICY_V1.maximumBytes
+      input.expectedSizeBytes > this.#maximumBytes
     ) {
       throw new DocumentObjectStoreFailure(
         input.expectedSizeBytes <= 0 ? "EMPTY_BODY" : "STREAM_TOO_LARGE",
@@ -149,13 +171,13 @@ export class LocalEncryptedDocumentObjectStore
           rawChunk.byteOffset,
           rawChunk.byteLength,
         );
-        if (chunk.byteLength > DOCUMENT_UPLOAD_POLICY_V1.maximumChunkBytes) {
+        if (chunk.byteLength > this.#maximumChunkBytes) {
           throw new DocumentObjectStoreFailure("CHUNK_TOO_LARGE");
         }
         total += chunk.byteLength;
         if (
           total > input.expectedSizeBytes ||
-          total > DOCUMENT_UPLOAD_POLICY_V1.maximumBytes
+          total > this.#maximumBytes
         ) {
           throw new DocumentObjectStoreFailure("STREAM_TOO_LARGE");
         }
@@ -363,7 +385,7 @@ export class LocalEncryptedDocumentObjectStore
     const stream = createReadStream(path, {
       start: parsed.headerBytes,
       end: parsed.headerBytes + parsed.sizeBytes - 1,
-      highWaterMark: DOCUMENT_UPLOAD_POLICY_V1.maximumChunkBytes,
+      highWaterMark: this.#maximumChunkBytes,
     });
     try {
       for await (const rawChunk of stream) {
@@ -406,7 +428,8 @@ export class LocalEncryptedDocumentObjectStore
   }
 
   #assertObjectKey(objectKey: string): void {
-    if (!OBJECT_KEY_PATTERN.test(objectKey)) {
+    this.#objectKeyPattern.lastIndex = 0;
+    if (!this.#objectKeyPattern.test(objectKey)) {
       throw new DocumentObjectStoreFailure("CONFIGURATION_INVALID");
     }
   }
