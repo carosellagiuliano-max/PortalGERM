@@ -57,6 +57,10 @@ export const AUDIT_TARGET_TYPES_V1 = [
   "SYSTEM_TASK",
   "CLUSTER_LAUNCH_ASSESSMENT",
   "TAX_RATE_VERSION",
+  "DOCUMENT",
+  "DOCUMENT_VERSION",
+  "DOCUMENT_UPLOAD_INTENT",
+  "DOCUMENT_READ_GRANT",
 ] as const;
 
 export type AuditTargetTypeV1 = (typeof AUDIT_TARGET_TYPES_V1)[number];

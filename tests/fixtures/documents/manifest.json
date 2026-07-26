@@ -1,0 +1,61 @@
+{
+  "version": "phase21-hostile-fixtures-v1",
+  "fixtures": [
+    {
+      "name": "clean_pdf",
+      "declaredMimeType": "application/pdf",
+      "base64": "JVBERi0xLjQKMSAwIG9iago8PD4+CmVuZG9iagp0cmFpbGVyCjw8Pj4KJSVFT0Y=",
+      "sha256": "2ab94463e399ce58a21df28c88b429dd6c64637faadd1de7d8d44f10e4132415",
+      "sizeBytes": 47,
+      "expectedOutcome": "CLEAN"
+    },
+    {
+      "name": "clean_png",
+      "declaredMimeType": "image/png",
+      "base64": "iVBORw0KGgpJRU5ErkJggg==",
+      "sha256": "75265d7b25eacdeee5c0f419f688896fa9b32ad629c4728211057c952ea1971a",
+      "sizeBytes": 16,
+      "expectedOutcome": "CLEAN"
+    },
+    {
+      "name": "mime_spoof",
+      "declaredMimeType": "image/png",
+      "base64": "JVBERi0xLjQKJSVFT0Y=",
+      "sha256": "4f1949e95440af0ece666ebd5f399c1d77d22de639950784d349fa5feb47dca5",
+      "sizeBytes": 14,
+      "expectedOutcome": "POLICY_REJECTED"
+    },
+    {
+      "name": "malware",
+      "declaredMimeType": "application/pdf",
+      "base64": "JVBERi0xLjQKRUlDQVItU1RBTkRBUkQtQU5USVZJUlVTLVRFU1QtRklMRQolJUVPRg==",
+      "sha256": "36c05802a9ce5aa3f14cc37b8354221a7d969c3bc86ee80e4785e6aec52326f2",
+      "sizeBytes": 49,
+      "expectedOutcome": "INFECTED"
+    },
+    {
+      "name": "polyglot",
+      "declaredMimeType": "application/pdf",
+      "base64": "JVBERi0xLjQKUEsDBAolJUVPRg==",
+      "sha256": "5a28d11fc2795d69796e28e82627f15a2c7c31e60abdebf6f53ddbd1961d4cb6",
+      "sizeBytes": 19,
+      "expectedOutcome": "POLICY_REJECTED"
+    },
+    {
+      "name": "malformed",
+      "declaredMimeType": "application/pdf",
+      "base64": "JVBERi0xLjQKbm8tdGVybWluYWw=",
+      "sha256": "b462b4cd62222f8ddd1ad54ae288323658c3137a032f6a568b9f7a5ff2961a08",
+      "sizeBytes": 20,
+      "expectedOutcome": "POLICY_REJECTED"
+    },
+    {
+      "name": "timeout",
+      "declaredMimeType": "application/pdf",
+      "base64": "JVBERi0xLjQKU1RIX1NDQU5fVElNRU9VVF9GSVhUVVJFCiUlRU9G",
+      "sha256": "22c63e4a0feaf9f163a8b6017bc1e2c4bed002c0345cb82354e12178ebfb48b2",
+      "sizeBytes": 39,
+      "expectedOutcome": "TIMEOUT"
+    }
+  ]
+}

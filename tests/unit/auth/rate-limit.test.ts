@@ -76,6 +76,18 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
           { scope: "IP", limit: 100, windowMs: HOUR },
         ],
       },
+      DOCUMENT_UPLOAD_INTENT: {
+        buckets: [
+          { scope: "USER", limit: 30, windowMs: HOUR },
+          { scope: "IP", limit: 100, windowMs: HOUR },
+        ],
+      },
+      DOCUMENT_READ_GRANT: {
+        buckets: [
+          { scope: "USER", limit: 60, windowMs: HOUR },
+          { scope: "IP", limit: 120, windowMs: HOUR },
+        ],
+      },
       JOB_ALERT_MUTATION: {
         buckets: [
           { scope: "USER", limit: 60, windowMs: HOUR },

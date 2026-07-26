@@ -111,6 +111,23 @@ function toRouteRecord(file: string): RouteRecord {
 
 function rolesFor(path: string): readonly string[] {
   if (path === "/forbidden") return ["PUBLIC"];
+  if (
+    path === "/api/documents/read" ||
+    isAtOrBelow(path, "/api/documents/read-grants")
+  ) {
+    return ["AUTHENTICATED"];
+  }
+  if (path.endsWith("/read-grants")) {
+    return ["CANDIDATE", "EMPLOYER", "RECRUITER"];
+  }
+  if (
+    path === "/api/documents/status" ||
+    isAtOrBelow(path, "/api/documents/upload-intents") ||
+    path.endsWith("/delete-request") ||
+    path.endsWith("/scan")
+  ) {
+    return ["CANDIDATE"];
+  }
   if (isAtOrBelow(path, "/candidate")) return ["CANDIDATE"];
   if (isAtOrBelow(path, "/employer")) return ["EMPLOYER", "RECRUITER"];
   if (isAtOrBelow(path, "/admin")) return ["ADMIN"];

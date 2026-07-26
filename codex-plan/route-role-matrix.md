@@ -1,6 +1,6 @@
 # Route- und Rollenmatrix
 
-> **Stand:** Phase-20-Abschlussbaum, 103 Seiten und 7 Route Handler. Die
+> **Stand:** Phase-21-Abschlussbaum, 103 Seiten und 16 Route Handler. Die
 > maschinenlesbare Inventarbasis ist
 > [`route-inventory.json`](./route-inventory.json); `npm run route:audit`
 > vergleicht sie mit dem tatsächlichen `app/`-Baum. Diese Matrix dokumentiert
@@ -69,6 +69,25 @@ Root-Error und Root-404 bleiben generisch.
 | `/logout` | Authenticated | Session wird widerrufen und Cookie entfernt |
 | `/session/clear` | Authenticated/abgelaufene Session | ungültigen Cookie sicher entfernen, erlaubtes `next` |
 | `/session/refresh` | Authenticated | rotierter gehashter Sessiontoken, Parallelitätsgrenze |
+
+## Dokumenten-Tresor-Handler — 9
+
+Die Dokumenten-API ist nur für den Local-/CI-Sandbox-Adapter aktiviert.
+Production und ein externer Objekt-Storage bleiben fail-closed. Ein Objekt-Key
+ist niemals ein Berechtigungsnachweis; Reads benötigen ein maximal 60 Sekunden
+gültiges, actor-gebundenes und einmalig konsumierbares Grant.
+
+| Handler | Rolle | Grenze |
+| --- | --- | --- |
+| `/api/documents/status` | Candidate | nur eigener CV-Slot und redigierter Versions-/Scanstatus |
+| `/api/documents/upload-intents` | Candidate | Origin-, Rate-, Typ-, Größen- und Actor-Limit vor Intent; maximal zehn Minuten |
+| `/api/documents/upload-intents/[id]/body` | Candidate | eigener Intent; Streaming-Limit, Byte-Limit und verschlüsselte Sandbox-Ablage |
+| `/api/documents/upload-intents/[id]/finalize` | Candidate | eigener vollständiger Intent; Hash-/Größenabgleich vor Quarantäne |
+| `/api/documents/versions/[id]/scan` | Candidate | eigene Version; deny-by-default Content- und Malware-Prüfung |
+| `/api/documents/versions/[id]/delete-request` | Candidate | eigene Version; Legal-Hold-/Application-Lifecycle-Grenze |
+| `/api/documents/versions/[id]/read-grants` | Candidate, Employer, Recruiter | Candidate-Eigentum oder exakt autorisierte Application+Company+Assignment; Recent-Auth und CLEAN-Version |
+| `/api/documents/read` | Authenticated | actor-gebundenes Single-use-Grant; Provider-Hash erneut geprüft; private/no-store |
+| `/api/documents/read-grants/[id]/revoke` | Authenticated | nur eigenes, noch nicht konsumiertes Grant; idempotenter Widerruf |
 
 ## Candidate — 17
 
@@ -198,10 +217,11 @@ Audit-Metadaten redigiert.
   REQ-REC-002 als separat gegatetes P1-Paket absent.
 - Referral-Routen für REQ-GRW-003 bleiben bis Legal-/Fraud-/Consent-Gate
   absent.
-- Es gibt keine realen Provider-Webhook-, Datei-Download-, PDF-Invoice-,
-  Scraping- oder Success-Fee-Routen.
+- Es gibt keine öffentlichen oder LIVE-fähigen Datei-URLs und keine realen
+  Provider-Webhook-, PDF-Invoice-, Scraping- oder Success-Fee-Routen. Der
+  Dokumenten-Read ist ausschließlich grant-gebunden und Sandbox-only.
 
-## Verbleibendes geplantes Route-/Prozessdelta Phase 21–32
+## Verbleibendes geplantes Route-/Prozessdelta Phase 22–32
 
 > **Nicht implementiert und nicht Bestandteil von `route-inventory.json`.**
 > Diese Tabelle ist ein Zielregister. Eine Zeile wird erst nach vorhandener
@@ -212,7 +232,6 @@ Audit-Metadaten redigiert.
 | Phase / Requirement | Geplanter Einstieg | Rollen / Capability und Tenantgrenze | Zustände / Datenklasse | Flag, Test und Aktivierung |
 | --- | --- | --- | --- | --- |
 | 25 · `REQ-ID-004` | gemeinsame `/security`-/Step-up-Challenge; Phase-20-E-Mail-Assurance bleibt Basis, keine Query-Token-Weitergabe | Candidate, Employer Owner, Billing, Admin; purpose/action/tenant/resource/session-bound | challenge, success, stale, cancelled, recovery, revoked; Security-sensitive | risk/assurance policy; direct-action/tenant/replay tests; High-risk actions fail-closed |
-| 21 · `REQ-DOC-002` | Dokument-Intent/finalize in JobPass; autorisierter Download/Delete aus Application/Privacy | Candidate owner; Employer nur Application-/Reveal-spezifisch; Admin nur benannte Need-to-know-Capability | uploading, quarantined, scanning, clean, rejected, failed, expired, deleted; besonders schützenswert | Storage+Scanner approved; object key nie Auth; cross-tenant/polyglot/expiry E2E |
 | 22 · `REQ-PRIV-004` | public `/legal/*`/Impressum; bestehende Privacy Cases plus expiring Export-Download | Public legal read; Candidate owner; Privacy Read/Verify/Process getrennt | versioned/pending/hold/partial/retry/ready/expired/erased; PII/Legal | Counsel/version flags; Step-up; processor/retention/export/delete E2E |
 | 23 · `REQ-OPS-005` | Admin/Ops Worker-, DLQ-, Provider- und Health-Details; keine Public Controls | Operations/Support/Security per least privilege; Local Token nicht Production-Ersatz | healthy/degraded/paused/backpressured/DLQ/replay; redigierte Opsdaten | environment/provider activation ledger; load/crash/restart/runbook tests |
 | 24 · `REQ-PAY-001` | hosted checkout redirect/return plus PSP webhook handler; Finance reconciliation/admin dispute views | Company Owner/Billing; webhook signature+Inbox; Finance capability tenant-/need-to-know | pending/authorized/paid/failed/refunded/disputed/reconciled; financial | nur LC5 WTP-Go + PSP/Tax/Legal; signature/replay/amount/tenant/chargeback E2E |

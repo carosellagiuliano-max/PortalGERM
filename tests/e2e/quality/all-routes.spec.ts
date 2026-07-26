@@ -24,7 +24,7 @@ import {
 } from "@/tests/e2e/fixtures/phase17-test";
 
 const EXPECTED_PAGE_COUNT = 103;
-const EXPECTED_HANDLER_COUNT = 7;
+const EXPECTED_HANDLER_COUNT = 16;
 const ROUTE_TEST_TIMEOUT_MILLISECONDS = 90_000;
 const QUALITY_TAGS = "@quality-desktop @quality-mobile";
 const MISSING_UUID = "00000000-0000-4000-8000-000000000018";
@@ -108,7 +108,7 @@ test.describe("Phase 18 exhaustive route quality", () => {
   });
 
   test(
-      `${QUALITY_TAGS} route inventory is exactly 103 pages and excludes all handlers`,
+      `${QUALITY_TAGS} route inventory is exactly 103 pages, tracks 16 handlers and excludes handlers from page visits`,
     async ({ page }, testInfo) => {
       testInfo.setTimeout(ROUTE_TEST_TIMEOUT_MILLISECONDS);
       assertProjectViewport(page, testInfo);

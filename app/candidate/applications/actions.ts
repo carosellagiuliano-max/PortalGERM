@@ -299,6 +299,8 @@ function applicationErrorMessage(code: string): string {
     CONFIRMATION_CHANGED:
       "Die Empfänger- oder Stellendaten haben sich geändert. Bitte lade die Seite neu und bestätige erneut.",
     DOCUMENT_REQUIRED: "Bitte wähle genau einen aktiven Lebenslauf aus.",
+    DOCUMENT_VAULT_UNAVAILABLE:
+      "Diese Stelle verlangt ein geprüftes CV. Der sichere Dokumenten-Vault ist für diese Bewerbung derzeit nicht verfügbar.",
     COVER_LETTER_REQUIRED: "Für diese Stelle ist ein Motivationsschreiben erforderlich.",
     UNSUPPORTED_REQUIREMENTS:
       "Die Unterlagenanforderungen dieser Stelle werden intern noch nicht unterstützt.",

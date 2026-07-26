@@ -7,6 +7,8 @@ import { requireAdminPage } from "@/lib/auth/route-guards";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { getNotificationDeliverySummary } from "@/lib/notifications/admin-read";
+import { getRedactedDocumentVaultSummary } from "@/lib/documents/admin-read";
+import { resolveDocumentRuntime } from "@/lib/documents/runtime-policy";
 import { formatDateTime } from "@/lib/utils/format";
 
 export const metadata: Metadata = { title: "Systemstatus" };
@@ -15,7 +17,6 @@ const providers = [
   ["Zahlung", "Lokaler persistierender Mock"],
   ["KI", "Deterministischer Regel-Mock"],
   ["Job-Room", "Versionierter lokaler Lookup"],
-  ["Storage", "Metadaten-Mock, keine Bytes"],
   ["Pendeldistanz", "Deterministische lokale Klasse"],
 ] as const;
 
@@ -34,12 +35,14 @@ export default async function AdminSystemPage() {
     database,
     now,
   } as const;
-  const [tasks, delivery] = await Promise.all([
+  const [tasks, delivery, documents] = await Promise.all([
     listOpenSystemTasks(dependencies),
     getNotificationDeliverySummary(dependencies),
+    getRedactedDocumentVaultSummary(database),
   ]);
   if (tasks === null || delivery === null) return null;
   const environment = getServerEnvironment();
+  const documentRuntime = resolveDocumentRuntime(environment);
 
   const overdue = tasks.filter((task) => task.dueAt <= now).length;
   return (
@@ -95,6 +98,20 @@ export default async function AdminSystemPage() {
               kein autonomer Worker werden behauptet.
             </p>
           </article>
+          <article className="rounded-lg border bg-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-medium">Dokumenten-Vault</h3>
+              <Badge variant="outline">
+                {documentRuntime.available ? "SANDBOX" : "DISABLED"}
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Storage {environment.DOCUMENT_STORAGE_MODE}; Scanner{" "}
+              {environment.DOCUMENT_SCANNER_MODE}; Clean Reads{" "}
+              {environment.DOCUMENT_CLEAN_READS ? "TEST" : "OFF"}. Kein
+              LIVE-Provider und kein Real→Mock-Fallback.
+            </p>
+          </article>
           {providers.map(([name, status]) => (
             <article className="rounded-lg border bg-card p-4" key={name}>
               <div className="flex items-center justify-between gap-3">
@@ -104,6 +121,60 @@ export default async function AdminSystemPage() {
               <p className="mt-2 text-sm text-muted-foreground">{status}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="document-vault-heading">
+        <h2 id="document-vault-heading" className="text-xl font-semibold">
+          Dokumenten-Vault (redigiert)
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Ausschliesslich Zustandszähler. Dateinamen, Object Keys, Hashes,
+          Scannerpayloads und Inhalte werden hier nicht ausgegeben.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <article className="rounded-lg border bg-card p-4">
+            <p className="text-sm text-muted-foreground">Aktive Upload-Intents</p>
+            <p className="mt-2 text-2xl font-semibold">
+              {documents.pendingIntents}
+            </p>
+          </article>
+          {Object.entries(documents.statuses).map(([status, count]) => (
+            <article className="rounded-lg border bg-card p-4" key={status}>
+              <p className="text-sm text-muted-foreground">{status}</p>
+              <p className="mt-2 text-2xl font-semibold">{count}</p>
+            </article>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <article className="rounded-lg border bg-card p-4">
+            <h3 className="font-medium">Scanner-Outcomes</h3>
+            <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+              {Object.entries(documents.scanOutcomes).length === 0 ? (
+                <li>Keine Scan-Evidenz.</li>
+              ) : (
+                Object.entries(documents.scanOutcomes).map(([outcome, count]) => (
+                  <li key={outcome}>
+                    {outcome}: {count}
+                  </li>
+                ))
+              )}
+            </ul>
+          </article>
+          <article className="rounded-lg border bg-card p-4">
+            <h3 className="font-medium">Reconciliation-Outcomes</h3>
+            <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+              {documents.lifecycle.length === 0 ? (
+                <li>Noch kein Command-Lauf.</li>
+              ) : (
+                documents.lifecycle.map((item) => (
+                  <li key={`${item.kind}:${item.status}`}>
+                    {item.kind} / {item.status}: {item.count}
+                  </li>
+                ))
+              )}
+            </ul>
+          </article>
         </div>
       </section>
 

@@ -238,6 +238,71 @@
     ]
   },
   {
+    "kind": "handler",
+    "path": "/api/documents/read",
+    "roles": [
+      "AUTHENTICATED"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/documents/read-grants/[id]/revoke",
+    "roles": [
+      "AUTHENTICATED"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/documents/status",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/documents/upload-intents",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/documents/upload-intents/[id]/body",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/documents/upload-intents/[id]/finalize",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/documents/versions/[id]/delete-request",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/documents/versions/[id]/read-grants",
+    "roles": [
+      "CANDIDATE",
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/documents/versions/[id]/scan",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
     "kind": "page",
     "path": "/candidate/alerts",
     "roles": [

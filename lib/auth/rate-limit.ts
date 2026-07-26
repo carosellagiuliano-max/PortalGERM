@@ -28,6 +28,8 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
   "ABUSE_INTAKE",
   "CONTACT_REQUEST",
   "RADAR_LIST",
+  "DOCUMENT_UPLOAD_INTENT",
+  "DOCUMENT_READ_GRANT",
 ] as const;
 
 export type RateLimitPresetName = (typeof RATE_LIMIT_PRESET_NAMES_V1)[number];
@@ -135,6 +137,18 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
   },
   RADAR_LIST: {
     buckets: [{ scope: "MEMBERSHIP", limit: 10, windowMs: MINUTE }],
+  },
+  DOCUMENT_UPLOAD_INTENT: {
+    buckets: [
+      { scope: "USER", limit: 30, windowMs: HOUR },
+      { scope: "IP", limit: 100, windowMs: HOUR },
+    ],
+  },
+  DOCUMENT_READ_GRANT: {
+    buckets: [
+      { scope: "USER", limit: 60, windowMs: HOUR },
+      { scope: "IP", limit: 120, windowMs: HOUR },
+    ],
   },
 } as const satisfies Record<
   RateLimitPresetName,

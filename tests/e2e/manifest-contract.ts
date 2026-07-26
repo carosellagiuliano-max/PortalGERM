@@ -19,11 +19,14 @@ export const PHASE20_IDENTITY_FLOW_FILE =
   "flows/phase20-identity-email.spec.ts" as const;
 export const PHASE20_IDENTITY_QUALITY_FILE =
   "quality/phase20-identity-email-quality.spec.ts" as const;
+export const PHASE21_DOCUMENT_QUALITY_FILE =
+  "quality/phase21-document-vault-quality.spec.ts" as const;
 export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE17_QUALITY_FILE,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
   PHASE20_IDENTITY_FLOW_FILE,
   PHASE20_IDENTITY_QUALITY_FILE,
+  PHASE21_DOCUMENT_QUALITY_FILE,
 ] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
@@ -68,6 +71,18 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     tag: "@quality-mobile",
     file: PHASE20_IDENTITY_QUALITY_FILE,
     expectedCount: 3,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@quality-desktop",
+    file: PHASE21_DOCUMENT_QUALITY_FILE,
+    expectedCount: 2,
+  }),
+  Object.freeze({
+    project: PHASE17_MOBILE_PROJECT,
+    tag: "@quality-mobile",
+    file: PHASE21_DOCUMENT_QUALITY_FILE,
+    expectedCount: 2,
   }),
 ] as const);
 
@@ -173,7 +188,7 @@ export function classifyPhase17Result(
   title: string,
   normalizedRelativeFile: string,
 ): Phase17ResultId {
-  const match = /\[(E2E-0[1-7])\]/u.exec(title);
+  const match = /\[(E2E-(?:0[1-7]|21))\]/u.exec(title);
   if (match?.[1] !== undefined) {
     return match[1] as Phase17CaseId;
   }

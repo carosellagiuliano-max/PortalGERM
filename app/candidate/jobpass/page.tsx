@@ -11,6 +11,7 @@ import {
   type JobPassFormInitialValues,
 } from "@/components/candidate/JobPassForm";
 import { ProfileCompletion } from "@/components/candidate/ProfileCompletion";
+import { DocumentVaultCard } from "@/components/candidate/DocumentVaultCard";
 import { PrivacyDeleteRequestForm } from "@/components/candidate/privacy-request-forms";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -21,6 +22,9 @@ import {
 } from "@/lib/candidate/profile";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
+import { resolveDocumentRuntime } from "@/lib/documents/runtime-policy";
+import { getCandidateDocumentVaultView } from "@/lib/documents/vault-service";
 
 export const metadata: Metadata = {
   title: "SwissJobPass",
@@ -31,10 +35,13 @@ export const runtime = "nodejs";
 
 export default async function CandidateJobPassPage() {
   const user = await requireCandidatePage();
-  const workspace = await getOwnedCandidateProfileWorkspace(
-    getDatabase(),
-    user.id,
-  );
+  const environment = getServerEnvironment();
+  const database = getDatabase();
+  const [workspace, vaultView] = await Promise.all([
+    getOwnedCandidateProfileWorkspace(database, user.id),
+    getCandidateDocumentVaultView(user.id, database),
+  ]);
+  const vaultRuntime = resolveDocumentRuntime(environment);
   const { profile } = workspace;
   const preference = profile.preference;
   const initial: JobPassFormInitialValues = Object.freeze({
@@ -118,6 +125,33 @@ export default async function CandidateJobPassPage() {
             skills={workspace.skills}
             categories={workspace.categories}
             radarNotice={TALENT_RADAR_VISIBILITY_NOTICE_V1.text}
+            legacyCvMetadataEnabled={
+              !vaultRuntime.available || !vaultRuntime.writes
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">Sicherer CV-Vault</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DocumentVaultCard
+            enabled={vaultRuntime.available && vaultRuntime.writes}
+            cleanReadsEnabled={
+              vaultRuntime.available && vaultRuntime.cleanReads
+            }
+            currentVersionId={vaultView?.currentVersionId ?? null}
+            initialVersions={(vaultView?.versions ?? []).map((version) => ({
+              id: version.id,
+              safeFilename: version.safeFilename,
+              declaredMimeType: version.declaredMimeType,
+              detectedMimeType: version.detectedMimeType,
+              sizeBytes: version.sizeBytes,
+              status: version.status,
+              sequence: version.sequence,
+            }))}
           />
         </CardContent>
       </Card>

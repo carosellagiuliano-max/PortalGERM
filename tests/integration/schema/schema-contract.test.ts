@@ -591,6 +591,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260723194000_phase_17_company_profile_array_defaults",
       "20260726140000_phase_20_identity_notification_outbox",
       "20260726143000_phase_20_notification_replay_audit",
+      "20260726210000_phase_21_document_vault",
     ]);
     expect(
       migrations.rows.every(

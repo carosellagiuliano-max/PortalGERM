@@ -13,6 +13,7 @@ const KEYRING_VARIABLES = [
   "REVEAL_CONFIRMATION_KEYS",
   "PII_REVEAL_KEYS",
   "NOTIFICATION_DELIVERY_KEYS",
+  "DOCUMENT_STORAGE_KEYS",
 ] as const;
 
 const FUTURE_PROVIDER_VARIABLES = [
@@ -96,6 +97,7 @@ const rawEnvironmentSchema = z
     REVEAL_CONFIRMATION_KEYS: z.string({ error: "is required" }),
     PII_REVEAL_KEYS: z.string({ error: "is required" }),
     NOTIFICATION_DELIVERY_KEYS: optionalString,
+    DOCUMENT_STORAGE_KEYS: optionalString,
     RATE_LIMIT_BACKEND: z.enum(["postgres", "memory"]).default("postgres"),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(8).default(0),
     ENABLE_LOCAL_MOCK_MAILBOX: z
@@ -129,6 +131,34 @@ const rawEnvironmentSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    DOCUMENT_VAULT_WRITES: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    DOCUMENT_STORAGE_MODE: z
+      .enum(["disabled", "filesystem_sandbox"])
+      .default("disabled"),
+    DOCUMENT_SCANNER_MODE: z
+      .enum(["disabled", "sandbox"])
+      .default("disabled"),
+    DOCUMENT_CLEAN_READS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    DOCUMENT_RECONCILIATION: z
+      .enum(["disabled", "dry_run", "command"])
+      .default("disabled"),
+    DOCUMENT_BULK_ACCESS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    DOCUMENT_VAULT_COHORT: z.enum(["none", "test"]).default("none"),
+    DOCUMENT_STORAGE_ROOT: optionalString,
+    DOCUMENT_STORAGE_REGION: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9][a-z0-9-]{1,31}$/u)
+      .default("local-test"),
     EMAIL_FROM: optionalString.refine(
       (value) =>
         value === undefined ||
@@ -316,6 +346,91 @@ const rawEnvironmentSchema = z
         path: ["OPTIONAL_EMAIL"],
         message:
           "must remain false until the Phase-22 purpose decision is approved",
+      });
+    }
+
+    const documentSandboxSelected =
+      environment.DOCUMENT_STORAGE_MODE === "filesystem_sandbox" ||
+      environment.DOCUMENT_SCANNER_MODE === "sandbox";
+    const documentCapabilityEnabled =
+      environment.DOCUMENT_VAULT_WRITES ||
+      environment.DOCUMENT_CLEAN_READS ||
+      environment.DOCUMENT_RECONCILIATION !== "disabled";
+
+    if (
+      documentSandboxSelected &&
+      environment.APP_ENV !== "local" &&
+      environment.APP_ENV !== "ci"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["DOCUMENT_STORAGE_MODE"],
+        message: "filesystem/scanner sandbox is allowed only in local or CI",
+      });
+    }
+
+    if (documentSandboxSelected) {
+      if (
+        environment.DOCUMENT_STORAGE_ROOT === undefined ||
+        !isAbsolutePathOutsideRepository(environment.DOCUMENT_STORAGE_ROOT)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["DOCUMENT_STORAGE_ROOT"],
+          message:
+            "must be an absolute path outside the repository for the document sandbox",
+        });
+      }
+      if (environment.DOCUMENT_STORAGE_KEYS === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["DOCUMENT_STORAGE_KEYS"],
+          message: "is required for encrypted document sandbox storage",
+        });
+      }
+    }
+
+    if (
+      documentCapabilityEnabled &&
+      (
+        environment.DOCUMENT_STORAGE_MODE !== "filesystem_sandbox" ||
+        environment.DOCUMENT_SCANNER_MODE !== "sandbox" ||
+        environment.DOCUMENT_VAULT_COHORT !== "test"
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["DOCUMENT_VAULT_WRITES"],
+        message:
+          "document capabilities require the explicit filesystem/scanner test cohort",
+      });
+    }
+
+    if (
+      environment.DOCUMENT_CLEAN_READS &&
+      !environment.DOCUMENT_VAULT_WRITES
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["DOCUMENT_CLEAN_READS"],
+        message: "requires document vault writes in the Phase-21 sandbox",
+      });
+    }
+
+    if (environment.DOCUMENT_BULK_ACCESS) {
+      context.addIssue({
+        code: "custom",
+        path: ["DOCUMENT_BULK_ACCESS"],
+        message: "must remain false until the Phase-25 step-up gate is approved",
+      });
+    }
+
+    if (productionLike && (documentSandboxSelected || documentCapabilityEnabled)) {
+      context.addIssue({
+        code: "custom",
+        path: ["DOCUMENT_STORAGE_MODE"],
+        message:
+          "Phase-21 document bytes remain disabled in staging and production",
       });
     }
 
@@ -537,6 +652,14 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     notificationDispatch: environment.NOTIFICATION_DISPATCH,
     optionalEmailEnabled: environment.OPTIONAL_EMAIL,
     deliveryReplayEnabled: environment.DELIVERY_REPLAY,
+    documentVaultWrites: environment.DOCUMENT_VAULT_WRITES,
+    documentStorageMode: environment.DOCUMENT_STORAGE_MODE,
+    documentScannerMode: environment.DOCUMENT_SCANNER_MODE,
+    documentCleanReads: environment.DOCUMENT_CLEAN_READS,
+    documentReconciliation: environment.DOCUMENT_RECONCILIATION,
+    documentBulkAccess: environment.DOCUMENT_BULK_ACCESS,
+    documentVaultCohort: environment.DOCUMENT_VAULT_COHORT,
+    documentStorageRegion: environment.DOCUMENT_STORAGE_REGION,
     abuseReportAdminRecipientCount:
       environment.ABUSE_REPORT_ADMIN_EMAILS?.length ?? 0,
     keyringWriterVersions: Object.fromEntries(

@@ -1,4 +1,4 @@
-export const PHASE17_FIXTURE_VERSION = "phase17-e2e-v1" as const;
+export const PHASE17_FIXTURE_VERSION = "phase17-e2e-v2" as const;
 
 export const PHASE17_CASES = Object.freeze([
   Object.freeze({
@@ -75,6 +75,12 @@ export const PHASE17_CASES = Object.freeze([
       "REQ-MKT-001",
     ]),
     summary: "Active and expired boost, score invariance and stable pagination.",
+  }),
+  Object.freeze({
+    id: "E2E-21",
+    requirements: Object.freeze(["REQ-DOC-002", "REQ-QA-003"]),
+    summary:
+      "Quarantined CV upload, immutable application version, replacement and authorized single-use employer download.",
   }),
 ] as const);
 

@@ -84,12 +84,14 @@ export function JobPassForm({
   skills,
   categories,
   radarNotice,
+  legacyCvMetadataEnabled = true,
 }: Readonly<{
   initial: JobPassFormInitialValues;
   cantons: readonly Readonly<{ id: string; code: string; name: string }>[];
   skills: readonly Readonly<{ id: string; name: string }>[];
   categories: readonly Readonly<{ id: string; name: string }>[];
   radarNotice: string;
+  legacyCvMetadataEnabled?: boolean;
 }>) {
   const [state, action, pending] = useActionState(
     saveCandidateProfileAction,
@@ -196,13 +198,15 @@ export function JobPassForm({
           </div>
         </FieldGroup>
 
-        <FieldGroup title="CV-Metadaten" description="Im MVP werden nur Dateiname, Grösse und MIME-Typ über den Mock-Speicher erfasst. Es werden keine Dateibytes übertragen oder gespeichert.">
-          <CvMetadataFields
-            key={initial.revision}
-            currentDocument={initial.currentDocument}
-            state={state}
-          />
-        </FieldGroup>
+        {legacyCvMetadataEnabled ? (
+          <FieldGroup title="CV-Metadaten (Legacy)" description="Solange der sichere Dokumenten-Vault deaktiviert ist, erfasst dieser Demo-Pfad weiterhin nur Dateiname, Grösse und MIME-Typ. Es werden hier keine Dateibytes übertragen oder als Download angeboten.">
+            <CvMetadataFields
+              key={initial.revision}
+              currentDocument={initial.currentDocument}
+              state={state}
+            />
+          </FieldGroup>
+        ) : null}
 
         <FieldGroup title="Anonymer Talent Radar" description="Die Einwilligung ist freiwillig und getrennt von Marketing oder Nutzungsbedingungen.">
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">

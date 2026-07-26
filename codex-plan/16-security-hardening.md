@@ -89,10 +89,11 @@ Confirm `AuditLog` rows are written for every canonical sensitive event below. A
 | `LEAD_SUBMITTED` / `LEAD_STATUS_CHANGED` / `SYSTEM_TASK_ASSIGNED` / `SYSTEM_TASK_OUTCOME_RECORDED` | Sales/Cockpit |
 | `CLUSTER_ASSESSMENT_APPROVED` / `CLUSTER_ACTIVATED` / `CLUSTER_REVOKED` / `CATALOG_VERSION_SCHEDULED` / `CATALOG_RELEASE_DECIDED` / `CATALOG_VERSION_DEACTIVATED` / `TAX_RATE_APPROVED` | launch/catalog governance |
 | `RATE_LIMITED` / `AUTHORIZATION_DENIED_SENSITIVE` / `MAINTENANCE_PROJECTION_SYNCED` | security/system; denial logging is rate-limited and redacted to avoid an audit DoS |
+| `DOCUMENT_UPLOAD_INTENT_CREATED` / `DOCUMENT_UPLOAD_COMPLETED` / `DOCUMENT_SCAN_COMPLETED` / `DOCUMENT_READ_GRANTED` / `DOCUMENT_READ` / `DOCUMENT_REPLACED` / `DOCUMENT_DELETE_REQUESTED` / `DOCUMENT_RECONCILED` | Phase 21 Document-/CV-Vault; Metadaten sind strikt redigiert und enthalten keine Dateinamen, Object Keys, Bytes oder Grant-Tokens |
 
 - [x] Each entry stores nullable `actorUserId`, explicit `actorKind: USER|SYSTEM|ANONYMOUS`, capability, entity type/id, result/reason/correlation and schema-allowlisted redacted metadata plus `version:HMAC-SHA-256(normalizedIp)` under the first active writer version from the dedicated rotating `AUDIT_IP_HASH_KEYS` keyring. Plain SHA/salt, raw IP and reuse of SESSION_SECRET are forbidden; event hash retention is 30 days. Anonymous login/rate/abuse events never fabricate a User actor.
 
-> The full typed matrix is verified against owning PostgreSQL workflow fixtures: all 129 canonical `AUDIT_ACTIONS_V1` members have an owning workflow assertion, with no source-grep-only substitute. Anonymous/system actors, reset/revocation, identity verification, login-email change, notification preferences/replay, import decisions, Radar consent/contact/reveal, Credit consumption, Support/Content and maintenance projection events are included.
+> The full typed matrix is verified against owning PostgreSQL workflow fixtures: all 137 canonical `AUDIT_ACTIONS_V1` members have an owning workflow assertion, with no source-grep-only substitute. Anonymous/system actors, reset/revocation, identity verification, login-email change, notification preferences/replay, import decisions, Radar consent/contact/reveal, Credit consumption, Support/Content, document-vault and maintenance projection events are included.
 
 ### Abuse reporting
 
@@ -144,7 +145,7 @@ Confirm `AuditLog` rows are written for every canonical sensitive event below. A
 - [x] Six manual IDOR attempts fail: foreign employer Job, candidate Application, candidate thread, Invoice, Talent-Radar request and non-admin `/admin`; foreign and random object IDs render the same generic 404, while the role boundary returns actual HTTP 403. README documents the repeatable plan; owning integration tests cover the write variants.
 - [x] Job description with `<script>…</script>` shows literal text (no execution)
 - [x] Application/contact/etc. are rate-limited with friendly German responses and audit `RATE_LIMITED`
-- [x] Automated Audit coverage proves owning workflow records for all 122 exact `AUDIT_ACTIONS_V1` members, including `RATE_LIMITED`, `USER_CONSENT_CHANGED`, `IMPORT_PARSED` and `ABUSE_REPORT_SUBMITTED`; source grep alone is not evidence
+- [x] Automated Audit coverage now proves persistence and owning workflow records for all 137 exact `AUDIT_ACTIONS_V1` members, including the Phase-21-Vault-Actions, `RATE_LIMITED`, `USER_CONSENT_CHANGED`, `IMPORT_PARSED` and `ABUSE_REPORT_SUBMITTED`; source grep alone is not evidence
 - [x] HMAC tests prove deterministic output for one key version, different output after rotation, IPv4/IPv6 normalization, absence of raw/plain-SHA values and 30-day cleanup; response matrix proves every sensitive out-of-layout route's cache/robots/referrer/log behavior
 - [x] Reading `/admin` as a non-admin renders the framework's forbidden response with actual HTTP 403 and no object detail; APIs/actions return typed 403. Do not test or describe a redirect-to-200 as a 403.
 

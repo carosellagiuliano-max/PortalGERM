@@ -1273,6 +1273,7 @@ async function seedApplication(
     const documentExpected = {
       id: documentId,
       applicationId: id,
+      candidateProfileId: candidate.id,
       documentMetadataId,
     };
     await ensureRow({

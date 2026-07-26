@@ -45,6 +45,9 @@ export type ApplicationConfirmationView = Readonly<{
     mimeType: string;
     sizeBytes: number;
     storageKeyHash: string;
+    storageKind: "METADATA_ONLY_LEGACY" | "VAULT_ENCRYPTED";
+    documentVersionId: string | null;
+    documentVersionStatus: string | null;
   }>[];
   externalApplyHref: string | null;
   identityComplete: boolean;
@@ -104,6 +107,9 @@ export async function loadApplicationConfirmationInTransaction(
             safeFilename: true,
             mimeType: true,
             sizeBytes: true,
+            storageKind: true,
+            documentVersionId: true,
+            documentVersion: { select: { status: true } },
           },
         },
       },
@@ -194,6 +200,9 @@ export async function loadApplicationConfirmationInTransaction(
             mimeType: document.mimeType,
             sizeBytes: document.sizeBytes,
             storageKeyHash: sha256Utf8(document.storageKey),
+            storageKind: document.storageKind,
+            documentVersionId: document.documentVersionId,
+            documentVersionStatus: document.documentVersion?.status ?? null,
           }),
         ),
       ),

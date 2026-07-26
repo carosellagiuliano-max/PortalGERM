@@ -28,6 +28,7 @@ import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { verifyJobIntent } from "@/lib/auth/signed-intent";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
+import { resolveDocumentRuntime } from "@/lib/documents/runtime-policy";
 import {
   writeNotificationExactlyOnce,
   type NotificationWritePort,
@@ -61,6 +62,7 @@ export type ApplyToJobResult =
         | "IDENTITY_VERIFICATION_REQUIRED"
         | "CONFIRMATION_CHANGED"
         | "DOCUMENT_REQUIRED"
+        | "DOCUMENT_VAULT_UNAVAILABLE"
         | "COVER_LETTER_REQUIRED"
         | "UNSUPPORTED_REQUIREMENTS"
         | "EXTERNAL_APPLICATION"
@@ -232,6 +234,7 @@ export async function applyToJob(
             parsed.data,
             context,
             coverLetter,
+            dependencies.environment,
           );
           if (!documents.ok) {
             return Object.freeze({ kind: "ERROR" as const, code: documents.code });
@@ -409,7 +412,9 @@ async function createApplicationTransaction(
     await transaction.applicationSubmissionDocument.createMany({
       data: documents.map((document) => ({
         applicationId: application.id,
+        candidateProfileId: context.profileId,
         documentMetadataId: document.id,
+        documentVersionId: document.documentVersionId,
         safeFilenameSnapshot: document.safeFilename,
         mimeTypeSnapshot: document.mimeType,
         sizeBytesSnapshot: document.sizeBytes,
@@ -555,6 +560,9 @@ type ApplicationDocumentSnapshot = Readonly<{
   mimeType: string;
   sizeBytes: number;
   storageKeyHash: string;
+  documentVersionId: string | null;
+  storageKind: "METADATA_ONLY_LEGACY" | "VAULT_ENCRYPTED";
+  documentVersionStatus: string | null;
 }>;
 
 function validateSelectedDocuments(
@@ -564,11 +572,16 @@ function validateSelectedDocuments(
     { ok: true }
   >["value"],
   coverLetter: string | undefined,
+  environment: ServerEnvironment,
 ):
   | Readonly<{ ok: true; selected: readonly ApplicationDocumentSnapshot[] }>
   | Readonly<{
       ok: false;
-      code: "DOCUMENT_REQUIRED" | "COVER_LETTER_REQUIRED" | "UNSUPPORTED_REQUIREMENTS";
+      code:
+        | "DOCUMENT_REQUIRED"
+        | "DOCUMENT_VAULT_UNAVAILABLE"
+        | "COVER_LETTER_REQUIRED"
+        | "UNSUPPORTED_REQUIREMENTS";
     }> {
   const required = context.projection.job.requiredDocumentKinds;
   if (required.includes("COVER_LETTER") && !coverLetter) {
@@ -589,6 +602,26 @@ function validateSelectedDocuments(
   });
   if (selected.length !== input.selectedDocumentIds.length) {
     return Object.freeze({ ok: false, code: "DOCUMENT_REQUIRED" });
+  }
+  const runtime = resolveDocumentRuntime(environment);
+  if (
+    required.includes("CV") &&
+    environment.DOCUMENT_VAULT_WRITES &&
+    (
+      !runtime.available ||
+      !runtime.cleanReads ||
+      selected.some(
+        (document) =>
+          document.storageKind !== "VAULT_ENCRYPTED" ||
+          document.documentVersionId === null ||
+          document.documentVersionStatus !== "CLEAN",
+      )
+    )
+  ) {
+    return Object.freeze({
+      ok: false,
+      code: "DOCUMENT_VAULT_UNAVAILABLE",
+    });
   }
   return Object.freeze({ ok: true, selected: Object.freeze(selected) });
 }

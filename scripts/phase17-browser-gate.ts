@@ -6,6 +6,7 @@ import {
 import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
+  mkdtempSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -13,6 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import type { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
@@ -74,9 +76,14 @@ async function main() {
 
   loadLocalEnvironment();
   const database = await createMigratedTestDatabase("phase17_browser");
+  const documentStorageRoot = mkdtempSync(
+    resolve(tmpdir(), "sth-phase21-browser-"),
+  );
   try {
     const notificationDeliveryKeys =
       `phase20-browser-v1:${randomBytes(32).toString("base64")}`;
+    const documentStorageKeys =
+      `document-v1:${randomBytes(32).toString("base64")}`;
     const runIdentity = createRunIdentity(database.databaseName);
     const port = await allocatePort();
     const baseUrl = `http://${HOST}:${port}`;
@@ -96,6 +103,16 @@ async function main() {
       OPTIONAL_EMAIL: "false",
       DELIVERY_REPLAY: "false",
       NOTIFICATION_DELIVERY_KEYS: notificationDeliveryKeys,
+      DOCUMENT_STORAGE_KEYS: documentStorageKeys,
+      DOCUMENT_VAULT_WRITES: "true",
+      DOCUMENT_STORAGE_MODE: "filesystem_sandbox",
+      DOCUMENT_SCANNER_MODE: "sandbox",
+      DOCUMENT_CLEAN_READS: "true",
+      DOCUMENT_RECONCILIATION: "command",
+      DOCUMENT_BULK_ACCESS: "false",
+      DOCUMENT_VAULT_COHORT: "test",
+      DOCUMENT_STORAGE_ROOT: documentStorageRoot,
+      DOCUMENT_STORAGE_REGION: "local-test",
     });
     await runDemoSeed({
       APP_ENV: "local",
@@ -110,6 +127,8 @@ async function main() {
       baseUrl,
       port,
       notificationDeliveryKeys,
+      documentStorageKeys,
+      documentStorageRoot,
     );
     let playwrightExit: ChildExit;
     try {
@@ -139,6 +158,7 @@ async function main() {
     );
   } finally {
     await database.dispose();
+    rmSync(documentStorageRoot, { recursive: true, force: true });
   }
 }
 
@@ -147,6 +167,8 @@ async function startServer(
   baseUrl: string,
   port: number,
   notificationDeliveryKeys: string,
+  documentStorageKeys: string,
+  documentStorageRoot: string,
 ) {
   const nextBinary = resolve(
     process.cwd(),
@@ -199,6 +221,16 @@ async function startServer(
         OPTIONAL_EMAIL: "false",
         DELIVERY_REPLAY: "false",
         NOTIFICATION_DELIVERY_KEYS: notificationDeliveryKeys,
+        DOCUMENT_STORAGE_KEYS: documentStorageKeys,
+        DOCUMENT_VAULT_WRITES: "true",
+        DOCUMENT_STORAGE_MODE: "filesystem_sandbox",
+        DOCUMENT_SCANNER_MODE: "sandbox",
+        DOCUMENT_CLEAN_READS: "true",
+        DOCUMENT_RECONCILIATION: "command",
+        DOCUMENT_BULK_ACCESS: "false",
+        DOCUMENT_VAULT_COHORT: "test",
+        DOCUMENT_STORAGE_ROOT: documentStorageRoot,
+        DOCUMENT_STORAGE_REGION: "local-test",
         STRIPE_SECRET_KEY: "",
         EMAIL_PROVIDER_API_KEY: "",
         OPENAI_API_KEY: "",

@@ -148,7 +148,8 @@ export function ApplyIntentConfirmation({
           <legend className="text-sm font-medium">Lebenslauf auswählen</legend>
           {documents.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Kein aktiver CV vorhanden. Füge im SwissJobPass zuerst CV-Metadaten hinzu.
+              Kein aktives, geprüftes CV vorhanden. Füge im SwissJobPass
+              zuerst ein CV im sicheren Dokumentenbereich hinzu.
             </p>
           ) : (
             documents.map((document, index) => (

@@ -74,7 +74,7 @@ describe("Phase 17 manifest contract", () => {
     expect(() =>
       validatePhase17RunManifest(incomplete, validationOptions(manifest)),
     ).toThrow(
-      /chromium-mobile-360 \/ quality\/phase20-identity-email-quality\.spec\.ts has 2 quality result/u,
+      /chromium-mobile-360 \/ quality\/phase21-document-vault-quality\.spec\.ts has 1 quality result/u,
     );
   });
 
@@ -267,13 +267,19 @@ describe("Phase 17 manifest contract", () => {
 });
 
 describe("Phase 17 reporter evidence helpers", () => {
-  it("classifies only named journeys and the two allowlisted quality files", () => {
+  it("classifies only named journeys and allowlisted quality files", () => {
     expect(
       classifyPhase17Result(
         "[E2E-07] @journey deterministic search",
         "tests/e2e/flows/search.spec.ts",
       ),
     ).toBe("E2E-07");
+    expect(
+      classifyPhase17Result(
+        "[E2E-21] @journey immutable CV",
+        "tests/e2e/flows/phase21-document-vault.spec.ts",
+      ),
+    ).toBe("E2E-21");
     expect(
       classifyPhase17Result(
         "@quality-mobile public routes",
