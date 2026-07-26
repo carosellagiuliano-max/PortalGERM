@@ -223,16 +223,18 @@ Audit-Metadaten redigiert.
 
 ## Verbleibendes geplantes Route-/Prozessdelta Phase 22–32
 
-> **Nicht implementiert und nicht Bestandteil von `route-inventory.json`.**
-> Diese Tabelle ist ein Zielregister. Eine Zeile wird erst nach vorhandener
-> Route, serverseitigem Guard, UX-/A11y-Abnahme und grünem Owning-Test in das
-> maschinenlesbare Ist-Inventar übernommen. Der genaue Pfad darf die Phase per
-> ADR konsolidieren, solange Rollen, Guard und Zustand erhalten bleiben.
+> Diese Tabelle ist ein Zielregister. Phase-22-Routen sind inzwischen im
+> maschinenlesbaren Ist-Inventar enthalten und automatisiert verifiziert,
+> bleiben aber wegen externer Gates deaktiviert; die übrigen Zeilen sind
+> weiterhin nicht implementiertes Delta. Eine neue Zeile wird erst nach
+> vorhandener Route, serverseitigem Guard, UX-/A11y-Abnahme und grünem
+> Owning-Test in das Ist-Inventar übernommen. Der genaue Pfad darf die Phase
+> per ADR konsolidieren, solange Rollen, Guard und Zustand erhalten bleiben.
 
 | Phase / Requirement | Geplanter Einstieg | Rollen / Capability und Tenantgrenze | Zustände / Datenklasse | Flag, Test und Aktivierung |
 | --- | --- | --- | --- | --- |
 | 25 · `REQ-ID-004` | gemeinsame `/security`-/Step-up-Challenge; Phase-20-E-Mail-Assurance bleibt Basis, keine Query-Token-Weitergabe | Candidate, Employer Owner, Billing, Admin; purpose/action/tenant/resource/session-bound | challenge, success, stale, cancelled, recovery, revoked; Security-sensitive | risk/assurance policy; direct-action/tenant/replay tests; High-risk actions fail-closed |
-| 22 · `REQ-PRIV-004` | public `/legal/*`/Impressum; bestehende Privacy Cases plus expiring Export-Download | Public legal read; Candidate owner; Privacy Read/Verify/Process getrennt | versioned/pending/hold/partial/retry/ready/expired/erased; PII/Legal | Counsel/version flags; Step-up; processor/retention/export/delete E2E |
+| 22 · `REQ-PRIV-004` | **Technischer Ist-Stand:** `/legal/privacy`, `/legal/terms`, `/legal/imprint`, `/admin/legal`, bestehende Privacy Cases plus expiring `/api/privacy/exports/[id]` | Public nur exakte Publication; Candidate owner; Privacy Read/Verify/Process getrennt; Nicht-Kontoinhaber fail-closed | versioned/pending/hold/partial/retry/ready/expired/erased; PII/Legal | Candidate `0636a875`, automatisiertes G3 `PASS`; Counsel/Phase-25-Step-up/Research `BLOCKED`, Activation `DISABLED`; [Evidence](./evidence/2026-07-26-phase-22.md) |
 | 23 · `REQ-OPS-005` | Admin/Ops Worker-, DLQ-, Provider- und Health-Details; keine Public Controls | Operations/Support/Security per least privilege; Local Token nicht Production-Ersatz | healthy/degraded/paused/backpressured/DLQ/replay; redigierte Opsdaten | environment/provider activation ledger; load/crash/restart/runbook tests |
 | 24 · `REQ-PAY-001` | hosted checkout redirect/return plus PSP webhook handler; Finance reconciliation/admin dispute views | Company Owner/Billing; webhook signature+Inbox; Finance capability tenant-/need-to-know | pending/authorized/paid/failed/refunded/disputed/reconciled; financial | nur LC5 WTP-Go + PSP/Tax/Legal; signature/replay/amount/tenant/chargeback E2E |
 | 24 · `REQ-BIL-010` | existing order/Boost/Radar/service detail and Support escalation | same Company entitlement plus Finance/Support capability | assessed, replacement, extended, credited, refunded, rejected, appealed | ServiceDeliveryPolicy; exactly-once ledger/refund tests |

@@ -202,7 +202,14 @@ Retention/Legal-Hold-Policy, autonome Worker und Bulk bleiben deaktiviert.
 
 ### [ ] 22 — Privacy, Legal und Analytics
 
-[`22-privacy-legal-analytics.md`](./22-privacy-legal-analytics.md) · reale Betroffenenprozesse, versionierte Rechtstexte und consent-bewusste LIVE-Analytics.
+[`22-privacy-legal-analytics.md`](./22-privacy-legal-analytics.md) · technischer
+Local-/CI-Sandbox-Candidate `0636a875` mit inventargebundenem Export,
+Correction/Erasure, Legal Holds, versionierten Rechtstext-Gates und
+consent-bewusster optionaler Analytics besteht das automatisierte G3; siehe
+[Phase-22-Evidence](./evidence/2026-07-26-phase-22.md). Die Phase bleibt
+ungehakt: Counsel-/AVG-/AVV-/DPA-/DSFA-/Retention-Entscheide, alternative
+Nicht-Kontoinhaber-Identity und moderierte n≥5+n≥5-Forschung fehlen;
+Aktivierung ist `DISABLED`.
 
 ### [ ] 23 — Production Operations und Worker
 
@@ -394,4 +401,16 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 21 wurden gemäss ihren Detailverträgen auf ihren jeweiligen Evidence-Candidates umgesetzt und verifiziert. Der nächste sequenzielle technische Arbeitsschritt ist Phase 22; nichtaktivierende frühe Research-Tracks 29A/31A dürfen gemäss der Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md) parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates bleiben separat und können nur für die jeweilige Launchklasse geschlossen werden; insbesondere bleiben reale E-Mail-/Storage-/Scanner-Zustellung, Production-Retention/Legal-Hold, autonome Ausführung, MFA/Step-up, Bulkzugriff und REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Phasen 01 bis 21 wurden gemäss ihren Detailverträgen auf ihren jeweiligen
+Evidence-Candidates umgesetzt und verifiziert. Phase 22 besitzt auf Candidate
+`0636a875` einen technisch implementierten und automatisiert G3-grünen
+Local-/CI-Sandboxvertrag, bleibt aber wegen der in ihrer Evidence genannten
+externen Pflichtgates ungehakt. Phase 23 ist deshalb noch nicht sequenziell
+freigegeben. Nichtaktivierende frühe Research-Tracks 29A/31A dürfen gemäss der
+Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md)
+parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates
+bleiben separat und können nur für die jeweilige Launchklasse geschlossen
+werden; insbesondere bleiben reale E-Mail-/Storage-/Scanner-Zustellung,
+Production-Retention/Legal-Hold, autonome Ausführung, MFA/Step-up, Bulkzugriff
+und REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine
+Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

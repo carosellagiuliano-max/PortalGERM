@@ -181,11 +181,16 @@ Phasen 01–21 sind implementiert und durch datierte, commitgebundene
 Ziel-Evidence lokal verifiziert. Phase 19 versiegelte die verpflichtende
 Baseline; Phase 20 schloss danach auf Candidate `5908900` den technischen
 Identity-/Notification-Vertrag; Phase 21 schloss auf Candidate `ca36bff`
-den technischen Document-/CV-Vault-Sandboxvertrag. **Phase 22 ist der nächste
-sequenzielle technische Implementierungsstart.** Die offenen
-Business-/Legal-/Privacy-/Tax-/Provider-/Ops-Entscheidungen besitzen weiterhin
-harte Deadlines vor Pilot oder realem Betrieb; der lokale technische Abschluss
-ersetzt keine dieser Freigaben.
+den technischen Document-/CV-Vault-Sandboxvertrag. Phase 22 besitzt auf
+Candidate `0636a875` einen implementierten, automatisiert G3-grünen
+Privacy-/Legal-/Analytics-Sandboxvertrag, bleibt aber wegen Counsel,
+alternativer Nicht-Kontoinhaber-Identity und moderierter Forschung
+ungehakt und `DISABLED`; siehe
+[Phase-22-Evidence](./evidence/2026-07-26-phase-22.md). **Phase 23 ist deshalb
+noch nicht sequenziell freigegeben.** Die offenen Business-/Legal-/Privacy-/
+Tax-/Provider-/Ops-Entscheidungen besitzen weiterhin harte Deadlines vor Pilot
+oder realem Betrieb; der lokale technische Abschluss ersetzt keine dieser
+Freigaben.
 
 ## 11. Prospektiver Remediation-Plan-Audit 19–32
 
@@ -211,7 +216,7 @@ Plan-Evidence; die Phase bleibt bis zur späteren Implementierung offen.
 | --- | --- | --- |
 | E-Mail-Verifikation/Delivery | technisch auf Candidate `5908900` geschlossen: Low-Assurance, Verification, sicherer E-Mail-Change, atomare Outbox, Attempts/Retry/DLQ und Preferences; reale Zustellung/autonomer Betrieb nicht aktiviert | Phase 20 Evidence grün; LIVE-Aktivierung und autonomes Scheduling bleiben Phase 23, MFA/Step-up Phase 25 |
 | CV-/Dokumentbytes | technisch auf Candidate `ca36bff` geschlossen: Quarantäne-first Bytes, Content-/Malware-Policy, immutable Application-Version und Single-use-Read; LIVE bleibt deaktiviert | Phase-21-Evidence grün; Production-Provider/Retention/Worker/Bulk bleiben Phasen 22/23/25 |
-| Privacy Export/Delete | bestätigt/teilweise; Export ist Manifest, Assessment kennt keine echte Erasure | Phase 22: versioniertes Dateninventar, Export/Korrektur/Löschung, Legal Holds, DSFA-/AVG-/Consent-Gates |
+| Privacy Export/Delete | Ausgangsbefund technisch auf `0636a875` im deaktivierten Local-/CI-Sandboxvertrag gelöst; externer Gesamtabschluss blockiert | Phase 22: Inventory V1, verschlüsselter V2-Export, Correction/Erasure, Holds, Restore und Failure-Evidence grün; Nicht-Kontoinhaber, Counsel/Retention und moderierte Forschung offen |
 | autonome Worker | bestätigt | Phase 23: Lease/Heartbeat/Dedupe/Retry/DLQ/Replay, Provider-Aktivierungsledger, Capacity/Unit Cost |
 | Payment/Refund | bestätigt für LIVE; Mockmechanik ist absichtlich korrekt | Phase 24 erst nach WTP-Go; Webhook/Reconciliation/Fraud plus Service-Recovery |
 | Admin ist Superrolle | bestätigt; Capabilities mindern Teilrisiko | Phase 25A Least Privilege/SoD/Break-glass, 25B Non-Admin-Step-up, 25C Fraud/ATO/Scam |

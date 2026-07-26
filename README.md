@@ -18,6 +18,14 @@ Incident-Prozesse und bestätigte Recovery-SLAs sind separate Go-live-Gates.
 Den reproduzierten Release- und Teststatus des Zielcommits dokumentiert
 [`BUILD_REPORT.md`](./BUILD_REPORT.md).
 
+Phase 22 besitzt auf Candidate `0636a875` zusätzlich einen automatisiert
+G3-grünen, standardmäßig deaktivierten Local-/CI-Sandboxvertrag für
+inventargebundenen Datenschutzvollzug, versionierte Legal-Gates und optionale
+Consent-Analytics. Counsel-/AVG-/AVV-/DPA-/DSFA-/Retention-Freigaben,
+Nicht-Kontoinhaber-Identity und moderierte Nutzerforschung fehlen; der
+Phasenstatus und jede LIVE-Aktivierung bleiben daher blockiert. Details:
+[`codex-plan/evidence/2026-07-26-phase-22.md`](./codex-plan/evidence/2026-07-26-phase-22.md).
+
 Dieses Verzeichnis ist ein eigenes verschachteltes Git-Repository. Die
 [`CLAUDE.md`](./CLAUDE.md) grenzt es ausdrücklich vom separaten Elternprojekt
 `Portal.git` ab; dessen Providerregeln gelten hier nicht.
@@ -93,7 +101,7 @@ UI/Route
 | [`app`](./app) | Next.js-Routen, Layouts, Server Actions und Route Handler |
 | [`components`](./components) | UI-Primitives und rollenbezogene Oberflächen |
 | [`lib`](./lib) | Domain-Policies, Auth, Billing, Search, Privacy, Provider-Ports und autorisierte Datenzugriffe |
-| [`prisma`](./prisma) | Schema, 43 committed Migrationen, deterministischer Seed |
+| [`prisma`](./prisma) | Schema, 48 committed Migrationen, deterministischer Seed |
 | [`tests`](./tests) | Unit-, PostgreSQL-Integration- und Playwright-E2E-Suiten |
 | [`scripts`](./scripts) | plattformneutrale Env-, DB-, Release-, Security- und Recovery-Werkzeuge |
 | [`codex-plan`](./codex-plan) | verbindlicher Plan, ADRs, Requirements und Evidence |
@@ -260,9 +268,9 @@ npm run db:smoke
 
 - `db:migrate` führt `prisma migrate deploy` gegen die ausdrücklich
   konfigurierte Ziel-DB aus.
-- Die **43 committed Migrationen** reichen von der Baseline über Domain-,
-  Billing-, Radar-, Search- und Security-Verträge bis zu den
-  Phase-17-Company-Profile-Array-Defaults.
+- Die **48 committed Migrationen** reichen von der Baseline über Domain-,
+  Billing-, Radar-, Search- und Security-Verträge bis zu Phase-22-Privacy-,
+  Legal-, Processing-, Hold-, Tombstone- und Analytics-Consent-Constraints.
 - `db:migrate:dev` und `db:studio` sind durch einen Local-/Loopback-Guard
   geschützt.
 - `prisma db push` ist für Production, Staging, Releases und

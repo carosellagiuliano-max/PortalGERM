@@ -4,6 +4,11 @@
 > ist eine technische Übergabe, keine Rechtsberatung und keine Freigabe. Wo
 > kein datierter, benannter Fachentscheid vorliegt, bleiben UI, API, Worker,
 > Provider und Marketing serverseitig deaktiviert.
+>
+> Der technische Sandbox-Candidate
+> `0636a87534c0c1641979fd041e4f13682e3d9bd4` und sein automatisiertes G3 sind
+> grün; das ändert keinen Status dieser Tabelle. Gebundene technische Evidence:
+> [`evidence/2026-07-26-phase-22.md`](./evidence/2026-07-26-phase-22.md).
 
 ## Technisches Dateninventar
 

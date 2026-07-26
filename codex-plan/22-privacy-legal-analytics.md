@@ -1,9 +1,10 @@
 # Phase 22 — Datenschutzvollzug, stabile Rechtsgates und LIVE-Analytics
 
-> **Planstatus:** IN UMSETZUNG / TECHNISCHER CANDIDATE IN PRÜFUNG
-> **Technikstatus:** IMPLEMENTIERT; COMMITGEBUNDENES G3 NOCH AUSSTEHEND
-> **Quality-Gate:** AUTOMATISIERT AUF ARBEITSBAUM GRÜN; COUNSEL UND
-> MODERIERTE FORSCHUNG NICHT GELAUFEN
+> **Planstatus:** BLOCKED BY EXTERNAL GATES
+> **Technikstatus:** IMPLEMENTIERT — LOCAL/CI-SANDBOX-CANDIDATE
+> `0636a87534c0c1641979fd041e4f13682e3d9bd4`
+> **Quality-Gate:** AUTOMATISIERTES G3 AUF EXAKTEM CANDIDATE BESTANDEN;
+> COUNSEL UND MODERIERTE FORSCHUNG NICHT GELAUFEN
 > **Aktivierung:** DISABLED
 >
 > Die bestehende Privacy-Case-Maschine ist wertvolle Vorarbeit. Export und
@@ -365,7 +366,7 @@ anzeigen.
 Alle genannten neuen Tests/Skripte sind anzulegen; nur reale Exit-0-Läufe auf
 dem Abschlusscommit werden Evidence.
 
-| Criterion | Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
+| Criterion | Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Planbasis |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `22-AC-01` | `STH-006/007`, `REQ-PRIV-004` | vergessener Datenort/instabiles Rechtsgate, P0 | Contract + Unit | Inventory×Subject×Processor×Flow und AVG/AVV/DSFA-Gate | jede Zeile hat freigegebenes Outcome/Owner/Version | fehlende Basis, expired/revoked Gate, unbekannter Processor oder Flow blockiert Aktivierung | Legal/Privacy/System | Policy Registry | vollständige Entity-/Providerliste + Canary | Unit | `npx vitest run --config vitest.config.ts tests/unit/privacy/data-inventory-contract.test.ts tests/unit/privacy/legal-gate-policy.test.ts` | 100 % Inventarzeilen vollständig; 0 unbekannte/expired Aktivierungen; Hash stabil | signierte Inventory-/Gate-Matrix | Privacy + Legal + QA | PLANNED |
 | `22-AC-02` | `STH-006`, `REQ-PRIV-004` | unvollständiger/fremder Export, P0 | PostgreSQL + E2E | Candidate/Employer/Invitee/Lead/Reporter Export mit DB + Dokumentbyte | eigenes Paket manifestiert alle freigegebenen Kategorien, decrypt/download einmal | Foreign Canary, expired/replayed URL, falscher Subject/Step-up und manipulierter Digest: 0 Daten | Data Subject | Privacy/DB/Object Store | je Subjectklasse, zwei Tenants, bekannte Bytehashes | PostgreSQL + Production Browser | `npm run test:integration -- tests/integration/privacy/privacy-export-v2-postgres.test.ts`; `npm run test:e2e:browser -- tests/e2e/flows/phase22-privacy-rights.spec.ts` | Kategorie-/Rowcounts exakt; Dokumenthash identisch; 0 Foreign IDs; zweiter Download 0; Manifesthash valide | verschlüsseltes Testmanifest, Trace | Privacy + Data | PLANNED |
@@ -378,6 +379,25 @@ dem Abschlusscommit werden Evidence.
 | `22-AC-09` | `STH-033`, `REQ-UX-003`, `REQ-QA-002` | unverstandene irreversible Entscheidung, P0 | E2E + A11y + moderiert | Request, Verify, Download, Hold-Erklärung, Delete und Analytics Opt-out | Nutzer lösen Aufgabe und erklären Wirkung korrekt | kritische Fehlannahme/Abbruch oder unzugänglicher State blockiert Cohort | Candidate/Employer/Invitee | Browser/Research | n≥5 Candidate + n≥5 Employer/Invitee, anonymisierte Fixtures | Desktop/360 + moderierte Session | `npm run test:e2e:browser -- tests/e2e/quality/phase22-privacy-legal-quality.spec.ts`; manueller Ablauf nach `codex-plan/research/phase22-privacy-comprehension-protocol.md` | 0 critical/serious Axe; Task Success ≥80 % je Rolle; 0 kritische Fehlannahmen; rote Findings geschlossen/re-scope | Axe-/Researchprotokoll | UX Research + Privacy | PLANNED |
 | `22-AC-10` | ADR-033, `REQ-QA-003` | Migration/Restore reaktiviert PII, P0 | Migration + Recovery | leer, Legacy Consents/Cases, Partial Backfill, Wiederholung, Restore | additive Migration und korrekte Legacyklassifikation | Fake Re-consent, Duplicate Outcome, restored erased PII oder fehlendes Inventory blockiert | System/Data | Prisma/Backup/Privacy | Phase-19-Bestand + erased tombstone | isoliertes PostgreSQL 16 + isolierter Restore | `npm run test:integration -- tests/integration/schema/phase22-privacy-legal-migration-postgres.test.ts`; `npm run db:migrate`; `npm run db:migrate:status`; `npm run privacy:restore-drill` | 0 gefälschte Consents; 0 Duplicate Outcomes; Restore-Reconcile entfernt/blockiert 100 % Tombstone-Canaries | Migration-/Restoremanifest | Data + Privacy + Ops | PLANNED |
 | `22-AC-11` | `REQ-QA-001`, `REQ-QA-003` | Radar/Billing/Audit/Privacy-Regression, P0 | G3 Portal-Golden | alle Owning-/Regression-/Browser-/Recovery-Gates | kompletter Vertrag auf identischem Commit | Skip, Retry, anderer Digest oder offene Pflichtzeile blockiert | alle | Repository/Portale | deterministischer Seed | Clean Clone, PostgreSQL 16, Production Browser | nacheinander `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:integration`, `npm run build`, `npm run test:e2e:http`, `npm run test:e2e:browser`, `npm run test:e2e:hsts`, `npm run test:release` | alle Exit 0; Retry 0; keine unerklärten Skips; Restore isoliert; gleicher Commit/Digest | G3-/Recovery-Manifest | QA + Ops | PLANNED |
+
+### Aktueller AC-Status auf Candidate `0636a875`
+
+| AC | Automatisierter Techniknachweis | Verbleibender Gate-Status |
+| --- | --- | --- |
+| `22-AC-01` | `PASS` | signiertes Inventory/Counsel `BLOCKED` |
+| `22-AC-02` | accountgebundener Export `PASS` | Nicht-Kontoinhaber-/Phase-25-Identity `BLOCKED` |
+| `22-AC-03` | `PASS (SANDBOX)` | Production Execution `DISABLED` |
+| `22-AC-04` | accountgebundene Correction `PASS` | Nicht-Kontoinhaber-/Phase-25-Identity `BLOCKED` |
+| `22-AC-05` | Publication-/Link-/Gate-Automation `PASS` | manueller Counsel-Abgleich `NOT RUN` |
+| `22-AC-06` | `PASS` | optionale Analytics `DISABLED` |
+| `22-AC-07` | Sandbox-Actor-/Authorization-Matrix `PASS` | reale Step-up-/Grant-Evidence aus Phase 25 `BLOCKED` |
+| `22-AC-08` | bounded Failure-/Resume-Vertrag `PASS` | autonome Worker bleiben Phase 23 |
+| `22-AC-09` | Desktop/360/Keyboard/Axe `PASS` | n≥5 Candidate + n≥5 Employer/Invitee `NOT RUN` |
+| `22-AC-10` | `PASS` | kein Aktivierungsclaim |
+| `22-AC-11` | automatisiertes G3 `PASS` | Gesamtphase wegen `22-AC-05/09` `BLOCKED` |
+
+Details, Commands, Digests und Limitationen:
+[`evidence/2026-07-26-phase-22.md`](./evidence/2026-07-26-phase-22.md).
 
 ## 22. Performance-, Query-, Queue-, Datei-, Latenz- und Lastgrenzen
 
@@ -393,6 +413,9 @@ dem Abschlusscommit werden Evidence.
   isolierten Referenzumgebung; keine unbounded Properties/Queries;
 - beide Referenzgrenzen werden gemeinsam reproduzierbar mit
   `npm run privacy:load` geprüft;
+- Candidate `0636a875` misst bei 10.000 Outbox-Zeilen plus 5-MiB-Dokument
+  16.877.328 Byte Heapdelta und bei 50 parallelen Analytics-Writes
+  121,06 ms p95; dies ist Local-/CI-Referenzevidence, kein Production-SLA;
 - Production-Kapazität, p95 Handling Time und Unit Cost werden mit Phase 23/
   `STH-034` gemessen, nicht aus Demo-Zeiten behauptet.
 
@@ -433,6 +456,8 @@ Fachentscheidungen stehen in
 [`phase22-external-gates.md`](./phase22-external-gates.md). Das
 vorregistrierte, noch nicht durchgeführte Researchverfahren steht in
 [`research/phase22-privacy-comprehension-protocol.md`](./research/phase22-privacy-comprehension-protocol.md).
+Die gebundene technische und automatisierte Evidence steht in
+[`evidence/2026-07-26-phase-22.md`](./evidence/2026-07-26-phase-22.md).
 
 ## 26. Definition of Done für Technik und Quality-Gate
 

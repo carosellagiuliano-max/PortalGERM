@@ -55,6 +55,8 @@ instanziieren.
 | Phase-19-Evidence | [`evidence/2026-07-26-phase-19.md`](./evidence/2026-07-26-phase-19.md): vollständiger Clean Clone, 43 Migrationen, Seed×2, 1.974 Unit-, 369 PostgreSQL- und 219 Browsertests, Build/HTTP/HSTS sowie Recovery bestanden |
 | Phase-20-Candidate | `59089009f54312a4c10989b7efde2d5fda9a2b8d` (`5908900`), Parent `8087c0c` |
 | Phase-20-Evidence | [`evidence/2026-07-26-phase-20.md`](./evidence/2026-07-26-phase-20.md): 45 Migrationen, Seed×2, 1.984 Unit-, 408 PostgreSQL- und 233 Browsertests, Build/HTTP/HSTS sowie Provider-/Dispatcher-Failure-Gates bestanden; LIVE bleibt deaktiviert |
+| Phase-21-Candidate/Evidence | `ca36bff59e0d759cc5243da346c6e717c650e35e`; [Evidence](./evidence/2026-07-26-phase-21.md): Document-/CV-Vault Local-/CI-Sandbox technisch geschlossen, LIVE/Retention/Worker/Bulk deaktiviert |
+| Phase-22-Candidate/Evidence | `0636a87534c0c1641979fd041e4f13682e3d9bd4`; [Evidence](./evidence/2026-07-26-phase-22.md): technische Sandbox und automatisiertes G3 grün; Counsel, alternative Identity, moderierte Forschung und Aktivierung blockiert |
 
 `eb9b45a` und `e34262e` bleiben historische Analyse-/Planungsidentitäten,
 keine Releasekandidaten. Phase 19 wählte bei ihrem tatsächlichen Start den
@@ -333,9 +335,11 @@ Infrastruktur, benannte Owner und bestätigte Betriebsziele.
 
 ## 6. Phasenübersicht 19–32
 
-Phasen 19 und 20 sind durch ihre verlinkte Candidate-Evidence geschlossen;
-alle Kästchen 21–32 bleiben offen. Ein Planartefakt oder ein vorhandener
-Teilmechanismus schliesst keine weitere Phase. Bei gemischt priorisierten
+Phasen 19 bis 21 sind durch ihre verlinkte Candidate-Evidence geschlossen.
+Phase 22 besitzt technische Candidate-Evidence, bleibt wegen externer
+Pflichtgates ungehakt; alle Kästchen 22–32 bleiben offen. Ein Planartefakt
+oder ein vorhandener Teilmechanismus schliesst keine weitere Phase. Bei
+gemischt priorisierten
 Phasen erhält jeder Track eigene Evidence. Ein grüner P1-Track darf
 freigegeben werden, ohne einen nicht ausgelösten P3-Befund fälschlich zu
 schließen; dieser benötigt stattdessen einen datierten Deferred-Entscheid mit
@@ -346,7 +350,7 @@ Headroom, Forecast, Alert und Owner.
 | [x] 19 | [Remediation-Baseline und Regression](./19-remediation-baseline-regression.md) | alle `STH-*` als Steuerung | Candidate `769ee62`, vollständige aktuelle Golden-Baseline, Regressionvertrag, Test-/Migrationsinventar und Gate-Backlog verifiziert |
 | [x] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md) | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | technischer Verification-/E-Mail-Change-/Outbox-/Dispatcher-/Preference-Vertrag auf Candidate `5908900`; LIVE/Worker/Step-up bleiben gegatet |
 | [x] 21 | [Document-/CV-Vault](./21-document-cv-vault.md) | `STH-003`; Storage-Anteil `STH-004` | Candidate `ca36bff`: echte CV-Bytes mit Quarantäne, Scan, immutable Application-Version, Single-use-Grant, Reconciliation und Audit im Local-/CI-Sandboxvertrag; LIVE/Retention/Worker/Bulk gegatet |
-| [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md) | `STH-006`, `STH-007`, `STH-017` | vollständiges Dateninventar, reale Export-/Korrektur-/Löschprozesse, Legal Holds, versionierte Rechtstexte und consent-bewusste LIVE-Analytics |
+| [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md) | `STH-006`, `STH-007`, `STH-017` | Candidate `0636a875`: technischer Local-/CI-Sandboxvertrag und automatisiertes G3 `PASS`; Counsel, alternative Identity, moderierte Forschung und jede Aktivierung `BLOCKED`, siehe [Evidence](./evidence/2026-07-26-phase-22.md) |
 | [ ] 23 | [Production Operations und Worker](./23-production-operations-workers.md) | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034` | explizit freigegebene reale Adapter, autonome Ausführung, Kapazitäts-/Stückkostenmodell und belastbare Staging-/Recovery-Grenzen |
 | [ ] 24 | [Reales Billing und Finance](./24-real-billing-finance.md) | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031` | echter, webhookbasierter Geldfluss, Reconciliation, Dunning/Dispute sowie vertraglich korrekte Refund-/Credit-Restoration |
 | [ ] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031` | 25A Admin-Least-Privilege/SoD/Break-glass, 25B risikobasiertes Non-Admin-Step-up, 25C Fraud-/Scam-/ATO-Abwehr |
@@ -441,8 +445,12 @@ HSTS, Seed×2, Provider-/Dispatcher-Failure- und Governance-Gates. Der
 [Phase-20-Evidence-Record](./evidence/2026-07-26-phase-20.md) trennt diesen
 technischen Abschluss von weiterhin `DISABLED`/`PAUSED` gesetzter
 Productionzustellung, autonomer Phase-23-Ausführung und Phase-25-Step-up.
-Phase 21 ist auf Candidate `ca36bff` technisch abgeschlossen; Phase 22 darf
-als nächster sequenzieller Track beginnen.
+Phase 21 ist auf Candidate `ca36bff` technisch abgeschlossen. Phase 22 ist
+auf `0636a875` technisch implementiert und automatisiert G3-grün, bleibt aber
+wegen Counsel, alternativer Nicht-Kontoinhaber-Identity und moderierter
+Forschung ungeschlossen und `DISABLED`; Phase 23 ist noch nicht sequenziell
+freigegeben. Siehe
+[Phase-22-Evidence](./evidence/2026-07-26-phase-22.md).
 
 ### [x] 21 — Document-/CV-Vault
 

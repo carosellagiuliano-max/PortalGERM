@@ -2,10 +2,13 @@
 
 > **Historischer Ausführungsplan für Phase 01–18.** Diese Phasen und ihre
 > commitgebundene Evidence bleiben unverändert. Für neue Implementierung ist
-> Phasen 19 bis 21 sind inzwischen auf den Candidates `769ee62`, `5908900`
-> und `ca36bff` abgeschlossen; als nächster technischer Track gilt Phase 22 und
-> danach der prospektive Abschnitt am
-> Ende dieses Dokuments zusammen mit
+> Phasen 19 bis 21 sind auf den Candidates `769ee62`, `5908900` und
+> `ca36bff` abgeschlossen. Phase 22 ist auf `0636a875` technisch implementiert
+> und automatisiert G3-grün, bleibt wegen Counsel, alternativer
+> Nicht-Kontoinhaber-Identity und moderierter Forschung jedoch ungeschlossen
+> und `DISABLED`; Phase 23 ist noch nicht sequenziell freigegeben. Für die
+> Fortsetzung gilt der prospektive Abschnitt am Ende dieses Dokuments zusammen
+> mit
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md)
 > verbindlich. Der historische Zielzustand war ein kontrollierbares,
 > DSG-freundlich vorbereitetes MVP mit persistierenden Mock-Providern, nicht
@@ -593,8 +596,9 @@ Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert u
 ## Prospektiver Ausführungsplan Phase 19–32
 
 > Dieser Abschnitt ist das ausdrücklich freigegebene Folgepaket auf
-> Planungsebene. Phasen 19 und 20 sind abgeschlossen; Phasen 21–32 bleiben
-> offen.
+> Planungsebene. Phasen 19 bis 21 sind abgeschlossen. Phase 22 ist technisch
+> implementiert und automatisiert G3-grün, bleibt aber wegen externer Gates
+> ungehakt; Phasen 22–32 bleiben offen.
 > Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
 > Folgephasengate-Vertrag aus
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md).

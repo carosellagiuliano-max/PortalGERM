@@ -542,10 +542,13 @@ Eine Funktion ist nur fertig, wenn Datenmodell/Migration, validierter Use Case, 
 
 ## 17. Prospektive Remediation-Architektur Phase 19–32
 
-> Dieser Abschnitt ist Zielarchitektur. Identity/Outbox (Phase 20) und der
-> Local-/CI-Sandboxanteil des Private Document Vault (Phase 21) besitzen
-> Test-Evidence; ihre LIVE-Provider-/Legal-/Operations-/Cohort-Gates sowie
-> alle späteren Boxen bleiben bis eigener Aktivierungsevidence geschlossen.
+> Dieser Abschnitt ist Zielarchitektur. Identity/Outbox (Phase 20), der
+> Local-/CI-Sandboxanteil des Private Document Vault (Phase 21) sowie der
+> technische Privacy-/Legal-/Analytics-Sandboxvertrag (Phase 22, Candidate
+> `0636a875`) besitzen Test-Evidence. Ihre LIVE-Provider-/Legal-/Operations-/
+> Cohort-Gates und Phase 22 insgesamt bleiben bis Counsel, alternativer
+> Identity, moderierter Forschung und eigener Aktivierungsevidence
+> geschlossen.
 
 ```mermaid
 flowchart LR
