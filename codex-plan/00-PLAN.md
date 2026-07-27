@@ -221,9 +221,15 @@ Pager/On-call, Provider-Sandbox, automatischer Backup-Lifecycle und
 genehmigte SLO/RPO/RTO sind verbindlich an Phase 32/G4 übertragen. Siehe
 [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md).
 
-### [ ] 24 — Reales Billing und Finance
+### [x] 24 — Reales Billing und Finance
 
-[`24-real-billing-finance.md`](./24-real-billing-finance.md) · echter Checkout, Webhooks, Reconciliation, Refund/Dunning und freigegebene Rechnungen.
+[`24-real-billing-finance.md`](./24-real-billing-finance.md) ·
+commitgebunden verifizierter, standardmässig deaktivierter Local-/CI-Vertrag
+`f785944` für Hosted Test Checkout, signierte Webhook-Inbox,
+Reconciliation, Refund/Chargeback/Dunning und Service-Recovery. Lokales G3
+`PASS`; WTP, Phase-25-Step-up/Fraud, PSP, Tax/Legal/Finance, Staging und
+LIVE bleiben externe Aktivierungsgates. Siehe
+[Phase-24-Evidence](./evidence/2026-07-27-phase-24.md).
 
 ### [ ] 25 — Admin-Security
 

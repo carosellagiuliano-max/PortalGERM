@@ -665,10 +665,11 @@ flowchart TD
    bauen auf dem abgeschlossenen Phase-21-Sandboxvertrag auf.
 7. **Phasen 25→26→30D**: privilegierte Assurance/Least Privilege/Fraud,
    belastbarer Company Trust und Job Freshness.
-8. **Phase 24 technisch vorbereitet, Aktivierung nur bei LC5-Go**:
-   fail-closed Local-/CI-Zahlungs- und Service-Recovery-Vertrag; kein
-   Staging-/Paid-/LIVE-Start vor WTP-, Phase-25-, Provider-, Tax-/Legal-,
-   Finance- und Operations-Go.
+8. **Phase 24 technisch abgeschlossen, Aktivierung nur bei LC5-Go**:
+   Candidate `f785944` besitzt den grünen fail-closed Local-/CI-Zahlungs- und
+   Service-Recovery-Vertrag; kein Staging-/Paid-/LIVE-Start vor WTP-,
+   Phase-25-, Provider-, Tax-/Legal-, Finance- und Operations-Go. Siehe
+   [Phase-24-Evidence](./evidence/2026-07-27-phase-24.md).
 9. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
    final usability-/mobile-/a11y-prüfen; erst danach genau das lieferbare
    Angebot/den Cluster aktivieren.

@@ -6,7 +6,7 @@
 | --- | --- |
 | Planstatus | `TECHNISCH ABGESCHLOSSEN` |
 | Technikstatus | `LOCAL/CI SANDBOXVERTRAG IMPLEMENTIERT` |
-| Quality-Gate | `LOCAL G3 IN PRÜFUNG` |
+| Quality-Gate | `LOCAL G3 PASSED` |
 | Aktivierung | `DISABLED` |
 
 Der Repository-Owner hat den technischen Phase-24-Vertrag ausdrücklich
@@ -58,8 +58,8 @@ Messbarer Zielwert für den technischen Vertrag:
 - ADR-014 bleibt für Phasen 01–18 wahr. ADR-035 genehmigt nur den prospektiven
   Real-Payment- und Service-Recovery-Scope dieser Phase. Die konkrete
   Paid-Servicepolicy und jede Markt-/LIVE-Aussage bleiben Phase 31/32.
-- Commitgebundene Counts, Befehle, Resultate und externe Blocker werden nach
-  dem unveränderlichen G3-Lauf in der Phase-24-Evidence festgehalten.
+- Commitgebundene Counts, Befehle, Resultate und externe Blocker stehen in
+  der [Phase-24-Evidence](./evidence/2026-07-27-phase-24.md).
 
 ## 4. Findings und Requirements
 
