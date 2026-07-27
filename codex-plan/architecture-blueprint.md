@@ -603,12 +603,20 @@ flowchart LR
 
 - PostgreSQL-backed queue/lease with claim owner, heartbeat/lease expiry,
   attempt, next run, last classified error, DLQ and replay evidence;
+- Phase-23 implementation uses atomic `SKIP LOCKED` claims, monotonic fencing,
+  append-only attempts/DLQ/effect receipts/replay audits and a paused-by-
+  default WorkerRun lifecycle; unknown handler/payload versions are not
+  claimed;
 - provider activation ledger records environment, adapter/config/secret
   version, DPA/contract, owner, health, sandbox/LIVE approval and rollback;
+- handler/provider activation is exact to environment, use case, version and
+  deployment digest, with no Real→Mock fallback; Production mutation remains
+  owned by Phase 25;
 - metrics include queue age/depth/arrival/service rate, retry/DLQ, SLO,
   handling time and capacity; logs remain redacted;
-- manual Commands call the same use cases but do not count as autonomous
-  operation.
+- manual Commands and worker handlers call the same owning use cases; local
+  autonomous execution is technical evidence, but does not count as Staging,
+  Pager, recovery or Production evidence.
 
 ### 17.4 Payment and service delivery
 

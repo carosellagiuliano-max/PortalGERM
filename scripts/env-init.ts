@@ -105,6 +105,8 @@ const values: Record<string, string> = {
   NOTIFICATION_DISPATCH: "paused",
   OPTIONAL_EMAIL: "false",
   DELIVERY_REPLAY: "false",
+  WORKER_RUNTIME: "paused",
+  WORKER_SANDBOX_REPLAY: "false",
   EMAIL_FROM: "",
   ABUSE_REPORT_ADMIN_EMAILS: "admin@demo.ch",
   LOG_LEVEL: "info",

@@ -351,7 +351,7 @@ Headroom, Forecast, Alert und Owner.
 | [x] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md) | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | technischer Verification-/E-Mail-Change-/Outbox-/Dispatcher-/Preference-Vertrag auf Candidate `5908900`; LIVE/Worker/Step-up bleiben gegatet |
 | [x] 21 | [Document-/CV-Vault](./21-document-cv-vault.md) | `STH-003`; Storage-Anteil `STH-004` | Candidate `ca36bff`: echte CV-Bytes mit Quarantäne, Scan, immutable Application-Version, Single-use-Grant, Reconciliation und Audit im Local-/CI-Sandboxvertrag; LIVE/Retention/Worker/Bulk gegatet |
 | [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md) | `STH-006`, `STH-007`, `STH-017` | Candidate `0636a875`: technischer Local-/CI-Sandboxvertrag und automatisiertes G3 `PASS`; Counsel, alternative Identity, moderierte Forschung und jede Aktivierung `BLOCKED`, siehe [Evidence](./evidence/2026-07-26-phase-22.md) |
-| [ ] 23 | [Production Operations und Worker](./23-production-operations-workers.md) | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034` | explizit freigegebene reale Adapter, autonome Ausführung, Kapazitäts-/Stückkostenmodell und belastbare Staging-/Recovery-Grenzen |
+| [ ] 23 | [Production Operations und Worker](./23-production-operations-workers.md) | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034` | lokaler/CI Worker-/Ledger-/Capacity-Candidate begonnen; reale Adapter, Staging/Pager/Recovery, genehmigte SLO/RPO/RTO und formales G3 bleiben offen |
 | [ ] 24 | [Reales Billing und Finance](./24-real-billing-finance.md) | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031` | echter, webhookbasierter Geldfluss, Reconciliation, Dunning/Dispute sowie vertraglich korrekte Refund-/Credit-Restoration |
 | [ ] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031` | 25A Admin-Least-Privilege/SoD/Break-glass, 25B risikobasiertes Non-Admin-Step-up, 25C Fraud-/Scam-/ATO-Abwehr |
 | [ ] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md) | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034` | beweisgestützter, vier-Augen-fähiger Trust-Lifecycle mit Ablauf, Re-Review und schneller Sperrung |
@@ -448,8 +448,9 @@ Productionzustellung, autonomer Phase-23-Ausführung und Phase-25-Step-up.
 Phase 21 ist auf Candidate `ca36bff` technisch abgeschlossen. Phase 22 ist
 auf `0636a875` technisch implementiert und automatisiert G3-grün, bleibt aber
 wegen Counsel, alternativer Nicht-Kontoinhaber-Identity und moderierter
-Forschung ungeschlossen und `DISABLED`; Phase 23 ist noch nicht sequenziell
-freigegeben. Siehe
+Forschung ungeschlossen und `DISABLED`. Phase 23 ist als lokaler/CI
+Technik-Candidate begonnen, bleibt aber für Staging/Production und ihr
+formales G3 extern blockiert. Siehe
 [Phase-22-Evidence](./evidence/2026-07-26-phase-22.md).
 
 ### [x] 21 — Document-/CV-Vault
@@ -528,6 +529,13 @@ keinen Produktflow blockieren. Erasure ist nicht rückrollbar; deshalb Dry
 Run, Approval, Export-Checksum und irreversible Bestätigung vor Ausführung.
 
 ### [ ] 23 — Production Operations und Worker
+
+**Aktueller Stand:** Lokaler/CI Technik-Candidate mit PostgreSQL-
+Lease/Fencing, Retry/DLQ/Replay, Scheduler, Handler-/Providerledger,
+Capacity-/Chaos-Evidence und redigiertem read-only Ops-Cockpit. Runtime und
+Provider bleiben standardmässig `DISABLED`. Das Häkchen bleibt aus, bis reale
+Staging-/Provider-/Pager-/Restore-Evidence, genehmigte SLO/RPO/RTO und das
+commitgebundene G3 vorliegen.
 
 **Zweck:** Die verbleibenden realen Provideradapter werden über die
 bestehenden Ports und eine gemeinsame Governance integriert. Gleichzeitig

@@ -8,6 +8,9 @@
 > Das geplante Phase-19+-Incident-, Fraud-/ATO-, Worker-, Freshness- und
 > Service-Recovery-Ziel steht im
 > [Remediation-Runbookziel](./remediation-production-target.md).
+> Phase 23 ergänzt Worker-/Providerzustände und einen fail-closed Validator
+> für eine echte Staging-/Pager-Sandbox-Übung. Ein Pager oder On-call-Team
+> wurde dadurch nicht provisioniert.
 
 ## Schweregrade
 
@@ -131,11 +134,50 @@ Identität kann technisch nicht „ungesehen“ gemacht werden.
 
 ## Provider- oder Notification-Fehler
 
-Alle externen Provider sind aktuell persistierende Mocks. Fehler werden über
-Domainzustand, `EmailLog`, Notification, SystemTask und Audit untersucht.
-Ein gesetzter späterer API-Key aktiviert keinen realen Provider. Für reale
-Provider sind separate DPA/Security-, Retry/Webhook-, Monitoring- und
-Fallback-Runbooks erforderlich.
+Provider werden nur über das environment-/use-case-spezifische Activation
+Ledger aufgelöst. Ohne vollständige Aktivierung bleibt der Use Case
+fail-closed; ein gesetzter API-Key aktiviert nichts und Production fällt
+niemals auf Mock zurück. Bei Ausfall den betroffenen Provider/Handler
+pausieren, Backlog erhalten und Activation-/Attempt-/Receipt-Evidence sichern.
+Details stehen in [provider-activation.md](./provider-activation.md).
+
+## Worker-, Queue- oder DLQ-Vorfall
+
+**Signale:** oldest age/Queue-Tiefe steigt, WorkerRun-Heartbeat fehlt,
+Lease-Loss häuft sich, Retry-/DLQ-Rate steigt, Provider-/DB-Kapazität erreicht
+80/90 % oder ein Poison Item wiederholt sich.
+
+**Eindämmung:**
+
+- betroffenen Handler pausieren; nur bei systemischem Risiko global stoppen;
+- keine Work Items, Attempts, DLQ, Receipts oder Activation Events löschen;
+- Deployment-Digest, WorkerRun, Handlerversion, Fencing-Token und redigierten
+  Fehlercode erfassen;
+- Provider/DB nicht mit unbounded Retry belasten; Aufnahmegrenze anwenden;
+- Production-Replay bis Phase 25 und gültiges Step-up/Dual Approval sperren.
+
+**Recovery:** Lease kontrolliert auslaufen lassen, Ursache beheben,
+Chaos-/Handler-/Provider-Smoke ausführen und danach canaryweise reaktivieren.
+Ein DLQ-Replay nutzt denselben Dedupe-/Effect-Key. Die vollständige Prozedur
+steht in [worker-operations.md](./worker-operations.md).
+
+## Phase-23-Pager-Drill
+
+Die reale Übung verlangt fünf Szenarien (`queue-age`, `dlq`,
+`provider-outage`, `backup-failure`, `pii-canary`), verschiedene Primär-/
+Sekundärowner, Page innerhalb zweier Messintervalle, Ack innerhalb der vorher
+genehmigten Frist und null PII-/Secret-Canary-Treffer:
+
+```text
+APP_ENV=staging
+PHASE23_INCIDENT_EVIDENCE_PATH=<ABSOLUTER_EXTERNER_PFAD>
+PHASE23_INCIDENT_EVIDENCE_SHA256=<SHA256>
+npm run ops:incident-drill -- --environment=staging --scenario=queue-age,dlq,provider-outage,backup-failure,pii-canary
+```
+
+Die Evidence-Datei muss absolut, ausserhalb des Repositories und SHA-256-
+gebunden sein. Ohne reale Stagingmetriken, Pager-Sandbox, namentliche Owner
+und Timeline muss der Befehl Exit-Code ungleich `0` liefern.
 
 ## Kommunikation und Evidence
 

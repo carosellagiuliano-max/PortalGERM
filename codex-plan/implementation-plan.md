@@ -6,7 +6,10 @@
 > `ca36bff` abgeschlossen. Phase 22 ist auf `0636a875` technisch implementiert
 > und automatisiert G3-grün, bleibt wegen Counsel, alternativer
 > Nicht-Kontoinhaber-Identity und moderierter Forschung jedoch ungeschlossen
-> und `DISABLED`; Phase 23 ist noch nicht sequenziell freigegeben. Für die
+> und `DISABLED`; Phase 23 ist als lokaler/CI Technik-Candidate begonnen,
+> bleibt aber ohne reales Staging, Pager/On-call, Provider-Sandbox,
+> Backup-Lifecycle, genehmigte SLO/RPO/RTO und formales G3 ungeschlossen und
+> `DISABLED`. Für die
 > Fortsetzung gilt der prospektive Abschnitt am Ende dieses Dokuments zusammen
 > mit
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md)
@@ -674,7 +677,9 @@ flowchart TD
 - Phase 21 ist abgeschlossen; Phase 22 integriert Retention-/Legal-Hold- und
   Privacy-Schemaänderungen sequenziell auf diesem Vertrag.
 - Phase 23 kann Worker-Grundlagen bauen; eine Domainqueue aktiviert erst nach
-  deren stabilem fachlichem Contract.
+  deren stabilem fachlichem Contract. Die technische Queue-/Lease-/Retry-/
+  DLQ-/Replay-Grundlage und die registrierten Phase-20–22-Adapter sind im
+  lokalen Candidate vorhanden; Production-Aktivierung folgt daraus nicht.
 - Phase 25 und 26 dürfen nach Phase 20 vorbereitet werden; Auth-/Role- und
   Company-Migrationen werden nicht gleichzeitig gecutovert.
 

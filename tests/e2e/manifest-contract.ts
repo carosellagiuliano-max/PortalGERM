@@ -25,6 +25,10 @@ export const PHASE22_LEGAL_FLOW_FILE =
   "flows/phase22-legal-consent.spec.ts" as const;
 export const PHASE22_PRIVACY_LEGAL_QUALITY_FILE =
   "quality/phase22-privacy-legal-quality.spec.ts" as const;
+export const PHASE23_OPS_FLOW_FILE =
+  "flows/phase23-ops-control.spec.ts" as const;
+export const PHASE23_OPS_QUALITY_FILE =
+  "quality/phase23-ops-quality.spec.ts" as const;
 export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE17_QUALITY_FILE,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
@@ -33,6 +37,8 @@ export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE21_DOCUMENT_QUALITY_FILE,
   PHASE22_LEGAL_FLOW_FILE,
   PHASE22_PRIVACY_LEGAL_QUALITY_FILE,
+  PHASE23_OPS_FLOW_FILE,
+  PHASE23_OPS_QUALITY_FILE,
 ] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
@@ -107,6 +113,24 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     tag: "@quality-mobile",
     file: PHASE22_PRIVACY_LEGAL_QUALITY_FILE,
     expectedCount: 2,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE23_OPS_FLOW_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@quality-desktop",
+    file: PHASE23_OPS_QUALITY_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_MOBILE_PROJECT,
+    tag: "@quality-mobile",
+    file: PHASE23_OPS_QUALITY_FILE,
+    expectedCount: 1,
   }),
 ] as const);
 

@@ -133,6 +133,13 @@ const rawEnvironmentSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    WORKER_RUNTIME: z
+      .enum(["paused", "sandbox_command", "autonomous"])
+      .default("paused"),
+    WORKER_SANDBOX_REPLAY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     DOCUMENT_VAULT_WRITES: z
       .enum(["true", "false"])
       .default("false")
@@ -412,6 +419,33 @@ const rawEnvironmentSchema = z
         path: ["DELIVERY_REPLAY"],
         message:
           "is allowed only with the isolated local_mock sandbox until Phase 25",
+      });
+    }
+
+    if (
+      environment.WORKER_RUNTIME === "sandbox_command" &&
+      environment.APP_ENV !== "local" &&
+      environment.APP_ENV !== "ci"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["WORKER_RUNTIME"],
+        message: "sandbox_command is allowed only in local or CI",
+      });
+    }
+
+    if (
+      environment.WORKER_SANDBOX_REPLAY &&
+      (
+        environment.WORKER_RUNTIME !== "sandbox_command" ||
+        (environment.APP_ENV !== "local" && environment.APP_ENV !== "ci")
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["WORKER_SANDBOX_REPLAY"],
+        message:
+          "requires the isolated Local/CI sandbox command runtime until Phase 25",
       });
     }
 
@@ -813,6 +847,8 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     notificationDispatch: environment.NOTIFICATION_DISPATCH,
     optionalEmailEnabled: environment.OPTIONAL_EMAIL,
     deliveryReplayEnabled: environment.DELIVERY_REPLAY,
+    workerRuntime: environment.WORKER_RUNTIME,
+    workerSandboxReplayEnabled: environment.WORKER_SANDBOX_REPLAY,
     documentVaultWrites: environment.DOCUMENT_VAULT_WRITES,
     documentStorageMode: environment.DOCUMENT_STORAGE_MODE,
     documentScannerMode: environment.DOCUMENT_SCANNER_MODE,

@@ -7,6 +7,10 @@
 > Der geplante Phase-19+-Produktionsvertrag steht separat im
 > [Remediation-Runbookziel](./remediation-production-target.md) und ist noch
 > nicht ausgeführt.
+>
+> Phase 23 ergänzt eine lokal/CI-geprüfte, standardmässig pausierte Worker-
+> Runtime und strikte externe Evidence-Validatoren. Es wurde dadurch noch
+> keine Staging-/Production-Infrastruktur verbunden.
 
 ## Zweck und Grenzen
 
@@ -69,6 +73,8 @@ npm run build
 npm run test:e2e:http
 npm run test:e2e:browser
 npm run test:e2e:hsts
+npm run worker:chaos
+npm run worker:benchmark
 ```
 
 `prisma db push`, `prisma migrate reset` und ein Demo-Seed sind in Staging und
@@ -87,14 +93,40 @@ der gleiche Versuch in Production vor dem ersten DEMO-Write scheitert.
 5. `npm run db:migrate` und danach `npm run db:migrate:status` ausführen.
 6. `npm run build` ausführen. Der Build erzeugt keine Go-live-Freigabe.
 7. Artefakt mit `npm run start` hinter dem vorgesehenen HTTPS-Ingress starten.
-8. `GET /health/live` und `GET /health/ready` prüfen. `ready` muss `200`
+   Worker zunächst mit `WORKER_RUNTIME=paused` deployen.
+8. Queue-/Provider-Migration und Activation Ledger prüfen. Erst danach genau
+   einen Diagnosehandler für den exakten Deployment-Digest als Canary
+   aktivieren. Die Prozedur steht in
+   [worker-operations.md](./worker-operations.md) und
+   [provider-activation.md](./provider-activation.md).
+9. `GET /health/live` und `GET /health/ready` prüfen. `ready` muss `200`
    liefern; ein `503` blockiert den Rollout.
-9. Öffentliche Kernrouten und die erlaubten Rollen mit nicht-demonstrativen
+10. Öffentliche Kernrouten und die erlaubten Rollen mit nicht-demonstrativen
    Staging-Konten prüfen. In Production dürfen keine Demo-Konten existieren.
-10. Security-Header, `no-store`/`noindex`, CSP, HSTS am echten HTTPS-Rand und
+11. Security-Header, `no-store`/`noindex`, CSP, HSTS am echten HTTPS-Rand und
     redigierte Logs kontrollieren.
-11. Release-Entscheid, Endzeit, Commit, Migrationen, Smoke-Ergebnisse und
+12. Release-Entscheid, Endzeit, Commit, Migrationen, Worker-/Providerstatus,
+    Smoke-Ergebnisse und
     bekannte offene Gates in der Evidence festhalten.
+
+## Phase-23-Staging-Evidence
+
+Der Staging-Smoke akzeptiert kein lokal erfundenes „Pass“. Er verlangt eine
+absolute JSON-Evidence-Datei ausserhalb des Repositories und deren erwarteten
+SHA-256:
+
+```text
+APP_ENV=staging
+TESTED_ARTIFACT_DIGEST=<IMMUTABLE_DIGEST>
+PHASE23_STAGING_DEPLOY_EVIDENCE_PATH=<ABSOLUTER_EXTERNER_PFAD>
+PHASE23_STAGING_DEPLOY_EVIDENCE_SHA256=<SHA256>
+npm run ops:staging-smoke -- --environment=staging --artifact-digest=<IMMUTABLE_DIGEST> --scenario=deploy,migrate,canary,rollback
+```
+
+Der Vertrag prüft identischen Test-/Deploydigest, leere und Upgrade-DB,
+keine pending Migration/Demozeile, Live/Ready/Worker-Canary sowie einen
+erfolgreichen Rollback innerhalb eines vorher genehmigten Budgets. Ohne reale
+Staging-Evidence muss der Befehl Exit-Code ungleich `0` liefern.
 
 ## Abbruchkriterien
 
@@ -130,6 +162,7 @@ Diese Punkte bleiben unabhängig von einem grünen lokalen Release-Drill offen:
 
 - echte Preview-/Staging-/Production-Infrastruktur und getrennte Secrets/DBs;
 - Staging-Smoke und HTTPS-/Ingress-Nachweis;
+- Workerhosting, Metrics/Error-Tracking und getesteter Handler-Canary;
 - Legal-/Privacy-/Tax-Freigabe;
 - reale Payment-, E-Mail-, AI-, Storage-, Job-Room- und Commute-Provider;
 - produktive verschlüsselte Retention sowie genehmigte RPO/RTO;

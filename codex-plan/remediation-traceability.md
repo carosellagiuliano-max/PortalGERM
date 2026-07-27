@@ -69,8 +69,8 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | STH-005 | Keine reale Zahlung/Billing-Abwicklung | bestätigt; Mock-Billing fachlich umfangreich | P0 für Paid Self-Service | Billing/Finance | 24 | 19, STH-004, Worker, Tax/Legal, früher Phase-31A-Go/No-go | offen; Orders/Invoices/Entitlements bleiben erhalten | starke Mock-/DB-Tests, keine Webhook/Reconciliation-E2E | `lib/providers/payments/index.ts:1-16`; `lib/providers/payments/stripe-payment-provider.ts:7-40`; `lib/billing/orders.ts:248-263` | PSP-Vertrag, Steuer-/Refund-/Dunning-Freigabe |
 | STH-006 | Kein realer Datenexport und keine reale Löschung | technisch im Local-/CI-Sandboxvertrag gelöst; Gesamtgate/Activation blockiert | P0 | Privacy/Legal | 22 | 19, STH-001/002, Storage; Phase 25 Alternative Identity/Step-up | Inventory-V2, verschlüsselter Streamingexport, Correction/Erasure, Holds, Processor-Outcomes und Restore-Tombstones implementiert; Nicht-Kontoinhaber fail-closed | Unit/PostgreSQL/Foreign-Canary/Failure/Restore/Last/Browser/G3 `PASS` auf `0636a875` | [Phase-22-Evidence](./evidence/2026-07-26-phase-22.md); `lib/privacy/export-v2.ts`; `lib/privacy/execution-v2.ts`; `lib/privacy/restore-reconciliation.ts` | signiertes Inventory, Counsel/Retention/Provider; Phase-25-Identity; moderierte Forschung |
 | STH-007 | Keine öffentlichen Rechtsseiten/kanonischen Rechtstexte | technische Publication-/Gate-Infrastruktur gelöst; Rechtstexte nicht fachlich freigegeben | P0 vor öffentlichem LIVE | Legal/Consent | 22 | 19, Counsel, STH-006/017/026 | `/legal/privacy`, `/legal/terms`, `/legal/imprint`, Admin-CMS, unabhängige Review/Publish/Revoke und exakte Processing-Gates implementiert; ohne Publication gesperrt | PostgreSQL/Hash/Re-consent/Desktop/360/Axe/G3 `PASS` auf `0636a875` | [Phase-22-Evidence](./evidence/2026-07-26-phase-22.md); `lib/legal/publication-service.ts`; `/admin/legal`; `/legal/*` | signierte CH-Texte, AVG/DSG/AGB/AVV/DPA/DSFA-Entscheide |
-| STH-008 | Produktionsbetrieb extern/offen | externe Voraussetzung; lokale Runbooks vorhanden | P0 Go-live-Gate | Operations/Release | 23 | 19, Infrastruktur, STH-004/009 | offen; Preview/Staging/Production unverbunden | lokaler Release-/Recovery-Drill grün, kein Staging-Smoke | `codex-plan/runbooks/deployment.md:28-48,124-132`; `codex-plan/release-checklist.md:96-120` | Infrastruktur, Secrets, Pager/Owner, Backup-Lifecycle |
-| STH-009 | Kein autonomer Worker | bestätigt; Phase 20 liefert nur bounded Command-Dispatcher | P0 für unbeaufsichtigten Self-Service | Worker/Outbox/Ops | 23 | 19, STH-013, Monitoring | durable Lease/Retry/DLQ vorhanden; autonomes Scheduling, Pager und Production-Recovery offen | Command-Restart-/Concurrency-/DLQ-Test `PASS`; kein autonomer Systemtest | `lib/notifications/dispatcher.ts`; [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md) | Queue/Scheduler-Hosting, Alerting |
+| STH-008 | Produktionsbetrieb extern/offen | externe Voraussetzung; lokale Runbooks und strikte Evidence-Validatoren vorhanden | P0 Go-live-Gate | Operations/Release | 23 | 19, Infrastruktur, STH-004/009 | Preview/Staging/Production weiter unverbunden; Deploy-/Pager-/Restore-Gates validieren externe SHA-256-Evidence fail-closed | lokaler Release-/Recovery-Drill und Phase-23-Validator-Tests grün; ohne Stagingkontext erwarteter Block | `codex-plan/runbooks/deployment.md`; `lib/ops/external-operations-evidence.ts` | Infrastruktur, Secrets, Pager/Owner, automatischer Backup-Lifecycle, genehmigte SLO/RPO/RTO |
+| STH-009 | Kein autonomer Worker | technisch lokal/CI adressiert; Productionausführung extern blockiert | P0 für unbeaufsichtigten Self-Service | Worker/Outbox/Ops | 23 | 19, STH-013, Monitoring | gemeinsame PostgreSQL-Queue mit Lease/Heartbeat/Fencing, Retry/DLQ/Replay, Scheduler, WorkerRun, Handlerledger und Backpressure implementiert; Default `PAUSED` | Unit/PostgreSQL/Crash/Restart/Rolling-Deploy/10’000×4/Desktop/360 `PASS` im Worktree; formales G3/Staging/Pager offen | `lib/ops/worker-runtime.ts`; `scripts/phase23-worker.ts`; `codex-plan/runbooks/worker-operations.md` | Workerhosting, externes Monitoring/Pager/On-call, SLO-Freigabe |
 | STH-010 | Alle Admin-Capabilities hängen am globalen ADMIN | bestätigt; Capability-Namen sind gute Vorarbeit | P0 vor Admin-LIVE | Admin-RBAC | 25 | 19, Rollen-/Duties-Matrix | offen; jede Capability wird demselben Actor erteilt | Test beweist gerade die globale Vollmacht | `lib/admin/capabilities.ts:1-60`; `tests/unit/admin/phase11-policies.test.ts:29-47` | benannte Support/Moderation/Finance/Privacy-Owner |
 | STH-011 | Kein Admin-MFA/Step-up | bestätigt | P0 vor privilegiertem LIVE-Zugriff | Admin Security | 25 | 19, STH-001/013, Identity-Provider-Entscheid | offen; Password+Session ohne zweiten Faktor | Session/Auth-Tests, keine MFA-/Recovery-/Step-up-Tests | `prisma/schema.prisma:1181-1208`; `lib/auth/route-guards.ts:18-23,39-55` | MFA-Verfahren, Recovery- und Supportprozess |
 | STH-012 | Exklusive globale Rolle verhindert Multi-Persona | bestätigt | P3 default/deferred; P0 nur bei explizitem Persona-Scope | Identity/Persona | 27 | 19, STH-010/011, Tenant-RBAC, Bedarfsgate | offen; CompanyMembership löst nur Unternehmenskontext | Rollen-/Company-Tests vorhanden, keine Persona-Kombination | `prisma/schema.prisma:10-15,1129-1137`; `lib/auth/route-guards.ts:10-23`; `prisma/schema.prisma:1536-1555` | Produktentscheidung und moderierter Bedarf |
@@ -430,23 +430,27 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
   `lib/jobs/effective-status.ts:95`, Contact-Expiry
   `lib/talentradar/contact-requests.ts:264`, Subscription-Grenzen
   `lib/billing/subscriptions.ts:64,278` und SLA-Projektion
-  `lib/admin/sla.ts:73`. `package.json:11-46` enthält keinen dauerhaften
-  Worker-Start; das Gate ist in
-  `codex-plan/commercial-go-live-gates.md:168-176` offen.
+  `lib/admin/sla.ts:73`. Phase 23 ergänzt `scripts/phase23-worker.ts`,
+  `lib/ops/worker-runtime.ts`, `worker-scheduler.ts` und das Activation
+  Ledger; das kommerzielle Go-live-Gate bleibt offen.
 - **Betroffene Modelle:** `SystemTask`, `EmailLog`, Alerts/Digests,
   Subscriptions, Jobs/Boosts, Contact Requests, Privacy Tasks und Audit.
 - **Betroffene Rollen:** System Actor, Operations/Admin; fachlich alle
   Empfänger zeitabhängiger Aktionen.
-- **Ist:** Viele Runner sind bounded und idempotent, werden aber nur explizit
-  angestoßen. Es gibt keine durable Queue, Lease, Attempt-Historie, Backoff,
-  DLQ, Scheduler-Ownership oder Heartbeat.
+- **Ist:** Die bounded Domainrunner sind über eine gemeinsame durable
+  PostgreSQL-Queue mit Lease/Heartbeat/Fencing, Attempt-Historie,
+  Backoff/DLQ, Scheduler-Ownership und WorkerRun angebunden. Die Runtime ist
+  standardmässig pausiert; reales Hosting, Pager und Production-Recovery
+  fehlen.
 - **Soll:** versionierter Jobvertrag mit enqueue-in-transaction/Outbox,
   `SKIP LOCKED`- oder Queue-Leases, Retry/Backoff/Jitter, Dead Letter,
   Concurrency-Limits, Shutdown/Restart, Monitoring und Re-drive.
-- **Root Cause:** Zeitabhängige Domänenlogik wurde implementiert, die
-  Produktionsausführung in ADR-014 jedoch verschoben.
-- **Impact:** Alerts, Abläufe, Renewals, Reminders und Cleanup passieren ohne
-  manuelle Intervention nicht zuverlässig.
+- **Root Cause:** Die frühere Lücke der gemeinsamen Runtime ist technisch
+  adressiert; offen bleibt die externe Betriebsplattform mit namentlichem
+  On-call, Monitoring und genehmigten Servicegrenzen.
+- **Impact:** Im Local-/CI-Sandboxvertrag laufen aktivierte Handler autonom.
+  Ohne reales Workerhosting und Activation Evidence passieren sie in
+  Production weiterhin nicht zuverlässig; deshalb bleibt die Aktivierung aus.
 - **Änderungsrisiko:** XL; doppelte Ausführung, verlorene Jobs und falsch
   fortgeschrittene Cutoffs können Geld- oder Privacy-Zustände beschädigen.
 - **Abhängigkeiten:** STH-008/013, Queue-/Scheduler-Plattform, Telemetrie,

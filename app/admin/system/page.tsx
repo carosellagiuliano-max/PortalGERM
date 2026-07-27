@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { getRedactedOperationsOverview } from "@/lib/admin/operations-read";
 import { listOpenSystemTasks } from "@/lib/admin/system-governance";
 import { requireAdminPage } from "@/lib/auth/route-guards";
 import { getServerEnvironment } from "@/lib/config/env";
@@ -12,13 +13,6 @@ import { resolveDocumentRuntime } from "@/lib/documents/runtime-policy";
 import { formatDateTime } from "@/lib/utils/format";
 
 export const metadata: Metadata = { title: "Systemstatus" };
-
-const providers = [
-  ["Zahlung", "Lokaler persistierender Mock"],
-  ["KI", "Deterministischer Regel-Mock"],
-  ["Job-Room", "Versionierter lokaler Lookup"],
-  ["Pendeldistanz", "Deterministische lokale Klasse"],
-] as const;
 
 export default async function AdminSystemPage() {
   const admin = await requireAdminPage();
@@ -35,25 +29,26 @@ export default async function AdminSystemPage() {
     database,
     now,
   } as const;
-  const [tasks, delivery, documents] = await Promise.all([
+  const [tasks, delivery, documents, operations] = await Promise.all([
     listOpenSystemTasks(dependencies),
     getNotificationDeliverySummary(dependencies),
     getRedactedDocumentVaultSummary(database),
+    getRedactedOperationsOverview(dependencies),
   ]);
-  if (tasks === null || delivery === null) return null;
+  if (tasks === null || delivery === null || operations === null) return null;
   const environment = getServerEnvironment();
   const documentRuntime = resolveDocumentRuntime(environment);
 
   const overdue = tasks.filter((task) => task.dueAt <= now).length;
   return (
-    <div className="grid gap-8">
+    <div className="grid min-w-0 gap-8" data-e2e-phase23-ops="true">
       <header>
         <p className="eyebrow">Operations</p>
         <h1 className="mt-2 text-3xl font-semibold">Systemstatus</h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">
-          Kontrollierte Betriebsübersicht für den Mock-MVP. Sie ersetzt kein
-          externes Monitoring, keinen Incident Owner und keine
-          Produktionsfreigabe.
+          Redigierte Betriebsübersicht für Queue, Worker und Provider-Ledger.
+          Sie ersetzt kein externes Monitoring, keinen Incident Owner und
+          keine Produktionsfreigabe.
         </p>
       </header>
 
@@ -73,6 +68,142 @@ export default async function AdminSystemPage() {
           <p className="mt-2 text-2xl font-semibold">{tasks.length} offen</p>
           <p className="mt-1 text-sm">{overdue} überfällig</p>
         </article>
+      </section>
+
+      <section aria-labelledby="worker-runtime-heading">
+        <h2 id="worker-runtime-heading" className="text-xl font-semibold">
+          Worker Runtime
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Runtime {environment.WORKER_RUNTIME}; Umgebung{" "}
+          {operations.environment}. Payloads, Subjects, Secrets und freie
+          Fehlertexte werden nicht angezeigt. Alle Mutationen bleiben bis
+          Phase 25 ausserhalb der Local/CI-CLI gesperrt.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {["PENDING", "LEASED", "RETRY", "PAUSED", "SUCCEEDED", "DEAD_LETTER"].map(
+            (status) => (
+              <article className="rounded-lg border bg-card p-4" key={status}>
+                <p className="text-sm text-muted-foreground">{status}</p>
+                <p className="mt-2 text-2xl font-semibold">
+                  {operations.queue.statuses[status] ?? 0}
+                </p>
+              </article>
+            ),
+          )}
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Älteste offene Arbeit:{" "}
+          {operations.queue.oldestOpenAt === null
+            ? "keine"
+            : formatDateTime(operations.queue.oldestOpenAt)}
+        </p>
+
+        <div className="mt-6 grid gap-3 lg:grid-cols-2">
+          <article className="rounded-lg border bg-card p-4">
+            <h3 className="font-medium">Letzte Worker-Läufe</h3>
+            {operations.workerRuns.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Noch kein Worker-Lauf in dieser Umgebung.
+              </p>
+            ) : (
+              <ul className="mt-3 grid gap-3">
+                {operations.workerRuns.map((run) => (
+                  <li className="rounded-md border p-3 text-sm" key={run.id}>
+                    <span className="flex flex-wrap items-center justify-between gap-2">
+                      <strong>{run.workerId}</strong>
+                      <Badge variant="outline">{run.status}</Badge>
+                    </span>
+                    <span className="mt-1 block text-muted-foreground">
+                      Build {run.deploymentDigest} · Heartbeat{" "}
+                      {formatDateTime(run.heartbeatAt)}
+                    </span>
+                    <span className="mt-1 block">
+                      {run.claimedCount} Claims · {run.succeededCount} erfolgreich
+                      · {run.failedCount} fehlgeschlagen
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+
+          <article className="rounded-lg border bg-card p-4">
+            <h3 className="font-medium">Dead Letter Queue</h3>
+            {operations.deadLetters.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Keine terminalen Work Items.
+              </p>
+            ) : (
+              <ul className="mt-3 grid gap-3">
+                {operations.deadLetters.map((letter) => (
+                  <li className="rounded-md border p-3 text-sm" key={letter.id}>
+                    <span className="flex flex-wrap items-center justify-between gap-2">
+                      <strong>
+                        {letter.workItem.handlerKey}{" "}
+                        {letter.workItem.handlerVersion}
+                      </strong>
+                      <Badge variant="destructive">DLQ</Badge>
+                    </span>
+                    <span className="mt-1 block text-muted-foreground">
+                      {letter.failureClass} / {letter.reasonCode} · Attempt{" "}
+                      {letter.terminalAttempt} · {formatDateTime(letter.createdAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="handler-ledger-heading">
+        <h2 id="handler-ledger-heading" className="text-xl font-semibold">
+          Handler-Aktivierungsledger
+        </h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {operations.handlerActivations.map((activation) => (
+            <article className="rounded-lg border bg-card p-4" key={activation.id}>
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-medium">
+                  {activation.handlerKey} {activation.handlerVersion}
+                </h3>
+                <Badge
+                  variant={
+                    activation.killSwitchEngaged ? "destructive" : "outline"
+                  }
+                >
+                  {activation.killSwitchEngaged
+                    ? "KILL SWITCH"
+                    : activation.mode}
+                </Badge>
+              </span>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Owner {activation.owner} · Batch {activation.batchSize} ·
+                Parallelität {activation.maxConcurrency}
+              </p>
+              <p className="mt-1 break-words text-xs text-muted-foreground">
+                Runbook: {activation.runbookRef}
+              </p>
+            </article>
+          ))}
+          {operations.absentHandlers.map((handler) => (
+            <article
+              className="min-w-0 rounded-lg border border-dashed p-4"
+              key={`${handler.handlerKey}:${handler.handlerVersion}`}
+            >
+              <span className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <h3 className="min-w-0 font-medium [overflow-wrap:anywhere]">
+                  {handler.handlerKey} {handler.handlerVersion}
+                </h3>
+                <Badge variant="outline">DISABLED</Badge>
+              </span>
+              <p className="mt-2 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                {handler.owner} · {handler.execution}
+              </p>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section>
@@ -112,16 +243,94 @@ export default async function AdminSystemPage() {
               LIVE-Provider und kein Real→Mock-Fallback.
             </p>
           </article>
-          {providers.map(([name, status]) => (
-            <article className="rounded-lg border bg-card p-4" key={name}>
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-medium">{name}</h3>
-                <Badge variant="outline">MOCK</Badge>
+          {operations.providerActivations.map((activation) => (
+            <article className="rounded-lg border bg-card p-4" key={activation.id}>
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <h3 className="min-w-0 font-medium [overflow-wrap:anywhere]">
+                  {activation.useCase}
+                </h3>
+                <Badge
+                  variant={
+                    activation.killSwitchEngaged ? "destructive" : "outline"
+                  }
+                >
+                  {activation.killSwitchEngaged
+                    ? "KILL SWITCH"
+                    : activation.mode}
+                </Badge>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">{status}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {activation.adapterKey} {activation.adapterVersion} ·{" "}
+                {activation.health} · Owner {activation.owner}
+              </p>
+              <p className="mt-1 break-words text-xs text-muted-foreground">
+                Runbook: {activation.runbookRef}
+              </p>
             </article>
           ))}
+          {operations.providerActivations.length === 0 ? (
+            <article className="rounded-lg border border-dashed p-4 sm:col-span-2">
+              <Badge variant="outline">DISABLED</Badge>
+              <p className="mt-2 text-sm text-muted-foreground">
+                In dieser Umgebung existiert keine aktuelle
+                Provider-Aktivierung. Konfiguration allein aktiviert nichts.
+              </p>
+            </article>
+          ) : null}
         </div>
+      </section>
+
+      <section aria-labelledby="capacity-heading">
+        <h2 id="capacity-heading" className="text-xl font-semibold">
+          Kapazität und Backpressure
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Nur aggregierte Queuewerte; keine individuelle
+          Mitarbeitendenleistung. Ohne gemessene Samples bleibt die
+          Produktionskapazität unbewiesen.
+        </p>
+        {operations.capacitySamples.length === 0 ? (
+          <p className="mt-4 rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+            Noch keine Kapazitätsmessung für diese Umgebung.
+          </p>
+        ) : (
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {operations.capacitySamples.map((sample) => (
+              <li
+                className="rounded-lg border bg-card p-4"
+                key={`${sample.handlerKey}:${sample.handlerVersion}`}
+              >
+                <span className="flex flex-wrap items-center justify-between gap-2">
+                  <strong>
+                    {sample.handlerKey} {sample.handlerVersion}
+                  </strong>
+                  <Badge
+                    variant={sample.state === "PAUSED" ? "destructive" : "outline"}
+                  >
+                    {sample.state}
+                  </Badge>
+                </span>
+                <span className="mt-2 block text-sm text-muted-foreground">
+                  p95 Arrival {sample.arrivalP95PerMinute.toFixed(2)}/min ·
+                  nachhaltig {sample.sustainablePerMinute.toFixed(2)}/min ·
+                  Auslastung{" "}
+                  {(sample.utilizationBasisPoints / 100).toFixed(1)} %
+                </span>
+                <span className="mt-1 block text-sm">
+                  Backlog {sample.backlogCount} · ältestes Item{" "}
+                  {Math.round(sample.oldestAgeMilliseconds / 1_000)} s
+                </span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Unit Cost{" "}
+                  {sample.unitCostMicros === null
+                    ? "unbekannt"
+                    : `${sample.unitCostMicros.toString()} µCHF`}{" "}
+                  · {sample.unitCostSource ?? "keine Quelle"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section aria-labelledby="document-vault-heading">
@@ -255,9 +464,9 @@ export default async function AdminSystemPage() {
       </section>
 
       <section className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-        Worker, Retention-Lifecycle, Staging-Monitoring, Pager/Incident Owner
-        und bestätigte RPO/RTO bleiben vor einem realen Betrieb separate
-        Go-live-Gates.
+        Reales Staging, Pager/Incident Owner, automatische
+        Backup-Retention, bestätigte SLO/RPO/RTO und ein auf demselben
+        Artefaktdigest gelaufener Gesamtdrill bleiben separate Go-live-Gates.
       </section>
     </div>
   );

@@ -213,7 +213,11 @@ Aktivierung ist `DISABLED`.
 
 ### [ ] 23 — Production Operations und Worker
 
-[`23-production-operations-workers.md`](./23-production-operations-workers.md) · reale Provider-Governance, autonome Worker, Staging, Monitoring und Recovery.
+[`23-production-operations-workers.md`](./23-production-operations-workers.md) ·
+begonnener lokaler/CI Technik-Candidate für Provider-Governance, autonome
+Worker, DLQ/Replay, Capacity und read-only Ops-Cockpit. Ungehakt:
+Staging/Pager/On-call, reale Provider-Sandbox, automatischer Backup-Lifecycle,
+genehmigte SLO/RPO/RTO und formales G3 fehlen.
 
 ### [ ] 24 — Reales Billing und Finance
 
@@ -405,12 +409,15 @@ Phasen 01 bis 21 wurden gemäss ihren Detailverträgen auf ihren jeweiligen
 Evidence-Candidates umgesetzt und verifiziert. Phase 22 besitzt auf Candidate
 `0636a875` einen technisch implementierten und automatisiert G3-grünen
 Local-/CI-Sandboxvertrag, bleibt aber wegen der in ihrer Evidence genannten
-externen Pflichtgates ungehakt. Phase 23 ist deshalb noch nicht sequenziell
-freigegeben. Nichtaktivierende frühe Research-Tracks 29A/31A dürfen gemäss der
+externen Pflichtgates ungehakt. Phase 23 ist als pausierter lokaler/CI
+Technik-Candidate begonnen; ihre reale Aktivierung und ihr formales G3 bleiben
+wegen der eigenen externen Pflichtgates gesperrt. Nichtaktivierende frühe
+Research-Tracks 29A/31A dürfen gemäss der
 Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md)
 parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates
 bleiben separat und können nur für die jeweilige Launchklasse geschlossen
 werden; insbesondere bleiben reale E-Mail-/Storage-/Scanner-Zustellung,
-Production-Retention/Legal-Hold, autonome Ausführung, MFA/Step-up, Bulkzugriff
-und REQ-REC-002 gegatet. Die Referenz aus `PortalGIT` bleibt reine
+Production-Retention/Legal-Hold, autonome Ausführung im Productionbetrieb,
+MFA/Step-up, Bulkzugriff und REQ-REC-002 gegatet. Die Referenz aus `PortalGIT`
+bleibt reine
 Vergleichsbasis und darf weiterhin nicht blind übernommen werden.

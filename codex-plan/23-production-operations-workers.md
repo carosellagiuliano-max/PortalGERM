@@ -1,14 +1,18 @@
 # Phase 23 — Produktionsbetrieb, Provider-Gates und autonome Worker
 
-> **Planstatus:** GEPLANT / NICHT BEGONNEN
-> **Technikstatus:** NICHT IMPLEMENTIERT
-> **Quality-Gate:** NICHT GELAUFEN
-> **Aktivierung:** DISABLED
+> **Planstatus:** BEGONNEN
+> **Technikstatus:** NICHT ABGESCHLOSSEN — lokaler/CI Technik-Candidate
+> implementiert
+> **Quality-Gate:** NICHT GELAUFEN (formales G3); lokale owning Gates
+> teilweise `PASS`
+> **Aktivierung:** DISABLED / BLOCKED BY EXTERNAL GATE
 >
-> Lokale Runbooks und ein isolierter Phase-18-Recovery-Drill existieren.
-> Staging/Production, autonome Worker, Provideraktivierungen, Monitoring,
-> Pager, genehmigte SLO/RPO/RTO und nachgewiesene Betriebskapazität existieren
-> am Planungsstand nicht.
+> Queue-/Lease-/Retry-/DLQ-/Replay-Runtime, Scheduler, Handler-/Provider-
+> Ledger, read-only Ops-Cockpit, Capacity-/Chaos-Tests und fail-closed
+> Evidence-Validatoren existieren im Phase-23-Worktree. Runtime und Provider
+> bleiben standardmässig pausiert. Reale Staging-/Production-Infrastruktur,
+> Pager/On-call, automatische Backupquelle, genehmigte SLO/RPO/RTO und reale
+> Provider-Sandbox-Evidence fehlen weiterhin.
 
 ## 1. Status in vier Dimensionen
 
@@ -42,24 +46,35 @@ Messbarer Zielzustand:
 
 ## 3. Tatsächlicher Repositoryzustand
 
-- `package.json:36-39` bietet manuelle Security-/Backup-/Restore-/Smoke-
-  Commands, aber keinen Worker-/Scheduler-Start.
-- `lib/candidate/job-alerts.ts:565-616`,
-  `lib/jobs/effective-status.ts:107-161` und
-  `lib/talentradar/contact-requests.ts:264+` besitzen bounded Runner/
-  Projektoren, jedoch keine gemeinsame Lease-/Heartbeat-/DLQ-Runtime.
-- `lib/billing/credits.ts:113-116` beschreibt ausdrücklich eine
-  admin-triggerbare Mock-Workergrenze; `app/admin/actions.ts:91-94` startet
-  Projektoren manuell.
-- `scripts/security-maintenance.ts:13-22` ist ein One-shot-Skript.
-- `.github/workflows/ci.yml:16-287` prüft Linux/PostgreSQL und Windows,
-  deployt aber keine reale Staging-/Production-Infrastruktur.
-- `scripts/phase18-release-gate.ts` und die Runbooks beweisen lokal
-  verschlüsselten Backup/Restore. `RPO≤24h`/`RTO≤8h` sind laut Evidence
-  unbestätigte Hypothesen, kein Production-SLO.
-- Provider-Composition-Roots sind überwiegend Mock/Placeholder; es gibt kein
-  persistiertes environment-/use-case-spezifisches Activation Ledger.
-- Für diese Planung wurden weder Infrastruktur noch Tests ausgeführt.
+- `prisma/migrations/20260727230000_phase_23_worker_operations/migration.sql`
+  liefert additive Work Items, Attempts, DLQ, Effect Receipts, Worker Runs,
+  Handler-/Provider-Activation Events und Capacity Samples mit Constraints,
+  Claim-Indizes und append-only Guards.
+- `lib/ops/worker-runtime.ts`, `worker-service.ts`, `worker-scheduler.ts`,
+  `worker-retry-policy.ts` und `work-replay.ts` implementieren PostgreSQL-
+  Claim/Lease/Heartbeat/Fencing, bounded Retry, DLQ, Effect-Dedupe,
+  Sandbox-Replay und registrierte bestehende Domaincommands.
+- `scripts/phase23-worker.ts` ist ein One-shot-/autonomer Prozess mit
+  Graceful Drain. `WORKER_RUNTIME=paused` ist Default; `sandbox_command`
+  bleibt Local/CI-only und `autonomous` benötigt das exakte persistierte
+  Activation Ledger.
+- `lib/ops/provider-activation-policy.ts` und
+  `operations-ledger.ts` lösen Provider strikt nach Environment, Use Case,
+  Adapter/Version, Evidence, DPA/Vertrag, Secret-Version, Region, Health,
+  Kapazität und Kill Switch auf. Es gibt kein Mockfallback.
+- `/admin/system` zeigt redigierte Queue-/DLQ-/Worker-/Activation-/
+  Capacity-Zustände read-only. Production-Mutationen bleiben bis Phase 25
+  absent.
+- Die isolierten PostgreSQL-, Chaos-, 10’000-Item-/4-Worker-, Desktop- und
+  360-px-Tests bestehen im Worktree. Formale commitgebundene Evidence und das
+  vollständige G3 stehen noch aus.
+- `scripts/phase23-staging-deploy-smoke.ts`,
+  `phase23-incident-drill.ts` und `phase23-backup-restore-drill.ts` validieren
+  ausschliesslich absolute, externe, SHA-256-gebundene reale Evidence und
+  bleiben ohne Staging/Pager/Restore korrekt blockiert.
+- `.github/workflows/ci.yml` deployt weiterhin keine reale Staging-/
+  Production-Infrastruktur. Pager/On-call, automatischer Backup-Lifecycle,
+  genehmigte SLO/RPO/RTO und namentliche externe Owner sind nicht bewiesen.
 
 ## 4. Findings und Requirements
 

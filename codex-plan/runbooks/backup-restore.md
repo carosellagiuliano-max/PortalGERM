@@ -7,6 +7,9 @@
 > Das geplante LC2–LC6-Ziel und seine noch offenen produktiven RPO/RTO-/
 > Retention-Gates stehen im
 > [Remediation-Runbookziel](./remediation-production-target.md).
+> Phase 23 ergänzt einen strikten Validator für reale Staging-Restore-
+> Evidence; er führt selbst kein Cloudbackup aus und macht dieses lokale
+> Runbook nicht produktiv.
 
 ## Sicherheitsvertrag
 
@@ -162,3 +165,25 @@ Vor Production sind deshalb zusätzlich erforderlich:
 - benannter Backup-/Incident Owner;
 - genehmigte RPO/RTO und dokumentierte Eskalation;
 - Legal-/Privacy-Prüfung von Standort und Aufbewahrung.
+
+## Phase-23-Staging-Restore-Gate
+
+Ein realer Staging-Drill muss ausserhalb des Repositories erzeugte, gehashte
+Evidence vorlegen. Source und Restore besitzen getrennte nicht geheime
+Identitäten; DB-URLs gehören nicht in das Manifest:
+
+```text
+APP_ENV=staging
+PHASE23_SOURCE_DB_ID=<SOURCE_ID>
+PHASE23_RESTORE_DB_ID=<DISTINCT_RESTORE_ID>
+PHASE23_RESTORE_EVIDENCE_PATH=<ABSOLUTER_EXTERNER_PFAD>
+PHASE23_RESTORE_EVIDENCE_SHA256=<SHA256>
+npm run ops:staging-restore -- --environment=staging --source=<SOURCE_ID> --restore=<DISTINCT_RESTORE_ID>
+```
+
+Der Validator verlangt verschlüsseltes Backup, getrennte Identity,
+identische Source-/Restore-Checksums sowie Schema-/Count-Digests, gemessene
+RPO/RTO und eine schriftliche Approval-Referenz. Gemessene Werte müssen die
+genehmigten Werte unterschreiten. Ohne reale automatische Backupquelle,
+getrennten Restore, Approval und externen Evidence-Digest endet das Gate
+absichtlich mit Exit-Code ungleich `0`.

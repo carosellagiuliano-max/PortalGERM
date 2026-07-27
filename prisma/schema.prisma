@@ -1094,6 +1094,85 @@ enum SystemTaskStatus {
   EXPIRED
 }
 
+enum WorkItemStatus {
+  PENDING
+  RETRY
+  LEASED
+  SUCCEEDED
+  DEAD_LETTER
+  PAUSED
+  CANCELLED
+}
+
+enum WorkFailureClass {
+  TRANSIENT
+  RATE_LIMITED
+  TIMEOUT
+  PERMANENT_VALIDATION
+  PERMANENT_CLIENT
+  CONFIGURATION
+  UNKNOWN
+}
+
+enum WorkAttemptOutcome {
+  SUCCEEDED
+  EFFECT_ALREADY_APPLIED
+  RETRY_SCHEDULED
+  DEAD_LETTERED
+  LEASE_LOST
+  PAUSED
+  CANCELLED
+}
+
+enum WorkerRunStatus {
+  STARTING
+  RUNNING
+  DRAINING
+  STOPPED
+  FAILED
+}
+
+enum WorkerShutdownOutcome {
+  CLEAN
+  DRAINED
+  LEASE_EXPIRED
+  CRASHED
+  FORCED
+}
+
+enum OperationsActivationMode {
+  DISABLED
+  SANDBOX
+  ALLOWLIST
+  LIVE
+}
+
+enum OperationsHealthStatus {
+  UNKNOWN
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+}
+
+enum OperationalCapacityState {
+  NORMAL
+  HEADROOM_LOW
+  THROTTLED
+  PAUSED
+  DEGRADED
+}
+
+enum OperationsActivationSubject {
+  HANDLER
+  PROVIDER
+}
+
+enum OperationsActivationEventKind {
+  CREATED
+  KILL_SWITCH_ENGAGED
+  REVOKED
+}
+
 enum NotificationKind {
   APPLICATION_SUBMITTED
   APPLICATION_STATUS_CHANGED
@@ -4634,6 +4713,272 @@ model SystemTask {
   @@index([status, dueAt])
   @@index([ownerUserId, status, dueAt])
   @@index([companyId, status, dueAt])
+}
+
+model WorkItem {
+  id                  String            @id @default(uuid()) @db.Uuid
+  handlerKey          String            @db.VarChar(96)
+  handlerVersion      String            @db.VarChar(32)
+  subjectType         String            @db.VarChar(64)
+  subjectId           String            @db.VarChar(128)
+  dedupeKey           String            @unique @db.VarChar(160)
+  effectKey           String            @db.VarChar(160)
+  priority            Int               @default(50) @db.SmallInt
+  availableAt         DateTime          @db.Timestamptz(3)
+  status              WorkItemStatus    @default(PENDING)
+  attemptCount        Int               @default(0)
+  maxAttempts         Int               @default(8)
+  replayCount         Int               @default(0)
+  payloadVersion      String            @db.VarChar(32)
+  payloadReference    Json
+  leaseOwner          String?           @db.VarChar(96)
+  leaseWorkerRunId     String?           @db.Uuid
+  leaseDeploymentDigest String?         @db.VarChar(128)
+  leaseClaimedAt      DateTime?         @db.Timestamptz(3)
+  leaseExpiresAt      DateTime?         @db.Timestamptz(3)
+  heartbeatAt         DateTime?         @db.Timestamptz(3)
+  fencingToken        Int               @default(0)
+  lastFailureClass    WorkFailureClass?
+  lastErrorCode       String?           @db.VarChar(64)
+  lastErrorDigest     String?           @db.Char(64)
+  completedAt         DateTime?         @db.Timestamptz(3)
+  deadLetteredAt      DateTime?         @db.Timestamptz(3)
+  cancelledAt         DateTime?         @db.Timestamptz(3)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
+  attempts            WorkAttempt[]
+  deadLetter          WorkDeadLetter?
+  effectReceipts      WorkEffectReceipt[]
+  replayAudits        WorkReplayAudit[]
+  leaseWorkerRun      WorkerRun?        @relation(fields: [leaseWorkerRunId], references: [id], onDelete: Restrict)
+
+  @@index([handlerKey, handlerVersion, status, availableAt])
+  @@index([status, availableAt, priority])
+  @@index([leaseExpiresAt])
+  @@index([subjectType, subjectId])
+  @@index([effectKey])
+}
+
+model WorkAttempt {
+  id                  String             @id @default(uuid()) @db.Uuid
+  workItemId          String             @db.Uuid
+  workerRunId         String?            @db.Uuid
+  attemptNumber       Int
+  fencingToken        Int
+  workerId            String             @db.VarChar(96)
+  deploymentDigest    String             @db.VarChar(128)
+  outcome             WorkAttemptOutcome
+  failureClass        WorkFailureClass?
+  errorCode           String?            @db.VarChar(64)
+  errorDigest         String?            @db.Char(64)
+  leaseClaimedAt      DateTime            @db.Timestamptz(3)
+  leaseExpiresAt      DateTime            @db.Timestamptz(3)
+  startedAt           DateTime            @db.Timestamptz(3)
+  completedAt         DateTime            @db.Timestamptz(3)
+  nextAvailableAt     DateTime?           @db.Timestamptz(3)
+  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
+  workItem            WorkItem            @relation(fields: [workItemId], references: [id], onDelete: Restrict)
+  workerRun           WorkerRun?          @relation(fields: [workerRunId], references: [id], onDelete: Restrict)
+
+  @@unique([workItemId, attemptNumber])
+  @@index([workItemId, completedAt])
+  @@index([workerRunId, completedAt])
+  @@index([outcome, completedAt])
+}
+
+model WorkDeadLetter {
+  id                  String            @id @default(uuid()) @db.Uuid
+  workItemId          String            @unique @db.Uuid
+  terminalAttempt     Int
+  failureClass        WorkFailureClass
+  reasonCode          String            @db.VarChar(64)
+  errorDigest         String?           @db.Char(64)
+  deploymentDigest    String            @db.VarChar(128)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  workItem            WorkItem          @relation(fields: [workItemId], references: [id], onDelete: Restrict)
+  replayAudits        WorkReplayAudit[]
+
+  @@index([failureClass, createdAt])
+}
+
+model WorkEffectReceipt {
+  id                    String    @id @default(uuid()) @db.Uuid
+  workItemId            String    @db.Uuid
+  effectKey             String    @unique @db.VarChar(160)
+  handlerKey            String    @db.VarChar(96)
+  handlerVersion        String    @db.VarChar(32)
+  effectDigest          String    @db.Char(64)
+  providerReceiptDigest String?   @db.Char(64)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  workItem              WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Restrict)
+
+  @@index([workItemId, createdAt])
+}
+
+model WorkReplayAudit {
+  id                   String          @id @default(uuid()) @db.Uuid
+  workItemId           String          @db.Uuid
+  deadLetterId         String          @db.Uuid
+  actorReference       String          @db.VarChar(128)
+  capability           String          @db.VarChar(96)
+  stepUpEvidenceDigest String          @db.Char(64)
+  reasonCode           String          @db.VarChar(64)
+  effectKey            String          @db.VarChar(160)
+  priorAttemptCount    Int
+  addedAttemptBudget   Int
+  createdAt            DateTime        @default(now()) @db.Timestamptz(3)
+  workItem             WorkItem        @relation(fields: [workItemId], references: [id], onDelete: Restrict)
+  deadLetter           WorkDeadLetter  @relation(fields: [deadLetterId], references: [id], onDelete: Restrict)
+
+  @@index([workItemId, createdAt])
+  @@index([actorReference, createdAt])
+}
+
+model WorkerRun {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  workerId            String                 @db.VarChar(96)
+  environment         String                 @db.VarChar(32)
+  deploymentDigest    String                 @db.VarChar(128)
+  runtimeVersion      String                 @db.VarChar(32)
+  status              WorkerRunStatus        @default(STARTING)
+  startedAt           DateTime               @db.Timestamptz(3)
+  heartbeatAt         DateTime               @db.Timestamptz(3)
+  drainingAt          DateTime?              @db.Timestamptz(3)
+  stoppedAt           DateTime?              @db.Timestamptz(3)
+  shutdownOutcome     WorkerShutdownOutcome?
+  lastErrorDigest     String?                @db.Char(64)
+  claimedCount        Int                    @default(0)
+  succeededCount      Int                    @default(0)
+  failedCount         Int                    @default(0)
+  createdAt           DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime               @updatedAt @db.Timestamptz(3)
+  attempts            WorkAttempt[]
+  leasedItems         WorkItem[]
+
+  @@unique([environment, workerId, startedAt])
+  @@index([environment, status, heartbeatAt])
+  @@index([deploymentDigest, startedAt])
+}
+
+model WorkerHandlerActivation {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  environment           String                   @db.VarChar(32)
+  handlerKey            String                   @db.VarChar(96)
+  handlerVersion        String                   @db.VarChar(32)
+  payloadVersion        String                   @db.VarChar(32)
+  mode                  OperationsActivationMode @default(DISABLED)
+  configurationDigest   String                   @db.Char(64)
+  deploymentDigest      String                   @db.VarChar(128)
+  owner                 String                   @db.VarChar(160)
+  runbookRef            String                   @db.VarChar(255)
+  sloRef                String                   @db.VarChar(255)
+  evidenceDigest        String                   @db.Char(64)
+  providerUseCase       String?                  @db.VarChar(96)
+  leaseMilliseconds     Int                      @default(60000)
+  heartbeatMilliseconds Int                      @default(20000)
+  batchSize             Int                      @default(25)
+  maxAttempts           Int                      @default(8)
+  maxConcurrency        Int                      @default(1)
+  killSwitchEngaged     Boolean                  @default(true)
+  effectiveAt           DateTime?                @db.Timestamptz(3)
+  expiresAt             DateTime?                @db.Timestamptz(3)
+  revokedAt             DateTime?                @db.Timestamptz(3)
+  revokeReasonCode      String?                  @db.VarChar(64)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
+
+  @@index([environment, handlerKey, handlerVersion, createdAt])
+  @@index([environment, mode, effectiveAt, expiresAt])
+}
+
+model ProviderActivation {
+  id                   String                   @id @default(uuid()) @db.Uuid
+  environment          String                   @db.VarChar(32)
+  useCase              String                   @db.VarChar(96)
+  adapterKey           String                   @db.VarChar(96)
+  adapterVersion       String                   @db.VarChar(32)
+  mode                 OperationsActivationMode @default(DISABLED)
+  configurationDigest  String                   @db.Char(64)
+  secretVersionRef     String?                  @db.VarChar(128)
+  region               String?                  @db.VarChar(64)
+  dpaRef               String?                  @db.VarChar(255)
+  contractRef          String?                  @db.VarChar(255)
+  approvalRef          String?                  @db.VarChar(255)
+  evidenceDigest       String                   @db.Char(64)
+  owner                String                   @db.VarChar(160)
+  runbookRef           String                   @db.VarChar(255)
+  health               OperationsHealthStatus   @default(UNKNOWN)
+  healthCheckedAt      DateTime?                @db.Timestamptz(3)
+  quotaUnits           Int?
+  sustainableCapacity Int?
+  unitCostMicros       BigInt?
+  unitCostSource       String?                  @db.VarChar(255)
+  killSwitchEngaged    Boolean                  @default(true)
+  effectiveAt          DateTime?                @db.Timestamptz(3)
+  expiresAt            DateTime?                @db.Timestamptz(3)
+  revokedAt            DateTime?                @db.Timestamptz(3)
+  revokeReasonCode     String?                  @db.VarChar(64)
+  createdAt            DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                 @updatedAt @db.Timestamptz(3)
+
+  @@index([environment, useCase, createdAt])
+  @@index([environment, mode, health, effectiveAt, expiresAt])
+}
+
+model OperationsActivationEvent {
+  id                   String                       @id @default(uuid()) @db.Uuid
+  subject              OperationsActivationSubject
+  activationId         String                       @db.Uuid
+  environment          String                       @db.VarChar(32)
+  useCase              String                       @db.VarChar(96)
+  mode                 OperationsActivationMode
+  kind                 OperationsActivationEventKind
+  actorReference       String                       @db.VarChar(128)
+  capability           String                       @db.VarChar(96)
+  stepUpEvidenceDigest String?                      @db.Char(64)
+  reasonCode           String                       @db.VarChar(64)
+  evidenceDigest       String                       @db.Char(64)
+  createdAt            DateTime                     @default(now()) @db.Timestamptz(3)
+
+  @@index([subject, activationId, createdAt])
+  @@index([environment, useCase, createdAt])
+  @@index([actorReference, createdAt])
+}
+
+model OperationalCapacitySample {
+  id                         String                     @id @default(uuid()) @db.Uuid
+  environment                String                     @db.VarChar(32)
+  queueKey                   String                     @db.VarChar(96)
+  handlerKey                 String                     @db.VarChar(96)
+  handlerVersion             String                     @db.VarChar(32)
+  deploymentDigest           String                     @db.VarChar(128)
+  windowStartedAt            DateTime                   @db.Timestamptz(3)
+  windowEndedAt              DateTime                   @db.Timestamptz(3)
+  arrivalCount               Int
+  completionCount            Int
+  failureCount               Int
+  retryCount                 Int
+  deadLetterCount            Int
+  backlogCount               Int
+  oldestAgeMilliseconds      Int
+  sustainablePerMinute       Float
+  arrivalP95PerMinute        Float
+  handlingP50Milliseconds    Int
+  handlingP95Milliseconds    Int
+  utilizationBasisPoints     Int
+  providerQuotaBasisPoints   Int?
+  databasePoolBasisPoints    Int?
+  workerCount                Int
+  unitCostMicros             BigInt?
+  unitCostSource             String?                    @db.VarChar(255)
+  manualHandlingMinutes      Int                        @default(0)
+  state                      OperationalCapacityState
+  policyVersion              String                     @db.VarChar(32)
+  createdAt                  DateTime                   @default(now()) @db.Timestamptz(3)
+
+  @@unique([environment, queueKey, handlerKey, handlerVersion, windowStartedAt, windowEndedAt])
+  @@index([environment, handlerKey, windowEndedAt])
+  @@index([environment, state, windowEndedAt])
 }
 
 model ReferralLink {

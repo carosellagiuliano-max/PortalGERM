@@ -930,6 +930,53 @@ async function isPendingBoundaryRetainedOwner(
     select: { id: true },
   })) !== null;
 }
+
+export async function expireDueCompanyInvitations(input: Readonly<{
+  correlationId: string;
+  database: DatabaseClient;
+  now: Date;
+}>): Promise<Readonly<{ expired: number; failed: number }>> {
+  if (
+    !z.uuid().safeParse(input.correlationId).success ||
+    !Number.isFinite(input.now.getTime())
+  ) {
+    throw new TypeError("Invitation expiry requires a valid clock and correlation.");
+  }
+  const due = await input.database.companyInvitation.findMany({
+    where: { status: "PENDING", expiresAt: { lte: input.now } },
+    orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
+    take: 200,
+    select: { companyId: true },
+    distinct: ["companyId"],
+  });
+  let expired = 0;
+  let failed = 0;
+  for (const { companyId } of due) {
+    try {
+      expired += await input.database.$transaction(async (transaction) => {
+        await lockCompany(transaction, companyId);
+        const count = await transaction.companyInvitation.count({
+          where: {
+            companyId,
+            status: "PENDING",
+            expiresAt: { lte: input.now },
+          },
+        });
+        await expireCompanyInvitations(
+          transaction,
+          companyId,
+          input.now,
+          input.correlationId,
+        );
+        return count;
+      });
+    } catch {
+      failed += 1;
+    }
+  }
+  return Object.freeze({ expired, failed });
+}
+
 async function expireCompanyInvitations(tx: Prisma.TransactionClient, companyId: string, now: Date, correlationId: string, exceptId?: string) {
   const expired = await tx.companyInvitation.findMany({ where: { companyId, status: "PENDING", expiresAt: { lte: now }, ...(exceptId === undefined ? {} : { id: { not: exceptId } }) }, select: { id: true } });
   for (const row of expired) {

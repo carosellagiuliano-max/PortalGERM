@@ -321,6 +321,43 @@ describe("parseEnvironment", () => {
     expect(environment.APP_URL).toBe("http://127.0.0.1:3000");
   });
 
+  it("keeps the Phase-23 worker and replay gates paused by default", () => {
+    const environment = parseEnvironment(createValidEnvironment());
+    expect(environment.WORKER_RUNTIME).toBe("paused");
+    expect(environment.WORKER_SANDBOX_REPLAY).toBe(false);
+    expect(getSafeEnvironmentSummary(environment)).toMatchObject({
+      workerRuntime: "paused",
+      workerSandboxReplayEnabled: false,
+    });
+  });
+
+  it("allows worker sandbox replay only in an explicit Local/CI command runtime", () => {
+    expectValidationFailure(
+      {
+        WORKER_SANDBOX_REPLAY: "true",
+        WORKER_RUNTIME: "paused",
+      },
+      "WORKER_SANDBOX_REPLAY",
+    );
+    expectValidationFailure(
+      {
+        APP_ENV: "staging",
+        APP_URL: "https://swisstalenthub.test",
+        TRUSTED_PROXY_HOPS: "2",
+        TEST_DATABASE_URL: undefined,
+        WORKER_RUNTIME: "sandbox_command",
+      },
+      "WORKER_RUNTIME",
+    );
+    const environment = parseEnvironment(
+      createValidEnvironment({
+        WORKER_RUNTIME: "sandbox_command",
+        WORKER_SANDBOX_REPLAY: "true",
+      }),
+    );
+    expect(environment.WORKER_SANDBOX_REPLAY).toBe(true);
+  });
+
   it.each([
     "STRIPE_SECRET_KEY",
     "EMAIL_PROVIDER_API_KEY",

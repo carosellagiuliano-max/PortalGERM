@@ -173,7 +173,7 @@ Audit-Metadaten redigiert.
 | `/admin` | `ADMIN_OVERVIEW_READ`; Queues, SLA und letzte Audits |
 | `/admin/analytics` | `ADMIN_ANALYTICS_READ`; suppressierte Funnels/Finanzen |
 | `/admin/audit` | `ADMIN_AUDIT_READ`; max. 100, geschlossene Filter/Correlation |
-| `/admin/system` | `ADMIN_COCKPIT_READ`; Health, Mock-Provider und SystemTasks |
+| `/admin/system` | `ADMIN_COCKPIT_READ` plus `ADMIN_OPS_READ`; Health, SystemTasks sowie redigierte read-only Queue-/DLQ-/Worker-/Provider-/Capacity-Zustände; keine Mutation vor Phase 25 |
 | `/admin/business-cockpit` | `ADMIN_COCKPIT_READ`; Evidenz/Aktion/Owner/Outcome |
 | `/admin/jobs` | `ADMIN_JOB_REVIEW`; Reviewqueue |
 | `/admin/jobs/[id]` | Review/Publish-Capabilities; Reason/Confirmation/Quota |

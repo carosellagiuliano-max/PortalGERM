@@ -1,0 +1,160 @@
+export type WorkerHandlerCatalogEntry = Readonly<{
+  defaultPriority: number;
+  execution:
+    | "IMPLEMENTED"
+    | "CATALOG_ONLY_REQUIRES_PHASE_25"
+    | "CATALOG_ONLY_REQUIRES_OWNING_PHASE";
+  handlerKey: string;
+  handlerVersion: string;
+  owner: string;
+  payloadVersion: string;
+  providerUseCase: string | null;
+  runbookRef: string;
+  schedule: string;
+  sloRef: string;
+}>;
+
+export const WORKER_HANDLER_CATALOG = Object.freeze([
+  handler({
+    handlerKey: "ops.diagnostic-effect",
+    owner: "Platform Engineering",
+    schedule: "manual-sandbox-only",
+    sloRef: "codex-plan/23-production-operations-workers.md#22",
+  }),
+  handler({
+    handlerKey: "notifications.dispatch",
+    owner: "Platform Engineering / Communications",
+    providerUseCase: "email.transactional",
+    schedule: "continuous-when-activated",
+    sloRef: "codex-plan/20-identity-email-notifications.md",
+  }),
+  handler({
+    handlerKey: "candidate.job-alert-digest",
+    owner: "Candidate Product / Platform",
+    providerUseCase: "email.job-alert",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/09-candidate-portal.md",
+  }),
+  handler({
+    handlerKey: "jobs.expiry-projection",
+    owner: "Jobs Domain / Platform",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/10-employer-portal.md",
+  }),
+  handler({
+    handlerKey: "employer.invitation-expiry",
+    owner: "Employer Identity / Platform",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/10-employer-portal.md",
+  }),
+  handler({
+    handlerKey: "billing.boost-projection",
+    owner: "Billing / Platform",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/12-monetization-billing.md",
+  }),
+  handler({
+    handlerKey: "billing.credit-expiry",
+    owner: "Billing / Finance",
+    schedule: "hour-boundary",
+    sloRef: "codex-plan/12-monetization-billing.md",
+  }),
+  handler({
+    handlerKey: "billing.subscription-boundary",
+    owner: "Billing / Finance",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/12-monetization-billing.md",
+  }),
+  handler({
+    handlerKey: "radar.contact-expiry",
+    owner: "Talent Radar / Privacy",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/14-talent-radar-privacy.md",
+  }),
+  handler({
+    handlerKey: "documents.scan",
+    owner: "Security / Documents",
+    providerUseCase: "documents.object-store",
+    schedule: "continuous-when-activated",
+    sloRef: "codex-plan/21-document-cv-vault.md",
+  }),
+  handler({
+    handlerKey: "documents.reconcile",
+    owner: "Security / Documents",
+    providerUseCase: "documents.object-store",
+    schedule: "hour-boundary",
+    sloRef: "codex-plan/21-document-cv-vault.md",
+  }),
+  handler({
+    execution: "CATALOG_ONLY_REQUIRES_PHASE_25",
+    handlerKey: "privacy.export",
+    owner: "Privacy / Platform",
+    schedule: "continuous-when-approved",
+    sloRef: "codex-plan/22-privacy-legal-analytics.md",
+  }),
+  handler({
+    execution: "CATALOG_ONLY_REQUIRES_PHASE_25",
+    handlerKey: "privacy.correction",
+    owner: "Privacy / Platform",
+    schedule: "continuous-when-approved",
+    sloRef: "codex-plan/22-privacy-legal-analytics.md",
+  }),
+  handler({
+    execution: "CATALOG_ONLY_REQUIRES_PHASE_25",
+    handlerKey: "privacy.erasure",
+    owner: "Privacy / Platform",
+    schedule: "continuous-when-approved",
+    sloRef: "codex-plan/22-privacy-legal-analytics.md",
+  }),
+  handler({
+    execution: "CATALOG_ONLY_REQUIRES_OWNING_PHASE",
+    handlerKey: "payments.reconcile",
+    owner: "Finance / Platform",
+    schedule: "disabled-until-phase-24",
+    sloRef: "codex-plan/24-real-billing-finance.md",
+  }),
+  handler({
+    execution: "CATALOG_ONLY_REQUIRES_OWNING_PHASE",
+    handlerKey: "jobs.freshness",
+    owner: "Jobs Domain / Trust",
+    schedule: "disabled-until-phase-30d",
+    sloRef: "codex-plan/30-search-scale-operations.md",
+  }),
+] as const satisfies readonly WorkerHandlerCatalogEntry[]);
+
+export function getWorkerHandlerDefinition(
+  handlerKey: string,
+  handlerVersion: string,
+): WorkerHandlerCatalogEntry | null {
+  return (
+    WORKER_HANDLER_CATALOG.find(
+      (entry) =>
+        entry.handlerKey === handlerKey &&
+        entry.handlerVersion === handlerVersion,
+    ) ?? null
+  );
+}
+
+function handler(
+  input: Readonly<{
+    execution?: WorkerHandlerCatalogEntry["execution"];
+    handlerKey: string;
+    owner: string;
+    providerUseCase?: string;
+    schedule: string;
+    sloRef: string;
+  }>,
+): WorkerHandlerCatalogEntry {
+  return Object.freeze({
+    handlerKey: input.handlerKey,
+    handlerVersion: "v1",
+    payloadVersion: "v1",
+    execution: input.execution ?? "IMPLEMENTED",
+    owner: input.owner,
+    runbookRef: "codex-plan/runbooks/worker-operations.md",
+    sloRef: input.sloRef,
+    providerUseCase: input.providerUseCase ?? null,
+    schedule: input.schedule,
+    defaultPriority: input.handlerKey === "ops.diagnostic-effect" ? 10 : 50,
+  });
+}
