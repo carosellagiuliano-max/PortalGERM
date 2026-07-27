@@ -60,7 +60,7 @@ export async function cancelAdminOrder(
 ) {
   const parsed = cancelAdminOrderSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_BILLING_MUTATE")) {
+  if (!(await requireCapability(dependencies, "ADMIN_BILLING_MUTATE"))) {
     return adminFailure("FORBIDDEN");
   }
 
@@ -264,7 +264,7 @@ export async function voidAdminInvoice(
 ) {
   const parsed = voidAdminInvoiceSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_INVOICE_MUTATE")) {
+  if (!(await requireCapability(dependencies, "ADMIN_INVOICE_MUTATE"))) {
     return adminFailure("FORBIDDEN");
   }
 

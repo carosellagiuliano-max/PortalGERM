@@ -31,6 +31,17 @@ export type CurrentUser = Readonly<{
     | "LEGACY_ASSURANCE";
 }>;
 
+export type CurrentAuthContext = Readonly<{
+  user: CurrentUser;
+  session: Readonly<{
+    id: string;
+    userId: string;
+    createdAt: Date;
+    expiresAt: Date;
+    absoluteExpiresAt: Date;
+  }>;
+}>;
+
 export interface CurrentUserRepository {
   findBySessionTokenHash(tokenHash: string, now: Date): Promise<CurrentUser | null>;
 }
@@ -47,6 +58,11 @@ export async function getCurrentUserFromToken(
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const context = await getCurrentAuthContext();
+  return context?.user ?? null;
+}
+
+export async function getCurrentAuthContext(): Promise<CurrentAuthContext | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_POLICY_V1.cookieName)?.value;
   if (token === undefined) return null;
@@ -63,5 +79,14 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     await store.revokeByTokenHash(session.tokenHash, now);
     return null;
   }
-  return user as CurrentUser;
+  return Object.freeze({
+    user: user as CurrentUser,
+    session: Object.freeze({
+      id: session.id,
+      userId: session.userId,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+      absoluteExpiresAt: session.absoluteExpiresAt,
+    }),
+  });
 }

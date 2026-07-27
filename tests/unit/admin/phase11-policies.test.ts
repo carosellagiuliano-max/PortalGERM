@@ -30,12 +30,23 @@ const activeAdmin = Object.freeze({
   userId: "11000000-0000-4000-8000-000000000001",
   role: "ADMIN",
   status: "ACTIVE",
+  capabilities: ADMIN_CAPABILITIES_V1,
 });
 
 describe("Phase 11 admin policy boundary", () => {
-  it("grants every named operation only to an active Platform Admin", () => {
+  it("grants every named operation only to an active explicitly-capable Admin", () => {
     for (const capability of ADMIN_CAPABILITIES_V1) {
       expect(hasAdminCapability(activeAdmin, capability)).toBe(true);
+      expect(
+        hasAdminCapability(
+          {
+            userId: activeAdmin.userId,
+            role: "ADMIN",
+            status: "ACTIVE",
+          },
+          capability,
+        ),
+      ).toBe(false);
       expect(
         hasAdminCapability({ ...activeAdmin, role: "EMPLOYER" }, capability),
       ).toBe(false);
@@ -83,6 +94,8 @@ describe("Phase 11 admin policy boundary", () => {
       "/admin/analytics",
       "/admin/business-cockpit",
       "/admin/audit",
+      "/admin/security/authenticators",
+      "/admin/trust-safety",
       "/admin/system",
     ]);
   });

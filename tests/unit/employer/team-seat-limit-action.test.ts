@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getEmployerContext: vi.fn(),
   getAuthRequestContext: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(),
+  requireEmployerPage: vi.fn(),
   getServerEnvironment: vi.fn(),
   getDatabase: vi.fn(),
   findPlanVersions: vi.fn(),
@@ -18,6 +19,9 @@ vi.mock("@/lib/auth/employer-context", () => ({
 vi.mock("@/lib/auth/request-context", () => ({
   getAuthRequestContext: mocks.getAuthRequestContext,
   isValidAuthMutationOrigin: mocks.isValidAuthMutationOrigin,
+}));
+vi.mock("@/lib/auth/route-guards", () => ({
+  requireEmployerPage: mocks.requireEmployerPage,
 }));
 vi.mock("@/lib/config/env", () => ({
   getServerEnvironment: mocks.getServerEnvironment,
@@ -55,6 +59,11 @@ describe("team invitation seat-limit action", () => {
       correlationId: "40000000-0000-4000-8000-000000000001",
     });
     mocks.isValidAuthMutationOrigin.mockReturnValue(true);
+    mocks.requireEmployerPage.mockResolvedValue({
+      id: "10000000-0000-4000-8000-000000000001",
+      role: "EMPLOYER",
+      sessionId: "50000000-0000-4000-8000-000000000001",
+    });
     mocks.getServerEnvironment.mockReturnValue({});
     mocks.getDatabase.mockReturnValue({
       planVersion: { findMany: mocks.findPlanVersions },

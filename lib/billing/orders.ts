@@ -35,6 +35,7 @@ import {
   realPaymentQuoteDigest,
   resolvePaidCheckoutActivation,
 } from "@/lib/billing/paid-activation-policy";
+import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 import { assessPaymentAttemptRiskInTransaction } from "@/lib/billing/payment-risk-policy";
 import {
   BOOST_POLICY_V1,
@@ -60,6 +61,7 @@ import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import type { EmailProvider, EmailTemplateKey } from "@/lib/providers/email";
 import { renderEmailTemplate } from "@/lib/providers/email/templates";
 import { resolveProviderActivation } from "@/lib/ops/provider-activation-policy";
+import { recordAndDecideRiskSignal } from "@/lib/security/risk/risk-service";
 
 const BILLING_AUDIT_RETENTION_MS = 10 * 365 * 86_400_000;
 const CHECKOUT_TTL_MS = 30 * 60 * 1_000;
@@ -349,6 +351,35 @@ export async function createCheckoutOrder(
                 )
               : billingSuccess<RealCheckoutAuthorization | null>(null);
           if (!realAuthorization.ok) return realAuthorization;
+          if (
+            provider === "MOCK" &&
+            dependencies.stepUp?.mode === "enforce"
+          ) {
+            const evidenceId = parsed.data.stepUpEvidenceId;
+            const grantToken = parsed.data.stepUpGrantToken;
+            if (
+              evidenceId === undefined ||
+              grantToken === undefined ||
+              !(await consumeStepUpGrant(transaction, {
+                evidenceId,
+                grantToken,
+                actor: {
+                  userId: dependencies.actor.userId,
+                  sessionId: dependencies.stepUp.sessionId,
+                  role: dependencies.stepUp.globalRole,
+                  status: "ACTIVE",
+                },
+                purpose: "EMPLOYER_BILLING",
+                action: "BILLING_CHECKOUT_CREATE",
+                tenantId: dependencies.actor.companyId,
+                resourceId: parsed.data.idempotencyKey,
+                correlationId: dependencies.correlationId,
+                now,
+              }))
+            ) {
+              return billingFailure("STEP_UP_REQUIRED");
+            }
+          }
 
           await transaction.order.create({
             data: {
@@ -555,6 +586,27 @@ export async function createCheckoutOrder(
 
   if (!prepared.ok) return prepared;
   if (prepared.value.status === "HELD") {
+    if (prepared.value.paymentAttemptId !== null) {
+      await recordAndDecideRiskSignal(
+        {
+          kind: "PAYMENT_FRAUD",
+          subjectType: "PAYMENT",
+          subjectId: prepared.value.paymentAttemptId,
+          companyId: dependencies.actor.companyId,
+          source: "PAYMENT_RISK",
+          observedCount: 2,
+          evidenceReference: `payment-risk:${prepared.value.paymentAttemptId}`,
+          idempotencyKey: `payment-risk:${prepared.value.paymentAttemptId}`,
+        },
+        {
+          database: dependencies.database,
+          correlationId: dependencies.correlationId,
+          mode: dependencies.trustRiskMode ?? "observe",
+          recordedByUserId: dependencies.actor.userId,
+          now,
+        },
+      ).catch(() => undefined);
+    }
     return billingFailure("PAYMENT_HELD");
   }
   if (prepared.value.status === "PAID") {
@@ -621,6 +673,7 @@ async function authorizeRealCheckout(
 ): Promise<BillingCommandResult<RealCheckoutAuthorization>> {
   const context = dependencies.realPayment;
   const stepUpEvidenceId = input.intent.stepUpEvidenceId;
+  const stepUpGrantToken = input.intent.stepUpGrantToken;
   if (
     context === undefined ||
     dependencies.paymentProvider.kind !== "STRIPE" ||
@@ -677,6 +730,36 @@ async function authorizeRealCheckout(
     description: input.description,
     orderId: input.orderId,
   });
+  if (dependencies.stepUp?.mode === "enforce") {
+    if (
+      stepUpGrantToken === undefined ||
+      !(await consumeStepUpGrant(transaction, {
+        evidenceId: stepUpEvidenceId,
+        grantToken: stepUpGrantToken,
+        actor: {
+          userId: dependencies.actor.userId,
+          sessionId: dependencies.stepUp.sessionId,
+          role: dependencies.stepUp.globalRole,
+          status: "ACTIVE",
+        },
+        purpose: PAID_CHECKOUT_POLICY_V1.stepUpPurpose,
+        action: checkoutStepUpAction(quoteDigest),
+        tenantId: dependencies.actor.companyId,
+        resourceId: input.orderId,
+        correlationId: dependencies.correlationId,
+        now,
+      }))
+    ) {
+      return billingFailure("STEP_UP_REQUIRED");
+    }
+    return billingSuccess({
+      paidScopeDecisionId: activation.paidScopeDecisionId,
+      paymentAttemptId: randomUUID(),
+      providerActivationId: providerActivation.id,
+      quoteDigest,
+      stepUpEvidenceId,
+    });
+  }
   await transaction.$queryRaw`
     SELECT "id"
     FROM "AuthAssuranceEvidence"

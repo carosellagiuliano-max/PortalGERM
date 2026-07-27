@@ -19,6 +19,8 @@ const CHECKOUT_FIELDS = new Set([
   "retainedMembershipIds",
   "targetJobId",
   "importSetupApprovalId",
+  "stepUpEvidenceId",
+  "stepUpGrantToken",
 ]);
 
 export async function startBillingCheckoutAction(
@@ -46,6 +48,14 @@ export async function startBillingCheckoutAction(
     .getAll("retainedMembershipIds")
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim());
+  const stepUpEvidenceId = readSingleFormString(
+    formData,
+    "stepUpEvidenceId",
+  );
+  const stepUpGrantToken = readSingleFormString(
+    formData,
+    "stepUpGrantToken",
+  );
   if (
     retainedMembershipIds.length !==
       formData.getAll("retainedMembershipIds").length ||
@@ -76,6 +86,8 @@ export async function startBillingCheckoutAction(
           kind: "PLAN",
           planSlug: slug,
           ...(retentionRequired ? { retainedMembershipIds } : {}),
+          ...(stepUpEvidenceId === null ? {} : { stepUpEvidenceId }),
+          ...(stepUpGrantToken === null ? {} : { stepUpGrantToken }),
           idempotencyKey,
         }
       : {
@@ -93,6 +105,8 @@ export async function startBillingCheckoutAction(
                 ),
               }
             : {}),
+          ...(stepUpEvidenceId === null ? {} : { stepUpEvidenceId }),
+          ...(stepUpGrantToken === null ? {} : { stepUpGrantToken }),
           idempotencyKey,
         };
   const result = await createCheckoutOrder(input, dependencies);

@@ -284,7 +284,7 @@ const setupApprovalSchema = z.strictObject({
 export async function approveImportSetup(raw: unknown, dependencies: AdminDependencies) {
   const parsed = setupApprovalSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_IMPORT_SETUP_APPROVE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_IMPORT_SETUP_APPROVE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   if (parsed.data.validUntil <= now || parsed.data.validUntil > new Date(now.getTime() + 30 * 86_400_000)) return adminFailure("INVALID_INPUT");
   const approvalKey = operationKey("admin-import-setup-approve", parsed.data.idempotencyKey);
@@ -312,7 +312,7 @@ export async function expireImportSetup(raw: unknown, dependencies: AdminDepende
 async function endImportSetup(raw: unknown, dependencies: AdminDependencies, status: "REVOKED" | "EXPIRED") {
   const parsed = setupEndSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_IMPORT_SETUP_APPROVE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_IMPORT_SETUP_APPROVE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey(`admin-import-setup-${status.toLowerCase()}`, parsed.data.idempotencyKey);
   try {

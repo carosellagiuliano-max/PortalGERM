@@ -76,6 +76,7 @@ function dependencies(
       email: "admin@example.test",
       role: "ADMIN",
       status: "ACTIVE",
+      capabilities: ["ADMIN_AUDIT_READ"],
       ...actorOverride,
     },
     correlationId: randomUUID(),

@@ -179,7 +179,7 @@ export async function cancelAdminJobBoost(
   input: unknown,
   dependencies: AdminDependencies,
 ): Promise<AdminCommandResult<{ boostId: string; jobId: string }>> {
-  if (!requireCapability(dependencies, "ADMIN_JOB_BOOST_MANAGE")) {
+  if (!await requireCapability(dependencies, "ADMIN_JOB_BOOST_MANAGE")) {
     return adminFailure("FORBIDDEN");
   }
   const result = await cancelAdminBoost(input, {
@@ -203,7 +203,7 @@ export async function projectAdminBoostStatuses(
   _input: unknown,
   dependencies: AdminDependencies,
 ): Promise<AdminCommandResult<BoostProjectionResult>> {
-  if (!requireCapability(dependencies, "ADMIN_JOB_BOOST_MANAGE")) {
+  if (!await requireCapability(dependencies, "ADMIN_JOB_BOOST_MANAGE")) {
     return adminFailure("FORBIDDEN");
   }
   try {
@@ -303,7 +303,7 @@ export async function publishAdminJob(
 ): Promise<AdminCommandResult<AdminJobCommandValue>> {
   const parsed = adminJobCommandSchema.safeParse(input);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_JOB_PUBLISH")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_JOB_PUBLISH")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey("admin-job-publish", parsed.data.idempotencyKey);
   const preflight = await dependencies.database.job.findUnique({
@@ -497,7 +497,7 @@ async function transitionReviewJob(
 ): Promise<AdminCommandResult<AdminJobCommandValue>> {
   const parsed = adminJobCommandSchema.safeParse(input);
   if (!parsed.success || (transition.reasonRequired === true && parsed.data.reasonCode === undefined)) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_JOB_REVIEW")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_JOB_REVIEW")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey(transition.operation, parsed.data.idempotencyKey);
   try {

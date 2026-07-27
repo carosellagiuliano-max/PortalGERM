@@ -35,6 +35,7 @@ function dependencies(now = NOW) {
       email: "admin-renewal@example.ch",
       role: "ADMIN",
       status: "ACTIVE",
+      capabilities: ["ADMIN_BILLING_MUTATE"] as const,
     },
     correlationId: randomUUID(),
     database: db(),

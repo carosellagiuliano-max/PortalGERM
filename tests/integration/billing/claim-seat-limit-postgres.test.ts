@@ -148,6 +148,7 @@ function dependencies() {
       email: "phase12-claim-admin@example.ch",
       role: "ADMIN" as const,
       status: "ACTIVE" as const,
+      capabilities: ["ADMIN_CLAIM_REVIEW"] as const,
     },
     correlationId: randomUUID(),
     database: db(),

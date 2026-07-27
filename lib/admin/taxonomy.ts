@@ -21,7 +21,7 @@ export const TAXONOMY_ENTITY_TYPES = ["CATEGORY", "CANTON", "CITY", "SKILL", "OC
 export type TaxonomyEntityType = (typeof TAXONOMY_ENTITY_TYPES)[number];
 
 export async function getAdminTaxonomyCatalog(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_TAXONOMY_MANAGE")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_TAXONOMY_MANAGE")) return null;
   const [categories, cantons, cities, skills, occupationVersions] = await Promise.all([
     dependencies.database.category.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, parentId: true, name: true, slug: true, isActive: true, sortOrder: true } }),
     dependencies.database.canton.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, code: true, name: true, slug: true, language: true, isActive: true, sortOrder: true } }),
@@ -64,7 +64,7 @@ const baseSchema = z.strictObject({
 export async function mutateAdminTaxonomy(raw: unknown, dependencies: AdminDependencies) {
   const parsed = baseSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_TAXONOMY_MANAGE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_TAXONOMY_MANAGE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   try {
     return await dependencies.database.$transaction(async (transaction) => {

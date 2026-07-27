@@ -80,6 +80,7 @@ describe("Phase 12 PostgreSQL revenue reconciliation", () => {
         email: "phase12-revenue-admin@example.ch",
         role: "ADMIN",
         status: "ACTIVE",
+        capabilities: ["ADMIN_ANALYTICS_READ"] as const,
       },
       correlationId: "phase12-revenue-reconciliation",
       database: client(),

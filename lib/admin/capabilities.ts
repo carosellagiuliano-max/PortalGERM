@@ -41,6 +41,14 @@ export const ADMIN_CAPABILITIES_V1 = [
   "PRIVACY_CASE_READ",
   "PRIVACY_CASE_VERIFY",
   "PRIVACY_CASE_PROCESS",
+  "ADMIN_SECURITY_READ",
+  "ADMIN_SECURITY_GRANT",
+  "ADMIN_SECURITY_APPROVE",
+  "ADMIN_AUTHENTICATOR_RESET",
+  "ADMIN_BREAK_GLASS_MANAGE",
+  "TRUST_SAFETY_READ",
+  "TRUST_SAFETY_REVIEW",
+  "TRUST_SAFETY_RESTORE",
 ] as const;
 
 export type AdminCapability = (typeof ADMIN_CAPABILITIES_V1)[number];
@@ -49,12 +57,14 @@ export type AdminCapabilityActor = Readonly<{
   userId: string;
   role: string;
   status: string;
+  capabilities?: readonly AdminCapability[];
 }>;
 
 /**
- * Phase 11 deliberately has one global Platform-Admin role, but every use case
- * still names its capability so a later Support/Moderator/Sales split can be
- * introduced without changing domain commands or audit evidence.
+ * Phase 25 is deliberately deny-by-default: the historical global ADMIN role
+ * proves only that the account may enter the internal portal. It never grants
+ * a domain capability. Callers must pass the currently resolved persisted
+ * capability set; missing, stale and unknown values deny access.
  */
 export function hasAdminCapability(
   actor: AdminCapabilityActor,
@@ -63,7 +73,7 @@ export function hasAdminCapability(
   return (
     actor.role === "ADMIN" &&
     actor.status === "ACTIVE" &&
-    ADMIN_CAPABILITIES_V1.includes(capability)
+    actor.capabilities?.includes(capability) === true
   );
 }
 

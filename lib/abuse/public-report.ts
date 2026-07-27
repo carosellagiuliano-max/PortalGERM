@@ -11,6 +11,7 @@ import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { EmailProvider } from "@/lib/providers/email";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
+import { recordAndDecideRiskSignal } from "@/lib/security/risk/risk-service";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
 import { trimmedString } from "@/lib/validation/common";
 
@@ -193,6 +194,13 @@ export async function createResolvedAbuseReport(
       );
       return created;
     });
+    await recordTrustSignalForReport(
+      report.id,
+      resolvedTarget,
+      parsed.data.reasonCode,
+      now,
+      dependencies,
+    ).catch(() => undefined);
     await notifyAbuseReportAdmins(
       report.id,
       parsed.data.reasonCode,
@@ -202,6 +210,54 @@ export async function createResolvedAbuseReport(
   } catch {
     return Object.freeze({ ok: false, code: "WRITE_FAILED" });
   }
+}
+
+async function recordTrustSignalForReport(
+  reportId: string,
+  target: ResolvedAbuseReportTarget,
+  reasonCode: AbuseReportContentInput["reasonCode"],
+  now: Date,
+  dependencies: AbuseReportDependencies,
+): Promise<void> {
+  if (
+    target.targetType !== "JOB" &&
+    target.targetType !== "COMPANY" &&
+    target.targetType !== "MESSAGE"
+  ) {
+    return;
+  }
+  const windowStartedAt = new Date(now.getTime() - 30 * 86_400_000);
+  const observedCount = await dependencies.database.abuseReport.count({
+    where: {
+      targetType: target.targetType,
+      targetId: target.id,
+      createdAt: { gte: windowStartedAt, lte: now },
+    },
+  });
+  await recordAndDecideRiskSignal(
+    {
+      kind:
+        reasonCode === "SCAM_OR_FRAUD" && target.targetType === "JOB"
+          ? "JOB_SCAM"
+          : "REPEATED_COMPLAINT",
+      subjectType: target.targetType,
+      subjectId: target.id,
+      companyId: target.companyId,
+      source: "ABUSE_REPORT",
+      observedCount,
+      windowStartedAt,
+      windowEndedAt: now,
+      evidenceReference: `abuse-report:${reportId}`,
+      idempotencyKey: `abuse-report:${reportId}`,
+    },
+    {
+      database: dependencies.database,
+      correlationId: dependencies.request.correlationId,
+      mode: dependencies.environment.TRUST_RISK_MODE,
+      recordedByUserId: dependencies.currentUser?.id ?? null,
+      now,
+    },
+  );
 }
 
 async function notifyAbuseReportAdmins(

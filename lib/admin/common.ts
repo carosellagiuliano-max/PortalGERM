@@ -16,6 +16,7 @@ import {
   type AdminCapability,
   type AdminCapabilityActor,
 } from "@/lib/admin/capabilities";
+import { resolveAdminActor } from "@/lib/admin/role-policy";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
 
 export const ADMIN_AUDIT_RETENTION_MILLISECONDS = 400 * 86_400_000;
@@ -69,11 +70,17 @@ export function adminFailure(
   return Object.freeze({ ok: false, code, ...(issues === undefined ? {} : { issues: Object.freeze([...issues]) }) });
 }
 
-export function requireCapability(
+export async function requireCapability(
   dependencies: AdminDependencies,
   capability: AdminCapability,
-): boolean {
-  return hasAdminCapability(dependencies.actor, capability);
+): Promise<boolean> {
+  if (hasAdminCapability(dependencies.actor, capability)) return true;
+  const resolved = await resolveAdminActor(
+    dependencies.database,
+    dependencies.actor,
+    adminNow(dependencies.now),
+  );
+  return hasAdminCapability(resolved, capability);
 }
 
 export function adminNow(value: Date | undefined): Date {

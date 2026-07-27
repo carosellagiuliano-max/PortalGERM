@@ -49,6 +49,11 @@ const clockPath = resolve(
   "logical-clock.json",
 );
 const playwrightArguments = Object.freeze(process.argv.slice(2));
+const phase25SecurityMode = playwrightArguments.some((argument) =>
+  argument.includes("phase25-"),
+)
+  ? "enforce"
+  : "observe";
 
 type ChildExit = Readonly<{
   code: number | null;
@@ -97,6 +102,7 @@ async function main() {
       TEST_DATABASE_URL: undefined,
       IDENTITY_VERIFICATION_ENFORCEMENT: "true",
       LOGIN_EMAIL_CHANGE: "true",
+      PRIVILEGED_STEP_UP_MODE: phase25SecurityMode,
       NOTIFICATION_OUTBOX_PRODUCERS: "true",
       EMAIL_PROVIDER_MODE: "disabled",
       NOTIFICATION_DISPATCH: "paused",
@@ -129,6 +135,7 @@ async function main() {
       notificationDeliveryKeys,
       documentStorageKeys,
       documentStorageRoot,
+      phase25SecurityMode,
     );
     let playwrightExit: ChildExit;
     try {
@@ -169,6 +176,7 @@ async function startServer(
   notificationDeliveryKeys: string,
   documentStorageKeys: string,
   documentStorageRoot: string,
+  privilegedStepUpMode: "enforce" | "observe",
 ) {
   const nextBinary = resolve(
     process.cwd(),
@@ -215,6 +223,7 @@ async function startServer(
         DEV_MAILBOX_SECRET: "",
         IDENTITY_VERIFICATION_ENFORCEMENT: "true",
         LOGIN_EMAIL_CHANGE: "true",
+        PRIVILEGED_STEP_UP_MODE: privilegedStepUpMode,
         NOTIFICATION_OUTBOX_PRODUCERS: "true",
         EMAIL_PROVIDER_MODE: "disabled",
         NOTIFICATION_DISPATCH: "paused",
@@ -330,6 +339,7 @@ async function runPlaywright(input: Readonly<{
         PHASE17_PLAYWRIGHT_VERSION:
           input.runIdentity.runtime.playwright,
         PHASE17_NPM_VERSION: input.runIdentity.runtime.npm,
+        PHASE25_SECURITY_MODE: phase25SecurityMode,
       },
       shell: false,
       stdio: "inherit",

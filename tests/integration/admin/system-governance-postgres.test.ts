@@ -26,8 +26,11 @@ beforeAll(async () => {
   await orchestrateDemoSeed(database);
   adminUserId = (
     await database.user.findFirstOrThrow({
-      where: { role: "ADMIN", status: "ACTIVE" },
-      orderBy: { id: "asc" },
+      where: {
+        emailNormalized: "admin@demo.ch",
+        role: "ADMIN",
+        status: "ACTIVE",
+      },
       select: { id: true },
     })
   ).id;
@@ -281,6 +284,10 @@ function dependencies() {
       email: "admin@demo.ch",
       role: "ADMIN",
       status: "ACTIVE",
+      capabilities: [
+        "ADMIN_SYSTEM_TASK_MANAGE",
+        "ADMIN_CATALOG_MUTATE",
+      ] as const,
     },
     correlationId: randomUUID(),
     database: db(),

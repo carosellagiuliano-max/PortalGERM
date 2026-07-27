@@ -11,7 +11,13 @@ import { projectDueCatalogVersions } from "@/lib/billing/catalog-lifecycle";
 import { projectDueSubscriptionBoundaries } from "@/lib/billing/subscriptions";
 import { ADMIN_NAVIGATION } from "@/components/admin/Sidebar";
 
-const actor = { userId: "11000000-0000-4000-8000-000000000001", email: "admin@example.ch", role: "ADMIN", status: "ACTIVE" } as const;
+const actor = {
+  userId: "11000000-0000-4000-8000-000000000001",
+  email: "admin@example.ch",
+  role: "ADMIN",
+  status: "ACTIVE",
+  capabilities: PHASE_12_BILLING_ADMIN_CAPABILITIES,
+} as const;
 const noDatabaseAccess = new Proxy({}, { get() { throw new Error("database must not be accessed"); } });
 
 describe("Phase 12 Admin Billing authorization boundary", () => {

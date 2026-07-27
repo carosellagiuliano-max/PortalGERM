@@ -33,6 +33,7 @@ export type CandidateRadarRequestSummary = Readonly<{
 export type CandidateRadarRequestDetail = CandidateRadarRequestSummary &
   Readonly<{
     company: Readonly<{
+      id: string;
       name: string;
       slug: string;
       verified: boolean;
@@ -72,6 +73,7 @@ export async function listCandidateRadarRequests(
       expiresAt: true,
       company: {
         select: {
+          id: true,
           name: true,
           status: true,
           verificationRequests: {
@@ -89,7 +91,11 @@ export async function listCandidateRadarRequests(
       const verified = request.company.verificationRequests.length === 1;
       return Object.freeze({
         id: request.id,
-        company: Object.freeze({ name: request.company.name, verified }),
+        company: Object.freeze({
+          id: request.company.id,
+          name: request.company.name,
+          verified,
+        }),
         subject: request.subject,
         messagePreview: request.messagePreview,
         status: effectiveStatus(request, now),
@@ -128,6 +134,7 @@ export async function getCandidateRadarRequest(
       expiresAt: true,
       company: {
         select: {
+          id: true,
           name: true,
           slug: true,
           status: true,
@@ -161,6 +168,7 @@ export async function getCandidateRadarRequest(
   return Object.freeze({
     id: request.id,
     company: Object.freeze({
+      id: request.company.id,
       name: request.company.name,
       slug: request.company.slug,
       verified,

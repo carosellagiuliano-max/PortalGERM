@@ -211,6 +211,41 @@
   },
   {
     "kind": "page",
+    "path": "/admin/security",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/security/authenticators",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/security/break-glass",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/security/grants",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/security/roles",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
     "path": "/admin/support",
     "roles": [
       "ADMIN"
@@ -233,6 +268,20 @@
   {
     "kind": "page",
     "path": "/admin/taxonomy",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/trust-safety",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/trust-safety/[id]",
     "roles": [
       "ADMIN"
     ]
@@ -417,6 +466,13 @@
   {
     "kind": "page",
     "path": "/candidate/saved-jobs",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/settings/security",
     "roles": [
       "CANDIDATE"
     ]
@@ -624,6 +680,14 @@
   {
     "kind": "page",
     "path": "/employer/notifications",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/settings/security",
     "roles": [
       "EMPLOYER",
       "RECRUITER"

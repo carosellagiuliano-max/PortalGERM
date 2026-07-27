@@ -629,6 +629,15 @@ Fraud-/Scam-/ATO-/Trust-&-Safety-Vertrag zusammen.
 
 **Befunde:** `STH-010`, `STH-011`, `STH-030`, `STH-031`.
 
+**Technischer Iststand:** Die drei Tracks sind als standardmässig
+deaktivierter Local-/CI-Vertrag umgesetzt: zehn persistierte Adminrollen mit
+50 deny-by-default Capabilities, WebAuthn/TOTP/Recovery und SoD/Break-glass;
+zentrale aktionsgebundene Single-use-Step-up-Grants; versionierte
+Risk-Decisions, Trust-&-Safety-Cases, bounded Hold/Revoke, Appeal und
+unabhängiges Restore. Gezielte automatisierte Tests sind grün; der
+commitgebundene vollständige G3-Abschluss und externe Aktivierungsgates stehen
+noch aus.
+
 **Abhängigkeiten:** 20 verifizierte Identität und Step-up-Grundlage; 22
 Privacy-/Legal-Aktionsklassen; bestehende Session- und Capability-Policies.
 Phase 23 liefert das Aktivierungs-Gate für Production-RP-ID, HTTPS, Secrets,

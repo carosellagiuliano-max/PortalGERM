@@ -133,6 +133,18 @@ export const WORKER_HANDLER_CATALOG = Object.freeze([
     sloRef: "codex-plan/24-real-billing-finance.md",
   }),
   handler({
+    handlerKey: "security.expiry-projection",
+    owner: "Security / Platform",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/25-admin-security.md#22",
+  }),
+  handler({
+    handlerKey: "trust.case-expiry",
+    owner: "Trust & Safety / Platform",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/25-admin-security.md#22",
+  }),
+  handler({
     execution: "CATALOG_ONLY_REQUIRES_OWNING_PHASE",
     handlerKey: "jobs.freshness",
     owner: "Jobs Domain / Trust",

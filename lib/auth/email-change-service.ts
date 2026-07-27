@@ -5,6 +5,7 @@ import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { createChallenge } from "@/lib/auth/email-verification-service";
 import { isIdentityActionAllowed } from "@/lib/auth/email-verification-policy";
 import { verifyPassword } from "@/lib/auth/password";
+import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { hashSessionToken } from "@/lib/auth/session";
@@ -47,6 +48,9 @@ export async function requestLoginEmailChange(
     sessionToken: string;
     targetEmail: string;
     password: string;
+    actorRole?: "CANDIDATE" | "EMPLOYER" | "RECRUITER";
+    stepUpEvidenceId?: string;
+    stepUpGrantToken?: string;
   }>,
   dependencies: EmailChangeDependencies,
 ): Promise<EmailChangeRequestResult> {
@@ -94,6 +98,7 @@ export async function requestLoginEmailChange(
       emailNormalized: true,
       emailVerifiedAt: true,
       identityAssurance: true,
+      role: true,
       credential: { select: { passwordHash: true } },
       sessions: {
         where: {
@@ -193,6 +198,29 @@ export async function requestLoginEmailChange(
           select: { id: true },
         });
         if (occupied !== null) return null;
+        if (dependencies.environment.PRIVILEGED_STEP_UP_MODE === "enforce") {
+          if (
+            input.stepUpEvidenceId === undefined ||
+            input.stepUpGrantToken === undefined ||
+            !(await consumeStepUpGrant(transaction, {
+              evidenceId: input.stepUpEvidenceId,
+              grantToken: input.stepUpGrantToken,
+              actor: {
+                userId: input.userId,
+                sessionId: liveSession.id,
+                role: input.actorRole ?? current.role,
+                status: "ACTIVE",
+              },
+              purpose: "ACCOUNT_SECURITY",
+              action: "LOGIN_EMAIL_CHANGE",
+              resourceId: input.userId,
+              correlationId: dependencies.request.correlationId,
+              now,
+            }))
+          ) {
+            return null;
+          }
+        }
 
         const priorPending = await transaction.pendingEmailChange.findFirst({
           where: { userId: input.userId, status: "PENDING" },

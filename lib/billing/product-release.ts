@@ -62,7 +62,7 @@ export async function recordProductReleaseDecision(
 ) {
   const parsed = releaseDecisionSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")) {
+  if (!(await requireCapability(dependencies, "ADMIN_CATALOG_MUTATE"))) {
     return adminFailure("FORBIDDEN");
   }
   const rationale = boundedPlainText(parsed.data.rationale, 20, 1_000);

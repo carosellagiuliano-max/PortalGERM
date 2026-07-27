@@ -22,6 +22,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import type { RevealField } from "@/lib/generated/prisma/enums";
 import type { RevealValue } from "@/lib/privacy/reveal-dto";
 
@@ -46,6 +47,8 @@ export function CandidateRadarRevealActions({
   trusted,
   grantIdempotencyKey,
   revokeIdempotencyKey,
+  companyId,
+  stepUpRequired = false,
 }: Readonly<{
   requestId: string;
   companyName: string;
@@ -55,6 +58,8 @@ export function CandidateRadarRevealActions({
   trusted: boolean;
   grantIdempotencyKey: string;
   revokeIdempotencyKey: string;
+  companyId?: string;
+  stepUpRequired?: boolean;
 }>) {
   const available = FIELD_OPTIONS.filter(
     ({ value }) => !existingFields.includes(value),
@@ -82,6 +87,8 @@ export function CandidateRadarRevealActions({
           companyName={companyName}
           available={available}
           grantIdempotencyKey={grantIdempotencyKey}
+          companyId={companyId ?? null}
+          stepUpRequired={stepUpRequired}
         />
       ) : null}
       {grantId !== null &&
@@ -102,11 +109,15 @@ function RevealDialog({
   companyName,
   available,
   grantIdempotencyKey,
+  companyId,
+  stepUpRequired,
 }: Readonly<{
   requestId: string;
   companyName: string;
   available: readonly (typeof FIELD_OPTIONS)[number][];
   grantIdempotencyKey: string;
+  companyId: string | null;
+  stepUpRequired: boolean;
 }>) {
   const [previewState, previewAction, previewPending] = useActionState(
     previewCandidateRadarRevealAction,
@@ -194,6 +205,15 @@ function RevealDialog({
                 Ich bestätige genau diese Felder und Werte für {companyName}.
               </span>
             </label>
+            {stepUpRequired && companyId !== null ? (
+              <StepUpGrantControl
+                purpose="CANDIDATE_TRUST"
+                action="IDENTITY_REVEAL"
+                tenantId={companyId}
+                resourceId={requestId}
+                securityHref="/candidate/settings/security"
+              />
+            ) : null}
             <ActionMessage state={grantState} />
             <DialogFooter>
               <DialogClose render={<Button type="button" variant="outline" />}>

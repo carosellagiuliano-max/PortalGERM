@@ -23,7 +23,7 @@ import {
 } from "@/lib/admin/common";
 
 export async function listAdminLeads(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_LEAD_MANAGE")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_LEAD_MANAGE")) return null;
   const now = adminNow(dependencies.now);
   return dependencies.database.salesLead.findMany({
     orderBy: [{ dueAt: "asc" }, { nextAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
@@ -33,7 +33,7 @@ export async function listAdminLeads(dependencies: AdminDependencies) {
 }
 
 export async function getAdminLeadDetail(dependencies: AdminDependencies, leadId: string) {
-  if (!requireCapability(dependencies, "ADMIN_LEAD_MANAGE") || !z.uuid().safeParse(leadId).success) return null;
+  if (!await requireCapability(dependencies, "ADMIN_LEAD_MANAGE") || !z.uuid().safeParse(leadId).success) return null;
   return dependencies.database.salesLead.findUnique({ where: { id: leadId }, select: { id: true, organizationName: true, contactName: true, emailNormalized: true, phoneNormalized: true, companySizeCode: true, hiringNeedCode: true, interestCode: true, callbackWindowCode: true, purpose: true, needSummary: true, message: true, status: true, dueAt: true, nextAt: true, createdAt: true, updatedAt: true, owner: { select: { id: true, name: true, email: true } }, company: { select: { id: true, name: true } }, activities: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { kind: true, safeNote: true, outcomeCode: true, createdAt: true } } } });
 }
 
@@ -55,7 +55,7 @@ const leadCommandSchema = z.strictObject({
 export async function manageSalesLead(raw: unknown, dependencies: AdminDependencies) {
   const parsed = leadCommandSchema.safeParse(raw);
   if (!parsed.success || (parsed.data.action === "ASSIGN" && parsed.data.ownerUserId === undefined) || (parsed.data.action === "SET_NEXT" && parsed.data.nextAt === undefined) || (parsed.data.action === "STATUS" && parsed.data.status === undefined) || (["NOTE", "CONTACT"].includes(parsed.data.action) && parsed.data.safeNote === undefined) || (parsed.data.action === "OUTCOME" && parsed.data.outcomeCode === undefined)) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_LEAD_MANAGE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_LEAD_MANAGE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const activityKey = operationKey(`admin-lead-${parsed.data.action.toLowerCase()}`, parsed.data.idempotencyKey);
   try {

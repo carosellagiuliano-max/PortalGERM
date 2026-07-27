@@ -44,7 +44,7 @@ export async function projectDueCatalogVersions(
   if (!projectDueCatalogVersionsSchema.safeParse(raw).success) {
     return adminFailure("INVALID_INPUT");
   }
-  if (!requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")) {
+  if (!(await requireCapability(dependencies, "ADMIN_CATALOG_MUTATE"))) {
     return adminFailure("FORBIDDEN");
   }
   try {

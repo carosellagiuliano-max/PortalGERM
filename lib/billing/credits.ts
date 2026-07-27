@@ -120,7 +120,7 @@ export async function projectDueCreditExpiries(
   if (!projectDueCreditExpiriesSchema.safeParse(raw).success) {
     return adminFailure("INVALID_INPUT");
   }
-  if (!requireCapability(dependencies, "ADMIN_BILLING_MUTATE")) {
+  if (!(await requireCapability(dependencies, "ADMIN_BILLING_MUTATE"))) {
     return adminFailure("FORBIDDEN");
   }
   try {

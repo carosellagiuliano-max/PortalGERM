@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import { startBillingCheckoutAction } from "@/app/employer/billing/checkout/actions";
 import { EmployerActionFeedback, EmployerSubmitButton } from "@/components/employer/action-form-parts";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import { INITIAL_BILLING_ACTION_STATE } from "@/lib/billing/employer-action-state";
 
 export function CheckoutSubmitForm({
@@ -14,6 +15,8 @@ export function CheckoutSubmitForm({
   retentionOptions = [],
   targetJobId = null,
   importSetupApprovalId = null,
+  companyId,
+  stepUpRequired = false,
 }: Readonly<{
   kind: "PLAN" | "PRODUCT";
   slug: string;
@@ -27,6 +30,8 @@ export function CheckoutSubmitForm({
   }>[];
   targetJobId?: string | null;
   importSetupApprovalId?: string | null;
+  companyId: string;
+  stepUpRequired?: boolean;
 }>) {
   const [state, action, pending] = useActionState(
     startBillingCheckoutAction,
@@ -72,6 +77,15 @@ export function CheckoutSubmitForm({
           ))}
         </fieldset>
       )}
+      {stepUpRequired ? (
+        <StepUpGrantControl
+          purpose="EMPLOYER_BILLING"
+          action="BILLING_CHECKOUT_CREATE"
+          tenantId={companyId}
+          resourceId={idempotencyKey}
+          securityHref="/employer/settings/security"
+        />
+      ) : null}
       <EmployerActionFeedback state={state} />
       <EmployerSubmitButton
         pending={pending}

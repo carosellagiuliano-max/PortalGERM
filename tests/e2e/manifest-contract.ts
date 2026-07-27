@@ -33,6 +33,18 @@ export const PHASE24_PAID_CHECKOUT_FLOW_FILE =
   "flows/phase24-paid-checkout.spec.ts" as const;
 export const PHASE24_BILLING_QUALITY_FILE =
   "quality/phase24-billing-quality.spec.ts" as const;
+export const PHASE25_ADMIN_ASSURANCE_FLOW_FILE =
+  "flows/phase25-admin-assurance.spec.ts" as const;
+export const PHASE25_OWNER_CANDIDATE_FLOW_FILE =
+  "flows/phase25-owner-candidate-step-up.spec.ts" as const;
+export const PHASE25_ACCOUNT_RECOVERY_FLOW_FILE =
+  "flows/phase25-account-recovery.spec.ts" as const;
+export const PHASE25_TRUST_SAFETY_FLOW_FILE =
+  "flows/phase25-trust-safety.spec.ts" as const;
+export const PHASE25_TRUST_APPEAL_FLOW_FILE =
+  "flows/phase25-trust-appeal.spec.ts" as const;
+export const PHASE25_SECURITY_QUALITY_FILE =
+  "quality/phase25-security-quality.spec.ts" as const;
 export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE17_QUALITY_FILE,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
@@ -45,6 +57,12 @@ export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE23_OPS_QUALITY_FILE,
   PHASE24_PAID_CHECKOUT_FLOW_FILE,
   PHASE24_BILLING_QUALITY_FILE,
+  PHASE25_ADMIN_ASSURANCE_FLOW_FILE,
+  PHASE25_OWNER_CANDIDATE_FLOW_FILE,
+  PHASE25_ACCOUNT_RECOVERY_FLOW_FILE,
+  PHASE25_TRUST_SAFETY_FLOW_FILE,
+  PHASE25_TRUST_APPEAL_FLOW_FILE,
+  PHASE25_SECURITY_QUALITY_FILE,
 ] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
@@ -64,13 +82,13 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     project: PHASE17_JOURNEY_PROJECT,
     tag: "@quality-desktop",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 111,
+    expectedCount: 120,
   }),
   Object.freeze({
     project: PHASE17_MOBILE_PROJECT,
     tag: "@quality-mobile",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 111,
+    expectedCount: 120,
   }),
   Object.freeze({
     project: PHASE17_JOURNEY_PROJECT,
@@ -154,6 +172,54 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     project: PHASE17_MOBILE_PROJECT,
     tag: "@quality-mobile",
     file: PHASE24_BILLING_QUALITY_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE25_ADMIN_ASSURANCE_FLOW_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE25_OWNER_CANDIDATE_FLOW_FILE,
+    expectedCount: 2,
+  }),
+  Object.freeze({
+    project: PHASE17_MOBILE_PROJECT,
+    tag: "@quality-mobile",
+    file: PHASE25_OWNER_CANDIDATE_FLOW_FILE,
+    expectedCount: 2,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE25_ACCOUNT_RECOVERY_FLOW_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE25_TRUST_SAFETY_FLOW_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE25_TRUST_APPEAL_FLOW_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@quality-desktop",
+    file: PHASE25_SECURITY_QUALITY_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_MOBILE_PROJECT,
+    tag: "@quality-mobile",
+    file: PHASE25_SECURITY_QUALITY_FILE,
     expectedCount: 1,
   }),
 ] as const);

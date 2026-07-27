@@ -38,7 +38,7 @@ export type AdminFinancialMetrics = Readonly<{
 export async function getAdminFinancialMetrics(
   dependencies: AdminDependencies,
 ): Promise<AdminFinancialMetrics | null> {
-  if (!requireCapability(dependencies, "ADMIN_ANALYTICS_READ")) return null;
+  if (!(await requireCapability(dependencies, "ADMIN_ANALYTICS_READ"))) return null;
   const now = adminNow(dependencies.now);
   const month = getZurichMonthWindow(now);
 

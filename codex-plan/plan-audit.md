@@ -214,12 +214,12 @@ Plan-Evidence; die Phase bleibt bis zur späteren Implementierung offen.
 
 | Befund | Bewertung am aktuellen Baum | Planauflösung |
 | --- | --- | --- |
-| E-Mail-Verifikation/Delivery | technisch auf Candidate `5908900` geschlossen: Low-Assurance, Verification, sicherer E-Mail-Change, atomare Outbox, Attempts/Retry/DLQ und Preferences; reale Zustellung/autonomer Betrieb nicht aktiviert | Phase 20 Evidence grün; LIVE-Aktivierung und autonomes Scheduling bleiben Phase 23, MFA/Step-up Phase 25 |
+| E-Mail-Verifikation/Delivery | technisch auf Candidate `5908900` geschlossen: Low-Assurance, Verification, sicherer E-Mail-Change, atomare Outbox, Attempts/Retry/DLQ und Preferences; Phase 25 ergänzt AAL2 und Session-/Grant-Revoke | Phase-20- und Phase-25-Evidence grün; LIVE-Zustellung, Production-RP-ID und Geräte-/Recoverypolicy bleiben deaktiviert/externe Gates |
 | CV-/Dokumentbytes | technisch auf Candidate `ca36bff` geschlossen: Quarantäne-first Bytes, Content-/Malware-Policy, immutable Application-Version und Single-use-Read; LIVE bleibt deaktiviert | Phase-21-Evidence grün; Production-Provider/Retention/Worker/Bulk bleiben Phasen 22/23/25 |
 | Privacy Export/Delete | Ausgangsbefund technisch auf `0636a875` im deaktivierten Local-/CI-Sandboxvertrag gelöst; externer Gesamtabschluss blockiert | Phase 22: Inventory V1, verschlüsselter V2-Export, Correction/Erasure, Holds, Restore und Failure-Evidence grün; Nicht-Kontoinhaber, Counsel/Retention und moderierte Forschung offen |
-| autonome Worker | bestätigt | Phase 23: Lease/Heartbeat/Dedupe/Retry/DLQ/Replay, Provider-Aktivierungsledger, Capacity/Unit Cost |
-| Payment/Refund | bestätigt für LIVE; Mockmechanik ist absichtlich korrekt | Phase 24 erst nach WTP-Go; Webhook/Reconciliation/Fraud plus Service-Recovery |
-| Admin ist Superrolle | bestätigt; Capabilities mindern Teilrisiko | Phase 25A Least Privilege/SoD/Break-glass, 25B Non-Admin-Step-up, 25C Fraud/ATO/Scam |
+| autonome Worker | technisch im deaktivierten Local-/CI-Vertrag gelöst | Phase 23: Lease/Heartbeat/Dedupe/Retry/DLQ/Replay, Provider-Aktivierungsledger und Capacity; Phase 25 ergänzt Security-/Trust-Expiry, Staging/Pager/LIVE offen |
+| Payment/Refund | technisch als fail-closed Testprovider-/Finance-Vertrag gelöst | Phase 24 Hosted Checkout/Webhook/Reconciliation/Fraud/Service-Recovery, Phase 25 Assurance/Trust; WTP/PSP/Tax/Legal/Finance/LIVE offen |
+| Admin ist Superrolle | technisch Local/CI gelöst; globale Rolle besitzt allein 0 Capabilities | Phase 25A persistierte Least Privilege/SoD/Break-glass, 25B Non-Admin-Step-up und 25C Fraud/ATO/Scam `PASS`; Owner/RP-ID/Risk-/Capacity-/Pager-Gates offen |
 | Firmenprüfung | teilweise gelöst; Lifecycle vorhanden, Evidenz/Expiry/Re-review schwach | Phase 26 und zwingendes Public-Trust-Gate |
 | Multi-Persona/Tracker/Scheduler | echte mögliche Lücken, aber Nachfrage nicht belegt | Phase 27, 28A und 28B jeweils P3/DEFERRED mit eigenem Demand-Go |
 | moderierte Forschung | bestätigt; Automation stark, Zielgruppenbeleg fehlt | Phase 29A früh; 29B finale Cross-browser/Mobile/A11y-Evidence |

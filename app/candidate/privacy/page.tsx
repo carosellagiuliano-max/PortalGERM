@@ -69,7 +69,13 @@ export default async function CandidatePrivacyPage() {
           <CardContent className="grid gap-4">
             <div className="flex items-center justify-between gap-3"><span>Aktueller Status</span><Badge>{RADAR_LABELS[dashboard.radarState]}</Badge></div>
             <p className="text-sm leading-6 text-muted-foreground">Sichtbarkeit lässt sich im SwissJobPass oder auf der eigenen Talent-Radar-Seite ändern. Marketing- und AGB-Einwilligungen bleiben davon getrennt.</p>
-            <RadarVisibilityForm consentGranted={dashboard.currentConsentGranted} />
+            <RadarVisibilityForm
+              consentGranted={dashboard.currentConsentGranted}
+              candidateUserId={user.id}
+              stepUpRequired={
+                environment.PRIVILEGED_STEP_UP_MODE === "enforce"
+              }
+            />
             <div className="flex flex-wrap gap-2"><Link href="/candidate/talent-radar" className={buttonVariants()}>Sichtbarkeit verwalten</Link><Link href="/candidate/jobpass" className={buttonVariants({ variant: "outline" })}>SwissJobPass öffnen</Link></div>
           </CardContent>
         </Card>
@@ -151,11 +157,11 @@ export default async function CandidatePrivacyPage() {
         <PrivacyRequestCard title="Datenexport anfordern" description="Erstellt einen nachverfolgbaren Export-Fall. Nach Prüfung entsteht ein verschlüsseltes, höchstens 15 Minuten gültiges Einmal-Artefakt." />
         <Card>
           <CardHeader><CardTitle as="h2">Konto-Löschung beantragen</CardTitle></CardHeader>
-          <CardContent><p className="mb-4 text-sm leading-6 text-muted-foreground">Die Anfrage startet einen processorweisen Vollzug. Zulässige Daten werden gelöscht oder anonymisiert; eng begrenzte Holds und Aufbewahrung bleiben verständlich sichtbar.</p><PrivacyDeleteRequestForm idempotencyKey={randomUUID()} /></CardContent>
+          <CardContent><p className="mb-4 text-sm leading-6 text-muted-foreground">Die Anfrage startet einen processorweisen Vollzug. Zulässige Daten werden gelöscht oder anonymisiert; eng begrenzte Holds und Aufbewahrung bleiben verständlich sichtbar.</p><PrivacyDeleteRequestForm idempotencyKey={randomUUID()} stepUpRequired={environment.PRIVILEGED_STEP_UP_MODE === "enforce"} /></CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle as="h2">Datenkorrektur</CardTitle></CardHeader>
-          <CardContent><PrivacyCorrectionRequestForm idempotencyKey={randomUUID()} /></CardContent>
+          <CardContent><PrivacyCorrectionRequestForm idempotencyKey={randomUUID()} stepUpRequired={environment.PRIVILEGED_STEP_UP_MODE === "enforce"} /></CardContent>
         </Card>
       </div>
 
@@ -173,5 +179,5 @@ export default async function CandidatePrivacyPage() {
 }
 
 function PrivacyRequestCard({ title, description }: Readonly<{ title: string; description: string }>) {
-  return <Card><CardHeader><CardTitle as="h2">{title}</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm leading-6 text-muted-foreground">{description}</p><PrivacyExportRequestForm idempotencyKey={randomUUID()} /></CardContent></Card>;
+  return <Card><CardHeader><CardTitle as="h2">{title}</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm leading-6 text-muted-foreground">{description}</p><PrivacyExportRequestForm idempotencyKey={randomUUID()} stepUpRequired={getServerEnvironment().PRIVILEGED_STEP_UP_MODE === "enforce"} /></CardContent></Card>;
 }

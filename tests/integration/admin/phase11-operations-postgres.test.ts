@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { ADMIN_CAPABILITIES_V1 } from "@/lib/admin/capabilities";
 import {
   approveAdminJob,
   publishAdminJob,
@@ -80,8 +81,11 @@ beforeAll(async () => {
   await orchestrateDemoSeed(database);
   adminUserId = (
     await database.user.findFirstOrThrow({
-      where: { role: "ADMIN", status: "ACTIVE" },
-      orderBy: { id: "asc" },
+      where: {
+        emailNormalized: "admin@demo.ch",
+        role: "ADMIN",
+        status: "ACTIVE",
+      },
       select: { id: true },
     })
   ).id;
@@ -1306,7 +1310,13 @@ function db(): DatabaseClient {
 
 function deps(_operation: string, now = NOW) {
   return Object.freeze({
-    actor: { userId: adminUserId, email: "admin@demo.ch", role: "ADMIN", status: "ACTIVE" },
+    actor: {
+      userId: adminUserId,
+      email: "admin@demo.ch",
+      role: "ADMIN",
+      status: "ACTIVE",
+      capabilities: ADMIN_CAPABILITIES_V1,
+    },
     correlationId: randomUUID(),
     database: db(),
     now,

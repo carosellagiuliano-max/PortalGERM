@@ -10,6 +10,7 @@ import {
 } from "@/components/auth/form-parts";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import {
   cancelLoginEmailChangeAction,
   requestLoginEmailChangeAction,
@@ -19,10 +20,16 @@ export function SecurityEmailChangeForm({
   currentEmail,
   enabled,
   pendingTarget,
+  stepUpRequired,
+  userId,
+  securityHref,
 }: Readonly<{
   currentEmail: string;
   enabled: boolean;
   pendingTarget: string | null;
+  stepUpRequired: boolean;
+  userId: string;
+  securityHref: string;
 }>) {
   const [state, action, pending] = useActionState(
     requestLoginEmailChangeAction,
@@ -91,6 +98,14 @@ export function SecurityEmailChangeForm({
               className={formControlClassName(false)}
             />
           </div>
+          {stepUpRequired ? (
+            <StepUpGrantControl
+              purpose="ACCOUNT_SECURITY"
+              action="LOGIN_EMAIL_CHANGE"
+              resourceId={userId}
+              securityHref={securityHref}
+            />
+          ) : null}
           <SubmitButton
             pending={pending}
             idleLabel="Neue Adresse sicher vormerken"

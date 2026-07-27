@@ -71,8 +71,8 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | STH-007 | Keine öffentlichen Rechtsseiten/kanonischen Rechtstexte | technische Publication-/Gate-Infrastruktur gelöst; Rechtstexte nicht fachlich freigegeben | P0 vor öffentlichem LIVE | Legal/Consent | 22 | 19, Counsel, STH-006/017/026 | `/legal/privacy`, `/legal/terms`, `/legal/imprint`, Admin-CMS, unabhängige Review/Publish/Revoke und exakte Processing-Gates implementiert; ohne Publication gesperrt | PostgreSQL/Hash/Re-consent/Desktop/360/Axe/G3 `PASS` auf `0636a875` | [Phase-22-Evidence](./evidence/2026-07-26-phase-22.md); `lib/legal/publication-service.ts`; `/admin/legal`; `/legal/*` | signierte CH-Texte, AVG/DSG/AGB/AVV/DPA/DSFA-Entscheide |
 | STH-008 | Produktionsbetrieb extern/offen | externe Voraussetzung; lokale Runbooks und strikte Evidence-Validatoren vorhanden | P0 Go-live-Gate | Operations/Release | 23 | 19, Infrastruktur, STH-004/009 | Preview/Staging/Production weiter unverbunden; Deploy-/Pager-/Restore-Gates validieren externe SHA-256-Evidence fail-closed | lokaler Release-/Recovery-Drill und Phase-23-Validator-Tests grün; ohne Stagingkontext erwarteter Block | `codex-plan/runbooks/deployment.md`; `lib/ops/external-operations-evidence.ts` | Infrastruktur, Secrets, Pager/Owner, automatischer Backup-Lifecycle, genehmigte SLO/RPO/RTO |
 | STH-009 | Kein autonomer Worker | technisch lokal/CI adressiert; Productionausführung extern blockiert | P0 für unbeaufsichtigten Self-Service | Worker/Outbox/Ops | 23 | 19, STH-013, Monitoring | gemeinsame PostgreSQL-Queue mit Lease/Heartbeat/Fencing, Retry/DLQ/Replay, Scheduler, WorkerRun, Handlerledger und Backpressure implementiert; Default `PAUSED` | Unit/PostgreSQL/Crash/Restart/Rolling-Deploy/10’000×4/Desktop/360 `PASS` im Worktree; formales G3/Staging/Pager offen | `lib/ops/worker-runtime.ts`; `scripts/phase23-worker.ts`; `codex-plan/runbooks/worker-operations.md` | Workerhosting, externes Monitoring/Pager/On-call, SLO-Freigabe |
-| STH-010 | Alle Admin-Capabilities hängen am globalen ADMIN | bestätigt; Capability-Namen sind gute Vorarbeit | P0 vor Admin-LIVE | Admin-RBAC | 25 | 19, Rollen-/Duties-Matrix | offen; jede Capability wird demselben Actor erteilt | Test beweist gerade die globale Vollmacht | `lib/admin/capabilities.ts:1-60`; `tests/unit/admin/phase11-policies.test.ts:29-47` | benannte Support/Moderation/Finance/Privacy-Owner |
-| STH-011 | Kein Admin-MFA/Step-up | bestätigt | P0 vor privilegiertem LIVE-Zugriff | Admin Security | 25 | 19, STH-001/013, Identity-Provider-Entscheid | offen; Password+Session ohne zweiten Faktor | Session/Auth-Tests, keine MFA-/Recovery-/Step-up-Tests | `prisma/schema.prisma:1181-1208`; `lib/auth/route-guards.ts:18-23,39-55` | MFA-Verfahren, Recovery- und Supportprozess |
+| STH-010 | Alle Admin-Capabilities hängen am globalen ADMIN | technisch Local/CI gelöst; Activation extern blockiert | P0 vor Admin-LIVE | Admin-RBAC | 25 | 19, Rollen-/Duties-Matrix | deny-by-default Resolution aus zehn persistierten Rollen, zeitgebundenen Assignments/Grants und Break-glass; globale Rolle allein gewährt 0 | Unit/PostgreSQL/Direct-Action/Browser `PASS`; Revoke wirkt im nächsten Read | `lib/admin/role-policy.ts`; `lib/admin/capabilities.ts`; Phase-25-Evidence folgt nach commitgebundenem G3 | benannte Support/Moderation/Finance/Privacy/Security/Trust-Owner weiterhin extern |
+| STH-011 | Kein Admin-MFA/Step-up | technisch Local/CI gelöst; Production-RP-ID/Policy extern blockiert | P0 vor privilegiertem LIVE-Zugriff | Admin Security | 25 | 19/20/23, STH-001/013 | Passkey/WebAuthn, verschlüsseltes TOTP, gehashte Single-use-Recovery-Codes, Session-AAL2 und action-bound Step-up | Unit/PostgreSQL/Desktop/360 `PASS`; replay/stale/wrong origin/RP-ID/recovery/direct action negativ | `lib/auth/assurance/**`; `/admin/security/authenticators`; Phase-25-Evidence folgt nach commitgebundenem G3 | Geräte-/Recoverypolicy, Production-RP-ID, getrennte Recovery-Owner und On-call weiterhin extern |
 | STH-012 | Exklusive globale Rolle verhindert Multi-Persona | bestätigt | P3 default/deferred; P0 nur bei explizitem Persona-Scope | Identity/Persona | 27 | 19, STH-010/011, Tenant-RBAC, Bedarfsgate | offen; CompanyMembership löst nur Unternehmenskontext | Rollen-/Company-Tests vorhanden, keine Persona-Kombination | `prisma/schema.prisma:10-15,1129-1137`; `lib/auth/route-guards.ts:10-23`; `prisma/schema.prisma:1536-1555` | Produktentscheidung und moderierter Bedarf |
 | STH-013 | Kein dauerhafter E-Mail-Outbox-/Retry-Vertrag | technisch gelöst; autonome Productionausführung bleibt offen | P0 | E-Mail/Worker | 20 | 19, STH-004/009 | atomare Outbox, Attempts, Lease, Heartbeat, Retry, Suppression, DLQ und auditiertes Sandbox-Replay implementiert | 105-Message-Two-Worker-, Crash-, Restart-, Bounce-, Poison- und DLQ-Tests `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `lib/notifications/outbox.ts`; `lib/notifications/dispatcher.ts` | Zustellprovider, Phase-23-Monitoring/Pager |
 | STH-014 | Company Verification beruht auf Text/Referenz | bestätigt; Lifecycle selbst ist robust | P0 für Trust-/Publish-Gate | Company Trust | 26 | 19, STH-003/004, Legal/Operations | offen; keine Dokumentbytes/Registry-Validierung | Cycle-/Concurrency-Tests vorhanden, keine Evidenzvalidierung | `prisma/schema.prisma:1665-1699`; `components/employer/verification-panel.tsx:160-195`; `lib/employer/company.ts:1120-1144` | Registerzugang, Prüfpolicy, Reviewer |
@@ -484,73 +484,69 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 ### STH-010 — Alle Admin-Capabilities gehören dem globalen ADMIN
 
-- **Status / Priorität / Phase:** bestätigt; P0 vor privilegiertem LIVE-Betrieb;
-  Phase 25 `25-admin-security.md`.
-- **Fundstellen:** Die 36 fachlich benannten Capabilities stehen in
-  `lib/admin/capabilities.ts:1-37`; `hasAdminCapability` gewährt in `52-60`
-  jede davon jedem aktiven globalen `ADMIN`. Der Test
-  `tests/unit/admin/phase11-policies.test.ts:29-47` beweist genau diese
-  Vollmacht.
-- **Betroffene Modelle:** `User`, `AuditLog`, Privacy-/Billing-/Moderation-/
-  Content-/Support-Domänen; neu AdminRole/RoleAssignment oder äquivalente
-  unveränderliche Grant-Evidence.
+- **Status / Priorität / Phase:** technisch im deaktivierten Local-/CI-Vertrag
+  gelöst; P0 vor privilegiertem LIVE-Betrieb; Phase 25.
+- **Fundstellen:** `lib/admin/capabilities.ts` ist deny-by-default;
+  `lib/admin/role-policy.ts` löst 50 geschlossene Capabilities aus zehn
+  persistierten Rollen, aktiven zeitgebundenen Assignments/Direktgrants und
+  engen Break-glass-Grants auf. `lib/auth/current-user.ts` und
+  `lib/auth/route-guards.ts` tragen den jeweils aktuellen Satz in alle Reads
+  und Commands.
+- **Betroffene Modelle:** `AdminRole`, `AdminRoleCapability`,
+  `AdminRoleAssignment`, `AdminCapabilityGrant`, `PrivilegedApproval`,
+  `BreakGlassGrant`, `Session`, `SessionAssurance`, `AuditLog`.
 - **Betroffene Rollen:** Platform Admin, künftig Support, Moderator,
   Content/Ops, Finance, Privacy Verifier/Processor und Security Admin.
-- **Ist:** Use Cases nennen bereits eine Capability und auditieren sie, aber
-  die Policy differenziert keine Admin-Personas oder Duties.
-- **Soll:** deny-by-default Capability-Grants, getrennte Rollen für Finance,
-  Privacy, Trust/Moderation, Support und Content/Ops, zeitlich begrenzter
-  Break-glass sowie explizite Separation-of-Duties für sensible Aktionen.
-- **Root Cause:** Phase 11 schuf absichtlich zunächst einen globalen
-  Platform-Admin und bereitete die spätere Trennung nur semantisch vor
-  (`lib/admin/capabilities.ts:47-50`).
-- **Impact:** Kompromittierte oder fehlbediente Admin-Konten besitzen unnötig
-  Zugriff auf Billing, Privacy, User-Suspension und Publikation.
-- **Änderungsrisiko:** sehr hoch; falsche Migration kann legitime Operations
-  sperren oder still zu breite Rechte erhalten.
-- **Abhängigkeiten:** fachliche Duties-Matrix, benannte Owner,
-  STH-011 und später STH-012; bestehende Command-Level-Capabilities bleiben
-  die Autoritätsgrenze.
-- **Geeignete Tests:** vollständige Rolle×Capability-Matrix mit Read/Write-
-  Denials, Cross-Duty-Aktionen, Break-glass TTL/Revoke, direkte Server-Action-
-  Aufrufe, Seed-Migration und Audit der Grant-Historie.
-- **Abnahmekriterium:** Kein Admin besitzt implizit alle Capabilities; jede
-  sensible Aktion wird serverseitig aus einem aktuellen Grant entschieden und
-  Capability-, Actor-, Grund- und Ergebnis-Evidence bleibt vollständig.
+- **Ist:** Die globale Rolle erlaubt nur Portalzugang und gewährt allein
+  exakt null Fachrechte. Finance/Security, Privacy Verify/Process und
+  Trust/Security sind konfliktbehaftete Duties. Selbstfreigabe scheitert;
+  Revocation beendet Sessions und Assurance in derselben Transaktion.
+- **Migration/Seed:** sieben additive Phase-25-Migrationen; der Demo-Seed
+  trennt Platform/Moderation/Support/Content/Finance/Privacy Processing,
+  Security/Trust Approval und Privacy Verification auf drei Konten. Es gibt
+  keinen Wildcard-/Default-All-Grant.
+- **Tests:** vollständige Rollenmatrix, global-ADMIN-alone,
+  expired/revoked/foreign Duty, SoD, Selbstgrant, unmittelbare Revocation,
+  Break-glass TTL/Alert sowie idempotente Migration laufen in Phase-25-Unit-,
+  PostgreSQL- und Browser-Suites grün.
+- **Verbleibender Gate:** benannte echte Duty-Owner, unabhängige Recovery-/
+  Break-glass-Personen, On-call und Staging-Drill. Bis dahin bleibt
+  Enforcement/BREAK_GLASS `DISABLED`; siehe
+  Phase-25-Evidence folgt nach commitgebundenem G3.
 
 ### STH-011 — Kein Admin-MFA und kein Step-up
 
-- **Status / Priorität / Phase:** bestätigt; P0; Phase 25.
-- **Fundstellen:** `Credential` enthält in
-  `prisma/schema.prisma:1181-1191` nur Passwortdaten, `Session` in `1193-1208`
-  keinen Authentication-Assurance-Level. Die Admin-Seitengrenze prüft in
-  `lib/auth/route-guards.ts:18-23,39-55` nur Session und globale Rolle. Eine
-  repository-weite Suche findet kein TOTP-, WebAuthn-, Recovery-Code- oder
-  Step-up-Modell und keinen entsprechenden Test.
-- **Betroffene Modelle:** `Credential`, `Session`, `User`, `AuditLog`; neu
-  authenticator/recovery enrollment, assurance snapshot und step-up challenge.
+- **Status / Priorität / Phase:** technisch im deaktivierten Local-/CI-Vertrag
+  gelöst; P0; Phase 25.
+- **Fundstellen:** `lib/auth/assurance/**`,
+  `components/security/**`, `/admin/security/authenticators`,
+  `/candidate/settings/security` und `/employer/settings/security`.
+- **Betroffene Modelle:** `Authenticator`, `WebAuthnCredential`,
+  `TotpCredential`, `AuthenticatorChallenge`, `RecoveryCode`,
+  `AuthenticatorEvent`, `SessionAssurance`, `StepUpChallenge` und erweiterte
+  `AuthAssuranceEvidence`.
 - **Betroffene Rollen:** alle Admin-Personas, besonders Finance, Privacy und
-  Security/Break-glass.
-- **Ist:** starke Passwort-Hash-, Session-Rotation/-Expiry- und Rate-Limit-
-  Verträge, aber nur ein Faktor und keine frische Reauthentisierung vor
+  Security/Break-glass, zusätzlich Candidate und Employer Owner bei
   Hochrisikoaktionen.
-- **Soll:** phishing-resistente Option bevorzugt, mindestens verpflichtender
-  zweiter Faktor, sichere Enrollment-/Recovery-Prozesse, Session-AAL und
-  zeitgebundener Step-up für Finance/Privacy/RBAC/Break-glass.
-- **Root Cause:** Auth Phase 06 fokussierte lokale passwortbasierte
-  Demo-Identität; ein externer IdP oder MFA-Lifecycle war nicht im MVP.
-- **Impact:** Ein gestohlenes Passwort oder eine bestehende Session genügt für
-  alle aktuellen Admin-Capabilities.
-- **Änderungsrisiko:** XL; Account-Lockout, Recovery-Social-Engineering,
-  Replay, Clock Drift und Session-Downgrade.
-- **Abhängigkeiten:** STH-001/013, gewähltes MFA-/IdP-Verfahren, Support-
-  Identitätsprüfung, Device-/Recovery-Policy und STH-010.
-- **Geeignete Tests:** Enrollment/confirmation, Replay, Recovery-Code single
-  use, Clock Boundary, Session-Rotation mit AAL, Step-up expiry, deaktiviertes
-  Verfahren, suspendierter Admin und verlorenes Gerät.
-- **Abnahmekriterium:** Admin-LIVE-Login erfordert den freigegebenen zweiten
-  Faktor; Hochrisiko-Commands verlangen eine frische, serverseitig geprüfte
-  Assurance und Recovery kann Rechte weder umgehen noch still erweitern.
+- **Ist:** WebAuthn bindet Challenge an Session/RP-ID/Origin und persistiert
+  Counter/Backup-State; TOTP-Secrets sind versioniert verschlüsselt und
+  akzeptierte Zeitschritte replay-sicher; Recovery-Codes sind gehasht,
+  batch-revocable und single-use. `STEP_UP_POLICY_V1` bindet kurze opaque
+  Grants an Actor, Session, Purpose, Action, Tenant und Resource.
+- **Integration:** Billing/Checkout/Profile/Subscription, Team,
+  Login-E-Mail, Privacy Export/Delete/Correct, kritischer Radar-Consent,
+  Reveal sowie Finance/Privacy/Trust-Adminaktionen nutzen denselben
+  serverseitigen Consumer. Abschluss der Login-E-Mail-Änderung widerruft alte
+  Sessions und offene Grants.
+- **Tests:** falsche Origin/RP-ID, Challenge-/TOTP-/Recovery-Replay,
+  stale/cross-purpose/cross-actor/cross-tenant/cross-resource, entfernte Rolle
+  und direkte Action erzeugen null Wirkung; erlaubte Desktop-/360-Journeys
+  konsumieren exakt einen Grant.
+- **Verbleibender Gate:** zugelassene Production-Geräte, RP-ID/HTTPS,
+  Recovery-/Supportpolicy, zwei Recovery-Owner und manueller Device-Loss-/
+  Assistive-Technology-Drill. `ADMIN_MFA_REQUIRED` und
+  `PRIVILEGED_STEP_UP_MODE` bleiben standardmässig geschlossen; siehe
+  Phase-25-Evidence folgt nach commitgebundenem G3.
 
 ### STH-012 — Exklusive globale Rolle verhindert Multi-Persona
 
@@ -1252,15 +1248,17 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 > `STH-029` ist durch Phase 19 geschlossen. `STH-001`, `STH-002` und
 > `STH-013` sind durch Phase 20 technisch geschlossen, `STH-026` im
 > fachlichen Kern umgesetzt; ihre LIVE-/Worker-/Legal-/UX-Gates sowie
-> `STH-030`–`STH-037` bleiben nach jeweiligem Status, Trigger oder externem
-> Gate offen. Die Priorität je
+> `STH-030` und `STH-031` sind durch Phase 25 technisch im deaktivierten
+> Local-/CI-Vertrag geschlossen, bleiben aber aktivierungsseitig an externe
+> Security-/Trust-/Operationsgates gebunden. `STH-032`–`STH-037` bleiben nach
+> jeweiligem Status, Trigger oder externem Gate offen. Die Priorität je
 > Launchklasse steht in Abschnitt 3B.
 
 | ID | Befund und unabhängiger Status | Lead / Mitwirkende | Rollen, Portale und aktuelle Fundstellen | Abhängigkeiten und geschützte Regressionen | Verbindlicher Test-/Evidence-Vertrag | Externer Gate / Abschlussstatus |
 | --- | --- | --- | --- | --- | --- | --- |
 | `STH-029` | **geschlossen:** höher priorisierte Requirements, Architektur, ADRs, Implementation Guidance, Quickref/Glossary und Phasen 19–32 waren nicht synchron; alle offenen Phasen hatten keinen vollständigen 28-Punkte-/AC-Testvertrag. Candidate `769ee62` synchronisiert und versiegelt diesen Vertrag. | 19 abgeschlossen / alle Phasen 20–32 halten den Vertrag | Product, Engineering, QA; `00-PLAN.md`, `requirements-matrix.md`, `architecture-blueprint.md`, `decisions.md`, `implementation-plan.md`, Phase-19–32-Testabschnitte | Candidate `769ee62`; Phasen 01–18/Evidence immutable; Ist-Routeinventar nicht vorplanen | 37/37 IDs, sechs LC, vier Statusdimensionen, jede Phase 28 Punkte und vollständige AC-Matrix; G4-Baseline und Diff-Invarianten auf einem Commit; [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) | kein externes Fachgate; **durch Phase-19-Gate geschlossen, Folgeregression weiter geschützt** |
-| `STH-030` | **teilweise bearbeitet:** `AuthAssuranceEvidence` existiert; Phase 24 verbraucht für Checkout und Refund frische, actor-/tenant-/purpose-/action-gebundene Evidenz genau einmal. Die nutzerseitige Challenge-, MFA-, Recovery- und risikobasierte Orchestrierung bleibt Phase 25B. | 25B / 20, 22, 24, 26 | Candidate, Employer Owner, Billing, Admin; `lib/auth/current-user.ts`, `lib/auth/route-guards.ts`, `lib/billing/orders.ts`, `lib/billing/finance-operations.ts`; Checkout-CTA bleibt ohne Phase-25B-Flow absent | Phase-20 Identity; bestehende Session-, safe-next-, tenant-, candidate-owner-, Reveal- und Billing-Autorisierung bleibt erhalten | Phase-24 fresh/stale/replay/cross-purpose/cross-tenant/direct-action PostgreSQL `PASS`; vollständige AAL-/Recovery-/credential-revoke-/UX-Matrix und G3 in Phase 25 | MFA-Verfahren, Recovery-/Supportpolicy, Security Owner; **technischer Payment-Consumer vorhanden, Gesamtbefund offen** |
-| `STH-031` | **teilweise bearbeitet:** Phase 24 ergänzt serverseitige Payment-Velocity-/Risk-Entscheide und Holds vor Provider-/Fulfillmentwirkung. Der kohärente Fraud-/Scam-/ATO-Vertrag für kompromittierte Firmen, Credential Stuffing, Fake-/Duplicate-Jobs, Massennachrichten, Reveal/Export-Anomalien und Complaint-Repeat bleibt Phase 25C. | 25 Threat-Model / 23, 24, 26, 30D | alle Nutzer, Trust & Safety, Security, Finance; `lib/billing/payment-risk-policy.ts`, `lib/auth/rate-limit.ts`, `lib/abuse/public-report.ts`, `lib/admin/moderation.ts`; Phase-25-Case-/Appeal-Orchestrierung fehlt | 20 Identity, 23 Incidents/Worker, 26 Trust; Session-/Company-/Job-/Radar-/Payment-/Audit-Invarianten | Payment-Hold/Replay/Tenant-/Provider-No-Effect Local/CI `PASS`; kompromittierte Firma, Stuffing, Massennachricht, Reveal/Export, Complaint, false positive/Appeal und Incident-Drill bleiben Phase 25/26/30D | benannte Trust-&-Safety-/Security-/Finance-Owner, Signal-/Retentionfreigabe; **Payment-Slice technisch, Gesamtbefund offen** |
+| `STH-030` | **technisch Local/CI gelöst:** Passkey/TOTP/Recovery, Session-AAL2 und `STEP_UP_POLICY_V1` orchestrieren kurzlebige, opaque, actor-/session-/purpose-/action-/tenant-/resource-bound Single-use-Grants für Candidate-, Employer-, Billing-, Privacy-, Reveal- und Admin-Hochrisikoaktionen. | 25B technisch / 20, 22, 24, 26 Consumer | Candidate, Employer Owner, Billing, Admin; `lib/auth/assurance/**`, Security-Routen und eingebettete `StepUpGrantControl`; bestehende Ownership/Membership bleibt vorgeschaltet | Phase-20 Identity; Session-, safe-next-, tenant-, candidate-owner-, Reveal-, Privacy- und Billing-Autorisierung bleibt erhalten | Unit/PostgreSQL/Desktop/360 `PASS`: stale/replay/cross-purpose/-actor/-tenant/-resource/direct action 0 Wirkung, erlaubte Action genau einmal; Account-Recovery widerruft alte Sessions/Grants | Phase-25-Evidence folgt nach commitgebundenem G3; Geräte-/Recoverypolicy, Production-RP-ID/HTTPS, Security Owner und Enforcement extern `BLOCKED`, Technikbefund geschlossen |
+| `STH-031` | **technisch Local/CI gelöst:** `TRUST_RISK_POLICY_V1`, persistierte minimierte Signal/Decision/Case/Event/Appeal-Evidence, bounded Queue, scope-basiertes Hold/Revoke, SoD-Appeal/Restore und Phase-23-Expiry-/Failure-Handler bilden den kohärenten Fraud-/Scam-/ATO-Vertrag. | 25C technisch / 23, 24, 26, 30D Consumer | alle Nutzer, Trust & Safety, Security, Finance; `lib/security/risk/**`, `lib/trust-safety/**`, Admin-/User-Security-Routen; interne Evidence bleibt aus Support-/Subject-DTOs entfernt | Identity/Workers/Payment geschützt; Phase 26 liefert fachliche Company-Reverification, 30D Duplicate-Fachsignal | Policy/PostgreSQL/E2E prüfen Stuffing, Compromise, Scam/Duplicate, Mass Contact, Complaint, Reveal/Export/Payment, Dedupe, false-positive Control, nächste-Read-Sperre, Appeal und Worker-Recovery `PASS` | Phase-25-Evidence folgt nach commitgebundenem G3; Risk-/Retention-/DSFA-Freigabe, benannte Reviewer, Capacity, Pager/Staging extern `BLOCKED`, Technikbefund geschlossen |
 | `STH-032` | **teilweise bestätigt:** Job-Ablauf und öffentliche Ausblendung sind fail-closed; Reconfirmation, Reminder, „besetzt/nicht verfügbar“-Feedback, Copy-/Dublettenreview und schnelle kanalübergreifende Deaktivierung fehlen. | 30D / 23 Worker, 26 Trust, 31 Cluster | Visitor, Candidate, Employer, Admin; Public Search/Detail, Employer Jobs, Admin Queue; `lib/jobs/effective-status.ts`, `lib/jobs/public-eligibility.ts`, Alerts/Sitemap/Recommendations | 23 Notifications/Worker und 26 Trust; bestehende Publish-/Revision-/Quota-/Slug-/Boost-/Eligibility-Verträge | Time-travel, concurrency, filled/report, exact/near-duplicate, appeal; identische Ausblendung aus Search, Sitemap, Alerts, Recommendations und Analytics; keine Promotion veralteter Dublette; G2/G3 vor Public | fachliche Freshness-/Duplicate-Policy, Moderationskapazität; **offen** |
 | `STH-033` | **bestätigt:** Browser-, Mobile- und Axe-Tests beweisen keine Verständlichkeit oder Vertrauen; es gibt kein rekrutiertes, moderiertes Research-Protokoll mit Schwellen. | frühe 29A / 26, 30, 31; 29B Abschluss | Candidate, Employer, Admin/Support; JobPass, Search, Fair Score, Verification, Radar/Reveal, CV/Privacy, Pricing/Limits/Kündigung; `playwright.config.ts`, `tests/e2e/quality/*`, Phase 29 | nach Phase 19 früh möglich; keine PII in Research; Defekte gehen in owning Phase statt UI-Kaschierung | vorab definierte Segmente/Tasks, Task success, Zeit, Fehler, Abbruch, Comprehension/Trust; anonymisiertes Research-Repository, Moderatorprotokoll und Go/No-go | Rekrutierung, Research/Privacy Owner; externe Nutzerhypothesen bleiben **offen** |
 | `STH-034` | **bestätigt:** SLA-/Queue-Alter existieren, aber kein Minuten-/Arrival-/Backlog-/Staffing-/Coverage-/Unit-Cost-Modell je Verification, Moderation, Import, Privacy, Support und Fraud. | frühe 31A / Telemetrie 23, Queues 25/26/30 | Ops, Support, Privacy, Trust, Commercial; `lib/admin/sla.ts`, `lib/admin/support.ts`, `product-strategy.md`, Phase 31 | reale oder kontrolliert gemessene Fälle; STH-033 Research; Demo-Zeitwerte nicht als Marktbeleg | p50/p95 Handling Time, Arrival, Backlog Age, FTE/Vertretung/On-call, Automation- und Aufnahme-Stopp, max. Concierge-COGS; Capacity-/Cost-Report mit Owner | Staffing-/Kosten-/Servicelevel-Freigabe; **offen** |

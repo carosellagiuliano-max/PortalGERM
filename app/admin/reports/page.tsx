@@ -19,7 +19,7 @@ type ReportQuery = Readonly<{
 export default async function AdminReportsPage({ searchParams }: Readonly<{ searchParams: Promise<ReportQuery> }>) {
   const [admin, query] = await Promise.all([requireAdminPage(), searchParams]);
   const now = new Date();
-  const dependencies = { actor: { userId: admin.id, email: admin.email, role: admin.role, status: admin.status }, correlationId: "admin-reports-read", database: getDatabase(), now } as const;
+  const dependencies = { actor: { userId: admin.id, email: admin.email, role: admin.role, status: admin.status, capabilities: admin.capabilities }, correlationId: "admin-reports-read", database: getDatabase(), now } as const;
   const rows = await listAdminReports(dependencies) ?? [];
   const assignees = [...new Map(rows.flatMap((row) => row.assignee === null ? [] : [[row.assignee.id, row.assignee] as const])).values()];
   const reports = rows.filter((row) =>

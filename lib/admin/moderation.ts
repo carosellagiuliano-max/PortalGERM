@@ -29,7 +29,7 @@ const restrictionTypes = ["HIDE_JOB", "PAUSE_COMPANY", "SUSPEND_USER", "BLOCK_ME
 const reasonSchema = z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u);
 
 export async function listAdminReports(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_REPORT_REVIEW")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_REPORT_REVIEW")) return null;
   const now = adminNow(dependencies.now);
   return dependencies.database.abuseReport.findMany({
     orderBy: [{ dueAt: "asc" }, { severity: "desc" }, { id: "asc" }],
@@ -43,7 +43,7 @@ export async function listAdminReports(dependencies: AdminDependencies) {
 }
 
 export async function getAdminReportDetail(dependencies: AdminDependencies, reportId: string) {
-  if (!requireCapability(dependencies, "ADMIN_REPORT_REVIEW") || !z.uuid().safeParse(reportId).success) return null;
+  if (!await requireCapability(dependencies, "ADMIN_REPORT_REVIEW") || !z.uuid().safeParse(reportId).success) return null;
   const [report, assignableAdmins] = await Promise.all([dependencies.database.abuseReport.findUnique({
     where: { id: reportId },
     select: {
@@ -72,7 +72,7 @@ const triageSchema = z.strictObject({
 export async function triageAbuseReport(raw: unknown, dependencies: AdminDependencies) {
   const parsed = triageSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_REPORT_REVIEW")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_REPORT_REVIEW")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey("admin-report-triage", parsed.data.idempotencyKey);
   try {
@@ -115,7 +115,7 @@ const applyRestrictionSchema = z.strictObject({
 export async function applyModerationRestriction(raw: unknown, dependencies: AdminDependencies) {
   const parsed = applyRestrictionSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_RESTRICTION_MANAGE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_RESTRICTION_MANAGE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   if (parsed.data.endsAt !== null && parsed.data.endsAt !== undefined && parsed.data.endsAt <= now) return adminFailure("INVALID_INPUT");
   const restrictionKey = operationKey("admin-restriction-apply", parsed.data.idempotencyKey);
@@ -166,7 +166,7 @@ export async function expireModerationRestriction(raw: unknown, dependencies: Ad
 async function endRestriction(raw: unknown, dependencies: AdminDependencies, toStatus: "LIFTED" | "EXPIRED") {
   const parsed = endRestrictionSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_RESTRICTION_MANAGE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_RESTRICTION_MANAGE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey(`admin-restriction-${toStatus.toLowerCase()}`, parsed.data.idempotencyKey);
   try {
@@ -210,7 +210,7 @@ export async function dismissAbuseReport(raw: unknown, dependencies: AdminDepend
 async function closeReport(raw: unknown, dependencies: AdminDependencies, status: "RESOLVED" | "DISMISSED") {
   const parsed = closeReportSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_REPORT_REVIEW")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_REPORT_REVIEW")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey(`admin-report-${status.toLowerCase()}`, parsed.data.idempotencyKey);
   try {

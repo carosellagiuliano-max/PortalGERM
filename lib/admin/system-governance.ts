@@ -32,7 +32,7 @@ const taxRateApprovalSchema = z.strictObject({
 });
 
 export async function listOpenSystemTasks(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_COCKPIT_READ")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_COCKPIT_READ")) return null;
   return dependencies.database.systemTask.findMany({
     where: { status: { in: ["OPEN", "ASSIGNED", "IN_PROGRESS"] } },
     orderBy: [{ dueAt: "asc" }, { id: "asc" }],
@@ -54,7 +54,7 @@ export async function listOpenSystemTasks(dependencies: AdminDependencies) {
 export async function listDraftTaxRateVersions(
   dependencies: AdminDependencies,
 ) {
-  if (!requireCapability(dependencies, "ADMIN_CATALOG_READ")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_CATALOG_READ")) return null;
   return dependencies.database.taxRateVersion.findMany({
     where: { reviewStatus: "DRAFT" },
     orderBy: [
@@ -90,7 +90,7 @@ export async function recordSystemTaskOutcome(
 ) {
   const parsed = systemTaskOutcomeSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_SYSTEM_TASK_MANAGE")) {
+  if (!await requireCapability(dependencies, "ADMIN_SYSTEM_TASK_MANAGE")) {
     return adminFailure("FORBIDDEN");
   }
   const now = adminNow(dependencies.now);
@@ -190,7 +190,7 @@ export async function approveTaxRateVersion(
 ) {
   const parsed = taxRateApprovalSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")) {
+  if (!await requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")) {
     return adminFailure("FORBIDDEN");
   }
   const now = adminNow(dependencies.now);

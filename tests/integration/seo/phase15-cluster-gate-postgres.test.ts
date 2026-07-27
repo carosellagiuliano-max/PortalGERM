@@ -760,6 +760,12 @@ function deps(now: Date) {
       email: "admin@demo.ch",
       role: "ADMIN" as const,
       status: "ACTIVE" as const,
+      capabilities: [
+        "ADMIN_CONTENT_MANAGE",
+        "ADMIN_CLUSTER_PRODUCT_APPROVE",
+        "ADMIN_CLUSTER_OPS_APPROVE",
+        "ADMIN_CLUSTER_ACTIVATE",
+      ] as const,
     },
     correlationId: randomUUID(),
     database: db(),

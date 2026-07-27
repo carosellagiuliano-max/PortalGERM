@@ -10,6 +10,7 @@ import {
 import { createCandidatePrivacyRequestAction } from "@/app/candidate/privacy/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PRIVACY_REQUEST_POLICY_V1 } from "@/lib/privacy/requests";
@@ -29,7 +30,8 @@ const CORRECTION_FIELDS = [
 
 export function PrivacyExportRequestForm({
   idempotencyKey,
-}: Readonly<{ idempotencyKey: string }>) {
+  stepUpRequired = false,
+}: Readonly<{ idempotencyKey: string; stepUpRequired?: boolean }>) {
   const [state, action, pending] = useActionState(
     createCandidatePrivacyRequestAction,
     INITIAL_CANDIDATE_PRIVACY_ACTION_STATE,
@@ -38,6 +40,14 @@ export function PrivacyExportRequestForm({
     <form action={action} className="grid gap-3" noValidate>
       <input type="hidden" name="type" value="EXPORT" />
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      {stepUpRequired ? (
+        <StepUpGrantControl
+          purpose="CANDIDATE_PRIVACY"
+          action="PRIVACY_EXPORT"
+          resourceId={idempotencyKey}
+          securityHref="/candidate/settings/security"
+        />
+      ) : null}
       <PrivacyActionFeedback state={state} />
       <Button type="submit" className="w-fit" disabled={pending || state.status === "success"}>
         {pending ? "Export-Fall wird erstellt …" : "Export-Fall erstellen"}
@@ -50,10 +60,12 @@ export function PrivacyDeleteRequestForm({
   idempotencyKey,
   fieldId = "deleteConfirmation",
   className,
+  stepUpRequired = false,
 }: Readonly<{
   idempotencyKey: string;
   fieldId?: string;
   className?: string;
+  stepUpRequired?: boolean;
 }>) {
   const [state, action, pending] = useActionState(
     createCandidatePrivacyRequestAction,
@@ -64,6 +76,14 @@ export function PrivacyDeleteRequestForm({
     <form action={action} className={cn("grid gap-3", className)} noValidate>
       <input type="hidden" name="type" value="DELETE" />
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      {stepUpRequired ? (
+        <StepUpGrantControl
+          purpose="CANDIDATE_PRIVACY"
+          action="PRIVACY_DELETE"
+          resourceId={idempotencyKey}
+          securityHref="/candidate/settings/security"
+        />
+      ) : null}
       <PrivacyActionFeedback state={state} />
       <label className="text-sm font-medium" htmlFor={fieldId}>
         Zur Bestätigung exakt eingeben:
@@ -95,7 +115,8 @@ export function PrivacyDeleteRequestForm({
 
 export function PrivacyCorrectionRequestForm({
   idempotencyKey,
-}: Readonly<{ idempotencyKey: string }>) {
+  stepUpRequired = false,
+}: Readonly<{ idempotencyKey: string; stepUpRequired?: boolean }>) {
   const [state, action, pending] = useActionState(
     createCandidatePrivacyRequestAction,
     INITIAL_CANDIDATE_PRIVACY_ACTION_STATE,
@@ -110,6 +131,14 @@ export function PrivacyCorrectionRequestForm({
     <form action={action} className="grid gap-3" noValidate>
       <input type="hidden" name="type" value="CORRECT" />
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      {stepUpRequired ? (
+        <StepUpGrantControl
+          purpose="CANDIDATE_PRIVACY"
+          action="PRIVACY_CORRECT"
+          resourceId={idempotencyKey}
+          securityHref="/candidate/settings/security"
+        />
+      ) : null}
       <PrivacyActionFeedback state={state} />
       <fieldset
         className="grid gap-2"

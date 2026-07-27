@@ -36,7 +36,7 @@ export async function listAdminAuditEntries(
   raw: AdminAuditFilter,
   dependencies: AdminDependencies,
 ) {
-  if (!requireCapability(dependencies, "ADMIN_AUDIT_READ")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_AUDIT_READ")) return null;
   const parsed = auditFilterSchema.safeParse(compactFilter(raw));
   if (!parsed.success) {
     return Object.freeze({ entries: [], invalidFilter: true });

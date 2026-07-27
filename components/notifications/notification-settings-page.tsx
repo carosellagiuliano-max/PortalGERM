@@ -128,6 +128,15 @@ export async function NotificationSettingsPage({
             currentEmail={user.email}
             enabled={environment.LOGIN_EMAIL_CHANGE}
             pendingTarget={pendingChange?.targetEmail ?? null}
+            stepUpRequired={
+              environment.PRIVILEGED_STEP_UP_MODE === "enforce"
+            }
+            userId={user.id}
+            securityHref={
+              user.role === "CANDIDATE"
+                ? "/candidate/settings/security"
+                : "/employer/settings/security"
+            }
           />
         </CardContent>
       </Card>

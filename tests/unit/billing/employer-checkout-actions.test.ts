@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getEmployerContext: vi.fn(),
+  getCurrentAuthContext: vi.fn(),
   getAuthRequestContext: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(),
+  getServerEnvironment: vi.fn(),
   getDatabase: vi.fn(),
   createCheckoutOrder: vi.fn(),
   saveCompanyBillingProfile: vi.fn(),
@@ -16,9 +18,15 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/auth/employer-context", () => ({
   getEmployerContext: mocks.getEmployerContext,
 }));
+vi.mock("@/lib/auth/current-user", () => ({
+  getCurrentAuthContext: mocks.getCurrentAuthContext,
+}));
 vi.mock("@/lib/auth/request-context", () => ({
   getAuthRequestContext: mocks.getAuthRequestContext,
   isValidAuthMutationOrigin: mocks.isValidAuthMutationOrigin,
+}));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: mocks.getServerEnvironment,
 }));
 vi.mock("@/lib/db/client", () => ({ getDatabase: mocks.getDatabase }));
 vi.mock("@/lib/providers/email", () => ({ emailProvider: { send: vi.fn() } }));
@@ -54,8 +62,21 @@ describe("employer billing action boundaries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getEmployerContext.mockResolvedValue(OWNER_CONTEXT);
+    mocks.getCurrentAuthContext.mockResolvedValue({
+      user: {
+        id: OWNER_CONTEXT.user.id,
+        role: "EMPLOYER",
+      },
+      session: {
+        id: "70000000-0000-4000-8000-000000000001",
+      },
+    });
     mocks.getAuthRequestContext.mockResolvedValue({ correlationId: "correlation-1" });
     mocks.isValidAuthMutationOrigin.mockReturnValue(true);
+    mocks.getServerEnvironment.mockReturnValue({
+      PRIVILEGED_STEP_UP_MODE: "disabled",
+      TRUST_RISK_MODE: "observe",
+    });
     mocks.getDatabase.mockReturnValue({ marker: "database" });
   });
 

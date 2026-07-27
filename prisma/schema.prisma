@@ -1208,6 +1208,7 @@ enum SystemTaskKind {
   RENEWAL_REVIEW
   RETENTION_RISK
   CREDIT_EXPIRY
+  SECURITY_INCIDENT
 }
 
 enum SystemTaskStatus {
@@ -1395,6 +1396,16 @@ enum AuditTargetType {
   SERVICE_DELIVERY
   PAYMENT_RISK_DECISION
   PAID_SCOPE_DECISION
+  ADMIN_ROLE_ASSIGNMENT
+  ADMIN_CAPABILITY_GRANT
+  AUTHENTICATOR
+  SECURITY_CHALLENGE
+  SESSION_ASSURANCE
+  BREAK_GLASS_GRANT
+  RISK_SIGNAL
+  RISK_DECISION
+  TRUST_SAFETY_CASE
+  TRUST_SAFETY_APPEAL
 }
 
 enum AuditAction {
@@ -1561,6 +1572,32 @@ enum AuditAction {
   SERVICE_DELIVERY_ASSESSED
   SERVICE_DELIVERY_RECOVERED
   PAYMENT_RISK_DECIDED
+  ADMIN_ROLE_ASSIGNMENT_REQUESTED
+  ADMIN_ROLE_ASSIGNMENT_APPROVED
+  ADMIN_ROLE_ASSIGNMENT_REVOKED
+  ADMIN_CAPABILITY_GRANT_REQUESTED
+  ADMIN_CAPABILITY_GRANT_APPROVED
+  ADMIN_CAPABILITY_GRANT_REVOKED
+  AUTHENTICATOR_ENROLLMENT_STARTED
+  AUTHENTICATOR_ACTIVATED
+  AUTHENTICATOR_USED
+  AUTHENTICATOR_REVOKED
+  AUTHENTICATOR_RESET_REQUESTED
+  AUTHENTICATOR_RESET_APPROVED
+  RECOVERY_CODES_ROTATED
+  RECOVERY_CODE_USED
+  SESSION_ASSURANCE_GRANTED
+  SESSION_ASSURANCE_REVOKED
+  STEP_UP_CHALLENGE_CREATED
+  STEP_UP_GRANT_ISSUED
+  STEP_UP_GRANT_CONSUMED
+  BREAK_GLASS_REQUESTED
+  BREAK_GLASS_ACTIVATED
+  BREAK_GLASS_REVOKED
+  RISK_SIGNAL_RECORDED
+  RISK_DECISION_RECORDED
+  TRUST_SAFETY_CASE_CHANGED
+  TRUST_SAFETY_APPEAL_CHANGED
 }
 
 enum AnalyticsPurpose {
@@ -1752,6 +1789,13 @@ model User {
   serviceDeliveryApprovals          ServiceDeliveryAssessment[]   @relation("ServiceDeliveryApprover")
   serviceDeliveryEvents             ServiceDeliveryEvent[]        @relation("ServiceDeliveryEventActor")
   paymentRiskDecisions              PaymentRiskDecision[]         @relation("PaymentRiskDecisionActor")
+  adminRoleAssignments              AdminRoleAssignment[]         @relation("AdminRoleAssignee")
+  adminCapabilityGrants             AdminCapabilityGrant[]        @relation("AdminCapabilityGrantee")
+  authenticators                    Authenticator[]               @relation("AuthenticatorOwner")
+  authenticatorChallenges           AuthenticatorChallenge[]      @relation("AuthenticatorChallengeOwner")
+  recoveryCodes                     RecoveryCode[]                @relation("RecoveryCodeOwner")
+  sessionAssurances                 SessionAssurance[]            @relation("SessionAssuranceOwner")
+  stepUpChallenges                  StepUpChallenge[]             @relation("StepUpChallengeOwner")
 
   @@index([status, role])
   @@index([dataProvenance, status])
@@ -1770,19 +1814,22 @@ model Credential {
 }
 
 model Session {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  userId              String                  @db.Uuid
-  tokenHash           String                  @unique @db.VarChar(64)
-  expiresAt           DateTime                @db.Timestamptz(3)
-  absoluteExpiresAt   DateTime                @db.Timestamptz(3)
-  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
-  rotatedAt           DateTime?               @db.Timestamptz(3)
-  revokedAt           DateTime?               @db.Timestamptz(3)
-  userAgent           String?                 @db.VarChar(512)
-  ipHash              String?                 @db.VarChar(128)
-  user                User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
-  pendingEmailChanges PendingEmailChange[]
-  assuranceEvidence   AuthAssuranceEvidence[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  userId                  String                   @db.Uuid
+  tokenHash               String                   @unique @db.VarChar(64)
+  expiresAt               DateTime                 @db.Timestamptz(3)
+  absoluteExpiresAt       DateTime                 @db.Timestamptz(3)
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  rotatedAt               DateTime?                @db.Timestamptz(3)
+  revokedAt               DateTime?                @db.Timestamptz(3)
+  userAgent               String?                  @db.VarChar(512)
+  ipHash                  String?                  @db.VarChar(128)
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  pendingEmailChanges     PendingEmailChange[]
+  assuranceEvidence       AuthAssuranceEvidence[]
+  assuranceLevels         SessionAssurance[]
+  authenticatorChallenges AuthenticatorChallenge[]
+  stepUpChallenges        StepUpChallenge[]
 
   @@index([userId])
   @@index([tokenHash])
@@ -3076,25 +3123,30 @@ model PendingEmailChange {
 }
 
 model AuthAssuranceEvidence {
-  id             String          @id @default(uuid()) @db.Uuid
-  userId         String          @db.Uuid
-  sessionId      String?         @db.Uuid
-  purpose        String          @db.VarChar(64)
-  action         String          @db.VarChar(96)
-  tenantId       String?         @db.Uuid
-  method         String          @db.VarChar(32)
-  issuedAt       DateTime        @db.Timestamptz(3)
-  expiresAt      DateTime        @db.Timestamptz(3)
-  usedAt         DateTime?       @db.Timestamptz(3)
-  revokedAt      DateTime?       @db.Timestamptz(3)
-  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
-  user           User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  session        Session?        @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @db.Uuid
+  sessionId      String?          @db.Uuid
+  purpose        String           @db.VarChar(64)
+  action         String           @db.VarChar(96)
+  tenantId       String?          @db.Uuid
+  resourceId     String?          @db.VarChar(160)
+  policyVersion  String           @default("STEP_UP_POLICY_V1") @db.VarChar(48)
+  challengeId    String?          @unique @db.Uuid
+  grantDigest    String?          @unique @db.Char(64)
+  method         String           @db.VarChar(32)
+  issuedAt       DateTime         @db.Timestamptz(3)
+  expiresAt      DateTime         @db.Timestamptz(3)
+  usedAt         DateTime?        @db.Timestamptz(3)
+  revokedAt      DateTime?        @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  session        Session?         @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  challenge      StepUpChallenge? @relation(fields: [challengeId], references: [id], onDelete: Restrict)
   paymentAttempt PaymentAttempt?
-  refundRequest  Refund?         @relation("RefundRequestStepUpEvidence")
-  refundApproval Refund?         @relation("RefundApprovalStepUpEvidence")
+  refundRequest  Refund?          @relation("RefundRequestStepUpEvidence")
+  refundApproval Refund?          @relation("RefundApprovalStepUpEvidence")
 
-  @@index([userId, purpose, action, expiresAt])
+  @@index([userId, purpose, action, tenantId, resourceId, expiresAt])
   @@index([sessionId, expiresAt])
 }
 
@@ -5654,4 +5706,539 @@ model SupportCaseEvent {
   supportCase    SupportCase          @relation(fields: [supportCaseId], references: [id], onDelete: Restrict)
 
   @@index([supportCaseId, createdAt])
+}
+
+enum AdminDuty {
+  PLATFORM
+  SECURITY
+  SUPPORT
+  MODERATION
+  FINANCE
+  PRIVACY_VERIFY
+  PRIVACY_PROCESS
+  CONTENT_SUPPLY
+  TRUST_SAFETY
+}
+
+enum AuthenticatorKind {
+  WEBAUTHN
+  TOTP
+}
+
+enum AuthenticatorStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  COMPROMISED
+}
+
+enum AuthenticatorChallengeKind {
+  WEBAUTHN_REGISTRATION
+  WEBAUTHN_AUTHENTICATION
+  TOTP_ENROLLMENT
+  TOTP_AUTHENTICATION
+  RECOVERY
+}
+
+enum SecurityChallengeStatus {
+  PENDING
+  VERIFIED
+  CANCELLED
+  EXPIRED
+  REVOKED
+}
+
+enum AssuranceLevel {
+  AAL1
+  AAL2
+  RECOVERY
+}
+
+enum PrivilegedApprovalKind {
+  ROLE_ASSIGNMENT
+  DIRECT_CAPABILITY_GRANT
+  AUTHENTICATOR_RESET
+  BREAK_GLASS
+  TRUST_RESTORE
+  FINANCE
+  PRIVACY
+}
+
+enum PrivilegedApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+  CONSUMED
+}
+
+enum BreakGlassStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum RiskSubjectType {
+  USER
+  SESSION
+  COMPANY
+  JOB
+  MESSAGE
+  CONTACT_REQUEST
+  REVEAL
+  EXPORT
+  PAYMENT
+}
+
+enum RiskSignalKind {
+  CREDENTIAL_STUFFING
+  PASSWORD_SPRAY
+  SESSION_ANOMALY
+  RECOVERY_ABUSE
+  COMPROMISED_COMPANY
+  JOB_SCAM
+  JOB_DUPLICATE
+  MASS_MESSAGING
+  MASS_CONTACT
+  REPEATED_COMPLAINT
+  REVEAL_ANOMALY
+  EXPORT_ANOMALY
+  PAYMENT_FRAUD
+}
+
+enum TrustRiskDecisionKind {
+  ALLOW
+  STEP_UP
+  HOLD
+  REVIEW
+  REVOKE
+}
+
+enum TrustSafetySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TrustSafetyCaseStatus {
+  OPEN
+  IN_REVIEW
+  HELD
+  REVOKED
+  APPEALED
+  RESOLVED
+  EXPIRED
+}
+
+enum TrustSafetyEventKind {
+  OPENED
+  ASSIGNED
+  REVIEW_STARTED
+  HELD
+  REVOKED
+  APPEAL_SUBMITTED
+  APPEAL_APPROVED
+  APPEAL_REJECTED
+  RESTORED
+  RESOLVED
+  EXPIRED
+}
+
+enum TrustSafetyAppealStatus {
+  OPEN
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+model AdminRole {
+  id            String                @id @default(uuid()) @db.Uuid
+  code          String                @unique @db.VarChar(64)
+  name          String                @db.VarChar(120)
+  description   String                @db.VarChar(500)
+  duty          AdminDuty
+  policyVersion String                @default("ADMIN_GRANTS_POLICY_V2") @db.VarChar(48)
+  isSystem      Boolean               @default(true)
+  active        Boolean               @default(true)
+  createdAt     DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime              @updatedAt @db.Timestamptz(3)
+  capabilities  AdminRoleCapability[]
+  assignments   AdminRoleAssignment[]
+
+  @@index([active, duty, code])
+}
+
+model AdminRoleCapability {
+  id          String    @id @default(uuid()) @db.Uuid
+  adminRoleId String    @db.Uuid
+  capability  String    @db.VarChar(64)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  adminRole   AdminRole @relation(fields: [adminRoleId], references: [id], onDelete: Restrict)
+
+  @@unique([adminRoleId, capability])
+  @@index([capability, adminRoleId])
+}
+
+model AdminRoleAssignment {
+  id              String              @id @default(uuid()) @db.Uuid
+  userId          String              @db.Uuid
+  adminRoleId     String              @db.Uuid
+  grantedByUserId String?             @db.Uuid
+  revokedByUserId String?             @db.Uuid
+  approvalId      String?             @unique @db.Uuid
+  reasonCode      String              @db.VarChar(64)
+  validFrom       DateTime            @db.Timestamptz(3)
+  validTo         DateTime            @db.Timestamptz(3)
+  revokedAt       DateTime?           @db.Timestamptz(3)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  user            User                @relation("AdminRoleAssignee", fields: [userId], references: [id], onDelete: Restrict)
+  adminRole       AdminRole           @relation(fields: [adminRoleId], references: [id], onDelete: Restrict)
+  approval        PrivilegedApproval? @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+
+  @@index([userId, revokedAt, validFrom, validTo])
+  @@index([adminRoleId, revokedAt, validTo])
+}
+
+model AdminCapabilityGrant {
+  id              String              @id @default(uuid()) @db.Uuid
+  userId          String              @db.Uuid
+  capability      String              @db.VarChar(64)
+  duty            AdminDuty
+  grantedByUserId String?             @db.Uuid
+  revokedByUserId String?             @db.Uuid
+  approvalId      String?             @unique @db.Uuid
+  reasonCode      String              @db.VarChar(64)
+  validFrom       DateTime            @db.Timestamptz(3)
+  validTo         DateTime            @db.Timestamptz(3)
+  revokedAt       DateTime?           @db.Timestamptz(3)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  user            User                @relation("AdminCapabilityGrantee", fields: [userId], references: [id], onDelete: Restrict)
+  approval        PrivilegedApproval? @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+
+  @@index([userId, capability, revokedAt, validFrom, validTo])
+}
+
+model Authenticator {
+  id                String               @id @default(uuid()) @db.Uuid
+  userId            String               @db.Uuid
+  kind              AuthenticatorKind
+  status            AuthenticatorStatus  @default(PENDING)
+  label             String               @db.VarChar(100)
+  verifiedAt        DateTime?            @db.Timestamptz(3)
+  lastUsedAt        DateTime?            @db.Timestamptz(3)
+  revokedAt         DateTime?            @db.Timestamptz(3)
+  revokedByUserId   String?              @db.Uuid
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
+  user              User                 @relation("AuthenticatorOwner", fields: [userId], references: [id], onDelete: Restrict)
+  webauthn          WebAuthnCredential?
+  totp              TotpCredential?
+  events            AuthenticatorEvent[]
+  sessionAssurances SessionAssurance[]
+  challenges        AuthenticatorChallenge[]
+
+  @@index([userId, status, kind])
+}
+
+model WebAuthnCredential {
+  id              String        @id @default(uuid()) @db.Uuid
+  authenticatorId String        @unique @db.Uuid
+  credentialId    String        @unique @db.VarChar(1024)
+  publicKey       Bytes
+  counter         BigInt        @default(0)
+  transports      String[]
+  deviceType      String        @db.VarChar(32)
+  backedUp        Boolean       @default(false)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+  authenticator   Authenticator @relation(fields: [authenticatorId], references: [id], onDelete: Restrict)
+}
+
+model TotpCredential {
+  id               String        @id @default(uuid()) @db.Uuid
+  authenticatorId  String        @unique @db.Uuid
+  secretCiphertext Bytes
+  secretNonce      Bytes
+  secretTag        Bytes
+  keyVersion       String        @db.VarChar(32)
+  algorithm        String        @default("SHA1") @db.VarChar(16)
+  digits           Int           @default(6)
+  periodSeconds    Int           @default(30)
+  lastAcceptedStep BigInt?
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
+  authenticator    Authenticator @relation(fields: [authenticatorId], references: [id], onDelete: Restrict)
+}
+
+model AuthenticatorChallenge {
+  id              String                     @id @default(uuid()) @db.Uuid
+  userId          String                     @db.Uuid
+  sessionId       String                     @db.Uuid
+  authenticatorId String?                    @db.Uuid
+  kind            AuthenticatorChallengeKind
+  status          SecurityChallengeStatus    @default(PENDING)
+  challengeDigest String                     @db.Char(64)
+  context         Json
+  attemptCount    Int                        @default(0)
+  maxAttempts     Int                        @default(5)
+  expiresAt       DateTime                   @db.Timestamptz(3)
+  verifiedAt      DateTime?                  @db.Timestamptz(3)
+  cancelledAt     DateTime?                  @db.Timestamptz(3)
+  createdAt       DateTime                   @default(now()) @db.Timestamptz(3)
+  user            User                       @relation("AuthenticatorChallengeOwner", fields: [userId], references: [id], onDelete: Restrict)
+  session         Session                    @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  authenticator   Authenticator?             @relation(fields: [authenticatorId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, expiresAt])
+  @@index([sessionId, status, expiresAt])
+}
+
+model RecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  batchId   String    @db.Uuid
+  codeHash  String    @unique @db.Char(64)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  user      User      @relation("RecoveryCodeOwner", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, batchId, usedAt, revokedAt])
+}
+
+model AuthenticatorEvent {
+  id              String        @id @default(uuid()) @db.Uuid
+  authenticatorId String        @db.Uuid
+  actorUserId     String        @db.Uuid
+  kind            String        @db.VarChar(48)
+  reasonCode      String        @db.VarChar(64)
+  correlationId   String        @db.VarChar(128)
+  metadata        Json?
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  authenticator   Authenticator @relation(fields: [authenticatorId], references: [id], onDelete: Restrict)
+
+  @@index([authenticatorId, createdAt])
+}
+
+model SessionAssurance {
+  id              String         @id @default(uuid()) @db.Uuid
+  sessionId       String         @unique @db.Uuid
+  userId          String         @db.Uuid
+  authenticatorId String?        @db.Uuid
+  level           AssuranceLevel
+  method          String         @db.VarChar(32)
+  policyVersion   String         @default("ADMIN_MFA_POLICY_V1") @db.VarChar(48)
+  verifiedAt      DateTime       @db.Timestamptz(3)
+  expiresAt       DateTime       @db.Timestamptz(3)
+  revokedAt       DateTime?      @db.Timestamptz(3)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  session         Session        @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  user            User           @relation("SessionAssuranceOwner", fields: [userId], references: [id], onDelete: Restrict)
+  authenticator   Authenticator? @relation(fields: [authenticatorId], references: [id], onDelete: Restrict)
+
+  @@index([userId, level, expiresAt, revokedAt])
+}
+
+model StepUpChallenge {
+  id              String                  @id @default(uuid()) @db.Uuid
+  userId          String                  @db.Uuid
+  sessionId       String                  @db.Uuid
+  purpose         String                  @db.VarChar(64)
+  action          String                  @db.VarChar(96)
+  tenantId        String?                 @db.Uuid
+  resourceId      String?                 @db.VarChar(160)
+  policyVersion   String                  @db.VarChar(48)
+  requiredLevel   AssuranceLevel
+  status          SecurityChallengeStatus @default(PENDING)
+  challengeDigest String                  @db.Char(64)
+  attemptCount    Int                     @default(0)
+  maxAttempts     Int                     @default(5)
+  expiresAt       DateTime                @db.Timestamptz(3)
+  verifiedAt      DateTime?               @db.Timestamptz(3)
+  cancelledAt     DateTime?               @db.Timestamptz(3)
+  createdAt       DateTime                @default(now()) @db.Timestamptz(3)
+  user            User                    @relation("StepUpChallengeOwner", fields: [userId], references: [id], onDelete: Restrict)
+  session         Session                 @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  grant           AuthAssuranceEvidence?
+
+  @@index([userId, purpose, action, status, expiresAt])
+  @@index([sessionId, status, expiresAt])
+}
+
+model PrivilegedApproval {
+  id                String                   @id @default(uuid()) @db.Uuid
+  kind              PrivilegedApprovalKind
+  status            PrivilegedApprovalStatus @default(PENDING)
+  requestedByUserId String                   @db.Uuid
+  approvedByUserId  String?                  @db.Uuid
+  rejectedByUserId  String?                  @db.Uuid
+  targetType        String                   @db.VarChar(48)
+  targetId          String                   @db.VarChar(160)
+  duty              AdminDuty
+  reasonCode        String                   @db.VarChar(64)
+  evidenceDigest    String                   @db.Char(64)
+  requestPayload    Json
+  expiresAt         DateTime                 @db.Timestamptz(3)
+  decidedAt         DateTime?                @db.Timestamptz(3)
+  consumedAt        DateTime?                @db.Timestamptz(3)
+  createdAt         DateTime                 @default(now()) @db.Timestamptz(3)
+  roleAssignment    AdminRoleAssignment?
+  capabilityGrant   AdminCapabilityGrant?
+  breakGlassGrant   BreakGlassGrant?
+
+  @@index([status, kind, duty, expiresAt])
+  @@index([targetType, targetId, status])
+}
+
+model BreakGlassGrant {
+  id                String             @id @default(uuid()) @db.Uuid
+  approvalId        String             @unique @db.Uuid
+  userId            String             @db.Uuid
+  requestedByUserId String             @db.Uuid
+  approvedByUserId  String             @db.Uuid
+  revokedByUserId   String?            @db.Uuid
+  status            BreakGlassStatus   @default(PENDING)
+  incidentReference String             @db.VarChar(160)
+  reasonCode        String             @db.VarChar(64)
+  capabilities      String[]
+  validFrom         DateTime           @db.Timestamptz(3)
+  validTo           DateTime           @db.Timestamptz(3)
+  revokedAt         DateTime?          @db.Timestamptz(3)
+  alertDedupeKey    String             @unique @db.VarChar(160)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  approval          PrivilegedApproval @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, validFrom, validTo])
+}
+
+model RiskSignal {
+  id               String              @id @default(uuid()) @db.Uuid
+  kind             RiskSignalKind
+  subjectType      RiskSubjectType
+  subjectId        String              @db.VarChar(160)
+  companyId        String?             @db.Uuid
+  source           String              @db.VarChar(64)
+  purpose          String              @db.VarChar(64)
+  policyVersion    String              @db.VarChar(48)
+  windowStartedAt  DateTime?           @db.Timestamptz(3)
+  windowEndedAt    DateTime?           @db.Timestamptz(3)
+  observedCount    Int?
+  evidenceDigest   String              @db.Char(64)
+  dedupeKey        String              @unique @db.VarChar(160)
+  recordedByUserId String?             @db.Uuid
+  occurredAt       DateTime            @db.Timestamptz(3)
+  retainUntil      DateTime            @db.Timestamptz(3)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  decisions        TrustRiskDecision[]
+
+  @@index([subjectType, subjectId, kind, occurredAt])
+  @@index([companyId, kind, occurredAt])
+  @@index([retainUntil])
+}
+
+model TrustRiskDecision {
+  id              String                @id @default(uuid()) @db.Uuid
+  riskSignalId    String                @db.Uuid
+  kind            TrustRiskDecisionKind
+  reasonCode      String                @db.VarChar(64)
+  policyVersion   String                @db.VarChar(48)
+  effectScope     String[]
+  evidenceDigest  String                @db.Char(64)
+  decidedByUserId String?               @db.Uuid
+  decidedAt       DateTime              @db.Timestamptz(3)
+  expiresAt       DateTime?             @db.Timestamptz(3)
+  idempotencyKey  String                @unique @db.VarChar(160)
+  createdAt       DateTime              @default(now()) @db.Timestamptz(3)
+  riskSignal      RiskSignal            @relation(fields: [riskSignalId], references: [id], onDelete: Restrict)
+  trustSafetyCase TrustSafetyCase?
+
+  @@index([kind, decidedAt, id])
+  @@index([riskSignalId, decidedAt])
+}
+
+model TrustSafetyCase {
+  id             String                 @id @default(uuid()) @db.Uuid
+  riskDecisionId String                 @unique @db.Uuid
+  subjectType    RiskSubjectType
+  subjectId      String                 @db.VarChar(160)
+  companyId      String?                @db.Uuid
+  category       RiskSignalKind
+  severity       TrustSafetySeverity
+  status         TrustSafetyCaseStatus  @default(OPEN)
+  policyVersion  String                 @db.VarChar(48)
+  safeReasonCode String                 @db.VarChar(64)
+  evidenceDigest String                 @db.Char(64)
+  dedupeKey      String                 @unique @db.VarChar(160)
+  assigneeUserId String?                @db.Uuid
+  reviewDueAt    DateTime               @db.Timestamptz(3)
+  holdExpiresAt  DateTime?              @db.Timestamptz(3)
+  version        Int                    @default(1)
+  resolvedAt     DateTime?              @db.Timestamptz(3)
+  createdAt      DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime               @updatedAt @db.Timestamptz(3)
+  riskDecision   TrustRiskDecision      @relation(fields: [riskDecisionId], references: [id], onDelete: Restrict)
+  events         TrustSafetyCaseEvent[]
+  appeals        TrustSafetyAppeal[]
+  effects        TrustSafetyContainmentEffect[]
+
+  @@index([status, severity, reviewDueAt, id])
+  @@index([assigneeUserId, status, reviewDueAt, id])
+  @@index([subjectType, subjectId, status])
+  @@index([companyId, status, reviewDueAt])
+}
+
+model TrustSafetyCaseEvent {
+  id                String               @id @default(uuid()) @db.Uuid
+  trustSafetyCaseId String               @db.Uuid
+  kind              TrustSafetyEventKind
+  actorUserId       String?              @db.Uuid
+  reasonCode        String               @db.VarChar(64)
+  safeNote          String?              @db.VarChar(1000)
+  evidenceDigest    String               @db.Char(64)
+  idempotencyKey    String               @unique @db.VarChar(160)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  trustSafetyCase   TrustSafetyCase      @relation(fields: [trustSafetyCaseId], references: [id], onDelete: Restrict)
+
+  @@index([trustSafetyCaseId, createdAt, id])
+}
+
+model TrustSafetyAppeal {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  trustSafetyCaseId  String                  @db.Uuid
+  appellantUserId    String                  @db.Uuid
+  status             TrustSafetyAppealStatus @default(OPEN)
+  safeStatement      String                  @db.VarChar(2000)
+  statementDigest    String                  @db.Char(64)
+  decisionReasonCode String?                 @db.VarChar(64)
+  decidedByUserId    String?                 @db.Uuid
+  decidedAt          DateTime?               @db.Timestamptz(3)
+  decisionVersion    Int                     @default(1)
+  createdAt          DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                @updatedAt @db.Timestamptz(3)
+  trustSafetyCase    TrustSafetyCase         @relation(fields: [trustSafetyCaseId], references: [id], onDelete: Restrict)
+
+  @@index([trustSafetyCaseId, status, createdAt])
+  @@index([appellantUserId, status, createdAt])
+}
+
+model TrustSafetyContainmentEffect {
+  id                String          @id @default(uuid()) @db.Uuid
+  trustSafetyCaseId String          @db.Uuid
+  effectScope       String          @db.VarChar(64)
+  targetType        String          @db.VarChar(48)
+  targetId          String          @db.VarChar(160)
+  previousState     String          @db.VarChar(48)
+  appliedState      String          @db.VarChar(48)
+  reversible        Boolean         @default(true)
+  reasonCode        String          @db.VarChar(64)
+  idempotencyKey    String          @unique @db.VarChar(160)
+  appliedAt         DateTime        @db.Timestamptz(3)
+  reversedAt        DateTime?       @db.Timestamptz(3)
+  trustSafetyCase   TrustSafetyCase @relation(fields: [trustSafetyCaseId], references: [id], onDelete: Restrict)
+
+  @@index([trustSafetyCaseId, reversedAt, effectScope, id])
+  @@index([targetType, targetId, reversedAt])
 }

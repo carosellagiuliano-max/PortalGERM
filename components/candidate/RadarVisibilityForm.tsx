@@ -6,6 +6,7 @@ import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { setTalentRadarVisibilityAction } from "@/app/candidate/jobpass/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import type { CandidateProfileActionState } from "@/lib/candidate/profile";
 
 const INITIAL_PROFILE_ACTION_STATE: CandidateProfileActionState = Object.freeze({
@@ -15,7 +16,13 @@ const INITIAL_PROFILE_ACTION_STATE: CandidateProfileActionState = Object.freeze(
 
 export function RadarVisibilityForm({
   consentGranted,
-}: Readonly<{ consentGranted: boolean }>) {
+  candidateUserId,
+  stepUpRequired = false,
+}: Readonly<{
+  consentGranted: boolean;
+  candidateUserId?: string;
+  stepUpRequired?: boolean;
+}>) {
   const [state, action, pending] = useActionState(
     setTalentRadarVisibilityAction,
     INITIAL_PROFILE_ACTION_STATE,
@@ -25,6 +32,14 @@ export function RadarVisibilityForm({
   return (
     <form action={action} className="grid gap-4">
       <input type="hidden" name="granted" value={String(target)} />
+      {target && stepUpRequired && candidateUserId ? (
+        <StepUpGrantControl
+          purpose="CANDIDATE_TRUST"
+          action="RADAR_CONSENT_CHANGE"
+          resourceId={candidateUserId}
+          securityHref="/candidate/settings/security"
+        />
+      ) : null}
       {state.status === "idle" ? null : (
         <Alert
           variant={state.status === "error" ? "destructive" : "default"}

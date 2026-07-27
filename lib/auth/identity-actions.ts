@@ -115,7 +115,10 @@ export async function requestLoginEmailChangeAction(
   const targetEmail = stringField(formData, "targetEmail");
   const password = stringField(formData, "password");
   const parsed = normalizedEmailSchema.safeParse(targetEmail);
-  if (!parsed.success || password.length < 12 || password.length > 128) {
+  // This is a verification of an existing credential, not a password-change
+  // operation. Legacy credentials that still authenticate must therefore not
+  // be rejected by the current minimum length policy before the hash check.
+  if (!parsed.success || password.length === 0 || password.length > 128) {
     return Object.freeze({
       status: "error",
       message: "Bitte prüfe die neue Adresse und dein aktuelles Passwort.",
@@ -141,6 +144,17 @@ export async function requestLoginEmailChangeAction(
       sessionToken,
       targetEmail: parsed.data,
       password,
+      actorRole: user.role as "CANDIDATE" | "EMPLOYER" | "RECRUITER",
+      ...(stringField(formData, "stepUpEvidenceId")
+        ? {
+            stepUpEvidenceId: stringField(formData, "stepUpEvidenceId"),
+          }
+        : {}),
+      ...(stringField(formData, "stepUpGrantToken")
+        ? {
+            stepUpGrantToken: stringField(formData, "stepUpGrantToken"),
+          }
+        : {}),
     },
     { database: getDatabase(), environment, request },
   );

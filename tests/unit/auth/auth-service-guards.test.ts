@@ -67,8 +67,13 @@ describe("Phase 06 auth service guards", () => {
         scope: "IP_IDENTIFIER",
       },
     });
+    const findUnique = vi.fn().mockResolvedValue(null);
+    const createSecurityEvent = vi.fn().mockResolvedValue({ id: "security-event" });
     const dependencies = {
-      database: {} as never,
+      database: {
+        user: { findUnique },
+        authSecurityEvent: { create: createSecurityEvent },
+      } as never,
       environment: { marker: "environment" } as never,
       request,
       now: new Date("2026-07-23T10:00:00.000Z"),
@@ -99,6 +104,11 @@ describe("Phase 06 auth service guards", () => {
         now: dependencies.now,
       },
     );
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { emailNormalized: "candidate@example.test" },
+      select: { id: true },
+    });
+    expect(createSecurityEvent).toHaveBeenCalledOnce();
   });
 
   it("rejects an unknown reset token before starting bcrypt work", async () => {

@@ -10,26 +10,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { INITIAL_EMPLOYER_ACTION_STATE } from "@/lib/employer/action-state";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import type { getEmployerTeam } from "@/lib/employer/team";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 
 type Team = NonNullable<Awaited<ReturnType<typeof getEmployerTeam>>>;
 
-export function TeamList({ data, canManage }: Readonly<{ data: Team; canManage: boolean }>) {
+export function TeamList({ data, canManage, companyId = "00000000-0000-4000-8000-000000000000", stepUpRequired = false }: Readonly<{ data: Team; canManage: boolean; companyId?: string; stepUpRequired?: boolean }>) {
   const recruiters = data.memberships.filter((member) => member.status === "ACTIVE" && member.role === "RECRUITER");
   return (
     <div className="grid gap-6">
-      <Card><CardHeader><CardTitle as="h2">Mitglieder</CardTitle></CardHeader><CardContent className="grid gap-3">{data.memberships.map((member) => <MemberRow key={member.id} member={member} canManage={canManage} />)}</CardContent></Card>
+      <Card><CardHeader><CardTitle as="h2">Mitglieder</CardTitle></CardHeader><CardContent className="grid gap-3">{data.memberships.map((member) => <MemberRow key={member.id} member={member} canManage={canManage} companyId={companyId} stepUpRequired={stepUpRequired} />)}</CardContent></Card>
       <Card><CardHeader><CardTitle as="h2">Offene Einladungen</CardTitle></CardHeader><CardContent className="grid gap-3">{data.invitations.length === 0 ? <p className="text-muted-foreground">Keine offenen Einladungen.</p> : data.invitations.map((invite) => <InvitationRow key={invite.id} invite={invite} canManage={canManage} />)}</CardContent></Card>
       <Card><CardHeader><CardTitle as="h2">Job-Zuweisungen</CardTitle></CardHeader><CardContent className="grid gap-4">{canManage ? <AssignmentForm jobs={data.jobs} recruiters={recruiters} /> : <p className="text-muted-foreground">Nur Inhaber:innen und Admins verwalten Zuweisungen.</p>}{data.assignments.map((assignment) => <AssignmentRow key={assignment.id} assignment={assignment} canManage={canManage} />)}</CardContent></Card>
     </div>
   );
 }
 
-function MemberRow({ member, canManage }: Readonly<{ member: Team["memberships"][number]; canManage: boolean }>) {
+function MemberRow({ member, canManage, companyId, stepUpRequired }: Readonly<{ member: Team["memberships"][number]; canManage: boolean; companyId: string; stepUpRequired: boolean }>) {
   const [roleState, roleAction, rolePending] = useActionState(changeMemberRoleAction, INITIAL_EMPLOYER_ACTION_STATE);
   const [removeState, removeAction, removePending] = useActionState(removeMemberAction, INITIAL_EMPLOYER_ACTION_STATE);
-  return <div className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"><div><p className="font-medium">{member.user.name ?? member.user.email}</p><p className="text-xs text-muted-foreground">{member.user.email} · seit {formatDate(member.joinedAt)}</p><Badge variant="outline" className="mt-2">{member.status}</Badge></div>{canManage ? <div className="grid gap-2"><form action={roleAction} className="flex flex-wrap gap-2"><input type="hidden" name="membershipId" value={member.id} /><select aria-label={`Rolle für ${member.user.name ?? member.user.email}`} name="role" defaultValue={member.role} className="h-8 rounded-lg border bg-background px-2 text-sm"><option value="OWNER">Inhaber:in</option><option value="ADMIN">Admin</option><option value="RECRUITER">Recruiter:in</option><option value="VIEWER">Leser:in</option></select><EmployerSubmitButton pending={rolePending} label="Rolle speichern" variant="outline" /></form><EmployerActionFeedback state={roleState} /><form action={removeAction} className="flex flex-wrap gap-2"><input type="hidden" name="membershipId" value={member.id} /><Input name="reason" required minLength={3} maxLength={500} placeholder="Grund der Entfernung" className="min-w-52" /><EmployerSubmitButton pending={removePending} label="Entfernen" variant="destructive" /></form><EmployerActionFeedback state={removeState} /></div> : <Badge>{member.role}</Badge>}</div>;
+  return <div className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"><div><p className="font-medium">{member.user.name ?? member.user.email}</p><p className="text-xs text-muted-foreground">{member.user.email} · seit {formatDate(member.joinedAt)}</p><Badge variant="outline" className="mt-2">{member.status}</Badge></div>{canManage ? <div className="grid gap-2"><form action={roleAction} className="grid gap-2"><input type="hidden" name="membershipId" value={member.id} /><div className="flex flex-wrap gap-2"><select aria-label={`Rolle für ${member.user.name ?? member.user.email}`} name="role" defaultValue={member.role} className="h-8 rounded-lg border bg-background px-2 text-sm"><option value="OWNER">Inhaber:in</option><option value="ADMIN">Admin</option><option value="RECRUITER">Recruiter:in</option><option value="VIEWER">Leser:in</option></select><EmployerSubmitButton pending={rolePending} label="Rolle speichern" variant="outline" /></div>{stepUpRequired ? <StepUpGrantControl action="TEAM_ROLE_CHANGE" purpose="EMPLOYER_TEAM" resourceId={member.id} securityHref="/employer/settings/security" tenantId={companyId} /> : null}</form><EmployerActionFeedback state={roleState} /><form action={removeAction} className="grid gap-2"><input type="hidden" name="membershipId" value={member.id} /><div className="flex flex-wrap gap-2"><Input name="reason" required minLength={3} maxLength={500} placeholder="Grund der Entfernung" className="min-w-52" /><EmployerSubmitButton pending={removePending} label="Entfernen" variant="destructive" /></div>{stepUpRequired ? <StepUpGrantControl action="TEAM_MEMBER_REMOVE" purpose="EMPLOYER_TEAM" resourceId={member.id} securityHref="/employer/settings/security" tenantId={companyId} /> : null}</form><EmployerActionFeedback state={removeState} /></div> : <Badge>{member.role}</Badge>}</div>;
 }
 
 function InvitationRow({ invite, canManage }: Readonly<{ invite: Team["invitations"][number]; canManage: boolean }>) {

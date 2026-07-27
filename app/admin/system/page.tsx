@@ -24,6 +24,7 @@ export default async function AdminSystemPage() {
       email: admin.email,
       role: admin.role,
       status: admin.status,
+    capabilities: admin.capabilities,
     },
     correlationId: "admin-system-read",
     database,

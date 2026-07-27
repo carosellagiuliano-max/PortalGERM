@@ -25,7 +25,12 @@ export default async function FinanceReconciliationPage({
   const cursor = typeof query.cursor === "string" ? query.cursor : null;
   const data = await getFinanceReconciliationPage(
     getDatabase(),
-    { userId: admin.id, role: admin.role, status: admin.status },
+    {
+      userId: admin.id,
+      role: admin.role,
+      status: admin.status,
+      capabilities: admin.capabilities,
+    },
     cursor,
   );
   if (data === null) return null;

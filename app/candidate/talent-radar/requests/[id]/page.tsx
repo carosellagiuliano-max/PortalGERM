@@ -19,6 +19,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
 import type { RevealField } from "@/lib/generated/prisma/enums";
 import {
   getCandidateRadarRequest,
@@ -237,6 +238,10 @@ export default async function CandidateRadarRequestPage({
               trusted={request.trusted}
               grantIdempotencyKey={randomUUID()}
               revokeIdempotencyKey={randomUUID()}
+              companyId={request.company.id}
+              stepUpRequired={
+                getServerEnvironment().PRIVILEGED_STEP_UP_MODE === "enforce"
+              }
             />
           </CardContent>
         </Card>

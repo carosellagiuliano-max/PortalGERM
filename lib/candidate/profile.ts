@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
+import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 import {
   getAnalyticsRetainUntilV1,
   type AnalyticsEventInputV1,
@@ -625,6 +626,12 @@ export async function setOwnedTalentRadarVisibility(
     correlationId: string;
     granted: boolean;
     now: Date;
+    stepUp?: Readonly<{
+      mode: "disabled" | "observe" | "enforce";
+      sessionId: string;
+      evidenceId?: string;
+      grantToken?: string;
+    }>;
   }>,
 ) {
   return database.$transaction(async (transaction) => {
@@ -638,6 +645,30 @@ export async function setOwnedTalentRadarVisibility(
       command.now,
     );
     const requirements = evaluateCandidateOnboarding(toPolicyInput(current));
+    if (
+      command.granted &&
+      !previous &&
+      command.stepUp?.mode === "enforce" &&
+      (command.stepUp.evidenceId === undefined ||
+        command.stepUp.grantToken === undefined ||
+        !(await consumeStepUpGrant(transaction, {
+          evidenceId: command.stepUp.evidenceId,
+          grantToken: command.stepUp.grantToken,
+          actor: {
+            userId: command.actorUserId,
+            sessionId: command.stepUp.sessionId,
+            role: "CANDIDATE",
+            status: "ACTIVE",
+          },
+          purpose: "CANDIDATE_TRUST",
+          action: "RADAR_CONSENT_CHANGE",
+          resourceId: command.actorUserId,
+          correlationId: command.correlationId,
+          now: command.now,
+        })))
+    ) {
+      throw new CandidateProfileUnavailableError();
+    }
     if (previous !== command.granted) {
       await appendRadarConsent(transaction, {
         actorUserId: command.actorUserId,

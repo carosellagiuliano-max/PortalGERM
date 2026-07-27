@@ -39,7 +39,7 @@ export type AdminDemandOverviewRow = Readonly<{
 }>;
 
 export async function getBusinessCockpit(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_COCKPIT_READ")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_COCKPIT_READ")) return null;
   const now = adminNow(dependencies.now);
   const window30 = new Date(now.getTime() - 30 * DAY);
   const window90 = new Date(now.getTime() - 90 * DAY);

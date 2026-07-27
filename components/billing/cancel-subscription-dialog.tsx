@@ -19,11 +19,15 @@ import {
 import { Label } from "@/components/ui/label";
 import { INITIAL_BILLING_ACTION_STATE } from "@/lib/billing/employer-action-state";
 import { formatDate } from "@/lib/utils/format";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 
 export function CancelSubscriptionDialog({
   periodEnd,
   idempotencyKey,
   retentionOptions,
+  companyId,
+  subscriptionId,
+  stepUpRequired = false,
 }: Readonly<{
   periodEnd: Date;
   idempotencyKey: string;
@@ -33,6 +37,9 @@ export function CancelSubscriptionDialog({
     role: "OWNER" | "ADMIN" | "RECRUITER" | "VIEWER";
     selectedByDefault: boolean;
   }>[];
+  companyId?: string;
+  subscriptionId?: string;
+  stepUpRequired?: boolean;
 }>) {
   const [state, action, pending] = useActionState(
     cancelSubscriptionAction,
@@ -85,6 +92,15 @@ export function CancelSubscriptionDialog({
               </label>
             ))}
           </fieldset>
+          {stepUpRequired && companyId && subscriptionId ? (
+            <StepUpGrantControl
+              action="BILLING_SUBSCRIPTION_CANCEL"
+              purpose="EMPLOYER_BILLING"
+              resourceId={subscriptionId}
+              securityHref="/employer/settings/security"
+              tenantId={companyId}
+            />
+          ) : null}
           <div className="flex items-start gap-2">
             <Checkbox id="cancel-confirm" name="confirm" value="yes" required />
             <Label htmlFor="cancel-confirm" className="leading-5">

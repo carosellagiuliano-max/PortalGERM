@@ -61,7 +61,7 @@ describe("ADMIN_FINANCIAL_METRICS_V1 Zurich window", () => {
           operation(transaction),
       ),
     };
-    const result = await getAdminFinancialMetrics({ actor: { userId: "11000000-0000-4000-8000-000000000001", email: "admin@example.ch", role: "ADMIN", status: "ACTIVE" }, correlationId: "22000000-0000-4000-8000-000000000001", database: database as never, now: new Date("2026-07-21T12:00:00.000Z") });
+    const result = await getAdminFinancialMetrics({ actor: { userId: "11000000-0000-4000-8000-000000000001", email: "admin@example.ch", role: "ADMIN", status: "ACTIVE", capabilities: ["ADMIN_ANALYTICS_READ"] }, correlationId: "22000000-0000-4000-8000-000000000001", database: database as never, now: new Date("2026-07-21T12:00:00.000Z") });
     expect(result).toEqual(expect.objectContaining({ mrrRappen: 54_800, customContractsWithoutValue: 1, monthlyMockPaidNetRappen: 24_800, monthlyMockPaidPlanNetRappen: 14_900, monthlyMockPaidProductNetRappen: 9_900, activeSubscriptions: 3, paidEmployers: 3, freeEmployers: 1, contactPackSales: { count: 1, netRappen: 9_900 } }));
     expect(database.$transaction).toHaveBeenCalledWith(
       expect.any(Function),

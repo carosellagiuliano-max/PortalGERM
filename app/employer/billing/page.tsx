@@ -26,6 +26,7 @@ import { requireEmployerBillingPage } from "@/lib/billing/employer-page-access";
 import { getEmployerBillingOverview } from "@/lib/billing/employer-read-model";
 import { getDatabase } from "@/lib/db/client";
 import { formatChfFromRappen, formatDate } from "@/lib/utils/format";
+import { getServerEnvironment } from "@/lib/config/env";
 
 export const metadata: Metadata = {
   title: "Billing und Abonnement",
@@ -207,9 +208,14 @@ export default async function EmployerBillingPage() {
           overview.plan.periodEnd !== null &&
           overview.plan.pendingChange === null ? (
             <CancelSubscriptionDialog
+              companyId={context.companyId}
               periodEnd={overview.plan.periodEnd}
               idempotencyKey={randomUUID()}
               retentionOptions={overview.cancellationRetentionOptions}
+              stepUpRequired={
+                getServerEnvironment().PRIVILEGED_STEP_UP_MODE === "enforce"
+              }
+              subscriptionId={overview.plan.subscriptionId ?? undefined}
             />
           ) : null}
         </CardContent>

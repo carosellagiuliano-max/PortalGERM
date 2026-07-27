@@ -20,6 +20,7 @@ import { expireDueCompanyInvitations } from "@/lib/employer/team";
 import { syncJobStatusProjection } from "@/lib/jobs/effective-status";
 import { dispatchNotificationBatch } from "@/lib/notifications/dispatcher";
 import { resolvePersistedProviderActivation } from "@/lib/ops/operations-ledger";
+import { projectExpiredSecurityState } from "@/lib/security/security-expiry";
 import {
   completeWorkItem,
   failWorkItem,
@@ -35,6 +36,7 @@ import {
   createDocumentObjectStore,
 } from "@/lib/providers/storage/document-storage-composition";
 import { expireDueContactRequests } from "@/lib/talentradar/contact-requests";
+import { projectExpiredTrustCases } from "@/lib/trust-safety/case-service";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const uuidSchema = z.uuid();
@@ -299,6 +301,17 @@ async function invokeHandler(
         }),
       );
     }
+    case "security.expiry-projection":
+      return digestSummary(
+        await projectExpiredSecurityState(dependencies.database, {
+          correlationId,
+          now,
+        }),
+      );
+    case "trust.case-expiry":
+      return digestSummary(
+        await projectExpiredTrustCases(dependencies.database, now),
+      );
     case "radar.contact-expiry":
       return digestSummary(
         await expireDueContactRequests({

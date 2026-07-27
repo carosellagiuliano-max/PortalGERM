@@ -660,6 +660,7 @@ describe.sequential("ADR-028 paid plan transitions", () => {
         email: data().downgrade.adminActor.email,
         role: "ADMIN",
         status: "ACTIVE",
+        capabilities: ["ADMIN_BILLING_MUTATE"] as const,
       },
       correlationId: randomUUID(),
       database: client(),
@@ -979,6 +980,7 @@ async function seedTransitionFixtures(db: DatabaseClient) {
       email: reviewer.email,
       role: reviewer.role,
       status: reviewer.status,
+      capabilities: ["ADMIN_ANALYTICS_READ"] as const,
     }),
     free,
     upgrade: Object.freeze({

@@ -94,17 +94,17 @@ describe("Phase-06 auth and RBAC seed fixtures", () => {
     expect(serialized).not.toMatch(/raw.?token|session.?secret|reset.?secret/iu);
   });
 
-  it("publishes a closed seven-identity block without hashes or secrets", () => {
+  it("publishes the closed Phase-25 identity block without hashes or secrets", () => {
     const fixtures = buildAuthRbacSeedFixtures(ANCHOR);
     const identities = assertSeedIdentityIntegrity(AUTH_RBAC_SEED_IDENTITIES);
     const digest = buildAuthRbacSeedBlockDigest();
     const serializedDigest = JSON.stringify(digest);
 
-    expect(identities).toHaveLength(7);
+    expect(identities).toHaveLength(21);
     expect(digest).toEqual({
       digestSha256: expect.stringMatching(SHA256_PATTERN),
       name: "auth-rbac",
-      recordCount: 7,
+      recordCount: 21,
     });
     expect(serializedDigest).not.toContain(DEMO_LOGIN_PASSWORD);
     expect(serializedDigest).not.toContain(fixtures.expiredSession.tokenHash);

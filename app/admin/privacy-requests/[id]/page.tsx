@@ -40,7 +40,12 @@ export default async function AdminPrivacyRequestDetailPage({
     userId: admin.id,
     capabilities: PHASE_14_PRIVACY_ADMIN_CAPABILITIES.filter((capability) =>
       hasAdminCapability(
-        { userId: admin.id, role: admin.role, status: admin.status },
+        {
+          userId: admin.id,
+          role: admin.role,
+          status: admin.status,
+          capabilities: admin.capabilities,
+        },
         capability,
       ),
     ),

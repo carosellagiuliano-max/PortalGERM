@@ -26,6 +26,7 @@ export default async function BusinessCockpitPage() {
       email: admin.email,
       role: admin.role,
       status: admin.status,
+    capabilities: admin.capabilities,
     },
     correlationId: "admin-cockpit-read",
     database: getDatabase(),

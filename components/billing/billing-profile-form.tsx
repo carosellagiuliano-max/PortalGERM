@@ -10,10 +10,17 @@ import {
   INITIAL_BILLING_ACTION_STATE,
 } from "@/lib/billing/employer-action-state";
 import type { BillingProfileReadModel } from "@/lib/billing/employer-read-model";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 
 export function BillingProfileForm({
   profile,
-}: Readonly<{ profile: BillingProfileReadModel | null }>) {
+  companyId,
+  stepUpRequired = false,
+}: Readonly<{
+  profile: BillingProfileReadModel | null;
+  companyId?: string;
+  stepUpRequired?: boolean;
+}>) {
   const [state, action, pending] = useActionState(
     saveBillingProfileAction,
     INITIAL_BILLING_ACTION_STATE,
@@ -103,6 +110,15 @@ export function BillingProfileForm({
           />
         </div>
       </div>
+      {stepUpRequired && companyId ? (
+        <StepUpGrantControl
+          action="BILLING_PROFILE_CHANGE"
+          purpose="EMPLOYER_BILLING"
+          resourceId={companyId}
+          securityHref="/employer/settings/security"
+          tenantId={companyId}
+        />
+      ) : null}
       <EmployerActionFeedback state={state} />
       <EmployerSubmitButton
         pending={pending}

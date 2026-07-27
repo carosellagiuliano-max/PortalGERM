@@ -1,6 +1,6 @@
 # Route- und Rollenmatrix
 
-> **Stand:** Phase-24-Technikbaum, 110 Seiten und 18 Route Handler. Die
+> **Stand:** Phase-25-Technikbaum, 119 Seiten und 18 Route Handler. Die
 > maschinenlesbare Inventarbasis ist
 > [`route-inventory.json`](./route-inventory.json); `npm run route:audit`
 > vergleicht sie mit dem tatsächlichen `app/`-Baum. Diese Matrix dokumentiert
@@ -15,7 +15,7 @@
 | Candidate | globale Rolle `CANDIDATE`; owner-scoped Candidate-Objekte |
 | Employer / Recruiter | globale Rolle `EMPLOYER` oder `RECRUITER` plus bei Firmenobjekten eine aktuelle aktive Membership |
 | Company Owner/Admin/Recruiter/Viewer | Firmenrolle; jede Query/Mutation prüft zusätzlich Company, Assignment, Entitlement und Status |
-| Admin | aktive globale Rolle `ADMIN`; jeder Use Case benennt zusätzlich eine Capability |
+| Admin | aktive globale Rolle `ADMIN` öffnet nur das Portal; jeder Read/Use Case benötigt zusätzlich aktuell persistierte Capabilities |
 | Public Operations | absichtlich minimale Health-Antwort ohne Secrets/Daten |
 | Local Ops Token | nur Local/CI, geheimes Bearer-Token; in Production 404 |
 
@@ -89,7 +89,7 @@ gültiges, actor-gebundenes und einmalig konsumierbares Grant.
 | `/api/documents/read` | Authenticated | actor-gebundenes Single-use-Grant; Provider-Hash erneut geprüft; private/no-store |
 | `/api/documents/read-grants/[id]/revoke` | Authenticated | nur eigenes, noch nicht konsumiertes Grant; idempotenter Widerruf |
 
-## Candidate — 17
+## Candidate — 18
 
 Alle Routen verlangen eine aktive `CANDIDATE`-Session. Detailobjekte werden
 bereits in der ersten Query auf Candidate/User/Conversation-Eigentum
@@ -113,6 +113,7 @@ eingeschränkt.
 | `/candidate/privacy` | eigene Consents, Contacts, Reveals und Cases |
 | `/candidate/privacy/requests/[id]` | eigener Privacy Case |
 | `/candidate/privacy/requests/[id]/verify` | eigener Case plus Recent-Password-Challenge |
+| `/candidate/settings/security` | eigene Session/Faktoren/Recovery und ausschließlich eigene Trust-Fälle; Hochrisikoaktionen über actor-/session-/purpose-/resource-bound Step-up |
 | `/candidate/support` | Candidate-Entry; leitet in requester-scoped Support |
 
 ## Gemeinsamer Support — 2
@@ -122,7 +123,7 @@ eingeschränkt.
 | `/support` | Authenticated | nur eigene Cases; Company-Auswahl nur aus aktiven Memberships |
 | `/support/[id]` | Authenticated | requester-scoped Safe 404; Reply nur im erlaubten Status |
 
-## Employer und Recruiter — 24
+## Employer und Recruiter — 25
 
 Das `/employer`-Layout akzeptiert globale Rollen `EMPLOYER` und `RECRUITER`.
 Firmenbezogene Daten verlangen eine aktive Membership im aktuell
@@ -148,6 +149,7 @@ erhalten einen sicheren Locked/404-Zustand.
 | `/employer/talent-radar/requests/[id]` | Company-scoped Request; Identität nur nach gültigem Reveal |
 | `/employer/analytics` | Company scope, Planlevel und Small-count-Suppression |
 | `/employer/notifications` | Low-Assurance-Security-Einstieg oder eigenes Preference Center; keine fremden Company-/User-Präferenzen |
+| `/employer/settings/security` | eigene Session/Faktoren/Recovery; Appeals nur zu Firmen mit eigener aktiver Membership, ohne interne Risk-Evidence |
 | `/employer/billing` | Owner/Admin read; Planwechsel/Kündigung Owner |
 | `/employer/billing/profile` | Owner/Admin; vollständiges Billingprofil |
 | `/employer/billing/checkout` | Plan Owner; One-time Product Owner/Admin |
@@ -163,18 +165,20 @@ erhalten einen sicheren Locked/404-Zustand.
 | --- | --- | --- |
 | `/mock/checkout/[orderId]` | Employer mit aktiver Company-Membership | gespeicherte Order/Company; Plan nur Owner, One-time Product Owner/Admin; Production-Provider bleibt Mock |
 
-## Admin — 34
+## Admin — 41
 
-Alle Routen verlangen eine aktive globale Adminrolle. Die Server-Use-Cases
-prüfen zusätzlich die genannte Capability; sensible Reads sind begrenzt und
-Audit-Metadaten redigiert.
+Alle Routen verlangen eine aktive globale Adminrolle. Diese globale Rolle
+gewährt selbst `0` Fachcapabilities. Die Server-Use-Cases lösen aktuelle,
+persistierte und zeitlich begrenzte Rollen/Grants auf und prüfen zusätzlich
+die genannte Capability; sensible Reads sind begrenzt und Audit-Metadaten
+redigiert.
 
 | Route(n) | Capability / Zweck |
 | --- | --- |
 | `/admin` | `ADMIN_OVERVIEW_READ`; Queues, SLA und letzte Audits |
 | `/admin/analytics` | `ADMIN_ANALYTICS_READ`; suppressierte Funnels/Finanzen |
 | `/admin/audit` | `ADMIN_AUDIT_READ`; max. 100, geschlossene Filter/Correlation |
-| `/admin/system` | `ADMIN_COCKPIT_READ` plus `ADMIN_OPS_READ`; Health, SystemTasks sowie redigierte read-only Queue-/DLQ-/Worker-/Provider-/Capacity-Zustände; keine Mutation vor Phase 25 |
+| `/admin/system` | `ADMIN_COCKPIT_READ` plus `ADMIN_OPS_READ`; Health, SystemTasks sowie redigierte read-only Queue-/DLQ-/Worker-/Provider-/Capacity-Zustände |
 | `/admin/business-cockpit` | `ADMIN_COCKPIT_READ`; Evidenz/Aktion/Owner/Outcome |
 | `/admin/jobs` | `ADMIN_JOB_REVIEW`; Reviewqueue |
 | `/admin/jobs/[id]` | Review/Publish-Capabilities; Reason/Confirmation/Quota |
@@ -205,6 +209,13 @@ Audit-Metadaten redigiert.
 | `/admin/products` | `ADMIN_CATALOG_READ|MUTATE`; Release-Permits |
 | `/admin/privacy-requests` | `PRIVACY_CASE_READ`; minimale Queue |
 | `/admin/privacy-requests/[id]` | Read/Verify/Process getrennt, Need-to-know |
+| `/admin/security` | aktive Adminsession; serverseitiger Redirect auf den eigenen Authenticator-Einstieg, keine Capability-Erweiterung |
+| `/admin/security/authenticators` | eigener Passkey-/TOTP-/Recovery-Lifecycle; Admin-Mutationswirkung erst mit frischer Assurance |
+| `/admin/security/roles` | `ADMIN_SECURITY_READ`; Antrag/Freigabe zusätzlich `ADMIN_SECURITY_GRANT|APPROVE`, unterschiedliche Actors und konfliktfreie Duties |
+| `/admin/security/grants` | `ADMIN_SECURITY_READ`; bounded Direktgrant und Geräte-Reset mit SoD, AAL2, Revoke und Audit |
+| `/admin/security/break-glass` | `ADMIN_SECURITY_READ`; Mutation nur `ADMIN_BREAK_GLASS_MANAGE|APPROVE`, anderem Actor, Incident-ID, TTL und aktivem Gate |
+| `/admin/trust-safety` | `TRUST_SAFETY_READ`; keyset-bounded, minimale Fall-/SLA-/Assignee-Daten ohne geheime Evidenz |
+| `/admin/trust-safety/[id]` | `TRUST_SAFETY_READ|REVIEW|RESTORE` je Aktion; Assignment, fallgebundenes AAL2, SoD-Appeal und versionierter Conflict-Schutz |
 
 ## Operations-Handler — 3
 
@@ -244,13 +255,13 @@ Audit-Metadaten redigiert.
 
 | Phase / Requirement | Geplanter Einstieg | Rollen / Capability und Tenantgrenze | Zustände / Datenklasse | Flag, Test und Aktivierung |
 | --- | --- | --- | --- | --- |
-| 25 · `REQ-ID-004` | gemeinsame `/security`-/Step-up-Challenge; Phase-20-E-Mail-Assurance bleibt Basis, keine Query-Token-Weitergabe | Candidate, Employer Owner, Billing, Admin; purpose/action/tenant/resource/session-bound | challenge, success, stale, cancelled, recovery, revoked; Security-sensitive | risk/assurance policy; direct-action/tenant/replay tests; High-risk actions fail-closed |
+| 25 · `REQ-ID-004` | **Technischer Ist-Stand:** `/candidate/settings/security`, `/employer/settings/security`, `/admin/security/authenticators` und eingebettete Step-up-Challenge; keine Query-Token-Weitergabe | Candidate, Employer Owner, Billing, Admin; purpose/action/tenant/resource/session-bound | challenge, success, stale, cancelled, recovery, revoked; Security-sensitive | Phase-25-Unit/PostgreSQL/Desktop/360 `PASS`; Enforcement und Production-RP-ID bleiben `DISABLED` |
 | 22 · `REQ-PRIV-004` | **Technischer Ist-Stand:** `/legal/privacy`, `/legal/terms`, `/legal/imprint`, `/admin/legal`, bestehende Privacy Cases plus expiring `/api/privacy/exports/[id]` | Public nur exakte Publication; Candidate owner; Privacy Read/Verify/Process getrennt; Nicht-Kontoinhaber fail-closed | versioned/pending/hold/partial/retry/ready/expired/erased; PII/Legal | Candidate `0636a875`, automatisiertes G3 `PASS`; Counsel/Phase-25-Step-up/Research `BLOCKED`, Activation `DISABLED`; [Evidence](./evidence/2026-07-26-phase-22.md) |
 | 23 · `REQ-OPS-005` | **Technischer Ist-Stand:** `/admin/system`, Phase-23-Worker-/DLQ-/Provider-/Health-Vertrag; keine Public Controls | Operationsmutationen bleiben Phase 25; Local Token nicht Production-Ersatz | healthy/degraded/paused/backpressured/DLQ/replay; redigierte Opsdaten | Candidate `d16a2d9`, Local-/CI-G3 `PASS`; Staging/Pager/Provider/LIVE `DISABLED` |
 | 24 · `REQ-PAY-001` | **Technischer Ist-Stand:** `/employer/billing/subscription`, `/api/webhooks/payments/[provider]`, `/admin/finance/reconciliation` plus bestehende Billing-/Invoice-Routen | Owner-Guard; Webhook-Signatur+Inbox; Finance read-only, Mutationen zusätzlich Capability/Step-up/SoD | locked/pending/paid/failed/refunded/disputed/reconciled; financial | Local-/CI-Sandboxvertrag; LC5 WTP, PSP/Tax/Legal/Finance/Phase-25-Step-up und LIVE bleiben `BLOCKED` |
 | 24 · `REQ-BIL-010` | **Technischer Ist-Stand:** `/admin/finance/service-recovery`, bestehende Order-/Boost-/Radarobjekte und ServiceDelivery-Worker | gleiche Company-/OrderLine-/Serviceinstanz; Finance/Support-Ausführung fail-closed | assessed, extended, credit-restored, escalated/refund; exactly-once | Policy-/PostgreSQL-/Replaytests technisch; konkrete Paid-Servicepolicy, Support-SLA und LIVE-Aktivierung offen |
-| 25 · `REQ-ADM-007` | `/admin/security`, role/assignment, dual-approval and break-glass oversight | Security Admin distinct from Support/Moderation/Finance/Privacy; SoD enforced server-side | enroll/recover/pending-second-approval/expired/revoked/break-glass | Admin RBAC/MFA flag; cross-capability/direct-action/E2E; no global fallback |
-| 25/26 · `REQ-TRUST-001` | risk-based Trust-&-Safety queues/details, possibly consolidated with existing reports | Trust & Safety/Security/Finance scoped by case type; subjects see bounded appeal | open/held/revoked/appealed/false-positive/resolved; secret signal details hidden | risk-policy version; fraud/ATO/incident drill; rapid kill switch |
+| 25 · `REQ-ADM-007` | **Technischer Ist-Stand:** `/admin/security/{authenticators,roles,grants,break-glass}` | Security Admin getrennt von Support/Moderation/Finance/Privacy; SoD serverseitig | enroll/recover/pending-second-approval/expired/revoked/break-glass | deny-by-default RBAC/MFA/Recovery/SoD PostgreSQL und Browser `PASS`; Production-Owner/RP-ID/On-call `BLOCKED` |
+| 25/26 · `REQ-TRUST-001` | **Phase-25-Ist:** `/admin/trust-safety`, `/admin/trust-safety/[id]` plus bounded Appeal in Candidate-/Employer-Security | Trust & Safety/Security/Finance scoped je Fall; Subjects sehen nur sicheren Grund und Appeal | open/held/revoked/appealed/false-positive/resolved; interne Evidence verborgen | Phase-25 Policy/PG/E2E/Worker-Failure `PASS`; fachliche Firmen-Reverification bleibt 26, externe Risk-/DSFA-/Capacity-Freigabe `BLOCKED` |
 | 26 · `REQ-EMP-008` | existing Company verification plus structured evidence/re-review | Company Owner submits; independent reviewers approve; no self-approval | draft/pending/needs-info/verified/expiring/expired/revoked/appealed | evidence provider + dual review; Badge/Job/Radar same-read revocation |
 | 30D · `REQ-JOB-007` | Employer reconfirm/fill action; public/candidate „nicht verfügbar“ report | own Company Job; public bounded report; Trust/Moderation review | due/grace/reconfirmed/filled/expired/duplicate-review/appeal | freshness policy+worker; Search/Sitemap/Alert/Recommendation parity tests |
 

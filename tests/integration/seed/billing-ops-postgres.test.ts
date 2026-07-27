@@ -184,6 +184,7 @@ describe.sequential("Phase-05 Billing/Ops PostgreSQL seed", () => {
           email: admin.email,
           role: "ADMIN",
           status: "ACTIVE",
+          capabilities: ["ADMIN_ANALYTICS_READ"] as const,
         },
         correlationId: "phase12-seed-mrr-reconciliation",
         database: client(),

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { PHASE_12_BILLING_ADMIN_CAPABILITIES } from "@/lib/admin/capabilities";
 import {
   deactivatePlanVersion,
   grantAdminCredits,
@@ -31,7 +32,13 @@ function db() {
 
 function deps(now = NOW) {
   return Object.freeze({
-    actor: { userId: ADMIN_ID, email: "admin-billing@example.ch", role: "ADMIN", status: "ACTIVE" },
+    actor: {
+      userId: ADMIN_ID,
+      email: "admin-billing@example.ch",
+      role: "ADMIN",
+      status: "ACTIVE",
+      capabilities: PHASE_12_BILLING_ADMIN_CAPABILITIES,
+    },
     correlationId: randomUUID(),
     database: db(),
     now,

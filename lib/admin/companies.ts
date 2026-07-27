@@ -31,7 +31,7 @@ const reasonSchema = z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u);
 const idempotencySchema = z.uuid();
 
 export async function listAdminCompanies(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_COMPANY_REVIEW")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_COMPANY_REVIEW")) return null;
   const now = adminNow(dependencies.now);
   return dependencies.database.company.findMany({
     orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
@@ -61,7 +61,7 @@ export async function listAdminCompanies(dependencies: AdminDependencies) {
 }
 
 export async function getAdminCompanyDetail(dependencies: AdminDependencies, companyId: string) {
-  if (!requireCapability(dependencies, "ADMIN_COMPANY_REVIEW") || !z.uuid().safeParse(companyId).success) return null;
+  if (!await requireCapability(dependencies, "ADMIN_COMPANY_REVIEW") || !z.uuid().safeParse(companyId).success) return null;
   const now = adminNow(dependencies.now);
   const [company, entitlements] = await Promise.all([
     dependencies.database.company.findUnique({
@@ -219,7 +219,7 @@ async function transitionVerification(
   const parsed = verificationCommandSchema.safeParse(input);
   const reasonRequired = action !== "VERIFY";
   if (!parsed.success || (reasonRequired && parsed.data.reasonCode === undefined)) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_COMPANY_REVIEW")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_COMPANY_REVIEW")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const operation = `admin-verification-${action.toLowerCase()}`;
   const eventKey = operationKey(operation, parsed.data.idempotencyKey);
@@ -296,7 +296,7 @@ export async function reactivateCompany(raw: unknown, dependencies: AdminDepende
 async function transitionCompanyLifecycle(raw: unknown, dependencies: AdminDependencies, action: "SUSPEND" | "REACTIVATE") {
   const parsed = companyLifecycleSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_COMPANY_MODERATE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_COMPANY_MODERATE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const toStatus = action === "SUSPEND" ? "SUSPENDED" as const : "ACTIVE" as const;
   const eventKey = operationKey(`admin-company-${action.toLowerCase()}`, parsed.data.idempotencyKey);
@@ -364,7 +364,7 @@ export async function approveCompanyClaim(raw: unknown, dependencies: AdminDepen
 async function reviewClaim(raw: unknown, dependencies: AdminDependencies, action: "EVIDENCE" | "REJECT" | "APPROVE") {
   const parsed = claimCommandSchema.safeParse(raw);
   if (!parsed.success || (action === "APPROVE" && parsed.data.approvedRole === undefined)) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CLAIM_REVIEW")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_CLAIM_REVIEW")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey(`admin-claim-${action.toLowerCase()}`, parsed.data.idempotencyKey);
   try {

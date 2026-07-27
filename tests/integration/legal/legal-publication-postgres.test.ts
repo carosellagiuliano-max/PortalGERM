@@ -160,6 +160,11 @@ function dependencies(
       email: actor.email,
       role: actor.role,
       status: actor.status,
+      capabilities: [
+        "ADMIN_LEGAL_DRAFT",
+        "ADMIN_LEGAL_REVIEW",
+        "ADMIN_LEGAL_PUBLISH",
+      ] as const,
     },
     correlationId: randomUUID(),
     now: PHASE22_NOW,

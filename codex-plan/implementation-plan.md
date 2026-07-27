@@ -601,9 +601,10 @@ Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert u
 ## Prospektiver Ausführungsplan Phase 19–32
 
 > Dieser Abschnitt ist das ausdrücklich freigegebene Folgepaket auf
-> Planungsebene. Phasen 19 bis 21 sind abgeschlossen. Phase 22 ist technisch
-> implementiert und automatisiert G3-grün, bleibt aber wegen externer Gates
-> ungehakt; Phasen 22–32 bleiben offen.
+> Planungsebene. Phasen 19 bis 25 sind technisch implementiert und ihre
+> jeweiligen lokalen/CI-Gates grün. Aktivierung, Realprovider, Staging und
+> externe Fach-/Operationsfreigaben bleiben je Phase getrennt
+> `DISABLED`/`BLOCKED`; Phasen 26–32 bleiben offen.
 > Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
 > Folgephasengate-Vertrag aus
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md).
@@ -661,10 +662,14 @@ flowchart TD
 5. **Track 30A**: fachliches Pflege-Korpus und, nur bei Aktivierung,
    Engineering-Korpus; gemeinsame Berufs-/Ort-/Qualifikations-/Skill-/
    Branchenkonzepte und privacy-safe Learning.
-6. **Phasen 22→23**: Datenschutz/Legal/Analytics und autonome Operations
-   bauen auf dem abgeschlossenen Phase-21-Sandboxvertrag auf.
-7. **Phasen 25→26→30D**: privilegierte Assurance/Least Privilege/Fraud,
-   belastbarer Company Trust und Job Freshness.
+6. **Phasen 22→23 — technisch abgeschlossen**: Datenschutz/Legal/Analytics
+   sowie Lease-/Retry-/DLQ-/Replay-Operations bauen auf dem
+   Phase-21-Sandboxvertrag auf; externe Counsel-/Provider-/Pager-Gates bleiben.
+7. **Phase 25 — technisch abgeschlossen; danach 26→30D**: persistierte
+   Admin-Least-Privilege-Rollen, MFA/Recovery, non-admin Step-up und
+   Fraud-/Scam-/ATO-Case/Appeal bestehen das lokale G3. Company Trust und Job
+   Freshness bleiben die nächsten Fachverträge; alle Phase-25-Enforcement-
+   Flags bleiben bis Owner-/RP-ID-/Risk-/Capacity-/Pager-Gates geschlossen.
 8. **Phase 24 technisch abgeschlossen, Aktivierung nur bei LC5-Go**:
    Candidate `f785944` besitzt den grünen fail-closed Local-/CI-Zahlungs- und
    Service-Recovery-Vertrag; kein Staging-/Paid-/LIVE-Start vor WTP-,
@@ -686,8 +691,9 @@ flowchart TD
   deren stabilem fachlichem Contract. Die technische Queue-/Lease-/Retry-/
   DLQ-/Replay-Grundlage und die registrierten Phase-20–22-Adapter sind im
   lokalen Candidate vorhanden; Production-Aktivierung folgt daraus nicht.
-- Phase 25 und 26 dürfen nach Phase 20 vorbereitet werden; Auth-/Role- und
-  Company-Migrationen werden nicht gleichzeitig gecutovert.
+- Phase 25 ist technisch abgeschlossen. Phase 26 baut auf diesem Vertrag auf;
+  Admin-/Assurance-Enforcement und Company-Migration werden trotzdem nicht im
+  selben Aktivierungsfenster gecutovert.
 
 ### Bewusst ausserhalb des Standardpfads
 

@@ -5,6 +5,7 @@ import { InvitationForm } from "@/components/employer/invitation-form";
 import { TeamList } from "@/components/employer/team-list";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
 import { canManageCompany, requireEmployerCompanyContext } from "@/lib/employer/context";
 import { getEmployerTeam } from "@/lib/employer/team";
 
@@ -29,5 +30,7 @@ export default async function EmployerTeamPage() {
     getDatabase(),
   );
   if (data === null) notFound();
-  return <section aria-labelledby="team-title" className="grid gap-7"><header><p className="eyebrow">Firma</p><h1 id="team-title" className="mt-2 text-3xl font-semibold tracking-tight">Team und Job-Zuweisungen</h1><p className="mt-3 max-w-3xl leading-7 text-muted-foreground">Rollen, reservierte Sitzplätze und Recruiter-Zugriffe werden serverseitig je Firmenkontext geprüft.</p></header>{canManage ? <InvitationForm /> : null}<TeamList data={data} canManage={canManage} /></section>;
+  const stepUpRequired =
+    getServerEnvironment().PRIVILEGED_STEP_UP_MODE === "enforce";
+  return <section aria-labelledby="team-title" className="grid gap-7"><header><p className="eyebrow">Firma</p><h1 id="team-title" className="mt-2 text-3xl font-semibold tracking-tight">Team und Job-Zuweisungen</h1><p className="mt-3 max-w-3xl leading-7 text-muted-foreground">Rollen, reservierte Sitzplätze und Recruiter-Zugriffe werden serverseitig je Firmenkontext geprüft.</p></header>{canManage ? <InvitationForm companyId={context.companyId} stepUpRequired={stepUpRequired} /> : null}<TeamList data={data} canManage={canManage} companyId={context.companyId} stepUpRequired={stepUpRequired} /></section>;
 }

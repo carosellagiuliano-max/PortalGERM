@@ -764,6 +764,7 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
             email: "phase16-login-race-admin@fixture.example.test",
             role: "ADMIN",
             status: "ACTIVE",
+            capabilities: ["ADMIN_USER_MODERATE"] as const,
           },
           correlationId: randomUUID(),
           database: client(),

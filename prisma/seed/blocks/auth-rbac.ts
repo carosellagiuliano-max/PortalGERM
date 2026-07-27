@@ -38,6 +38,8 @@ export async function seedAuthRbacFixtures(
       await ensureExpiredSession(transaction, fixtures);
       await ensureResetEvidence(transaction, fixtures.expiredReset);
       await ensureResetEvidence(transaction, fixtures.usedReset);
+      await ensurePhase25AdminActors(transaction, fixtures, passwordHash);
+      await ensureAdminRoleAssignments(transaction, fixtures);
     },
     { maxWait: 5_000, timeout: 20_000 },
   );
@@ -51,6 +53,15 @@ export async function seedAuthRbacFixtures(
       "Credential",
       fixtures.suspendedActor.email,
     );
+  }
+  for (const actor of fixtures.phase25AdminActors) {
+    const credential = await database.credential.findUniqueOrThrow({
+      where: { id: actor.credentialId },
+      select: { passwordHash: true },
+    });
+    if (!(await verifyPassword(DEMO_LOGIN_PASSWORD, credential.passwordHash))) {
+      throw new SeedDataDriftError("Credential", actor.email);
+    }
   }
 
   return Object.freeze({
@@ -93,6 +104,12 @@ export function buildAuthRbacSeedBlockDigest() {
         status: fixtures.recruiterMembership.status,
         userId: fixtures.recruiterMembership.userId,
       },
+      adminRoleAssignments: fixtures.adminRoleAssignments.map(
+        ({ id, naturalKey, roleCode }) => ({ id, naturalKey, roleCode }),
+      ),
+      phase25AdminActors: fixtures.phase25AdminActors.map(
+        ({ id, email }) => ({ id, email }),
+      ),
     },
   );
 }
@@ -180,6 +197,94 @@ async function ensureSuspendedActor(
       passwordChangedAt: actor.passwordChangedAt.toISOString(),
     },
   });
+}
+
+async function ensurePhase25AdminActors(
+  transaction: SeedTransaction,
+  fixtures: ReturnType<typeof buildAuthRbacSeedFixtures>,
+  passwordHash: string,
+): Promise<void> {
+  for (const actor of fixtures.phase25AdminActors) {
+    await createOrVerifySeedRecord({
+      entity: "User",
+      naturalKey: actor.email,
+      findExisting: () =>
+        transaction.user.findUnique({ where: { id: actor.id } }),
+      create: () =>
+        transaction.user.create({
+          data: {
+            id: actor.id,
+            email: actor.email,
+            emailNormalized: actor.email,
+            name: actor.name,
+            role: "ADMIN",
+            status: "ACTIVE",
+            dataProvenance: "DEMO",
+            emailVerifiedAt: actor.createdAt,
+            identityAssurance: "VERIFIED_EMAIL",
+            createdAt: actor.createdAt,
+          },
+        }),
+      project: (row) => ({
+        id: row.id,
+        email: row.email,
+        emailNormalized: row.emailNormalized,
+        name: row.name,
+        role: row.role,
+        status: row.status,
+        dataProvenance: row.dataProvenance,
+        emailVerifiedAt: iso(row.emailVerifiedAt),
+        identityAssurance: row.identityAssurance,
+        createdAt: row.createdAt.toISOString(),
+      }),
+      expected: {
+        id: actor.id,
+        email: actor.email,
+        emailNormalized: actor.email,
+        name: actor.name,
+        role: "ADMIN",
+        status: "ACTIVE",
+        dataProvenance: "DEMO",
+        emailVerifiedAt: actor.createdAt.toISOString(),
+        identityAssurance: "VERIFIED_EMAIL",
+        createdAt: actor.createdAt.toISOString(),
+      },
+    });
+    await createOrVerifySeedRecord({
+      entity: "Credential",
+      naturalKey: actor.email,
+      findExisting: () =>
+        transaction.credential.findUnique({
+          where: { id: actor.credentialId },
+        }),
+      create: () =>
+        transaction.credential.create({
+          data: {
+            id: actor.credentialId,
+            userId: actor.id,
+            passwordHash,
+            algorithm: PASSWORD_HASH_POLICY_V1.algorithm,
+            algorithmVersion: PASSWORD_HASH_POLICY_V1.algorithmVersion,
+            passwordChangedAt: actor.createdAt,
+            createdAt: actor.createdAt,
+          },
+        }),
+      project: (row) => ({
+        id: row.id,
+        userId: row.userId,
+        algorithm: row.algorithm,
+        algorithmVersion: row.algorithmVersion,
+        passwordChangedAt: row.passwordChangedAt.toISOString(),
+      }),
+      expected: {
+        id: actor.credentialId,
+        userId: actor.id,
+        algorithm: PASSWORD_HASH_POLICY_V1.algorithm,
+        algorithmVersion: PASSWORD_HASH_POLICY_V1.algorithmVersion,
+        passwordChangedAt: actor.createdAt.toISOString(),
+      },
+    });
+  }
 }
 
 async function ensureRecruiterMembership(
@@ -365,6 +470,89 @@ async function ensureResetEvidence(
       createdAt: reset.createdAt.toISOString(),
     },
   });
+}
+
+async function ensureAdminRoleAssignments(
+  transaction: SeedTransaction,
+  fixtures: ReturnType<typeof buildAuthRbacSeedFixtures>,
+): Promise<void> {
+  for (const assignment of fixtures.adminRoleAssignments) {
+    const role = await transaction.adminRole.findUnique({
+      where: { id: assignment.adminRoleId },
+      select: { id: true, code: true, active: true },
+    });
+    if (
+      role === null ||
+      role.code !== assignment.roleCode ||
+      role.active !== true
+    ) {
+      throw new SeedDataDriftError("AdminRole", assignment.roleCode);
+    }
+
+    const compatibilityRows = await transaction.adminRoleAssignment.findMany({
+      where: {
+        userId: assignment.userId,
+        adminRoleId: assignment.adminRoleId,
+        revokedAt: null,
+        id: { not: assignment.id },
+      },
+      orderBy: { id: "asc" },
+      select: { id: true, validFrom: true },
+    });
+    for (const compatibility of compatibilityRows) {
+      await transaction.adminRoleAssignment.update({
+        where: { id: compatibility.id },
+        data: {
+          revokedAt: compatibility.validFrom,
+          reasonCode: "PHASE25_DEMO_SEED_REPLACED_BOOTSTRAP",
+        },
+        select: { id: true },
+      });
+    }
+
+    await createOrVerifySeedRecord({
+      entity: "AdminRoleAssignment",
+      naturalKey: assignment.naturalKey,
+      findExisting: () =>
+        transaction.adminRoleAssignment.findUnique({
+          where: { id: assignment.id },
+        }),
+      create: () =>
+        transaction.adminRoleAssignment.create({
+          data: {
+            id: assignment.id,
+            userId: assignment.userId,
+            adminRoleId: assignment.adminRoleId,
+            grantedByUserId: null,
+            revokedByUserId: null,
+            approvalId: null,
+            reasonCode: assignment.reasonCode,
+            validFrom: assignment.validFrom,
+            validTo: assignment.validTo,
+            revokedAt: null,
+            createdAt: assignment.validFrom,
+          },
+        }),
+      project: (row) => ({
+        id: row.id,
+        userId: row.userId,
+        adminRoleId: row.adminRoleId,
+        reasonCode: row.reasonCode,
+        validFrom: row.validFrom.toISOString(),
+        validTo: row.validTo.toISOString(),
+        revokedAt: iso(row.revokedAt),
+      }),
+      expected: {
+        id: assignment.id,
+        userId: assignment.userId,
+        adminRoleId: assignment.adminRoleId,
+        reasonCode: assignment.reasonCode,
+        validFrom: assignment.validFrom.toISOString(),
+        validTo: assignment.validTo.toISOString(),
+        revokedAt: null,
+      },
+    });
+  }
 }
 
 function iso(value: Date | null): string | null {

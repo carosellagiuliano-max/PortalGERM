@@ -22,6 +22,7 @@ import { requireEmployerBillingPage } from "@/lib/billing/employer-page-access";
 import { getCheckoutPreview } from "@/lib/billing/employer-read-model";
 import { getPublicPricingCatalog } from "@/lib/billing/public-catalog";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
 import { formatChfFromRappen } from "@/lib/utils/format";
 
 export const metadata: Metadata = {
@@ -132,6 +133,10 @@ export default async function EmployerBillingCheckoutPage({
             retentionOptions={preview.value.retentionOptions}
             targetJobId={preview.value.targetJobId}
             importSetupApprovalId={preview.value.importSetupApprovalId}
+            companyId={context.companyId}
+            stepUpRequired={
+              getServerEnvironment().PRIVILEGED_STEP_UP_MODE === "enforce"
+            }
           />
         </div>
       )}

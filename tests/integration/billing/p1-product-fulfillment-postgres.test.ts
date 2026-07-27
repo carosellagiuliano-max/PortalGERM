@@ -981,6 +981,7 @@ async function seedFixtures(database: DatabaseClient) {
       email: admin.email,
       role: admin.role,
       status: admin.status,
+      capabilities: ["ADMIN_CATALOG_MUTATE"] as const,
     }),
     starterActor: starterTenant.actor,
     starterRecheckActor: starterRecheckTenant.actor,

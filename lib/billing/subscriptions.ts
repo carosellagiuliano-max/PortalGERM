@@ -28,17 +28,20 @@ import {
   type BillingDependencies,
 } from "@/lib/billing/contracts";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 
 const AUDIT_RETENTION_MILLISECONDS = 10 * 365 * 24 * 60 * 60 * 1_000;
 const cancellationInputSchema = z.strictObject({
   idempotencyKey: billingIdempotencyKeySchema,
   retainedMembershipIds: z.array(z.uuid()).max(100).optional(),
+  stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
 });
 const projectDueSubscriptionBoundariesSchema = z.strictObject({});
 
 type SubscriptionDependencies = Pick<
   BillingDependencies,
-  "actor" | "correlationId" | "database" | "now"
+  "actor" | "correlationId" | "database" | "now" | "stepUp"
 >;
 
 export type ScheduleCancellationInput = z.input<typeof cancellationInputSchema>;
@@ -68,7 +71,7 @@ export async function projectDueSubscriptionBoundaries(
   if (!projectDueSubscriptionBoundariesSchema.safeParse(rawInput).success) {
     return adminFailure("INVALID_INPUT");
   }
-  if (!requireCapability(dependencies, "ADMIN_BILLING_MUTATE")) {
+  if (!(await requireCapability(dependencies, "ADMIN_BILLING_MUTATE"))) {
     return adminFailure("FORBIDDEN");
   }
 
@@ -207,6 +210,31 @@ export async function scheduleSubscriptionCancellation(
           parsed.data.retainedMembershipIds,
         );
         if (selected === null) return billingFailure("INVALID_INPUT");
+        if (
+          dependencies.stepUp?.mode === "enforce" &&
+          !(
+            parsed.data.stepUpEvidenceId !== undefined &&
+            parsed.data.stepUpGrantToken !== undefined &&
+            (await consumeStepUpGrant(transaction, {
+              evidenceId: parsed.data.stepUpEvidenceId,
+              grantToken: parsed.data.stepUpGrantToken,
+              actor: {
+                userId: dependencies.actor.userId,
+                sessionId: dependencies.stepUp.sessionId,
+                role: dependencies.stepUp.globalRole,
+                status: "ACTIVE",
+              },
+              purpose: "EMPLOYER_BILLING",
+              action: "BILLING_SUBSCRIPTION_CANCEL",
+              tenantId: dependencies.actor.companyId,
+              resourceId: subscription.id,
+              correlationId: dependencies.correlationId,
+              now,
+            }))
+          )
+        ) {
+          return billingFailure("STEP_UP_REQUIRED");
+        }
 
         const schedule = await transaction.subscriptionChangeSchedule.create({
           data: {

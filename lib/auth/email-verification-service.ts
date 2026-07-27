@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { writeAuthSecurityEvent } from "@/lib/auth/security-events";
+import { revokeUserStepUpState } from "@/lib/auth/assurance/step-up-service";
 import { issueSession } from "@/lib/auth/session-issuance";
 import { hashSessionToken, type CreatedSession } from "@/lib/auth/session";
 import {
@@ -387,6 +388,11 @@ export async function consumeEmailVerification(
           });
           if (completed.count !== 1) return null;
           await transaction.session.updateMany({
+            where: { userId: challenge.userId, revokedAt: null },
+            data: { revokedAt: now },
+          });
+          await revokeUserStepUpState(transaction, challenge.userId, now);
+          await transaction.sessionAssurance.updateMany({
             where: { userId: challenge.userId, revokedAt: null },
             data: { revokedAt: now },
           });

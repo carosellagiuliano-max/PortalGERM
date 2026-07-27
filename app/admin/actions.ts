@@ -34,7 +34,7 @@ export async function adminCommandAction(_previous: AdminActionState, formData: 
   if (operation === null) return errorState("Das Formular ist unvollständig.", "INVALID_INPUT");
   const input = formObject(formData);
   delete input.operation;
-  const dependencies = Object.freeze({ actor: { userId: user.id, email: user.email, role: user.role, status: user.status }, correlationId: request.correlationId, database: getDatabase(), now: new Date() });
+  const dependencies = Object.freeze({ actor: { userId: user.id, email: user.email, role: user.role, status: user.status, capabilities: user.capabilities }, correlationId: request.correlationId, database: getDatabase(), now: new Date() });
   try {
     const result = operation === "job-start-review" ? await startAdminJobReview(input as never, dependencies)
       : operation === "job-request-changes" ? await requestAdminJobChanges(input as never, dependencies)

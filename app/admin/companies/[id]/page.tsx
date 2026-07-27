@@ -34,6 +34,7 @@ export default async function AdminCompanyDetailPage({
       email: user.email,
       role: user.role,
       status: user.status,
+    capabilities: user.capabilities,
     },
     correlationId: "admin-company-detail",
     database: getDatabase(),

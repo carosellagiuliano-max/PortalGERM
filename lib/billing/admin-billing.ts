@@ -75,7 +75,7 @@ const deactivateCatalogSchema = z.strictObject({
 });
 
 export async function listAdminOrders(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_BILLING_READ")) return null;
+  if (!(await requireCapability(dependencies, "ADMIN_BILLING_READ"))) return null;
   return dependencies.database.order.findMany({
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 200,
@@ -105,7 +105,11 @@ export async function listAdminOrders(dependencies: AdminDependencies) {
 }
 
 export async function getAdminOrderDetail(dependencies: AdminDependencies, orderId: string) {
-  if (!requireCapability(dependencies, "ADMIN_BILLING_READ") || !z.uuid().safeParse(orderId).success) return null;
+  if (
+    !(await requireCapability(dependencies, "ADMIN_BILLING_READ")) ||
+    !z.uuid().safeParse(orderId).success
+  )
+    return null;
   return dependencies.database.order.findUnique({
     where: { id: orderId },
     select: {
@@ -171,7 +175,7 @@ export async function getAdminOrderDetail(dependencies: AdminDependencies, order
 }
 
 export async function listAdminInvoices(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_BILLING_READ")) return null;
+  if (!(await requireCapability(dependencies, "ADMIN_BILLING_READ"))) return null;
   return dependencies.database.invoice.findMany({
     orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     take: 200,
@@ -194,7 +198,11 @@ export async function listAdminInvoices(dependencies: AdminDependencies) {
 }
 
 export async function getAdminInvoiceDetail(dependencies: AdminDependencies, invoiceId: string) {
-  if (!requireCapability(dependencies, "ADMIN_BILLING_READ") || !z.uuid().safeParse(invoiceId).success) return null;
+  if (
+    !(await requireCapability(dependencies, "ADMIN_BILLING_READ")) ||
+    !z.uuid().safeParse(invoiceId).success
+  )
+    return null;
   return dependencies.database.invoice.findUnique({
     where: { id: invoiceId },
     select: {
@@ -252,7 +260,7 @@ export async function getAdminInvoiceDetail(dependencies: AdminDependencies, inv
 }
 
 export async function listAdminPlans(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_CATALOG_READ")) return null;
+  if (!(await requireCapability(dependencies, "ADMIN_CATALOG_READ"))) return null;
   return dependencies.database.plan.findMany({
     orderBy: [{ isDefaultFree: "desc" }, { name: "asc" }, { id: "asc" }],
     select: {
@@ -285,7 +293,7 @@ export async function listAdminPlans(dependencies: AdminDependencies) {
 }
 
 export async function listAdminProducts(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_CATALOG_READ")) return null;
+  if (!(await requireCapability(dependencies, "ADMIN_CATALOG_READ"))) return null;
   return dependencies.database.product.findMany({
     orderBy: [{ type: "asc" }, { name: "asc" }, { id: "asc" }],
     select: {
@@ -334,7 +342,11 @@ export async function listAdminProducts(dependencies: AdminDependencies) {
 }
 
 export async function getAdminCompanyCreditReadModel(dependencies: AdminDependencies, companyId: string) {
-  if (!requireCapability(dependencies, "ADMIN_BILLING_READ") || !z.uuid().safeParse(companyId).success) return null;
+  if (
+    !(await requireCapability(dependencies, "ADMIN_BILLING_READ")) ||
+    !z.uuid().safeParse(companyId).success
+  )
+    return null;
   const now = adminNow(dependencies.now);
   const company = await dependencies.database.company.findUnique({
     where: { id: companyId },
@@ -397,7 +409,8 @@ export async function getAdminCompanyCreditReadModel(dependencies: AdminDependen
 export async function grantAdminCredits(raw: unknown, dependencies: AdminDependencies) {
   const parsed = grantCreditsSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CREDITS_GRANT")) return adminFailure("FORBIDDEN");
+  if (!(await requireCapability(dependencies, "ADMIN_CREDITS_GRANT")))
+    return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const maximumValidity = addZurichCalendarMonthsClampedV1(now, 12);
   if (
@@ -447,7 +460,8 @@ export async function grantAdminCredits(raw: unknown, dependencies: AdminDepende
 export async function reverseCreditConsume(raw: unknown, dependencies: AdminDependencies) {
   const parsed = reverseConsumeSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CREDIT_REVERSE")) return adminFailure("FORBIDDEN");
+  if (!(await requireCapability(dependencies, "ADMIN_CREDIT_REVERSE")))
+    return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const ledgerKey = operationKey("admin-credit-reversal", parsed.data.idempotencyKey);
   try {
@@ -532,7 +546,8 @@ export async function reverseCreditConsume(raw: unknown, dependencies: AdminDepe
 export async function schedulePlanVersion(raw: unknown, dependencies: AdminDependencies) {
   const parsed = schedulePlanSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")) return adminFailure("FORBIDDEN");
+  if (!(await requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")))
+    return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const validTo = parsed.data.validTo ?? null;
   if (parsed.data.validFrom.getTime() <= now.getTime() || (validTo !== null && validTo.getTime() <= parsed.data.validFrom.getTime())) return adminFailure("INVALID_INPUT");
@@ -589,7 +604,8 @@ export async function schedulePlanVersion(raw: unknown, dependencies: AdminDepen
 export async function scheduleProductVersion(raw: unknown, dependencies: AdminDependencies) {
   const parsed = scheduleProductSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")) return adminFailure("FORBIDDEN");
+  if (!(await requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")))
+    return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const validTo = parsed.data.validTo ?? null;
   if (parsed.data.validFrom.getTime() <= now.getTime() || (validTo !== null && validTo.getTime() <= parsed.data.validFrom.getTime())) return adminFailure("INVALID_INPUT");
@@ -711,7 +727,8 @@ export async function deactivateProductVersion(raw: unknown, dependencies: Admin
 async function deactivateCatalogVersion(kind: "PLAN" | "PRODUCT", raw: unknown, dependencies: AdminDependencies) {
   const parsed = deactivateCatalogSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")) return adminFailure("FORBIDDEN");
+  if (!(await requireCapability(dependencies, "ADMIN_CATALOG_MUTATE")))
+    return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   try {
     return await dependencies.database.$transaction(async (transaction) => {

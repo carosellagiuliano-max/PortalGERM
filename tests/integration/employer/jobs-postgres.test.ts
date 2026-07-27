@@ -493,6 +493,7 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
         email: "admin-job-test@example.ch",
         role: "ADMIN" as const,
         status: "ACTIVE" as const,
+        capabilities: ["ADMIN_JOB_REVIEW"] as const,
       },
       correlationId: id(201),
       database: client,

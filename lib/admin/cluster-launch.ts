@@ -39,7 +39,7 @@ export async function evaluateClusterLaunch(
 ) {
   const parsed = evaluationSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) {
+  if (!await requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) {
     return adminFailure("FORBIDDEN");
   }
   const evaluatedAt = adminNow(dependencies.now);

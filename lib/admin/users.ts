@@ -15,7 +15,7 @@ import {
 } from "@/lib/admin/common";
 
 export async function listAdminUsers(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_USER_MODERATE")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_USER_MODERATE")) return null;
   const now = adminNow(dependencies.now);
   return dependencies.database.user.findMany({
     orderBy: [{ createdAt: "desc" }, { id: "asc" }],
@@ -51,7 +51,7 @@ export async function listAdminUsers(dependencies: AdminDependencies) {
 }
 
 export async function getAdminUserDetail(dependencies: AdminDependencies, userId: string) {
-  if (!requireCapability(dependencies, "ADMIN_USER_MODERATE") || !z.uuid().safeParse(userId).success) return null;
+  if (!await requireCapability(dependencies, "ADMIN_USER_MODERATE") || !z.uuid().safeParse(userId).success) return null;
   return dependencies.database.user.findUnique({
     where: { id: userId },
     select: {
@@ -82,7 +82,7 @@ const userCommandSchema = z.strictObject({
 export async function suspendUser(raw: unknown, dependencies: AdminDependencies) {
   const parsed = userCommandSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_USER_MODERATE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_USER_MODERATE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const auditCorrelation = parsed.data.idempotencyKey;
   try {
@@ -162,7 +162,7 @@ export async function suspendUser(raw: unknown, dependencies: AdminDependencies)
 export async function reactivateUser(raw: unknown, dependencies: AdminDependencies) {
   const parsed = userCommandSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_USER_MODERATE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_USER_MODERATE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const auditCorrelation = parsed.data.idempotencyKey;
   try {
@@ -194,7 +194,7 @@ const logoutSchema = z.strictObject({
 export async function forceLogoutUser(raw: unknown, dependencies: AdminDependencies) {
   const parsed = logoutSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_USER_MODERATE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_USER_MODERATE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const auditCorrelation = parsed.data.idempotencyKey;
   try {

@@ -18,6 +18,7 @@ export default async function AdminContentPage() {
       email: admin.email,
       role: admin.role,
       status: admin.status,
+    capabilities: admin.capabilities,
     },
     correlationId: "admin-content-read",
     database: getDatabase(),

@@ -162,11 +162,27 @@ export async function setTalentRadarVisibilityAction(
   }
 
   try {
+    const stepUpEvidenceId = optionalString(formData, "stepUpEvidenceId");
+    const stepUpGrantToken = optionalString(formData, "stepUpGrantToken");
     const result = await setOwnedTalentRadarVisibility(security.database, {
       actorUserId: security.userId,
       correlationId: security.correlationId,
       granted: raw[0] === "true",
       now: security.now,
+      stepUp: {
+        mode: security.stepUpMode,
+        sessionId: security.sessionId,
+        ...(typeof stepUpEvidenceId !== "string"
+          ? {}
+          : {
+              evidenceId: stepUpEvidenceId,
+            }),
+        ...(typeof stepUpGrantToken !== "string"
+          ? {}
+          : {
+              grantToken: stepUpGrantToken,
+            }),
+      },
     });
     revalidateCandidateProfilePaths();
     if (result.outcome === "UNCHANGED") {
@@ -230,6 +246,8 @@ async function secureCandidateProfileMutation() {
   return Object.freeze({
     ok: true as const,
     userId: user.id,
+    sessionId: user.sessionId,
+    stepUpMode: environment.PRIVILEGED_STEP_UP_MODE,
     correlationId: request.correlationId,
     database,
     now,

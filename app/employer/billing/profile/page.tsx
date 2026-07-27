@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { requireEmployerBillingPage } from "@/lib/billing/employer-page-access";
 import { getCompanyBillingProfile } from "@/lib/billing/employer-read-model";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
 
 export const metadata: Metadata = { title: "Rechnungsprofil" };
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export default async function EmployerBillingProfilePage() {
       {profile === null ? <Alert><AlertTitle>Noch unvollständig</AlertTitle><AlertDescription>Ohne vollständiges Schweizer Rechnungsprofil wird serverseitig keine Bestellung erstellt.</AlertDescription></Alert> : null}
       <Card>
         <CardHeader><CardTitle as="h2">Schweizer Rechnungsprofil</CardTitle><CardDescription>Bearbeitbar für aktive Owner- und Admin-Mitgliedschaften.</CardDescription></CardHeader>
-        <CardContent><BillingProfileForm profile={profile} /></CardContent>
+        <CardContent><BillingProfileForm profile={profile} companyId={context.companyId} stepUpRequired={getServerEnvironment().PRIVILEGED_STEP_UP_MODE === "enforce"} /></CardContent>
       </Card>
       <Link href="/employer/billing" className={buttonVariants({ variant: "outline" })}>Zurück zur Billing-Übersicht</Link>
     </section>

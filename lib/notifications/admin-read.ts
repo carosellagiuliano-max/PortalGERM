@@ -23,7 +23,7 @@ const DELIVERY_STATUSES = [
 export async function getNotificationDeliverySummary(
   dependencies: AdminDependencies,
 ) {
-  if (!requireCapability(dependencies, "ADMIN_COCKPIT_READ")) return null;
+  if (!(await requireCapability(dependencies, "ADMIN_COCKPIT_READ"))) return null;
   const [grouped, bounced, oldestQueued] = await Promise.all([
     dependencies.database.notificationOutbox.groupBy({
       by: ["status"],

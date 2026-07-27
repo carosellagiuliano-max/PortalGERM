@@ -57,7 +57,7 @@ export async function adminMockRenewSubscription(
 ): Promise<AdminCommandResult<AdminMockRenewalResult>> {
   const parsed = renewalSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_BILLING_MUTATE")) {
+  if (!(await requireCapability(dependencies, "ADMIN_BILLING_MUTATE"))) {
     return adminFailure("FORBIDDEN");
   }
 

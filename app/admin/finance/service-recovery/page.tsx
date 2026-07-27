@@ -24,7 +24,12 @@ export default async function FinanceServiceRecoveryPage({
   const [admin, query] = await Promise.all([requireAdminPage(), searchParams]);
   const data = await getFinanceServiceRecoveryPage(
     getDatabase(),
-    { userId: admin.id, role: admin.role, status: admin.status },
+    {
+      userId: admin.id,
+      role: admin.role,
+      status: admin.status,
+      capabilities: admin.capabilities,
+    },
     typeof query.cursor === "string" ? query.cursor : null,
   );
   if (data === null) return null;

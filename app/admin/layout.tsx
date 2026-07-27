@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 
 import { PrivateShell } from "@/components/auth/private-shell";
-import { ADMIN_NAVIGATION, AdminGlobalSearch } from "@/components/admin/Sidebar";
+import {
+  AdminGlobalSearch,
+  getAdminNavigation,
+} from "@/components/admin/Sidebar";
 import { requireAdminPage } from "@/lib/auth/route-guards";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +19,7 @@ export default async function AdminLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireAdminPage();
   return (
-    <PrivateShell area="Administration" navigation={ADMIN_NAVIGATION} navigationVariant="sidebar" identity={{ displayName: user.name ?? "Platform Admin", secondaryLabel: user.email }} contextControl={<AdminGlobalSearch />}>
+    <PrivateShell area="Administration" navigation={getAdminNavigation(user.capabilities)} navigationVariant="sidebar" identity={{ displayName: user.name ?? "Platform Admin", secondaryLabel: user.email }} contextControl={<AdminGlobalSearch enabled={user.capabilities.includes("ADMIN_GLOBAL_SEARCH")} />}>
       {children}
     </PrivateShell>
   );

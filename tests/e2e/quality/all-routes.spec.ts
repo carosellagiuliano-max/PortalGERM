@@ -23,7 +23,7 @@ import {
   type PageObservation,
 } from "@/tests/e2e/fixtures/phase17-test";
 
-const EXPECTED_PAGE_COUNT = 110;
+const EXPECTED_PAGE_COUNT = 119;
 const EXPECTED_HANDLER_COUNT = 18;
 const ROUTE_TEST_TIMEOUT_MILLISECONDS = 90_000;
 const QUALITY_TAGS = "@quality-desktop @quality-mobile";
@@ -108,7 +108,7 @@ test.describe("Phase 18 exhaustive route quality", () => {
   });
 
   test(
-      `${QUALITY_TAGS} route inventory is exactly 110 pages, tracks 18 handlers and excludes handlers from page visits`,
+      `${QUALITY_TAGS} route inventory is exactly 119 pages, tracks 18 handlers and excludes handlers from page visits`,
     async ({ page }, testInfo) => {
       testInfo.setTimeout(ROUTE_TEST_TIMEOUT_MILLISECONDS);
       assertProjectViewport(page, testInfo);

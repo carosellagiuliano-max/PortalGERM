@@ -4,10 +4,10 @@
 
 | Dimension | Status |
 | --- | --- |
-| Planstatus | `GEPLANT` |
-| Technikstatus | `NICHT IMPLEMENTIERT` |
-| Quality-Gate | `NICHT GELAUFEN` |
-| Aktivierung | `DISABLED` |
+| Planstatus | `IN TECHNISCHER ABNAHME` |
+| Technikstatus | `LOCAL/CI CONTRACT IMPLEMENTED` |
+| Quality-Gate | `TARGETED PASS; FULL G3 AUSSTEHEND` |
+| Aktivierung | `DISABLED / BLOCKED BY EXTERNAL GATE` |
 
 Diese Phase besteht aus drei getrennt abnehmbaren, aber gemeinsam modellierten
 Tracks:
@@ -16,9 +16,10 @@ Tracks:
 - **25B — non-admin risk-based Step-up für Candidate und Employer**;
 - **25C — Fraud, Scam, Account Takeover und Trust-&-Safety-Operations**.
 
-Kein Track besitzt technische, qualitative oder LIVE-Evidence. Ein Teiltrack
-darf technisch abgeschlossen werden, aktiviert aber keinen anderen Teiltrack
-implizit.
+Alle drei Tracks sind als zusammenhängender, standardmässig deaktivierter
+Local-/CI-Vertrag implementiert. Die gezielten Unit-, PostgreSQL- und
+Browserprüfungen sind grün; der vollständige commitgebundene G3-Abschluss
+steht noch aus. Technische Abnahme aktiviert keinen Track implizit.
 
 ## 2. Ziel und messbarer Business-/Nutzerwert
 
@@ -44,24 +45,25 @@ Messbare Zielwerte:
 
 ## 3. Tatsächlicher Repositoryzustand
 
-- `STH-010`: Capability-Namen und serverseitige Admin-Seams existieren, aber
-  jeder aktive globale `ADMIN` erhält derzeit sämtliche implementierten
-  Admin-Capabilities.
-- `STH-011`: Passwort plus bis zu 30 Tage alte Session genügt; WebAuthn/TOTP,
-  Recovery Codes und serverseitige Assurance-Level fehlen.
-- Dual Approval speichert zwei Schritte, erzwingt historisch aber nicht
-  allgemein zwei unterschiedliche Personen.
-- Candidate-/Employer-Hochrisikoaktionen besitzen keinen einheitlichen
-  risk-based Step-up-Vertrag (`STH-030`).
-- Rate Limits, Abuse Reports, Audit und Suspensionen sind gute Vorarbeit, bilden
-  aber keinen zusammenhängenden Fraud-/Scam-/ATO-Fall mit Signal, Hold,
-  Review, schneller Revocation und Appeal (`STH-031`).
-- Phase 25 hat noch keine implementierten persistenten Grants,
-  Authenticatoren, StepUpGrants, Risk Decisions oder TrustSafetyCases.
+- `STH-010`: zehn persistierte Adminrollen verteilen 50 explizite
+  Capabilities. Die globale Plattformrolle `ADMIN` öffnet nur den internen
+  Portalrahmen und gewährt allein exakt `0` Capabilities.
+- `STH-011`: WebAuthn, TOTP, gehashte Single-use Recovery Codes,
+  Session-Assurance, Authenticator-Reset mit Freigabe, SoD und zeitgebundenes
+  Break-glass sind serverseitig und persistent umgesetzt.
+- `STH-030`: eine zentrale `StepUpPolicy` schützt inventarisierte
+  Candidate-/Employer-Aktionen mit opaque Single-use Grants, gebunden an
+  Actor, Session, Purpose, Action, Tenant und Resource.
+- `STH-031`: versionierte Risk Signals und Decisions, deduplizierte
+  Trust-&-Safety-Cases, bounded Hold/Revoke, Appeal, unabhängiges Restore und
+  fail-closed Expiry-/Revocation-Worker sind integriert.
+- Sieben additive Phase-25-Migrationen, der Seedvertrag
+  `phase-25-demo-v14`, 119 Seiten/18 Handler im Routeninventar sowie
+  owning Unit-, PostgreSQL-, Desktop-/360- und A11y-Tests liegen vor.
 
-Die konkrete aktuelle Capability-, Route-, Action-, Session-, Audit- und
-Testmatrix wird vor Implementierung auf dem Phase-19-Baseline-Commit neu
-inventarisiert.
+Die Durchsetzung bleibt über sichere Defaults geschlossen beziehungsweise im
+Observe-Modus, bis die externen Owner-, Staging-, Policy- und
+Operationsgates aus Abschnitt 17 erfüllt sind.
 
 ## 4. Findings und Requirements
 
@@ -157,29 +159,32 @@ persistierte Grants beziehungsweise Company Membership/Assignment neu auf.
 
 ## 8. Portale, Routen, Services, Provider und Worker
 
-Geplantes Route Delta:
+Implementiertes Route Delta:
 
 - Admin Security: `/admin/security/roles`, `/admin/security/grants`,
   `/admin/security/authenticators`, `/admin/security/break-glass`;
 - Trust & Safety: `/admin/trust-safety`, `/admin/trust-safety/[id]`;
 - User Security: `/candidate/settings/security`,
-  `/employer/settings/security`, gemeinsame Step-up-/Recovery-Flows;
+  `/employer/settings/security`, `/security/step-up` und
+  `/security/account-recovery`;
 - bestehende Admin-, Finance-, Privacy-, Company-, Radar-, Export-/Delete-,
   Team-/Billing- und Jobactions werden an zentrale Guards gebunden.
 
-Geplante Services:
+Implementierte Services:
 
-- `lib/auth/assurance/**`, `lib/auth/authenticators/**`;
-- `lib/admin/roles/**`, zentrale persistierte Capability Resolution;
+- `lib/auth/assurance/**`;
+- `lib/admin/role-policy.ts`, `lib/admin/security-governance.ts` und zentrale
+  persistierte Capability Resolution;
 - `lib/security/risk/**`, `lib/trust-safety/**`;
-- Worker für Expiry, Alert, Revocation-Projektion und Queue-SLA über Phase 23;
+- Worker für Security-/Case-Expiry, Alert und Revocation-Projektion über den
+  Phase-23-Handlerkatalog;
 - Notification-Outbox aus Phase 20.
 
-Planned Routes bleiben aus dem generierten Ist-Inventar, bis Dateien existieren.
+Das generierte Ist-Inventar enthält 119 Seiten und 18 Handler.
 
 ## 9. Datenmodelle, Constraints, Indizes und Datenklassifikation
 
-Prospektive Modelle:
+Implementierte additive Modelle:
 
 - `AdminRole`, `AdminCapabilityGrant`, `AdminRoleAssignment`;
 - `Authenticator`, `WebAuthnCredential`, `TotpCredential`,
@@ -395,13 +400,15 @@ Phase 27 ist keine Abhängigkeit und wird nicht mit internem RBAC vermischt.
 
 ## 20. Feature Flags, Kill Switch und Aktivierung
 
-- `ADMIN_GRANTS_V2`: observe → enforce;
-- `ADMIN_MFA_REQUIRED`: Enrollment Cohort → alle produktiven Admins;
-- `PRIVILEGED_STEP_UP_V1`: actionweise Allowlist, serverseitig;
-- `TRUST_RISK_OBSERVE`: Signale/Entscheide ohne automatische Wirkung;
-- `TRUST_RISK_HOLD`: reversible Holds für freigegebene Signalgruppen;
-- `TRUST_RAPID_REVOKE`: nur nach Phase-26-/domain-spezifischer Integration;
-- `BREAK_GLASS`: default off, zeitgebundener Incident Grant;
+- persistierte Admin-Grants sind deny-by-default; es gibt keinen globalen
+  All-Admin-Schalter;
+- `ADMIN_MFA_REQUIRED=false`: Enrollment/Assurance bleibt vor externem Cutover
+  nicht global erzwungen;
+- `PRIVILEGED_STEP_UP_MODE=disabled`: optional `observe`, danach actionweise
+  `enforce`;
+- `TRUST_RISK_MODE=observe`: optional `hold` erst nach Policy-/False-Positive-
+  Freigabe;
+- `BREAK_GLASS_ENABLED=false`: zeitgebundener Incident Grant;
 - globale Kill Switches pausieren neue Grants, automatisierte Holds/Revoke oder
   einzelne Risk-Regeln, reaktivieren aber nie All-Admin/Step-up-Bypass.
 
@@ -411,25 +418,47 @@ False-Positive-, Lockout-, Queue-/Alert- und Rollback-Evidence.
 
 ## 21. Akzeptanzkriterien und vollständige AC→Test-Matrix
 
-Alle genannten Testdateien sind geplant und werden erst in Phase 25 angelegt.
+Alle genannten automatisierten Testdateien sind implementiert. Die Matrix
+weist den gezielten lokalen Stand aus; erst der vollständige commitgebundene
+G3-Lauf erlaubt den Phasenabschluss.
 
 | Criterion/Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `P25A-AC-01` / `REQ-ADM-007` | P0: globale Adminvollmacht | Unit + PostgreSQL | Role×Capability×Action | nur explizite aktive Grants erlauben | role=ADMIN allein, fremde Duty, expired/revoked Grant, Direktaufruf | alle Adminrollen | Admin Pages/Commands | jede Rolle, 36+ Capabilities, active/expired Grants | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/admin/admin-role-capability-matrix.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/admin/admin-grants-postgres.test.ts` | vollständige Matrix; unzulässige Kombinationen `0` Read/Write; role=ADMIN allein gewährt `0` | Matrix-/DB-Report | Security + Fachowner + QA | `PLANNED` |
-| `P25A-AC-02` / `REQ-ADM-007` | P0: MFA-/Recovery-Bypass | Unit + E2E | WebAuthn/TOTP Enrollment/Login/Recovery | gültiger Faktor und single-use Recovery | falsche RP-ID/Origin, replay, expired challenge, TOTP replay, used code, last factor remove | Admin | Security UI/Auth | Passkey/TOTP/Recovery/Device-Loss Fixtures | Unit + Chromium | `npx vitest run --config vitest.config.ts tests/unit/auth/admin-mfa-recovery.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-admin-assurance.spec.ts --project=chromium-journeys` | jeder Token/Code höchstens 1 Erfolg; Negativfälle `0` Session-Assurance; Recovery auditiert | Vitest/Playwright/Audit | Security + QA | `PLANNED` |
-| `P25A-AC-03` / `REQ-ADM-007` | P0: stale Grant/Session | PostgreSQL | Grant-/Authenticator-/User-Revocation | nächste Prüfung sperrt sofort | Cache, alte Session, direkter Command, parallel laufende Action | Admin/Security | Guards/Commands | grant/user/authenticator active→revoked, zwei Sessions | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/admin/admin-revocation-postgres.test.ts` | nach Commit der Revocation `0` weitere erlaubte Reads/Writes mit alter Session/Assurance | Transaction-/Audit-Report | Security | `PLANNED` |
-| `P25A-AC-04` / `REQ-ADM-007` | P0: Kollusion/Selbstfreigabe/Lockout | PostgreSQL + E2E | SoD, Vier-Augen, Break-glass | zwei zulässige verschiedene Actors; zeitgebundener Incidentzugriff | gleiche Actor-ID, unvereinbare Duties, missing reason, expired TTL, stiller Legacy-Fallback | Security/Approver | Grant/Privacy/Finance/Trust | Actor A/B, duty conflicts, expired grants | real PostgreSQL + Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/admin/admin-sod-breakglass-postgres.test.ts`; manuell: Device-Loss-/Break-glass-Drill ohne DB-Edit | gleiche Actor-ID `0` Abschluss; Break-glass automatisch widerrufen und 1 Alert; kein Betreiber-Lockout im Drill | SoD-/Incident-/Alert-Record | Security + Management | `PLANNED` |
-| `P25B-AC-01` / `REQ-ID-004` | P0: non-admin Hochrisikoaction via alte Session | Unit + PostgreSQL | StepUpPolicy/-Grant Binding | passender frischer Grant erlaubt genau eine definierte Action | stale/replay/cross-purpose/cross-tenant/cross-resource/role revoked | Candidate/Owner | zentrale Guards/Actions | alle Actionklassen, Company A/B, Candidate A/B | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/auth/step-up-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/security/non-admin-step-up-postgres.test.ts` | Negativfall `0` Wirkung; Grant kann nicht für andere Action/Tenant genutzt werden; Audit vollständig | Policy-/DB-/Audit-Report | Security + Domainowner | `PLANNED` |
-| `P25B-AC-02` / `REQ-ID-004` | P0: Billing/Team/Reveal/Privacy ATO | E2E | reale Hochrisikojourneys | Owner/Candidate steppt up und Aktion wirkt einmal | direkte URL/Action, Cancel, expired challenge, anderer User/Company | Candidate/Employer Owner | Billing, Team, Privacy, Radar | seeded Candidate/Company A/B, stale/current grants | Chromium Desktop + 360 | `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-owner-candidate-step-up.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-owner-candidate-step-up.spec.ts --project=chromium-mobile-360` | je definierter Flow 1 Success; alle bypass/direct/cross-tenant Fälle 0 fachliche Wirkung; Axe serious/critical 0 | Playwright/Axe/Screenshots | Security + Candidate/Employer QA | `PLANNED` |
-| `P25B-AC-03` / `REQ-ID-005` | P0: Recovery/E-Mail-Change übernimmt Konto | PostgreSQL + E2E | Login-E-Mail, Account Recovery, Sessionwiderruf | alte+neue Adresse policygerecht, neue reverified | unverified new mail, replay, attacker support, old session/grants | Candidate/Employer | Account Security/Outbox | verified/unverified/changed addresses, compromised session | real PostgreSQL + Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/security/account-recovery-step-up-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-account-recovery.spec.ts --project=chromium-journeys` | alte Session/Grants nach Abschluss `0` Wirkung; Tokens single-use; beide nötigen Notifications durable | DB-/Outbox-/E2E-Report | Identity + Security | `PLANNED` |
-| `P25C-AC-01` / `REQ-TRUST-001` | P0/P1: Credential Stuffing/ATO unerkannt | Unit + PostgreSQL | Risk Decision Matrix | erlaubte Baseline; erhöhte Signale führen Step-up/Hold/Review | signal replay/poison, geschütztes Attribut, fremder Subject/Tenant | User/System/T&S | Risk Engine | velocity/session/device/complaint fixtures + false positives | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/security/trust-risk-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/trust/risk-decisions-postgres.test.ts` | jede Fixture genau erwarteter Decision-Code; geschützte/proxy-sensitive Inputs `0` Policyeinfluss; 1 Case je Dedupe-Key | Decision-Matrix/DB-Report | Trust & Safety + Privacy + Security | `PLANNED` |
-| `P25C-AC-02` / `REQ-TRUST-001` | P0: kompromittierte VERIFIED Company bleibt sichtbar | PostgreSQL + E2E | Rapid Hold/Revoke | bestätigter Incident sperrt Sessions/Badge/Jobs/Radar/Payment | unbestätigtes Signal allein löscht irreversibel; stale Read/worker delay | T&S/Company/User | Trust Case + Public/Employer/Radar | verified Company, public jobs, Radar, sessions, incident | real PostgreSQL + Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/trust/compromised-company-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-trust-safety.spec.ts --project=chromium-journeys` | nach committed REVOKE nächster Read: Badge/Job/Radar `0` eligible, Sessions/risky actions denied; History/Audit erhalten | Cross-domain-State-/E2E-Report | Trust & Safety + Company/Jobs/Radar | `PLANNED` |
-| `P25C-AC-03` / `REQ-TRUST-001` | P1: Fake-/Duplicate-Job, Scam, Massennachricht | Unit + PostgreSQL | Signal→Case→Hold | begründete Velocity/Complaint/Duplicate-Signale öffnen bounded Case | einzelne legitime Nachricht/ähnlicher Job; Cross-Tenant-Signal; enumeration | Employer/T&S | Jobs/Messaging/Case Queue | fake/legit/near-duplicate jobs, message bursts, complaints | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/trust-safety/scam-signal-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/trust/scam-cases-postgres.test.ts` | Dedupe-Key erzeugt 1 Case; legitime Kontrollgruppe ohne Auto-Revoke; Held Content verschwindet fail-closed | Policy-/Case-/Eligibility-Report | Trust & Safety + Moderation | `PLANNED` |
-| `P25C-AC-04` / `REQ-TRUST-001` | P0/P1: Reveal/Export/Payment Fraud | PostgreSQL | Cross-domain Risk Hold | anomalous flow gehalten und domain-spezifisch reviewed | normale Nutzung, replayed Signal, Support versucht Override | Candidate/Owner/Finance/T&S | Radar/Export/Billing | bounded normal/abuse cohorts, Company A/B | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/trust/high-risk-domain-actions-postgres.test.ts` | High Risk: `0` Reveal/Export/Fulfillment bis Decision; normaler Flow unverändert; Override nur Capability+Step-up+Audit | Cross-domain-/Audit-Report | Trust & Safety + Privacy + Finance | `PLANNED` |
-| `P25C-AC-05` / `REQ-TRUST-001` | P1: False Positive ohne Rechtsbehelf | PostgreSQL + E2E | Appeal/Restore/Expiry | berechtigte Person sieht sicheren Grund, reicht Appeal ein, unabhängiger Review | Caseowner entscheidet eigenen Appeal; Secret-Leak; Restore ohne Reverification | User/T&S Approver | Trust Case/Appeal UI | held/expired/restored cases, Actor A/B | real PostgreSQL + Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/trust/trust-appeal-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-trust-appeal.spec.ts --project=chromium-journeys` | 1 Appeal je offene Decisionversion; gleicher Actor `0` Final Approval; Restore erst nach gültigen Preconditions; keine geheimen Signale im DTO | Appeal-/DTO-/E2E-Report | Trust & Safety + Legal/Privacy | `PLANNED` |
-| `P25-AC-13` / `REQ-QA-003` | P0: unsicherer Legacy-/Teilbackfill | Migration | empty/upgrade/partial/idempotent | minimale explizite Grants und sichere observe-only Daten | Default-All-Grant, orphan Grants, duplicate factors, partial Case | System/DBA | Prisma/PostgreSQL | leere DB + alle Legacyrollen + partial states | isoliertes PostgreSQL | `npm run db:migrate`; `npm run db:migrate:status`; `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase25-security-migration-postgres.test.ts` | Default-All-Grant `0`; Orphans/Duplicates `0`; Wiederholung 0 Zusatzwirkung; Count/Tenant-Abweichung 0 | Migration-/Backfill-Manifest | Security + Data/DBA | `PLANNED` |
-| `P25-AC-14` / `REQ-QA-003` | P1: Sicherheits-UX unzugänglich | E2E + A11y | Enrollment/Step-up/Case/Appeal mobile | alle Zustände per Tastatur/Screenreader | Locked/Error/Expired/Conflict ohne Fokus/Erklärung | Admin/Candidate/Owner/T&S | Security-/Trust-UIs | alle UX-Zustände, Desktop/360 | Chromium Desktop + 360 | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase25-security-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase25-security-quality.spec.ts --project=chromium-mobile-360` | Axe serious/critical 0; kritische Action/Fokus/Status ohne horizontales Clipping; keine Secret-/Risk-Leaks | Playwright/Axe/Screenshots | UX + Accessibility + Security | `PLANNED` |
-| `P25-AC-15` / `REQ-OPS-005` | P0: Alert/Expiry/Revocation fällt aus | Failure/Operations | Worker crash, queue delay, pager | fail-closed Reads schützen trotz Worker-Restart | poison event, delayed alert, duplicate expiry/revoke | System/Ops/T&S | Worker/Queue/Alerts | due grants/cases/revokes + Fault Injection | Staging | `npx vitest run --config vitest.integration.config.ts tests/integration/trust/trust-worker-failure-postgres.test.ts`; manuell: Worker stop/restart, Poison→DLQ, Alert→Ack→Escalation | fachliche Doppelwirkung 0; fail-closed Read unmittelbar; DLQ/age Alert innerhalb freigegebener SLO | Failure-/Pager-/Runbook-Record | Ops + Trust & Safety + Security | `PLANNED` |
+| `P25A-AC-01` / `REQ-ADM-007` | P0: globale Adminvollmacht | Unit + PostgreSQL | Role×Capability×Action | nur explizite aktive Grants erlauben | role=ADMIN allein, fremde Duty, expired/revoked Grant, Direktaufruf | alle Adminrollen | Admin Pages/Commands | jede Rolle, 50 Capabilities, active/expired Grants | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/admin/admin-role-capability-matrix.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/admin/admin-grants-postgres.test.ts` | vollständige Matrix; unzulässige Kombinationen `0` Read/Write; role=ADMIN allein gewährt `0` | Matrix-/DB-Report | Security + Fachowner + QA | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25A-AC-02` / `REQ-ADM-007` | P0: MFA-/Recovery-Bypass | Unit + E2E | WebAuthn/TOTP Enrollment/Login/Recovery | gültiger Faktor und single-use Recovery | falsche RP-ID/Origin, replay, expired challenge, TOTP replay, used code, last factor remove | Admin | Security UI/Auth | Passkey/TOTP/Recovery/Device-Loss Fixtures | Unit + Chromium | `npx vitest run --config vitest.config.ts tests/unit/auth/admin-mfa-recovery.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-admin-assurance.spec.ts --project=chromium-journeys` | jeder Token/Code höchstens 1 Erfolg; Negativfälle `0` Session-Assurance; Recovery auditiert | Vitest/Playwright/Audit | Security + QA | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25A-AC-03` / `REQ-ADM-007` | P0: stale Grant/Session | PostgreSQL | Grant-/Authenticator-/User-Revocation | nächste Prüfung sperrt sofort | Cache, alte Session, direkter Command, parallel laufende Action | Admin/Security | Guards/Commands | grant/user/authenticator active→revoked, zwei Sessions | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/admin/admin-revocation-postgres.test.ts` | nach Commit der Revocation `0` weitere erlaubte Reads/Writes mit alter Session/Assurance | Transaction-/Audit-Report | Security | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25A-AC-04` / `REQ-ADM-007` | P0: Kollusion/Selbstfreigabe/Lockout | PostgreSQL + E2E | SoD, Vier-Augen, Break-glass | zwei zulässige verschiedene Actors; zeitgebundener Incidentzugriff | gleiche Actor-ID, unvereinbare Duties, missing reason, expired TTL, stiller Legacy-Fallback | Security/Approver | Grant/Privacy/Finance/Trust | Actor A/B, duty conflicts, expired grants | real PostgreSQL + Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/admin/admin-sod-breakglass-postgres.test.ts`; manuell: Device-Loss-/Break-glass-Drill ohne DB-Edit | gleiche Actor-ID `0` Abschluss; Break-glass automatisch widerrufen und 1 Alert; kein Betreiber-Lockout im Drill | SoD-/Incident-/Alert-Record | Security + Management | `LOCAL AUTOMATED PASS; EXTERNAL DRILL BLOCKED` |
+| `P25B-AC-01` / `REQ-ID-004` | P0: non-admin Hochrisikoaction via alte Session | Unit + PostgreSQL | StepUpPolicy/-Grant Binding | passender frischer Grant erlaubt genau eine definierte Action | stale/replay/cross-purpose/cross-tenant/cross-resource/role revoked | Candidate/Owner | zentrale Guards/Actions | alle Actionklassen, Company A/B, Candidate A/B | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/auth/step-up-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/security/non-admin-step-up-postgres.test.ts` | Negativfall `0` Wirkung; Grant kann nicht für andere Action/Tenant genutzt werden; Audit vollständig | Policy-/DB-/Audit-Report | Security + Domainowner | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25B-AC-02` / `REQ-ID-004` | P0: Billing/Team/Reveal/Privacy ATO | E2E | reale Hochrisikojourneys | Owner/Candidate steppt up und Aktion wirkt einmal | direkte URL/Action, Cancel, expired challenge, anderer User/Company | Candidate/Employer Owner | Billing, Team, Privacy, Radar | seeded Candidate/Company A/B, stale/current grants | Chromium Desktop + 360 | `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-owner-candidate-step-up.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-owner-candidate-step-up.spec.ts --project=chromium-mobile-360` | je definierter Flow 1 Success; alle bypass/direct/cross-tenant Fälle 0 fachliche Wirkung; Axe serious/critical 0 | Playwright/Axe/Screenshots | Security + Candidate/Employer QA | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25B-AC-03` / `REQ-ID-005` | P0: Recovery/E-Mail-Change übernimmt Konto | PostgreSQL + E2E | Login-E-Mail, Account Recovery, Sessionwiderruf | alte+neue Adresse policygerecht, neue reverified | unverified new mail, replay, attacker support, old session/grants | Candidate/Employer | Account Security/Outbox | verified/unverified/changed addresses, compromised session | real PostgreSQL + Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/security/account-recovery-step-up-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-account-recovery.spec.ts --project=chromium-journeys` | alte Session/Grants nach Abschluss `0` Wirkung; Tokens single-use; beide nötigen Notifications durable | DB-/Outbox-/E2E-Report | Identity + Security | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25C-AC-01` / `REQ-TRUST-001` | P0/P1: Credential Stuffing/ATO unerkannt | Unit + PostgreSQL | Risk Decision Matrix | erlaubte Baseline; erhöhte Signale führen Step-up/Hold/Review | signal replay/poison, geschütztes Attribut, fremder Subject/Tenant | User/System/T&S | Risk Engine | velocity/session/device/complaint fixtures + false positives | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/security/trust-risk-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/trust/risk-decisions-postgres.test.ts` | jede Fixture genau erwarteter Decision-Code; geschützte/proxy-sensitive Inputs `0` Policyeinfluss; 1 Case je Dedupe-Key | Decision-Matrix/DB-Report | Trust & Safety + Privacy + Security | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25C-AC-02` / `REQ-TRUST-001` | P0: kompromittierte VERIFIED Company bleibt sichtbar | PostgreSQL + E2E | Rapid Hold/Revoke | bestätigter Incident sperrt Sessions/Badge/Jobs/Radar/Payment | unbestätigtes Signal allein löscht irreversibel; stale Read/worker delay | T&S/Company/User | Trust Case + Public/Employer/Radar | verified Company, public jobs, Radar, sessions, incident | real PostgreSQL + Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/trust/compromised-company-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-trust-safety.spec.ts --project=chromium-journeys` | nach committed REVOKE nächster Read: Badge/Job/Radar `0` eligible, Sessions/risky actions denied; History/Audit erhalten | Cross-domain-State-/E2E-Report | Trust & Safety + Company/Jobs/Radar | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25C-AC-03` / `REQ-TRUST-001` | P1: Fake-/Duplicate-Job, Scam, Massennachricht | Unit + PostgreSQL | Signal→Case→Hold | begründete Velocity/Complaint/Duplicate-Signale öffnen bounded Case | einzelne legitime Nachricht/ähnlicher Job; Cross-Tenant-Signal; enumeration | Employer/T&S | Jobs/Messaging/Case Queue | fake/legit/near-duplicate jobs, message bursts, complaints | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/trust-safety/scam-signal-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/trust/scam-cases-postgres.test.ts` | Dedupe-Key erzeugt 1 Case; legitime Kontrollgruppe ohne Auto-Revoke; Held Content verschwindet fail-closed | Policy-/Case-/Eligibility-Report | Trust & Safety + Moderation | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25C-AC-04` / `REQ-TRUST-001` | P0/P1: Reveal/Export/Payment Fraud | PostgreSQL | Cross-domain Risk Hold | anomalous flow gehalten und domain-spezifisch reviewed | normale Nutzung, replayed Signal, Support versucht Override | Candidate/Owner/Finance/T&S | Radar/Export/Billing | bounded normal/abuse cohorts, Company A/B | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/trust/high-risk-domain-actions-postgres.test.ts` | High Risk: `0` Reveal/Export/Fulfillment bis Decision; normaler Flow unverändert; Override nur Capability+Step-up+Audit | Cross-domain-/Audit-Report | Trust & Safety + Privacy + Finance | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25C-AC-05` / `REQ-TRUST-001` | P1: False Positive ohne Rechtsbehelf | PostgreSQL + E2E | Appeal/Restore/Expiry | berechtigte Person sieht sicheren Grund, reicht Appeal ein, unabhängiger Review | Caseowner entscheidet eigenen Appeal; Secret-Leak; Restore ohne Reverification | User/T&S Approver | Trust Case/Appeal UI | held/expired/restored cases, Actor A/B | real PostgreSQL + Browser | `npx vitest run --config vitest.integration.config.ts tests/integration/trust/trust-appeal-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase25-trust-appeal.spec.ts --project=chromium-journeys` | 1 Appeal je offene Decisionversion; gleicher Actor `0` Final Approval; Restore erst nach gültigen Preconditions; keine geheimen Signale im DTO | Appeal-/DTO-/E2E-Report | Trust & Safety + Legal/Privacy | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25-AC-13` / `REQ-QA-003` | P0: unsicherer Legacy-/Teilbackfill | Migration | empty/upgrade/partial/idempotent | minimale explizite Grants und sichere observe-only Daten | Default-All-Grant, orphan Grants, duplicate factors, partial Case | System/DBA | leere DB + alle Legacyrollen + partial states | isoliertes PostgreSQL | `npm run db:migrate`; `npm run db:migrate:status`; `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase25-security-migration-postgres.test.ts` | Default-All-Grant `0`; Orphans/Duplicates `0`; Wiederholung 0 Zusatzwirkung; Count/Tenant-Abweichung 0 | Migration-/Backfill-Manifest | Security + Data/DBA | `LOCAL TARGETED PASS; CLEAN-CLONE G3 PENDING` |
+| `P25-AC-14` / `REQ-QA-003` | P1: Sicherheits-UX unzugänglich | E2E + A11y | Enrollment/Step-up/Case/Appeal mobile | alle Zustände per Tastatur/Screenreader | Locked/Error/Expired/Conflict ohne Fokus/Erklärung | Admin/Candidate/Owner/T&S | Security-/Trust-UIs | alle UX-Zustände, Desktop/360 | Chromium Desktop + 360 | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase25-security-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase25-security-quality.spec.ts --project=chromium-mobile-360` | Axe serious/critical 0; kritische Action/Fokus/Status ohne horizontales Clipping; keine Secret-/Risk-Leaks | Playwright/Axe/Screenshots | UX + Accessibility + Security | `LOCAL TARGETED PASS; G3 PENDING` |
+| `P25-AC-15` / `REQ-OPS-005` | P0: Alert/Expiry/Revocation fällt aus | Failure/Operations | Worker crash, queue delay, pager | fail-closed Reads schützen trotz Worker-Restart | poison event, delayed alert, duplicate expiry/revoke | System/Ops/T&S | Worker/Queue/Alerts | due grants/cases/revokes + Fault Injection | Staging | `npx vitest run --config vitest.integration.config.ts tests/integration/trust/trust-worker-failure-postgres.test.ts`; manuell: Worker stop/restart, Poison→DLQ, Alert→Ack→Escalation | fachliche Doppelwirkung 0; fail-closed Read unmittelbar; DLQ/age Alert innerhalb freigegebener SLO | Failure-/Pager-/Runbook-Record | Ops + Trust & Safety + Security | `LOCAL INTEGRATION PASS; STAGING PAGER DRILL BLOCKED` |
+
+### Phase-25 Audit-log extension matrix
+
+Die 26 neuen kanonischen Actions erweitern die unveränderlichen Phase-16-,
+Phase-22- und Phase-24-Matrizen. TypeScript, Prisma-Enum, Metadata-Allowlist
+und die vier Matrizen werden gemeinsam durch den Audit-Contract-Test
+abgeglichen.
+
+| Audit Actions | Owning Workflow |
+| --- | --- |
+| `ADMIN_ROLE_ASSIGNMENT_REQUESTED` / `ADMIN_ROLE_ASSIGNMENT_APPROVED` / `ADMIN_ROLE_ASSIGNMENT_REVOKED` | persistierte Rollenzuweisung mit Vier-Augen-Freigabe und Widerruf |
+| `ADMIN_CAPABILITY_GRANT_REQUESTED` / `ADMIN_CAPABILITY_GRANT_APPROVED` / `ADMIN_CAPABILITY_GRANT_REVOKED` | zeitgebundener Direct Grant mit Vier-Augen-Freigabe und Widerruf |
+| `AUTHENTICATOR_ENROLLMENT_STARTED` / `AUTHENTICATOR_ACTIVATED` / `AUTHENTICATOR_USED` / `AUTHENTICATOR_REVOKED` | Passkey-/TOTP-Enrollment, Nutzung und Faktorwiderruf |
+| `AUTHENTICATOR_RESET_REQUESTED` / `AUTHENTICATOR_RESET_APPROVED` | SoD-gebundener Device-Loss-/Authenticator-Reset |
+| `RECOVERY_CODES_ROTATED` / `RECOVERY_CODE_USED` | gehashte Single-use-Recovery-Codes |
+| `SESSION_ASSURANCE_GRANTED` / `SESSION_ASSURANCE_REVOKED` | aktuelle AAL2-Session-Assurance |
+| `STEP_UP_CHALLENGE_CREATED` / `STEP_UP_GRANT_ISSUED` / `STEP_UP_GRANT_CONSUMED` | actor-/session-/purpose-/action-/tenant-/resource-gebundener Step-up |
+| `BREAK_GLASS_REQUESTED` / `BREAK_GLASS_ACTIVATED` / `BREAK_GLASS_REVOKED` | zeitgebundener Incidentzugriff |
+| `RISK_SIGNAL_RECORDED` / `RISK_DECISION_RECORDED` | minimiertes versioniertes Signal und Policyentscheid |
+| `TRUST_SAFETY_CASE_CHANGED` / `TRUST_SAFETY_APPEAL_CHANGED` | Case, Hold/Revoke, Appeal und unabhängiges Restore |
 
 ## 22. Performance und Scale
 

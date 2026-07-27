@@ -116,7 +116,17 @@ export async function loginWithPassword(
     { environment: dependencies.environment, database: dependencies.database },
   );
   if (!rate.allowed) {
-    await auditRateLimit(dependencies, "LOGIN", rate.audit.scope, now);
+    const riskSubject = await dependencies.database.user.findUnique({
+      where: { emailNormalized: input.email },
+      select: { id: true },
+    });
+    await auditRateLimit(
+      dependencies,
+      "LOGIN",
+      rate.audit.scope,
+      now,
+      riskSubject?.id,
+    );
     await recordAuthSecuritySignal(dependencies, {
       kind: "LOGIN_RATE_LIMITED",
       targetHash: hashAuthIdentifier(
@@ -665,7 +675,17 @@ export async function requestPasswordReset(
     { environment: dependencies.environment, database: dependencies.database },
   );
   if (!rate.allowed) {
-    await auditRateLimit(dependencies, "FORGOT_PASSWORD", rate.audit.scope, now);
+    const riskSubject = await dependencies.database.user.findUnique({
+      where: { emailNormalized: input.email },
+      select: { id: true },
+    });
+    await auditRateLimit(
+      dependencies,
+      "FORGOT_PASSWORD",
+      rate.audit.scope,
+      now,
+      riskSubject?.id,
+    );
     await completeTimingEnvelope(startedAt);
     return Object.freeze({
       ok: true,
@@ -1050,6 +1070,7 @@ async function auditRateLimit(
   preset: "LOGIN" | "REGISTER" | "FORGOT_PASSWORD",
   scope: RateLimitScope | "OPEN_TYPE" | "UNKNOWN",
   now: Date,
+  riskSubjectUserId?: string,
 ) {
   await recordRateLimitDenial(
     {
@@ -1059,6 +1080,7 @@ async function auditRateLimit(
     {
       actorKind: "ANONYMOUS",
       capability: "AUTH_RATE_LIMIT",
+      ...(riskSubjectUserId === undefined ? {} : { riskSubjectUserId }),
       targetId: dependencies.request.correlationId,
       targetType: "SYSTEM_TASK",
     },

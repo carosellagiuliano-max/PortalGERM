@@ -688,6 +688,12 @@ function adminDependencies(): AdminDependencies {
       email: "phase14-eligibility-admin@example.test",
       role: "ADMIN",
       status: "ACTIVE",
+      capabilities: [
+        "ADMIN_USER_MODERATE",
+        "ADMIN_COMPANY_REVIEW",
+        "ADMIN_COMPANY_MODERATE",
+        "ADMIN_RESTRICTION_MANAGE",
+      ] as const,
     }),
     correlationId: randomUUID(),
     database: db(),

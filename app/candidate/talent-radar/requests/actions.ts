@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentAuthContext } from "@/lib/auth/current-user";
 import { hasVerifiedEmailIdentity } from "@/lib/auth/email-verification-policy";
 import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import {
@@ -48,6 +48,8 @@ const grantSchema = z.strictObject({
   confirmationToken: z.string().min(40).max(4_096),
   idempotencyKey: z.string().regex(IDEMPOTENCY_KEY),
   confirmed: z.literal(true),
+  stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
 });
 const revokeSchema = z.strictObject({
   requestId: z.uuid(),
@@ -150,6 +152,8 @@ export async function grantCandidateRadarRevealAction(
     confirmationToken: formData.get("confirmationToken"),
     idempotencyKey: formData.get("idempotencyKey"),
     confirmed: formData.get("confirmed") === "true",
+    stepUpEvidenceId: optionalFormString(formData, "stepUpEvidenceId"),
+    stepUpGrantToken: optionalFormString(formData, "stepUpGrantToken"),
   });
   if (!parsed.success) return errorState(GENERIC_ERROR);
   if (
@@ -170,6 +174,16 @@ export async function grantCandidateRadarRevealAction(
       confirmationToken: parsed.data.confirmationToken,
       idempotencyKey: parsed.data.idempotencyKey,
       now: new Date(),
+      stepUp: {
+        mode: environment.PRIVILEGED_STEP_UP_MODE,
+        sessionId: dependencies.sessionId,
+        ...(parsed.data.stepUpEvidenceId === undefined
+          ? {}
+          : { evidenceId: parsed.data.stepUpEvidenceId }),
+        ...(parsed.data.stepUpGrantToken === undefined
+          ? {}
+          : { grantToken: parsed.data.stepUpGrantToken }),
+      },
     },
     {
       confirmation: revealKeyring(
@@ -287,29 +301,37 @@ async function runLifecycleAction(
 }
 
 async function actionDependencies() {
-  const [user, request] = await Promise.all([
-    getCurrentUser(),
+  const [auth, request] = await Promise.all([
+    getCurrentAuthContext(),
     getAuthRequestContext(),
   ]);
   const environment = getServerEnvironment();
   if (
-    user?.role !== "CANDIDATE" ||
+    auth?.user.role !== "CANDIDATE" ||
     !isValidAuthMutationOrigin(request) ||
     (environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
       !hasVerifiedEmailIdentity({
-        assurance: user.identityAssurance,
-        emailVerifiedAt: user.emailVerifiedAt,
+        assurance: auth.user.identityAssurance,
+        emailVerifiedAt: auth.user.emailVerifiedAt,
       }))
   ) {
     return null;
   }
   return Object.freeze({
-    userId: user.id,
+    userId: auth.user.id,
+    sessionId: auth.session.id,
     correlationId: request.correlationId,
     request,
     environment,
     database: getDatabase(),
   });
+}
+
+function optionalFormString(formData: FormData, name: string) {
+  const value = formData.get(name);
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
 }
 
 async function consumeCandidateActionRateLimit(

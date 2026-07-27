@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Sales Leads" };
 export default async function AdminLeadsPage({ searchParams }: Readonly<{ searchParams: Promise<{ status?: string; owner?: string; overdue?: string }> }>) {
   const [admin, query] = await Promise.all([requireAdminPage(), searchParams]);
   const now = new Date();
-  const dependencies = { actor: { userId: admin.id, email: admin.email, role: admin.role, status: admin.status }, correlationId: "admin-leads-read", database: getDatabase(), now } as const;
+  const dependencies = { actor: { userId: admin.id, email: admin.email, role: admin.role, status: admin.status, capabilities: admin.capabilities }, correlationId: "admin-leads-read", database: getDatabase(), now } as const;
   const rows = await listAdminLeads(dependencies) ?? [];
   const owners = [...new Map(rows.flatMap((lead) => lead.owner === null ? [] : [[lead.owner.id, lead.owner] as const])).values()];
   const leads = rows.filter((lead) => {

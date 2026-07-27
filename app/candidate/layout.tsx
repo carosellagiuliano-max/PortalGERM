@@ -20,6 +20,7 @@ const navigation = [
   { href: "/candidate/alerts", label: "Jobabos" },
   { href: "/candidate/messages", label: "Nachrichten" },
   { href: "/candidate/privacy", label: "Privatsphäre" },
+  { href: "/candidate/settings/security", label: "Sicherheit" },
   { href: "/candidate/notifications", label: "Benachrichtigungen" },
 ] as const;
 

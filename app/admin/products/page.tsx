@@ -28,6 +28,7 @@ export default async function AdminProductsPage() {
       email: user.email,
       role: user.role,
       status: user.status,
+    capabilities: user.capabilities,
     },
     correlationId: crypto.randomUUID(),
     database: getDatabase(),

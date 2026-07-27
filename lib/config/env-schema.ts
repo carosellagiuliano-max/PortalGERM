@@ -115,6 +115,20 @@ const rawEnvironmentSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    ADMIN_MFA_REQUIRED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PRIVILEGED_STEP_UP_MODE: z
+      .enum(["disabled", "observe", "enforce"])
+      .default("disabled"),
+    TRUST_RISK_MODE: z
+      .enum(["observe", "hold"])
+      .default("observe"),
+    BREAK_GLASS_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     NOTIFICATION_OUTBOX_PRODUCERS: z
       .enum(["true", "false"])
       .default("false")
@@ -375,6 +389,37 @@ const rawEnvironmentSchema = z
         path: ["LOGIN_EMAIL_CHANGE"],
         message:
           "requires verified-identity enforcement and notification outbox producers",
+      });
+    }
+
+    if (environment.BREAK_GLASS_ENABLED && !environment.ADMIN_MFA_REQUIRED) {
+      context.addIssue({
+        code: "custom",
+        path: ["BREAK_GLASS_ENABLED"],
+        message: "requires mandatory Admin MFA",
+      });
+    }
+
+    if (
+      environment.PRIVILEGED_STEP_UP_MODE === "enforce" &&
+      !environment.IDENTITY_VERIFICATION_ENFORCEMENT
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVILEGED_STEP_UP_MODE"],
+        message: "requires verified-identity enforcement",
+      });
+    }
+
+    if (
+      environment.ADMIN_MFA_REQUIRED &&
+      productionLike &&
+      !environment.APP_URL.startsWith("https://")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["APP_URL"],
+        message: "must use https when Admin MFA is required",
       });
     }
 
@@ -998,6 +1043,10 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     mailboxEnabled: environment.ENABLE_LOCAL_MOCK_MAILBOX,
     identityVerificationEnforced: environment.IDENTITY_VERIFICATION_ENFORCEMENT,
     loginEmailChangeEnabled: environment.LOGIN_EMAIL_CHANGE,
+    adminMfaRequired: environment.ADMIN_MFA_REQUIRED,
+    privilegedStepUpMode: environment.PRIVILEGED_STEP_UP_MODE,
+    trustRiskMode: environment.TRUST_RISK_MODE,
+    breakGlassEnabled: environment.BREAK_GLASS_ENABLED,
     notificationOutboxProducersEnabled:
       environment.NOTIFICATION_OUTBOX_PRODUCERS,
     emailProviderMode: environment.EMAIL_PROVIDER_MODE,

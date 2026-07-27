@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Admin-Übersicht" };
 
 export default async function AdminPage({ searchParams }: Readonly<{ searchParams: Promise<{ q?: string }> }>) {
   const [user, query] = await Promise.all([requireAdminPage(), searchParams]);
-  const dependencies = { actor: { userId: user.id, email: user.email, role: user.role, status: user.status }, correlationId: "admin-overview-read", database: getDatabase(), now: new Date() } as const;
+  const dependencies = { actor: { userId: user.id, email: user.email, role: user.role, status: user.status, capabilities: user.capabilities }, correlationId: "admin-overview-read", database: getDatabase(), now: new Date() } as const;
   const [overview, search, financial] = await Promise.all([getAdminOverview(dependencies), query.q ? searchAdmin(dependencies, query.q) : null, getAdminFinancialMetrics(dependencies)]);
   if (overview === null || financial === null) return null;
   const metrics = overview.metrics;

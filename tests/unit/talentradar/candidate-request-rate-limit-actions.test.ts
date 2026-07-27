@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   database: { marker: "database" },
   environment: { marker: "environment" },
   getAuthRequestContext: vi.fn(),
-  getCurrentUser: vi.fn(),
+  getCurrentAuthContext: vi.fn(),
   getDatabase: vi.fn(),
   getServerEnvironment: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/auth/current-user", () => ({
-  getCurrentUser: mocks.getCurrentUser,
+  getCurrentAuthContext: mocks.getCurrentAuthContext,
 }));
 vi.mock("@/lib/auth/rate-limit-runtime", () => ({
   consumeRequestRateLimit: mocks.consumeRequestRateLimit,
@@ -57,9 +57,14 @@ const REQUEST = Object.freeze({
 describe("candidate Radar request rate-limit denial", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getCurrentUser.mockResolvedValue({
-      id: USER_ID,
-      role: "CANDIDATE",
+    mocks.getCurrentAuthContext.mockResolvedValue({
+      user: {
+        id: USER_ID,
+        role: "CANDIDATE",
+      },
+      session: {
+        id: "93000000-0000-4000-8000-000000000004",
+      },
     });
     mocks.getAuthRequestContext.mockResolvedValue(REQUEST);
     mocks.isValidAuthMutationOrigin.mockReturnValue(true);

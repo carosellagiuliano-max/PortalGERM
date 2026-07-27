@@ -16,6 +16,7 @@ export const planCheckoutIntentSchema = z.strictObject({
   planSlug: z.enum(["starter", "pro"]),
   paymentOrderId: z.uuid().optional(),
   stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
   retainedMembershipIds: z
     .array(z.uuid())
     .min(1)
@@ -31,6 +32,7 @@ const contactPackCheckoutIntentSchema = z.strictObject({
   paymentOrderId: z.uuid().optional(),
   quantity: z.coerce.number().int().min(1).max(10).default(1),
   stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
   idempotencyKey: billingIdempotencyKeySchema,
 });
 
@@ -41,6 +43,7 @@ const boostCheckoutIntentSchema = z.strictObject({
   quantity: z.coerce.number().pipe(z.literal(1)).default(1),
   targetJobId: z.uuid(),
   stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
   idempotencyKey: billingIdempotencyKeySchema,
 });
 
@@ -51,6 +54,7 @@ const additionalJobCheckoutIntentSchema = z.strictObject({
   quantity: z.coerce.number().pipe(z.literal(1)).default(1),
   targetJobId: z.uuid(),
   stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
   idempotencyKey: billingIdempotencyKeySchema,
 });
 
@@ -61,6 +65,7 @@ const importSetupCheckoutIntentSchema = z.strictObject({
   quantity: z.coerce.number().pipe(z.literal(1)).default(1),
   importSetupApprovalId: z.uuid(),
   stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
   idempotencyKey: billingIdempotencyKeySchema,
 });
 
@@ -100,6 +105,12 @@ export type BillingDependencies = Readonly<{
   database: DatabaseClient;
   paymentProvider: PaymentProvider;
   emailProvider: EmailProvider;
+  stepUp?: Readonly<{
+    mode: "disabled" | "observe" | "enforce";
+    sessionId: string;
+    globalRole: "EMPLOYER" | "RECRUITER";
+  }>;
+  trustRiskMode?: "observe" | "hold";
   realPayment?: Readonly<{
     appUrl: string;
     environment: "local" | "ci" | "staging";

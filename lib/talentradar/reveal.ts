@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { writeRequiredAudit } from "@/lib/audit/log";
+import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { RevealField } from "@/lib/generated/prisma/enums";
@@ -49,6 +50,14 @@ const grantCommandSchema = z.strictObject({
   confirmationToken: z.string().min(40).max(4_096),
   idempotencyKey: z.string().trim().min(8).max(128),
   now: z.date(),
+  stepUp: z
+    .strictObject({
+      mode: z.enum(["disabled", "observe", "enforce"]),
+      sessionId: UUID,
+      evidenceId: UUID.optional(),
+      grantToken: z.string().min(32).max(128).optional(),
+    })
+    .optional(),
 });
 const revokeCommandSchema = z.strictObject({
   actorUserId: UUID,
@@ -325,6 +334,32 @@ export async function grantRevealFields(
         return Object.freeze({
           ok: false as const,
           code: "ALREADY_REVEALED" as const,
+        });
+      }
+      if (
+        command.stepUp?.mode === "enforce" &&
+        (command.stepUp.evidenceId === undefined ||
+          command.stepUp.grantToken === undefined ||
+          !(await consumeStepUpGrant(transaction, {
+            evidenceId: command.stepUp.evidenceId,
+            grantToken: command.stepUp.grantToken,
+            actor: {
+              userId: command.actorUserId,
+              sessionId: command.stepUp.sessionId,
+              role: "CANDIDATE",
+              status: "ACTIVE",
+            },
+            purpose: "CANDIDATE_TRUST",
+            action: "IDENTITY_REVEAL",
+            tenantId: authorization.companyId,
+            resourceId: command.contactRequestId,
+            correlationId: token.tokenId,
+            now: command.now,
+          })))
+      ) {
+        return Object.freeze({
+          ok: false as const,
+          code: "INVALID_CONFIRMATION" as const,
         });
       }
       const grantId = existingGrant?.id ?? randomUUID();

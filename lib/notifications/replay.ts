@@ -31,7 +31,7 @@ export async function replayDeadLetterNotification(
 ): Promise<
   AdminCommandResult<Readonly<{ outboxId: string; nextAttempt: number }>>
 > {
-  if (!requireCapability(dependencies, "ADMIN_SYSTEM_TASK_MANAGE")) {
+  if (!(await requireCapability(dependencies, "ADMIN_SYSTEM_TASK_MANAGE"))) {
     return adminFailure("FORBIDDEN");
   }
   if (

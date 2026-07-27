@@ -26,6 +26,44 @@ const EXPIRED_RESET_NATURAL_KEY =
   `${CANDIDATE_EMAIL}:expired-phase-06` as const;
 const USED_RESET_NATURAL_KEY =
   `${EMPLOYER_EMAIL}:used-phase-06` as const;
+const ADMIN_EMAIL = "admin@demo.ch" as const;
+export const PHASE25_SECURITY_ADMIN_EMAIL =
+  "security-admin@demo.swisstalenthub.test" as const;
+export const PHASE25_PRIVACY_VERIFIER_EMAIL =
+  "privacy-verifier@demo.swisstalenthub.test" as const;
+
+export const PHASE25_ADMIN_ROLE_IDS = Object.freeze({
+  PLATFORM_OPERATOR: "25000000-0000-4000-8000-000000000001",
+  JOB_MODERATOR: "25000000-0000-4000-8000-000000000002",
+  SUPPORT_AGENT: "25000000-0000-4000-8000-000000000003",
+  CONTENT_SUPPLY_OPERATOR: "25000000-0000-4000-8000-000000000004",
+  FINANCE_OPERATOR: "25000000-0000-4000-8000-000000000005",
+  PRIVACY_VERIFIER: "25000000-0000-4000-8000-000000000006",
+  PRIVACY_PROCESSOR: "25000000-0000-4000-8000-000000000007",
+  SECURITY_ADMIN: "25000000-0000-4000-8000-000000000008",
+  TRUST_SAFETY_REVIEWER: "25000000-0000-4000-8000-000000000009",
+  TRUST_SAFETY_APPROVER: "25000000-0000-4000-8000-000000000010",
+} as const);
+
+export const PHASE25_ADMIN_ROLE_CODES = Object.freeze(
+  Object.keys(PHASE25_ADMIN_ROLE_IDS) as Array<
+    keyof typeof PHASE25_ADMIN_ROLE_IDS
+  >,
+);
+const PHASE25_ADMIN_EMAIL_BY_ROLE = Object.freeze({
+  PLATFORM_OPERATOR: ADMIN_EMAIL,
+  JOB_MODERATOR: ADMIN_EMAIL,
+  SUPPORT_AGENT: ADMIN_EMAIL,
+  CONTENT_SUPPLY_OPERATOR: ADMIN_EMAIL,
+  FINANCE_OPERATOR: ADMIN_EMAIL,
+  PRIVACY_VERIFIER: PHASE25_PRIVACY_VERIFIER_EMAIL,
+  PRIVACY_PROCESSOR: ADMIN_EMAIL,
+  SECURITY_ADMIN: PHASE25_SECURITY_ADMIN_EMAIL,
+  TRUST_SAFETY_REVIEWER: ADMIN_EMAIL,
+  TRUST_SAFETY_APPROVER: PHASE25_SECURITY_ADMIN_EMAIL,
+} as const satisfies Readonly<
+  Record<(typeof PHASE25_ADMIN_ROLE_CODES)[number], string>
+>);
 
 export const AUTH_RBAC_SEED_IDENTITIES: readonly SeedIdentityRecord[] =
   Object.freeze([
@@ -42,6 +80,16 @@ export const AUTH_RBAC_SEED_IDENTITIES: readonly SeedIdentityRecord[] =
     createSeedIdentity("session", EXPIRED_SESSION_NATURAL_KEY),
     createSeedIdentity("password-reset-token", EXPIRED_RESET_NATURAL_KEY),
     createSeedIdentity("password-reset-token", USED_RESET_NATURAL_KEY),
+    createSeedIdentity("user", PHASE25_SECURITY_ADMIN_EMAIL),
+    createSeedIdentity("credential", PHASE25_SECURITY_ADMIN_EMAIL),
+    createSeedIdentity("user", PHASE25_PRIVACY_VERIFIER_EMAIL),
+    createSeedIdentity("credential", PHASE25_PRIVACY_VERIFIER_EMAIL),
+    ...PHASE25_ADMIN_ROLE_CODES.map((roleCode) =>
+      createSeedIdentity(
+        "admin-role-assignment",
+        `${PHASE25_ADMIN_EMAIL_BY_ROLE[roleCode]}:${roleCode}`,
+      ),
+    ),
   ]);
 
 export type AuthRbacSeedFixtures = ReturnType<typeof buildAuthRbacSeedFixtures>;
@@ -51,6 +99,7 @@ export function buildAuthRbacSeedFixtures(anchorAt: Date) {
   const recruiter = requireDemoAccount(RECRUITER_EMAIL);
   const candidate = requireDemoAccount(CANDIDATE_EMAIL);
   const employer = requireDemoAccount(EMPLOYER_EMAIL);
+  const admin = requireDemoAccount(ADMIN_EMAIL);
   const companyId = stableSeedId("company", RADAR_DEMO_COMPANY_SLUG);
   const companyOwnerUserId = stableSeedId(
     "user",
@@ -140,6 +189,51 @@ export function buildAuthRbacSeedFixtures(anchorAt: Date) {
       usedAt: addHours(anchorAt, -12),
       requestedUserAgent: "Phase-06 deterministic used-reset fixture",
     }),
+    phase25AdminActors: Object.freeze([
+      Object.freeze({
+        id: stableSeedId("user", PHASE25_SECURITY_ADMIN_EMAIL),
+        credentialId: stableSeedId(
+          "credential",
+          PHASE25_SECURITY_ADMIN_EMAIL,
+        ),
+        email: PHASE25_SECURITY_ADMIN_EMAIL,
+        name: "Demo Security Administration",
+        createdAt: addDays(anchorAt, -1),
+      }),
+      Object.freeze({
+        id: stableSeedId("user", PHASE25_PRIVACY_VERIFIER_EMAIL),
+        credentialId: stableSeedId(
+          "credential",
+          PHASE25_PRIVACY_VERIFIER_EMAIL,
+        ),
+        email: PHASE25_PRIVACY_VERIFIER_EMAIL,
+        name: "Demo Privacy Verification",
+        createdAt: addDays(anchorAt, -1),
+      }),
+    ]),
+    adminRoleAssignments: Object.freeze(
+      PHASE25_ADMIN_ROLE_CODES.map((roleCode) =>
+        Object.freeze({
+          id: stableSeedId(
+            "admin-role-assignment",
+            `${PHASE25_ADMIN_EMAIL_BY_ROLE[roleCode]}:${roleCode}`,
+          ),
+          naturalKey: `${PHASE25_ADMIN_EMAIL_BY_ROLE[roleCode]}:${roleCode}`,
+          userId:
+            PHASE25_ADMIN_EMAIL_BY_ROLE[roleCode] === ADMIN_EMAIL
+              ? admin.id
+              : stableSeedId(
+                  "user",
+                  PHASE25_ADMIN_EMAIL_BY_ROLE[roleCode],
+                ),
+          adminRoleId: PHASE25_ADMIN_ROLE_IDS[roleCode],
+          roleCode,
+          reasonCode: "PHASE25_DEMO_EXPLICIT_ROLE",
+          validFrom: addDays(anchorAt, -1),
+          validTo: addDays(anchorAt, 365),
+        }),
+      ),
+    ),
   });
 }
 

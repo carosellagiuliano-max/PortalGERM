@@ -13,6 +13,7 @@ import {
 } from "@/lib/candidate/profile";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
 import { listCandidateRadarRequests } from "@/lib/talentradar/candidate-request-view";
 
 export const metadata: Metadata = {
@@ -66,7 +67,13 @@ export default async function CandidateTalentRadarPage() {
               Einwilligungsversion: {TALENT_RADAR_VISIBILITY_NOTICE_V1.noticeVersion}
             </p>
           </div>
-          <RadarVisibilityForm consentGranted={workspace.radarConsentGranted} />
+          <RadarVisibilityForm
+            consentGranted={workspace.radarConsentGranted}
+            candidateUserId={user.id}
+            stepUpRequired={
+              getServerEnvironment().PRIVILEGED_STEP_UP_MODE === "enforce"
+            }
+          />
           {workspace.radarState === "INCOMPLETE" ? (
             <Link href="/candidate/jobpass" className={buttonVariants({ variant: "outline", className: "w-fit" })}>
               SwissJobPass vervollständigen

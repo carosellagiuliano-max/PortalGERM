@@ -173,7 +173,7 @@ export async function getAdminFunnelDashboard(
   dependencies: AdminDependencies,
   options: Readonly<{ demoMode?: boolean }> = {},
 ): Promise<AdminFunnelDashboard | null> {
-  if (!requireCapability(dependencies, "ADMIN_ANALYTICS_READ")) return null;
+  if (!(await requireCapability(dependencies, "ADMIN_ANALYTICS_READ"))) return null;
   const now = adminNow(dependencies.now);
   const demoMode = options.demoMode === true;
   const clusters = await loadLaunchClusterOptions(dependencies, now, demoMode);

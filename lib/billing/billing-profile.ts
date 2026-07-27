@@ -10,16 +10,20 @@ import {
   canManageBillingProfile,
   normalizeBillingNow,
   type BillingActor,
+  type BillingDependencies,
   type BillingCommandResult,
 } from "@/lib/billing/contracts";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { billingAddressSchema } from "@/lib/validation/billing";
+import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 
 const BILLING_AUDIT_RETENTION_MS = 10 * 365 * 86_400_000;
 
 const billingProfileCommandSchema = billingAddressSchema.extend({
   expectedVersion: z.coerce.number().int().positive().nullable().optional(),
+  stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
 });
 
 export type BillingProfileView = Readonly<{
@@ -40,6 +44,7 @@ export async function saveCompanyBillingProfile(
     actor: BillingActor;
     correlationId: string;
     database: DatabaseClient;
+    stepUp?: BillingDependencies["stepUp"];
     now?: Date;
   }>,
 ): Promise<BillingCommandResult<BillingProfileView>> {
@@ -76,6 +81,31 @@ export async function saveCompanyBillingProfile(
         (current !== null && current.version !== expectedVersion)
       ) {
         return billingFailure("CONFLICT");
+      }
+      if (
+        dependencies.stepUp?.mode === "enforce" &&
+        !(
+          parsed.data.stepUpEvidenceId !== undefined &&
+          parsed.data.stepUpGrantToken !== undefined &&
+          (await consumeStepUpGrant(transaction, {
+            evidenceId: parsed.data.stepUpEvidenceId,
+            grantToken: parsed.data.stepUpGrantToken,
+            actor: {
+              userId: dependencies.actor.userId,
+              sessionId: dependencies.stepUp.sessionId,
+              role: dependencies.stepUp.globalRole,
+              status: "ACTIVE",
+            },
+            purpose: "EMPLOYER_BILLING",
+            action: "BILLING_PROFILE_CHANGE",
+            tenantId: dependencies.actor.companyId,
+            resourceId: dependencies.actor.companyId,
+            correlationId: dependencies.correlationId,
+            now,
+          }))
+        )
+      ) {
+        return billingFailure("STEP_UP_REQUIRED");
       }
 
       const data = {

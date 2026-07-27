@@ -611,7 +611,8 @@ flowchart LR
   version, DPA/contract, owner, health, sandbox/LIVE approval and rollback;
 - handler/provider activation is exact to environment, use case, version and
   deployment digest, with no Real→Mock fallback; Production mutation remains
-  owned by Phase 25;
+  disabled until Phase-25-Assurance plus Phase-32 Provider-/Staging-G4 auf
+  demselben Artefakt freigegeben sind;
 - metrics include queue age/depth/arrival/service rate, retry/DLQ, SLO,
   handling time and capacity; logs remain redacted;
 - manual Commands and worker handlers call the same owning use cases; local
@@ -643,15 +644,29 @@ flowchart LR
 
 ### 17.5 Privileged security, fraud and company trust
 
-- persisted AdminRole/RoleCapabilityAssignment with separation of duties,
-  dual approval and time-bounded break-glass;
-- shared, versioned risk decisions for credential stuffing, ATO,
-  compromised Company, velocity/mass messaging, repeated complaints,
-  Reveal/Export anomaly, duplicate/fake Job and payment fraud;
+- Phase 25 implementiert persistierte `AdminRole`,
+  `AdminRoleCapability`, zeitgebundene Assignments/Direktgrants,
+  deny-by-default Resolution, konfliktfreie Duties, Vier-Augen-Approval und
+  gegatetes Break-glass; die globale `ADMIN`-Rolle besitzt allein keine
+  Fachcapability;
+- Passkey/WebAuthn, verschlüsseltes TOTP, gehashte Single-use-Recovery-Codes,
+  `SessionAssurance`, Challenge und opaque Step-up-Evidence bilden einen
+  gemeinsamen actor-/session-/purpose-/action-/tenant-/resource-gebundenen
+  AAL2-Vertrag;
+- `TRUST_RISK_POLICY_V1` und persistierte `RiskSignal`,
+  `TrustRiskDecision`, `TrustSafetyCase/Event/Appeal` modellieren Credential
+  Stuffing, ATO, compromised Company, Velocity/Mass Messaging, wiederholte
+  Beschwerden, Reveal/Export-Anomalie, Duplicate/Fake Job und Payment Fraud;
+- scope-basierte Containment-Effekte sperren Sessions/Assurance, Company,
+  Verification, Public Jobs, Radar-Kontakte und ausstehende Paymentwirkung
+  idempotent; aktuelle Reads bleiben auch bei Worker-Verzögerung fail-closed;
 - company evidence is structured, sourced, expiring and re-reviewable;
-  verification, Badge, public Jobs and Radar access revoke consistently;
+  die fachliche Reverification/Badge-Projektion bleibt Phase 26;
 - review, hold, revoke, appeal and false-positive correction append events and
-  audits without exposing secret risk weights.
+  audits without exposing secret risk weights. Alle Phase-25-Flags bleiben
+  standardmässig `disabled` beziehungsweise `observe`; Production-RP-ID,
+  benannte getrennte Owner, Risk-/DSFA-Freigabe, Reviewer-/On-call-Kapazität
+  und Staging-G4 bleiben extern.
 
 ### 17.6 Search, learning and freshness
 
@@ -669,23 +684,30 @@ flowchart LR
   feed the one public Eligibility predicate used by Search, Sitemap, Alerts,
   Recommendations, Boost and Analytics.
 
-## 18. Planned route and process delta
+## 18. Route and process delta
 
-The actual route inventory remains unchanged until implementation. The
-normative planned delta is maintained in
+The actual route inventory is generated from the implementation. The
+normative current and planned delta is maintained in
 [`route-role-matrix.md`](./route-role-matrix.md) and must include phase,
 launchclass, role/capability, tenant/owner guard, data class, UX states,
 feature flag, owning test and activation gate.
 
-Expected route families, subject to the owning ADR and phase:
+Implemented route families through Phase 25:
 
-- email verify/resend, login-email change and security/step-up settings;
+- email verify/resend, login-email change and Candidate-/Employer-/Admin-
+  Security-/Step-up settings;
 - private document upload/finalize/download/delete;
 - public legal/terms/privacy/imprint pages and secure export artifact access;
-- Admin roles/security/Trust-&-Safety/provider/worker operations;
+- Admin roles/grants/authenticators/break-glass and Trust-&-Safety
+  Queue/Detail/Appeal;
 - payment webhook is implemented by Phase 24 and remains behind explicit
   test-PSP config, ProviderActivation and independent ingestion/projection
   switches;
+- provider/worker operations are implemented read-only beziehungsweise über
+  den Phase-23-Handlervertrag; Production-Replay und Pager bleiben deaktiviert.
+
+Still planned, subject to the owning ADR and phase:
+
 - Employer job reconfirm/fill and public/candidate unavailable-report entry;
 - central notification preferences.
 

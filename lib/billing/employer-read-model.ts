@@ -46,6 +46,7 @@ export type BillingProfileReadModel = Readonly<{
 
 export type EmployerBillingOverview = Readonly<{
   plan: Readonly<{
+    subscriptionId: string | null;
     code: string;
     name: string;
     monthlyNetRappen: number;
@@ -240,7 +241,8 @@ export async function getEmployerBillingOverview(
   );
 
   const plan = subscription === null
-    ? {
+      ? {
+        subscriptionId: null,
         code: freePlan.plan.code,
         name: freePlan.plan.name,
         monthlyNetRappen: freePlan.netPriceRappen ?? 0,
@@ -250,6 +252,7 @@ export async function getEmployerBillingOverview(
         pendingChange: null,
       }
     : {
+        subscriptionId: subscription.id,
         code: subscription.planVersion.plan.code,
         name: subscription.planVersion.plan.name,
         monthlyNetRappen: subscription.monthlyEquivalentRappenSnapshot,

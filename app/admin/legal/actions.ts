@@ -31,6 +31,7 @@ export async function adminLegalAction(formData: FormData): Promise<void> {
       email: admin.email,
       role: admin.role,
       status: admin.status,
+    capabilities: admin.capabilities,
     },
     correlationId: request.correlationId,
     database: getDatabase(),

@@ -6,7 +6,7 @@ import type { DatabaseClient } from "@/lib/db/factory";
 import { requireCapability, type AdminDependencies } from "@/lib/admin/common";
 
 export async function getAdminOverview(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_OVERVIEW_READ")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_OVERVIEW_READ")) return null;
   const now = dependencies.now ?? new Date();
   const ageingJobBoundary = new Date(now.getTime() - 48 * 3_600_000);
   const leadBoundary = new Date(now.getTime() - 24 * 3_600_000);
@@ -25,7 +25,7 @@ export async function getAdminOverview(dependencies: AdminDependencies) {
 }
 
 export async function searchAdmin(dependencies: AdminDependencies, rawQuery: string) {
-  if (!requireCapability(dependencies, "ADMIN_GLOBAL_SEARCH")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_GLOBAL_SEARCH")) return null;
   const query = rawQuery.trim().slice(0, 160);
   if (query.length < 2) return Object.freeze({ jobs: [], companies: [], users: [] });
   const isUuid = z.uuid().safeParse(query).success;

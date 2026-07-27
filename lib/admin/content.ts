@@ -22,7 +22,7 @@ import { CLUSTER_LAUNCH_POLICY_V1 } from "@/lib/seo/cluster-launch-policy";
 import { trimmedString } from "@/lib/validation/common";
 
 export async function listAdminContent(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) return null;
   const [pages, assessments, cantons, categories] = await Promise.all([
     dependencies.database.contentPage.findMany({ orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: 200, select: { id: true, slug: true, locale: true, type: true, canonicalPath: true, currentPublishedRevisionId: true, updatedAt: true, revisions: { orderBy: [{ revisionNumber: "desc" }], take: 1, select: { id: true, revisionNumber: true, status: true, title: true, version: true, createdAt: true } } } }),
     dependencies.database.clusterLaunchAssessment.findMany({ orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }], take: 100, select: { id: true, policyVersion: true, evaluatedAt: true, validUntil: true, status: true, liveJobCount: true, activeCandidateCount: true, activeEmployerCount: true, responseRateBasisPoints: true, contentCoverageBasisPoints: true, medianApplicationsTimes2: true, evidenceHash: true, evidenceWindowStart: true, evidenceWindowEnd: true, canton: { select: { name: true, code: true } }, category: { select: { name: true } } } }),
@@ -33,7 +33,7 @@ export async function listAdminContent(dependencies: AdminDependencies) {
 }
 
 export async function getAdminContentPage(dependencies: AdminDependencies, pageId: string) {
-  if (!requireCapability(dependencies, "ADMIN_CONTENT_MANAGE") || !z.uuid().safeParse(pageId).success) return null;
+  if (!await requireCapability(dependencies, "ADMIN_CONTENT_MANAGE") || !z.uuid().safeParse(pageId).success) return null;
   return dependencies.database.contentPage.findUnique({ where: { id: pageId }, select: { id: true, slug: true, locale: true, type: true, canonicalPath: true, currentPublishedRevisionId: true, dataProvenance: true, revisions: { orderBy: [{ revisionNumber: "desc" }], select: { id: true, revisionNumber: true, status: true, title: true, excerpt: true, body: true, contentHash: true, version: true, reviewedAt: true, publishedAt: true, createdAt: true } }, events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { kind: true, actorUserId: true, reasonCode: true, createdAt: true } } } });
 }
 
@@ -63,7 +63,7 @@ export function sanitizeAdminMarkdown(value: string): string {
 export async function saveContentDraft(raw: unknown, dependencies: AdminDependencies) {
   const parsed = draftSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const body = sanitizeAdminMarkdown(parsed.data.body);
   if (body.length < 20 || /<script|onerror\s*=|javascript\s*:/iu.test(body)) return adminFailure("INVALID_INPUT");
@@ -101,7 +101,7 @@ const lifecycleSchema = z.strictObject({ revisionId: z.uuid(), expectedVersion: 
 export async function transitionContentRevision(raw: unknown, dependencies: AdminDependencies) {
   const parsed = lifecycleSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey(`admin-content-${parsed.data.action.toLowerCase()}`, parsed.data.idempotencyKey);
   const rule = parsed.data.action === "SUBMIT" ? { from: "DRAFT" as const, to: "IN_REVIEW" as const, kind: "SUBMITTED_FOR_REVIEW" as const, audit: "CONTENT_REVIEWED" as const }
@@ -131,7 +131,7 @@ export async function transitionContentRevision(raw: unknown, dependencies: Admi
 }
 
 export async function getClusterAssessmentDetail(dependencies: AdminDependencies, assessmentId: string) {
-  if (!requireCapability(dependencies, "ADMIN_CONTENT_MANAGE") || !z.uuid().safeParse(assessmentId).success) return null;
+  if (!await requireCapability(dependencies, "ADMIN_CONTENT_MANAGE") || !z.uuid().safeParse(assessmentId).success) return null;
   return dependencies.database.clusterLaunchAssessment.findUnique({ where: { id: assessmentId }, select: { id: true, policyVersion: true, evaluatedAt: true, evidenceWindowStart: true, evidenceWindowEnd: true, liveJobCount: true, activeCandidateCount: true, activeEmployerCount: true, responseRateBasisPoints: true, contentCoverageBasisPoints: true, medianApplicationsTimes2: true, dataProvenance: true, evidenceHash: true, validUntil: true, status: true, productApprovedByUserId: true, productApprovedAt: true, opsApprovedByUserId: true, opsApprovedAt: true, activatedAt: true, revokedAt: true, canton: { select: { code: true, name: true } }, category: { select: { name: true, slug: true } }, events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { kind: true, reasonCode: true, createdAt: true } } } });
 }
 
@@ -165,7 +165,7 @@ export async function transitionClusterLaunch(raw: unknown, dependencies: AdminD
   const parsed = clusterActionSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
   const capability: AdminCapability = parsed.data.action === "PRODUCT_APPROVE" ? "ADMIN_CLUSTER_PRODUCT_APPROVE" : parsed.data.action === "OPS_APPROVE" ? "ADMIN_CLUSTER_OPS_APPROVE" : "ADMIN_CLUSTER_ACTIVATE";
-  if (!requireCapability(dependencies, capability)) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, capability)) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey(`admin-cluster-${parsed.data.action.toLowerCase()}`, parsed.data.idempotencyKey);
   try {
@@ -211,7 +211,7 @@ const clusterExpirySchema = z.strictObject({ idempotencyKey: z.uuid() });
 export async function projectExpiredClusterLaunches(raw: unknown, dependencies: AdminDependencies) {
   const parsed = clusterExpirySchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_CLUSTER_ACTIVATE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_CLUSTER_ACTIVATE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const prefix = operationKey("admin-cluster-expire", parsed.data.idempotencyKey);
   try {

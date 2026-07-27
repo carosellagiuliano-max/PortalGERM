@@ -8,7 +8,7 @@ const OPEN_WORK_STATUSES = ["PENDING", "RETRY", "LEASED", "PAUSED"] as const;
 export async function getRedactedOperationsOverview(
   dependencies: AdminDependencies,
 ) {
-  if (!requireCapability(dependencies, "ADMIN_OPS_READ")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_OPS_READ")) return null;
   const environment = process.env.APP_ENV ?? "local";
   const [
     queueGroups,

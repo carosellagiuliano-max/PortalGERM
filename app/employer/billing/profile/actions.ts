@@ -20,7 +20,20 @@ const PROFILE_FIELDS = new Set([
   "uid",
   "vatNumber",
   "expectedVersion",
+  "stepUpEvidenceId",
+  "stepUpGrantToken",
 ]);
+const REQUIRED_PROFILE_FIELDS = [
+  "legalName",
+  "billingContactEmail",
+  "street",
+  "postalCode",
+  "city",
+  "countryCode",
+  "uid",
+  "vatNumber",
+  "expectedVersion",
+] as const;
 
 export async function saveBillingProfileAction(
   _state: BillingActionState,
@@ -33,7 +46,9 @@ export async function saveBillingProfileAction(
   const values = Object.fromEntries(
     [...PROFILE_FIELDS].map((field) => [field, readSingleFormString(formData, field)]),
   ) as Record<string, string | null>;
-  if (Object.values(values).some((value) => value === null)) return invalidState();
+  if (REQUIRED_PROFILE_FIELDS.some((field) => values[field] === null)) {
+    return invalidState();
+  }
   if (values.countryCode !== "CH") return invalidState();
 
   const expectedVersion = values.expectedVersion === ""
@@ -50,6 +65,12 @@ export async function saveBillingProfileAction(
       uid: emptyToUndefined(values.uid ?? null),
       vatNumber: emptyToUndefined(values.vatNumber ?? null),
       expectedVersion,
+      ...(values.stepUpEvidenceId
+        ? { stepUpEvidenceId: values.stepUpEvidenceId }
+        : {}),
+      ...(values.stepUpGrantToken
+        ? { stepUpGrantToken: values.stepUpGrantToken }
+        : {}),
     },
     dependencies,
   );
@@ -92,6 +113,13 @@ function profileError(code: string): BillingActionState {
   }
   if (code === "INVALID_INPUT") return invalidState();
   if (code === "FORBIDDEN" || code === "NOT_FOUND") return deniedState();
+  if (code === "STEP_UP_REQUIRED") {
+    return Object.freeze({
+      status: "error",
+      message:
+        "Die frische, an dieses Rechnungsprofil gebundene Sicherheitsbestätigung fehlt oder wurde bereits verwendet.",
+    });
+  }
   return Object.freeze({
     status: "error",
     message: "Das Rechnungsprofil konnte nicht gespeichert werden.",

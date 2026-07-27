@@ -64,6 +64,7 @@ export default async function AdminAnalyticsPage({
       email: user.email,
       role: user.role,
       status: user.status,
+    capabilities: user.capabilities,
     },
     correlationId: "admin-analytics-read",
     database: getDatabase(),

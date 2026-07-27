@@ -87,7 +87,7 @@ export async function createLegalDraft(
   input: unknown,
   dependencies: AdminDependencies,
 ): Promise<AdminCommandResult<Readonly<{ revisionId: string }>>> {
-  if (!requireCapability(dependencies, "ADMIN_LEGAL_DRAFT")) {
+  if (!(await requireCapability(dependencies, "ADMIN_LEGAL_DRAFT"))) {
     return adminFailure("FORBIDDEN");
   }
   const parsed = draftSchema.safeParse(input);
@@ -163,7 +163,7 @@ export async function reviewLegalRevision(
   input: unknown,
   dependencies: AdminDependencies,
 ): Promise<AdminCommandResult<Readonly<{ revisionId: string; status: string }>>> {
-  if (!requireCapability(dependencies, "ADMIN_LEGAL_REVIEW")) {
+  if (!(await requireCapability(dependencies, "ADMIN_LEGAL_REVIEW"))) {
     return adminFailure("FORBIDDEN");
   }
   const parsed = reviewSchema.safeParse(input);
@@ -214,7 +214,7 @@ export async function publishLegalRevision(
   input: unknown,
   dependencies: AdminDependencies,
 ): Promise<AdminCommandResult<Readonly<{ publicationId: string }>>> {
-  if (!requireCapability(dependencies, "ADMIN_LEGAL_PUBLISH")) {
+  if (!(await requireCapability(dependencies, "ADMIN_LEGAL_PUBLISH"))) {
     return adminFailure("FORBIDDEN");
   }
   const parsed = publishSchema.safeParse(input);
@@ -289,7 +289,7 @@ export async function revokeLegalPublication(
   input: unknown,
   dependencies: AdminDependencies,
 ): Promise<AdminCommandResult<Readonly<{ publicationId: string }>>> {
-  if (!requireCapability(dependencies, "ADMIN_LEGAL_PUBLISH")) {
+  if (!(await requireCapability(dependencies, "ADMIN_LEGAL_PUBLISH"))) {
     return adminFailure("FORBIDDEN");
   }
   const parsed = revokeSchema.safeParse(input);

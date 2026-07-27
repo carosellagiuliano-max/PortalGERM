@@ -33,6 +33,7 @@ export default async function AdminAuditPage({
       email: admin.email,
       role: admin.role,
       status: admin.status,
+    capabilities: admin.capabilities,
     },
     correlationId: "admin-audit-read",
     database: getDatabase(),

@@ -650,6 +650,13 @@ async function loadObservedSeedState(
     where: { id: authFixtures.suspendedActor.id },
     include: { credential: true },
   });
+  const phase25AdminActors = await db.user.findMany({
+    where: {
+      id: { in: authFixtures.phase25AdminActors.map(({ id }) => id) },
+    },
+    include: { credential: true },
+    orderBy: { emailNormalized: "asc" },
+  });
   const recruiterSecondMembership = await db.companyMembership.findUnique({
     where: { id: authFixtures.recruiterMembership.id },
     include: { events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
@@ -662,6 +669,15 @@ async function loadObservedSeedState(
       id: {
         in: [authFixtures.expiredReset.id, authFixtures.usedReset.id],
       },
+    },
+    orderBy: { id: "asc" },
+  });
+  const adminRoleAssignments = await db.adminRoleAssignment.findMany({
+    where: {
+      id: { in: authFixtures.adminRoleAssignments.map(({ id }) => id) },
+    },
+    include: {
+      adminRole: { select: { code: true, active: true, duty: true } },
     },
     orderBy: { id: "asc" },
   });
@@ -923,6 +939,7 @@ async function loadObservedSeedState(
     abuseReports,
     analyticsEvents,
     applications,
+    adminRoleAssignments,
     authResetEvidence,
     auditLogs,
     boosts,
@@ -942,6 +959,7 @@ async function loadObservedSeedState(
     employerCorePrincipals,
     employerCoreVerifications,
     expiredAuthSession,
+    phase25AdminActors,
     invoices,
     jobAlertDeliveryConsents,
     jobAlertEmails,
@@ -1369,6 +1387,82 @@ async function verifyAuthRbac(
   anchorAt: Date,
 ): Promise<void> {
   const fixtures = buildAuthRbacSeedFixtures(anchorAt);
+  check(
+    context,
+    "Phase-25 separated Admin actor count",
+    observed.phase25AdminActors.length,
+    fixtures.phase25AdminActors.length,
+  );
+  const phase25PasswordChecks = await Promise.all(
+    observed.phase25AdminActors.map(async (actor) => {
+      const expected = fixtures.phase25AdminActors.find(
+        ({ id }) => id === actor.id,
+      );
+      return (
+        expected !== undefined &&
+        actor.emailNormalized === expected.email &&
+        actor.role === "ADMIN" &&
+        actor.status === "ACTIVE" &&
+        actor.credential !== null &&
+        actor.credential.algorithm === "bcryptjs" &&
+        actor.credential.algorithmVersion === 1 &&
+        (await verifyPassword(
+          DEMO_LOGIN_PASSWORD,
+          actor.credential.passwordHash,
+        ))
+      );
+    }),
+  );
+  check(
+    context,
+    "Phase-25 separated Admin credentials",
+    phase25PasswordChecks,
+    fixtures.phase25AdminActors.map(() => true),
+  );
+  check(
+    context,
+    "Phase-25 explicit Admin role assignments",
+    observed.adminRoleAssignments.map((assignment) => ({
+      id: assignment.id,
+      userId: assignment.userId,
+      adminRoleId: assignment.adminRoleId,
+      roleCode: assignment.adminRole.code,
+      roleActive: assignment.adminRole.active,
+      reasonCode: assignment.reasonCode,
+      validFrom: assignment.validFrom.toISOString(),
+      validTo: assignment.validTo.toISOString(),
+      revokedAt: assignment.revokedAt?.toISOString() ?? null,
+    })),
+    [...fixtures.adminRoleAssignments]
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((assignment) => ({
+        id: assignment.id,
+        userId: assignment.userId,
+        adminRoleId: assignment.adminRoleId,
+        roleCode: assignment.roleCode,
+        roleActive: true,
+        reasonCode: assignment.reasonCode,
+        validFrom: assignment.validFrom.toISOString(),
+        validTo: assignment.validTo.toISOString(),
+        revokedAt: null,
+      })),
+  );
+  const dutiesByUser = new Map<string, Set<string>>();
+  for (const assignment of observed.adminRoleAssignments) {
+    const duties = dutiesByUser.get(assignment.userId) ?? new Set<string>();
+    duties.add(assignment.adminRole.duty);
+    dutiesByUser.set(assignment.userId, duties);
+  }
+  const conflicts = [...dutiesByUser.entries()].flatMap(([userId, duties]) =>
+    [
+      ["PRIVACY_VERIFY", "PRIVACY_PROCESS"],
+      ["FINANCE", "SECURITY"],
+      ["TRUST_SAFETY", "SECURITY"],
+    ]
+      .filter(([left, right]) => duties.has(left!) && duties.has(right!))
+      .map(([left, right]) => `${userId}:${left}:${right}`),
+  );
+  check(context, "Phase-25 seed duty conflicts", conflicts, []);
   const actor = observed.suspendedAuthActor;
   check(context, "Phase-06 suspended auth actor exists", actor !== null, true);
   if (actor !== null) {

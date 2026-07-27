@@ -15,6 +15,8 @@ const CANCELLATION_FIELDS = new Set([
   "confirm",
   "idempotencyKey",
   "retainedMembershipIds",
+  "stepUpEvidenceId",
+  "stepUpGrantToken",
 ]);
 
 export async function cancelSubscriptionAction(
@@ -45,7 +47,26 @@ export async function cancelSubscriptionAction(
     });
   }
   const result = await scheduleSubscriptionCancellation(
-    { idempotencyKey, retainedMembershipIds },
+    {
+      idempotencyKey,
+      retainedMembershipIds,
+      ...(readSingleFormString(formData, "stepUpEvidenceId")
+        ? {
+            stepUpEvidenceId: readSingleFormString(
+              formData,
+              "stepUpEvidenceId",
+            )!,
+          }
+        : {}),
+      ...(readSingleFormString(formData, "stepUpGrantToken")
+        ? {
+            stepUpGrantToken: readSingleFormString(
+              formData,
+              "stepUpGrantToken",
+            )!,
+          }
+        : {}),
+    },
     dependencies,
   );
   if (!result.ok) return cancellationError(result.code);
@@ -72,6 +93,8 @@ function cancellationError(code: string): BillingActionState {
     CATALOG_UNAVAILABLE: "Die Free-Basic-Limiten konnten nicht eindeutig bestimmt werden.",
     IDEMPOTENCY_MISMATCH: "Diese Bestätigung passt nicht zum vorhandenen Vorgang.",
     INVALID_INPUT: "Die Kündigung konnte nicht eindeutig bestätigt werden.",
+    STEP_UP_REQUIRED:
+      "Die frische, an dieses Abonnement gebundene Sicherheitsbestätigung fehlt oder wurde bereits verwendet.",
   };
   return Object.freeze({
     status: code === "CONFLICT" ? "conflict" : "error",

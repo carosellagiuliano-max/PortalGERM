@@ -52,7 +52,7 @@ test("[22-AC-05/06] @journey legal publication and optional analytics remain fai
     await page
       .getByRole("button", { name: "Unabhängig freigeben" })
       .click();
-    await expect(page).toHaveURL(/result=restricted/u);
+    await expect(page).toHaveURL(/result=forbidden/u);
     const revision = await database.legalRevision.findFirstOrThrow({
       where: { versionLabel: "phase22-browser-v1" },
       select: { status: true, reviewedByUserId: true },

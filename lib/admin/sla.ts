@@ -76,7 +76,7 @@ export async function projectAdminSlaAlerts(
 ): Promise<AdminCommandResult<Readonly<{ projected: number }>>> {
   const parsed = projectionSchema.safeParse(input);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_SLA_PROJECT")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_SLA_PROJECT")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
 
   const [reports, supportCases, claims, verifications, leads] = await Promise.all([

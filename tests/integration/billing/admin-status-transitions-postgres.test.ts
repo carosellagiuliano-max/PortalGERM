@@ -51,6 +51,10 @@ function dependencies(
       email: "phase16-billing-admin@example.ch",
       role: "ADMIN",
       status: "ACTIVE",
+      capabilities: [
+        "ADMIN_BILLING_MUTATE",
+        "ADMIN_INVOICE_MUTATE",
+      ] as const,
     },
     correlationId: randomUUID(),
     database: db(),

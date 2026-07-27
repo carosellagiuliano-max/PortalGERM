@@ -97,13 +97,13 @@ export async function replyToSupportCase(raw: unknown, actor: SupportRequesterAc
 }
 
 export async function listAdminSupportCases(dependencies: AdminDependencies) {
-  if (!requireCapability(dependencies, "ADMIN_SUPPORT_MANAGE")) return null;
+  if (!await requireCapability(dependencies, "ADMIN_SUPPORT_MANAGE")) return null;
   const now = adminNow(dependencies.now);
   return dependencies.database.supportCase.findMany({ orderBy: [{ dueAt: "asc" }, { priority: "desc" }, { id: "asc" }], take: 250, select: { id: true, category: true, priority: true, status: true, subject: true, dueAt: true, version: true, createdAt: true, company: { select: { id: true, name: true } }, requester: { select: { id: true, name: true, email: true } }, assignee: { select: { id: true, name: true, email: true } } } }).then((rows) => rows.sort((a, b) => Number(a.dueAt > now) - Number(b.dueAt > now) || a.dueAt.getTime() - b.dueAt.getTime() || a.id.localeCompare(b.id)));
 }
 
 export async function getAdminSupportCase(dependencies: AdminDependencies, caseId: string) {
-  if (!requireCapability(dependencies, "ADMIN_SUPPORT_MANAGE") || !z.uuid().safeParse(caseId).success) return null;
+  if (!await requireCapability(dependencies, "ADMIN_SUPPORT_MANAGE") || !z.uuid().safeParse(caseId).success) return null;
   return dependencies.database.supportCase.findUnique({ where: { id: caseId }, select: { id: true, category: true, priority: true, status: true, subject: true, description: true, contactPreference: true, dueAt: true, version: true, createdAt: true, updatedAt: true, company: { select: { id: true, name: true } }, requester: { select: { id: true, name: true, email: true } }, assignee: { select: { id: true, name: true, email: true } }, events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { kind: true, actorUserId: true, safeBody: true, reasonCode: true, createdAt: true } } } });
 }
 
@@ -114,7 +114,7 @@ const adminSupportSchema = z.strictObject({
 export async function manageSupportCase(raw: unknown, dependencies: AdminDependencies) {
   const parsed = adminSupportSchema.safeParse(raw);
   if (!parsed.success || (parsed.data.action === "TRIAGE" && parsed.data.priority === undefined) || (parsed.data.action === "ASSIGN" && parsed.data.assigneeUserId == null) || (parsed.data.action === "REQUEST_INFORMATION" && parsed.data.safeBody === undefined)) return adminFailure("INVALID_INPUT");
-  if (!requireCapability(dependencies, "ADMIN_SUPPORT_MANAGE")) return adminFailure("FORBIDDEN");
+  if (!await requireCapability(dependencies, "ADMIN_SUPPORT_MANAGE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
   const eventKey = operationKey(`admin-support-${parsed.data.action.toLowerCase()}`, parsed.data.idempotencyKey);
   try {

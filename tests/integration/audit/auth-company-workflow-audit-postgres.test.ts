@@ -495,6 +495,10 @@ function adminDependencies(
       email: "phase16-company-audit-admin@fixture.example.test",
       role: "ADMIN",
       status: "ACTIVE",
+      capabilities: [
+        "ADMIN_CLAIM_REVIEW",
+        "ADMIN_COMPANY_REVIEW",
+      ] as const,
     },
     correlationId,
     database: db(),

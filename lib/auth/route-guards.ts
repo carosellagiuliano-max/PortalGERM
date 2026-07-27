@@ -3,28 +3,81 @@ import "server-only";
 import { headers } from "next/headers";
 import { forbidden, redirect } from "next/navigation";
 
-import { getCurrentUser, type CurrentUser } from "@/lib/auth/current-user";
+import {
+  getCurrentAuthContext,
+  type CurrentUser,
+} from "@/lib/auth/current-user";
 import { INTERNAL_REQUEST_PATH_HEADER } from "@/lib/auth/request-context";
+import type { AdminCapability } from "@/lib/admin/capabilities";
+import {
+  ADMIN_GRANTS_POLICY_V2,
+  resolveAdminActor,
+  type AdminDutyV2,
+} from "@/lib/admin/role-policy";
+import { hasCurrentAal2 } from "@/lib/auth/assurance/mfa-service";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 
-export function requireCandidatePage(): Promise<CurrentUser> {
+export type AuthenticatedPageUser = CurrentUser &
+  Readonly<{ sessionId: string }>;
+
+export type AdminPageUser = AuthenticatedPageUser &
+  Readonly<{
+    capabilities: readonly AdminCapability[];
+    adminDuties: readonly AdminDutyV2[];
+    breakGlassGrantIds: readonly string[];
+    adminGrantPolicyVersion: typeof ADMIN_GRANTS_POLICY_V2;
+  }>;
+
+export function requireCandidatePage(): Promise<AuthenticatedPageUser> {
   return requirePageRole(["CANDIDATE"]);
 }
 
-export function requireEmployerPage(): Promise<CurrentUser> {
+export function requireEmployerPage(): Promise<AuthenticatedPageUser> {
   return requirePageRole(["EMPLOYER", "RECRUITER"]);
 }
 
-export function requireAdminPage(): Promise<CurrentUser> {
-  return requirePageRole(["ADMIN"]);
+export async function requireAdminPage(): Promise<AdminPageUser> {
+  const user = await requirePageRole(["ADMIN"]);
+  const environment = getServerEnvironment();
+  if (
+    environment.ADMIN_MFA_REQUIRED &&
+    !(await hasCurrentAal2(getDatabase(), {
+      userId: user.id,
+      sessionId: user.sessionId,
+      now: new Date(),
+    }))
+  ) {
+    const requestPath = sanitizePrivateRequestPath(
+      (await headers()).get(INTERNAL_REQUEST_PATH_HEADER),
+    );
+    const pathname =
+      requestPath === null
+        ? null
+        : new URL(requestPath, "https://private-route.invalid").pathname;
+    if (pathname !== "/admin/security/authenticators") {
+      redirect("/admin/security/authenticators?required=1");
+    }
+  }
+  const resolved = await resolveAdminActor(
+    getDatabase(),
+    { userId: user.id, role: user.role, status: user.status },
+    new Date(),
+  );
+  return Object.freeze({
+    ...user,
+    capabilities: resolved.capabilities,
+    adminDuties: resolved.duties,
+    breakGlassGrantIds: resolved.breakGlassGrantIds,
+    adminGrantPolicyVersion: resolved.policyVersion,
+  });
 }
 
-export function requireAuthenticatedPage(): Promise<CurrentUser> {
+export function requireAuthenticatedPage(): Promise<AuthenticatedPageUser> {
   return requirePageRole(["CANDIDATE", "EMPLOYER", "RECRUITER", "ADMIN"]);
 }
 
-export async function requirePendingCompanyClaimPage(): Promise<CurrentUser> {
+export async function requirePendingCompanyClaimPage(): Promise<AuthenticatedPageUser> {
   const user = await requireEmployerPage();
   const pending = await getDatabase().companyClaimRequest.findFirst({
     where: {
@@ -39,10 +92,10 @@ export async function requirePendingCompanyClaimPage(): Promise<CurrentUser> {
 
 async function requirePageRole(
   allowedRoles: readonly CurrentUser["role"][],
-): Promise<CurrentUser> {
+): Promise<AuthenticatedPageUser> {
   const requestHeaders = await headers();
-  const user = await getCurrentUser();
-  if (user === null) {
+  const context = await getCurrentAuthContext();
+  if (context === null) {
     const next = sanitizePrivateRequestPath(
       requestHeaders.get(INTERNAL_REQUEST_PATH_HEADER),
     );
@@ -52,6 +105,7 @@ async function requirePageRole(
         : `/session/clear?next=${encodeURIComponent(next)}`,
     );
   }
+  const user = context.user;
   if (!allowedRoles.includes(user.role)) forbidden();
   const environment = getServerEnvironment();
   if (
@@ -70,7 +124,7 @@ async function requirePageRole(
       );
     }
   }
-  return user;
+  return Object.freeze({ ...user, sessionId: context.session.id });
 }
 
 function isLowAssurancePage(path: string | null) {

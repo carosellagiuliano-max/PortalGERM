@@ -17,6 +17,7 @@ const REAL_CHECKOUT_FIELDS = new Set([
   "orderId",
   "planSlug",
   "stepUpEvidenceId",
+  "stepUpGrantToken",
 ]);
 
 export async function startRealSubscriptionCheckoutAction(
@@ -30,6 +31,10 @@ export async function startRealSubscriptionCheckoutAction(
   const orderId = readSingleFormString(formData, "orderId");
   const planSlug = readSingleFormString(formData, "planSlug");
   const stepUpEvidenceId = readSingleFormString(formData, "stepUpEvidenceId");
+  const stepUpGrantToken = readSingleFormString(
+    formData,
+    "stepUpGrantToken",
+  );
   if (
     idempotencyKey === null ||
     orderId === null ||
@@ -69,6 +74,7 @@ export async function startRealSubscriptionCheckoutAction(
       planSlug,
       paymentOrderId: orderId,
       stepUpEvidenceId,
+      ...(stepUpGrantToken === null ? {} : { stepUpGrantToken }),
       idempotencyKey,
     },
     {

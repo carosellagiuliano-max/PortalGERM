@@ -97,6 +97,7 @@ describe("Phase-23 operations authorization and redaction", () => {
         email: "admin@example.test",
         role: "ADMIN",
         status: "ACTIVE",
+        capabilities: ["ADMIN_OPS_READ"] as const,
       },
       correlationId: randomUUID(),
       database: db(),

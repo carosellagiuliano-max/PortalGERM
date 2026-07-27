@@ -24,6 +24,7 @@ import { performance } from "node:perf_hooks";
 import { Client } from "pg";
 
 import { inspectPostgresTarget } from "@/lib/db/database-target";
+import { assertFreshMigrationBaseline } from "@/lib/ops/release-database-baseline";
 import { loadLocalEnvironment } from "@/scripts/load-local-environment";
 import {
   redact,
@@ -195,11 +196,7 @@ async function main() {
       { ...environment, DATABASE_URL: guardUrl },
     );
     const beforeGuard = await domainRowCounts(guardUrl);
-    if (Object.values(beforeGuard).some((count) => count !== 0)) {
-      throw new Error(
-        "Fresh Production-guard database unexpectedly contains domain rows.",
-      );
-    }
+    assertFreshMigrationBaseline(beforeGuard);
     const guard = await runNpmExpectFailure(
       "Production demo-seed guard",
       ["run", "db:seed"],

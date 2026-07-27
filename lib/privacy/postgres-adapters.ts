@@ -5,6 +5,7 @@ import {
   type AuditPersistenceRecord,
 } from "@/lib/audit/log";
 import type { DatabaseClient } from "@/lib/db/factory";
+import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 import { Prisma } from "@/lib/generated/prisma/client";
 import {
   PrivacyRequestStatus,
@@ -38,14 +39,26 @@ export const POSTGRES_PRIVACY_ADAPTER_POLICY_V1 = Object.freeze({
 
 type IntakeInput = Parameters<PrivacyRequestRepository["intakeAtomically"]>[0];
 type TransactionClient = Prisma.TransactionClient;
+type PrivacyStepUpContext = Readonly<{
+  mode: "disabled" | "observe" | "enforce";
+  actor: Readonly<{
+    userId: string;
+    sessionId: string;
+    role: "CANDIDATE";
+  }>;
+  correlationId: string;
+  evidenceId?: string;
+  grantToken?: string;
+}>;
 
 /** Production PostgreSQL implementation of the atomic Privacy intake port. */
 export function createPostgresPrivacyRequestRepository(
   database: DatabaseClient,
+  stepUp?: PrivacyStepUpContext,
 ): PrivacyRequestRepository {
   const repository: PrivacyRequestRepository = {
     intakeAtomically: (input: IntakeInput) =>
-      runAtomicPrivacyIntake(database, input),
+      runAtomicPrivacyIntake(database, input, stepUp),
     findOwned: async (requestId: string, userId: string) => {
       const request = await database.privacyRequest.findFirst({
         where: { id: requestId, requesterUserId: userId },
@@ -60,6 +73,7 @@ export function createPostgresPrivacyRequestRepository(
 async function runAtomicPrivacyIntake(
   database: DatabaseClient,
   rawInput: IntakeInput,
+  stepUp?: PrivacyStepUpContext,
 ): Promise<AtomicPrivacyRequestIntakeResult> {
   const input = validateAtomicIntakeInput(rawInput);
   return database.$transaction(
@@ -133,6 +147,29 @@ async function runAtomicPrivacyIntake(
       });
       if (createdInWindow >= input.rollingThirtyDayLimit) {
         return Object.freeze({ outcome: "RATE_LIMITED" as const });
+      }
+      if (
+        stepUp?.mode === "enforce" &&
+        (stepUp.actor.userId !== input.userId ||
+          stepUp.evidenceId === undefined ||
+          stepUp.grantToken === undefined ||
+          !(await consumeStepUpGrant(transaction, {
+            evidenceId: stepUp.evidenceId,
+            grantToken: stepUp.grantToken,
+            actor: {
+              userId: stepUp.actor.userId,
+              sessionId: stepUp.actor.sessionId,
+              role: stepUp.actor.role,
+              status: "ACTIVE",
+            },
+            purpose: "CANDIDATE_PRIVACY",
+            action: `PRIVACY_${input.request.type}`,
+            resourceId: input.request.idempotencyKey,
+            correlationId: stepUp.correlationId,
+            now: input.createdAt,
+          })))
+      ) {
+        return Object.freeze({ outcome: "UNAUTHORIZED" as const });
       }
 
       const correlationId = randomUUID();

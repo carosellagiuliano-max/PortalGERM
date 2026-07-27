@@ -452,6 +452,7 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
           email: "phase20-replay-admin@example.test",
           role: "ADMIN",
           status: "ACTIVE",
+          capabilities: ["ADMIN_SYSTEM_TASK_MANAGE"] as const,
         },
         correlationId: "20000000-0000-4000-8000-000000000301",
         database: db(),

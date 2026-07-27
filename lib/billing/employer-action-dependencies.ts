@@ -1,6 +1,8 @@
 import "server-only";
 
 import { getEmployerContext } from "@/lib/auth/employer-context";
+import { getCurrentAuthContext } from "@/lib/auth/current-user";
+import { getServerEnvironment } from "@/lib/config/env";
 import {
   getAuthRequestContext,
   isValidAuthMutationOrigin,
@@ -13,14 +15,19 @@ import { paymentProvider } from "@/lib/providers/payments";
 export async function getEmployerBillingActionDependencies(
   ownerOnly = false,
 ): Promise<BillingDependencies | null> {
-  const [context, request] = await Promise.all([
+  const [context, request, authContext] = await Promise.all([
     getEmployerContext(),
     getAuthRequestContext(),
+    getCurrentAuthContext(),
   ]);
   const current = context?.current ?? null;
   if (
     context === null ||
     current === null ||
+    authContext === null ||
+    authContext.user.id !== context?.user.id ||
+    (authContext.user.role !== "EMPLOYER" &&
+      authContext.user.role !== "RECRUITER") ||
     !isValidAuthMutationOrigin(request) ||
     (ownerOnly
       ? current.membershipRole !== "OWNER"
@@ -40,6 +47,12 @@ export async function getEmployerBillingActionDependencies(
     database: getDatabase(),
     paymentProvider,
     emailProvider,
+    stepUp: {
+      mode: getServerEnvironment().PRIVILEGED_STEP_UP_MODE,
+      sessionId: authContext.session.id,
+      globalRole: authContext.user.role,
+    },
+    trustRiskMode: getServerEnvironment().TRUST_RISK_MODE,
     now: new Date(),
   });
 }

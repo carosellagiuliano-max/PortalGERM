@@ -544,6 +544,7 @@ function dependencies(): AdminDependencies {
       email: "phase12-funnel-admin@example.ch",
       role: "ADMIN",
       status: "ACTIVE",
+      capabilities: ["ADMIN_ANALYTICS_READ"] as const,
     },
     correlationId: "phase12-admin-funnel-test",
     database: db(),

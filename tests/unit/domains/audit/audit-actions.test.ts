@@ -100,6 +100,32 @@ function extractPhase24AuditActions(plan: string) {
   ];
 }
 
+function extractPhase25AuditActions(plan: string) {
+  const matrixBlock = plan.match(
+    /### Phase-25 Audit-log extension matrix([\s\S]*?)(?=\r?\n## )/,
+  )?.[1];
+
+  if (!matrixBlock) {
+    throw new Error("Phase 25 audit-log extension matrix was not found");
+  }
+
+  return [
+    ...new Set(
+      matrixBlock
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("| `"))
+        .flatMap((line) => {
+          const actionCell = line.split("|")[1] ?? "";
+
+          return Array.from(
+            actionCell.matchAll(/`([A-Z][A-Z0-9_]*)`/g),
+            (match) => match[1],
+          );
+        }),
+    ),
+  ];
+}
+
 describe("AUDIT_ACTIONS_V1 contract", () => {
   it("keeps the typed constant, Prisma enum and immutable plus remediation matrices synchronized", () => {
     const constantActions = [...AUDIT_ACTIONS_V1];
@@ -115,6 +141,9 @@ describe("AUDIT_ACTIONS_V1 contract", () => {
       ),
       ...extractPhase24AuditActions(
         readRepositoryFile("codex-plan/24-real-billing-finance.md"),
+      ),
+      ...extractPhase25AuditActions(
+        readRepositoryFile("codex-plan/25-admin-security.md"),
       ),
     ];
 

@@ -31,6 +31,7 @@ import {
 } from "@/lib/auth/registration-consent";
 import { trimmedString } from "@/lib/validation/common";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
+import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 
 const DAY = 86_400_000;
 const AUDIT_TTL = 365 * DAY;
@@ -42,14 +43,20 @@ const assignmentRoles = ["EDITOR", "REVIEWER", "PIPELINE"] as const;
 export const teamInvitationSchema = z.strictObject({
   email: z.string().trim().toLowerCase().email().max(320),
   role: z.enum(membershipRoles),
+  stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
 });
 export const membershipRoleSchema = z.strictObject({
   membershipId: z.uuid(),
   role: z.enum(membershipRoles),
+  stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
 });
 export const removeMembershipSchema = z.strictObject({
   membershipId: z.uuid(),
   reason: trimmedString(3, 500),
+  stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
 });
 export const assignmentSchema = z.strictObject({
   jobId: z.uuid(),
@@ -75,6 +82,10 @@ type CommandDependencies = Readonly<{
   request: AuthRequestContext;
   environment: ServerEnvironment;
   emailProvider?: EmailProvider;
+  stepUpActor?: Readonly<{
+    sessionId: string;
+    globalRole: "EMPLOYER" | "RECRUITER";
+  }>;
   now?: Date;
 }>;
 type CommandResult<T extends object | void = void> =
@@ -226,6 +237,20 @@ export async function sendCompanyInvitation(
               ? {}
               : { suggestedPlanSlug: seatGate.suggestedPlanSlug }),
           };
+        }
+        if (
+          !(await authorizeTeamStepUp(
+            tx,
+            dependencies,
+            actor,
+            parsed.data,
+            companyId,
+            "TEAM_INVITE",
+            companyId,
+            now,
+          ))
+        ) {
+          return { ok: false as const, code: "STEP_UP_REQUIRED" };
         }
         const invitation = await tx.companyInvitation.create({
           data: {
@@ -431,6 +456,20 @@ export async function changeCompanyMemberRole(
           notificationEventId: replayEvent?.id ?? null,
         };
       }
+      if (
+        !(await authorizeTeamStepUp(
+          tx,
+          dependencies,
+          actor,
+          parsed.data,
+          companyId,
+          "TEAM_ROLE_CHANGE",
+          target.id,
+          now,
+        ))
+      ) {
+        return { ok: false as const, code: "STEP_UP_REQUIRED" };
+      }
       if (target.role === "RECRUITER" && parsed.data.role !== "RECRUITER") {
         const assignments = await tx.jobAssignment.findMany({
           where: { membershipId: target.id, companyId, status: "ACTIVE" },
@@ -506,6 +545,20 @@ export async function removeCompanyMember(
         target.role === "OWNER" &&
         await isPendingBoundaryRetainedOwner(tx, companyId, target.id, target.userId)
       ) return { ok: false as const, code: "RETAINED_OWNER_REQUIRED" };
+      if (
+        !(await authorizeTeamStepUp(
+          tx,
+          dependencies,
+          actor,
+          parsed.data,
+          companyId,
+          "TEAM_MEMBER_REMOVE",
+          target.id,
+          now,
+        ))
+      ) {
+        return { ok: false as const, code: "STEP_UP_REQUIRED" };
+      }
       const assignments = await tx.jobAssignment.findMany({ where: { membershipId: target.id, companyId, status: "ACTIVE" }, select: { id: true, role: true } });
       for (const assignment of assignments) {
         await tx.jobAssignment.update({ where: { id: assignment.id }, data: { status: "REVOKED", revokedAt: now, updatedAt: now } });
@@ -913,6 +966,48 @@ async function countReservedSeats(tx: Prisma.TransactionClient, companyId: strin
 }
 async function activeOwnerCount(tx: Prisma.TransactionClient, companyId: string) {
   return tx.companyMembership.count({ where: { companyId, status: "ACTIVE", role: "OWNER" } });
+}
+
+async function authorizeTeamStepUp(
+  transaction: Prisma.TransactionClient,
+  dependencies: CommandDependencies,
+  actor: Actor,
+  input: Readonly<{
+    stepUpEvidenceId?: string;
+    stepUpGrantToken?: string;
+  }>,
+  companyId: string,
+  action: "TEAM_INVITE" | "TEAM_ROLE_CHANGE" | "TEAM_MEMBER_REMOVE",
+  resourceId: string,
+  now: Date,
+): Promise<boolean> {
+  if (dependencies.environment.PRIVILEGED_STEP_UP_MODE !== "enforce") {
+    return true;
+  }
+  const stepUpActor = dependencies.stepUpActor;
+  if (
+    stepUpActor === undefined ||
+    input.stepUpEvidenceId === undefined ||
+    input.stepUpGrantToken === undefined
+  ) {
+    return false;
+  }
+  return consumeStepUpGrant(transaction, {
+    evidenceId: input.stepUpEvidenceId,
+    grantToken: input.stepUpGrantToken,
+    actor: {
+      userId: actor.userId,
+      sessionId: stepUpActor.sessionId,
+      role: stepUpActor.globalRole,
+      status: "ACTIVE",
+    },
+    purpose: "EMPLOYER_TEAM",
+    action,
+    tenantId: companyId,
+    resourceId,
+    correlationId: dependencies.request.correlationId,
+    now,
+  });
 }
 async function isPendingBoundaryRetainedOwner(
   tx: Prisma.TransactionClient,

@@ -25,6 +25,7 @@ const navigation = [
   { href: "/employer/talent-radar", label: "Talent Radar" },
   { href: "/employer/analytics", label: "Analytics" },
   { href: "/employer/billing", label: "Billing" },
+  { href: "/employer/settings/security", label: "Sicherheit" },
   { href: "/employer/notifications", label: "Benachrichtigungen" },
 ] as const;
 

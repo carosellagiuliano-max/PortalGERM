@@ -93,7 +93,25 @@ export async function createCandidatePrivacyRequestAction(
       { userId: user.id, userStatus: user.status },
       parsed.data,
       now,
-      createPostgresPrivacyRequestRepository(database),
+      createPostgresPrivacyRequestRepository(database, {
+        mode: environment.PRIVILEGED_STEP_UP_MODE,
+        actor: {
+          userId: user.id,
+          sessionId: user.sessionId,
+          role: "CANDIDATE",
+        },
+        correlationId: request.correlationId,
+        ...(singleString(formData, "stepUpEvidenceId") === undefined
+          ? {}
+          : {
+              evidenceId: singleString(formData, "stepUpEvidenceId"),
+            }),
+        ...(singleString(formData, "stepUpGrantToken") === undefined
+          ? {}
+          : {
+              grantToken: singleString(formData, "stepUpGrantToken"),
+            }),
+      }),
     );
     if (!result.ok) {
       return errorState(
