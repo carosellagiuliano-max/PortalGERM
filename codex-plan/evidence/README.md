@@ -38,6 +38,9 @@ gelten nicht als Nachweis.
 - [`2026-07-24-commercial-launch-follow-up.md`](./2026-07-24-commercial-launch-follow-up.md) — unabhängig bewertete Commercial-, Cashflow-, Packaging-, Salary-, Worker- und AVG-Befunde samt isolierter Zielcommit-Verifikation.
 - [`2026-07-26-phase-19.md`](./2026-07-26-phase-19.md) — aktuelle Remediation-Governance, vollständige Clean-Clone-/Golden-Baseline, 37-ID-Traceability sowie Search-, Fan-out-, Admin-Cap- und Sitemap-Istwerte.
 - [`2026-07-26-phase-20.md`](./2026-07-26-phase-20.md) — verifizierte E-Mail-Identität, sicherer Login-E-Mail-Wechsel, atomare Notification-Outbox, bounded Dispatcher, Preferences und fail-closed Resend-Sandboxvertrag.
+- [`2026-07-26-phase-21.md`](./2026-07-26-phase-21.md) — quarantänisierter Document-/CV-Vault, immutable Application-Versionen, Single-use-Downloads, Reconciliation und fail-closed Storage-/Scanner-Sandboxvertrag.
+- [`2026-07-26-phase-22.md`](./2026-07-26-phase-22.md) — technischer Privacy-/Legal-/Analytics-Sandboxvertrag mit Processor-Reconciliation, Restore-Schutz und explizit offenen Counsel-/Research-Gates.
+- [`2026-07-27-phase-23.md`](./2026-07-27-phase-23.md) — commitgebundener Local-/CI-Worker-, Lease-/DLQ-/Replay-, Provider-Ledger-, Capacity- und Ops-Cockpit-Kandidat; reales Staging/Pager/Backup/SLO bleibt blockiert.
 
 ## Pflichtfelder eines Records
 

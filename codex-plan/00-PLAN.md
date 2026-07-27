@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** Stand 26. Juli 2026. **Phasen 01 bis 20 sind im Zielrepository implementiert und commitgebunden verifiziert.** Phase 19 versiegelt auf `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` die Clean-Clone-/Governance-Baseline; Phase 20 schliesst auf Candidate `59089009f54312a4c10989b7efde2d5fda9a2b8d` den technischen Identity-, E-Mail-Change-, Outbox-, Dispatcher- und Preference-Vertrag. Siehe [Phase-19-Evidence](./evidence/2026-07-26-phase-19.md) und [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md). Reale E-Mail-Aktivierung, autonome Worker, Production-Replay und MFA/Step-up bleiben ausdrücklich offen. Auch die übrigen fachlichen Befunde bleiben nach Status, Trigger oder externem Gate in den Phasen 21 bis 32. Weder historische Evidence noch die grüne LC1-/Sandbox-Baseline ist eine Pilot- oder Produktionsfreigabe. Staging, ausgewählte reale Provider, produktiver Backup-Lifecycle und autonome Worker sind noch umzusetzende beziehungsweise real zu betreibende Lieferobjekte; AVG/Legal/Privacy/Tax, Providerverträge, bezahlte Marktvalidierung, Cashflow/Runway, LIVE-Daten, RPO/RTO, Incident Ownership und Operationskapazität benötigen zusätzlich externe oder organisatorische Freigaben. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft; Export/Löschung bleiben kontrollierte MVP-Mocks ohne reale Datenbereitstellung oder Erasure. Das separat gegatete REQ-REC-002-Paket bleibt offen.
+> **Planstatus:** Stand 27. Juli 2026. **Phasen 01 bis 21 sind im Zielrepository implementiert und commitgebunden verifiziert.** Phase 22 besitzt einen commitgebundenen, automatisiert grünen Local-/CI-Sandboxvertrag, bleibt wegen Counsel, alternativer Identity und moderierter Forschung ungeschlossen. Phase 23 besitzt auf `d16a2d9d48a5fa387f6590fdd24b1bfe37ecddd3` einen commitgebunden verifizierten Local-/CI-Worker-/Operations-Kandidaten; reales Staging, Provider-Sandbox, Pager/On-call, automatischer Backup-Lifecycle, genehmigte SLO/RPO/RTO und das formale Gesamt-G3 bleiben blockiert. Siehe [Phase-22-Evidence](./evidence/2026-07-26-phase-22.md) und [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md). Weder historische Evidence noch eine grüne lokale LC1-/Sandbox-Baseline ist eine Pilot- oder Produktionsfreigabe. AVG/Legal/Privacy/Tax, Providerverträge, bezahlte Marktvalidierung, Cashflow/Runway, LIVE-Daten, Incident Ownership und Operationskapazität benötigen zusätzlich externe oder organisatorische Freigaben. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft. Das separat gegatete `REQ-REC-002`-Paket bleibt offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -214,10 +214,12 @@ Aktivierung ist `DISABLED`.
 ### [ ] 23 — Production Operations und Worker
 
 [`23-production-operations-workers.md`](./23-production-operations-workers.md) ·
-begonnener lokaler/CI Technik-Candidate für Provider-Governance, autonome
-Worker, DLQ/Replay, Capacity und read-only Ops-Cockpit. Ungehakt:
-Staging/Pager/On-call, reale Provider-Sandbox, automatischer Backup-Lifecycle,
-genehmigte SLO/RPO/RTO und formales G3 fehlen.
+commitgebunden verifizierter lokaler/CI Technik-Candidate `d16a2d9` für
+Provider-Governance, autonome Worker, DLQ/Replay, Capacity und read-only
+Ops-Cockpit. Lokale Automation `PASS`; ungehakt bleiben reales
+Staging/Pager/On-call, Provider-Sandbox, automatischer Backup-Lifecycle,
+genehmigte SLO/RPO/RTO und damit das formale G3. Siehe
+[Phase-23-Evidence](./evidence/2026-07-27-phase-23.md).
 
 ### [ ] 24 — Reales Billing und Finance
 
@@ -409,9 +411,11 @@ Phasen 01 bis 21 wurden gemäss ihren Detailverträgen auf ihren jeweiligen
 Evidence-Candidates umgesetzt und verifiziert. Phase 22 besitzt auf Candidate
 `0636a875` einen technisch implementierten und automatisiert G3-grünen
 Local-/CI-Sandboxvertrag, bleibt aber wegen der in ihrer Evidence genannten
-externen Pflichtgates ungehakt. Phase 23 ist als pausierter lokaler/CI
-Technik-Candidate begonnen; ihre reale Aktivierung und ihr formales G3 bleiben
-wegen der eigenen externen Pflichtgates gesperrt. Nichtaktivierende frühe
+externen Pflichtgates ungehakt. Phase 23 besitzt auf `d16a2d9` einen
+commitgebunden verifizierten, pausierten lokalen/CI Technik-Candidate; ihre
+reale Aktivierung und ihr formales G3 bleiben wegen der in der
+[Evidence](./evidence/2026-07-27-phase-23.md) benannten externen Pflichtgates
+gesperrt. Nichtaktivierende frühe
 Research-Tracks 29A/31A dürfen gemäss der
 Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md)
 parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates

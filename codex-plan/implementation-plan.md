@@ -6,10 +6,11 @@
 > `ca36bff` abgeschlossen. Phase 22 ist auf `0636a875` technisch implementiert
 > und automatisiert G3-grün, bleibt wegen Counsel, alternativer
 > Nicht-Kontoinhaber-Identity und moderierter Forschung jedoch ungeschlossen
-> und `DISABLED`; Phase 23 ist als lokaler/CI Technik-Candidate begonnen,
+> und `DISABLED`; Phase 23 besitzt auf `d16a2d9` einen commitgebunden
+> verifizierten lokalen/CI Technik-Candidate und lokale Automation `PASS`,
 > bleibt aber ohne reales Staging, Pager/On-call, Provider-Sandbox,
 > Backup-Lifecycle, genehmigte SLO/RPO/RTO und formales G3 ungeschlossen und
-> `DISABLED`. Für die
+> `DISABLED`; siehe [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md). Für die
 > Fortsetzung gilt der prospektive Abschnitt am Ende dieses Dokuments zusammen
 > mit
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md)

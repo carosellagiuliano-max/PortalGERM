@@ -400,8 +400,10 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 - **Betroffene Rollen:** Release Owner, Operations, Security, Privacy/Legal,
   Support und Business Owner.
 - **Ist:** lokale Env-Gates, Migration/Seed-Guards, verschlüsselter
-  Backup-/Restore-Drill und Runbooks sind vorhanden; reale isolierte
-  Umgebungen, Pager, Retention und Owners fehlen.
+  Backup-/Restore-Drill und Runbooks sind auf Candidate `d16a2d9`
+  commitgebunden grün; reale isolierte Umgebungen, Pager, Retention und Owners
+  fehlen. Siehe
+  [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md).
 - **Soll:** getrennte Preview/Staging/Production-Accounts, immutable Artifact,
   Secret-/Key-Rotation, observability/SLOs, Backup-Retention, getestete
   Restore-/Rollback-/Incident-Prozesse und benannte Verantwortliche.
@@ -440,8 +442,10 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 - **Ist:** Die bounded Domainrunner sind über eine gemeinsame durable
   PostgreSQL-Queue mit Lease/Heartbeat/Fencing, Attempt-Historie,
   Backoff/DLQ, Scheduler-Ownership und WorkerRun angebunden. Die Runtime ist
+  auf Candidate `d16a2d9` lokal/isoliert commitgebunden verifiziert und
   standardmässig pausiert; reales Hosting, Pager und Production-Recovery
-  fehlen.
+  fehlen. Siehe
+  [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md).
 - **Soll:** versionierter Jobvertrag mit enqueue-in-transaction/Outbox,
   `SKIP LOCKED`- oder Queue-Leases, Retry/Backoff/Jitter, Dead Letter,
   Concurrency-Limits, Shutdown/Restart, Monitoring und Re-drive.
