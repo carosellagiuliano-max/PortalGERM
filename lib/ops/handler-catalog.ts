@@ -86,6 +86,13 @@ export const WORKER_HANDLER_CATALOG = Object.freeze([
     sloRef: "codex-plan/21-document-cv-vault.md",
   }),
   handler({
+    handlerKey: "payments.inbox-project",
+    owner: "Billing / Finance / Platform",
+    providerUseCase: "payments.hosted-checkout",
+    schedule: "event-driven",
+    sloRef: "codex-plan/24-real-billing-finance.md#22",
+  }),
+  handler({
     execution: "CATALOG_ONLY_REQUIRES_PHASE_25",
     handlerKey: "privacy.export",
     owner: "Privacy / Platform",
@@ -107,10 +114,22 @@ export const WORKER_HANDLER_CATALOG = Object.freeze([
     sloRef: "codex-plan/22-privacy-legal-analytics.md",
   }),
   handler({
-    execution: "CATALOG_ONLY_REQUIRES_OWNING_PHASE",
     handlerKey: "payments.reconcile",
     owner: "Finance / Platform",
-    schedule: "disabled-until-phase-24",
+    providerUseCase: "payments.hosted-checkout",
+    schedule: "hour-boundary",
+    sloRef: "codex-plan/24-real-billing-finance.md",
+  }),
+  handler({
+    handlerKey: "payments.dunning",
+    owner: "Billing / Finance / Platform",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/24-real-billing-finance.md",
+  }),
+  handler({
+    handlerKey: "payments.service-recovery",
+    owner: "Billing / Finance / Support",
+    schedule: "minute-boundary",
     sloRef: "codex-plan/24-real-billing-finance.md",
   }),
   handler({

@@ -595,6 +595,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260726220000_phase_22_privacy_legal_analytics",
       "20260726221500_phase_22_completion_insert_guard",
       "20260727230000_phase_23_worker_operations",
+      "20260728000000_phase_24_real_billing_finance",
     ]);
     expect(
       migrations.rows.every(

@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRightIcon, BriefcaseBusinessIcon, FileTextIcon, GaugeIcon, WalletCardsIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  BriefcaseBusinessIcon,
+  FileTextIcon,
+  GaugeIcon,
+  WalletCardsIcon,
+} from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CancelSubscriptionDialog } from "@/components/billing/cancel-subscription-dialog";
@@ -53,19 +59,29 @@ export default async function EmployerBillingPage() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="eyebrow">Firma · Billing</p>
-          <h1 id="billing-title" className="mt-2 text-3xl font-semibold tracking-tight">
+          <h1
+            id="billing-title"
+            className="mt-2 text-3xl font-semibold tracking-tight"
+          >
             Plan, Rechnungen und Guthaben
           </h1>
           <p className="mt-3 max-w-3xl leading-7 text-muted-foreground">
             Transparente CHF-Beträge, unveränderliche Rechnungen und getrennte
-            Guthabenquellen. Zahlungen laufen im MVP ausschliesslich lokal als Mock.
+            Guthabenquellen. Der lokale Mock bleibt als klar gekennzeichnete
+            Demo; reale Käufe sind bis zu allen Freigaben serverseitig gesperrt.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/employer/billing/profile" className={buttonVariants({ variant: "outline" })}>
+          <Link
+            href="/employer/billing/profile"
+            className={buttonVariants({ variant: "outline" })}
+          >
             Rechnungsprofil
           </Link>
-          <Link href="/employer/billing/usage" className={buttonVariants({ variant: "outline" })}>
+          <Link
+            href="/employer/billing/usage"
+            className={buttonVariants({ variant: "outline" })}
+          >
             Nutzung im Detail
           </Link>
         </div>
@@ -76,7 +92,8 @@ export default async function EmployerBillingPage() {
           <AlertTitle>Rechnungsprofil vervollständigen</AlertTitle>
           <AlertDescription>
             Vor einem Checkout benötigt Billing den rechtlichen Firmennamen, die
-            Rechnungsadresse und eine Kontakt-E-Mail. <Link href="/employer/billing/profile">Jetzt ergänzen</Link>.
+            Rechnungsadresse und eine Kontakt-E-Mail.{" "}
+            <Link href="/employer/billing/profile">Jetzt ergänzen</Link>.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -97,11 +114,13 @@ export default async function EmployerBillingPage() {
           icon={<WalletCardsIcon aria-hidden="true" />}
           label="Aktueller Plan"
           value={overview.plan.name}
-          detail={overview.plan.status === "CANCELLING"
-            ? `Kündigt per ${formatDate(overview.plan.cancellationEffectiveAt ?? overview.plan.periodEnd!)}`
-            : overview.plan.status === "FREE"
-              ? "Kostenloser Basisplan"
-              : "Aktiver Monatsplan"}
+          detail={
+            overview.plan.status === "CANCELLING"
+              ? `Kündigt per ${formatDate(overview.plan.cancellationEffectiveAt ?? overview.plan.periodEnd!)}`
+              : overview.plan.status === "FREE"
+                ? "Kostenloser Basisplan"
+                : "Aktiver Monatsplan"
+          }
         />
         <MetricCard
           icon={<BriefcaseBusinessIcon aria-hidden="true" />}
@@ -113,9 +132,11 @@ export default async function EmployerBillingPage() {
           icon={<GaugeIcon aria-hidden="true" />}
           label="Monatlicher Nettopreis"
           value={formatChfFromRappen(overview.plan.monthlyNetRappen)}
-          detail={overview.plan.periodEnd === null
-            ? "keine bezahlte Periode"
-            : `aktuelle Periode bis ${formatDate(overview.plan.periodEnd)}`}
+          detail={
+            overview.plan.periodEnd === null
+              ? "keine bezahlte Periode"
+              : `aktuelle Periode bis ${formatDate(overview.plan.periodEnd)}`
+          }
         />
         <MetricCard
           icon={<FileTextIcon aria-hidden="true" />}
@@ -129,34 +150,62 @@ export default async function EmployerBillingPage() {
         <CardHeader>
           <CardTitle as="h2">Nächste Schritte</CardTitle>
           <CardDescription>
-            Planänderungen benötigen die Owner-Rolle. Admins dürfen das Rechnungsprofil
-            pflegen und freigegebene Einmalprodukte kaufen.
+            Planänderungen benötigen die Owner-Rolle. Admins dürfen das
+            Rechnungsprofil pflegen und freigegebene Einmalprodukte kaufen.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          {isOwner && overview.plan.pendingChange === null ? <PlanActions currentCode={overview.plan.code} /> : !isOwner ? (
+          {isOwner && overview.plan.pendingChange === null ? (
+            <PlanActions currentCode={overview.plan.code} />
+          ) : !isOwner ? (
             <Badge variant="outline">Planänderung nur durch Inhaber:in</Badge>
           ) : null}
           {overview.usage.talentRadarAccess ? (
-            <Link href="/employer/billing/checkout?product=contact-pack-10" className={buttonVariants({ variant: "outline" })}>
+            <Link
+              href="/employer/billing/checkout?product=contact-pack-10"
+              className={buttonVariants({ variant: "outline" })}
+            >
               Contact Pack kaufen
             </Link>
           ) : isOwner ? (
-            <Link href="/employer/billing/checkout?plan=pro" className={buttonVariants({ variant: "outline" })}>
+            <Link
+              href="/employer/billing/checkout?plan=pro"
+              className={buttonVariants({ variant: "outline" })}
+            >
               Talent Radar mit Pro freischalten
             </Link>
           ) : (
-            <Link href="/pricing" className={buttonVariants({ variant: "outline" })}>
+            <Link
+              href="/pricing"
+              className={buttonVariants({ variant: "outline" })}
+            >
               Planoptionen ansehen
             </Link>
           )}
-          <Link href="/employer/jobs" className={buttonVariants({ variant: "outline" })}>
+          <Link
+            href="/employer/jobs"
+            className={buttonVariants({ variant: "outline" })}
+          >
             Boost auf einer Stelle auswählen
           </Link>
-          <Link href="/employer/billing/invoices" className={buttonVariants({ variant: "outline" })}>
+          <Link
+            href="/employer/billing/invoices"
+            className={buttonVariants({ variant: "outline" })}
+          >
             Rechnungen ansehen
           </Link>
-          {isOwner && overview.plan.status === "ACTIVE" && overview.plan.periodEnd !== null && overview.plan.pendingChange === null ? (
+          {isOwner ? (
+            <Link
+              href="/employer/billing/subscription"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Real-Payment-Status
+            </Link>
+          ) : null}
+          {isOwner &&
+          overview.plan.status === "ACTIVE" &&
+          overview.plan.periodEnd !== null &&
+          overview.plan.pendingChange === null ? (
             <CancelSubscriptionDialog
               periodEnd={overview.plan.periodEnd}
               idempotencyKey={randomUUID()}
@@ -171,11 +220,15 @@ export default async function EmployerBillingPage() {
       <Card>
         <CardHeader>
           <CardTitle as="h2">Letzte Bestellungen</CardTitle>
-          <CardDescription>Status und unveränderlicher Rechnungsbetrag.</CardDescription>
+          <CardDescription>
+            Status und unveränderlicher Rechnungsbetrag.
+          </CardDescription>
         </CardHeader>
         <CardContent className="min-w-0">
           {overview.recentOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Noch keine Bestellungen.</p>
+            <p className="text-sm text-muted-foreground">
+              Noch keine Bestellungen.
+            </p>
           ) : (
             <div
               className="max-w-full contain-paint overflow-x-auto"
@@ -185,16 +238,46 @@ export default async function EmployerBillingPage() {
               tabIndex={0}
             >
               <table className="w-full min-w-[42rem] text-left text-sm">
-                <thead className="text-muted-foreground"><tr><th className="pb-2">Datum</th><th className="pb-2">Produkt / Plan</th><th className="pb-2">Status</th><th className="pb-2 text-right">Total</th><th className="pb-2"><span className="sr-only">Aktion</span></th></tr></thead>
+                <thead className="text-muted-foreground">
+                  <tr>
+                    <th className="pb-2">Datum</th>
+                    <th className="pb-2">Produkt / Plan</th>
+                    <th className="pb-2">Status</th>
+                    <th className="pb-2 text-right">Total</th>
+                    <th className="pb-2">
+                      <span className="sr-only">Aktion</span>
+                    </th>
+                  </tr>
+                </thead>
                 <tbody>
                   {overview.recentOrders.map((order) => (
                     <tr key={order.id} className="border-t">
                       <td className="py-3">{formatDate(order.createdAt)}</td>
                       <td className="py-3 font-medium">{order.label}</td>
-                      <td className="py-3"><Badge variant={order.status === "PAID" ? "default" : "outline"}>{orderStatusLabel(order.status)}</Badge></td>
-                      <td className="py-3 text-right tabular-nums">{formatChfFromRappen(order.totalRappen)}</td>
+                      <td className="py-3">
+                        <Badge
+                          variant={
+                            order.status === "PAID" ? "default" : "outline"
+                          }
+                        >
+                          {orderStatusLabel(order.status)}
+                        </Badge>
+                      </td>
+                      <td className="py-3 text-right tabular-nums">
+                        {formatChfFromRappen(order.totalRappen)}
+                      </td>
                       <td className="py-3 text-right">
-                        {order.status === "PAID" ? <Link href={`/employer/billing/success?order=${encodeURIComponent(order.id)}`} className={buttonVariants({ variant: "ghost", size: "sm" })}>Details</Link> : null}
+                        {order.status === "PAID" ? (
+                          <Link
+                            href={`/employer/billing/success?order=${encodeURIComponent(order.id)}`}
+                            className={buttonVariants({
+                              variant: "ghost",
+                              size: "sm",
+                            })}
+                          >
+                            Details
+                          </Link>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -208,23 +291,92 @@ export default async function EmployerBillingPage() {
   );
 }
 
-function MetricCard({ icon, label, value, detail }: Readonly<{ icon: React.ReactNode; label: string; value: string; detail: string }>) {
-  return <Card><CardHeader><div className="mb-2 flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</div><CardDescription>{label}</CardDescription><CardTitle as="h2" className="text-2xl">{value}</CardTitle></CardHeader><CardContent><p className="text-xs text-muted-foreground">{detail}</p></CardContent></Card>;
+function MetricCard({
+  icon,
+  label,
+  value,
+  detail,
+}: Readonly<{
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+}>) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="mb-2 flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          {icon}
+        </div>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle as="h2" className="text-2xl">
+          {value}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 function PlanActions({ currentCode }: Readonly<{ currentCode: string }>) {
   if (currentCode === "FREE_BASIC") {
-    return <><Link href="/employer/billing/checkout?plan=starter" className={buttonVariants()}>Starter wählen <ArrowRightIcon aria-hidden="true" /></Link><Link href="/employer/billing/checkout?plan=pro" className={buttonVariants({ variant: "outline" })}>Pro wählen</Link></>;
+    return (
+      <>
+        <Link
+          href="/employer/billing/checkout?plan=starter"
+          className={buttonVariants()}
+        >
+          Starter wählen <ArrowRightIcon aria-hidden="true" />
+        </Link>
+        <Link
+          href="/employer/billing/checkout?plan=pro"
+          className={buttonVariants({ variant: "outline" })}
+        >
+          Pro wählen
+        </Link>
+      </>
+    );
   }
   if (currentCode === "STARTER") {
-    return <Link href="/employer/billing/checkout?plan=pro" className={buttonVariants()}>Auf Pro upgraden <ArrowRightIcon aria-hidden="true" /></Link>;
+    return (
+      <Link
+        href="/employer/billing/checkout?plan=pro"
+        className={buttonVariants()}
+      >
+        Auf Pro upgraden <ArrowRightIcon aria-hidden="true" />
+      </Link>
+    );
   }
   if (currentCode === "PRO") {
-    return <Link href="/employer/billing/checkout?plan=starter" className={buttonVariants({ variant: "outline" })}>Zu Starter per Periodenende</Link>;
+    return (
+      <Link
+        href="/employer/billing/checkout?plan=starter"
+        className={buttonVariants({ variant: "outline" })}
+      >
+        Zu Starter per Periodenende
+      </Link>
+    );
   }
-  return <Link href="/employers/demo" className={buttonVariants()}>Planberatung anfragen</Link>;
+  return (
+    <Link href="/employers/demo" className={buttonVariants()}>
+      Planberatung anfragen
+    </Link>
+  );
 }
 
 function orderStatusLabel(status: string) {
-  return ({ DRAFT: "Entwurf", PENDING: "Zahlung offen", PAID: "Bezahlt", FAILED: "Fehlgeschlagen", CANCELLED: "Abgebrochen", EXPIRED: "Abgelaufen" } as Record<string, string>)[status] ?? status;
+  return (
+    (
+      {
+        DRAFT: "Entwurf",
+        PENDING: "Zahlung offen",
+        PAID: "Bezahlt",
+        FAILED: "Fehlgeschlagen",
+        CANCELLED: "Abgebrochen",
+        EXPIRED: "Abgelaufen",
+      } as Record<string, string>
+    )[status] ?? status
+  );
 }

@@ -30,7 +30,12 @@ export async function startBillingCheckoutAction(
   const slug = readSingleFormString(formData, "slug");
   const quantityText = readSingleFormString(formData, "quantity");
   const idempotencyKey = readSingleFormString(formData, "idempotencyKey");
-  if (kind === null || slug === null || quantityText === null || idempotencyKey === null) {
+  if (
+    kind === null ||
+    slug === null ||
+    quantityText === null ||
+    idempotencyKey === null
+  ) {
     return invalidState();
   }
   const retentionMarker = formData.has("retentionRequired")
@@ -42,7 +47,8 @@ export async function startBillingCheckoutAction(
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim());
   if (
-    retainedMembershipIds.length !== formData.getAll("retainedMembershipIds").length ||
+    retainedMembershipIds.length !==
+      formData.getAll("retainedMembershipIds").length ||
     new Set(retainedMembershipIds).size !== retainedMembershipIds.length ||
     (formData.has("retentionRequired") && retentionMarker !== "yes") ||
     (retentionRequired && retainedMembershipIds.length === 0) ||
@@ -52,7 +58,9 @@ export async function startBillingCheckoutAction(
     return invalidState();
   }
 
-  const dependencies = await getEmployerBillingActionDependencies(kind === "PLAN");
+  const dependencies = await getEmployerBillingActionDependencies(
+    kind === "PLAN",
+  );
   if (dependencies === null) {
     return Object.freeze({
       status: "error",
@@ -62,30 +70,31 @@ export async function startBillingCheckoutAction(
           : "Dieser Kauf ist für deine aktuelle Rolle nicht verfügbar.",
     });
   }
-  const input = kind === "PLAN"
-    ? {
-        kind: "PLAN",
-        planSlug: slug,
-        ...(retentionRequired ? { retainedMembershipIds } : {}),
-        idempotencyKey,
-      }
-    : {
-        kind: "PRODUCT",
-        productSlug: slug,
-        quantity: Number(quantityText),
-        ...(formData.has("targetJobId")
-          ? { targetJobId: readSingleFormString(formData, "targetJobId") }
-          : {}),
-        ...(formData.has("importSetupApprovalId")
-          ? {
-              importSetupApprovalId: readSingleFormString(
-                formData,
-                "importSetupApprovalId",
-              ),
-            }
-          : {}),
-        idempotencyKey,
-      };
+  const input =
+    kind === "PLAN"
+      ? {
+          kind: "PLAN",
+          planSlug: slug,
+          ...(retentionRequired ? { retainedMembershipIds } : {}),
+          idempotencyKey,
+        }
+      : {
+          kind: "PRODUCT",
+          productSlug: slug,
+          quantity: Number(quantityText),
+          ...(formData.has("targetJobId")
+            ? { targetJobId: readSingleFormString(formData, "targetJobId") }
+            : {}),
+          ...(formData.has("importSetupApprovalId")
+            ? {
+                importSetupApprovalId: readSingleFormString(
+                  formData,
+                  "importSetupApprovalId",
+                ),
+              }
+            : {}),
+          idempotencyKey,
+        };
   const result = await createCheckoutOrder(input, dependencies);
   if (!result.ok) return checkoutError(result.code);
   redirect(result.value.checkoutUrl);
@@ -105,22 +114,35 @@ function checkoutError(code: string): BillingActionState {
     NOT_FOUND: "Der aktuelle Firmenkontext ist nicht mehr verfügbar.",
     PROFILE_REQUIRED: "Vervollständige zuerst das Rechnungsprofil.",
     CATALOG_UNAVAILABLE: "Diese Option ist aktuell nicht verfügbar.",
-    TAX_UNAVAILABLE: "Die freigegebene Schweizer MWST-Rate ist aktuell nicht eindeutig verfügbar.",
+    TAX_UNAVAILABLE:
+      "Die freigegebene Schweizer MWST-Rate ist aktuell nicht eindeutig verfügbar.",
     SAME_PLAN: "Dieser Plan ist bereits aktiv.",
     PLAN_NOT_SELF_SERVICE: "Dieser Planwechsel benötigt eine Beratung.",
     PRODUCT_NOT_AVAILABLE: "Dieses Produkt ist aktuell nicht kaufbar.",
-    PRODUCT_RELEASE_REQUIRED: "Für dieses P1-Produkt fehlt ein gültiger aufgezeichneter Release-Entscheid.",
-    PRODUCT_CONTEXT_INVALID: "Der serverseitig geprüfte Zielkontext ist nicht mehr gültig.",
-    ADDITIONAL_JOB_NOT_ELIGIBLE: "Diese Stelle erfüllt die Voraussetzungen für eine Zusatzstelle nicht mehr.",
-    JOB_BOOST_NOT_ELIGIBLE: "Diese Stelle erfüllt die Voraussetzungen für den gewählten Boost nicht mehr.",
-    IMPORT_SETUP_NOT_ELIGIBLE: "Die Import-Freigabe oder der zugehörige Vertrag ist nicht mehr gültig.",
-    TALENT_RADAR_REQUIRED: "Contact Packs benötigen einen aktiven Talent-Radar-Zugang.",
-    FULFILLMENT_HANDLER_MISSING: "Für dieses Produkt ist noch keine sichere Auslieferung registriert.",
-    IDEMPOTENCY_MISMATCH: "Diese Checkout-Anfrage passt nicht zum vorhandenen Vorgang. Lade die Seite neu.",
-    PAYMENT_PROVIDER_FAILED: "Der lokale Mock-Checkout konnte nicht gestartet werden.",
+    PRODUCT_RELEASE_REQUIRED:
+      "Für dieses P1-Produkt fehlt ein gültiger aufgezeichneter Release-Entscheid.",
+    PRODUCT_CONTEXT_INVALID:
+      "Der serverseitig geprüfte Zielkontext ist nicht mehr gültig.",
+    ADDITIONAL_JOB_NOT_ELIGIBLE:
+      "Diese Stelle erfüllt die Voraussetzungen für eine Zusatzstelle nicht mehr.",
+    JOB_BOOST_NOT_ELIGIBLE:
+      "Diese Stelle erfüllt die Voraussetzungen für den gewählten Boost nicht mehr.",
+    IMPORT_SETUP_NOT_ELIGIBLE:
+      "Die Import-Freigabe oder der zugehörige Vertrag ist nicht mehr gültig.",
+    TALENT_RADAR_REQUIRED:
+      "Contact Packs benötigen einen aktiven Talent-Radar-Zugang.",
+    FULFILLMENT_HANDLER_MISSING:
+      "Für dieses Produkt ist noch keine sichere Auslieferung registriert.",
+    IDEMPOTENCY_MISMATCH:
+      "Diese Checkout-Anfrage passt nicht zum vorhandenen Vorgang. Lade die Seite neu.",
+    PAYMENT_PROVIDER_FAILED: "Die lokale Demo konnte nicht gestartet werden.",
+    PAID_ACTIVATION_REQUIRED: "Der reale Checkout ist nicht freigegeben.",
+    STEP_UP_REQUIRED: "Die aktionsgebundene Sicherheitsbestätigung fehlt.",
+    PAYMENT_HELD: "Der Vorgang wurde zur Sicherheitsprüfung angehalten.",
   };
   return Object.freeze({
     status: code === "CONFLICT" ? "conflict" : "error",
-    message: messages[code] ?? "Der Checkout konnte nicht sicher gestartet werden.",
+    message:
+      messages[code] ?? "Der Checkout konnte nicht sicher gestartet werden.",
   });
 }

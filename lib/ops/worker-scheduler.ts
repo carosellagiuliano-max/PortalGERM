@@ -39,6 +39,14 @@ export async function scheduleActivatedWork(
   let replayed = 0;
 
   for (const handler of WORKER_HANDLER_CATALOG) {
+    if (handler.schedule === "event-driven") {
+      handlerStates.push({
+        handlerKey: handler.handlerKey,
+        reason: "EVENT_DRIVEN",
+        scheduled: 0,
+      });
+      continue;
+    }
     if (handler.schedule === "manual-sandbox-only") {
       handlerStates.push({
         handlerKey: handler.handlerKey,
@@ -112,8 +120,7 @@ async function enqueueScheduleTick(
     now: Date;
   }>,
 ) {
-  const divisor =
-    handler.schedule === "hour-boundary" ? 60 * 60_000 : 60_000;
+  const divisor = handler.schedule === "hour-boundary" ? 60 * 60_000 : 60_000;
   const bucket = Math.floor(dependencies.now.getTime() / divisor);
   const dedupeKey = `${handler.handlerKey}:${handler.handlerVersion}:${bucket}`;
   const outcome = await enqueueWorkItem(dependencies.database, {
@@ -155,10 +162,8 @@ async function enqueueDocumentScans(
   let created = 0;
   let replayed = 0;
   for (const version of versions) {
-    const revision =
-      `${version.createdAt.getTime()}-${version._count.scanAttempts}`;
-    const dedupeKey =
-      `${handler.handlerKey}:${handler.handlerVersion}:${version.id}:${revision}`;
+    const revision = `${version.createdAt.getTime()}-${version._count.scanAttempts}`;
+    const dedupeKey = `${handler.handlerKey}:${handler.handlerVersion}:${version.id}:${revision}`;
     const outcome = await enqueueWorkItem(dependencies.database, {
       handlerKey: handler.handlerKey,
       handlerVersion: handler.handlerVersion,
@@ -243,6 +248,14 @@ function providerRequirements(
         {
           useCase: "documents.object-store",
           adapterKey: environment.DOCUMENT_STORAGE_MODE,
+        },
+      ];
+    case "payments.inbox-project":
+    case "payments.reconcile":
+      return [
+        {
+          useCase: "payments.hosted-checkout",
+          adapterKey: environment.PAYMENT_PROVIDER_MODE,
         },
       ];
     default:

@@ -620,16 +620,26 @@ flowchart LR
 
 ### 17.4 Payment and service delivery
 
-- PSP webhook Inbox stores only the approved minimal raw/signature evidence,
-  provider event id and processing state; server validates amount, currency,
-  order, tenant and transition;
-- reconciliation binds ProviderAttempt/Receipt to immutable
-  Order/Invoice/PaymentEvent/Ledger snapshots;
+- Phase 24 implements a disabled-by-default Stripe-test Hosted-Checkout port;
+  the server binds CHF amount, VAT, company, plan, WTP decision,
+  ProviderActivation and one action-bound AssuranceEvidence in one Attempt;
+- the PSP webhook Inbox stores only normalized allowlisted fields plus
+  raw/signature digests, Provider Event ID and processing state; raw-body
+  signature, account, test environment, amount, currency, order, tenant and
+  transition are validated before domain projection;
+- reconciliation binds PaymentAttempt/Inbox to immutable
+  Order/Invoice/PaymentEvent/Subscription/Ledger snapshots and persists every
+  deviation instead of silently repairing it;
+- Refund requires requester/approver separation and two purpose-bound
+  AssuranceEvidence rows; Chargeback, CreditNote and Dunning are explicit
+  state machines;
 - ServiceDeliveryAssessment distinguishes expected recruiting outcome from
-  platform-caused non-delivery and issues at most one approved replacement,
-  extension, credit restoration or refund;
-- real Payment is absent/disabled unless Phase-31A WTP-Go and LC5 external
-  gates are present.
+  platform-caused non-delivery and issues at most one approved extension,
+  exact credit restoration or Finance escalation/refund;
+- Real-Payment capability exists only as Local-/CI-/Staging test-mode code and
+  remains disabled unless Phase-31A WTP-Go plus Provider, Tax, Legal, Finance,
+  Phase-25-Step-up and LC5 external gates are present. Phase 24 has no LIVE
+  provider mode and no Real→Mock fallback.
 
 ### 17.5 Privileged security, fraud and company trust
 
@@ -673,7 +683,9 @@ Expected route families, subject to the owning ADR and phase:
 - private document upload/finalize/download/delete;
 - public legal/terms/privacy/imprint pages and secure export artifact access;
 - Admin roles/security/Trust-&-Safety/provider/worker operations;
-- payment webhook only in Phase 24 and only behind explicit PSP config;
+- payment webhook is implemented by Phase 24 and remains behind explicit
+  test-PSP config, ProviderActivation and independent ingestion/projection
+  switches;
 - Employer job reconfirm/fill and public/candidate unavailable-report entry;
 - central notification preferences.
 

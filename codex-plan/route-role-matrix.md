@@ -1,6 +1,6 @@
 # Route- und Rollenmatrix
 
-> **Stand:** Phase-21-Abschlussbaum, 103 Seiten und 16 Route Handler. Die
+> **Stand:** Phase-24-Technikbaum, 110 Seiten und 18 Route Handler. Die
 > maschinenlesbare Inventarbasis ist
 > [`route-inventory.json`](./route-inventory.json); `npm run route:audit`
 > vergleicht sie mit dem tatsächlichen `app/`-Baum. Diese Matrix dokumentiert
@@ -122,7 +122,7 @@ eingeschränkt.
 | `/support` | Authenticated | nur eigene Cases; Company-Auswahl nur aus aktiven Memberships |
 | `/support/[id]` | Authenticated | requester-scoped Safe 404; Reply nur im erlaubten Status |
 
-## Employer und Recruiter — 23
+## Employer und Recruiter — 24
 
 Das `/employer`-Layout akzeptiert globale Rollen `EMPLOYER` und `RECRUITER`.
 Firmenbezogene Daten verlangen eine aktive Membership im aktuell
@@ -155,6 +155,7 @@ erhalten einen sicheren Locked/404-Zustand.
 | `/employer/billing/invoices` | Owner/Admin, tenant-scoped |
 | `/employer/billing/invoices/[id]` | Owner/Admin; fremd/nicht existent gleiche 404 |
 | `/employer/billing/usage` | Owner/Admin; Ledger-/Entitlement-Summaries |
+| `/employer/billing/subscription` | Owner; read-only Real-Payment-Gatestatus, kein Kauf-CTA vor WTP-/Provider-/Phase-25B-Step-up-Freigabe |
 
 ## Lokaler Mock-Checkout — 1
 
@@ -162,7 +163,7 @@ erhalten einen sicheren Locked/404-Zustand.
 | --- | --- | --- |
 | `/mock/checkout/[orderId]` | Employer mit aktiver Company-Membership | gespeicherte Order/Company; Plan nur Owner, One-time Product Owner/Admin; Production-Provider bleibt Mock |
 
-## Admin — 32
+## Admin — 34
 
 Alle Routen verlangen eine aktive globale Adminrolle. Die Server-Use-Cases
 prüfen zusätzlich die genannte Capability; sensible Reads sind begrenzt und
@@ -194,6 +195,8 @@ Audit-Metadaten redigiert.
 | `/admin/leads` | `ADMIN_LEAD_MANAGE`; consent-/purpose-bounded |
 | `/admin/leads/[id]` | Assignment/Notiz/Status/Follow-up |
 | `/admin/billing` | `ADMIN_BILLING_READ`; Mock-Finanzübersicht |
+| `/admin/finance/reconciliation` | `ADMIN_BILLING_READ`; redigierte Inbox-/Attempt-/Mismatch-/Run-Ansicht, Phase 24 read-only |
+| `/admin/finance/service-recovery` | `ADMIN_BILLING_READ`; Dunning-/Refund-/Service-Assessment-Status, Remedy-Ausführung standardmässig gesperrt |
 | `/admin/orders` | Billing-Read/Mutation je Aktion |
 | `/admin/orders/[id]` | gespeicherte Order/Payment/Fulfillment-Evidence |
 | `/admin/invoices` | Billing-Read |
@@ -211,15 +214,23 @@ Audit-Metadaten redigiert.
 | `/health/ready` | Public Operations | begrenzter DB-/Schema-/Migrationscheck, 200/503 + Correlation ID |
 | `/dev/mailbox` | Local Ops Token | Local/CI plus Bearer-Secret; Production 404, no-store/noindex/no-referrer |
 
+## Payment-Provider-Handler — 1
+
+| Handler | Autorität | Antwortgrenze |
+| --- | --- | --- |
+| `/api/webhooks/payments/[provider]` | keine Userrolle; exakte Providerkennung, Raw-Body-Signatur, Testaccount/-environment und Ingestion-Flag | durable, deduplizierte Inbox vor Antwort; keine Domainwirkung bei ungültiger Signatur/Account/Environment; keine Raw-Payload-Ausgabe |
+
 ## Nicht vorhandene/deferred Routen
 
 - `/employer/mandates` und `/employer/mandates/[id]` bleiben zusammen mit
   REQ-REC-002 als separat gegatetes P1-Paket absent.
 - Referral-Routen für REQ-GRW-003 bleiben bis Legal-/Fraud-/Consent-Gate
   absent.
-- Es gibt keine öffentlichen oder LIVE-fähigen Datei-URLs und keine realen
-  Provider-Webhook-, PDF-Invoice-, Scraping- oder Success-Fee-Routen. Der
-  Dokumenten-Read ist ausschließlich grant-gebunden und Sandbox-only.
+- Es gibt keine öffentlichen oder LIVE-fähigen Datei-URLs, PDF-Invoice-,
+  Scraping- oder Success-Fee-Routen. Der Payment-Webhook ist technisch nur für
+  den explizit gegateten Stripe-Testadapter implementiert und kein
+  LIVE-Paymentbeleg. Der Dokumenten-Read ist ausschließlich grant-gebunden und
+  Sandbox-only.
 
 ## Verbleibendes geplantes Route-/Prozessdelta Phase 22–32
 
@@ -235,9 +246,9 @@ Audit-Metadaten redigiert.
 | --- | --- | --- | --- | --- |
 | 25 · `REQ-ID-004` | gemeinsame `/security`-/Step-up-Challenge; Phase-20-E-Mail-Assurance bleibt Basis, keine Query-Token-Weitergabe | Candidate, Employer Owner, Billing, Admin; purpose/action/tenant/resource/session-bound | challenge, success, stale, cancelled, recovery, revoked; Security-sensitive | risk/assurance policy; direct-action/tenant/replay tests; High-risk actions fail-closed |
 | 22 · `REQ-PRIV-004` | **Technischer Ist-Stand:** `/legal/privacy`, `/legal/terms`, `/legal/imprint`, `/admin/legal`, bestehende Privacy Cases plus expiring `/api/privacy/exports/[id]` | Public nur exakte Publication; Candidate owner; Privacy Read/Verify/Process getrennt; Nicht-Kontoinhaber fail-closed | versioned/pending/hold/partial/retry/ready/expired/erased; PII/Legal | Candidate `0636a875`, automatisiertes G3 `PASS`; Counsel/Phase-25-Step-up/Research `BLOCKED`, Activation `DISABLED`; [Evidence](./evidence/2026-07-26-phase-22.md) |
-| 23 · `REQ-OPS-005` | Admin/Ops Worker-, DLQ-, Provider- und Health-Details; keine Public Controls | Operations/Support/Security per least privilege; Local Token nicht Production-Ersatz | healthy/degraded/paused/backpressured/DLQ/replay; redigierte Opsdaten | environment/provider activation ledger; load/crash/restart/runbook tests |
-| 24 · `REQ-PAY-001` | hosted checkout redirect/return plus PSP webhook handler; Finance reconciliation/admin dispute views | Company Owner/Billing; webhook signature+Inbox; Finance capability tenant-/need-to-know | pending/authorized/paid/failed/refunded/disputed/reconciled; financial | nur LC5 WTP-Go + PSP/Tax/Legal; signature/replay/amount/tenant/chargeback E2E |
-| 24 · `REQ-BIL-010` | existing order/Boost/Radar/service detail and Support escalation | same Company entitlement plus Finance/Support capability | assessed, replacement, extended, credited, refunded, rejected, appealed | ServiceDeliveryPolicy; exactly-once ledger/refund tests |
+| 23 · `REQ-OPS-005` | **Technischer Ist-Stand:** `/admin/system`, Phase-23-Worker-/DLQ-/Provider-/Health-Vertrag; keine Public Controls | Operationsmutationen bleiben Phase 25; Local Token nicht Production-Ersatz | healthy/degraded/paused/backpressured/DLQ/replay; redigierte Opsdaten | Candidate `d16a2d9`, Local-/CI-G3 `PASS`; Staging/Pager/Provider/LIVE `DISABLED` |
+| 24 · `REQ-PAY-001` | **Technischer Ist-Stand:** `/employer/billing/subscription`, `/api/webhooks/payments/[provider]`, `/admin/finance/reconciliation` plus bestehende Billing-/Invoice-Routen | Owner-Guard; Webhook-Signatur+Inbox; Finance read-only, Mutationen zusätzlich Capability/Step-up/SoD | locked/pending/paid/failed/refunded/disputed/reconciled; financial | Local-/CI-Sandboxvertrag; LC5 WTP, PSP/Tax/Legal/Finance/Phase-25-Step-up und LIVE bleiben `BLOCKED` |
+| 24 · `REQ-BIL-010` | **Technischer Ist-Stand:** `/admin/finance/service-recovery`, bestehende Order-/Boost-/Radarobjekte und ServiceDelivery-Worker | gleiche Company-/OrderLine-/Serviceinstanz; Finance/Support-Ausführung fail-closed | assessed, extended, credit-restored, escalated/refund; exactly-once | Policy-/PostgreSQL-/Replaytests technisch; konkrete Paid-Servicepolicy, Support-SLA und LIVE-Aktivierung offen |
 | 25 · `REQ-ADM-007` | `/admin/security`, role/assignment, dual-approval and break-glass oversight | Security Admin distinct from Support/Moderation/Finance/Privacy; SoD enforced server-side | enroll/recover/pending-second-approval/expired/revoked/break-glass | Admin RBAC/MFA flag; cross-capability/direct-action/E2E; no global fallback |
 | 25/26 · `REQ-TRUST-001` | risk-based Trust-&-Safety queues/details, possibly consolidated with existing reports | Trust & Safety/Security/Finance scoped by case type; subjects see bounded appeal | open/held/revoked/appealed/false-positive/resolved; secret signal details hidden | risk-policy version; fraud/ATO/incident drill; rapid kill switch |
 | 26 · `REQ-EMP-008` | existing Company verification plus structured evidence/re-review | Company Owner submits; independent reviewers approve; no self-approval | draft/pending/needs-info/verified/expiring/expired/revoked/appealed | evidence provider + dual review; Badge/Job/Radar same-read revocation |

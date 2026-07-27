@@ -65,7 +65,13 @@ export type PlanVersionEntitlementSource = Readonly<{
 export type SubscriptionEntitlementSource = Readonly<{
   id: string;
   companyId: string;
-  status: "SCHEDULED" | "ACTIVE" | "CANCELLING" | "EXPIRED" | "CANCELLED";
+  status:
+    | "SCHEDULED"
+    | "ACTIVE"
+    | "CANCELLING"
+    | "SUSPENDED"
+    | "EXPIRED"
+    | "CANCELLED";
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
   planVersion: PlanVersionEntitlementSource;
@@ -142,7 +148,9 @@ export type EntitlementResolutionResult =
     }>;
 
 export type EntitlementRepository = Readonly<{
-  listDefaultFreePlanVersions(at: Date): Promise<readonly PlanVersionEntitlementSource[]>;
+  listDefaultFreePlanVersions(
+    at: Date,
+  ): Promise<readonly PlanVersionEntitlementSource[]>;
   listCompanySubscriptions(
     companyId: string,
     at: Date,
@@ -157,7 +165,9 @@ export type EntitlementRepository = Readonly<{
   ): Promise<readonly FundableCreditRecord[]>;
 }>;
 
-const ENTITLEMENT_TYPES: Readonly<Record<EntitlementKey, EntitlementValueType>> = {
+const ENTITLEMENT_TYPES: Readonly<
+  Record<EntitlementKey, EntitlementValueType>
+> = {
   ACTIVE_JOB_LIMIT: "INTEGER",
   SEAT_LIMIT: "INTEGER",
   TALENT_RADAR_ACCESS: "BOOLEAN",
@@ -194,12 +204,12 @@ export async function getEffectiveEntitlements(
   // cannot safely execute concurrent queries.
   const defaultFreePlanVersions =
     await repository.listDefaultFreePlanVersions(at);
-  const subscriptions =
-    await repository.listCompanySubscriptions(companyId, at);
-  const grants =
-    await repository.listCompanyEntitlementGrants(companyId, at);
-  const fundableCredits =
-    await repository.listFundableCredits(companyId, at);
+  const subscriptions = await repository.listCompanySubscriptions(
+    companyId,
+    at,
+  );
+  const grants = await repository.listCompanyEntitlementGrants(companyId, at);
+  const fundableCredits = await repository.listFundableCredits(companyId, at);
 
   return resolveEffectiveEntitlements({
     companyId,
@@ -350,9 +360,7 @@ export function decodePlanEntitlementsV1(
       ENHANCED_COMPANY_PROFILE: decoded.get(
         "ENHANCED_COMPANY_PROFILE",
       ) as boolean,
-      EMPLOYER_IMPORT_ACCESS: decoded.get(
-        "EMPLOYER_IMPORT_ACCESS",
-      ) as boolean,
+      EMPLOYER_IMPORT_ACCESS: decoded.get("EMPLOYER_IMPORT_ACCESS") as boolean,
     },
   };
 }
@@ -361,10 +369,7 @@ function decodeTypedValue(
   key: EntitlementKey,
   row: Pick<
     PlanEntitlementRecord,
-    | "valueType"
-    | "booleanValue"
-    | "integerValue"
-    | "analyticsLevelValue"
+    "valueType" | "booleanValue" | "integerValue" | "analyticsLevelValue"
   >,
 ):
   | Readonly<{ ok: true; value: boolean | number | AnalyticsLevel }>
@@ -443,9 +448,7 @@ function applyGrants(
       for (const grant of keyGrants) {
         const decoded = decodeTypedValue(key, grant);
         if (!decoded.ok || typeof decoded.value !== "number") {
-          return decoded.ok
-            ? failure("INVALID_GRANT", key)
-            : decoded;
+          return decoded.ok ? failure("INVALID_GRANT", key) : decoded;
         }
         if (grant.integerMode !== "ADD" && grant.integerMode !== "REPLACE") {
           return failure("INVALID_GRANT", key);
@@ -521,10 +524,7 @@ function applyGrants(
 function buildFundableBySource(
   records: readonly FundableCreditRecord[],
 ): FundableBySource | null {
-  const result: Record<
-    CreditFundingSource,
-    Record<CreditType, number>
-  > = {
+  const result: Record<CreditFundingSource, Record<CreditType, number>> = {
     PLAN_ALLOWANCE: emptyCreditTypeRecord(),
     PURCHASED_PACK: emptyCreditTypeRecord(),
     ADMIN_GRANT: emptyCreditTypeRecord(),

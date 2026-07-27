@@ -7,7 +7,13 @@ import { CheckoutSubmitForm } from "@/components/billing/checkout-submit-form";
 import { CheckoutSummary } from "@/components/billing/checkout-summary";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   buildEmployerCheckoutChoices,
   type EmployerCheckoutChoiceResult,
@@ -18,7 +24,10 @@ import { getPublicPricingCatalog } from "@/lib/billing/public-catalog";
 import { getDatabase } from "@/lib/db/client";
 import { formatChfFromRappen } from "@/lib/utils/format";
 
-export const metadata: Metadata = { title: "Sicherer Mock-Checkout" };
+export const metadata: Metadata = {
+  title: "Lokale Billing-Demo",
+  robots: { index: false, follow: false, noarchive: true },
+};
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -42,10 +51,11 @@ export default async function EmployerBillingCheckoutPage({
 
   if (plan === null && product === null) {
     const catalog = await getPublicPricingCatalog(new Date());
-    const choices = catalog.ok &&
+    const choices =
+      catalog.ok &&
       (context.membershipRole === "OWNER" || context.membershipRole === "ADMIN")
-      ? buildEmployerCheckoutChoices(catalog.value, context.membershipRole)
-      : ({ ok: false, code: "CATALOG_UNAVAILABLE" } as const);
+        ? buildEmployerCheckoutChoices(catalog.value, context.membershipRole)
+        : ({ ok: false, code: "CATALOG_UNAVAILABLE" } as const);
     return <CheckoutChoice choices={choices} />;
   }
   const quantity = parseQuantity(query.quantity);
@@ -56,7 +66,9 @@ export default async function EmployerBillingCheckoutPage({
       ...(plan === null ? {} : { plan }),
       ...(product === null ? {} : { product }),
       quantity,
-      ...(scalar(query.job) === null ? {} : { targetJobId: scalar(query.job)! }),
+      ...(scalar(query.job) === null
+        ? {}
+        : { targetJobId: scalar(query.job)! }),
       ...(scalar(query.approval) === null
         ? {}
         : { importSetupApprovalId: scalar(query.approval)! }),
@@ -75,14 +87,21 @@ export default async function EmployerBillingCheckoutPage({
   return (
     <section aria-labelledby="checkout-title" className="grid gap-7">
       <header>
-        <p className="eyebrow">Billing · Sicherer Checkout</p>
-        <h1 id="checkout-title" className="mt-2 text-3xl font-semibold tracking-tight">
+        <div className="flex flex-wrap gap-2">
+          <p className="eyebrow">Billing · Lokale Demo</p>
+        </div>
+        <h1
+          id="checkout-title"
+          className="mt-2 text-3xl font-semibold tracking-tight"
+        >
           Bestellung prüfen
         </h1>
         <p className="mt-3 max-w-3xl leading-7 text-muted-foreground">
-          Auswahl und Menge sind nur eine Kaufabsicht. Preis, MWST, Firmenkontext und
-          Rechnungsprofil werden beim Absenden erneut serverseitig geladen und als
-          unveränderliche Bestellung gespeichert.
+          Auswahl und Menge sind nur eine Kaufabsicht. Preis, MWST,
+          Firmenkontext und Rechnungsprofil werden beim Absenden erneut
+          serverseitig geladen und als unveränderliche Demo-Bestellung
+          gespeichert. Dieser Ablauf belastet kein echtes Zahlungsmittel und ist
+          keine Umsatz- oder WTP-Evidence.
         </p>
       </header>
       <CheckoutSummary preview={preview.value} />
@@ -90,12 +109,21 @@ export default async function EmployerBillingCheckoutPage({
         <Alert>
           <AlertTitle>Rechnungsprofil fehlt</AlertTitle>
           <AlertDescription>
-            Es wurde noch keine Bestellung angelegt. <Link href="/employer/billing/profile">Rechnungsprofil vervollständigen</Link>.
+            Es wurde noch keine Bestellung angelegt.{" "}
+            <Link href="/employer/billing/profile">
+              Rechnungsprofil vervollständigen
+            </Link>
+            .
           </AlertDescription>
         </Alert>
       ) : (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <Link href="/employer/billing" className={buttonVariants({ variant: "outline" })}>Abbrechen</Link>
+          <Link
+            href="/employer/billing"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Abbrechen
+          </Link>
           <CheckoutSubmitForm
             kind={preview.value.kind}
             slug={preview.value.slug}
@@ -119,7 +147,10 @@ function CheckoutChoice({
       <section aria-labelledby="checkout-choice-title" className="grid gap-7">
         <header>
           <p className="eyebrow">Billing · Checkout</p>
-          <h1 id="checkout-choice-title" className="mt-2 text-3xl font-semibold tracking-tight">
+          <h1
+            id="checkout-choice-title"
+            className="mt-2 text-3xl font-semibold tracking-tight"
+          >
             Plan oder Produkt wählen
           </h1>
         </header>
@@ -127,10 +158,14 @@ function CheckoutChoice({
           <AlertTitle>Checkout-Auswahl momentan nicht verfügbar</AlertTitle>
           <AlertDescription className="grid gap-3">
             <p>
-              Die aktuell wirksamen Katalogversionen konnten nicht eindeutig bestätigt werden.
-              Deshalb zeigen wir keine Ersatzpreise oder Ersatzlimiten an.
+              Die aktuell wirksamen Katalogversionen konnten nicht eindeutig
+              bestätigt werden. Deshalb zeigen wir keine Ersatzpreise oder
+              Ersatzlimiten an.
             </p>
-            <Link href="/employer/billing" className={buttonVariants({ variant: "outline" })}>
+            <Link
+              href="/employer/billing"
+              className={buttonVariants({ variant: "outline" })}
+            >
               Zur Billing-Übersicht
             </Link>
           </AlertDescription>
@@ -141,9 +176,37 @@ function CheckoutChoice({
 
   return (
     <section aria-labelledby="checkout-choice-title" className="grid gap-7">
-      <header><p className="eyebrow">Billing · Checkout</p><h1 id="checkout-choice-title" className="mt-2 text-3xl font-semibold tracking-tight">Plan oder Produkt wählen</h1><p className="mt-3 text-muted-foreground">Die Auswahl übernimmt nur aktuell wirksame Katalogwerte. Der Link übermittelt eine Kaufabsicht; Verfügbarkeit, Rechte und Betrag werden vor der Bestellung erneut serverseitig geprüft.</p></header>
+      <header>
+        <p className="eyebrow">Billing · Checkout</p>
+        <h1
+          id="checkout-choice-title"
+          className="mt-2 text-3xl font-semibold tracking-tight"
+        >
+          Plan oder Produkt wählen
+        </h1>
+        <p className="mt-3 text-muted-foreground">
+          Die Auswahl übernimmt nur aktuell wirksame Katalogwerte. Der Link
+          übermittelt eine Kaufabsicht; Verfügbarkeit, Rechte und Betrag werden
+          vor der Bestellung erneut serverseitig geprüft.
+        </p>
+      </header>
       <div className="grid gap-4 md:grid-cols-2">
-        {choices.value.map((choice) => <Card key={choice.href}><CardHeader><CardTitle as="h2">{choice.name}</CardTitle><CardDescription>{choice.detail}</CardDescription></CardHeader><CardContent className="flex items-center justify-between gap-3"><p className="text-lg font-semibold">{formatChfFromRappen(choice.netPriceRappen)} netto</p><Link href={choice.href} className={buttonVariants()}>Prüfen</Link></CardContent></Card>)}
+        {choices.value.map((choice) => (
+          <Card key={choice.href}>
+            <CardHeader>
+              <CardTitle as="h2">{choice.name}</CardTitle>
+              <CardDescription>{choice.detail}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between gap-3">
+              <p className="text-lg font-semibold">
+                {formatChfFromRappen(choice.netPriceRappen)} netto
+              </p>
+              <Link href={choice.href} className={buttonVariants()}>
+                Prüfen
+              </Link>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </section>
   );
@@ -153,25 +216,77 @@ function CheckoutUnavailable({
   code,
   canManagePlan,
 }: Readonly<{ code: string; canManagePlan: boolean }>) {
-  const copy: Record<string, { title: string; description: string; href?: string; cta?: string }> = {
-    INVALID_SELECTION: { title: "Ungültige Auswahl", description: "Wähle genau einen freigegebenen Plan oder ein Contact Pack." },
-    CATALOG_UNAVAILABLE: { title: "Aktuell nicht verfügbar", description: "Für diese Auswahl existiert aktuell keine eindeutig freigegebene Version." },
-    TAX_UNAVAILABLE: { title: "Checkout vorsorglich gesperrt", description: "Die freigegebene Schweizer MWST-Version ist nicht eindeutig verfügbar." },
-    SAME_PLAN: { title: "Plan bereits aktiv", description: "Ein Checkout für denselben aktiven Plan ist nicht zulässig." },
-    PLAN_NOT_SELF_SERVICE: { title: "Beratung erforderlich", description: "Dieser Planwechsel ist im Self-Service-MVP nicht freigegeben.", href: "/employers/demo", cta: "Beratung anfragen" },
+  const copy: Record<
+    string,
+    { title: string; description: string; href?: string; cta?: string }
+  > = {
+    INVALID_SELECTION: {
+      title: "Ungültige Auswahl",
+      description:
+        "Wähle genau einen freigegebenen Plan oder ein Contact Pack.",
+    },
+    CATALOG_UNAVAILABLE: {
+      title: "Aktuell nicht verfügbar",
+      description:
+        "Für diese Auswahl existiert aktuell keine eindeutig freigegebene Version.",
+    },
+    TAX_UNAVAILABLE: {
+      title: "Checkout vorsorglich gesperrt",
+      description:
+        "Die freigegebene Schweizer MWST-Version ist nicht eindeutig verfügbar.",
+    },
+    SAME_PLAN: {
+      title: "Plan bereits aktiv",
+      description:
+        "Ein Checkout für denselben aktiven Plan ist nicht zulässig.",
+    },
+    PLAN_NOT_SELF_SERVICE: {
+      title: "Beratung erforderlich",
+      description:
+        "Dieser Planwechsel ist im Self-Service-MVP nicht freigegeben.",
+      href: "/employers/demo",
+      cta: "Beratung anfragen",
+    },
     TALENT_RADAR_REQUIRED: {
       title: "Talent Radar erforderlich",
-      description: "Contact Packs erweitern nur vorhandenes Guthaben und schalten Talent Radar nicht frei.",
-      href: canManagePlan
-        ? "/employer/billing/checkout?plan=pro"
-        : "/pricing",
+      description:
+        "Contact Packs erweitern nur vorhandenes Guthaben und schalten Talent Radar nicht frei.",
+      href: canManagePlan ? "/employer/billing/checkout?plan=pro" : "/pricing",
       cta: canManagePlan ? "Pro prüfen" : "Planoptionen ansehen",
     },
-    PRODUCT_RELEASE_REQUIRED: { title: "P1-Release nicht freigegeben", description: "Dieses Produkt bleibt ohne aktiven Katalog-Release-Entscheid serverseitig gesperrt." },
-    PRODUCT_CONTEXT_INVALID: { title: "Zielkontext nicht verfügbar", description: "Die ausgewählte Stelle oder Import-Freigabe erfüllt die Voraussetzungen aktuell nicht." },
+    PRODUCT_RELEASE_REQUIRED: {
+      title: "P1-Release nicht freigegeben",
+      description:
+        "Dieses Produkt bleibt ohne aktiven Katalog-Release-Entscheid serverseitig gesperrt.",
+    },
+    PRODUCT_CONTEXT_INVALID: {
+      title: "Zielkontext nicht verfügbar",
+      description:
+        "Die ausgewählte Stelle oder Import-Freigabe erfüllt die Voraussetzungen aktuell nicht.",
+    },
   };
   const message = copy[code] ?? copy.INVALID_SELECTION!;
-  return <Alert><AlertTitle>{message.title}</AlertTitle><AlertDescription className="grid gap-3"><p>{message.description}</p><div className="flex flex-wrap gap-2">{message.href === undefined ? null : <Link href={message.href} className={buttonVariants()}>{message.cta}</Link>}<Link href="/employer/billing" className={buttonVariants({ variant: "outline" })}>Zur Billing-Übersicht</Link></div></AlertDescription></Alert>;
+  return (
+    <Alert>
+      <AlertTitle>{message.title}</AlertTitle>
+      <AlertDescription className="grid gap-3">
+        <p>{message.description}</p>
+        <div className="flex flex-wrap gap-2">
+          {message.href === undefined ? null : (
+            <Link href={message.href} className={buttonVariants()}>
+              {message.cta}
+            </Link>
+          )}
+          <Link
+            href="/employer/billing"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Zur Billing-Übersicht
+          </Link>
+        </div>
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 function scalar(value: string | string[] | undefined) {

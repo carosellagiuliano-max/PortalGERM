@@ -28,9 +28,9 @@ describe("parseEnvironment", () => {
     expect(auditKeyring[0]?.key.withValue((value) => value)).toBe(
       keyMaterial(2),
     );
-    expect(
-      environment.secrets.database.withValue((value) => value),
-    ).toContain("swisstalenthub");
+    expect(environment.secrets.database.withValue((value) => value)).toContain(
+      "swisstalenthub",
+    );
     expect(Object.isFrozen(auditKeyring[0]?.key)).toBe(true);
     expect(environment).not.toHaveProperty("AUDIT_IP_HASH_KEYS");
     expect(environment).not.toHaveProperty("DATABASE_URL");
@@ -64,7 +64,11 @@ describe("parseEnvironment", () => {
   it.each([
     ["missing application environment", { APP_ENV: undefined }, "APP_ENV"],
     ["missing database URL", { DATABASE_URL: undefined }, "DATABASE_URL"],
-    ["non-PostgreSQL database URL", { DATABASE_URL: "https://db.invalid" }, "DATABASE_URL"],
+    [
+      "non-PostgreSQL database URL",
+      { DATABASE_URL: "https://db.invalid" },
+      "DATABASE_URL",
+    ],
     ["malformed database URL", { DATABASE_URL: "not-a-url" }, "DATABASE_URL"],
     [
       "malformed encoded database path",
@@ -86,11 +90,31 @@ describe("parseEnvironment", () => {
       { APP_URL: "https://user:secret@swisstalenthub.test/?token=leak" },
       "APP_URL",
     ],
-    ["non-canonical session secret", { SESSION_SECRET: "not-base64" }, "SESSION_SECRET"],
-    ["wrong session-secret byte length", { SESSION_SECRET: Buffer.alloc(31).toString("base64") }, "SESSION_SECRET"],
-    ["malformed keyring entry", { AUDIT_IP_HASH_KEYS: keyMaterial(2) }, "AUDIT_IP_HASH_KEYS"],
-    ["invalid key version", { AUDIT_IP_HASH_KEYS: `bad version:${keyMaterial(2)}` }, "AUDIT_IP_HASH_KEYS"],
-    ["placeholder secret", { SESSION_SECRET: "REPLACE_WITH_BASE64_32_BYTES" }, "SESSION_SECRET"],
+    [
+      "non-canonical session secret",
+      { SESSION_SECRET: "not-base64" },
+      "SESSION_SECRET",
+    ],
+    [
+      "wrong session-secret byte length",
+      { SESSION_SECRET: Buffer.alloc(31).toString("base64") },
+      "SESSION_SECRET",
+    ],
+    [
+      "malformed keyring entry",
+      { AUDIT_IP_HASH_KEYS: keyMaterial(2) },
+      "AUDIT_IP_HASH_KEYS",
+    ],
+    [
+      "invalid key version",
+      { AUDIT_IP_HASH_KEYS: `bad version:${keyMaterial(2)}` },
+      "AUDIT_IP_HASH_KEYS",
+    ],
+    [
+      "placeholder secret",
+      { SESSION_SECRET: "REPLACE_WITH_BASE64_32_BYTES" },
+      "SESSION_SECRET",
+    ],
   ])(
     "rejects %s",
     (
@@ -98,7 +122,7 @@ describe("parseEnvironment", () => {
       overrides: Record<string, string | undefined>,
       expectedVariable: string,
     ) => {
-    expectValidationFailure(overrides, expectedVariable);
+      expectValidationFailure(overrides, expectedVariable);
     },
   );
 
@@ -137,10 +161,7 @@ describe("parseEnvironment", () => {
   );
 
   it("validates the non-secret build identifier", () => {
-    expectValidationFailure(
-      { APP_BUILD_ID: "bad build/id" },
-      "APP_BUILD_ID",
-    );
+    expectValidationFailure({ APP_BUILD_ID: "bad build/id" }, "APP_BUILD_ID");
 
     const environment = parseEnvironment(
       createValidEnvironment({ APP_BUILD_ID: "git-abc1234" }),
@@ -259,8 +280,7 @@ describe("parseEnvironment", () => {
   it("normalizes, freezes and safely summarizes the abuse-report distribution", () => {
     const environment = parseEnvironment(
       createValidEnvironment({
-        ABUSE_REPORT_ADMIN_EMAILS:
-          " Security@Example.Test,ops@example.test ",
+        ABUSE_REPORT_ADMIN_EMAILS: " Security@Example.Test,ops@example.test ",
       }),
     );
 
@@ -359,7 +379,6 @@ describe("parseEnvironment", () => {
   });
 
   it.each([
-    "STRIPE_SECRET_KEY",
     "EMAIL_PROVIDER_API_KEY",
     "OPENAI_API_KEY",
     "STORAGE_ENDPOINT",
@@ -367,6 +386,76 @@ describe("parseEnvironment", () => {
     "MAPS_API_KEY",
   ])("keeps the future provider gate closed for %s", (variable: string) => {
     expectValidationFailure({ [variable]: "not-approved-yet" }, variable);
+  });
+
+  it("keeps payments disabled by default and permits only an isolated Stripe test sandbox", () => {
+    const disabled = parseEnvironment(createValidEnvironment());
+    expect(disabled.PAYMENT_PROVIDER_MODE).toBe("disabled");
+    expect(disabled.REAL_PAYMENT_INGESTION).toBe(false);
+    expect(disabled.REAL_PAYMENT_PROJECTION).toBe(false);
+    expect(disabled.PAID_SELF_SERVICE).toBe(false);
+    expect(disabled.secrets.stripeSecretKey).toBeUndefined();
+    expect(disabled.secrets.stripeWebhookSecret).toBeUndefined();
+
+    expectValidationFailure(
+      { STRIPE_SECRET_KEY: "sk_test_not_configured" },
+      "PAYMENT_PROVIDER_MODE",
+    );
+    expectValidationFailure(
+      {
+        PAYMENT_PROVIDER_MODE: "stripe_sandbox",
+        STRIPE_SECRET_KEY: "sk_live_forbidden123",
+        STRIPE_WEBHOOK_SECRET: "whsec_12345678",
+        STRIPE_ACCOUNT_ID: "acct_12345678",
+        STRIPE_SECRET_VERSION: "test-v1",
+      },
+      "STRIPE_SECRET_KEY",
+    );
+    expectValidationFailure(
+      {
+        PAYMENT_PROVIDER_MODE: "stripe_sandbox",
+        STRIPE_SECRET_KEY: "sk_test_12345678",
+        STRIPE_WEBHOOK_SECRET: "whsec_12345678",
+        STRIPE_ACCOUNT_ID: "acct_12345678",
+        STRIPE_SECRET_VERSION: "test-v1",
+        REAL_PAYMENT_PROJECTION: "true",
+      },
+      "REAL_PAYMENT_PROJECTION",
+    );
+    expectValidationFailure(
+      {
+        APP_ENV: "production",
+        NODE_ENV: "production",
+        APP_URL: "https://swisstalenthub.test",
+        TRUSTED_PROXY_HOPS: "2",
+        TEST_DATABASE_URL: undefined,
+        PAYMENT_PROVIDER_MODE: "stripe_sandbox",
+        STRIPE_SECRET_KEY: "sk_test_12345678",
+        STRIPE_WEBHOOK_SECRET: "whsec_12345678",
+        STRIPE_ACCOUNT_ID: "acct_12345678",
+        STRIPE_SECRET_VERSION: "test-v1",
+      },
+      "PAYMENT_PROVIDER_MODE",
+    );
+
+    const sandbox = parseEnvironment(
+      createValidEnvironment({
+        PAYMENT_PROVIDER_MODE: "stripe_sandbox",
+        PAYMENT_SANDBOX_COHORT: "test",
+        STRIPE_SECRET_KEY: "sk_test_12345678",
+        STRIPE_WEBHOOK_SECRET: "whsec_12345678",
+        STRIPE_ACCOUNT_ID: "acct_12345678",
+        STRIPE_SECRET_VERSION: "test-v1",
+        REAL_PAYMENT_INGESTION: "true",
+        REAL_PAYMENT_PROJECTION: "true",
+        PAID_SELF_SERVICE: "true",
+        PAID_SERVICE_RECOVERY: "true",
+      }),
+    );
+    expect(sandbox.PAYMENT_PROVIDER_MODE).toBe("stripe_sandbox");
+    expect(sandbox.PAID_SELF_SERVICE).toBe(true);
+    expect(String(sandbox.secrets.stripeSecretKey)).toBe("[secret-handle]");
+    expect(String(sandbox.secrets.stripeWebhookSecret)).toBe("[secret-handle]");
   });
 
   it("requires an isolated, explicitly labelled test database in CI", () => {

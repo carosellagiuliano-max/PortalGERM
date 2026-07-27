@@ -26,9 +26,7 @@ export const MOCK_PAYMENT_POLICY_V1 = Object.freeze({
 
 export class MockPaymentInputError extends TypeError {
   readonly code:
-    | "INVALID_INPUT"
-    | "INVALID_OPERATION_IDENTITY"
-    | "INVALID_RETURN_URL";
+    "INVALID_INPUT" | "INVALID_OPERATION_IDENTITY" | "INVALID_RETURN_URL";
 
   constructor(code: MockPaymentInputError["code"], message: string) {
     super(message);
@@ -42,6 +40,8 @@ export class MockPaymentInputError extends TypeError {
  * PaymentEvent, Invoice and fulfillment writes.
  */
 export class MockPaymentProvider implements PaymentProvider {
+  readonly kind = "MOCK" as const;
+
   async createCheckout(
     input: CreatePaymentOperationInput,
   ): Promise<CheckoutSession> {

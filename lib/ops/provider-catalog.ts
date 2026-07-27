@@ -13,6 +13,11 @@ export const PROVIDER_CATALOG = Object.freeze([
   provider("documents.object-store", "filesystem_sandbox", "Security / Documents"),
   provider("documents.malware-scan", "deterministic_sandbox", "Security / Documents"),
   provider("privacy.export-store", "filesystem_sandbox", "Privacy / Platform"),
+  provider(
+    "payments.hosted-checkout",
+    "stripe_sandbox",
+    "Billing / Finance / Security / Platform",
+  ),
 ] as const satisfies readonly ProviderCatalogEntry[]);
 
 export function getProviderDefinition(

@@ -977,6 +977,9 @@ async function prepareOwnedPackage(
             },
           }),
         };
+  const billingEvidence = requiredProcessors.includes("payment-ledger")
+    ? await getPrivacyExportBillingEvidenceV1(database, ownerUserId)
+    : [];
 
   const sections: ExportSection[] = [
     section("account", "postgres-primary", [account]),
@@ -1005,7 +1008,7 @@ async function prepareOwnedPackage(
       notificationPreferences,
     ),
     section("emailDeliveryReceipts", "email-provider", emailLogs),
-    section("billingEvidence", "payment-ledger", []),
+    section("billingEvidence", "payment-ledger", billingEvidence),
   ].filter((item) => requiredProcessors.includes(item.processorKey));
   for (const processorKey of requiredProcessors) {
     if (!sections.some((item) => item.processorKey === processorKey)) {
@@ -1093,6 +1096,234 @@ async function prepareOwnedPackage(
     sections: Object.freeze(preparedSections),
     documents: Object.freeze(documents),
   });
+}
+
+export async function getPrivacyExportBillingEvidenceV1(
+  database: DatabaseClient,
+  ownerUserId: string,
+) {
+  if (!UUID.safeParse(ownerUserId).success) {
+    throw new TypeError("Privacy billing subject is invalid.");
+  }
+  const subject = await database.user.findUnique({
+    where: { id: ownerUserId },
+    select: { email: true },
+  });
+  if (subject === null) return Object.freeze([]);
+  const orders = await database.order.findMany({
+    where: {
+      OR: [
+        { createdByUserId: ownerUserId },
+        {
+          billingContactEmailSnapshot: {
+            equals: subject.email,
+            mode: "insensitive",
+          },
+        },
+      ],
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      provider: true,
+      billingLegalNameSnapshot: true,
+      billingContactEmailSnapshot: true,
+      billingStreetSnapshot: true,
+      billingPostalCodeSnapshot: true,
+      billingCitySnapshot: true,
+      billingCountryCodeSnapshot: true,
+      billingUidSnapshot: true,
+      billingVatNumberSnapshot: true,
+      currency: true,
+      netTotalRappen: true,
+      vatTotalRappen: true,
+      totalRappen: true,
+      paidAt: true,
+      failedAt: true,
+      cancelledAt: true,
+      expiresAt: true,
+      createdAt: true,
+      updatedAt: true,
+      paymentEvents: {
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          provider: true,
+          kind: true,
+          createdAt: true,
+        },
+      },
+      paymentAttempts: {
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          provider: true,
+          environment: true,
+          amountRappen: true,
+          currency: true,
+          status: true,
+          failureCode: true,
+          expiresAt: true,
+          lastProviderEventAt: true,
+          createdAt: true,
+          updatedAt: true,
+          dunningCases: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              previousSubscriptionStatus: true,
+              status: true,
+              reasonCode: true,
+              paymentDueAt: true,
+              graceEndsAt: true,
+              suspendedAt: true,
+              resolvedAt: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+          riskDecisions: {
+            orderBy: [{ decisionAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              kind: true,
+              decisionAt: true,
+              expiresAt: true,
+              createdAt: true,
+            },
+          },
+        },
+      },
+      invoice: {
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          billingLegalNameSnapshot: true,
+          billingContactEmailSnapshot: true,
+          billingStreetSnapshot: true,
+          billingPostalCodeSnapshot: true,
+          billingCitySnapshot: true,
+          billingCountryCodeSnapshot: true,
+          billingUidSnapshot: true,
+          billingVatNumberSnapshot: true,
+          currency: true,
+          netTotalRappen: true,
+          vatTotalRappen: true,
+          totalRappen: true,
+          dueAt: true,
+          issuedAt: true,
+          paidAt: true,
+          voidedAt: true,
+          createdAt: true,
+          creditNotes: {
+            orderBy: [{ issuedAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              number: true,
+              amountRappen: true,
+              currency: true,
+              status: true,
+              reasonCode: true,
+              issuedAt: true,
+              voidedAt: true,
+              createdAt: true,
+            },
+          },
+        },
+      },
+      subscription: {
+        select: {
+          id: true,
+          status: true,
+          currentPeriodStart: true,
+          currentPeriodEnd: true,
+          billingIntervalSnapshot: true,
+          termMonthsSnapshot: true,
+          recurringNetRappenSnapshot: true,
+          monthlyEquivalentRappenSnapshot: true,
+          currencySnapshot: true,
+          activatedAt: true,
+          endedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+      refunds: {
+        orderBy: [{ requestedAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          amountRappen: true,
+          currency: true,
+          status: true,
+          reasonCode: true,
+          requestedAt: true,
+          completedAt: true,
+          failureCode: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+      chargebacks: {
+        orderBy: [{ openedAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          amountRappen: true,
+          currency: true,
+          status: true,
+          reasonCode: true,
+          openedAt: true,
+          resolvedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+      lines: {
+        orderBy: { id: "asc" },
+        select: {
+          id: true,
+          descriptionSnapshot: true,
+          fulfillmentContext: true,
+          quantity: true,
+          netRappen: true,
+          vatRappen: true,
+          totalRappen: true,
+          currency: true,
+          createdAt: true,
+          serviceDeliveryAssessments: {
+            orderBy: [{ assessedAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              serviceKind: true,
+              policyVersion: true,
+              classification: true,
+              status: true,
+              remedyKind: true,
+              remedyAmount: true,
+              currency: true,
+              reasonCode: true,
+              assessedAt: true,
+              approvedAt: true,
+              appliedAt: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  return Object.freeze(
+    orders.map((order) =>
+      Object.freeze({
+        schemaVersion: "phase24-v1",
+        kind: "billing-order",
+        ...order,
+      }),
+    ),
+  );
 }
 
 async function* packageBody(

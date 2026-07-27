@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 
-const keyMaterial = (seed: number) =>
-  Buffer.alloc(32, seed).toString("base64");
+const keyMaterial = (seed: number) => Buffer.alloc(32, seed).toString("base64");
 
 export function createValidEnvironment(
   overrides: Record<string, string | undefined> = {},
@@ -59,6 +58,17 @@ export function createValidEnvironment(
     OPTIONAL_ANALYTICS_NAVIGATION: "false",
     OPTIONAL_ANALYTICS_CONVERSION: "false",
     SEARCH_LEARNING_COLLECTION: "false",
+    PAYMENT_PROVIDER_MODE: "disabled",
+    PAYMENT_SANDBOX_COHORT: "none",
+    REAL_PAYMENT_INGESTION: "false",
+    REAL_PAYMENT_PROJECTION: "false",
+    PAID_SELF_SERVICE: "false",
+    FINANCE_REPAIR_ACTIONS: "false",
+    PAID_SERVICE_RECOVERY: "false",
+    STRIPE_SECRET_KEY: "",
+    STRIPE_WEBHOOK_SECRET: "",
+    STRIPE_ACCOUNT_ID: "",
+    STRIPE_SECRET_VERSION: "",
     ...overrides,
   } satisfies Record<string, string | undefined>;
 }

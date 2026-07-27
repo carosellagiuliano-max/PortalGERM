@@ -4,17 +4,20 @@
 
 | Dimension | Status |
 | --- | --- |
-| Planstatus | `GEPLANT` |
-| Technikstatus | `NICHT IMPLEMENTIERT` |
-| Quality-Gate | `NICHT GELAUFEN` |
+| Planstatus | `TECHNISCH ABGESCHLOSSEN` |
+| Technikstatus | `LOCAL/CI SANDBOXVERTRAG IMPLEMENTIERT` |
+| Quality-Gate | `LOCAL G3 IN PRÜFUNG` |
 | Aktivierung | `DISABLED` |
 
-Diese Datei ist ein prospektiver Ausführungsvertrag. Sie enthält keine technische
-Evidence, keine Paymentprovider-Freigabe und keine Aussage über einen bereits
-zahlungsbereiten Markt. Phase 24 darf erst beginnen, wenn Phase 31A für einen
-konkret benannten LC5-Scope ein dokumentiertes WTP-`GO` erteilt hat. Ein
-manueller, rechtlich und steuerlich freigegebener Rechnungspilot kann WTP vor
-dieser Phase testen; er aktiviert keinen öffentlichen Self-Service.
+Der Repository-Owner hat den technischen Phase-24-Vertrag ausdrücklich
+beauftragt. Er wurde deshalb ausschliesslich als standardmässig gesperrter
+Local-/CI-Testvertrag umgesetzt. Das ist keine Paymentprovider-Freigabe und
+keine Aussage über einen zahlungsbereiten Markt. Bezahlte Aktivierung,
+Sandbox-Staging und öffentlicher Self-Service dürfen weiterhin erst nach einem
+dokumentierten Phase-31A-WTP-`GO` für den exakten LC5-Scope sowie allen
+Provider-, Step-up-, Tax-, Legal-, Finance- und Operations-Gates beginnen.
+Ein manueller, rechtlich und steuerlich freigegebener Rechnungspilot kann WTP
+vorher testen; er aktiviert keinen öffentlichen Self-Service.
 
 ## 2. Ziel und messbarer Business-/Nutzerwert
 
@@ -36,23 +39,27 @@ Messbarer Zielwert für den technischen Vertrag:
 
 ## 3. Tatsächlicher Repositoryzustand
 
-- `STH-005` ist offen: die bestehende Billing-Domain modelliert Orders,
-  Invoices, Rappen, VAT, Credits, Subscriptions, Entitlements und
-  idempotentes Fulfillment, aber der aktive Paymentprovider ist ein lokaler
-  Mock.
-- Der Payment-Composition-Root wählt keinen produktiven PSP; der vorhandene
-  Stripe-Klassenname ist ein werfender Placeholder und keine Integration.
-- Es gibt keine produktive Webhook-Inbox, Payment Attempts, Reconciliation,
-  Dunning-, Chargeback-, Refund- oder Credit-Note-Ausführung.
+- `STH-005` ist technisch für Local/CI bearbeitet: zusätzlich zur bestehenden
+  Billing-Domain existieren serverautorisierter Hosted Checkout, Payment
+  Attempts, ein Stripe-Testadapter, signierte Webhook-Inbox, monotone
+  Projektion, Reconciliation, Dunning, Chargeback, Refund und Credit Note.
+- Der Payment-Composition-Root wählt den Stripe-Adapter nur bei vollständiger
+  Testkonfiguration; Production/LIVE ist nicht implementiert und es gibt
+  keinen Real→Mock-Fallback.
+- Aktivierung verlangt zusätzlich zum Environment einen aktuellen
+  WTP-Entscheid, das exakte ProviderActivation-Ledger, Testkohorte und eine
+  frische, action-bound AssuranceEvidence. Ohne eine Bedingung entstehen
+  weder Kauf-CTA noch Checkout-Session.
+- `STH-035` besitzt eine immutable Assessment-/Event-Kette für Plattformfehler
+  und DB-gegatete genau-einmalige Credit-Wiederherstellung,
+  Boostverlängerung oder Finance-Eskalation.
 - Historische Mock-Orders und Mock-Invoices sind gültige Demo-Evidence, aber
   niemals Umsatz- oder WTP-Evidence.
 - ADR-014 bleibt für Phasen 01–18 wahr. ADR-035 genehmigt nur den prospektiven
-  Real-Payment- und Service-Recovery-Scope dieser Phase.
-
-Vor Implementierung werden die konkreten Fundstellen, Modellzahlen,
-Migrationen, Tests, offenen Findings und der aktuelle Baseline-Commit in der
-Phase-24-Evidence neu erfasst; diese Planbeschreibung ersetzt die Erfassung
-nicht.
+  Real-Payment- und Service-Recovery-Scope dieser Phase. Die konkrete
+  Paid-Servicepolicy und jede Markt-/LIVE-Aussage bleiben Phase 31/32.
+- Commitgebundene Counts, Befehle, Resultate und externe Blocker werden nach
+  dem unveränderlichen G3-Lauf in der Phase-24-Evidence festgehalten.
 
 ## 4. Findings und Requirements
 
@@ -278,6 +285,20 @@ Payment-Pending wird nie als bezahlt oder erfüllt dargestellt.
 - Jede Finance-, Risk-Hold-, Service-Recovery- und Replay-Mutation schreibt
   transaktional Audit beziehungsweise garantierte Outbox-Evidence.
 
+### Phase-24 Audit-log extension matrix
+
+| AuditAction | Pflichtauslöser | Primäres Ziel |
+| --- | --- | --- |
+| `PAYMENT_ATTEMPT_HELD` | Risk- oder Providerunsicherheit stoppt den Checkout | `PAYMENT_ATTEMPT` |
+| `PAYMENT_EVENT_INGESTED`, `PAYMENT_EVENT_PROJECTED` | signiertes Providerereignis wird durable angenommen beziehungsweise fachlich projiziert | `PAYMENT_EVENT` |
+| `RECONCILIATION_COMPLETED`, `RECONCILIATION_ITEM_REPAIRED` | Abgleichlauf endet beziehungsweise ein freigegebener Repair wird ausgeführt | `RECONCILIATION_RUN` / `RECONCILIATION_ITEM` |
+| `REFUND_REQUESTED`, `REFUND_COMPLETED` | Refund wird mit Step-up angefordert beziehungsweise per signiertem Ereignis abgeschlossen | `REFUND` |
+| `CHARGEBACK_CHANGED` | Chargebackzustand ändert sich monoton | `CHARGEBACK` |
+| `CREDIT_NOTE_ISSUED` | Credit Note wird genau einmal ausgestellt | `CREDIT_NOTE` |
+| `DUNNING_CHANGED` | Grace, Suspension, Recovery oder Ablauf ändert sich | `DUNNING_CASE` |
+| `SERVICE_DELIVERY_ASSESSED`, `SERVICE_DELIVERY_RECOVERED` | bezahlte Leistung wird klassifiziert beziehungsweise genau einmal kompensiert | `SERVICE_DELIVERY_ASSESSMENT` |
+| `PAYMENT_RISK_DECIDED` | paymentnahes Risiko führt zu Allow, Review oder Hold | `PAYMENT_RISK_DECISION` |
+
 ## 16. Abuse-, Fraud-, ATO-, Replay- und Insider-Szenarien
 
 - gestohlene Owner-Session startet Checkout/Refund oder ändert Billingrollen;
@@ -365,24 +386,25 @@ benötigt eigenes Smoke-, Reconciliation- und Rollback-/Kill-Switch-Protokoll.
 
 ## 21. Akzeptanzkriterien und vollständige AC→Test-Matrix
 
-Alle Testdateien sind **geplant** und werden in dieser Phase angelegt. Kein
-Eintrag behauptet einen gelaufenen Test.
+Die Testdateien sind implementiert. `LOCAL/CI PASS` bezeichnet nur tatsächlich
+gelaufene automatisierte Evidence; externe PSP-/Staging-/Owner-Drills bleiben
+separat `BLOCKED` und werden dadurch nicht als bestanden dargestellt.
 
 | Criterion/Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `P24-AC-01` / `REQ-COM-001` | P0 LC5: Produkt vor WTP gebaut/verkauft | Unit + E2E | WTP-/Activation-Gate | datiertes 31A-Go öffnet nur Sandboxscope | fehlendes/abgelaufenes/anderes Package-Go, direkte Action | Product Owner | Pricing, Checkout, Server Action | GO/NO-GO/expired Decisions, zwei Packages | Unit + Browser | `npx vitest run --config vitest.config.ts tests/unit/billing/paid-activation-policy.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase24-paid-checkout.spec.ts --project=chromium-journeys` | ohne passendes GO `0` Checkout Sessions und CTA/Action fail-closed; mit GO genau eine Sandbox Session | Vitest/Playwright-Report, Decision-ID | Product + QA | `PLANNED` |
-| `P24-AC-02` / `REQ-PAY-001` | P0: Preis-/Tenantmanipulation | Unit + PostgreSQL | serverautoritative Quote/Checkout | gültiger Owner/Quote erzeugt Attempt | Betrag, Currency, Product, Target, Company oder stale Quote manipuliert | Employer Owner | Employer Checkout/Quote Service | CHF-Rappen, VAT, Company A/B, stale Catalog | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/billing/real-payment-contract.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/billing/real-payment-postgres.test.ts` | erlaubter Fall: 1 Attempt mit Serversnapshot; jeder Negativfall: 0 Provider Calls/DB-Wirkung | Testreport + redigierter Quote-Snapshot | Billing + QA | `PLANNED` |
-| `P24-AC-03` / `REQ-PAY-001` | P0: gefälschter/verlorener/doppelter Webhook | Contract + PostgreSQL | Raw Body, Signatur, Inbox, Replay/Order | gültiges Event wird durable angenommen und einmal projiziert | falsche Signatur/account/env/timestamp, Replay, out-of-order | PSP/System | Webhook + Inbox Projector | signierte Fixtures, duplicate IDs, reversed Reihenfolge | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/providers/payments/payment-provider-contract.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-webhook-postgres.test.ts` | ungültig: 0 Inbox-/Domainwirkung; gültiges Replay N-mal: 1 Inbox/1 fachliche Wirkung | Contract-/DB-Report, Provider-Event-ID redigiert | Billing + Security | `PLANNED` |
-| `P24-AC-04` / `REQ-PAY-001` | P0: Geld und Entitlement divergieren | PostgreSQL | Lifecycle/fulfillment | Success/Renewal/Upgrade/Downgrade/Cancel wirken policytreu | Failure/Pending/Timeout/Race dürfen nicht erfüllen | System Worker | Billing Domain | alle Payment-/Subscriptionzustände, feste Uhr | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/real-payment-lifecycle-postgres.test.ts` | je Eventfolge exakt 1 zulässiger Endzustand; Pending/Failure `0` Fulfillment | DB-State-/Ledger-Assertions | Billing + Finance + QA | `PLANNED` |
-| `P24-AC-05` / `REQ-PAY-001` | P0: unbemerkte Finanzabweichung | PostgreSQL + Provider | Reconciliation/Repair | Receipt↔Order↔Invoice↔Ledger stimmt oder Repairfall entsteht | missing/extra/wrong amount/currency/tenant; unautorisierter Repair | Finance/System | Reconciliation Worker/Cockpit | matched und sechs mismatch Fixtures | real PostgreSQL + PSP Sandbox | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/reconciliation-postgres.test.ts`; manuell: Sandbox-Settlement importieren, Run starten, jeden Mismatch mit Reason bearbeiten | `100 %` Items matched oder explizit OPEN/ESCALATED; `0` stille Korrekturen | Reconciliation-Manifest, Screenshots ohne PII | Finance + Ops | `PLANNED` |
-| `P24-AC-06` / `REQ-ID-004` | P0: ATO führt zu Kauf/Refund | Security + PostgreSQL | action-bound Owner/Finance Step-up | frischer passender Grant erlaubt genau eine Aktion | stale/replay/cross-purpose/cross-company/revoked role/direct action | Owner/Finance | Checkout, Refund, Repair Commands | Grants je Actor/Purpose/Tenant, Company A/B | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-step-up-postgres.test.ts` | Negativfälle: 0 Provider-/Ledgerwirkung; Positivfall: genau 1 Wirkung und Audit | Security-Testreport, Audit-IDs | Security + Billing | `PLANNED` |
-| `P24-AC-07` / `REQ-TRUST-001` | P0/P1: Payment Fraud/Chargeback Abuse | Unit + PostgreSQL | velocity/risk hold/appeal | riskante Aktion wird gehalten und Fall eröffnet | Signal-Replay, fremder Tenant, Support-Bypass, false positive ohne Appeal | Trust & Safety/Finance | Risk Engine/Finance | velocity, device, refund/chargeback, complaint Fixtures | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/billing/payment-risk-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-fraud-postgres.test.ts` | High Risk: `0` Fulfillment bis Review, 1 Case; Appeal ändert nur per auditiertem Entscheid | Risk-/Case-Manifest | Trust & Safety + Security | `PLANNED` |
-| `P24-AC-08` / `REQ-BIL-010` | P0 LC5: bezahlte Nichterfüllung/doppelter Refund | Unit + PostgreSQL | Service-Delivery-Policy | Plattformfehler erzeugt genau die freigegebene Remedy | normal decline/expiry/user cancel; parallele/replayed Remedies | Owner/Finance/System | Boost/Radar/Billing Recovery | alle ADR-035-Klassen, Original OrderLine/Ledger | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/billing/service-delivery-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/billing/service-recovery-postgres.test.ts` | jede Klasse genau 1 zulässiges Outcome; Nicht-Plattformfälle 0 Auto-Refund; Replay 1 Remedy | Policy-Matrix, Ledger-Diff | Product + Finance + Billing | `PLANNED` |
-| `P24-AC-09` / `REQ-PAY-001` | P0: Race/Doppelwirkung | PostgreSQL Concurrency | Checkout/Webhook/Refund parallel | konkurrierende Wiederholungen konvergieren | Crash vor/nach Side Effect, doppelte Worker/Requests | System/Finance | DB + Worker | 20 parallele gleiche/differente Keys | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-concurrency-postgres.test.ts` | 20 gleiche Requests → 1 Attempt/Effect; Ledger/Invoice unverändert und Balance korrekt | Concurrency-Report + Counts | Billing + QA | `PLANNED` |
-| `P24-AC-10` / `REQ-QA-003` | P0: Migration korrumpiert Mock-/Geldhistorie | Migration | empty/upgrade/partial/idempotent | neue Modelle ohne Änderung historischer Snapshots | unterbrochener Backfill, N-1 Writer, Orphans/duplicates | System/Ops | Prisma/PostgreSQL | leere DB + Phase-18-Bestandsfixture + partial state | isoliertes PostgreSQL | `npm run db:migrate`; `npm run db:migrate:status`; `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase24-payment-migration-postgres.test.ts` | Exit 0; Mock→Real-Reklassifizierung `0`; Count/Checksum/Tenant-Abweichung `0` | Migrationlog + redigierter Abgleich | Data/DBA + Billing | `PLANNED` |
-| `P24-AC-11` / `REQ-QA-003` | P1: unverständlicher/unerreichbarer Zahlfluss | E2E + A11y | Checkout/3DS/Pending/Invoice/Cancel/Recovery | alle Zustände, Fokus und Beträge verständlich | Providerabbruch, expired session, Locked, Error/Retry | Employer Owner/Finance | Employer/Admin UI | Sandbox Orders, alle UX-Zustände | Chromium Desktop + 360 | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase24-billing-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase24-billing-quality.spec.ts --project=chromium-mobile-360` | Axe serious/critical `0`; horizontales Clipping kritischer CTA/Beträge `0`; jeder Zustand per Heading/Text unterscheidbar | Playwright/Axe/Screenshots | UX + Accessibility + QA | `PLANNED` |
-| `P24-AC-12` / `REQ-OPS-005` | P0: Provider-/Worker-Ausfall verliert Geldereignis | Failure + Sandbox | timeout/429/5xx/DLQ/restart | durable Inbox wird nach Recovery einmal projiziert | Provider offline, poison event, deploy zwischen write/effect | System/Ops | PSP/Worker/DLQ | Sandbox Events und Fault Injection | Staging/Sandbox | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-failure-recovery-postgres.test.ts`; manuell: Worker nach durablem Inbox-Write stoppen, neu starten, DLQ re-drive | verlorene signierte Events `0`; doppelte Effekte `0`; Alert für DLQ/age innerhalb freigegebener SLO | Failure-Manifest, Alert-/Runbook-Record | Ops + Billing | `PLANNED` |
-| `P24-AC-13` / `REQ-PAY-001` | P0 LC5: falsches Artefakt/Secret live | Provider Smoke | Sandbox→Allowlist→LIVE Gate | getestetes Artefakt mit korrektem Account/Environment | Testevent/Mockprovider/abweichender Digest in Production | Ops/Finance | Deployment/Provider Registry | Build-Digest, Sandbox/LIVE Accounts, Secret-Version | Staging; LIVE erst nach Freigabe | manuell: deployten Digest prüfen, Provider-Health, 3DS-Test, Webhook, Invoice, Reconciliation, Kill Switch; anschließend `npm run test:e2e:http` | Digest exakt gleich; Mock/LIVE-Mix `0`; Smoke vollständig reconciliiert; Kill Switch stoppt neue Käufe | Provider Receipt, Deployment-/Go-Record | Ops + Finance + Release Manager | `PLANNED` |
+| `P24-AC-01` / `REQ-COM-001` | P0 LC5: Produkt vor WTP gebaut/verkauft | Unit + E2E | WTP-/Activation-Gate | datiertes 31A-Go öffnet nur Sandboxscope | fehlendes/abgelaufenes/anderes Package-Go, direkte Action | Product Owner | Pricing, Checkout, Server Action | GO/NO-GO/expired Decisions, zwei Packages | Unit + Browser | `npx vitest run --config vitest.config.ts tests/unit/billing/paid-activation-policy.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase24-paid-checkout.spec.ts --project=chromium-journeys` | ohne passendes GO `0` Checkout Sessions und CTA/Action fail-closed; mit GO genau eine Sandbox Session | Vitest/Playwright-Report, Decision-ID | Product + QA | `LOCAL/CI PASS`; echtes WTP-`GO` `BLOCKED` |
+| `P24-AC-02` / `REQ-PAY-001` | P0: Preis-/Tenantmanipulation | Unit + PostgreSQL | serverautoritative Quote/Checkout | gültiger Owner/Quote erzeugt Attempt | Betrag, Currency, Product, Target, Company oder stale Quote manipuliert | Employer Owner | Employer Checkout/Quote Service | CHF-Rappen, VAT, Company A/B, stale Catalog | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/billing/real-payment-contract.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/billing/real-payment-postgres.test.ts` | erlaubter Fall: 1 Attempt mit Serversnapshot; jeder Negativfall: 0 Provider Calls/DB-Wirkung | Testreport + redigierter Quote-Snapshot | Billing + QA | `LOCAL/CI PASS` |
+| `P24-AC-03` / `REQ-PAY-001` | P0: gefälschter/verlorener/doppelter Webhook | Contract + PostgreSQL | Raw Body, Signatur, Inbox, Replay/Order | gültiges Event wird durable angenommen und einmal projiziert | falsche Signatur/account/env/timestamp, Replay, out-of-order | PSP/System | Webhook + Inbox Projector | signierte Fixtures, duplicate IDs, reversed Reihenfolge | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/providers/payments/payment-provider-contract.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-webhook-postgres.test.ts` | ungültig: 0 Inbox-/Domainwirkung; gültiges Replay N-mal: 1 Inbox/1 fachliche Wirkung | Contract-/DB-Report, Provider-Event-ID redigiert | Billing + Security | `LOCAL/CI PASS` |
+| `P24-AC-04` / `REQ-PAY-001` | P0: Geld und Entitlement divergieren | PostgreSQL | Lifecycle/fulfillment | Success/Renewal/Upgrade/Downgrade/Cancel wirken policytreu | Failure/Pending/Timeout/Race dürfen nicht erfüllen | System Worker | Billing Domain | alle Payment-/Subscriptionzustände, feste Uhr | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/real-payment-lifecycle-postgres.test.ts` | je Eventfolge exakt 1 zulässiger Endzustand; Pending/Failure `0` Fulfillment | DB-State-/Ledger-Assertions | Billing + Finance + QA | `LOCAL/CI PASS` |
+| `P24-AC-05` / `REQ-PAY-001` | P0: unbemerkte Finanzabweichung | PostgreSQL + Provider | Reconciliation/Repair | Receipt↔Order↔Invoice↔Ledger stimmt oder Repairfall entsteht | missing/extra/wrong amount/currency/tenant; unautorisierter Repair | Finance/System | Reconciliation Worker/Cockpit | matched und sechs mismatch Fixtures | real PostgreSQL + PSP Sandbox | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/reconciliation-postgres.test.ts`; manuell: Sandbox-Settlement importieren, Run starten, jeden Mismatch mit Reason bearbeiten | `100 %` Items matched oder explizit OPEN/ESCALATED; `0` stille Korrekturen | Reconciliation-Manifest, Screenshots ohne PII | Finance + Ops | Local PostgreSQL `PASS`; PSP-Settlement/Repair `BLOCKED` |
+| `P24-AC-06` / `REQ-ID-004` | P0: ATO führt zu Kauf/Refund | Security + PostgreSQL | action-bound Owner/Finance Step-up | frischer passender Grant erlaubt genau eine Aktion | stale/replay/cross-purpose/cross-company/revoked role/direct action | Owner/Finance | Checkout, Refund, Repair Commands | Grants je Actor/Purpose/Tenant, Company A/B | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-step-up-postgres.test.ts` | Negativfälle: 0 Provider-/Ledgerwirkung; Positivfall: genau 1 Wirkung und Audit | Security-Testreport, Audit-IDs | Security + Billing | Payment-Consumer `PASS`; Phase-25B-Orchestrierung `BLOCKED` |
+| `P24-AC-07` / `REQ-TRUST-001` | P0/P1: Payment Fraud/Chargeback Abuse | Unit + PostgreSQL | velocity/risk hold/appeal | riskante Aktion wird gehalten und Fall eröffnet | Signal-Replay, fremder Tenant, Support-Bypass, false positive ohne Appeal | Trust & Safety/Finance | Risk Engine/Finance | velocity, device, refund/chargeback, complaint Fixtures | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/billing/payment-risk-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-fraud-postgres.test.ts` | High Risk: `0` Fulfillment bis Review, 1 Case; Appeal ändert nur per auditiertem Entscheid | Risk-/Case-Manifest | Trust & Safety + Security | Payment-Hold `PASS`; Phase-25C-Case/Appeal `BLOCKED` |
+| `P24-AC-08` / `REQ-BIL-010` | P0 LC5: bezahlte Nichterfüllung/doppelter Refund | Unit + PostgreSQL | Service-Delivery-Policy | Plattformfehler erzeugt genau die freigegebene Remedy | normal decline/expiry/user cancel; parallele/replayed Remedies | Owner/Finance/System | Boost/Radar/Billing Recovery | alle ADR-035-Klassen, Original OrderLine/Ledger | Unit + real PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/billing/service-delivery-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/billing/service-recovery-postgres.test.ts` | jede Klasse genau 1 zulässiges Outcome; Nicht-Plattformfälle 0 Auto-Refund; Replay 1 Remedy | Policy-Matrix, Ledger-Diff | Product + Finance + Billing | Technik `PASS`; Paid-Servicepolicy `BLOCKED` |
+| `P24-AC-09` / `REQ-PAY-001` | P0: Race/Doppelwirkung | PostgreSQL Concurrency | Checkout/Webhook/Refund parallel | konkurrierende Wiederholungen konvergieren | Crash vor/nach Side Effect, doppelte Worker/Requests | System/Finance | DB + Worker | 20 parallele gleiche/differente Keys | real PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-concurrency-postgres.test.ts` | 20 gleiche Requests → 1 Attempt/Effect; Ledger/Invoice unverändert und Balance korrekt | Concurrency-Report + Counts | Billing + QA | `LOCAL/CI PASS` |
+| `P24-AC-10` / `REQ-QA-003` | P0: Migration korrumpiert Mock-/Geldhistorie | Migration | empty/upgrade/partial/idempotent | neue Modelle ohne Änderung historischer Snapshots | unterbrochener Backfill, N-1 Writer, Orphans/duplicates | System/Ops | Prisma/PostgreSQL | leere DB + Phase-18-Bestandsfixture + partial state | isoliertes PostgreSQL | `npm run db:migrate`; `npm run db:migrate:status`; `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase24-payment-migration-postgres.test.ts` | Exit 0; Mock→Real-Reklassifizierung `0`; Count/Checksum/Tenant-Abweichung `0` | Migrationlog + redigierter Abgleich | Data/DBA + Billing | `LOCAL/CI PASS` |
+| `P24-AC-11` / `REQ-QA-003` | P1: unverständlicher/unerreichbarer Zahlfluss | E2E + A11y | Checkout/3DS/Pending/Invoice/Cancel/Recovery | alle Zustände, Fokus und Beträge verständlich | Providerabbruch, expired session, Locked, Error/Retry | Employer Owner/Finance | Employer/Admin UI | Sandbox Orders, alle UX-Zustände | Chromium Desktop + 360 | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase24-billing-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase24-billing-quality.spec.ts --project=chromium-mobile-360` | Axe serious/critical `0`; horizontales Clipping kritischer CTA/Beträge `0`; jeder Zustand per Heading/Text unterscheidbar | Playwright/Axe/Screenshots | UX + Accessibility + QA | Locked/Finance Desktop+360 `PASS`; PSP-3DS `BLOCKED` |
+| `P24-AC-12` / `REQ-OPS-005` | P0: Provider-/Worker-Ausfall verliert Geldereignis | Failure + Sandbox | timeout/429/5xx/DLQ/restart | durable Inbox wird nach Recovery einmal projiziert | Provider offline, poison event, deploy zwischen write/effect | System/Ops | PSP/Worker/DLQ | Sandbox Events und Fault Injection | Staging/Sandbox | `npx vitest run --config vitest.integration.config.ts tests/integration/billing/payment-failure-recovery-postgres.test.ts`; manuell: Worker nach durablem Inbox-Write stoppen, neu starten, DLQ re-drive | verlorene signierte Events `0`; doppelte Effekte `0`; Alert für DLQ/age innerhalb freigegebener SLO | Failure-Manifest, Alert-/Runbook-Record | Ops + Billing | Local Recovery `PASS`; Staging/Alert-Drill `BLOCKED` |
+| `P24-AC-13` / `REQ-PAY-001` | P0 LC5: falsches Artefakt/Secret live | Provider Smoke | Sandbox→Allowlist→LIVE Gate | getestetes Artefakt mit korrektem Account/Environment | Testevent/Mockprovider/abweichender Digest in Production | Ops/Finance | Deployment/Provider Registry | Build-Digest, Sandbox/LIVE Accounts, Secret-Version | Staging; LIVE erst nach Freigabe | manuell: deployten Digest prüfen, Provider-Health, 3DS-Test, Webhook, Invoice, Reconciliation, Kill Switch; anschließend `npm run test:e2e:http` | Digest exakt gleich; Mock/LIVE-Mix `0`; Smoke vollständig reconciliiert; Kill Switch stoppt neue Käufe | Provider Receipt, Deployment-/Go-Record | Ops + Finance + Release Manager | `BLOCKED` — externe Aktivierungsgates fehlen |
 
 ## 22. Performance und Scale
 

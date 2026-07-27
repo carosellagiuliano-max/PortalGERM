@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-import {
-  COMPANY_CLAIM_SIGNAL_CODES_V1,
-} from "@/lib/auth/employer-registration-signals";
+import { COMPANY_CLAIM_SIGNAL_CODES_V1 } from "@/lib/auth/employer-registration-signals";
 import {
   RATE_LIMIT_PRESET_NAMES_V1,
   RATE_LIMIT_SCOPES_V1,
@@ -70,6 +68,17 @@ export const AUDIT_TARGET_TYPES_V1 = [
   "DOCUMENT_VERSION",
   "DOCUMENT_UPLOAD_INTENT",
   "DOCUMENT_READ_GRANT",
+  "PAYMENT_ATTEMPT",
+  "PROVIDER_EVENT",
+  "RECONCILIATION_RUN",
+  "RECONCILIATION_ITEM",
+  "REFUND",
+  "CHARGEBACK",
+  "CREDIT_NOTE",
+  "DUNNING_CASE",
+  "SERVICE_DELIVERY",
+  "PAYMENT_RISK_DECISION",
+  "PAID_SCOPE_DECISION",
 ] as const;
 
 export type AuditTargetTypeV1 = (typeof AUDIT_TARGET_TYPES_V1)[number];
@@ -120,7 +129,8 @@ const auditMetadataSchemas = Object.fromEntries(
 >;
 auditMetadataSchemas.RATE_LIMITED = RATE_LIMITED_AUDIT_METADATA_SCHEMA;
 auditMetadataSchemas.USER_REGISTERED = USER_REGISTERED_AUDIT_METADATA_SCHEMA;
-auditMetadataSchemas.USER_LOGIN_FAILED = USER_LOGIN_FAILED_AUDIT_METADATA_SCHEMA;
+auditMetadataSchemas.USER_LOGIN_FAILED =
+  USER_LOGIN_FAILED_AUDIT_METADATA_SCHEMA;
 auditMetadataSchemas.COMPANY_CREATED_WITH_OWNER =
   COMPANY_REGISTRATION_AUDIT_METADATA_SCHEMA;
 auditMetadataSchemas.COMPANY_CLAIM_REQUESTED =

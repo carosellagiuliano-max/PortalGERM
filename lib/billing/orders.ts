@@ -30,12 +30,20 @@ import {
   type CheckoutIntent,
 } from "@/lib/billing/contracts";
 import {
+  checkoutStepUpAction,
+  PAID_CHECKOUT_POLICY_V1,
+  realPaymentQuoteDigest,
+  resolvePaidCheckoutActivation,
+} from "@/lib/billing/paid-activation-policy";
+import { assessPaymentAttemptRiskInTransaction } from "@/lib/billing/payment-risk-policy";
+import {
   BOOST_POLICY_V1,
   hasOverlappingBoost,
   validateBoostJobInTransaction,
   writeBoostActivatedEvidence,
 } from "@/lib/billing/boosts";
 import { isContactPackPlanEligibleV1 } from "@/lib/billing/checkout-eligibility";
+import { resolveCompanyDunningInTransaction } from "@/lib/billing/dunning";
 import {
   decodePlanEntitlementsV1,
   getEffectiveEntitlements,
@@ -51,6 +59,7 @@ import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import type { EmailProvider, EmailTemplateKey } from "@/lib/providers/email";
 import { renderEmailTemplate } from "@/lib/providers/email/templates";
+import { resolveProviderActivation } from "@/lib/ops/provider-activation-policy";
 
 const BILLING_AUDIT_RETENTION_MS = 10 * 365 * 86_400_000;
 const CHECKOUT_TTL_MS = 30 * 60 * 1_000;
@@ -124,13 +133,29 @@ type ImportSetupQuote = Readonly<{
   targetImportSetupApprovalId: string;
 }>;
 
-type ProductQuote = ContactPackQuote | BoostQuote | AdditionalJobQuote | ImportSetupQuote;
+type ProductQuote =
+  ContactPackQuote | BoostQuote | AdditionalJobQuote | ImportSetupQuote;
 type ResolvedQuote = PlanQuote | ProductQuote;
 
 type PreparedCheckoutOrder = Readonly<{
+  amountRappen: number;
+  billingContactEmail: string;
+  currency: "CHF";
+  description: string;
   orderId: string;
+  paymentAttemptId: string | null;
+  provider: "MOCK" | "STRIPE";
   providerIdempotencyKey: string;
-  status: "PENDING" | "PAID";
+  quoteDigest: string | null;
+  status: "HELD" | "PENDING" | "PAID";
+}>;
+
+type RealCheckoutAuthorization = Readonly<{
+  paidScopeDecisionId: string;
+  paymentAttemptId: string;
+  providerActivationId: string;
+  quoteDigest: string;
+  stepUpEvidenceId: string;
 }>;
 
 type PlanFulfillmentTerms = Readonly<{
@@ -161,236 +186,377 @@ export async function createCheckoutOrder(
     return billingFailure("FORBIDDEN");
   }
   const now = normalizeBillingNow(dependencies.now);
+  const provider = dependencies.paymentProvider.kind ?? "MOCK";
+  if (
+    (provider === "MOCK" && dependencies.realPayment !== undefined) ||
+    (provider === "STRIPE" && dependencies.realPayment === undefined)
+  ) {
+    return billingFailure("PAID_ACTIVATION_REQUIRED");
+  }
   const fingerprint = checkoutRequestFingerprint(
     dependencies.actor.companyId,
     parsed.data,
   );
 
-  let prepared: BillingCommandResult<PreparedCheckoutOrder>;
-  try {
-    prepared = await dependencies.database.$transaction(
-      async (transaction) => {
-        await lockCheckoutIdempotencyKey(
-          transaction,
-          parsed.data.idempotencyKey,
-        );
-        await lockCompanyBillingScope(transaction, dependencies.actor.companyId);
-        if (!(await hasCurrentBillingMembership(transaction, dependencies))) {
-          return billingFailure("NOT_FOUND");
-        }
-
-        const existing = await transaction.order.findUnique({
-          where: { clientIdempotencyKey: parsed.data.idempotencyKey },
-          select: {
-            id: true,
-            companyId: true,
-            status: true,
-            requestFingerprint: true,
-            providerIdempotencyKey: true,
-            expiresAt: true,
-          },
-        });
-        if (existing !== null) {
-          if (
-            existing.companyId !== dependencies.actor.companyId ||
-            existing.requestFingerprint !== fingerprint ||
-            existing.providerIdempotencyKey === null
-          ) {
-            return billingFailure("IDEMPOTENCY_MISMATCH");
-          }
-          if (existing.status === "FAILED") {
-            return billingFailure("PAYMENT_PROVIDER_FAILED");
-          }
-          if (
-            existing.status === "PENDING" &&
-            existing.expiresAt !== null &&
-            existing.expiresAt.getTime() <= now.getTime()
-          ) {
-            await expirePendingOrder(transaction, {
-              companyId: dependencies.actor.companyId,
-              correlationId: dependencies.correlationId,
-              now,
-              orderId: existing.id,
-            });
-            return billingFailure("ORDER_EXPIRED");
-          }
-          if (existing.status !== "PENDING" && existing.status !== "PAID") {
-            return billingFailure("ORDER_NOT_PENDING");
-          }
-          return billingSuccess(
-            {
-              orderId: existing.id,
-              providerIdempotencyKey: existing.providerIdempotencyKey,
-              status: existing.status,
-            },
-            true,
+  const prepared: BillingCommandResult<PreparedCheckoutOrder> =
+    await runSerializableRetry<PreparedCheckoutOrder>(async () =>
+      dependencies.database.$transaction(
+        async (transaction) => {
+          await lockCheckoutIdempotencyKey(
+            transaction,
+            parsed.data.idempotencyKey,
           );
-        }
+          await lockCompanyBillingScope(
+            transaction,
+            dependencies.actor.companyId,
+          );
+          if (!(await hasCurrentBillingMembership(transaction, dependencies))) {
+            return billingFailure("NOT_FOUND");
+          }
 
-        const profile = await transaction.companyBillingProfile.findUnique({
-          where: { companyId: dependencies.actor.companyId },
-        });
-        if (profile === null || !isCompleteSwissBillingProfile(profile)) {
-          return billingFailure("PROFILE_REQUIRED");
-        }
-        const taxRate = await loadCurrentTaxRate(transaction, now);
-        if (taxRate === null) return billingFailure("TAX_UNAVAILABLE");
-        const quote = await resolveCheckoutQuote(
-          transaction,
-          parsed.data,
-          dependencies,
-          now,
-        );
-        if (!quote.ok) return quote;
-
-        const orderId = randomUUID();
-        const orderLineId = randomUUID();
-        const providerIdempotencyKey = `checkout:${orderId}`;
-        const quantity = quote.value.kind === "PLAN" ? 1 : quote.value.quantity;
-        const netRappen = quote.value.unitNetRappen * quantity;
-        const vat = computeVat(netRappen, taxRate.rateBasisPoints);
-        const descriptionSnapshot =
-          quote.value.kind === "PLAN"
-            ? `${quote.value.planVersion.plan.name} Monatsplan`
-            : quote.value.productVersion.product.name;
-
-        await transaction.order.create({
-          data: {
-            id: orderId,
-            companyId: dependencies.actor.companyId,
-            createdByUserId: dependencies.actor.userId,
-            status: "DRAFT",
-            provider: "MOCK",
-            clientIdempotencyKey: parsed.data.idempotencyKey,
-            providerIdempotencyKey,
-            requestFingerprint: fingerprint,
-            billingLegalNameSnapshot: profile.legalName,
-            billingContactEmailSnapshot: profile.billingContactEmail,
-            billingStreetSnapshot: profile.street,
-            billingPostalCodeSnapshot: profile.postalCode,
-            billingCitySnapshot: profile.city,
-            billingCountryCodeSnapshot: "CH",
-            billingUidSnapshot: profile.uid,
-            billingVatNumberSnapshot: profile.vatNumber,
-            currency: "CHF",
-            netTotalRappen: vat.net,
-            vatTotalRappen: vat.vatAmount,
-            totalRappen: vat.total,
-            expiresAt: new Date(now.getTime() + CHECKOUT_TTL_MS),
-            lines: {
-              create: {
-                id: orderLineId,
-                planVersionId:
-                  quote.value.kind === "PLAN"
-                    ? quote.value.planVersion.id
-                    : null,
-                productVersionId:
-                  quote.value.kind === "PLAN"
-                    ? null
-                    : quote.value.productVersion.id,
-                taxRateVersionId: taxRate.id,
-                quantity,
-                unitNetRappen: quote.value.unitNetRappen,
-                netRappen: vat.net,
-                taxRateBasisPoints: taxRate.rateBasisPoints,
-                vatRappen: vat.vatAmount,
-                totalRappen: vat.total,
-                currency: "CHF",
-                descriptionSnapshot,
-                fulfillmentContext:
-                  quote.value.kind === "PLAN" ? "SUBSCRIPTION" : quote.value.kind,
-                targetJobId:
-                  quote.value.kind === "ADDITIONAL_JOB" ||
-                  quote.value.kind === "JOB_BOOST"
-                    ? quote.value.targetJobId
-                    : null,
-                targetImportSourceId:
-                  quote.value.kind === "IMPORT_SETUP"
-                    ? quote.value.targetImportSourceId
-                    : null,
-                targetImportSetupApprovalId:
-                  quote.value.kind === "IMPORT_SETUP"
-                    ? quote.value.targetImportSetupApprovalId
-                    : null,
-                targetCreditType:
-                  quote.value.kind === "CONTACT_PACK" ? "TALENT_CONTACT" : null,
-                ...(quote.value.kind === "PLAN"
-                  ? {
-                      subscriptionSnapshot: {
-                        create: { id: randomUUID(), ...quote.value.snapshot },
-                      },
-                    }
-                  : {}),
+          const existing = await transaction.order.findUnique({
+            where: { clientIdempotencyKey: parsed.data.idempotencyKey },
+            select: {
+              id: true,
+              companyId: true,
+              status: true,
+              provider: true,
+              requestFingerprint: true,
+              providerIdempotencyKey: true,
+              expiresAt: true,
+              totalRappen: true,
+              currency: true,
+              billingContactEmailSnapshot: true,
+              lines: {
+                take: 1,
+                orderBy: { id: "asc" },
+                select: { descriptionSnapshot: true },
+              },
+              paymentAttempts: {
+                take: 1,
+                orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+                select: {
+                  id: true,
+                  quoteDigest: true,
+                  status: true,
+                },
               },
             },
-          },
-        });
-        const released = await transaction.order.updateMany({
-          where: { id: orderId, status: "DRAFT" },
-          data: { status: "PENDING" },
-        });
-        if (released.count !== 1) {
-          throw new BillingDomainRollbackError("CONFLICT");
-        }
-        if (quote.value.kind === "IMPORT_SETUP") {
-          const reserved = await transaction.importSetupApproval.updateMany({
-            where: {
-              id: quote.value.targetImportSetupApprovalId,
-              companyId: dependencies.actor.companyId,
-              importSourceId: quote.value.targetImportSourceId,
-              status: "APPROVED",
-              validUntil: { gt: now },
-              orderLineId: null,
-            },
-            data: { orderLineId },
           });
-          if (reserved.count !== 1) {
-            throw new BillingDomainRollbackError(
-              "IMPORT_SETUP_NOT_ELIGIBLE",
+          if (existing !== null) {
+            if (
+              existing.companyId !== dependencies.actor.companyId ||
+              existing.provider !== provider ||
+              existing.requestFingerprint !== fingerprint ||
+              existing.providerIdempotencyKey === null
+            ) {
+              return billingFailure("IDEMPOTENCY_MISMATCH");
+            }
+            if (existing.status === "FAILED") {
+              return billingFailure("PAYMENT_PROVIDER_FAILED");
+            }
+            if (
+              existing.status === "PENDING" &&
+              existing.expiresAt !== null &&
+              existing.expiresAt.getTime() <= now.getTime()
+            ) {
+              await expirePendingOrder(transaction, {
+                companyId: dependencies.actor.companyId,
+                correlationId: dependencies.correlationId,
+                now,
+                orderId: existing.id,
+              });
+              return billingFailure("ORDER_EXPIRED");
+            }
+            if (existing.status !== "PENDING" && existing.status !== "PAID") {
+              return billingFailure("ORDER_NOT_PENDING");
+            }
+            const line = existing.lines[0];
+            const attempt = existing.paymentAttempts[0] ?? null;
+            if (
+              line === undefined ||
+              existing.currency !== "CHF" ||
+              (provider === "STRIPE" && attempt === null)
+            ) {
+              return billingFailure("CONFLICT");
+            }
+            if (attempt?.status === "HELD") {
+              return billingFailure("PAYMENT_HELD");
+            }
+            return billingSuccess(
+              {
+                amountRappen: existing.totalRappen,
+                billingContactEmail: existing.billingContactEmailSnapshot,
+                currency: "CHF",
+                description: line.descriptionSnapshot,
+                orderId: existing.id,
+                paymentAttemptId: attempt?.id ?? null,
+                provider,
+                providerIdempotencyKey: existing.providerIdempotencyKey,
+                quoteDigest: attempt?.quoteDigest ?? null,
+                status: existing.status,
+              },
+              true,
             );
           }
-        }
-        await transaction.paymentEvent.create({
-          data: {
-            orderId,
-            provider: "MOCK",
-            kind: "CHECKOUT_CREATED",
-            idempotencyKey: `checkout-created:${orderId}`,
-            payload: {
-              schemaVersion: "1",
-              provider: "MOCK",
-              amountAuthoritative: false,
-            },
-          },
-        });
-        await writeBillingAudit(transaction, dependencies, now, {
-          action: "CHECKOUT_CREATED",
-          capability: "EMPLOYER_BILLING_CHECKOUT_CREATE",
-          targetId: orderId,
-          targetType: "ORDER",
-          reasonCode:
-            quote.value.kind === "PLAN"
-              ? "PLAN_CHECKOUT"
-              : quote.value.kind === "CONTACT_PACK"
-                ? "CONTACT_PACK_CHECKOUT"
-                : quote.value.kind === "ADDITIONAL_JOB"
-                  ? "ADDITIONAL_JOB_CHECKOUT"
-                  : "IMPORT_SETUP_CHECKOUT",
-        });
 
-        return billingSuccess({
-          orderId,
-          providerIdempotencyKey,
-          status: "PENDING",
-        });
-      },
-      { isolationLevel: "Serializable" },
+          const profile = await transaction.companyBillingProfile.findUnique({
+            where: { companyId: dependencies.actor.companyId },
+          });
+          if (profile === null || !isCompleteSwissBillingProfile(profile)) {
+            return billingFailure("PROFILE_REQUIRED");
+          }
+          const taxRate = await loadCurrentTaxRate(transaction, now);
+          if (taxRate === null) return billingFailure("TAX_UNAVAILABLE");
+          const quote = await resolveCheckoutQuote(
+            transaction,
+            parsed.data,
+            dependencies,
+            now,
+          );
+          if (!quote.ok) return quote;
+
+          const orderId =
+            provider === "STRIPE" && parsed.data.paymentOrderId !== undefined
+              ? parsed.data.paymentOrderId
+              : randomUUID();
+          const orderLineId = randomUUID();
+          const providerIdempotencyKey = `checkout:${orderId}`;
+          const quantity =
+            quote.value.kind === "PLAN" ? 1 : quote.value.quantity;
+          const netRappen = quote.value.unitNetRappen * quantity;
+          const vat = computeVat(netRappen, taxRate.rateBasisPoints);
+          const descriptionSnapshot =
+            quote.value.kind === "PLAN"
+              ? `${quote.value.planVersion.plan.name} Monatsplan`
+              : quote.value.productVersion.product.name;
+          const realAuthorization =
+            provider === "STRIPE"
+              ? await authorizeRealCheckout(
+                  transaction,
+                  {
+                    amountRappen: vat.total,
+                    description: descriptionSnapshot,
+                    intent: parsed.data,
+                    orderId,
+                    packageCode:
+                      quote.value.kind === "PLAN"
+                        ? quote.value.planVersion.plan.code
+                        : quote.value.productVersion.product.code,
+                  },
+                  dependencies,
+                  now,
+                )
+              : billingSuccess<RealCheckoutAuthorization | null>(null);
+          if (!realAuthorization.ok) return realAuthorization;
+
+          await transaction.order.create({
+            data: {
+              id: orderId,
+              companyId: dependencies.actor.companyId,
+              createdByUserId: dependencies.actor.userId,
+              status: "DRAFT",
+              provider,
+              clientIdempotencyKey: parsed.data.idempotencyKey,
+              providerIdempotencyKey,
+              requestFingerprint: fingerprint,
+              billingLegalNameSnapshot: profile.legalName,
+              billingContactEmailSnapshot: profile.billingContactEmail,
+              billingStreetSnapshot: profile.street,
+              billingPostalCodeSnapshot: profile.postalCode,
+              billingCitySnapshot: profile.city,
+              billingCountryCodeSnapshot: "CH",
+              billingUidSnapshot: profile.uid,
+              billingVatNumberSnapshot: profile.vatNumber,
+              currency: "CHF",
+              netTotalRappen: vat.net,
+              vatTotalRappen: vat.vatAmount,
+              totalRappen: vat.total,
+              expiresAt: new Date(now.getTime() + CHECKOUT_TTL_MS),
+              lines: {
+                create: {
+                  id: orderLineId,
+                  planVersionId:
+                    quote.value.kind === "PLAN"
+                      ? quote.value.planVersion.id
+                      : null,
+                  productVersionId:
+                    quote.value.kind === "PLAN"
+                      ? null
+                      : quote.value.productVersion.id,
+                  taxRateVersionId: taxRate.id,
+                  quantity,
+                  unitNetRappen: quote.value.unitNetRappen,
+                  netRappen: vat.net,
+                  taxRateBasisPoints: taxRate.rateBasisPoints,
+                  vatRappen: vat.vatAmount,
+                  totalRappen: vat.total,
+                  currency: "CHF",
+                  descriptionSnapshot,
+                  fulfillmentContext:
+                    quote.value.kind === "PLAN"
+                      ? "SUBSCRIPTION"
+                      : quote.value.kind,
+                  targetJobId:
+                    quote.value.kind === "ADDITIONAL_JOB" ||
+                    quote.value.kind === "JOB_BOOST"
+                      ? quote.value.targetJobId
+                      : null,
+                  targetImportSourceId:
+                    quote.value.kind === "IMPORT_SETUP"
+                      ? quote.value.targetImportSourceId
+                      : null,
+                  targetImportSetupApprovalId:
+                    quote.value.kind === "IMPORT_SETUP"
+                      ? quote.value.targetImportSetupApprovalId
+                      : null,
+                  targetCreditType:
+                    quote.value.kind === "CONTACT_PACK"
+                      ? "TALENT_CONTACT"
+                      : null,
+                  ...(quote.value.kind === "PLAN"
+                    ? {
+                        subscriptionSnapshot: {
+                          create: { id: randomUUID(), ...quote.value.snapshot },
+                        },
+                      }
+                    : {}),
+                },
+              },
+            },
+          });
+          let realPaymentHeld = false;
+          if (realAuthorization.value !== null) {
+            await transaction.paymentAttempt.create({
+              data: {
+                id: realAuthorization.value.paymentAttemptId,
+                orderId,
+                companyId: dependencies.actor.companyId,
+                paidScopeDecisionId:
+                  realAuthorization.value.paidScopeDecisionId,
+                providerActivationId:
+                  realAuthorization.value.providerActivationId,
+                stepUpEvidenceId: realAuthorization.value.stepUpEvidenceId,
+                provider: "STRIPE",
+                environment: dependencies.realPayment!.environment,
+                providerAccountReference:
+                  dependencies.realPayment!.providerAccountReference,
+                attemptKey: providerIdempotencyKey,
+                quoteDigest: realAuthorization.value.quoteDigest,
+                amountRappen: vat.total,
+                currency: "CHF",
+                status: "CREATED",
+                expiresAt: new Date(now.getTime() + CHECKOUT_TTL_MS),
+                createdAt: now,
+                updatedAt: now,
+              },
+            });
+            const riskDecision = await assessPaymentAttemptRiskInTransaction(
+              transaction,
+              {
+                amountRappen: vat.total,
+                companyId: dependencies.actor.companyId,
+                correlationId: dependencies.correlationId,
+                now,
+                paymentAttemptId: realAuthorization.value.paymentAttemptId,
+              },
+            );
+            realPaymentHeld = riskDecision.kind !== "ALLOW";
+            if (realPaymentHeld) {
+              await transaction.paymentAttempt.update({
+                where: {
+                  id: realAuthorization.value.paymentAttemptId,
+                },
+                data: {
+                  status: "HELD",
+                  failureCode: `PAYMENT_RISK_${riskDecision.kind}`,
+                  updatedAt: now,
+                },
+              });
+              await writeBillingAudit(transaction, dependencies, now, {
+                action: "PAYMENT_ATTEMPT_HELD",
+                capability: "PAYMENT_RISK_EVALUATE",
+                targetId: realAuthorization.value.paymentAttemptId,
+                targetType: "PAYMENT_ATTEMPT",
+                reasonCode: `PAYMENT_RISK_${riskDecision.kind}`,
+              });
+            }
+          }
+          const released = await transaction.order.updateMany({
+            where: { id: orderId, status: "DRAFT" },
+            data: { status: "PENDING" },
+          });
+          if (released.count !== 1) {
+            throw new BillingDomainRollbackError("CONFLICT");
+          }
+          if (quote.value.kind === "IMPORT_SETUP") {
+            const reserved = await transaction.importSetupApproval.updateMany({
+              where: {
+                id: quote.value.targetImportSetupApprovalId,
+                companyId: dependencies.actor.companyId,
+                importSourceId: quote.value.targetImportSourceId,
+                status: "APPROVED",
+                validUntil: { gt: now },
+                orderLineId: null,
+              },
+              data: { orderLineId },
+            });
+            if (reserved.count !== 1) {
+              throw new BillingDomainRollbackError("IMPORT_SETUP_NOT_ELIGIBLE");
+            }
+          }
+          await transaction.paymentEvent.create({
+            data: {
+              orderId,
+              provider,
+              kind: "CHECKOUT_CREATED",
+              idempotencyKey: `checkout-created:${orderId}`,
+              payload: {
+                schemaVersion: "1",
+                provider,
+                amountAuthoritative: provider === "STRIPE",
+                externalChargeClaimed: false,
+              },
+            },
+          });
+          await writeBillingAudit(transaction, dependencies, now, {
+            action: "CHECKOUT_CREATED",
+            capability: "EMPLOYER_BILLING_CHECKOUT_CREATE",
+            targetId: orderId,
+            targetType: "ORDER",
+            reasonCode:
+              quote.value.kind === "PLAN"
+                ? "PLAN_CHECKOUT"
+                : quote.value.kind === "CONTACT_PACK"
+                  ? "CONTACT_PACK_CHECKOUT"
+                  : quote.value.kind === "ADDITIONAL_JOB"
+                    ? "ADDITIONAL_JOB_CHECKOUT"
+                    : "IMPORT_SETUP_CHECKOUT",
+          });
+
+          return billingSuccess({
+            amountRappen: vat.total,
+            billingContactEmail: profile.billingContactEmail,
+            currency: "CHF" as const,
+            description: descriptionSnapshot,
+            orderId,
+            paymentAttemptId: realAuthorization.value?.paymentAttemptId ?? null,
+            provider,
+            providerIdempotencyKey,
+            quoteDigest: realAuthorization.value?.quoteDigest ?? null,
+            status: realPaymentHeld ? "HELD" : "PENDING",
+          });
+        },
+        {
+          isolationLevel: "Serializable",
+        },
+      ),
     );
-  } catch {
-    return billingFailure("WRITE_FAILED");
-  }
 
   if (!prepared.ok) return prepared;
+  if (prepared.value.status === "HELD") {
+    return billingFailure("PAYMENT_HELD");
+  }
   if (prepared.value.status === "PAID") {
     return billingSuccess(
       {
@@ -403,8 +569,7 @@ export async function createCheckoutOrder(
   }
   const providerSession = await safeCreateProviderCheckout(
     dependencies,
-    prepared.value.orderId,
-    prepared.value.providerIdempotencyKey,
+    prepared.value,
   );
   if (providerSession === null) {
     await recordCheckoutProviderFailure(
@@ -414,9 +579,21 @@ export async function createCheckoutOrder(
     );
     return billingFailure("PAYMENT_PROVIDER_FAILED");
   }
+  if (
+    prepared.value.provider === "STRIPE" &&
+    !(await recordHostedCheckoutSession(
+      dependencies,
+      prepared.value,
+      providerSession.providerSessionReference,
+      now,
+    ))
+  ) {
+    return billingFailure("WRITE_FAILED");
+  }
   const analytics = await recordCheckoutStartedAnalytics(
     dependencies,
     prepared.value.orderId,
+    prepared.value.provider,
     now,
   );
   if (!analytics.ok) return analytics;
@@ -428,6 +605,122 @@ export async function createCheckoutOrder(
     },
     prepared.replay === true,
   );
+}
+
+async function authorizeRealCheckout(
+  transaction: Prisma.TransactionClient,
+  input: Readonly<{
+    amountRappen: number;
+    description: string;
+    intent: CheckoutIntent;
+    orderId: string;
+    packageCode: string;
+  }>,
+  dependencies: BillingDependencies,
+  now: Date,
+): Promise<BillingCommandResult<RealCheckoutAuthorization>> {
+  const context = dependencies.realPayment;
+  const stepUpEvidenceId = input.intent.stepUpEvidenceId;
+  if (
+    context === undefined ||
+    dependencies.paymentProvider.kind !== "STRIPE" ||
+    stepUpEvidenceId === undefined ||
+    input.intent.paymentOrderId !== input.orderId ||
+    input.intent.kind !== "PLAN"
+  ) {
+    return billingFailure(
+      stepUpEvidenceId === undefined
+        ? "STEP_UP_REQUIRED"
+        : "PAID_ACTIVATION_REQUIRED",
+    );
+  }
+  const [scopeDecision, providerActivation] = await Promise.all([
+    transaction.paidScopeDecision.findFirst({
+      where: {
+        scopeCode: PAID_CHECKOUT_POLICY_V1.scopeCode,
+        packageCode: input.packageCode,
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    }),
+    transaction.providerActivation.findFirst({
+      where: {
+        environment: context.environment,
+        useCase: "payments.hosted-checkout",
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    }),
+  ]);
+  const providerDecision = resolveProviderActivation({
+    activation: providerActivation,
+    adapterKey: "stripe_sandbox",
+    adapterVersion: "v1",
+    environment: context.environment,
+    now,
+    useCase: "payments.hosted-checkout",
+  });
+  const activation = resolvePaidCheckoutActivation({
+    environment: context.environment,
+    now,
+    packageCode: input.packageCode,
+    paidSelfServiceEnabled: context.paidSelfServiceEnabled,
+    provider: providerDecision,
+    sandboxCohort: context.sandboxCohort,
+    scopeDecision,
+  });
+  if (!activation.active || providerActivation === null) {
+    return billingFailure("PAID_ACTIVATION_REQUIRED");
+  }
+  const quoteDigest = realPaymentQuoteDigest({
+    amountRappen: input.amountRappen,
+    companyId: dependencies.actor.companyId,
+    currency: "CHF",
+    description: input.description,
+    orderId: input.orderId,
+  });
+  await transaction.$queryRaw`
+    SELECT "id"
+    FROM "AuthAssuranceEvidence"
+    WHERE "id" = ${stepUpEvidenceId}::uuid
+    FOR UPDATE
+  `;
+  const evidence = await transaction.authAssuranceEvidence.findFirst({
+    where: {
+      id: stepUpEvidenceId,
+      userId: dependencies.actor.userId,
+      tenantId: dependencies.actor.companyId,
+      purpose: PAID_CHECKOUT_POLICY_V1.stepUpPurpose,
+      action: checkoutStepUpAction(quoteDigest),
+      method: { in: ["PASSWORD", "TOTP", "WEBAUTHN"] },
+      issuedAt: {
+        lte: now,
+        gt: new Date(
+          now.getTime() - PAID_CHECKOUT_POLICY_V1.stepUpMaximumAgeMilliseconds,
+        ),
+      },
+      expiresAt: { gt: now },
+      usedAt: null,
+      revokedAt: null,
+    },
+    select: { id: true },
+  });
+  if (evidence === null) return billingFailure("STEP_UP_REQUIRED");
+  const consumed = await transaction.authAssuranceEvidence.updateMany({
+    where: {
+      id: evidence.id,
+      usedAt: null,
+      revokedAt: null,
+      expiresAt: { gt: now },
+    },
+    data: { usedAt: now },
+  });
+  if (consumed.count !== 1) return billingFailure("STEP_UP_REQUIRED");
+  return billingSuccess({
+    paidScopeDecisionId: activation.paidScopeDecisionId,
+    paymentAttemptId: randomUUID(),
+    providerActivationId: providerActivation.id,
+    quoteDigest,
+    stepUpEvidenceId: evidence.id,
+  });
 }
 
 export async function confirmMockPayment(
@@ -467,7 +760,10 @@ export async function confirmMockPayment(
   const transactionResult = await runSerializableRetry(async () =>
     dependencies.database.$transaction(
       async (transaction) => {
-        await lockCompanyBillingScope(transaction, dependencies.actor.companyId);
+        await lockCompanyBillingScope(
+          transaction,
+          dependencies.actor.companyId,
+        );
         await transaction.$queryRaw`
           SELECT "id" FROM "Order"
           WHERE "id" = ${parsed.data.orderId}::uuid
@@ -492,7 +788,10 @@ export async function confirmMockPayment(
         if (order.status !== "PENDING") {
           return billingFailure("ORDER_NOT_PENDING");
         }
-        if (order.expiresAt !== null && order.expiresAt.getTime() <= now.getTime()) {
+        if (
+          order.expiresAt !== null &&
+          order.expiresAt.getTime() <= now.getTime()
+        ) {
           await expirePendingOrder(transaction, {
             companyId: order.companyId,
             correlationId: dependencies.correlationId,
@@ -504,7 +803,10 @@ export async function confirmMockPayment(
         if (order.lines.length !== 1) return billingFailure("CONFLICT");
         const line = order.lines[0];
         if (line === undefined) return billingFailure("CONFLICT");
-        if (line.planVersionId !== null && !canManagePlan(dependencies.actor.membershipRole)) {
+        if (
+          line.planVersionId !== null &&
+          !canManagePlan(dependencies.actor.membershipRole)
+        ) {
           return billingFailure("FORBIDDEN");
         }
         if (
@@ -532,7 +834,11 @@ export async function confirmMockPayment(
           },
         });
         const paid = await transaction.order.updateMany({
-          where: { id: order.id, companyId: order.companyId, status: "PENDING" },
+          where: {
+            id: order.id,
+            companyId: order.companyId,
+            status: "PENDING",
+          },
           data: {
             status: "PAID",
             paidAt: now,
@@ -544,7 +850,13 @@ export async function confirmMockPayment(
         const invoice = await createPaidInvoice(transaction, order, now);
         const fulfillment =
           line.planVersionId !== null
-            ? await fulfillPlanOrder(transaction, order, line, dependencies, now)
+            ? await fulfillPlanOrder(
+                transaction,
+                order,
+                line,
+                dependencies,
+                now,
+              )
             : await fulfillProductOrder(
                 transaction,
                 order,
@@ -631,6 +943,315 @@ export async function confirmMockPayment(
       emailsRecorded,
     },
     transactionResult.replay === true,
+  );
+}
+
+export async function projectRealPaymentSuccess(
+  input: Readonly<{
+    amountRappen: number;
+    correlationId: string;
+    eventCreatedAt: Date;
+    paymentAttemptId: string;
+    providerEventId: string;
+    providerPaymentReference: string;
+  }>,
+  dependencies: Readonly<{
+    database: BillingDependencies["database"];
+    emailProvider: EmailProvider;
+    now?: Date;
+  }>,
+): Promise<BillingCommandResult<ConfirmedOrderResult>> {
+  const now = normalizeBillingNow(dependencies.now);
+  if (
+    !Number.isSafeInteger(input.amountRappen) ||
+    input.amountRappen <= 0 ||
+    !/^[A-Za-z0-9][A-Za-z0-9_.:-]{2,254}$/u.test(input.providerEventId) ||
+    !/^[A-Za-z0-9][A-Za-z0-9_.:-]{2,254}$/u.test(
+      input.providerPaymentReference,
+    ) ||
+    !Number.isFinite(input.eventCreatedAt.getTime())
+  ) {
+    return billingFailure("INVALID_INPUT");
+  }
+
+  let settled: BillingCommandResult<EmailContext>;
+  try {
+    settled = await dependencies.database.$transaction(
+      async (transaction) => {
+        await transaction.$queryRaw`
+          SELECT "id"
+          FROM "PaymentAttempt"
+          WHERE "id" = ${input.paymentAttemptId}::uuid
+          FOR UPDATE
+        `;
+        const attempt = await transaction.paymentAttempt.findUnique({
+          where: { id: input.paymentAttemptId },
+          include: {
+            order: {
+              include: confirmOrderInclude,
+            },
+            riskDecisions: {
+              where: {
+                kind: { in: ["HOLD", "DENY", "REVIEW"] },
+                OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+              },
+              orderBy: [{ decisionAt: "desc" }, { id: "desc" }],
+              take: 1,
+              select: { id: true, kind: true },
+            },
+          },
+        });
+        if (
+          attempt === null ||
+          attempt.provider !== "STRIPE" ||
+          attempt.order.provider !== "STRIPE"
+        ) {
+          return billingFailure("NOT_FOUND");
+        }
+        const order = attempt.order;
+        await lockCompanyBillingScope(transaction, order.companyId);
+        await transaction.$queryRaw`
+          SELECT "id"
+          FROM "Order"
+          WHERE "id" = ${order.id}::uuid
+          FOR UPDATE
+        `;
+        if (attempt.riskDecisions.length > 0 || attempt.status === "HELD") {
+          await transaction.paymentAttempt.updateMany({
+            where: { id: attempt.id, status: { not: "SUCCEEDED" } },
+            data: {
+              status: "HELD",
+              failureCode: "PAYMENT_RISK_HOLD",
+              lastProviderEventAt: input.eventCreatedAt,
+              updatedAt: now,
+            },
+          });
+          return billingFailure("PAYMENT_HELD");
+        }
+        if (order.status === "PAID") {
+          const replay = buildPaidReplay(order);
+          if (replay === null) return billingFailure("CONFLICT");
+          return billingSuccess(
+            {
+              ...replay,
+              jobTitle: null,
+              recipientUserId: order.createdByUserId,
+              subscriptionStatus: order.subscription?.status ?? null,
+              subscriptionReason: null,
+              billingEmail: order.billingContactEmailSnapshot,
+              planName: order.lines[0]?.planVersion?.plan.name ?? null,
+              creditCount: null,
+            },
+            true,
+          );
+        }
+        if (
+          order.status !== "PENDING" ||
+          attempt.status === "FAILED" ||
+          attempt.status === "CANCELLED" ||
+          input.amountRappen !== attempt.amountRappen ||
+          input.amountRappen !== order.totalRappen ||
+          attempt.currency !== "CHF" ||
+          order.currency !== "CHF" ||
+          input.eventCreatedAt.getTime() <
+            attempt.createdAt.getTime() - 5 * 60_000 ||
+          (order.expiresAt !== null &&
+            input.eventCreatedAt.getTime() >= order.expiresAt.getTime())
+        ) {
+          return billingFailure("CONFLICT");
+        }
+        const line = order.lines[0];
+        if (
+          order.lines.length !== 1 ||
+          line === undefined ||
+          line.planVersionId === null
+        ) {
+          return billingFailure("CONFLICT");
+        }
+        const membership = await transaction.companyMembership.findFirst({
+          where: {
+            companyId: order.companyId,
+            userId: order.createdByUserId,
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: { id: true },
+        });
+        const actorDependencies: BillingDependencies = Object.freeze({
+          actor: Object.freeze({
+            userId: order.createdByUserId,
+            email: order.billingContactEmailSnapshot,
+            companyId: order.companyId,
+            membershipId: membership?.id ?? randomUUID(),
+            membershipRole: "OWNER",
+          }),
+          correlationId: input.correlationId,
+          database: dependencies.database,
+          paymentProvider: Object.freeze({
+            kind: "STRIPE" as const,
+            async createCheckout() {
+              throw new Error("PROJECTION_PROVIDER_CALL_FORBIDDEN");
+            },
+            async confirmPayment() {
+              throw new Error("PROJECTION_PROVIDER_CALL_FORBIDDEN");
+            },
+            async cancel() {
+              throw new Error("PROJECTION_PROVIDER_CALL_FORBIDDEN");
+            },
+          }),
+          emailProvider: dependencies.emailProvider,
+          now,
+        });
+
+        const paymentEvent = await transaction.paymentEvent.createMany({
+          data: [
+            {
+              orderId: order.id,
+              provider: "STRIPE",
+              kind: "PAID",
+              providerReference: input.providerPaymentReference,
+              idempotencyKey: `provider-paid:${input.providerEventId}`,
+              createdAt: now,
+              payload: {
+                schemaVersion: "1",
+                providerEventId: input.providerEventId,
+                externalChargeClaimed: true,
+                amountAuthoritative: true,
+              },
+            },
+          ],
+          skipDuplicates: true,
+        });
+        if (paymentEvent.count !== 1) {
+          return billingFailure("CONFLICT");
+        }
+        const paid = await transaction.order.updateMany({
+          where: {
+            id: order.id,
+            companyId: order.companyId,
+            status: "PENDING",
+          },
+          data: {
+            status: "PAID",
+            paidAt: now,
+            providerReference: input.providerPaymentReference,
+          },
+        });
+        if (paid.count !== 1) {
+          throw new BillingDomainRollbackError("CONFLICT");
+        }
+        const attemptUpdated = await transaction.paymentAttempt.updateMany({
+          where: {
+            id: attempt.id,
+            status: {
+              in: ["CREATED", "CHECKOUT_CREATED", "PENDING"],
+            },
+          },
+          data: {
+            status: "SUCCEEDED",
+            providerPaymentReference: input.providerPaymentReference,
+            lastProviderEventAt: input.eventCreatedAt,
+            failureCode: null,
+            updatedAt: now,
+          },
+        });
+        if (attemptUpdated.count !== 1) {
+          throw new BillingDomainRollbackError("CONFLICT");
+        }
+        const invoice = await createPaidInvoice(transaction, order, now);
+        const fulfillment = await fulfillPlanOrder(
+          transaction,
+          order,
+          line,
+          actorDependencies,
+          now,
+        );
+        if (!fulfillment.ok) {
+          throw new BillingDomainRollbackError(fulfillment.code);
+        }
+        await resolveCompanyDunningInTransaction(transaction, {
+          companyId: order.companyId,
+          correlationId: input.correlationId,
+          now,
+        });
+        await writeRealPaymentSystemAudit(transaction, now, {
+          action: "PAYMENT_EVENT_PROJECTED",
+          capability: "PAYMENT_WEBHOOK_PROJECT",
+          companyId: order.companyId,
+          correlationId: input.correlationId,
+          reasonCode: "SIGNED_PAYMENT_SUCCEEDED",
+          targetId: attempt.id,
+          targetType: "PAYMENT_ATTEMPT",
+        });
+        await writeRealPaymentSystemAudit(transaction, now, {
+          action: "ORDER_PAID",
+          capability: "PAYMENT_WEBHOOK_PROJECT",
+          companyId: order.companyId,
+          correlationId: input.correlationId,
+          reasonCode: "SIGNED_PAYMENT_SUCCEEDED",
+          targetId: order.id,
+          targetType: "ORDER",
+        });
+        await writeRealPaymentSystemAudit(transaction, now, {
+          action: "INVOICE_PAID",
+          capability: "PAYMENT_WEBHOOK_PROJECT",
+          companyId: order.companyId,
+          correlationId: input.correlationId,
+          reasonCode: "SIGNED_PAYMENT_SUCCEEDED",
+          targetId: invoice.id,
+          targetType: "INVOICE",
+        });
+        await writeCheckoutAnalyticsEvent(
+          transaction,
+          "CHECKOUT_COMPLETED",
+          order,
+          line,
+          now,
+        );
+        return billingSuccess({
+          orderId: order.id,
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          subscriptionId: fulfillment.value.subscriptionId,
+          creditGrantEntryId: fulfillment.value.creditGrantEntryId,
+          additionalJobPermitId: fulfillment.value.additionalJobPermitId,
+          importAccessGrantId: fulfillment.value.importAccessGrantId,
+          jobBoostId: fulfillment.value.jobBoostId ?? null,
+          jobTitle: fulfillment.value.jobTitle ?? null,
+          recipientUserId: order.createdByUserId,
+          subscriptionStatus: fulfillment.value.subscriptionStatus,
+          subscriptionReason: fulfillment.value.subscriptionReason,
+          billingEmail: order.billingContactEmailSnapshot,
+          planName: line.planVersion?.plan.name ?? null,
+          creditCount: null,
+        });
+      },
+      { isolationLevel: "Serializable" },
+    );
+  } catch (error) {
+    if (error instanceof BillingDomainRollbackError) {
+      return billingFailure(error.code);
+    }
+    return billingFailure("WRITE_FAILED");
+  }
+  if (!settled.ok) return settled;
+  await sendBillingNotifications(dependencies.database, settled.value);
+  const emailsRecorded = await sendBillingEmails(
+    dependencies.emailProvider,
+    settled.value,
+  );
+  return billingSuccess(
+    {
+      orderId: settled.value.orderId,
+      invoiceId: settled.value.invoiceId,
+      invoiceNumber: settled.value.invoiceNumber,
+      subscriptionId: settled.value.subscriptionId,
+      creditGrantEntryId: settled.value.creditGrantEntryId,
+      additionalJobPermitId: settled.value.additionalJobPermitId,
+      importAccessGrantId: settled.value.importAccessGrantId,
+      jobBoostId: settled.value.jobBoostId,
+      emailsRecorded,
+    },
+    settled.replay === true,
   );
 }
 
@@ -877,7 +1498,9 @@ async function resolveCheckoutQuote(
     );
     if (!eligibility.ok) return billingFailure("JOB_BOOST_NOT_ELIGIBLE");
     const endsAt = new Date(now.getTime() + product.durationDays! * 86_400_000);
-    if (await hasOverlappingBoost(transaction, intent.targetJobId, now, endsAt)) {
+    if (
+      await hasOverlappingBoost(transaction, intent.targetJobId, now, endsAt)
+    ) {
       return billingFailure("JOB_BOOST_NOT_ELIGIBLE");
     }
     return billingSuccess({
@@ -915,7 +1538,13 @@ async function resolveCheckoutQuote(
     if (!entitlements.value.rights.TALENT_RADAR_ACCESS) {
       return billingFailure("TALENT_RADAR_REQUIRED");
     }
-    if (!(await hasContactPackEligiblePlan(transaction, dependencies.actor.companyId, now))) {
+    if (
+      !(await hasContactPackEligiblePlan(
+        transaction,
+        dependencies.actor.companyId,
+        now,
+      ))
+    ) {
       return billingFailure("TALENT_RADAR_REQUIRED");
     }
     return billingSuccess({
@@ -1262,8 +1891,7 @@ async function derivePlanFulfillmentTerms(
     return billingSuccess({
       periodStart: now,
       periodEnd: periodEnd.value,
-      talentContactAllowance:
-        entitlements.value.TALENT_CONTACT_ALLOWANCE,
+      talentContactAllowance: entitlements.value.TALENT_CONTACT_ALLOWANCE,
       jobBoostAllowance: entitlements.value.JOB_BOOST_ALLOWANCE,
     });
   }
@@ -1272,8 +1900,7 @@ async function derivePlanFulfillmentTerms(
     return billingSuccess({
       periodStart: snapshot.fulfillmentPeriodStart,
       periodEnd: snapshot.fulfillmentPeriodEnd,
-      talentContactAllowance:
-        entitlements.value.TALENT_CONTACT_ALLOWANCE,
+      talentContactAllowance: entitlements.value.TALENT_CONTACT_ALLOWANCE,
       jobBoostAllowance: entitlements.value.JOB_BOOST_ALLOWANCE,
     });
   }
@@ -1365,7 +1992,13 @@ async function fulfillProductOrder(
     return fulfillJobBoostOrder(transaction, order, line, dependencies, now);
   }
   if (line.fulfillmentContext === "ADDITIONAL_JOB") {
-    return fulfillAdditionalJobOrder(transaction, order, line, dependencies, now);
+    return fulfillAdditionalJobOrder(
+      transaction,
+      order,
+      line,
+      dependencies,
+      now,
+    );
   }
   if (line.fulfillmentContext === "IMPORT_SETUP") {
     return fulfillImportSetupOrder(transaction, order, line, dependencies, now);
@@ -1760,7 +2393,8 @@ async function createPaidInvoice(
       const value = rows[0]?.sequence ?? null;
       if (value === null) return null;
       const numeric = Number(value);
-      if (!Number.isSafeInteger(numeric)) throw new RangeError("Invoice sequence overflow.");
+      if (!Number.isSafeInteger(numeric))
+        throw new RangeError("Invoice sequence overflow.");
       return numeric;
     },
   };
@@ -2162,7 +2796,10 @@ async function authorizeAdditionalJobContext(
       select: { id: true },
     }),
   ]);
-  if (subscriptions.length !== 1 || subscriptions[0]?.planVersion.plan.code !== "STARTER") {
+  if (
+    subscriptions.length !== 1 ||
+    subscriptions[0]?.planVersion.plan.code !== "STARTER"
+  ) {
     return false;
   }
   const revision = job?.currentRevision;
@@ -2459,7 +3096,10 @@ async function authorizeMockPaymentConfirmation(
       if (order.status !== "PENDING") {
         return billingFailure("ORDER_NOT_PENDING");
       }
-      if (order.expiresAt !== null && order.expiresAt.getTime() <= now.getTime()) {
+      if (
+        order.expiresAt !== null &&
+        order.expiresAt.getTime() <= now.getTime()
+      ) {
         await expirePendingOrder(transaction, {
           companyId: order.companyId,
           correlationId: dependencies.correlationId,
@@ -2506,7 +3146,13 @@ async function authorizeMockPaymentConfirmation(
           if (!entitlements.value.rights.TALENT_RADAR_ACCESS) {
             return billingFailure("TALENT_RADAR_REQUIRED");
           }
-          if (!(await hasContactPackEligiblePlan(transaction, order.companyId, now))) {
+          if (
+            !(await hasContactPackEligiblePlan(
+              transaction,
+              order.companyId,
+              now,
+            ))
+          ) {
             return billingFailure("TALENT_RADAR_REQUIRED");
           }
         } else if (line.fulfillmentContext === "JOB_BOOST") {
@@ -2530,12 +3176,12 @@ async function authorizeMockPaymentConfirmation(
           );
           if (
             !eligibility.ok ||
-            await hasOverlappingBoost(
+            (await hasOverlappingBoost(
               transaction,
               line.targetJobId,
               now,
               endsAt,
-            )
+            ))
           ) {
             return billingFailure("JOB_BOOST_NOT_ELIGIBLE");
           }
@@ -2605,30 +3251,26 @@ type FulfillmentResult = Readonly<{
   jobBoostId?: string | null;
   jobTitle?: string | null;
   subscriptionStatus: "SCHEDULED" | "ACTIVE" | null;
-  subscriptionReason:
-    | "DOWNGRADED"
-    | "ACTIVATED"
-    | "UPGRADED"
-    | null;
+  subscriptionReason: "DOWNGRADED" | "ACTIVATED" | "UPGRADED" | null;
 }>;
 
 type EmailContext = Readonly<{
-    orderId: string;
-    invoiceId: string;
-    invoiceNumber: string;
-    subscriptionId: string | null;
-    creditGrantEntryId: string | null;
-    additionalJobPermitId: string | null;
-    importAccessGrantId: string | null;
-    jobBoostId: string | null;
-    jobTitle: string | null;
-    recipientUserId: string;
-    subscriptionStatus: string | null;
-    subscriptionReason: string | null;
-    billingEmail: string;
-    planName: string | null;
-    creditCount: number | null;
-  }>;
+  orderId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  subscriptionId: string | null;
+  creditGrantEntryId: string | null;
+  additionalJobPermitId: string | null;
+  importAccessGrantId: string | null;
+  jobBoostId: string | null;
+  jobTitle: string | null;
+  recipientUserId: string;
+  subscriptionStatus: string | null;
+  subscriptionReason: string | null;
+  billingEmail: string;
+  planName: string | null;
+  creditCount: number | null;
+}>;
 
 async function hasCurrentBillingMembership(
   transaction: Prisma.TransactionClient,
@@ -2680,6 +3322,7 @@ async function lockCheckoutIdempotencyKey(
 async function recordCheckoutStartedAnalytics(
   dependencies: BillingDependencies,
   orderId: string,
+  provider: "MOCK" | "STRIPE",
   now: Date,
 ): Promise<BillingCommandResult<Readonly<{ recorded: true }>>> {
   return runSerializableRetry(async () =>
@@ -2694,12 +3337,15 @@ async function recordCheckoutStartedAnalytics(
           WHERE "id" = ${orderId}::uuid
           FOR UPDATE
         `;
-        const order = await loadOrderForConfirmation(
-          transaction,
-          orderId,
-          dependencies.actor.companyId,
-        );
-        if (order === null || order.provider !== "MOCK") {
+        const order = await transaction.order.findFirst({
+          where: {
+            id: orderId,
+            companyId: dependencies.actor.companyId,
+            provider,
+          },
+          include: confirmOrderInclude,
+        });
+        if (order === null || order.provider !== provider) {
           return billingFailure("NOT_FOUND");
         }
         if (order.status !== "PENDING" && order.status !== "PAID") {
@@ -2807,6 +3453,7 @@ async function recordCheckoutProviderFailure(
   orderId: string,
   now: Date,
 ) {
+  const provider = dependencies.paymentProvider.kind ?? "MOCK";
   try {
     await dependencies.database.$transaction(
       async (transaction) => {
@@ -2814,6 +3461,56 @@ async function recordCheckoutProviderFailure(
           transaction,
           dependencies.actor.companyId,
         );
+        if (provider === "STRIPE") {
+          const attempt = await transaction.paymentAttempt.findFirst({
+            where: {
+              orderId,
+              companyId: dependencies.actor.companyId,
+              provider: "STRIPE",
+              status: { in: ["CREATED", "CHECKOUT_CREATED"] },
+            },
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            select: { id: true },
+          });
+          if (attempt === null) return;
+          const held = await transaction.paymentAttempt.updateMany({
+            where: {
+              id: attempt.id,
+              status: { in: ["CREATED", "CHECKOUT_CREATED"] },
+            },
+            data: {
+              status: "HELD",
+              failureCode: "CHECKOUT_CALL_UNCERTAIN",
+              updatedAt: now,
+            },
+          });
+          if (held.count !== 1) return;
+          await transaction.paymentEvent.createMany({
+            data: [
+              {
+                orderId,
+                provider: "STRIPE",
+                kind: "PENDING",
+                idempotencyKey: `checkout-call-uncertain:${orderId}`,
+                createdAt: now,
+                payload: {
+                  schemaVersion: "1",
+                  reasonCode: "CHECKOUT_CALL_UNCERTAIN",
+                  externalChargeClaimed: false,
+                },
+              },
+            ],
+            skipDuplicates: true,
+          });
+          await writeBillingAudit(transaction, dependencies, now, {
+            action: "PAYMENT_ATTEMPT_HELD",
+            capability: "EMPLOYER_BILLING_CHECKOUT_CREATE",
+            targetId: attempt.id,
+            targetType: "PAYMENT_ATTEMPT",
+            reasonCode: "CHECKOUT_CALL_UNCERTAIN",
+          });
+          return;
+        }
         const importReservation = await transaction.orderLine.findFirst({
           where: {
             orderId,
@@ -2851,13 +3548,16 @@ async function recordCheckoutProviderFailure(
         await transaction.paymentEvent.create({
           data: {
             orderId,
-            provider: "MOCK",
+            provider,
             kind: "FAILED",
             idempotencyKey: `checkout-failed:${orderId}`,
             createdAt: now,
             payload: {
               schemaVersion: "1",
-              reasonCode: "MOCK_CHECKOUT_PROVIDER_FAILED",
+              reasonCode:
+                provider === "MOCK"
+                  ? "MOCK_CHECKOUT_PROVIDER_FAILED"
+                  : "HOSTED_CHECKOUT_PROVIDER_FAILED",
               externalChargeClaimed: false,
             },
           },
@@ -2867,7 +3567,10 @@ async function recordCheckoutProviderFailure(
           capability: "EMPLOYER_BILLING_CHECKOUT_CREATE",
           targetId: orderId,
           targetType: "ORDER",
-          reasonCode: "MOCK_CHECKOUT_PROVIDER_FAILED",
+          reasonCode:
+            provider === "MOCK"
+              ? "MOCK_CHECKOUT_PROVIDER_FAILED"
+              : "HOSTED_CHECKOUT_PROVIDER_FAILED",
         });
       },
       { isolationLevel: "Serializable" },
@@ -2880,21 +3583,109 @@ async function recordCheckoutProviderFailure(
 
 async function safeCreateProviderCheckout(
   dependencies: BillingDependencies,
-  orderId: string,
-  idempotencyKey: string,
+  prepared: PreparedCheckoutOrder,
 ) {
   try {
+    const successPath = `/employer/billing/success?order=${encodeURIComponent(prepared.orderId)}`;
+    const cancelPath = "/employer/billing?checkout=cancelled";
+    const successUrl =
+      prepared.provider === "STRIPE"
+        ? new URL(successPath, dependencies.realPayment!.appUrl).toString()
+        : successPath;
+    const cancelUrl =
+      prepared.provider === "STRIPE"
+        ? new URL(cancelPath, dependencies.realPayment!.appUrl).toString()
+        : cancelPath;
     const session = await dependencies.paymentProvider.createCheckout({
-      orderId,
-      idempotencyKey,
-      successUrl: `/employer/billing/success?order=${encodeURIComponent(orderId)}`,
-      cancelUrl: "/employer/billing?checkout=cancelled",
+      orderId: prepared.orderId,
+      idempotencyKey: prepared.providerIdempotencyKey,
+      successUrl,
+      cancelUrl,
+      ...(prepared.provider === "STRIPE" &&
+      prepared.paymentAttemptId !== null &&
+      prepared.quoteDigest !== null
+        ? {
+            authoritative: {
+              amountRappen: prepared.amountRappen,
+              currency: prepared.currency,
+              customerEmail: prepared.billingContactEmail,
+              description: prepared.description,
+              quoteDigest: prepared.quoteDigest,
+              paymentAttemptId: prepared.paymentAttemptId,
+            },
+          }
+        : {}),
     });
-    return session.provider === "MOCK" && session.orderId === orderId
+    return session.provider === prepared.provider &&
+      session.orderId === prepared.orderId
       ? session
       : null;
   } catch {
     return null;
+  }
+}
+
+async function recordHostedCheckoutSession(
+  dependencies: BillingDependencies,
+  prepared: PreparedCheckoutOrder,
+  providerSessionReference: string | undefined,
+  now: Date,
+) {
+  if (
+    prepared.paymentAttemptId === null ||
+    providerSessionReference === undefined
+  ) {
+    return false;
+  }
+  const paymentAttemptId = prepared.paymentAttemptId;
+  try {
+    return await dependencies.database.$transaction(async (transaction) => {
+      await transaction.$queryRaw`
+        SELECT "id"
+        FROM "PaymentAttempt"
+        WHERE "id" = ${paymentAttemptId}::uuid
+        FOR UPDATE
+      `;
+      const attempt = await transaction.paymentAttempt.findFirst({
+        where: {
+          id: paymentAttemptId,
+          orderId: prepared.orderId,
+          companyId: dependencies.actor.companyId,
+          provider: "STRIPE",
+        },
+        select: {
+          status: true,
+          providerSessionReference: true,
+        },
+      });
+      if (attempt === null) return false;
+      if (
+        attempt.providerSessionReference !== null &&
+        attempt.providerSessionReference !== providerSessionReference
+      ) {
+        return false;
+      }
+      if (
+        attempt.status !== "CREATED" &&
+        attempt.status !== "CHECKOUT_CREATED"
+      ) {
+        return false;
+      }
+      const updated = await transaction.paymentAttempt.updateMany({
+        where: {
+          id: paymentAttemptId,
+          status: { in: ["CREATED", "CHECKOUT_CREATED"] },
+        },
+        data: {
+          status: "CHECKOUT_CREATED",
+          providerSessionReference,
+          updatedAt: now,
+        },
+      });
+      return updated.count === 1;
+    });
+  } catch {
+    return false;
   }
 }
 
@@ -2912,9 +3703,7 @@ function checkoutRequestFingerprint(companyId: string, intent: CheckoutIntent) {
           intent.productSlug,
           String(intent.quantity),
           "targetJobId" in intent ? intent.targetJobId : "",
-          "importSetupApprovalId" in intent
-            ? intent.importSetupApprovalId
-            : "",
+          "importSetupApprovalId" in intent ? intent.importSetupApprovalId : "",
         ].join(CHECKOUT_HASH_SEPARATOR);
   return createHash("sha256")
     .update("billing-checkout-intent-v1", "utf8")
@@ -2925,14 +3714,16 @@ function checkoutRequestFingerprint(companyId: string, intent: CheckoutIntent) {
     .digest("hex");
 }
 
-function isCompleteSwissBillingProfile(profile: Readonly<{
-  legalName: string;
-  billingContactEmail: string;
-  street: string;
-  postalCode: string;
-  city: string;
-  countryCode: string;
-}>) {
+function isCompleteSwissBillingProfile(
+  profile: Readonly<{
+    legalName: string;
+    billingContactEmail: string;
+    street: string;
+    postalCode: string;
+    city: string;
+    countryCode: string;
+  }>,
+) {
   return (
     profile.countryCode === "CH" &&
     profile.legalName.trim().length >= 2 &&
@@ -2975,9 +3766,7 @@ async function expirePendingOrder(
     correlationId: input.correlationId,
     reasonCode: "ORDER_TTL_ELAPSED",
     result: "SUCCEEDED",
-    retainUntil: new Date(
-      input.now.getTime() + BILLING_AUDIT_RETENTION_MS,
-    ),
+    retainUntil: new Date(input.now.getTime() + BILLING_AUDIT_RETENTION_MS),
     targetId: input.orderId,
     targetType: "ORDER",
   });
@@ -2997,7 +3786,8 @@ async function writeBillingAudit(
       | "INVOICE_PAID"
       | "SUBSCRIPTION_ACTIVATED"
       | "SUBSCRIPTION_CHANGED"
-      | "CREDITS_GRANTED";
+      | "CREDITS_GRANTED"
+      | "PAYMENT_ATTEMPT_HELD";
     capability: string;
     targetId: string;
     targetType: AuditTargetTypeV1;
@@ -3011,6 +3801,33 @@ async function writeBillingAudit(
     capability: input.capability,
     companyId: dependencies.actor.companyId,
     correlationId: dependencies.correlationId,
+    reasonCode: input.reasonCode,
+    result: "SUCCEEDED",
+    retainUntil: new Date(now.getTime() + BILLING_AUDIT_RETENTION_MS),
+    targetId: input.targetId,
+    targetType: input.targetType,
+  });
+}
+
+async function writeRealPaymentSystemAudit(
+  transaction: Prisma.TransactionClient,
+  now: Date,
+  input: Readonly<{
+    action: "PAYMENT_EVENT_PROJECTED" | "ORDER_PAID" | "INVOICE_PAID";
+    capability: string;
+    companyId: string;
+    correlationId: string;
+    reasonCode: string;
+    targetId: string;
+    targetType: AuditTargetTypeV1;
+  }>,
+) {
+  await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
+    action: input.action,
+    actorKind: "SYSTEM",
+    capability: input.capability,
+    companyId: input.companyId,
+    correlationId: input.correlationId,
     reasonCode: input.reasonCode,
     result: "SUCCEEDED",
     retainUntil: new Date(now.getTime() + BILLING_AUDIT_RETENTION_MS),

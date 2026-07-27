@@ -149,6 +149,8 @@ describe("Phase-22 privacy export V2", () => {
             .update(`own-invite:${users.requester.id}`)
             .digest("hex"),
           expiresAt: new Date(PHASE22_NOW.getTime() + 86_400_000),
+          createdAt: PHASE22_NOW,
+          updatedAt: PHASE22_NOW,
         },
       }),
       client.companyInvitation.create({
@@ -161,6 +163,8 @@ describe("Phase-22 privacy export V2", () => {
             .update(`foreign-invite:${foreign.id}`)
             .digest("hex"),
           expiresAt: new Date(PHASE22_NOW.getTime() + 86_400_000),
+          createdAt: PHASE22_NOW,
+          updatedAt: PHASE22_NOW,
         },
       }),
       client.salesLead.create({

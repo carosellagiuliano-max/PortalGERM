@@ -54,7 +54,7 @@ describe("Phase 11 admin policy boundary", () => {
     ]);
   });
 
-  it("preserves the global-role boundary after Phase 12 adds its owned billing routes", () => {
+  it("preserves the global-role boundary after Phase 24 adds its finance routes", () => {
     const root = process.cwd();
     for (const route of ["billing", "orders", "invoices", "plans", "products"]) {
       expect(existsSync(join(root, "app", "admin", route))).toBe(true);
@@ -77,6 +77,7 @@ describe("Phase 11 admin policy boundary", () => {
       "/admin/content",
       "/admin/leads",
       "/admin/billing",
+      "/admin/finance/reconciliation",
       "/admin/plans",
       "/admin/products",
       "/admin/analytics",

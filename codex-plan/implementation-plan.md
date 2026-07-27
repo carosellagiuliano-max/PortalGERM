@@ -665,7 +665,10 @@ flowchart TD
    bauen auf dem abgeschlossenen Phase-21-Sandboxvertrag auf.
 7. **Phasen 25→26→30D**: privilegierte Assurance/Least Privilege/Fraud,
    belastbarer Company Trust und Job Freshness.
-8. **Phase 24 nur bei LC5-Go**: reales Billing plus Paid-Service-Recovery.
+8. **Phase 24 technisch vorbereitet, Aktivierung nur bei LC5-Go**:
+   fail-closed Local-/CI-Zahlungs- und Service-Recovery-Vertrag; kein
+   Staging-/Paid-/LIVE-Start vor WTP-, Phase-25-, Provider-, Tax-/Legal-,
+   Finance- und Operations-Go.
 9. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
    final usability-/mobile-/a11y-prüfen; erst danach genau das lieferbare
    Angebot/den Cluster aktivieren.

@@ -14,6 +14,8 @@ export const billingIdempotencyKeySchema = z
 export const planCheckoutIntentSchema = z.strictObject({
   kind: z.literal("PLAN"),
   planSlug: z.enum(["starter", "pro"]),
+  paymentOrderId: z.uuid().optional(),
+  stepUpEvidenceId: z.uuid().optional(),
   retainedMembershipIds: z
     .array(z.uuid())
     .min(1)
@@ -26,31 +28,39 @@ export const planCheckoutIntentSchema = z.strictObject({
 const contactPackCheckoutIntentSchema = z.strictObject({
   kind: z.literal("PRODUCT"),
   productSlug: z.enum(["contact-pack-10", "contact-pack-50"]),
+  paymentOrderId: z.uuid().optional(),
   quantity: z.coerce.number().int().min(1).max(10).default(1),
+  stepUpEvidenceId: z.uuid().optional(),
   idempotencyKey: billingIdempotencyKeySchema,
 });
 
 const boostCheckoutIntentSchema = z.strictObject({
   kind: z.literal("PRODUCT"),
   productSlug: z.enum(["boost-7d", "boost-30d"]),
+  paymentOrderId: z.uuid().optional(),
   quantity: z.coerce.number().pipe(z.literal(1)).default(1),
   targetJobId: z.uuid(),
+  stepUpEvidenceId: z.uuid().optional(),
   idempotencyKey: billingIdempotencyKeySchema,
 });
 
 const additionalJobCheckoutIntentSchema = z.strictObject({
   kind: z.literal("PRODUCT"),
   productSlug: z.literal("additional-job-30d"),
+  paymentOrderId: z.uuid().optional(),
   quantity: z.coerce.number().pipe(z.literal(1)).default(1),
   targetJobId: z.uuid(),
+  stepUpEvidenceId: z.uuid().optional(),
   idempotencyKey: billingIdempotencyKeySchema,
 });
 
 const importSetupCheckoutIntentSchema = z.strictObject({
   kind: z.literal("PRODUCT"),
   productSlug: z.literal("import-setup"),
+  paymentOrderId: z.uuid().optional(),
   quantity: z.coerce.number().pipe(z.literal(1)).default(1),
   importSetupApprovalId: z.uuid(),
+  stepUpEvidenceId: z.uuid().optional(),
   idempotencyKey: billingIdempotencyKeySchema,
 });
 
@@ -90,6 +100,13 @@ export type BillingDependencies = Readonly<{
   database: DatabaseClient;
   paymentProvider: PaymentProvider;
   emailProvider: EmailProvider;
+  realPayment?: Readonly<{
+    appUrl: string;
+    environment: "local" | "ci" | "staging";
+    paidSelfServiceEnabled: boolean;
+    providerAccountReference: string;
+    sandboxCohort: "none" | "test";
+  }>;
   now?: Date;
 }>;
 
@@ -116,6 +133,9 @@ export type BillingCommandErrorCode =
   | "ORDER_EXPIRED"
   | "ORDER_NOT_PENDING"
   | "PAYMENT_PROVIDER_FAILED"
+  | "PAID_ACTIVATION_REQUIRED"
+  | "STEP_UP_REQUIRED"
+  | "PAYMENT_HELD"
   | "WRITE_FAILED";
 
 export type BillingCommandResult<TValue> = Readonly<

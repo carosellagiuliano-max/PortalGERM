@@ -18,7 +18,6 @@ const KEYRING_VARIABLES = [
 ] as const;
 
 const FUTURE_PROVIDER_VARIABLES = [
-  "STRIPE_SECRET_KEY",
   "OPENAI_API_KEY",
   "STORAGE_ENDPOINT",
   "JOBROOM_API_URL",
@@ -32,6 +31,8 @@ const SENSITIVE_VARIABLES = [
   "DEV_MAILBOX_SECRET",
   ...KEYRING_VARIABLES,
   ...FUTURE_PROVIDER_VARIABLES,
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
   "EMAIL_PROVIDER_API_KEY",
 ] as const;
 
@@ -49,9 +50,7 @@ const adminEmailDistribution = z.preprocess(
   z
     .string()
     .transform((value) =>
-      value
-        .split(",")
-        .map((email) => email.trim().toLowerCase()),
+      value.split(",").map((email) => email.trim().toLowerCase()),
     )
     .pipe(z.array(z.string().email().max(320)).min(1).max(20))
     .refine(
@@ -64,10 +63,9 @@ const adminEmailDistribution = z.preprocess(
 
 const rawEnvironmentSchema = z
   .object({
-    APP_ENV: z.enum(
-      ["local", "ci", "preview", "staging", "production"],
-      { error: "is required" },
-    ),
+    APP_ENV: z.enum(["local", "ci", "preview", "staging", "production"], {
+      error: "is required",
+    }),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -80,15 +78,17 @@ const rawEnvironmentSchema = z
     ),
     APP_URL: z
       .string({ error: "is required" })
-      .refine(isHttpOrigin, "must be an absolute credential-free http(s) origin"),
+      .refine(
+        isHttpOrigin,
+        "must be an absolute credential-free http(s) origin",
+      ),
     NEXT_PUBLIC_APP_NAME: z
       .string({ error: "is required" })
       .trim()
       .min(2, "must contain at least 2 characters")
       .max(80, "must contain at most 80 characters"),
     APP_BUILD_ID: optionalString.refine(
-      (value) =>
-        value === undefined || BUILD_IDENTIFIER_PATTERN.test(value),
+      (value) => value === undefined || BUILD_IDENTIFIER_PATTERN.test(value),
       "must be a safe non-secret build identifier",
     ),
     SESSION_SECRET: z.string({ error: "is required" }),
@@ -122,9 +122,7 @@ const rawEnvironmentSchema = z
     EMAIL_PROVIDER_MODE: z
       .enum(["disabled", "local_mock", "resend_sandbox"])
       .default("disabled"),
-    NOTIFICATION_DISPATCH: z
-      .enum(["paused", "command"])
-      .default("paused"),
+    NOTIFICATION_DISPATCH: z.enum(["paused", "command"]).default("paused"),
     OPTIONAL_EMAIL: z
       .enum(["true", "false"])
       .default("false")
@@ -140,6 +138,30 @@ const rawEnvironmentSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    PAYMENT_PROVIDER_MODE: z
+      .enum(["disabled", "stripe_sandbox"])
+      .default("disabled"),
+    PAYMENT_SANDBOX_COHORT: z.enum(["none", "test"]).default("none"),
+    REAL_PAYMENT_INGESTION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    REAL_PAYMENT_PROJECTION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PAID_SELF_SERVICE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    FINANCE_REPAIR_ACTIONS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PAID_SERVICE_RECOVERY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     DOCUMENT_VAULT_WRITES: z
       .enum(["true", "false"])
       .default("false")
@@ -147,9 +169,7 @@ const rawEnvironmentSchema = z
     DOCUMENT_STORAGE_MODE: z
       .enum(["disabled", "filesystem_sandbox"])
       .default("disabled"),
-    DOCUMENT_SCANNER_MODE: z
-      .enum(["disabled", "sandbox"])
-      .default("disabled"),
+    DOCUMENT_SCANNER_MODE: z.enum(["disabled", "sandbox"]).default("disabled"),
     DOCUMENT_CLEAN_READS: z
       .enum(["true", "false"])
       .default("false")
@@ -253,6 +273,9 @@ const rawEnvironmentSchema = z
     BACKUP_AGE_RECIPIENT: optionalString,
     BACKUP_AGE_IDENTITY_FILE: optionalString,
     STRIPE_SECRET_KEY: optionalString,
+    STRIPE_WEBHOOK_SECRET: optionalString,
+    STRIPE_ACCOUNT_ID: optionalString,
+    STRIPE_SECRET_VERSION: optionalString,
     EMAIL_PROVIDER_API_KEY: optionalString,
     OPENAI_API_KEY: optionalString,
     STORAGE_ENDPOINT: optionalString,
@@ -260,11 +283,7 @@ const rawEnvironmentSchema = z
     MAPS_API_KEY: optionalString,
   })
   .superRefine((environment, context) => {
-    validateBase64Secret(
-      "SESSION_SECRET",
-      environment.SESSION_SECRET,
-      context,
-    );
+    validateBase64Secret("SESSION_SECRET", environment.SESSION_SECRET, context);
 
     const seenKeyMaterial = new Map<string, string>();
     registerUniqueKeyMaterial(
@@ -290,8 +309,7 @@ const rawEnvironmentSchema = z
     }
 
     const productionLike =
-      environment.APP_ENV === "production" ||
-      environment.APP_ENV === "staging";
+      environment.APP_ENV === "production" || environment.APP_ENV === "staging";
     const productionRuntime =
       productionLike || environment.NODE_ENV === "production";
 
@@ -360,10 +378,7 @@ const rawEnvironmentSchema = z
       });
     }
 
-    if (
-      environment.EMAIL_PROVIDER_MODE === "local_mock" &&
-      productionRuntime
-    ) {
+    if (environment.EMAIL_PROVIDER_MODE === "local_mock" && productionRuntime) {
       context.addIssue({
         code: "custom",
         path: ["EMAIL_PROVIDER_MODE"],
@@ -436,16 +451,143 @@ const rawEnvironmentSchema = z
 
     if (
       environment.WORKER_SANDBOX_REPLAY &&
-      (
-        environment.WORKER_RUNTIME !== "sandbox_command" ||
-        (environment.APP_ENV !== "local" && environment.APP_ENV !== "ci")
-      )
+      (environment.WORKER_RUNTIME !== "sandbox_command" ||
+        (environment.APP_ENV !== "local" && environment.APP_ENV !== "ci"))
     ) {
       context.addIssue({
         code: "custom",
         path: ["WORKER_SANDBOX_REPLAY"],
         message:
           "requires the isolated Local/CI sandbox command runtime until Phase 25",
+      });
+    }
+
+    const paymentCapabilityEnabled =
+      environment.REAL_PAYMENT_INGESTION ||
+      environment.REAL_PAYMENT_PROJECTION ||
+      environment.PAID_SELF_SERVICE ||
+      environment.FINANCE_REPAIR_ACTIONS ||
+      environment.PAID_SERVICE_RECOVERY;
+    const stripeSandboxSelected =
+      environment.PAYMENT_PROVIDER_MODE === "stripe_sandbox";
+    if (
+      stripeSandboxSelected &&
+      !["local", "ci", "staging"].includes(environment.APP_ENV)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PAYMENT_PROVIDER_MODE"],
+        message:
+          "stripe_sandbox is forbidden in preview and production runtimes",
+      });
+    }
+    if (stripeSandboxSelected) {
+      if (
+        environment.STRIPE_SECRET_KEY === undefined ||
+        !/^sk_test_[A-Za-z0-9]{8,}$/u.test(environment.STRIPE_SECRET_KEY)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["STRIPE_SECRET_KEY"],
+          message: "must be a Stripe test-mode secret for stripe_sandbox",
+        });
+      }
+      if (
+        environment.STRIPE_WEBHOOK_SECRET === undefined ||
+        !/^whsec_[A-Za-z0-9]{8,}$/u.test(environment.STRIPE_WEBHOOK_SECRET)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["STRIPE_WEBHOOK_SECRET"],
+          message:
+            "must be a Stripe endpoint signing secret for stripe_sandbox",
+        });
+      }
+      if (
+        environment.STRIPE_ACCOUNT_ID === undefined ||
+        !/^acct_[A-Za-z0-9]{8,}$/u.test(environment.STRIPE_ACCOUNT_ID)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["STRIPE_ACCOUNT_ID"],
+          message: "is required and must identify the sandbox merchant account",
+        });
+      }
+      if (
+        environment.STRIPE_SECRET_VERSION === undefined ||
+        !KEY_VERSION_PATTERN.test(environment.STRIPE_SECRET_VERSION)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["STRIPE_SECRET_VERSION"],
+          message: "is required and must be a safe non-secret version label",
+        });
+      }
+    } else if (
+      environment.STRIPE_SECRET_KEY !== undefined ||
+      environment.STRIPE_WEBHOOK_SECRET !== undefined ||
+      environment.STRIPE_ACCOUNT_ID !== undefined ||
+      environment.STRIPE_SECRET_VERSION !== undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PAYMENT_PROVIDER_MODE"],
+        message: "Stripe configuration requires stripe_sandbox mode",
+      });
+    }
+    if (paymentCapabilityEnabled && !stripeSandboxSelected) {
+      context.addIssue({
+        code: "custom",
+        path: ["REAL_PAYMENT_INGESTION"],
+        message: "payment capabilities require an explicit sandbox provider",
+      });
+    }
+    if (
+      environment.REAL_PAYMENT_PROJECTION &&
+      !environment.REAL_PAYMENT_INGESTION
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["REAL_PAYMENT_PROJECTION"],
+        message: "requires durable real-payment ingestion",
+      });
+    }
+    if (
+      (environment.PAID_SELF_SERVICE || environment.PAID_SERVICE_RECOVERY) &&
+      (environment.PAYMENT_SANDBOX_COHORT !== "test" ||
+        (environment.APP_ENV !== "local" && environment.APP_ENV !== "ci"))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PAID_SELF_SERVICE"],
+        message:
+          "paid actions remain limited to the isolated Local/CI test cohort until Phase 25 and 31 gates",
+      });
+    }
+    if (environment.PAID_SELF_SERVICE && !environment.REAL_PAYMENT_PROJECTION) {
+      context.addIssue({
+        code: "custom",
+        path: ["PAID_SELF_SERVICE"],
+        message: "requires signed ingestion and sandbox projection",
+      });
+    }
+    if (environment.FINANCE_REPAIR_ACTIONS) {
+      context.addIssue({
+        code: "custom",
+        path: ["FINANCE_REPAIR_ACTIONS"],
+        message:
+          "must remain false until Phase-25 finance capability and step-up are complete",
+      });
+    }
+    if (
+      environment.APP_ENV === "production" &&
+      (stripeSandboxSelected || paymentCapabilityEnabled)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PAYMENT_PROVIDER_MODE"],
+        message:
+          "Phase-24 contains no LIVE adapter; production payments must remain disabled",
       });
     }
 
@@ -501,11 +643,9 @@ const rawEnvironmentSchema = z
 
     if (
       documentCapabilityEnabled &&
-      (
-        environment.DOCUMENT_STORAGE_MODE !== "filesystem_sandbox" ||
+      (environment.DOCUMENT_STORAGE_MODE !== "filesystem_sandbox" ||
         environment.DOCUMENT_SCANNER_MODE !== "sandbox" ||
-        environment.DOCUMENT_VAULT_COHORT !== "test"
-      )
+        environment.DOCUMENT_VAULT_COHORT !== "test")
     ) {
       context.addIssue({
         code: "custom",
@@ -530,11 +670,15 @@ const rawEnvironmentSchema = z
       context.addIssue({
         code: "custom",
         path: ["DOCUMENT_BULK_ACCESS"],
-        message: "must remain false until the Phase-25 step-up gate is approved",
+        message:
+          "must remain false until the Phase-25 step-up gate is approved",
       });
     }
 
-    if (productionLike && (documentSandboxSelected || documentCapabilityEnabled)) {
+    if (
+      productionLike &&
+      (documentSandboxSelected || documentCapabilityEnabled)
+    ) {
       context.addIssue({
         code: "custom",
         path: ["DOCUMENT_STORAGE_MODE"],
@@ -571,11 +715,9 @@ const rawEnvironmentSchema = z
     }
     if (
       privacyExecutionEnabled &&
-      (
-        environment.PRIVACY_PROCESSING_MODE !== "sandbox_command" ||
+      (environment.PRIVACY_PROCESSING_MODE !== "sandbox_command" ||
         environment.PRIVACY_PROCESSING_COHORT !== "test" ||
-        !environment.PRIVACY_PROVIDER_POSTGRES
-      )
+        !environment.PRIVACY_PROVIDER_POSTGRES)
     ) {
       context.addIssue({
         code: "custom",
@@ -587,14 +729,12 @@ const rawEnvironmentSchema = z
     if (
       (environment.PRIVACY_EXPORT_V2 ||
         environment.PRIVACY_EXPORT_STORAGE_MODE === "filesystem_sandbox") &&
-      (
-        environment.PRIVACY_EXPORT_STORAGE_MODE !== "filesystem_sandbox" ||
+      (environment.PRIVACY_EXPORT_STORAGE_MODE !== "filesystem_sandbox" ||
         environment.PRIVACY_EXPORT_STORAGE_ROOT === undefined ||
         !isAbsolutePathOutsideRepository(
           environment.PRIVACY_EXPORT_STORAGE_ROOT,
         ) ||
-        environment.PRIVACY_EXPORT_KEYS === undefined
-      )
+        environment.PRIVACY_EXPORT_KEYS === undefined)
     ) {
       context.addIssue({
         code: "custom",
@@ -629,10 +769,7 @@ const rawEnvironmentSchema = z
       });
     }
 
-    if (
-      productionLike &&
-      environment.ABUSE_REPORT_ADMIN_EMAILS === undefined
-    ) {
+    if (productionLike && environment.ABUSE_REPORT_ADMIN_EMAILS === undefined) {
       context.addIssue({
         code: "custom",
         path: ["ABUSE_REPORT_ADMIN_EMAILS"],
@@ -704,9 +841,9 @@ export type SecretHandle<TPurpose extends string = string> = Readonly<{
   withValue<TResult>(consumer: (value: string) => TResult): TResult;
 }>;
 
-class InMemorySecretHandle<TPurpose extends string>
-  implements SecretHandle<TPurpose>
-{
+class InMemorySecretHandle<
+  TPurpose extends string,
+> implements SecretHandle<TPurpose> {
   readonly #value: string;
   readonly [secretPurpose]: TPurpose;
 
@@ -731,10 +868,11 @@ class InMemorySecretHandle<TPurpose extends string>
 
 type KeyringVariable = (typeof KEYRING_VARIABLES)[number];
 
-export type KeyringEntry<TPurpose extends KeyringVariable = KeyringVariable> = Readonly<{
-  version: string;
-  key: SecretHandle<TPurpose>;
-}>;
+export type KeyringEntry<TPurpose extends KeyringVariable = KeyringVariable> =
+  Readonly<{
+    version: string;
+    key: SecretHandle<TPurpose>;
+  }>;
 
 type RawEnvironment = z.output<typeof rawEnvironmentSchema>;
 type NonSecretEnvironment = Omit<
@@ -750,6 +888,8 @@ export type ServerEnvironment = Readonly<
       session: SecretHandle<"SESSION_SECRET">;
       localMailbox?: SecretHandle<"DEV_MAILBOX_SECRET">;
       emailProvider?: SecretHandle<"EMAIL_PROVIDER_API_KEY">;
+      stripeSecretKey?: SecretHandle<"STRIPE_SECRET_KEY">;
+      stripeWebhookSecret?: SecretHandle<"STRIPE_WEBHOOK_SECRET">;
       keyrings: Readonly<{
         readonly [Purpose in KeyringVariable]: readonly KeyringEntry<Purpose>[];
       }>;
@@ -781,12 +921,14 @@ export function parseEnvironment(
     throw new EnvironmentValidationError(result.error);
   }
 
-  const keyrings = Object.freeze(Object.fromEntries(
-    KEYRING_VARIABLES.map((variable) => [
-      variable,
-      parseValidatedKeyring(variable, result.data[variable]),
-    ]),
-  )) as ServerEnvironment["secrets"]["keyrings"];
+  const keyrings = Object.freeze(
+    Object.fromEntries(
+      KEYRING_VARIABLES.map((variable) => [
+        variable,
+        parseValidatedKeyring(variable, result.data[variable]),
+      ]),
+    ),
+  ) as ServerEnvironment["secrets"]["keyrings"];
 
   const environment = { ...result.data } as Record<string, unknown>;
   for (const variable of SENSITIVE_VARIABLES) {
@@ -822,6 +964,22 @@ export function parseEnvironment(
               result.data.EMAIL_PROVIDER_API_KEY,
             ),
           }),
+      ...(result.data.STRIPE_SECRET_KEY === undefined
+        ? {}
+        : {
+            stripeSecretKey: createSecretHandle(
+              "STRIPE_SECRET_KEY",
+              result.data.STRIPE_SECRET_KEY,
+            ),
+          }),
+      ...(result.data.STRIPE_WEBHOOK_SECRET === undefined
+        ? {}
+        : {
+            stripeWebhookSecret: createSecretHandle(
+              "STRIPE_WEBHOOK_SECRET",
+              result.data.STRIPE_WEBHOOK_SECRET,
+            ),
+          }),
       keyrings,
     }),
   });
@@ -838,8 +996,7 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     rateLimitBackend: environment.RATE_LIMIT_BACKEND,
     trustedProxyHops: environment.TRUSTED_PROXY_HOPS,
     mailboxEnabled: environment.ENABLE_LOCAL_MOCK_MAILBOX,
-    identityVerificationEnforced:
-      environment.IDENTITY_VERIFICATION_ENFORCEMENT,
+    identityVerificationEnforced: environment.IDENTITY_VERIFICATION_ENFORCEMENT,
     loginEmailChangeEnabled: environment.LOGIN_EMAIL_CHANGE,
     notificationOutboxProducersEnabled:
       environment.NOTIFICATION_OUTBOX_PRODUCERS,
@@ -849,6 +1006,13 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     deliveryReplayEnabled: environment.DELIVERY_REPLAY,
     workerRuntime: environment.WORKER_RUNTIME,
     workerSandboxReplayEnabled: environment.WORKER_SANDBOX_REPLAY,
+    paymentProviderMode: environment.PAYMENT_PROVIDER_MODE,
+    paymentSandboxCohort: environment.PAYMENT_SANDBOX_COHORT,
+    realPaymentIngestionEnabled: environment.REAL_PAYMENT_INGESTION,
+    realPaymentProjectionEnabled: environment.REAL_PAYMENT_PROJECTION,
+    paidSelfServiceEnabled: environment.PAID_SELF_SERVICE,
+    financeRepairActionsEnabled: environment.FINANCE_REPAIR_ACTIONS,
+    paidServiceRecoveryEnabled: environment.PAID_SERVICE_RECOVERY,
     documentVaultWrites: environment.DOCUMENT_VAULT_WRITES,
     documentStorageMode: environment.DOCUMENT_STORAGE_MODE,
     documentScannerMode: environment.DOCUMENT_SCANNER_MODE,
@@ -894,14 +1058,12 @@ function isHttpOrigin(value: string) {
 function parseHttpOrigin(value: string) {
   try {
     const url = new URL(value);
-    return (
-      (url.protocol === "http:" || url.protocol === "https:") &&
+    return (url.protocol === "http:" || url.protocol === "https:") &&
       url.username === "" &&
       url.password === "" &&
       url.pathname === "/" &&
       url.search === "" &&
       url.hash === ""
-    )
       ? url
       : undefined;
   } catch {
@@ -1175,9 +1337,7 @@ function isCanonicalBase64WithMinimumByteLength(
 
   try {
     const decoded = Buffer.from(value, "base64");
-    return (
-      decoded.length >= byteLength && decoded.toString("base64") === value
-    );
+    return decoded.length >= byteLength && decoded.toString("base64") === value;
   } catch {
     return false;
   }

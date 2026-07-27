@@ -7,6 +7,10 @@ import { z } from "zod";
 import { syncBoostStatusProjection } from "@/lib/billing/boosts";
 import { projectCreditExpiries } from "@/lib/billing/credits";
 import { projectSubscriptionBoundaries } from "@/lib/billing/subscriptions";
+import { projectPaymentInboxEvent } from "@/lib/billing/payment-inbox";
+import { reconcilePersistedPayments } from "@/lib/billing/finance-reconciliation";
+import { projectDueDunningCases } from "@/lib/billing/dunning";
+import { projectApprovedServiceRecoveries } from "@/lib/billing/service-delivery-policy";
 import { runJobAlertDigestMock } from "@/lib/candidate/job-alerts";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -15,9 +19,7 @@ import { scanDocumentVersion } from "@/lib/documents/vault-service";
 import { expireDueCompanyInvitations } from "@/lib/employer/team";
 import { syncJobStatusProjection } from "@/lib/jobs/effective-status";
 import { dispatchNotificationBatch } from "@/lib/notifications/dispatcher";
-import {
-  resolvePersistedProviderActivation,
-} from "@/lib/ops/operations-ledger";
+import { resolvePersistedProviderActivation } from "@/lib/ops/operations-ledger";
 import {
   completeWorkItem,
   failWorkItem,
@@ -26,9 +28,8 @@ import {
   type ClaimedWorkItem,
   type WorkLeaseIdentity,
 } from "@/lib/ops/worker-runtime";
-import {
-  createEmailDeliveryProvider,
-} from "@/lib/providers/email/delivery-composition";
+import { createEmailDeliveryProvider } from "@/lib/providers/email/delivery-composition";
+import { emailProvider } from "@/lib/providers/email";
 import {
   createDocumentMalwareScanner,
   createDocumentObjectStore,
@@ -39,12 +40,7 @@ const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const uuidSchema = z.uuid();
 
 export type RegisteredHandlerExecutionResult = Readonly<{
-  completion:
-    | "COMPLETED"
-    | "LEASE_LOST"
-    | "RETRY"
-    | "DEAD_LETTER"
-    | "PAUSED";
+  completion: "COMPLETED" | "LEASE_LOST" | "RETRY" | "DEAD_LETTER" | "PAUSED";
   handlerKey: string;
   workItemId: string;
 }>;
@@ -160,7 +156,10 @@ async function invokeHandler(
         clock: dependencies.now,
       });
       if (summary.status !== "COMPLETED") {
-        throw new HandlerFailure("CONFIGURATION", "NOTIFICATION_DISPATCH_PAUSED");
+        throw new HandlerFailure(
+          "CONFIGURATION",
+          "NOTIFICATION_DISPATCH_PAUSED",
+        );
       }
       return digestSummary(summary);
     }
@@ -226,6 +225,80 @@ async function invokeHandler(
           now,
         }),
       );
+    case "payments.inbox-project": {
+      await requireProvider(dependencies, {
+        adapterKey: dependencies.environment.PAYMENT_PROVIDER_MODE,
+        useCase: "payments.hosted-checkout",
+        now,
+      });
+      if (!dependencies.environment.REAL_PAYMENT_PROJECTION) {
+        throw new HandlerFailure(
+          "CONFIGURATION",
+          "REAL_PAYMENT_PROJECTION_DISABLED",
+        );
+      }
+      const payload = z
+        .strictObject({ providerEventInboxId: uuidSchema })
+        .parse(claimed.payloadReference);
+      return digestSummary(
+        await projectPaymentInboxEvent(
+          {
+            correlationId,
+            inboxId: payload.providerEventInboxId,
+            now,
+          },
+          {
+            database: dependencies.database,
+            emailProvider,
+          },
+        ),
+      );
+    }
+    case "payments.reconcile": {
+      await requireProvider(dependencies, {
+        adapterKey: dependencies.environment.PAYMENT_PROVIDER_MODE,
+        useCase: "payments.hosted-checkout",
+        now,
+      });
+      if (!dependencies.environment.REAL_PAYMENT_INGESTION) {
+        throw new HandlerFailure(
+          "CONFIGURATION",
+          "REAL_PAYMENT_INGESTION_DISABLED",
+        );
+      }
+      return digestSummary(
+        await reconcilePersistedPayments(
+          {
+            batchSize: 100,
+            correlationId,
+            environment: dependencies.environment.APP_ENV as
+              "local" | "ci" | "staging",
+            now,
+          },
+          dependencies.database,
+        ),
+      );
+    }
+    case "payments.dunning": {
+      return digestSummary(
+        await projectDueDunningCases({
+          correlationId,
+          database: dependencies.database,
+          enabled: dependencies.environment.REAL_PAYMENT_PROJECTION,
+          now,
+        }),
+      );
+    }
+    case "payments.service-recovery": {
+      return digestSummary(
+        await projectApprovedServiceRecoveries({
+          correlationId,
+          database: dependencies.database,
+          enabled: dependencies.environment.PAID_SERVICE_RECOVERY,
+          now,
+        }),
+      );
+    }
     case "radar.contact-expiry":
       return digestSummary(
         await expireDueContactRequests({
@@ -259,18 +332,18 @@ async function invokeHandler(
         );
       }
       const summary = await scanDocumentVersion(
-          {
-            actorUserId: version.candidateProfile.userId,
-            documentVersionId: payload.documentVersionId,
-            correlationId,
-          },
-          {
-            database: dependencies.database,
-            environment: dependencies.environment,
-            objectStore: createDocumentObjectStore(dependencies.environment),
-            scanner: createDocumentMalwareScanner(dependencies.environment),
-          },
-        );
+        {
+          actorUserId: version.candidateProfile.userId,
+          documentVersionId: payload.documentVersionId,
+          correlationId,
+        },
+        {
+          database: dependencies.database,
+          environment: dependencies.environment,
+          objectStore: createDocumentObjectStore(dependencies.environment),
+          scanner: createDocumentMalwareScanner(dependencies.environment),
+        },
+      );
       if (!summary.ok) {
         throw new HandlerFailure(
           summary.code === "PROVIDER_DEGRADED"
@@ -302,9 +375,7 @@ async function invokeHandler(
       );
       if (!summary.ok) {
         throw new HandlerFailure(
-          summary.code === "PROVIDER_DEGRADED"
-            ? "TRANSIENT"
-            : "CONFIGURATION",
+          summary.code === "PROVIDER_DEGRADED" ? "TRANSIENT" : "CONFIGURATION",
           summary.code,
         );
       }

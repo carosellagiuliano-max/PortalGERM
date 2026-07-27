@@ -78,6 +78,20 @@
   },
   {
     "kind": "page",
+    "path": "/admin/finance/reconciliation",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/finance/service-recovery",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
     "path": "/admin/imports",
     "roles": [
       "ADMIN"
@@ -317,6 +331,13 @@
     ]
   },
   {
+    "kind": "handler",
+    "path": "/api/webhooks/payments/[provider]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
     "kind": "page",
     "path": "/candidate/alerts",
     "roles": [
@@ -515,6 +536,14 @@
   {
     "kind": "page",
     "path": "/employer/billing/profile",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/billing/subscription",
     "roles": [
       "EMPLOYER",
       "RECRUITER"

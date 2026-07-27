@@ -26,6 +26,14 @@ Nicht-Kontoinhaber-Identity und moderierte Nutzerforschung fehlen; der
 Phasenstatus und jede LIVE-Aktivierung bleiben daher blockiert. Details:
 [`codex-plan/evidence/2026-07-26-phase-22.md`](./codex-plan/evidence/2026-07-26-phase-22.md).
 
+Phase 24 ergänzt einen technisch geprüften, standardmässig gesperrten
+Stripe-Sandboxvertrag für Hosted Checkout, signierte Webhook-Inbox,
+Reconciliation, Refund/Chargeback/Dunning und bezahlte Service-Recovery.
+Mock-Billing bleibt davon getrennt. Ohne WTP-, Provider-, Step-up-, Tax-,
+Legal-, Finance- und Operations-Gates entstehen weder ein Kauf-CTA noch eine
+LIVE-Zahlung. Das Betriebsverfahren steht im
+[`Payment-Operations-Runbook`](./codex-plan/runbooks/payment-operations.md).
+
 Dieses Verzeichnis ist ein eigenes verschachteltes Git-Repository. Die
 [`CLAUDE.md`](./CLAUDE.md) grenzt es ausdrücklich vom separaten Elternprojekt
 `Portal.git` ab; dessen Providerregeln gelten hier nicht.
@@ -65,7 +73,7 @@ Arbeitgeber-Owner:
 | Validierung | Zod `4.4.3`, zusätzliche Domain- und SQL-Constraints |
 | Auth | Eigene E-Mail/Passwort-Authentifizierung mit `bcryptjs`, persistierten DB-Sessions und httpOnly-Cookie; kein Auth.js |
 | Tests | Vitest `4.1.10`, Testing Library, Playwright `1.61.1`, axe-core |
-| Provider | Sechs serverseitige Ports mit lokalen, netzwerkfreien Mock-Adaptern |
+| Provider | Serverseitige Ports mit lokalen Mock-Adaptern sowie explizit gegatetem Stripe-Testadapter; kein LIVE-Paymentmodus |
 
 Die Versionen sind in `.node-version`, `.nvmrc`,
 `package.json#packageManager` und `package.json#engines` festgelegt.
@@ -219,14 +227,13 @@ Alle `*_KEYS` verwenden kommaseparierte Einträge
 persistierter Datensatz mehr auf sie verweist. Schlüsselmaterial darf weder
 zwischen Keyrings noch mit `SESSION_SECRET` wiederverwendet werden.
 
-### Rate-Limiting, Recovery und inaktive Provider
+### Rate-Limiting, Recovery und Provider
 
 | Variable | Pflicht / Scope | Beschreibung |
 |---|---|---|
 | `RATE_LIMIT_BACKEND` | immer | `postgres`; `memory` ist ausschließlich ein Local/Test-Adapter |
 | `BACKUP_AGE_RECIPIENT` | Recovery-Drill | Ein öffentlicher X25519-`age1...`-Empfänger |
 | `BACKUP_AGE_IDENTITY_FILE` | Restore-Drill | Absoluter, geschützter Secret-Mount außerhalb des Repositories; enthält nur den Pfad, nie das Keymaterial selbst |
-| `STRIPE_SECRET_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
 | `EMAIL_PROVIDER_API_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
 | `OPENAI_API_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
 | `STORAGE_ENDPOINT` | Platzhalter | Für den Mock-MVP leer lassen |
@@ -236,6 +243,31 @@ zwischen Keyrings noch mit `SESSION_SECRET` wiederverwendet werden.
 Nicht leere Provider-Platzhalter werden bis zu einem expliziten
 Security-/Legal-/Ops-Gate abgelehnt. Ein Env-Wert aktiviert nie automatisch
 einen Real-Adapter.
+
+### Payment-Sandbox und Finance
+
+Alle Payment-Schalter sind standardmässig geschlossen. Der Stripe-Adapter
+akzeptiert in Phase 24 ausschliesslich Testmodus-Konfiguration in
+`local|ci|staging`; `production` und LIVE-Schlüssel werden abgelehnt.
+Environment-Werte allein genügen nie: zusätzlich ist ein aktuelles
+`ProviderActivation`-Ledger erforderlich.
+
+| Variable | Sicherer Default / Scope | Beschreibung |
+|---|---|---|
+| `PAYMENT_PROVIDER_MODE` | `disabled` | Optional `stripe_sandbox`; wählt keinen LIVE-Modus |
+| `PAYMENT_SANDBOX_COHORT` | `none` | `test` nur für eine ausdrücklich freigegebene Testkohorte |
+| `REAL_PAYMENT_INGESTION` | `false` | Erlaubt nach Provider-Gate nur signaturgeprüfte durable Inbox-Writes |
+| `REAL_PAYMENT_PROJECTION` | `false` | Projiziert Inbox-Ereignisse; setzt Ingestion voraus |
+| `PAID_SELF_SERVICE` | `false` | Checkout-Kill-Switch; benötigt zusätzlich WTP-Go, Providerledger und Step-up |
+| `FINANCE_REPAIR_ACTIONS` | `false` | Refund-/Repair-Mutationen; bleibt bis Phase 25A geschlossen |
+| `PAID_SERVICE_RECOVERY` | `false` | Führt genehmigte, policygebundene Remedies aus |
+| `STRIPE_ACCOUNT_ID` | leer | Exakte Test-Merchant-Account-ID aus dem Activation Ledger |
+| `STRIPE_SECRET_KEY` | leer | Nur secret-gemounteter `sk_test_…`-Schlüssel; nie committen oder loggen |
+| `STRIPE_WEBHOOK_SECRET` | leer | Secret-Mount für Raw-Body-Signaturprüfung |
+| `STRIPE_SECRET_VERSION` | leer | Nicht geheime Referenz auf die freigegebene Secret-Version |
+
+Die Aktivierungsreihenfolge und Incident-/Reconciliation-Abläufe stehen in
+[`codex-plan/runbooks/payment-operations.md`](./codex-plan/runbooks/payment-operations.md).
 
 ## PostgreSQL, Migrationen und Seed
 
@@ -268,9 +300,9 @@ npm run db:smoke
 
 - `db:migrate` führt `prisma migrate deploy` gegen die ausdrücklich
   konfigurierte Ziel-DB aus.
-- Die **48 committed Migrationen** reichen von der Baseline über Domain-,
+- Die **50 committed Migrationen** reichen von der Baseline über Domain-,
   Billing-, Radar-, Search- und Security-Verträge bis zu Phase-22-Privacy-,
-  Legal-, Processing-, Hold-, Tombstone- und Analytics-Consent-Constraints.
+  Legal-, Worker- sowie Phase-24-Payment-/Finance-Constraints.
 - `db:migrate:dev` und `db:studio` sind durch einen Local-/Loopback-Guard
   geschützt.
 - `prisma db push` ist für Production, Staging, Releases und
