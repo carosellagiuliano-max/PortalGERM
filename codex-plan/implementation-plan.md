@@ -667,9 +667,11 @@ flowchart TD
    Phase-21-Sandboxvertrag auf; externe Counsel-/Provider-/Pager-Gates bleiben.
 7. **Phase 25 — technisch abgeschlossen; danach 26→30D**: persistierte
    Admin-Least-Privilege-Rollen, MFA/Recovery, non-admin Step-up und
-   Fraud-/Scam-/ATO-Case/Appeal bestehen das lokale G3. Company Trust und Job
-   Freshness bleiben die nächsten Fachverträge; alle Phase-25-Enforcement-
-   Flags bleiben bis Owner-/RP-ID-/Risk-/Capacity-/Pager-Gates geschlossen.
+   Fraud-/Scam-/ATO-Case/Appeal bestehen auf Candidate `eb8cbcd` das lokale
+   G3; siehe [Phase-25-Evidence](./evidence/2026-07-28-phase-25.md). Company
+   Trust und Job Freshness bleiben die nächsten Fachverträge; alle
+   Phase-25-Enforcement-Flags bleiben bis Owner-/RP-ID-/Risk-/Capacity-/
+   Pager-Gates geschlossen.
 8. **Phase 24 technisch abgeschlossen, Aktivierung nur bei LC5-Go**:
    Candidate `f785944` besitzt den grünen fail-closed Local-/CI-Zahlungs- und
    Service-Recovery-Vertrag; kein Staging-/Paid-/LIVE-Start vor WTP-,

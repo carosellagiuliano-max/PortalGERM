@@ -231,9 +231,15 @@ Reconciliation, Refund/Chargeback/Dunning und Service-Recovery. Lokales G3
 LIVE bleiben externe Aktivierungsgates. Siehe
 [Phase-24-Evidence](./evidence/2026-07-27-phase-24.md).
 
-### [ ] 25 — Admin-Security
+### [x] 25 — Admin-Security
 
-[`25-admin-security.md`](./25-admin-security.md) · Least-Privilege-Adminrollen, Separation of Duties sowie MFA/Step-up.
+[`25-admin-security.md`](./25-admin-security.md) · commitgebunden
+verifizierter, standardmässig deaktivierter Local-/CI-Vertrag `eb8cbcd` für
+zehn Least-Privilege-Adminrollen, MFA/Recovery, Separation of Duties,
+single-use Step-up und Trust-&-Safety-Case/Appeal/Containment. Lokales G3
+`PASS`; Production-RP-ID, benannte Duty-/Recovery-/Trust-Owner, Risk-/DSFA-
+Freigabe, Staging, Pager/On-call und LIVE bleiben externe Gates. Siehe
+[Phase-25-Evidence](./evidence/2026-07-28-phase-25.md).
 
 ### [ ] 26 — Company Trust und Verifikation
 

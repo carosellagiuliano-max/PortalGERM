@@ -353,7 +353,7 @@ Headroom, Forecast, Alert und Owner.
 | [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md) | `STH-006`, `STH-007`, `STH-017` | Candidate `0636a875`: technischer Local-/CI-Sandboxvertrag und automatisiertes G3 `PASS`; Counsel, alternative Identity, moderierte Forschung und jede Aktivierung `BLOCKED`, siehe [Evidence](./evidence/2026-07-26-phase-22.md) |
 | [x] 23 | [Production Operations und Worker](./23-production-operations-workers.md) | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034` | Candidate `d16a2d9`: lokaler/CI Worker-/Ledger-/Capacity-Vertrag und lokales G3 `PASS`; reale Adapter bleiben `DISABLED`, Staging/Pager/Recovery und genehmigte SLO/RPO/RTO sind Phase-32-/G4-Gates, siehe [Evidence](./evidence/2026-07-27-phase-23.md) |
 | [x] 24 | [Reales Billing und Finance](./24-real-billing-finance.md) | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031` | Candidate `f785944`: deaktivierter Local-/CI-Stripe-Testvertrag und lokales G3 `PASS` für Hosted Checkout, Webhook-Inbox, Reconciliation, Refund/Chargeback/Dunning und Service-Recovery; WTP/Tax/Legal/Finance/Phase-25/Staging/LIVE bleiben externe Gates, siehe [Evidence](./evidence/2026-07-27-phase-24.md) |
-| [ ] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031` | 25A Admin-Least-Privilege/SoD/Break-glass, 25B risikobasiertes Non-Admin-Step-up, 25C Fraud-/Scam-/ATO-Abwehr |
+| [x] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031` | Candidate `eb8cbcd`: 25A Admin-Least-Privilege/SoD/Break-glass, 25B Non-Admin-Step-up und 25C Fraud-/Scam-/ATO-Abwehr im deaktivierten Local-/CI-Vertrag mit lokalem G3 `PASS`; externe Security-/Trust-/Staging-/LIVE-Gates bleiben blockiert, siehe [Evidence](./evidence/2026-07-28-phase-25.md) |
 | [ ] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md) | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034` | beweisgestützter, vier-Augen-fähiger Trust-Lifecycle mit Ablauf, Re-Review und schneller Sperrung |
 | [ ] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md) | `STH-012` | additive Plattform-/Company-Personas mit explizitem aktivem Kontext |
 | [ ] 28 | [Recruiting-Workflows](./28-recruiting-workflows.md) | `STH-015`, `STH-016` | zwei unabhängige, nachgewiesen nachgefragte optionale Tracks: 28A externer Statusimport und 28B persistente Interviewplanung |
@@ -618,7 +618,7 @@ refund/dispute. Ein Kill Switch verhindert neue Checkouts; Reconciliation
 und gesetzliche Aufbewahrung laufen weiter. Reale Orders werden nie in
 Mock-Orders konvertiert.
 
-### [ ] 25 — Privileged Action Assurance, Admin Least Privilege und Trust & Safety
+### [x] 25 — Privileged Action Assurance, Admin Least Privilege und Trust & Safety
 
 **Zweck:** 25A entwickelt die bestehende Capability-Abstraktion zu echten
 Least-Privilege-Adminrollen mit MFA, Separation of Duties und Break-glass.
@@ -634,9 +634,11 @@ deaktivierter Local-/CI-Vertrag umgesetzt: zehn persistierte Adminrollen mit
 50 deny-by-default Capabilities, WebAuthn/TOTP/Recovery und SoD/Break-glass;
 zentrale aktionsgebundene Single-use-Step-up-Grants; versionierte
 Risk-Decisions, Trust-&-Safety-Cases, bounded Hold/Revoke, Appeal und
-unabhängiges Restore. Gezielte automatisierte Tests sind grün; der
-commitgebundene vollständige G3-Abschluss und externe Aktivierungsgates stehen
-noch aus.
+unabhängiges Restore. Candidate `eb8cbcd` besteht das commitgebundene lokale
+G3 mit Unit-, PostgreSQL-, Desktop-/360-/A11y-, Migration-/Seed-,
+HTTP/HSTS- und Clean-Clone-Recovery-Evidence; siehe
+[Phase-25-Evidence](./evidence/2026-07-28-phase-25.md). Externe
+Aktivierungsgates stehen weiterhin aus.
 
 **Abhängigkeiten:** 20 verifizierte Identität und Step-up-Grundlage; 22
 Privacy-/Legal-Aktionsklassen; bestehende Session- und Capability-Policies.
