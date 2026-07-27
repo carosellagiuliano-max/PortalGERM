@@ -49,6 +49,12 @@ LC2–LC6-Urteil; ein technischer Testabschluss ist keine externe Freigabe.
   ab.
 - Externe Provider-, Legal-, Privacy-, Tax-, AVG-, Market-, Staffing- und
   Operations-Evidence kann nicht aus Code oder Seed abgeleitet werden.
+- Der Sequenzentscheid vom 27. Juli 2026 richtet Staging erst am Ende ein.
+  Phase 32 übernimmt deshalb ausdrücklich die realen Anteile von
+  Phase-23-`AC-05` bis `AC-09` und `AC-12`: Provider-Sandbox,
+  Stagingdeploy/-rollback, Pager/On-call, automatischer Backup-Lifecycle,
+  genehmigte SLO/RPO/RTO und Bindung an den deployten Artefaktdigest. Ein
+  lokaler Phase-23-Pass darf keines dieser G4-Gates ersetzen.
 - Deshalb lautet der aktuelle Phase-32-Status ehrlich `UNVERIFIED /
   DISABLED`.
 

@@ -351,7 +351,7 @@ Headroom, Forecast, Alert und Owner.
 | [x] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md) | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | technischer Verification-/E-Mail-Change-/Outbox-/Dispatcher-/Preference-Vertrag auf Candidate `5908900`; LIVE/Worker/Step-up bleiben gegatet |
 | [x] 21 | [Document-/CV-Vault](./21-document-cv-vault.md) | `STH-003`; Storage-Anteil `STH-004` | Candidate `ca36bff`: echte CV-Bytes mit Quarantäne, Scan, immutable Application-Version, Single-use-Grant, Reconciliation und Audit im Local-/CI-Sandboxvertrag; LIVE/Retention/Worker/Bulk gegatet |
 | [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md) | `STH-006`, `STH-007`, `STH-017` | Candidate `0636a875`: technischer Local-/CI-Sandboxvertrag und automatisiertes G3 `PASS`; Counsel, alternative Identity, moderierte Forschung und jede Aktivierung `BLOCKED`, siehe [Evidence](./evidence/2026-07-26-phase-22.md) |
-| [ ] 23 | [Production Operations und Worker](./23-production-operations-workers.md) | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034` | Candidate `d16a2d9`: lokaler/CI Worker-/Ledger-/Capacity-Vertrag und lokale Automation `PASS`; reale Adapter, Staging/Pager/Recovery, genehmigte SLO/RPO/RTO und formales G3 bleiben offen, siehe [Evidence](./evidence/2026-07-27-phase-23.md) |
+| [x] 23 | [Production Operations und Worker](./23-production-operations-workers.md) | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034` | Candidate `d16a2d9`: lokaler/CI Worker-/Ledger-/Capacity-Vertrag und lokales G3 `PASS`; reale Adapter bleiben `DISABLED`, Staging/Pager/Recovery und genehmigte SLO/RPO/RTO sind Phase-32-/G4-Gates, siehe [Evidence](./evidence/2026-07-27-phase-23.md) |
 | [ ] 24 | [Reales Billing und Finance](./24-real-billing-finance.md) | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031` | echter, webhookbasierter Geldfluss, Reconciliation, Dunning/Dispute sowie vertraglich korrekte Refund-/Credit-Restoration |
 | [ ] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031` | 25A Admin-Least-Privilege/SoD/Break-glass, 25B risikobasiertes Non-Admin-Step-up, 25C Fraud-/Scam-/ATO-Abwehr |
 | [ ] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md) | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034` | beweisgestützter, vier-Augen-fähiger Trust-Lifecycle mit Ablauf, Re-Review und schneller Sperrung |
@@ -529,15 +529,17 @@ Metriktrennung werden über echte Trigger geprüft. Analytics-Ausfall darf
 keinen Produktflow blockieren. Erasure ist nicht rückrollbar; deshalb Dry
 Run, Approval, Export-Checksum und irreversible Bestätigung vor Ausführung.
 
-### [ ] 23 — Production Operations und Worker
+### [x] 23 — Production Operations und Worker
 
 **Aktueller Stand:** Candidate `d16a2d9` ist mit PostgreSQL-Lease/Fencing,
 Retry/DLQ/Replay, Scheduler, Handler-/Providerledger, Capacity-/Chaos-Evidence,
 redigiertem read-only Ops-Cockpit und vollständiger lokaler Automation
 commitgebunden verifiziert. Runtime und Provider bleiben standardmässig
-`DISABLED`. Das Häkchen bleibt aus, bis reale Staging-/Provider-/Pager-/
-Restore-Evidence, genehmigte SLO/RPO/RTO und damit das formale G3 vorliegen;
-siehe [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md).
+`DISABLED`. Der lokale Technikvertrag ist geschlossen. Auf Product-Owner-
+Vorgabe wird Staging erst am Ende eingerichtet; reale Staging-/Provider-/
+Pager-/Restore-Evidence und genehmigte SLO/RPO/RTO bleiben zwingende
+Phase-32-/G4-Aktivierungsgates; siehe
+[Phase-23-Evidence](./evidence/2026-07-27-phase-23.md).
 
 **Zweck:** Die verbleibenden realen Provideradapter werden über die
 bestehenden Ports und eine gemeinsame Governance integriert. Gleichzeitig

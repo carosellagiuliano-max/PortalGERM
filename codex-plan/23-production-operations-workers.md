@@ -1,10 +1,10 @@
 # Phase 23 — Produktionsbetrieb, Provider-Gates und autonome Worker
 
-> **Planstatus:** BEGONNEN
-> **Technikstatus:** NICHT ABGESCHLOSSEN — lokaler/CI Technik-Candidate
-> implementiert und commitgebunden verifiziert
-> **Quality-Gate:** LOKALE AUTOMATION `PASS`; formales G3
-> `BLOCKED BY EXTERNAL GATES`
+> **Planstatus:** TECHNISCH ABGESCHLOSSEN
+> **Technikstatus:** `PASS` — Local-/CI-Vertrag auf Candidate `d16a2d9`
+> commitgebunden verifiziert
+> **Quality-Gate:** lokales G3 `PASS`; reales Staging-/Aktivierungs-G4
+> verbindlich an Phase 32 übergeben
 > **Aktivierung:** DISABLED / BLOCKED BY EXTERNAL GATE
 > **Evidence:** [2026-07-27-phase-23.md](./evidence/2026-07-27-phase-23.md)
 >
@@ -13,7 +13,13 @@
 > Evidence-Validatoren existieren im Phase-23-Worktree. Runtime und Provider
 > bleiben standardmässig pausiert. Reale Staging-/Production-Infrastruktur,
 > Pager/On-call, automatische Backupquelle, genehmigte SLO/RPO/RTO und reale
-> Provider-Sandbox-Evidence fehlen weiterhin.
+> Provider-Sandbox-Evidence fehlen weiterhin und blockieren jede reale
+> Aktivierung, nicht mehr den lokalen Technikabschluss.
+>
+> **Sequenzentscheid vom 27. Juli 2026:** Staging wird auf ausdrückliche
+> Product-Owner-Vorgabe erst am Ende eingerichtet. Die realen Anteile von
+> `23-AC-05` bis `23-AC-09` und `23-AC-12` werden nicht erlassen, sondern als
+> zwingendes Phase-32-/G4-Aktivierungsgate weitergeführt.
 
 ## 1. Status in vier Dimensionen
 
@@ -332,10 +338,10 @@ und alarmiert.
 
 ## 21. Akzeptanzkriterien und vollständige AC→Test-Matrix
 
-Die geplanten Dateien/Skripte sind Phase-23-Deliverables. Lokale Automation
-und externe Pflichtgates werden getrennt ausgewiesen; ein lokales `PASS`
-ersetzt weder reale Staging-/Pager-/Provider-/Restore-Evidence noch das
-formale Gesamt-G3.
+Die geplanten Dateien/Skripte sind Phase-23-Deliverables. Der lokale
+Technikabschluss und das spätere externe G4 werden getrennt ausgewiesen. Das
+lokale `PASS` erlaubt Folgephasen nur mit deaktivierten Realprovidern; es
+ersetzt keine Staging-/Pager-/Provider-/Restore-Evidence für eine Aktivierung.
 
 | Criterion | Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -343,14 +349,14 @@ formale Gesamt-G3.
 | `23-AC-02` | `REQ-OPS-005`, `REQ-NOT-001` | Crash erzeugt Verlust/Doppelwirkung, P0 | Chaos + PostgreSQL | Crash vor Effect, nach Effect vor Ack, während heartbeat/restart/deploy | nächster Worker übernimmt und Domain-Dedupe schützt Effect | Kill -9 an jeder Grenze, duplicate provider receipt und alte Worker-Version verursachen keine zweite Wirkung | System Worker | Worker/Domain/Provider | repräsentativer Outbox-, Alert-, Expiry- und Privacy-Handler | isoliertes PostgreSQL + Workerprozesse | `npx vitest run --config vitest.integration.config.ts tests/integration/ops/worker-effect-idempotency-postgres.test.ts`; `npx tsx scripts/phase23-worker-chaos.ts --scenario=before-effect,after-effect-before-ack,heartbeat-loss,restart,rolling-deploy` | 0 verlorene Items; je fachlichem Key genau 1 Effect; Recovery innerhalb Testlease+Backoff | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Platform + Domain Owner | LOCAL/CI PASS |
 | `23-AC-03` | `STH-009`, `REQ-OPS-005`, Beitrag `STH-031` | Retry-Storm/Poison/Insider-Replay, P0 | Unit + PostgreSQL Security | timeout/429/5xx, permanent 4xx, unknown, max attempts, DLQ, Replay | transient retryt mit Backoff; autorisiertes Replay nutzt gleichen Effect-Key | Poison blockiert keine gesunden Jobs; unauthorisiert/stale/cross-resource Replay 0 Claims/Reads | System/Ops | Retry/DLQ/Cockpit | Failurematrix, zwei Capabilities, stale Step-up | Unit + isoliertes PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/ops/worker-retry-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/ops/worker-dlq-replay-postgres.test.ts` | Max Attempts exakt; 100 gesunde Jobs trotz Poison abgeschlossen; 1 DLQ; Denials vor Payloadread; Replay 1 auditierter Attempt/0 Doppeleffect | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Platform + Security | LOCAL/CI PASS; PRODUCTION REPLAY DISABLED |
 | `23-AC-04` | `STH-009`, `REQ-OPS-005`, Worker `REQ-JOB-007` | fällige Prozesse bleiben manuell/Zeitrace, P0 | PostgreSQL Contract | Outbox, Alert, Invitation, Job/Boost/Credit/Subscription/Contact, Scan/Privacy je vor/an/nach Grenze | jeder aktivierte Handler läuft autonom genau an fachlicher Grenze | disabled/unfreigegebener Handler, DST-Doppelstunde, restart und Request/Worker-Race erzeugen 0 falsche Transition | System | Scheduler/Domaincommands | logische Zurich-Uhr und alle Statusgrenzen | isoliertes PostgreSQL 16 | `npx vitest run --config vitest.integration.config.ts tests/integration/ops/scheduled-domain-handlers-postgres.test.ts` | 100 % Registryhandler haben Owner/Test/SLO; je Due-Key 1 Transition; disabled 0; DST ohne Doppelwirkung | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Platform + alle Domain Owner | LOCAL/CI PASS; OWNING-PHASE HANDLER DISABLED |
-| `23-AC-05` | `STH-004`, `REQ-INT-002`, ADR-034 | impliziter/falscher Realprovider, P0 | Unit + PostgreSQL + Sandbox | Activation Ledger completeness, expiry/revoke, config/secret/evidence digest und unabhängige Use Cases | exakt freigegebener Sandboxprovider startet für einen Use Case | fehlende DPA/region/secret/runbook/evidence, expired/revoked entry oder anderer Provider bleibt disabled; kein Mockfallback | Ops/System | Provider Registry/Boot | alle Composition Roots, good/bad ledger rows | isoliertes PostgreSQL + Provider Sandbox | `npx vitest run --config vitest.config.ts tests/unit/ops/provider-activation-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/ops/provider-activation-postgres.test.ts`; `npx tsx scripts/phase23-provider-activation-smoke.ts --environment=staging --mode=sandbox --all-registered` | 100 % Use Cases genau ein Ledgeroutcome; unvollständig Exit ≠0; Aktivierung eines Providers ändert 0 andere; 0 Secrets | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Security + Fachowner | LEDGER LOCAL PASS; REAL SANDBOX BLOCKED |
-| `23-AC-06` | `STH-034`, `REQ-OPS-004/005` | unbekannte Kapazität/COGS/Backlog, P0 LC2+ | Load + PostgreSQL | Arrival, Durchsatz, Backlog, oldest age, Providerquota, Handling minutes, Unit Cost und Backpressure | nachhaltiger Durchsatz ≥1,5× p95 Arrival, Utilization ≤70 % | 80/90-%-Schwellen drosseln/stoppen; Provider-/DB-Degradation führt nicht zu OOM/Retry-Storm | Ops/Commercial/System | Worker/Capacity Ledger | LC2/LC3-Profile, 10.000 Items, Kostenfixtures | isolierte Lastumgebung + Staging | `npx vitest run --config vitest.config.ts tests/unit/ops/capacity-backpressure-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/ops/operational-capacity-postgres.test.ts`; `npx tsx scripts/phase23-capacity-benchmark.ts --profile=lc3 --items=10000 --workers=4` | ≥1,5× Headroom; 0 Loss/OOM; Warnung ≥80 %, Intake/Dispatch-Pause ≥90 %; Unit Cost/Item und p50/p95 Handling Time vorhanden | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Commercial + Finance | FIXTURE LOAD PASS; REAL ARRIVAL/COST/STAGING BLOCKED |
-| `23-AC-07` | `STH-008`, `REQ-OPS-001` | Environment-/Artefakt-/Migrationsdrift, P0 | Staging Deploy/E2E | immutable Build → migrate → app/worker deploy → canary → rollback | Stagingdigest entspricht Testdigest, Readiness grün | falsche DB, pending migration, Demo seed, inkompatibler Worker, bad secret booten 0 Traffic/Claims | Ops/System | CI/IaC/Staging | leere + Upgrade-DB, bad configs; `TESTED_ARTIFACT_DIGEST` aus signiertem Buildmanifest | echte Stagingumgebung | `npx tsx scripts/phase23-staging-deploy-smoke.ts --environment=staging --artifact-digest=$env:TESTED_ARTIFACT_DIGEST --scenario=deploy,migrate,canary,rollback`; `npm run env:validate`; `npm run db:migrate:status` | Digest exakt; bad scenarios fail-closed; Rollback innerhalb genehmigtem Budget; keine Production-/Demo-Daten | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Release QA | BLOCKED — REAL STAGING/IAC ABSENT |
-| `23-AC-08` | `STH-008`, `REQ-OPS-002`, Beitrag `STH-031` | unsichtbarer Ausfall/kein Owner, P0 | Observability + Incident Drill | Queue age/DLQ/error/provider/backup Alarm → Page → Ack → Escalate → Recover | richtige Primärperson bestätigt und führt Runbook aus | Pager unavailable, keine Ack, PII canary in log, Alertflap oder unowned service blockiert | Ops/Security/Privacy | Metrics/Logs/Pager/Runbook | synthetische Correlation IDs und PII Canaries | Staging + Pager Sandbox | `npx tsx scripts/phase23-incident-drill.ts --environment=staging --scenario=queue-age,dlq,provider-outage,backup-failure,pii-canary`; manueller Ack-/Eskalationsablauf aus `codex-plan/runbooks/incident-response.md` | Alert innerhalb 2 Messintervalle; Ack/Eskalation innerhalb freigegebener Frist; 0 PII/Secrets; Owner/Runbook 100 % | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Security | BLOCKED — PAGER/ON-CALL DRILL ABSENT |
-| `23-AC-09` | `STH-008`, `REQ-OPS-003` | Backup nicht restorable/RPO-RTO unbewiesen, P0 | Recovery | automatische verschlüsselte Backups, Retention, isolierter Restore, App/Worker-Smoke | neueste erlaubte Sicherung restauriert vollständig | corrupt checksum, falsche identity, gleiche/source DB, abgelaufene Retention und fehlende Approval blockieren | Ops/System | Backup Store/PostgreSQL | Source-, Backup-, leere Restore-DB, Corrupt Canary; getrennte IDs in `PHASE23_SOURCE_DB_ID`/`PHASE23_RESTORE_DB_ID` | Staging + isolierter Restore | `npm run test:release`; `npx tsx scripts/phase23-backup-restore-drill.ts --environment=staging --source=$env:PHASE23_SOURCE_DB_ID --restore=$env:PHASE23_RESTORE_DB_ID` | Checksum/Counts/Schema gleich; DBs verschieden; RPO/RTO gemessen und ≤ schriftlich genehmigter Werte; ohne Approval kein LIVE-Pass | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Business Owner | LOCAL RESTORE PASS; STAGING LIFECYCLE/APPROVAL BLOCKED |
+| `23-AC-05` | `STH-004`, `REQ-INT-002`, ADR-034 | impliziter/falscher Realprovider, P0 | Unit + PostgreSQL + Sandbox | Activation Ledger completeness, expiry/revoke, config/secret/evidence digest und unabhängige Use Cases | exakt freigegebener Sandboxprovider startet für einen Use Case | fehlende DPA/region/secret/runbook/evidence, expired/revoked entry oder anderer Provider bleibt disabled; kein Mockfallback | Ops/System | Provider Registry/Boot | alle Composition Roots, good/bad ledger rows | isoliertes PostgreSQL + Provider Sandbox | `npx vitest run --config vitest.config.ts tests/unit/ops/provider-activation-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/ops/provider-activation-postgres.test.ts`; `npx tsx scripts/phase23-provider-activation-smoke.ts --environment=staging --mode=sandbox --all-registered` | 100 % Use Cases genau ein Ledgeroutcome; unvollständig Exit ≠0; Aktivierung eines Providers ändert 0 andere; 0 Secrets | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Security + Fachowner | LEDGER LOCAL PASS; REAL SANDBOX DEFERRED TO G4 |
+| `23-AC-06` | `STH-034`, `REQ-OPS-004/005` | unbekannte Kapazität/COGS/Backlog, P0 LC2+ | Load + PostgreSQL | Arrival, Durchsatz, Backlog, oldest age, Providerquota, Handling minutes, Unit Cost und Backpressure | nachhaltiger Durchsatz ≥1,5× p95 Arrival, Utilization ≤70 % | 80/90-%-Schwellen drosseln/stoppen; Provider-/DB-Degradation führt nicht zu OOM/Retry-Storm | Ops/Commercial/System | Worker/Capacity Ledger | LC2/LC3-Profile, 10.000 Items, Kostenfixtures | isolierte Lastumgebung + Staging | `npx vitest run --config vitest.config.ts tests/unit/ops/capacity-backpressure-policy.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/ops/operational-capacity-postgres.test.ts`; `npx tsx scripts/phase23-capacity-benchmark.ts --profile=lc3 --items=10000 --workers=4` | ≥1,5× Headroom; 0 Loss/OOM; Warnung ≥80 %, Intake/Dispatch-Pause ≥90 %; Unit Cost/Item und p50/p95 Handling Time vorhanden | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Commercial + Finance | FIXTURE LOAD PASS; REAL ARRIVAL/COST DEFERRED TO G4 |
+| `23-AC-07` | `STH-008`, `REQ-OPS-001` | Environment-/Artefakt-/Migrationsdrift, P0 | Staging Deploy/E2E | immutable Build → migrate → app/worker deploy → canary → rollback | Stagingdigest entspricht Testdigest, Readiness grün | falsche DB, pending migration, Demo seed, inkompatibler Worker, bad secret booten 0 Traffic/Claims | Ops/System | CI/IaC/Staging | leere + Upgrade-DB, bad configs; `TESTED_ARTIFACT_DIGEST` aus signiertem Buildmanifest | echte Stagingumgebung | `npx tsx scripts/phase23-staging-deploy-smoke.ts --environment=staging --artifact-digest=$env:TESTED_ARTIFACT_DIGEST --scenario=deploy,migrate,canary,rollback`; `npm run env:validate`; `npm run db:migrate:status` | Digest exakt; bad scenarios fail-closed; Rollback innerhalb genehmigtem Budget; keine Production-/Demo-Daten | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Release QA | DEFERRED TO PHASE 32/G4 — REAL STAGING |
+| `23-AC-08` | `STH-008`, `REQ-OPS-002`, Beitrag `STH-031` | unsichtbarer Ausfall/kein Owner, P0 | Observability + Incident Drill | Queue age/DLQ/error/provider/backup Alarm → Page → Ack → Escalate → Recover | richtige Primärperson bestätigt und führt Runbook aus | Pager unavailable, keine Ack, PII canary in log, Alertflap oder unowned service blockiert | Ops/Security/Privacy | Metrics/Logs/Pager/Runbook | synthetische Correlation IDs und PII Canaries | Staging + Pager Sandbox | `npx tsx scripts/phase23-incident-drill.ts --environment=staging --scenario=queue-age,dlq,provider-outage,backup-failure,pii-canary`; manueller Ack-/Eskalationsablauf aus `codex-plan/runbooks/incident-response.md` | Alert innerhalb 2 Messintervalle; Ack/Eskalation innerhalb freigegebener Frist; 0 PII/Secrets; Owner/Runbook 100 % | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Security | DEFERRED TO PHASE 32/G4 — PAGER/ON-CALL |
+| `23-AC-09` | `STH-008`, `REQ-OPS-003` | Backup nicht restorable/RPO-RTO unbewiesen, P0 | Recovery | automatische verschlüsselte Backups, Retention, isolierter Restore, App/Worker-Smoke | neueste erlaubte Sicherung restauriert vollständig | corrupt checksum, falsche identity, gleiche/source DB, abgelaufene Retention und fehlende Approval blockieren | Ops/System | Backup Store/PostgreSQL | Source-, Backup-, leere Restore-DB, Corrupt Canary; getrennte IDs in `PHASE23_SOURCE_DB_ID`/`PHASE23_RESTORE_DB_ID` | Staging + isolierter Restore | `npm run test:release`; `npx tsx scripts/phase23-backup-restore-drill.ts --environment=staging --source=$env:PHASE23_SOURCE_DB_ID --restore=$env:PHASE23_RESTORE_DB_ID` | Checksum/Counts/Schema gleich; DBs verschieden; RPO/RTO gemessen und ≤ schriftlich genehmigter Werte; ohne Approval kein LIVE-Pass | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Ops + Business Owner | LOCAL RESTORE PASS; REAL LIFECYCLE DEFERRED TO G4 |
 | `23-AC-10` | `REQ-SEC-002/003`, `REQ-QA-002` | Ops-IDOR/Secretleak/unbedienbares Incident UI, P0 | Security + E2E + A11y | Health/Queue/Provider/DLQ/Capacity read/action matrix | berechtigter Actor sieht redigierten Zustand und erlaubte Sandboxaction | Public/Support/falsche Capability, direct action, stale step-up und payload/secret canary lesen/wirken 0 | Public/Support/Ops | Health/Admin System | Rollenmatrix, Secret-/PII-Canaries | PostgreSQL + Production Browser Desktop/360 | `npx vitest run --config vitest.integration.config.ts tests/integration/ops/ops-authorization-postgres.test.ts`; `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase23-ops-control.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase23-ops-quality.spec.ts --project=chromium-mobile-360` | Public health allowlist exakt; 0 Canary leak; Denial vor payloadread; 0 critical/serious Axe/Clipping | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Security + UX + Ops | LOCAL/CI PASS |
 | `23-AC-11` | ADR-034, `REQ-QA-003` | Queue-Migration verliert/dupliziert Arbeit, P0 | Migration/PostgreSQL | leer, Bestands-Due-Items, Partial Backfill, Parallelproducer, Wiederholung, alte Worker | jedes fällige Fachobjekt genau ein Work Item, kompatibles Drain | unknown version nicht geclaimt; Duplicate/Orphan/Lockbudget-Verletzung blockiert Cutover | System/Data | Prisma/Queue | realistische Phase-22-Statusmatrix | isoliertes PostgreSQL 16 | `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase23-worker-runtime-migration-postgres.test.ts`; `npm run db:migrate`; `npm run db:migrate:status` | 0 verlorene Due-Objekte; 0 Doppel-Dedupe; Wiederholung 0 Delta; Lock-/Batchbudget eingehalten | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | Data + Platform | LOCAL/CI PASS |
-| `23-AC-12` | `REQ-QA-001`, `REQ-QA-003` | systemweite Regression/anderer Deploydigest, P0 | G3 Portal-Golden | vollständige Unit/Integration/Browser/Worker/Provider/Recovery-Suite | ein Commit/Digest besteht alle Gates | Skip, Retry, Flake, anderes Artefakt oder offenes P0 blockiert | alle | Repository/Staging | deterministischer Seed + Provider Sandboxes | Clean Clone, PostgreSQL 16, Production Build/Staging | nacheinander `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:integration`, `npm run build`, `npm run test:e2e:http`, `npm run test:e2e:browser`, `npm run test:e2e:hsts`, `npm run test:release` sowie AC-05–09-Skripte | alle Exit 0; Browser Retry 0; keine unerklärten Skips; getesteter/deployter Digest identisch | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | QA + Ops | LOCAL AUTOMATION PASS; FORMAL G3 BLOCKED |
+| `23-AC-12` | `REQ-QA-001`, `REQ-QA-003` | systemweite Regression/anderer Deploydigest, P0 | G3 Portal-Golden | vollständige Unit/Integration/Browser/Worker/Provider/Recovery-Suite | ein Commit/Digest besteht alle Gates | Skip, Retry, Flake, anderes Artefakt oder offenes P0 blockiert | alle | Repository/Staging | deterministischer Seed + Provider Sandboxes | Clean Clone, PostgreSQL 16, Production Build/Staging | nacheinander `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:integration`, `npm run build`, `npm run test:e2e:http`, `npm run test:e2e:browser`, `npm run test:e2e:hsts`, `npm run test:release` sowie AC-05–09-Skripte | alle Exit 0; Browser Retry 0; keine unerklärten Skips; getesteter/deployter Digest identisch | [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md) | QA + Ops | LOCAL G3 PASS; EXTERNAL G4 DEFERRED |
 
 ## 22. Performance-, Query-, Queue-, Latenz-, Last- und Kostenlimits
 
@@ -400,30 +406,38 @@ in vorgeprüfte getrennte Zielumgebung.
 
 ## 25. Benötigte Evidence und Artefakte
 
-Phase-23-Evidence enthält Commit/Artefaktdigest, IaC-/Environment-/Migration-
-Manifest, vollständiges Handler- und Provider Activation Ledger,
+Phase-23-Technik-Evidence enthält Commit/Artefaktdigest, Migration,
+vollständiges Handler- und Provider Activation Ledger,
 Lease/Fencing-/Crash-/DLQ-/Replay-Timelines, Capacity-/Arrival-/Backlog-/
-Handling-/Unit-Cost-Report, Queryplans, SLO/Alert/Pager-/Incidenttimeline,
-Secret-/PII-Redaction, Stagingdeploy/-rollback, automatische Backupretention,
-isolierten Restore mit gemessenen und genehmigten RPO/RTO, Mobile/A11y,
-Flags/Kill-Switches, Owner/Vertretung und G3-Entscheid.
+Handling-/Fixture-Cost-Report, Queryplans, Secret-/PII-Redaction, lokalen
+isolierten Restore, Mobile/A11y, Flags/Kill-Switches und lokales G3.
+Phase 32 übernimmt zwingend IaC-/Environment-, Stagingdeploy/-rollback-,
+Provider-Sandbox-, SLO/Alert/Pager-/Incident-, automatische Backupretention-,
+genehmigte RPO/RTO-, Owner-/Vertretungs- und G4-Evidence.
 
 ## 26. Definition of Done für Technik und Quality-Gate
 
-Technikstatus verlangt reproduzierbare Environments/IaC, autonome Worker mit
-Lease/Heartbeat/Retry/DLQ, vollständiges Provider Ledger, Observability,
-Backpressure/Capacity/Cost, Backup/Restore und Runbooks. Quality verlangt
-`23-AC-01` bis `23-AC-12` auf demselben Commit/Digest, G3 und reale
-Staging-/Pager-/Restore-Evidence. Kein autonom erforderlicher Prozess darf nur
-manuell bleiben; optional deaktivierte Handler sind ehrlich dokumentiert.
+Der lokale Technikstatus verlangt autonome Worker mit Lease/Heartbeat/Retry/
+DLQ, vollständiges fail-closed Provider Ledger, lokale Observability,
+Backpressure/Capacity, verschlüsselten isolierten Restore, Runbooks und alle
+lokal ausführbaren AC-/G3-Gates auf demselben Commit. Dieser Vertrag ist auf
+`d16a2d9` erfüllt.
+
+Reproduzierbare reale Environments/IaC, Provider-Sandbox, Staging-Deployment,
+Pager/On-call, automatischer Backup-Lifecycle, genehmigte SLO/RPO/RTO und das
+deploygebundene G4 bleiben ein nicht erlassenes Phase-32-Aktivierungsgate.
+Kein Realprovider oder autonomer Productionprozess darf vorher starten;
+optional deaktivierte Handler bleiben ehrlich dokumentiert.
 
 ## 27. Gate für abhängige Folgephasen
 
-Phase 24/25/26/30 dürfen Provider-/Trust-/Freshness-/Payment-Handler erst
-registrieren und aktivieren, wenn deren Domain-G1/G3 grün und der konkrete
-Activation-Ledger-Eintrag gültig ist. LC3+ benötigt grüne Kernworker;
-LC4–LC6 zusätzlich freigegebene SLO/Capacity/On-call. Phase 32 darf nur den
-exakt getesteten/deployten Digest übernehmen und muss G4 erneut ausführen.
+Phase 24/25/26/30 dürfen auf dem grünen lokalen Worker-/Ledgervertrag
+implementieren und testen. Provider-/Trust-/Freshness-/Payment-Handler dürfen
+real erst aktiviert werden, wenn deren Domain-G1/G3 grün, der konkrete
+Activation-Ledger-Eintrag gültig und das Phase-32-G4 bestanden ist. LC3+
+benötigt grüne Kernworker; LC4–LC6 zusätzlich freigegebene
+SLO/Capacity/On-call. Phase 32 darf nur den exakt getesteten/deployten Digest
+übernehmen.
 
 ## 28. Ausdrücklich nicht bewiesene Aussagen und Referenzen
 
