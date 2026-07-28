@@ -355,7 +355,7 @@ Headroom, Forecast, Alert und Owner.
 | [x] 24 | [Reales Billing und Finance](./24-real-billing-finance.md) | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031` | Candidate `f785944`: deaktivierter Local-/CI-Stripe-Testvertrag und lokales G3 `PASS` für Hosted Checkout, Webhook-Inbox, Reconciliation, Refund/Chargeback/Dunning und Service-Recovery; WTP/Tax/Legal/Finance/Phase-25/Staging/LIVE bleiben externe Gates, siehe [Evidence](./evidence/2026-07-27-phase-24.md) |
 | [x] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031` | Candidate `eb8cbcd`: 25A Admin-Least-Privilege/SoD/Break-glass, 25B Non-Admin-Step-up und 25C Fraud-/Scam-/ATO-Abwehr im deaktivierten Local-/CI-Vertrag mit lokalem G3 `PASS`; externe Security-/Trust-/Staging-/LIVE-Gates bleiben blockiert, siehe [Evidence](./evidence/2026-07-28-phase-25.md) |
 | [ ] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md) | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034` | beweisgestützter, vier-Augen-fähiger Trust-Lifecycle mit Ablauf, Re-Review und schneller Sperrung |
-| [x] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md) | `STH-012` | Candidate `cf99911`: owner-aktivierter, default-off Local-/CI-Vertrag und lokales G3 `PASS` für additive Personas, expliziten Session-/Company-Kontext, Invitation, Privacy und Admintrennung; Demand-/Staging-/Launch-Go offen, siehe [Evidence](./evidence/2026-07-28-phase-27.md) |
+| [x] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md) | `STH-012` | Candidate `291b953`: owner-aktivierter, default-off Local-/CI-Vertrag und lokales G3 `PASS` für additive Personas, expliziten Session-/Company-Kontext, Invitation, Privacy und Admintrennung; Demand-/Staging-/Launch-Go offen, siehe [Evidence](./evidence/2026-07-28-phase-27.md) |
 | [ ] 28 | [Recruiting-Workflows](./28-recruiting-workflows.md) | `STH-015`, `STH-016` | zwei unabhängige, nachgewiesen nachgefragte optionale Tracks: 28A externer Statusimport und 28B persistente Interviewplanung |
 | [ ] 29 | [Research, UX, Mobile und Accessibility](./29-ux-mobile-accessibility.md) | `STH-023`, `STH-025`, `STH-033`; UX-Regression `STH-026` | früher moderierter Research-Track und später bedienbare Cross-Browser-/Mobile-/A11y-Abnahme |
 | [ ] 30 | [Startcluster-Suche, Freshness und Scale Operations](./30-search-scale-operations.md) | 30A: `STH-019`, `STH-036`; 30B: `STH-020/021`; 30C: `STH-027`; 30D: `STH-032` | gemeinsamer berufsfachlicher Suchvertrag samt sicherem Lernkreislauf, Job-Freshness in allen Consumern sowie triggerbasierte Scale-/Sitemap-Arbeit |
@@ -693,7 +693,7 @@ Retention geschützt, nicht öffentlich.
 
 **Status/Priorität:** Der Repository-Owner hat den technischen Scope am
 28. Juli 2026 ausdrücklich aktiviert; der additive Local-/CI-Vertrag ist auf
-Candidate `cf99911` implementiert und mit lokalem G3 verifiziert. Siehe
+Candidate `291b953` implementiert und mit lokalem G3 verifiziert. Siehe
 [Phase-27-Evidence](./evidence/2026-07-28-phase-27.md). Er bleibt default-off.
 Markt-/Kohortenaktivierung bleibt
 `DEFERRED`, P3, bis datierter moderierter Persona-Bedarf, Product-/Security-/

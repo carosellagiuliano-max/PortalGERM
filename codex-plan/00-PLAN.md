@@ -256,7 +256,7 @@ Reviewer-Capacity, Staging/Pager und öffentliche Aktivierung bleiben
 
 [`27-multi-persona-identity.md`](./27-multi-persona-identity.md) ·
 commitgebunden verifizierter, standardmässig deaktivierter Local-/CI-Vertrag
-`cf99911` für additive Candidate-/Employer-Personas, versionierten
+`291b953` für additive Candidate-/Employer-Personas, versionierten
 Session-/Company-Kontext, sichere bestehende-Identity-Invitation,
 identity-weite Privacy sowie getrennte Tenant-/Adminautorität. Lokales G3
 `PASS`; Demand Research, Vier-Owner-Go, Staging/Canary und LIVE bleiben
@@ -445,7 +445,7 @@ externen Pflichtgates ungehakt. Phase 23 ist auf `d16a2d9` als pausierter
 lokaler/CI Technikvertrag geschlossen; ihre reale Aktivierung bleibt wegen
 der in der [Evidence](./evidence/2026-07-27-phase-23.md) benannten und an
 Phase 32/G4 übertragenen Pflichtgates gesperrt.
-Phase 27 ist auf `cf99911` als default-off Local-/CI-Technikvertrag
+Phase 27 ist auf `291b953` als default-off Local-/CI-Technikvertrag
 geschlossen; ihr Demand-, Kohorten-, Staging- und LIVE-Scope bleibt gemäss
 [Evidence](./evidence/2026-07-28-phase-27.md) offen und ist keine
 Launchvoraussetzung. Nichtaktivierende frühe
