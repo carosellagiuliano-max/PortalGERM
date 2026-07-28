@@ -6,11 +6,11 @@ import {
 } from "@/lib/ops/release-database-baseline";
 
 describe("Phase-18 fresh release database baseline", () => {
-  it("accepts only the exact migration-owned Phase-25 security catalog", () => {
+  it("accepts only the exact migration-owned Phase-25/26 security catalog", () => {
     expect(() =>
       assertFreshMigrationBaseline({
         AdminRole: 10,
-        AdminRoleCapability: 58,
+        AdminRoleCapability: 60,
         Company: 0,
         Job: 0,
         User: 0,
@@ -18,7 +18,7 @@ describe("Phase-18 fresh release database baseline", () => {
     ).not.toThrow();
     expect(MIGRATION_OWNED_DOMAIN_ROW_COUNTS).toEqual({
       AdminRole: 10,
-      AdminRoleCapability: 58,
+      AdminRoleCapability: 60,
     });
   });
 
@@ -26,7 +26,7 @@ describe("Phase-18 fresh release database baseline", () => {
     expect(() =>
       assertFreshMigrationBaseline({
         AdminRole: 10,
-        AdminRoleCapability: 58,
+        AdminRoleCapability: 60,
         Company: 1,
       }),
     ).toThrow(/Company=1 \(expected 0\)/u);
@@ -36,16 +36,16 @@ describe("Phase-18 fresh release database baseline", () => {
     expect(() =>
       assertFreshMigrationBaseline({
         AdminRole: 9,
-        AdminRoleCapability: 59,
+        AdminRoleCapability: 61,
       }),
     ).toThrow(
-      /AdminRole=9 \(expected 10\).*AdminRoleCapability=59 \(expected 58\)/u,
+      /AdminRole=9 \(expected 10\).*AdminRoleCapability=61 \(expected 60\)/u,
     );
 
     expect(() =>
       assertFreshMigrationBaseline({
         AdminRole: 10,
       }),
-    ).toThrow(/AdminRoleCapability=missing \(expected 58\)/u);
+    ).toThrow(/AdminRoleCapability=missing \(expected 60\)/u);
   });
 });

@@ -5,7 +5,9 @@
  */
 export const MIGRATION_OWNED_DOMAIN_ROW_COUNTS = Object.freeze({
   AdminRole: 10,
-  AdminRoleCapability: 58,
+  // Phase 25 installs 58 mappings; Phase 26 adds the independently scoped
+  // company-verification reviewer and approver mappings.
+  AdminRoleCapability: 60,
 } as const);
 
 export function assertFreshMigrationBaseline(
