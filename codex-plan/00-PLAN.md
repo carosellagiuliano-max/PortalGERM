@@ -252,9 +252,16 @@ Reviewer-Capacity, Staging/Pager und öffentliche Aktivierung bleiben
 `BLOCKED`. Siehe
 [Phase-26-Evidence](./evidence/2026-07-28-phase-26.md).
 
-### [ ] 27 — Multi-Persona Identity
+### [x] 27 — Multi-Persona Identity
 
-[`27-multi-persona-identity.md`](./27-multi-persona-identity.md) · additive Plattform-/Company-Personas mit explizitem aktivem Kontext.
+[`27-multi-persona-identity.md`](./27-multi-persona-identity.md) ·
+commitgebunden verifizierter, standardmässig deaktivierter Local-/CI-Vertrag
+`cf99911` für additive Candidate-/Employer-Personas, versionierten
+Session-/Company-Kontext, sichere bestehende-Identity-Invitation,
+identity-weite Privacy sowie getrennte Tenant-/Adminautorität. Lokales G3
+`PASS`; Demand Research, Vier-Owner-Go, Staging/Canary und LIVE bleiben
+`OPEN / DISABLED`. Siehe
+[Phase-27-Evidence](./evidence/2026-07-28-phase-27.md).
 
 ### [ ] 28 — Recruiting-Workflows
 
@@ -437,7 +444,11 @@ Local-/CI-Sandboxvertrag, bleibt aber wegen der in ihrer Evidence genannten
 externen Pflichtgates ungehakt. Phase 23 ist auf `d16a2d9` als pausierter
 lokaler/CI Technikvertrag geschlossen; ihre reale Aktivierung bleibt wegen
 der in der [Evidence](./evidence/2026-07-27-phase-23.md) benannten und an
-Phase 32/G4 übertragenen Pflichtgates gesperrt. Nichtaktivierende frühe
+Phase 32/G4 übertragenen Pflichtgates gesperrt.
+Phase 27 ist auf `cf99911` als default-off Local-/CI-Technikvertrag
+geschlossen; ihr Demand-, Kohorten-, Staging- und LIVE-Scope bleibt gemäss
+[Evidence](./evidence/2026-07-28-phase-27.md) offen und ist keine
+Launchvoraussetzung. Nichtaktivierende frühe
 Research-Tracks 29A/31A dürfen gemäss der
 Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md)
 parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates

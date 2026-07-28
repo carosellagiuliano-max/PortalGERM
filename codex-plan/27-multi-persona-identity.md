@@ -4,10 +4,13 @@
 
 | Dimension | Status |
 | --- | --- |
-| Planstatus | `TECHNISCH AKTIVIERT DURCH OWNER; DEMAND-GATE OFFEN` |
-| Technikstatus | `LOCAL/CI CONTRACT IMPLEMENTIERT` |
-| Quality-Gate | `TARGETED PASS; FINALER G3-WIEDERHOLUNGSLAUF LÄUFT` |
+| Planstatus | `TECHNISCH ABGESCHLOSSEN; DEMAND-GATE OFFEN` |
+| Technikstatus | `LOCAL/CI CONTRACT IMPLEMENTIERT UND VERIFIZIERT` |
+| Quality-Gate | `LOCAL G3 PASS; EXTERNES G4 OFFEN` |
 | Aktivierung | `DISABLED` |
+
+Technische Abnahme:
+[Phase-27-Evidence](./evidence/2026-07-28-phase-27.md).
 
 Phase 27 liegt weiterhin **nicht** auf dem kritischen Markt-/Launchpfad. Der
 Repository-Owner hat am 28. Juli 2026 den vollständigen technischen Scope
@@ -124,7 +127,7 @@ Launchscope absent; die technischen Flags bleiben `DISABLED`.
 
 - Research: Candidate, Employer Owner/Admin/Recruiter und Personen mit
   tatsächlichem Dual-Persona-Bedarf;
-- bei technischem `GO`: Identity mit optionaler Candidate Persona und null bis
+- im ausdrücklich aktivierten technischen Owner-Scope: Identity mit optionaler Candidate Persona und null bis
   vielen Company Memberships;
 - Company Owner/Admin/Recruiter/Viewer bleiben pro Company;
 - interne Adminrollen/Grants bleiben eigenständige Phase-25-Autorität;
@@ -140,10 +143,11 @@ Engineering-Sign-off erteilen.
 
 ## 8. Portale, Routen, Services, Provider und Worker
 
-Vor `GO`: **keine geplante Route wird implementiert oder in das Ist-Inventar
-aufgenommen.**
+Ohne ausdrückliche technische Owner-Scope-Aktivierung wird **keine geplante
+Route implementiert oder in das Ist-Inventar aufgenommen.**
 
-Nur bei `GO` entsteht ein versioniertes Planned Route Delta für:
+Im ausdrücklich aktivierten technischen Owner-Scope entstand ein versioniertes
+Route Delta für:
 
 - Portal-/Persona-Auswahl nach Login und in Candidate-/Employer-Navigation;
 - bestehende Candidate-/Employer-/Admin-Layouts und Default Destinations;
@@ -163,10 +167,10 @@ Es entsteht kein neuer externer Providerbedarf allein durch Phase 27.
 
 ## 9. Datenmodelle, Constraints, Indizes und Datenklassifikation
 
-Vor `GO`: keine Schemaänderung.
+Ohne ausdrückliche technische Owner-Scope-Aktivierung: keine Schemaänderung.
 
-Nur bei `GO` entscheidet eine neue ADR zwischen additiven Varianten. Zulässige
-Zielinvarianten:
+Im ausdrücklich aktivierten technischen Owner-Scope entschied ADR-039 den
+additiven Vertrag. Seine Zielinvarianten:
 
 - eine `Identity`/bestehende `User`-Identität mit optionalen versionierten
   `PersonaAssignment`-Datensätzen;
@@ -187,9 +191,9 @@ Migration/Dedupe sicher unterstützen.
 
 ## 10. Migration, Backfill und Kompatibilität
 
-Vor `GO`: keine Migration.
+Ohne ausdrückliche technische Owner-Scope-Aktivierung: keine Migration.
 
-Nur bei `GO`:
+Im ausdrücklich aktivierten technischen Owner-Scope:
 
 1. Identity-/Persona-ADR, vollständige Ist-Guard-/Route-/Datenmatrix und
    expand–migrate–contract Plan;
@@ -209,9 +213,10 @@ Nur bei `GO`:
 
 ## 11. Server-, Worker-, Queue- und Providervertrag
 
-Vor `GO`: kein neuer Server-/Workervertrag.
+Ohne ausdrückliche technische Owner-Scope-Aktivierung: kein neuer
+Server-/Workervertrag.
 
-Nur bei `GO`:
+Im ausdrücklich aktivierten technischen Owner-Scope:
 
 - Authentisierung löst Identity; jede fachliche Query prüft Persona,
   Membership, Assignment, Ownership, Status und Tenant separat;
@@ -232,9 +237,10 @@ Nur bei `GO`:
 
 ## 12. UX-Zustände
 
-Vor `GO`: keine Multi-Persona-UI.
+Ohne ausdrückliche technische Owner-Scope-Aktivierung: keine Multi-Persona-UI.
 
-Nur bei `GO` besitzen Portalwahl, Invitation, Context Switch und Recovery:
+Im ausdrücklich aktivierten technischen Owner-Scope besitzen Portalwahl,
+Invitation, Context Switch und Recovery:
 
 - **Loading:** aktuelle Personas/Memberships serverseitig laden;
 - **Empty:** keine zweite Persona/Membership, ohne falschen CTA;
@@ -254,7 +260,7 @@ des anderen Contexts vorab zu leaken.
 
 ## 13. Mobile und Accessibility
 
-Nur bei `GO`:
+Im ausdrücklich aktivierten technischen Owner-Scope:
 
 - Portal-/Company-Switcher funktioniert bei 360 px, Touch, Tastatur und
   Screenreader;
@@ -406,19 +412,19 @@ und keine Aktivierungsfreigabe.
 
 | Criterion/Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `P27-AC-01` / `REQ-PER-001` / `REQ-UX-003` | P1/P3: XL-Umbau ohne Bedarf | Moderated Research | Persona-Demand-Gate | qualifizierter aktueller Dual-Persona-Blocker | hypothetischer Wunsch, unqualifizierte Person, günstigere sichere Alternative reicht | Candidate/Employer | heutige Login/Invite/Portal Journeys | ≥12 Teilnehmer, ≥6 realer Dualbedarf, ≥3 Firmen | moderierte Research, echte Zielgruppe | preregistrierter Ablauf: Candidate→Company Invitation, Company→Candidate Journey, Login/Recovery/Privacy; Alternative mit separatem Konto testen; anonymisiert protokollieren | GO nur bei ≥4/6 materiell blockiert + keine sichere günstigere Lösung + vier Owner-Sign-offs; sonst NO-GO/DEFERRED | Researchplan, anonymisierte Task-/Time-/Error-/Comprehension-Matrix, Decision | Product Research + Privacy | `PLANNED` |
-| `P27-AC-02` / `REQ-PER-001` | P0 Governance: NO-GO erzeugt trotzdem Code | Plan/Repository Audit | No-Code Boundary | NO-GO lässt Phase deferred/disabled | Persona-Schema/Route/Flag/CTA/Claim trotz fehlendem GO | Engineering/Product | Repository/Plan/Routes | Decision NO-GO/DEFERRED, Baseline-Inventar | Clean Worktree/CI | `npm run plan:audit`; `npm run route:audit`; `rg -n "PersonaAssignment" app components lib prisma`; `rg -n "PERSONA_PORTAL_SWITCH" app components lib prisma`; `rg -n "IDENTITY_PERSONA_V2" app components lib prisma` | ohne GO neue Phase-27-Runtime-/Schema-/Route-/Flag-Treffer `0`; Planstatus bleibt DEFERRED/DISABLED | Auditlogs, Decision-ID, Git-Diff | Governance + QA | `PLANNED` |
-| `P27-AC-03` / `REQ-PER-001` | P0 bei GO: Persona wird Autorität | Unit | Identity×Persona×Membership×Assignment Matrix | explizite Persona plus aktuelle Membership/Assignment erlaubt | Persona allein, fremde Company, suspended membership, Admin aus Persona | Candidate/Employer/Admin | Policy/Guards | alle Persona-/Role-/Statuskombinationen, Company A/B | Unit, nur nach GO | `npx vitest run --config vitest.config.ts tests/unit/auth/persona-authorization-matrix.test.ts` | vollständige Matrix; Persona-only Tenantzugriff `0`; Admin Grants aus Persona `0` | Matrixreport | Security + Identity QA | `PLANNED (NUR NACH GO)` |
-| `P27-AC-04` / `REQ-PER-001` | P0: Backfill grantet Rechte/verliert Identität | Migration | empty/upgrade/partial/repeat/N-1 | Legacyrollen exakt additiv abgebildet | zusätzliche Persona/Grant, duplicates, orphan, partial, suspended Fälle | System/DBA | Prisma/PostgreSQL | alle Legacyrollen/statuses, multi-company, partial states | isoliertes PostgreSQL, nur nach GO | `npm run db:migrate`; `npm run db:migrate:status`; `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase27-persona-migration-postgres.test.ts` | neue unberechtigte Personas/Grants `0`; Count/Tenant/Consent-Abweichung `0`; Wiederholung 0 Zusatzwirkung | Migration-/Backfill-/Compatibility-Manifest | Identity + Data/DBA | `PLANNED (NUR NACH GO)` |
-| `P27-AC-05` / `REQ-PER-001` | P0: Invitation erzeugt Cross-Tenant-Recht | PostgreSQL | bestehende Identity nimmt Company Invitation an | current token/role/seat/company + Step-up erzeugt 1 Membership | replay/expired/revoked invite, changed role/seat, fremde Mail/Company, parallel accept | Candidate/Owner | Invitation/Auth/Company | Identity A, Company A/B, all invite states | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/employer/persona-invitations-postgres.test.ts` | erlaubter Accept 1 Membership; alle Negativ-/Parallelfälle 0 unzulässige Memberships; Audit 1 | DB-/Audit-Report | Identity + Employer QA | `PLANNED (NUR NACH GO)` |
-| `P27-AC-06` / `REQ-ID-004` | P0: Context Switch/ATO erzeugt Zugriff | Unit + PostgreSQL | Portal-/Company Context, Safe Next, Step-up | autorisierter Switch rotiert/bindet Context | manipulierte IDs/next, Company A→B stale cache/tab, replayed Grant | Candidate/Employer | Session/Guards/Navigation | Candidate+2 companies, active/suspended memberships | Unit + real PostgreSQL, nur nach GO | `npx vitest run --config vitest.config.ts tests/unit/auth/persona-context-safe-next.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/security/persona-context-postgres.test.ts` | Cross-context/-tenant Daten `0`; Switch erzeugt `0` Grants; stale action grant nach Contextwechsel denied | Session-/Security-Report | Security + Identity | `PLANNED (NUR NACH GO)` |
-| `P27-AC-07` / `REQ-PRIV-004` | P0: Export/Delete übersieht Persona/leakt Company | PostgreSQL | identity-weite Rechte | Export/Correction/Delete inventarisiert alle eigenen Personas | nur aktive Persona, Company-/Drittdaten, immutable Records falsch gelöscht, partial failure | Candidate/Employer/Privacy | Privacy Service | identity with candidate+2 memberships+applications+radar | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/persona-privacy-postgres.test.ts` | eigenes Inventar vollständig; Drittdatenleak 0; erlaubte Lösch-/Holdmatrix exakt; Resume idempotent | Data-Inventory-/Export-/Erasure-Report | Privacy + Identity | `PLANNED (NUR NACH GO)` |
-| `P27-AC-08` / `REQ-PER-001` | P0: Suspension zu eng/zu breit | PostgreSQL | Identity/Persona/Membership Suspension | jede Suspension wirkt nur laut Matrix | Candidate suspend sperrt fälschlich Company oder Membership suspend globale Identity; stale session | Security/Admin/User | Auth/All Portals | all suspension scopes, sessions, companies | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/security/persona-suspension-postgres.test.ts` | Wirkung exakt je Scope; gesperrter Scope nächste Prüfung denied; andere zulässige Scopes unverändert | Scope-/Session-/Audit-Report | Security + Privacy | `PLANNED (NUR NACH GO)` |
-| `P27-AC-09` / `REQ-ADM-007` | P0: Persona verleiht Admin | Security Regression | interne Grants getrennt | bestehender expliziter AdminGrant wirkt | Candidate/Employerpersona, Company Owner oder Switch erzeugt Capability | User/Admin | Admin Guards | all personas + no/explicit admin grants | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/admin/persona-admin-separation-postgres.test.ts` | Persona-/Membershipkombinationen ohne expliziten Grant erhalten `0` Adminreads/-writes | Capability-/Tenant-Report | Security + Admin QA | `PLANNED (NUR NACH GO)` |
-| `P27-AC-10` / `REQ-PER-001` | P1: Audit/Analytics/Notification falscher Context | PostgreSQL | Context Evidence | Event trägt richtige Identity/Persona/Company/Purpose | Candidate PII im Employeranalytics, duplicate mail, falscher Tenant, raw context leak | User/System | Audit/Analytics/Outbox | same action in each context, Company A/B | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/auth/persona-context-evidence-postgres.test.ts` | Auditkontext 100 % korrekt; Analytics PII-Leaks 0; Notification je Dedupe-Key 1 an zulässigen Empfänger | Audit-/Analytics-/Outbox-Manifest | Identity + Privacy + Data | `PLANNED (NUR NACH GO)` |
-| `P27-AC-11` / `REQ-PER-001` | P0: Cross-persona/-tenant Browserleak | E2E | Candidate↔Employer, Company A/B, Direct URL, Invite, Recovery | jeder autorisierte Wechsel und Rückweg funktioniert | direct URL, stale tab, expired invite, unsupported merge, suspended context | Candidate/Owner/Admin | Candidate/Employer/Admin UI | all legacy roles + dual identity + Company A/B | Chromium, nur nach GO | `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase27-persona-switch.spec.ts --project=chromium-journeys` | autorisierte Journeys je 1 Pass; Cross-persona/-tenant/Direct-URL-Leak `0`; Retry 0 | Playwright/trace-safe Report | Identity + Security QA | `PLANNED (NUR NACH GO)` |
-| `P27-AC-12` / `REQ-QA-003` | P1: mobile/a11y Switch unbrauchbar | E2E + A11y | Switcher/Invite/Locked/Conflict bei 360 | Tastatur/Touch/Screenreader vollständig | Fokusverlust, hidden Context, clipping, color-only, nicht erreichbare Company | alle User | Navigation/Auth UI | 1/2/many companies, every UX state | Chromium Desktop + 360, nur nach GO | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase27-persona-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase27-persona-quality.spec.ts --project=chromium-mobile-360` | Axe serious/critical 0; Clipping kritischer Action 0; aktiver Context programmatisch eindeutig | Playwright/Axe/Screenshots | UX + Accessibility + QA | `PLANNED (NUR NACH GO)` |
-| `P27-AC-13` / `REQ-QA-003` | P0: Rollback regrantet/verliert Context | Migration/Recovery | dual-read cutover/rollback | alte/new reader konvergieren, Flag stoppt neue Switches | Contract zu früh, N-1 misliest Persona, old session, partial backfill | System/Ops | App/DB/Session | N/N-1 artifact, partial migration, active sessions | Staging, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/auth/persona-cutover-postgres.test.ts`; manuell: dual-read canary, Flag off, N-1/roll-forward drill | Grant-/Tenantabweichung 0; bestehende Memberships erhalten; alte unklare Sessions widerrufen; kein destruktiver Contract vor G3 | Cutover-/Rollback-/Session-Manifest | Identity + Ops + DBA | `PLANNED (NUR NACH GO)` |
+| `P27-AC-01` / `REQ-PER-001` / `REQ-UX-003` | P1/P3: XL-Umbau ohne Bedarf | Moderated Research | Persona-Demand-Gate | qualifizierter aktueller Dual-Persona-Blocker | hypothetischer Wunsch, unqualifizierte Person, günstigere sichere Alternative reicht | Candidate/Employer | heutige Login/Invite/Portal Journeys | ≥12 Teilnehmer, ≥6 realer Dualbedarf, ≥3 Firmen | moderierte Research, echte Zielgruppe | preregistrierter Ablauf: Candidate→Company Invitation, Company→Candidate Journey, Login/Recovery/Privacy; Alternative mit separatem Konto testen; anonymisiert protokollieren | GO nur bei ≥4/6 materiell blockiert + keine sichere günstigere Lösung + vier Owner-Sign-offs; sonst NO-GO/DEFERRED | Researchplan, anonymisierte Task-/Time-/Error-/Comprehension-Matrix, Decision | Product Research + Privacy | `OPEN — EXTERNE DEMAND-EVIDENCE FEHLT` |
+| `P27-AC-02` / `REQ-PER-001` | P0 Governance: NO-GO erzeugt trotzdem Code | Plan/Repository Audit | No-Code Boundary | NO-GO lässt Phase deferred/disabled | Persona-Schema/Route/Flag/CTA/Claim trotz fehlendem GO | Engineering/Product | Repository/Plan/Routes | Decision NO-GO/DEFERRED, Baseline-Inventar | Clean Worktree/CI | `npm run plan:audit`; `npm run route:audit`; `rg -n "PersonaAssignment" app components lib prisma`; `rg -n "PERSONA_PORTAL_SWITCH" app components lib prisma`; `rg -n "IDENTITY_PERSONA_V2" app components lib prisma` | ohne GO neue Phase-27-Runtime-/Schema-/Route-/Flag-Treffer `0`; Planstatus bleibt DEFERRED/DISABLED | Auditlogs, Decision-ID, Git-Diff | Governance + QA | `N/A — TECHNIKSCOPE DURCH OWNER AKTIVIERT; MARKT-AKTIVIERUNG BLEIBT DISABLED` |
+| `P27-AC-03` / `REQ-PER-001` | P0 bei GO: Persona wird Autorität | Unit | Identity×Persona×Membership×Assignment Matrix | explizite Persona plus aktuelle Membership/Assignment erlaubt | Persona allein, fremde Company, suspended membership, Admin aus Persona | Candidate/Employer/Admin | Policy/Guards | alle Persona-/Role-/Statuskombinationen, Company A/B | Unit, nur nach GO | `npx vitest run --config vitest.config.ts tests/unit/auth/persona-authorization-matrix.test.ts` | vollständige Matrix; Persona-only Tenantzugriff `0`; Admin Grants aus Persona `0` | Matrixreport | Security + Identity QA | `PASS — LOCAL/CI TECHNIKSCOPE` |
+| `P27-AC-04` / `REQ-PER-001` | P0: Backfill grantet Rechte/verliert Identität | Migration | empty/upgrade/partial/repeat/N-1 | Legacyrollen exakt additiv abgebildet | zusätzliche Persona/Grant, duplicates, orphan, partial, suspended Fälle | System/DBA | Prisma/PostgreSQL | alle Legacyrollen/statuses, multi-company, partial states | isoliertes PostgreSQL, nur nach GO | `npm run db:migrate`; `npm run db:migrate:status`; `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase27-persona-migration-postgres.test.ts` | neue unberechtigte Personas/Grants `0`; Count/Tenant/Consent-Abweichung `0`; Wiederholung 0 Zusatzwirkung | Migration-/Backfill-/Compatibility-Manifest | Identity + Data/DBA | `PASS — LOCAL/CI; STAGING N-1 OFFEN` |
+| `P27-AC-05` / `REQ-PER-001` | P0: Invitation erzeugt Cross-Tenant-Recht | PostgreSQL | bestehende Identity nimmt Company Invitation an | current token/role/seat/company + Step-up erzeugt 1 Membership | replay/expired/revoked invite, changed role/seat, fremde Mail/Company, parallel accept | Candidate/Owner | Invitation/Auth/Company | Identity A, Company A/B, all invite states | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/employer/persona-invitations-postgres.test.ts` | erlaubter Accept 1 Membership; alle Negativ-/Parallelfälle 0 unzulässige Memberships; Audit 1 | DB-/Audit-Report | Identity + Employer QA | `PASS — LOCAL/CI TECHNIKSCOPE` |
+| `P27-AC-06` / `REQ-ID-004` | P0: Context Switch/ATO erzeugt Zugriff | Unit + PostgreSQL | Portal-/Company Context, Safe Next, Step-up | autorisierter Switch rotiert/bindet Context | manipulierte IDs/next, Company A→B stale cache/tab, replayed Grant | Candidate/Employer | Session/Guards/Navigation | Candidate+2 companies, active/suspended memberships | Unit + real PostgreSQL, nur nach GO | `npx vitest run --config vitest.config.ts tests/unit/auth/persona-context-safe-next.test.ts`; `npx vitest run --config vitest.integration.config.ts tests/integration/security/persona-context-postgres.test.ts` | Cross-context/-tenant Daten `0`; Switch erzeugt `0` Grants; stale action grant nach Contextwechsel denied | Session-/Security-Report | Security + Identity | `PASS — LOCAL/CI TECHNIKSCOPE` |
+| `P27-AC-07` / `REQ-PRIV-004` | P0: Export/Delete übersieht Persona/leakt Company | PostgreSQL | identity-weite Rechte | Export/Correction/Delete inventarisiert alle eigenen Personas | nur aktive Persona, Company-/Drittdaten, immutable Records falsch gelöscht, partial failure | Candidate/Employer/Privacy | Privacy Service | identity with candidate+2 memberships+applications+radar | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/persona-privacy-postgres.test.ts` | eigenes Inventar vollständig; Drittdatenleak 0; erlaubte Lösch-/Holdmatrix exakt; Resume idempotent | Data-Inventory-/Export-/Erasure-Report | Privacy + Identity | `PASS — LOCAL/CI TECHNIKSCOPE` |
+| `P27-AC-08` / `REQ-PER-001` | P0: Suspension zu eng/zu breit | PostgreSQL | Identity/Persona/Membership Suspension | jede Suspension wirkt nur laut Matrix | Candidate suspend sperrt fälschlich Company oder Membership suspend globale Identity; stale session | Security/Admin/User | Auth/All Portals | all suspension scopes, sessions, companies | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/security/persona-suspension-postgres.test.ts` | Wirkung exakt je Scope; gesperrter Scope nächste Prüfung denied; andere zulässige Scopes unverändert | Scope-/Session-/Audit-Report | Security + Privacy | `PASS — LOCAL/CI TECHNIKSCOPE` |
+| `P27-AC-09` / `REQ-ADM-007` | P0: Persona verleiht Admin | Security Regression | interne Grants getrennt | bestehender expliziter AdminGrant wirkt | Candidate/Employerpersona, Company Owner oder Switch erzeugt Capability | User/Admin | Admin Guards | all personas + no/explicit admin grants | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/admin/persona-admin-separation-postgres.test.ts` | Persona-/Membershipkombinationen ohne expliziten Grant erhalten `0` Adminreads/-writes | Capability-/Tenant-Report | Security + Admin QA | `PASS — LOCAL/CI TECHNIKSCOPE` |
+| `P27-AC-10` / `REQ-PER-001` | P1: Audit/Analytics/Notification falscher Context | PostgreSQL | Context Evidence | Event trägt richtige Identity/Persona/Company/Purpose | Candidate PII im Employeranalytics, duplicate mail, falscher Tenant, raw context leak | User/System | Audit/Analytics/Outbox | same action in each context, Company A/B | real PostgreSQL, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/auth/persona-context-evidence-postgres.test.ts` | Auditkontext 100 % korrekt; Analytics PII-Leaks 0; Notification je Dedupe-Key 1 an zulässigen Empfänger | Audit-/Analytics-/Outbox-Manifest | Identity + Privacy + Data | `PASS — LOCAL/CI TECHNIKSCOPE` |
+| `P27-AC-11` / `REQ-PER-001` | P0: Cross-persona/-tenant Browserleak | E2E | Candidate↔Employer, Company A/B, Direct URL, Invite, Recovery | jeder autorisierte Wechsel und Rückweg funktioniert | direct URL, stale tab, expired invite, unsupported merge, suspended context | Candidate/Owner/Admin | Candidate/Employer/Admin UI | all legacy roles + dual identity + Company A/B | Chromium, nur nach GO | `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase27-persona-switch.spec.ts --project=chromium-journeys` | autorisierte Journeys je 1 Pass; Cross-persona/-tenant/Direct-URL-Leak `0`; Retry 0 | Playwright/trace-safe Report | Identity + Security QA | `PASS — LOCAL/CI TECHNIKSCOPE` |
+| `P27-AC-12` / `REQ-QA-003` | P1: mobile/a11y Switch unbrauchbar | E2E + A11y | Switcher/Invite/Locked/Conflict bei 360 | Tastatur/Touch/Screenreader vollständig | Fokusverlust, hidden Context, clipping, color-only, nicht erreichbare Company | alle User | Navigation/Auth UI | 1/2/many companies, every UX state | Chromium Desktop + 360, nur nach GO | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase27-persona-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase27-persona-quality.spec.ts --project=chromium-mobile-360` | Axe serious/critical 0; Clipping kritischer Action 0; aktiver Context programmatisch eindeutig | Playwright/Axe/Screenshots | UX + Accessibility + QA | `PASS — AUTOMATISIERT; MANUELLE AT-SESSION OFFEN` |
+| `P27-AC-13` / `REQ-QA-003` | P0: Rollback regrantet/verliert Context | Migration/Recovery | dual-read cutover/rollback | alte/new reader konvergieren, Flag stoppt neue Switches | Contract zu früh, N-1 misliest Persona, old session, partial backfill | System/Ops | App/DB/Session | N/N-1 artifact, partial migration, active sessions | Staging, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/auth/persona-cutover-postgres.test.ts`; manuell: dual-read canary, Flag off, N-1/roll-forward drill | Grant-/Tenantabweichung 0; bestehende Memberships erhalten; alte unklare Sessions widerrufen; kein destruktiver Contract vor G3 | Cutover-/Rollback-/Session-Manifest | Identity + Ops + DBA | `PASS — LOCAL AUTOMATISIERT; STAGING-/MANUELLER CANARY BLOCKED` |
 
 ### Phase-27 Audit-log extension matrix
 
@@ -429,9 +435,10 @@ und keine Aktivierungsfreigabe.
 
 ## 22. Performance und Scale
 
-Vor `GO`: keine Phase-27-Performancearbeit.
+Ohne ausdrückliche technische Owner-Scope-Aktivierung: keine
+Phase-27-Performancearbeit.
 
-Nur bei `GO`:
+Im ausdrücklich aktivierten technischen Owner-Scope:
 
 - Current Identity/Persona/Company Context wird in bounded, indexierten Queries
   geladen; keine N+1-Abfrage je Membership;
@@ -463,9 +470,10 @@ Ein Context Switch darf niemals als Berechtigung, Consent oder Reveal gelten.
 
 ## 24. Rollback und Roll-forward
 
-Vor `GO`: kein technischer Rollback nötig; `NO-GO` hält den Status deferred.
+Ohne technische Owner-Scope-Aktivierung ist kein technischer Rollback nötig;
+ein Demand-`NO-GO` hält Markt- und Kohortenaktivierung deferred.
 
-Nur bei `GO`:
+Im ausdrücklich aktivierten technischen Owner-Scope:
 
 - Flags pausieren neue Personaanlage/Invitation/Switch, ohne gültige
   Memberships zu löschen;
@@ -480,14 +488,14 @@ Nur bei `GO`:
 
 ## 25. Benötigte Evidence und Artefakte
 
-Vor `GO`:
+Vor einer Markt-/Kohortenaktivierung:
 
 - preregistrierter Researchplan, Qualifikations-/Schwellenmatrix;
 - anonymisierte moderierte Resultate und getestete Alternativen;
 - Security-/Privacy-/Migration-/Support-Blast-Radius;
 - datierter Vier-Owner-`GO|NO-GO|DEFERRED`-Entscheid.
 
-Nur bei `GO` zusätzlich:
+Für den ausdrücklich aktivierten technischen Owner-Scope zusätzlich:
 
 - Identity-/Persona-ADR und Route×Role×Tenant×Action-Matrix;
 - Migration-/Backfill-/N-1-/Rollback-/Count-/Consent-Manifest;

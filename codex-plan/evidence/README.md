@@ -44,6 +44,7 @@ gelten nicht als Nachweis.
 - [`2026-07-27-phase-24.md`](./2026-07-27-phase-24.md) — deaktivierter Local-/CI-Zahlungs-, Webhook-, Reconciliation-, Finance- und Service-Recovery-Vertrag; WTP, PSP, Tax/Legal/Finance, Staging und LIVE bleiben blockiert.
 - [`2026-07-28-phase-25.md`](./2026-07-28-phase-25.md) — Least-Privilege-Adminrollen, MFA/Recovery, Step-up sowie Trust-&-Safety-Containment und Appeal; Production-RP-ID, Duty-Owner, Risk/DSFA, Pager und LIVE bleiben blockiert.
 - [`2026-07-28-phase-26.md`](./2026-07-28-phase-26.md) — strukturierte Company-Trust-Evidence, Providerports, Vault, unabhängige Decisions, Re-review und gemeinsame Badge-/Job-/Radar-Revocation; reale Provider, Legal/Capacity, Staging und Public-Go bleiben blockiert.
+- [`2026-07-28-phase-27.md`](./2026-07-28-phase-27.md) — default-off Multi-Persona-/Sessionkontext-Vertrag mit sicherem Portalwechsel, bestehender-Identity-Invitation, identity-weiter Privacy und strikt getrennten Tenant-/Adminrechten; Demand, Staging und LIVE bleiben offen.
 
 ## Pflichtfelder eines Records
 
