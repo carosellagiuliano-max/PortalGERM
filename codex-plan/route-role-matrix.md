@@ -246,9 +246,9 @@ redigiert.
 ## Technischer Ist-Stand und verbleibendes Route-/Prozessdelta Phase 22–32
 
 > Diese Tabelle trennt implementierten Technikstand von geplantem Delta.
-> Routen der Phasen 22 bis 26 sind im maschinenlesbaren Ist-Inventar enthalten
+> Routen der Phasen 22 bis 27 sind im maschinenlesbaren Ist-Inventar enthalten
 > und automatisiert verifiziert, bleiben aber je nach externem Gate
-> deaktiviert. Die Zeilen ab Phase 27/30D sind weiterhin geplantes Delta. Eine
+> deaktiviert. Die Zeilen ab Phase 28/30D sind weiterhin geplantes Delta. Eine
 > neue Zeile wird erst nach vorhandener Route, serverseitigem Guard,
 > UX-/A11y-Abnahme und grünem Owning-Test in das Ist-Inventar übernommen.
 
@@ -262,12 +262,14 @@ redigiert.
 | 25 · `REQ-ADM-007` | **Technischer Ist-Stand:** `/admin/security/{authenticators,roles,grants,break-glass}` | Security Admin getrennt von Support/Moderation/Finance/Privacy; SoD serverseitig | enroll/recover/pending-second-approval/expired/revoked/break-glass | deny-by-default RBAC/MFA/Recovery/SoD PostgreSQL und Browser `PASS`; Production-Owner/RP-ID/On-call `BLOCKED` |
 | 25/26 · `REQ-TRUST-001` | **Technischer Ist-Stand:** `/admin/trust-safety`, `/admin/trust-safety/[id]` plus bounded Appeal in Candidate-/Employer-Security und Company-Reverification | Trust & Safety/Security/Finance scoped je Fall; Subjects sehen nur sicheren Grund und Appeal; Restore verlangt frische starke Evidence und unabhängigen Entscheider | open/held/revoked/appealed/false-positive/resolved; interne Evidence verborgen | Phase-25/26 Policy/PG/E2E/Worker-Failure `PASS`; externe Risk-/DSFA-/Provider-/Capacity-Freigabe `BLOCKED` |
 | 26 · `REQ-EMP-008` | **Technischer Ist-Stand:** `/employer/verification`, `/admin/company-verification`, `/admin/company-verification/[id]`, `/api/company-verification/documents/upload-intents` plus Public-Company-/Job-/Radar-Consumer | Company Owner/Admin submitten nur im eigenen Tenant; Reviewer benötigt persistierte Verification-Capability und Step-up; Self-Approval/SoD fail-closed; Upload-Handler erzwingt Owner-Auth trotz generischer Dateisystemklassifikation | draft/pending/needs-info/verified/expiring/expired/revoked/appealed; private Evidence bleibt aus Public DTOs entfernt | Candidate `96933aa`, Unit/PostgreSQL/HTTP/Desktop/360 `PASS`; reale Provider, Legal/DPA/Region, Capacity, Staging/Pager und Public-Flags `BLOCKED`; [Evidence](./evidence/2026-07-28-phase-26.md) |
+| 27 · `REQ-PER-001` | **Technischer Ist-Stand:** `/account/portal` plus eingebettete Candidate-/Employer-Context-Switcher und bestehender `/invite/resume`-Flow | aktuelle Identity plus aktive PersonaAssignment; Employer zusätzlich exakte aktive CompanyMembership; Admin ausschließlich persistierte Admin-Grants; Candidate-Self-Service und erste Existing-Identity-Employer-Persona action-bound step-up | loading/empty/locked/pending/error/retry/conflict/expired/cancelled/success; Identity/Persona/Company-Kontext und Privacy-sensitive | Phase-27-Unit/PostgreSQL/Migration/Desktop/360 `PASS`; `IDENTITY_PERSONA_V2`, Invitation, Switch, Privacy und Legacy-Cutover default `DISABLED`; Demand/Canary/Staging/G4 offen; [Evidence](./evidence/2026-07-28-phase-27.md) |
 | 30D · `REQ-JOB-007` | Employer reconfirm/fill action; public/candidate „nicht verfügbar“ report | own Company Job; public bounded report; Trust/Moderation review | due/grace/reconfirmed/filled/expired/duplicate-review/appeal | freshness policy+worker; Search/Sitemap/Alert/Recommendation parity tests |
 
 Conditional routes:
 
-- Phase 27 Multi-Persona routes remain P3/deferred until an explicit
-  `REQ-PER-001` scope decision.
+- Phase 27 market/cohort activation remains P3/deferred until the moderated
+  `REQ-PER-001` demand decision; the owner-activated technical route remains
+  default disabled and does not satisfy that gate.
 - Phase 28A external tracker and 28B full scheduler remain absent until
   separate `REQ-REC-003` moderated-demand gates.
 - Phase 30C sitemap index/shards remain absent until the documented

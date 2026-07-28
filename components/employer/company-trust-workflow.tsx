@@ -120,14 +120,26 @@ export function CompanyTrustWorkflow({
   const challenge = current?.evidence
     .map((evidence) => evidence.domainChallenge)
     .find((value) => value !== null);
+  const actionRequestId = beginState.requestId ?? null;
+  const actionChallengeId = beginState.challengeId ?? null;
+  const persistedPendingRequest =
+    current?.policyVersion === "COMPANY_TRUST_POLICY_V2" &&
+    current.status === "PENDING"
+      ? current
+      : null;
+  const domainRequestId =
+    actionRequestId ?? persistedPendingRequest?.id ?? null;
+  const domainChallengeId =
+    actionChallengeId ?? challenge?.id ?? null;
   const featureReady =
     activation.trustV2 !== "disabled" &&
     activation.registerCheck &&
     activation.domainChallenge;
   const mayStart =
-    current === null ||
-    current.policyVersion !== "COMPANY_TRUST_POLICY_V2" ||
-    ["VERIFIED", "REJECTED", "REVOKED"].includes(current.status);
+    actionRequestId === null &&
+    (current === null ||
+      current.policyVersion !== "COMPANY_TRUST_POLICY_V2" ||
+      ["VERIFIED", "REJECTED", "REVOKED"].includes(current.status));
 
   return (
     <div className="grid gap-6">
@@ -214,9 +226,9 @@ export function CompanyTrustWorkflow({
 
       {workspace.canManage &&
       featureReady &&
-      current?.policyVersion === "COMPANY_TRUST_POLICY_V2" &&
-      current.status === "PENDING" &&
-      (challenge?.status === "PENDING" || beginState.challengeId) ? (
+      domainRequestId !== null &&
+      domainChallengeId !== null &&
+      (actionChallengeId !== null || challenge?.status === "PENDING") ? (
         <form action={domainAction} className="grid gap-4 rounded-xl border p-4 sm:p-5">
           <div>
             <h2 className="text-lg font-semibold">Domainkontrolle bestätigen</h2>
@@ -226,8 +238,8 @@ export function CompanyTrustWorkflow({
             </p>
           </div>
           <ActionFeedback state={domainState} />
-          <input name="verificationRequestId" type="hidden" value={beginState.requestId ?? current.id} />
-          <input name="challengeId" type="hidden" value={beginState.challengeId ?? challenge?.id ?? ""} />
+          <input name="verificationRequestId" type="hidden" value={domainRequestId} />
+          <input name="challengeId" type="hidden" value={domainChallengeId} />
           <input name="idempotencyKey" type="hidden" value={idempotencyKeys.domain} />
           <Field label="Challenge-Geheimnis" name="challengeToken" defaultValue={beginState.challengeToken ?? ""} minLength={32} />
           <Field label="Gefundener Nachweis" name="presentedProof" defaultValue={beginState.challengeToken ? `sth-domain-verification=${beginState.challengeToken}` : ""} minLength={32} />
@@ -235,7 +247,7 @@ export function CompanyTrustWorkflow({
             <StepUpGrantControl
               action="COMPANY_DOMAIN_CHANGE"
               purpose="EMPLOYER_COMPANY_TRUST"
-              resourceId={current.id}
+              resourceId={domainRequestId}
               securityHref="/employer/settings/security"
               tenantId={workspace.company.id}
             />

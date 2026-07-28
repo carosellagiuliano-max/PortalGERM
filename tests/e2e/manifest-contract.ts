@@ -49,6 +49,10 @@ export const PHASE26_COMPANY_VERIFICATION_FLOW_FILE =
   "flows/phase26-company-verification.spec.ts" as const;
 export const PHASE26_COMPANY_TRUST_QUALITY_FILE =
   "quality/phase26-company-trust-quality.spec.ts" as const;
+export const PHASE27_PERSONA_FLOW_FILE =
+  "flows/phase27-persona-switch.spec.ts" as const;
+export const PHASE27_PERSONA_QUALITY_FILE =
+  "quality/phase27-persona-quality.spec.ts" as const;
 export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE17_QUALITY_FILE,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
@@ -69,6 +73,8 @@ export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE25_SECURITY_QUALITY_FILE,
   PHASE26_COMPANY_VERIFICATION_FLOW_FILE,
   PHASE26_COMPANY_TRUST_QUALITY_FILE,
+  PHASE27_PERSONA_FLOW_FILE,
+  PHASE27_PERSONA_QUALITY_FILE,
 ] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
@@ -88,13 +94,13 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     project: PHASE17_JOURNEY_PROJECT,
     tag: "@quality-desktop",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 123,
+    expectedCount: 124,
   }),
   Object.freeze({
     project: PHASE17_MOBILE_PROJECT,
     tag: "@quality-mobile",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 123,
+    expectedCount: 124,
   }),
   Object.freeze({
     project: PHASE17_JOURNEY_PROJECT,
@@ -244,6 +250,24 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     project: PHASE17_MOBILE_PROJECT,
     tag: "@quality-mobile",
     file: PHASE26_COMPANY_TRUST_QUALITY_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE27_PERSONA_FLOW_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@quality-desktop",
+    file: PHASE27_PERSONA_QUALITY_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_MOBILE_PROJECT,
+    tag: "@quality-mobile",
+    file: PHASE27_PERSONA_QUALITY_FILE,
     expectedCount: 1,
   }),
 ] as const);

@@ -29,6 +29,46 @@ describe("Phase 25 action-bound step-up policy", () => {
     expect(decision.allowed).toBe(true);
   });
 
+  it("binds persona creation to the exact identity or invitation scope", () => {
+    const identityId = crypto.randomUUID();
+    const companyId = crypto.randomUUID();
+    const invitationId = crypto.randomUUID();
+    expect(
+      resolveStepUpPolicy({
+        actorRole: "EMPLOYER",
+        purpose: "IDENTITY_PERSONA",
+        action: "PERSONA_CANDIDATE_CREATE",
+        resourceId: identityId,
+      }).allowed,
+    ).toBe(true);
+    expect(
+      resolveStepUpPolicy({
+        actorRole: "CANDIDATE",
+        purpose: "IDENTITY_PERSONA",
+        action: "PERSONA_EMPLOYER_CREATE",
+        tenantId: companyId,
+        resourceId: invitationId,
+      }).allowed,
+    ).toBe(true);
+    expect(
+      resolveStepUpPolicy({
+        actorRole: "CANDIDATE",
+        purpose: "IDENTITY_PERSONA",
+        action: "PERSONA_EMPLOYER_CREATE",
+        resourceId: invitationId,
+      }),
+    ).toEqual({ allowed: false, reason: "TENANT_REQUIRED" });
+    expect(
+      resolveStepUpPolicy({
+        actorRole: "EMPLOYER",
+        purpose: "IDENTITY_PERSONA",
+        action: "PERSONA_CANDIDATE_CREATE",
+        tenantId: companyId,
+        resourceId: identityId,
+      }),
+    ).toEqual({ allowed: false, reason: "TENANT_FORBIDDEN" });
+  });
+
   it.each([
     [
       "unknown action",

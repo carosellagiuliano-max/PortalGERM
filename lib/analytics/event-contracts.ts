@@ -162,6 +162,14 @@ const boostProperties = z
     placement: placement.optional(),
   })
   .strict();
+const personaContextProperties = z
+  .object({
+    fromPortal: z.enum(["CANDIDATE", "EMPLOYER", "ADMIN"]).nullable(),
+    toPortal: z.enum(["CANDIDATE", "EMPLOYER", "ADMIN"]),
+    contextVersion: z.number().int().positive(),
+    companySelected: z.boolean(),
+  })
+  .strict();
 
 export const ANALYTICS_EVENT_PROPERTIES_V1 = {
   PUBLIC_VALUE_VIEWED: publicValueProperties,
@@ -199,6 +207,7 @@ export const ANALYTICS_EVENT_PROPERTIES_V1 = {
   LEAD_WON: leadProperties,
   BOOST_ACTIVATED: boostProperties,
   MODERATION_ACTIONED: workflowProperties,
+  PERSONA_CONTEXT_SWITCHED: personaContextProperties,
 } as const satisfies Record<AnalyticsEventKindValue, z.ZodType>;
 
 type AnalyticsOwnerV1 =
@@ -208,7 +217,8 @@ type AnalyticsOwnerV1 =
   | "MARKETPLACE"
   | "BILLING"
   | "SALES"
-  | "TRUST_SAFETY";
+  | "TRUST_SAFETY"
+  | "IDENTITY";
 
 export type AnalyticsEventContractV1 = Readonly<{
   owner: AnalyticsOwnerV1;
@@ -282,6 +292,7 @@ export const ANALYTICS_EVENT_CONTRACTS_V1 = Object.freeze({
   LEAD_WON: essentialContract(leadProperties, "SALES", ["LEAD_FUNNEL"]),
   BOOST_ACTIVATED: essentialContract(boostProperties, "BILLING", ["BOOST"]),
   MODERATION_ACTIONED: essentialContract(workflowProperties, "TRUST_SAFETY", ["MODERATION"]),
+  PERSONA_CONTEXT_SWITCHED: essentialContract(personaContextProperties, "IDENTITY", []),
 } satisfies Record<AnalyticsEventKindValue, AnalyticsEventContractV1>);
 
 const commonEventFields = {
@@ -291,6 +302,10 @@ const commonEventFields = {
   pseudonymousActorId: z.string().min(1).max(128).optional(),
   pseudonymousSessionId: z.string().min(1).max(128).optional(),
   companyId: z.string().uuid().optional(),
+  portalContext: z
+    .enum(["CANDIDATE", "EMPLOYER", "ADMIN"])
+    .optional(),
+  sessionContextVersion: z.number().int().positive().optional(),
   jobId: z.string().uuid().optional(),
 } as const;
 
@@ -343,6 +358,7 @@ export const analyticsEventV1Schema = z.discriminatedUnion("kind", [
   eventSchema(AnalyticsEventKind.LEAD_WON, leadProperties),
   eventSchema(AnalyticsEventKind.BOOST_ACTIVATED, boostProperties),
   eventSchema(AnalyticsEventKind.MODERATION_ACTIONED, workflowProperties),
+  eventSchema(AnalyticsEventKind.PERSONA_CONTEXT_SWITCHED, personaContextProperties),
 ]);
 
 export type AnalyticsEventInputV1 = z.infer<typeof analyticsEventV1Schema>;

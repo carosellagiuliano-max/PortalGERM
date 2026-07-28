@@ -654,3 +654,68 @@ or revoked trust to remain visible.
 
 Referenced by: Phase 21/23/25/26/30/32; `REQ-EMP-008`,
 `REQ-TRUST-001`, `REQ-DOC-002`, `STH-014`.
+
+---
+
+## ADR-039 — Identity, Persona und Tenant bleiben getrennte Autoritäten
+
+**Status:** accepted for the owner-activated, disabled Phase-27 Local-/CI
+contract; moderated demand and every market activation remain prospective.
+
+**Decision:** `User` remains the authentication identity and keeps its legacy
+`role` only as an N-1 compatibility projection. Candidate and Employer
+eligibility are represented by one append-oriented `PersonaAssignment` per
+identity and kind. Company access still requires a current
+`CompanyMembership`; job access still requires the existing assignment and
+ownership rules. Persisted Admin roles and capability grants remain a third,
+independent authority and can never be derived from a Persona or Company
+Membership.
+
+Every authenticated Session owns exactly one versioned
+Candidate/Employer/Admin portal context and, for Employer, one current Company
+context. Login with multiple available portals lands on `/account/portal`.
+Switches validate the exact current assignment, membership, company and
+session version, persist the next context, revoke action-bound step-up grants
+from the prior context and write minimized Audit/Analytics evidence. URL,
+form, cookie or client state can select neither a Persona nor a Tenant without
+that server-side proof.
+
+Candidate self-service Persona creation and first Employer Persona creation
+through an existing-identity invitation require the Phase-25 action-bound
+step-up contract. Invitations continue to enforce current token, e-mail,
+role, seat, company and replay rules atomically. No automatic account merge,
+name/domain heuristic, shared account or Admin-to-normal-Persona union is
+introduced.
+
+The additive migration backfills only evidence already present in the legacy
+role, Candidate profile and current Company Memberships. It adds
+append-oriented assignment events, session-context versioning, indexes,
+constraints and fail-closed invalidation triggers; it does not create Company
+Memberships, Job Assignments, Admin Grants or Consent. Legacy reads remain
+available until a later G3/G4 cutover explicitly retires them.
+
+Privacy export/correction/erasure inventory is identity-wide across all
+Personas while Company, third-party, financial, consent, security and other
+immutable records retain their existing ownership/hold rules. Audit rows
+carry typed portal/session context; Analytics uses a pseudonymous identity
+subject and allowlisted context only. Suspension remains scoped: User status
+is global, Persona status is fachlich scoped and Membership status is
+Company-local.
+
+The flags `IDENTITY_PERSONA_V2`, `EXISTING_IDENTITY_INVITATION`,
+`PERSONA_PORTAL_SWITCH`, `PERSONA_PRIVACY_V2` and
+`PERSONA_LEGACY_CONTRACT` default to disabled/fail-closed. The Owner's
+technical scope activation permits implementation and Local-/CI evidence but
+is not a demand `GO`, market claim, cohort approval or LIVE authorization.
+Any `INTERNAL`, `ALLOWLIST` or `LAUNCH_SCOPE` promotion requires the phase's
+moderated demand threshold, named Product/Security/Privacy/Engineering
+sign-offs, current G3/G4 evidence and an explicit cohort/rollback decision.
+
+**Why:** A single global role cannot safely represent legitimate
+Candidate-plus-Employer use, but treating context selection as authorization
+would union Tenant and Admin rights. Additive assignments plus an exact,
+versioned Session context solve the technical boundary while preserving
+existing Membership, Assignment, capability, privacy and rollback contracts.
+
+Referenced by: Phase 20/22/23/25/27/29/32; `REQ-PER-001`,
+`REQ-ID-004`, `REQ-ADM-007`, `REQ-PRIV-004`, `STH-012`.

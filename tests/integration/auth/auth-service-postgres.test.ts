@@ -196,12 +196,37 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
             },
           },
         },
+        personaAssignments: {
+          orderBy: { kind: "asc" },
+          select: {
+            id: true,
+            kind: true,
+            status: true,
+            source: true,
+            version: true,
+            activatedAt: true,
+            events: {
+              select: {
+                kind: true,
+                fromStatus: true,
+                toStatus: true,
+                source: true,
+                actorUserId: true,
+                reasonCode: true,
+                correlationId: true,
+              },
+            },
+          },
+        },
         sessions: {
           select: {
             id: true,
             tokenHash: true,
             ipHash: true,
             userAgent: true,
+            activePortal: true,
+            activeCompanyId: true,
+            contextVersion: true,
           },
         },
         userConsents: {
@@ -249,11 +274,34 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
           },
         ],
       },
+      personaAssignments: [
+        {
+          kind: "CANDIDATE",
+          status: "ACTIVE",
+          source: "REGISTRATION",
+          version: 1,
+          activatedAt: NOW,
+          events: [
+            {
+              kind: "CREATED",
+              fromStatus: null,
+              toStatus: "ACTIVE",
+              source: "REGISTRATION",
+              actorUserId: user.id,
+              reasonCode: "REGISTRATION",
+              correlationId: request.correlationId,
+            },
+          ],
+        },
+      ],
       sessions: [
         {
           id: result.session.record.id,
           tokenHash: hashSessionToken(result.session.token),
           userAgent: request.userAgent,
+          activePortal: "CANDIDATE",
+          activeCompanyId: null,
+          contextVersion: 1,
         },
       ],
     });
@@ -280,8 +328,14 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
         purpose: REGISTRATION_CONSENT_NOTICES_V1.MARKETING.purpose,
       },
     ]);
-    expect(registrationAudit).toHaveLength(1);
-    expect(registrationAudit[0]).toMatchObject({
+    expect(registrationAudit).toHaveLength(2);
+    const userRegisteredAudit = registrationAudit.find(
+      ({ action }) => action === "USER_REGISTERED",
+    );
+    const personaAssignmentAudit = registrationAudit.find(
+      ({ action }) => action === "PERSONA_ASSIGNMENT_CHANGED",
+    );
+    expect(userRegisteredAudit).toMatchObject({
       action: "USER_REGISTERED",
       actorKind: "USER",
       actorUserId: user.id,
@@ -292,8 +346,26 @@ describe.sequential("Phase 06 PostgreSQL auth service", () => {
       targetId: user.id,
       targetType: "USER",
     });
-    expect(registrationAudit[0]?.ipHash).toMatch(/^audit-v1:[a-f0-9]{64}$/u);
-    expect(registrationAudit[0]?.ipHash).not.toContain(request.sourceIp);
+    expect(userRegisteredAudit?.ipHash).toMatch(/^audit-v1:[a-f0-9]{64}$/u);
+    expect(userRegisteredAudit?.ipHash).not.toContain(request.sourceIp);
+    expect(personaAssignmentAudit).toMatchObject({
+      action: "PERSONA_ASSIGNMENT_CHANGED",
+      actorKind: "USER",
+      actorUserId: user.id,
+      capability: "IDENTITY_PERSONA_ASSIGN",
+      correlationId: request.correlationId,
+      metadata: {
+        kind: "CANDIDATE",
+        fromStatus: null,
+        toStatus: "ACTIVE",
+        version: 1,
+      },
+      portalContext: "CANDIDATE",
+      result: "SUCCEEDED",
+      targetId: user.personaAssignments[0]?.id,
+      targetType: "PERSONA_ASSIGNMENT",
+    });
+    expect(personaAssignmentAudit?.ipHash).toBeNull();
     expect(registrationAnalytics).toMatchObject({
       kind: "CANDIDATE_REGISTERED",
       purpose: "ESSENTIAL_OPERATIONAL",

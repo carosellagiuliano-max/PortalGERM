@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { ZodError } from "zod";
 
 import type { AuthActionState, AuthActionValue } from "@/lib/auth/action-state";
+import { getCurrentAuthContext } from "@/lib/auth/current-user";
 import {
   loginWithPassword,
   registerCandidate,
@@ -18,8 +19,15 @@ import {
   getAuthRequestContext,
   isValidAuthMutationOrigin,
 } from "@/lib/auth/request-context";
-import { resolveSafeNext } from "@/lib/auth/safe-next";
+import {
+  resolveSafeNext,
+  resolveSafeNextForPortal,
+} from "@/lib/auth/safe-next";
 import { writeSessionCookie } from "@/lib/auth/session";
+import {
+  createCandidatePersona,
+  switchPersonaContext,
+} from "@/lib/auth/persona-context";
 import { getServerEnvironment } from "@/lib/config/env";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import { getPublicCompanyCardBySlug } from "@/lib/companies/public-read-model";
@@ -312,6 +320,97 @@ export async function switchCompanyContextAction(
   redirect(resolveSafeNext(nullableStringField(formData, "next"), "EMPLOYER"));
 }
 
+export async function switchPersonaContextAction(
+  _previousState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const [request, context] = await Promise.all([
+    getAuthRequestContext(),
+    getCurrentAuthContext(),
+  ]);
+  if (!isValidAuthMutationOrigin(request)) return originError({});
+  if (context === null) {
+    return Object.freeze({
+      status: "error",
+      message: "Bitte melde dich erneut an.",
+    });
+  }
+  const environment = getServerEnvironment();
+  const portal = stringField(formData, "portal");
+  const companyId = nullableStringField(formData, "companyId");
+  const result = await switchPersonaContext(
+    { portal, companyId },
+    {
+      userId: context.user.id,
+      identityRole: context.user.identityRole ?? context.user.role,
+      sessionId: context.session.id,
+      currentPortal: context.session.activePortal,
+      activeCompanyId: context.session.activeCompanyId,
+      contextVersion: context.session.contextVersion,
+    },
+    {
+      database: getDatabase(),
+      environment,
+      request,
+    },
+  );
+  if (!result.ok) {
+    return Object.freeze({
+      status: "error",
+      message: personaContextMessage(result.code),
+    });
+  }
+  redirect(
+    resolveSafeNextForPortal(
+      nullableStringField(formData, "next"),
+      result.portal,
+    ),
+  );
+}
+
+export async function createCandidatePersonaAction(
+  _previousState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const [request, context] = await Promise.all([
+    getAuthRequestContext(),
+    getCurrentAuthContext(),
+  ]);
+  if (!isValidAuthMutationOrigin(request)) return originError({});
+  if (context === null) {
+    return Object.freeze({
+      status: "error",
+      message: "Bitte melde dich erneut an.",
+    });
+  }
+  const result = await createCandidatePersona(
+    {
+      stepUpEvidenceId: stringField(formData, "stepUpEvidenceId"),
+      stepUpGrantToken: stringField(formData, "stepUpGrantToken"),
+    },
+    {
+      userId: context.user.id,
+      identityRole: context.user.identityRole ?? context.user.role,
+      sessionId: context.session.id,
+      currentPortal: context.session.activePortal,
+      activeCompanyId: context.session.activeCompanyId,
+      contextVersion: context.session.contextVersion,
+    },
+    {
+      database: getDatabase(),
+      environment: getServerEnvironment(),
+      request,
+    },
+  );
+  if (!result.ok) {
+    return Object.freeze({
+      status: "error",
+      message: personaCreationMessage(result.code),
+    });
+  }
+  redirect("/account/portal?persona=created");
+}
+
 function validationState(
   error: ZodError,
   values: Readonly<Record<string, AuthActionValue>>,
@@ -415,4 +514,36 @@ function nullableStringField(formData: FormData, name: string): string | null {
 function checkboxField(formData: FormData, name: string): boolean {
   const value = formData.get(name);
   return value === "on" || value === "true" || value === "1";
+}
+
+function personaContextMessage(code: string) {
+  if (code === "FEATURE_DISABLED") {
+    return "Der Portalwechsel ist in dieser Umgebung nicht freigegeben.";
+  }
+  if (code === "COMPANY_SELECTION_REQUIRED") {
+    return "Bitte wähle das Unternehmen, in dessen Kontext du arbeiten möchtest.";
+  }
+  if (code === "STALE_CONTEXT") {
+    return "Der Sicherheitskontext hat sich geändert. Bitte lade die Seite neu.";
+  }
+  return "Dieser Portal- oder Firmenkontext ist nicht mehr verfügbar.";
+}
+
+function personaCreationMessage(code: string) {
+  if (code === "FEATURE_DISABLED") {
+    return "Die Anlage eines weiteren Arbeitsbereichs ist nicht freigegeben.";
+  }
+  if (code === "STEP_UP_REQUIRED" || code === "INVALID_INPUT") {
+    return "Bitte stelle zuerst eine frische, aktionsgebundene Sicherheitsbestätigung aus.";
+  }
+  if (code === "ALREADY_EXISTS") {
+    return "Der Kandidaten-Arbeitsbereich besteht bereits.";
+  }
+  if (code === "PERSONA_SUSPENDED" || code === "PERSONA_REVOKED") {
+    return "Dieser Arbeitsbereich ist gesperrt. Bitte kontaktiere den Support.";
+  }
+  if (code === "STALE_CONTEXT") {
+    return "Der Sicherheitskontext hat sich geändert. Bitte lade die Seite neu.";
+  }
+  return "Der Kandidaten-Arbeitsbereich konnte nicht sicher angelegt werden.";
 }

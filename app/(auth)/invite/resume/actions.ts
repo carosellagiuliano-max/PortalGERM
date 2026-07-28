@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentAuthContext } from "@/lib/auth/current-user";
 import { setEmployerCompanyContext } from "@/lib/auth/employer-context";
 import {
   clearInviteResumeCookie,
@@ -26,15 +26,18 @@ import {
 
 export async function acceptInvitationAction(
   _state: EmployerActionState,
-  _formData: FormData,
+  formData: FormData,
 ): Promise<EmployerActionState> {
-  const [user, request, cookieStore] = await Promise.all([
-    getCurrentUser(),
+  const [authContext, request, cookieStore] = await Promise.all([
+    getCurrentAuthContext(),
     getAuthRequestContext(),
     cookies(),
   ]);
   const environment = getServerEnvironment();
-  if (user === null || !isValidAuthMutationOrigin(request)) return failure();
+  if (authContext === null || !isValidAuthMutationOrigin(request)) {
+    return failure();
+  }
+  const user = authContext.user;
   const token = readInviteResumeToken(
     cookieStore.get(INVITE_RESUME_COOKIE_POLICY_V1.cookieName)?.value,
     new Date(),
@@ -44,14 +47,28 @@ export async function acceptInvitationAction(
     clearInviteResumeCookie(cookieStore, request.production);
     return failure();
   }
-  const result = await acceptCompanyInvitation(token, user, {
-    database: getDatabase(),
-    request,
-    environment,
-  });
+  const result = await acceptCompanyInvitation(
+    token,
+    user,
+    {
+      database: getDatabase(),
+      request,
+      environment,
+      stepUpActor: {
+        sessionId: authContext.session.id,
+        globalRole: user.role,
+      },
+    },
+    {
+      stepUpEvidenceId: optionalFormString(formData, "stepUpEvidenceId"),
+      stepUpGrantToken: optionalFormString(formData, "stepUpGrantToken"),
+    },
+  );
   if (!result.ok) return failure(invitationMessage(result.code));
   clearInviteResumeCookie(cookieStore, request.production);
-  if (!(await setEmployerCompanyContext(result.companyId))) return failure();
+  if (!(await setEmployerCompanyContext(result.companyId))) {
+    redirect("/account/portal?invitation=accepted&context=pending");
+  }
   redirect("/employer/dashboard?invitation=accepted");
 }
 
@@ -114,8 +131,21 @@ function invitationMessage(code: string) {
   if (code === "ACCOUNT_TYPE_UNSUPPORTED") {
     return "Bitte verwende ein separates Arbeitgeberkonto oder kontaktiere den Support.";
   }
+  if (code === "STEP_UP_REQUIRED") {
+    return "Bitte stelle zuerst die angezeigte Sicherheitsbestätigung aus.";
+  }
+  if (code === "PERSONA_SUSPENDED" || code === "PERSONA_REVOKED") {
+    return "Der Arbeitgeber-Arbeitsbereich dieses Kontos ist gesperrt. Bitte kontaktiere den Support.";
+  }
   if (code === "INVALID_INPUT") {
     return "Bitte prüfe Name, E-Mail, Passwort und Zustimmung.";
   }
   return undefined;
+}
+
+function optionalFormString(formData: FormData, name: string) {
+  const value = formData.get(name);
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
 }

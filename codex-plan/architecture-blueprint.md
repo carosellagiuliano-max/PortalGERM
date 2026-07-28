@@ -697,7 +697,7 @@ normative current and planned delta is maintained in
 launchclass, role/capability, tenant/owner guard, data class, UX states,
 feature flag, owning test and activation gate.
 
-Implemented route families through Phase 26:
+Implemented route families through Phase 27:
 
 - email verify/resend, login-email change and Candidate-/Employer-/Admin-
   Security-/Step-up settings;
@@ -714,14 +714,21 @@ Implemented route families through Phase 26:
   switches;
 - provider/worker operations are implemented read-only beziehungsweise über
   den Phase-23-Handlervertrag; Production-Replay und Pager bleiben deaktiviert.
+- `/account/portal` resolves one versioned Candidate/Employer/Admin Session
+  context; Candidate-/Employer-layout switchers expose only current
+  PersonaAssignment plus Membership-authorized destinations. Existing-
+  identity Employer invitations and Candidate Persona creation use
+  action-bound step-up. All Phase-27 flags remain disabled by default.
 
 Still planned, subject to the owning ADR and phase:
 
 - Employer job reconfirm/fill and public/candidate unavailable-report entry;
 - central notification preferences.
 
-Multi-Persona, external tracker and full scheduler routes remain absent unless
-their explicit moderated-demand gates pass. Sitemap index/shard routes remain
+Multi-Persona market activation remains absent unless its explicit
+moderated-demand and cohort gates pass; the disabled technical route is not a
+product/market claim. External tracker and full scheduler routes remain absent
+unless their own moderated-demand gates pass. Sitemap index/shard routes remain
 absent until the measured capacity trigger.
 
 ## 19. Migration and compatibility topology

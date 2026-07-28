@@ -4108,7 +4108,9 @@ function verifyOperationsAndContent(
     sortedStrings(Object.keys(analyticsKindCounts)),
     sortedStrings(
       ANALYTICS_EVENT_KINDS_V1.filter(
-        (kind) => kind !== "EXTERNAL_APPLY_CLICKED",
+        (kind) =>
+          kind !== "EXTERNAL_APPLY_CLICKED" &&
+          kind !== "PERSONA_CONTEXT_SWITCHED",
       ),
     ),
   );

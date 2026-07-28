@@ -21,6 +21,7 @@ export type AuditResultV1 = (typeof AUDIT_RESULTS_V1)[number];
 export const AUDIT_TARGET_TYPES_V1 = [
   "USER",
   "SESSION",
+  "PERSONA_ASSIGNMENT",
   "COMPANY",
   "MEMBERSHIP",
   "INVITATION",
@@ -131,6 +132,17 @@ const COMPANY_REGISTRATION_AUDIT_METADATA_SCHEMA = z
 const CATALOG_VERSION_SCHEDULED_AUDIT_METADATA_SCHEMA = z.strictObject({
   sourceVersionId: z.uuid(),
 });
+const PERSONA_ASSIGNMENT_CHANGED_AUDIT_METADATA_SCHEMA = z.strictObject({
+  kind: z.enum(["CANDIDATE", "EMPLOYER"]),
+  fromStatus: z.enum(["ACTIVE", "SUSPENDED", "REVOKED"]).nullable(),
+  toStatus: z.enum(["ACTIVE", "SUSPENDED", "REVOKED"]),
+  version: z.number().int().positive(),
+});
+const PERSONA_CONTEXT_SWITCHED_AUDIT_METADATA_SCHEMA = z.strictObject({
+  fromPortal: z.enum(["CANDIDATE", "EMPLOYER", "ADMIN"]).nullable(),
+  toPortal: z.enum(["CANDIDATE", "EMPLOYER", "ADMIN"]),
+  contextVersion: z.number().int().positive(),
+});
 
 /**
  * Phase 03 starts with a deny-by-default metadata contract. A domain owner may
@@ -153,6 +165,10 @@ auditMetadataSchemas.COMPANY_CLAIM_REQUESTED =
   COMPANY_REGISTRATION_AUDIT_METADATA_SCHEMA;
 auditMetadataSchemas.CATALOG_VERSION_SCHEDULED =
   CATALOG_VERSION_SCHEDULED_AUDIT_METADATA_SCHEMA;
+auditMetadataSchemas.PERSONA_ASSIGNMENT_CHANGED =
+  PERSONA_ASSIGNMENT_CHANGED_AUDIT_METADATA_SCHEMA;
+auditMetadataSchemas.PERSONA_CONTEXT_SWITCHED =
+  PERSONA_CONTEXT_SWITCHED_AUDIT_METADATA_SCHEMA;
 
 export const AUDIT_METADATA_SCHEMAS_V1 = Object.freeze(auditMetadataSchemas);
 
@@ -172,6 +188,10 @@ const auditInputSchema = z
     actorUserId: z.uuid().nullish(),
     capability: z.string().regex(CAPABILITY_PATTERN),
     companyId: z.uuid().nullish(),
+    portalContext: z
+      .enum(["CANDIDATE", "EMPLOYER", "ADMIN"])
+      .nullish(),
+    sessionContextVersion: z.number().int().positive().nullish(),
     correlationId: z.uuid(),
     metadata: z.unknown().optional(),
     reasonCode: z.string().regex(CODE_PATTERN).nullish(),
@@ -203,6 +223,8 @@ export type RequiredAuditInput = Readonly<{
   actorUserId?: string | null;
   capability: string;
   companyId?: string | null;
+  portalContext?: "CANDIDATE" | "EMPLOYER" | "ADMIN" | null;
+  sessionContextVersion?: number | null;
   correlationId: string;
   metadata?: unknown;
   reasonCode?: string | null;
@@ -218,6 +240,8 @@ export type AuditPersistenceRecord = Readonly<{
   actorUserId: string | null;
   capability: string;
   companyId: string | null;
+  portalContext: "CANDIDATE" | "EMPLOYER" | "ADMIN" | null;
+  sessionContextVersion: number | null;
   correlationId: string;
   ipHash: string | null;
   ipHashVersion: string | null;
@@ -354,6 +378,8 @@ export function buildAuditPersistenceRecord(
     actorUserId: result.data.actorUserId ?? null,
     capability: result.data.capability,
     companyId: result.data.companyId ?? null,
+    portalContext: result.data.portalContext ?? null,
+    sessionContextVersion: result.data.sessionContextVersion ?? null,
     correlationId: result.data.correlationId,
     ipHash: writerIpHash,
     ipHashVersion,

@@ -163,6 +163,25 @@ const rawEnvironmentSchema = z
       .enum(["disabled", "deterministic_sandbox"])
       .default("disabled"),
     COMPANY_VERIFICATION_COHORT: z.enum(["none", "test"]).default("none"),
+    IDENTITY_PERSONA_V2: z
+      .enum(["disabled", "dual_read", "internal", "allowlist", "launch_scope"])
+      .default("disabled"),
+    EXISTING_IDENTITY_INVITATION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PERSONA_PORTAL_SWITCH: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PERSONA_PRIVACY_V2: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PERSONA_LEGACY_CONTRACT: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     BREAK_GLASS_ENABLED: z
       .enum(["true", "false"])
       .default("false")
@@ -499,6 +518,48 @@ const rawEnvironmentSchema = z
         path: ["COMPANY_VERIFICATION_DOCUMENT"],
         message:
           "requires enabled vault writes plus explicit storage and scanner modes",
+      });
+    }
+
+    const personaRuntimeEnabled =
+      environment.EXISTING_IDENTITY_INVITATION ||
+      environment.PERSONA_PORTAL_SWITCH ||
+      environment.PERSONA_PRIVACY_V2 ||
+      environment.PERSONA_LEGACY_CONTRACT;
+    if (
+      personaRuntimeEnabled &&
+      environment.IDENTITY_PERSONA_V2 === "disabled"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["IDENTITY_PERSONA_V2"],
+        message: "must be enabled before any Phase-27 runtime surface",
+      });
+    }
+    if (
+      (environment.EXISTING_IDENTITY_INVITATION ||
+        environment.PERSONA_PORTAL_SWITCH) &&
+      environment.IDENTITY_PERSONA_V2 === "dual_read"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["IDENTITY_PERSONA_V2"],
+        message:
+          "dual_read cannot expose invitation acceptance or portal switching",
+      });
+    }
+    if (
+      environment.PERSONA_LEGACY_CONTRACT &&
+      (environment.IDENTITY_PERSONA_V2 !== "launch_scope" ||
+        !environment.EXISTING_IDENTITY_INVITATION ||
+        !environment.PERSONA_PORTAL_SWITCH ||
+        !environment.PERSONA_PRIVACY_V2)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PERSONA_LEGACY_CONTRACT"],
+        message:
+          "requires launch_scope plus invitation, switch and privacy contracts",
       });
     }
     if (
@@ -1193,6 +1254,11 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
       environment.COMPANY_REGISTER_PROVIDER_MODE,
     companyDomainProviderMode: environment.COMPANY_DOMAIN_PROVIDER_MODE,
     companyVerificationCohort: environment.COMPANY_VERIFICATION_COHORT,
+    identityPersonaV2: environment.IDENTITY_PERSONA_V2,
+    existingIdentityInvitation: environment.EXISTING_IDENTITY_INVITATION,
+    personaPortalSwitch: environment.PERSONA_PORTAL_SWITCH,
+    personaPrivacyV2: environment.PERSONA_PRIVACY_V2,
+    personaLegacyContract: environment.PERSONA_LEGACY_CONTRACT,
     breakGlassEnabled: environment.BREAK_GLASS_ENABLED,
     notificationOutboxProducersEnabled:
       environment.NOTIFICATION_OUTBOX_PRODUCERS,

@@ -20,6 +20,39 @@ enum UserStatus {
   DELETED
 }
 
+enum PersonaKind {
+  CANDIDATE
+  EMPLOYER
+}
+
+enum PersonaAssignmentStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum PersonaAssignmentSource {
+  LEGACY_BACKFILL
+  REGISTRATION
+  COMPANY_INVITATION
+  SELF_SERVICE
+  SUPPORT_LINK
+}
+
+enum PersonaAssignmentEventKind {
+  MIGRATED
+  CREATED
+  SUSPENDED
+  REACTIVATED
+  REVOKED
+}
+
+enum PortalContextKind {
+  CANDIDATE
+  EMPLOYER
+  ADMIN
+}
+
 enum DataProvenance {
   LIVE
   DEMO
@@ -1425,6 +1458,7 @@ enum AuditResult {
 enum AuditTargetType {
   USER
   SESSION
+  PERSONA_ASSIGNMENT
   COMPANY
   MEMBERSHIP
   INVITATION
@@ -1516,6 +1550,8 @@ enum AuditAction {
   NOTIFICATION_PREFERENCE_CHANGED
   NOTIFICATION_DELIVERY_REPLAYED
   SESSION_REVOKED
+  PERSONA_ASSIGNMENT_CHANGED
+  PERSONA_CONTEXT_SWITCHED
   USER_SUSPENDED
   USER_REACTIVATED
   COMPANY_CREATED_WITH_OWNER
@@ -1741,6 +1777,7 @@ enum AnalyticsEventKind {
   LEAD_WON
   BOOST_ACTIVATED
   MODERATION_ACTIONED
+  PERSONA_CONTEXT_SWITCHED
 }
 
 enum JobReportingResult {
@@ -1903,6 +1940,7 @@ model User {
   recoveryCodes                       RecoveryCode[]                @relation("RecoveryCodeOwner")
   sessionAssurances                   SessionAssurance[]            @relation("SessionAssuranceOwner")
   stepUpChallenges                    StepUpChallenge[]             @relation("StepUpChallengeOwner")
+  personaAssignments                  PersonaAssignment[]
 
   @@index([status, role])
   @@index([dataProvenance, status])
@@ -1931,6 +1969,10 @@ model Session {
   revokedAt               DateTime?                @db.Timestamptz(3)
   userAgent               String?                  @db.VarChar(512)
   ipHash                  String?                  @db.VarChar(128)
+  activePortal            PortalContextKind?
+  activeCompanyId         String?                  @db.Uuid
+  contextVersion          Int                      @default(1)
+  contextChangedAt        DateTime?                @db.Timestamptz(3)
   user                    User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
   pendingEmailChanges     PendingEmailChange[]
   assuranceEvidence       AuthAssuranceEvidence[]
@@ -1941,6 +1983,46 @@ model Session {
   @@index([userId])
   @@index([tokenHash])
   @@index([expiresAt])
+  @@index([userId, activePortal, revokedAt])
+  @@index([activeCompanyId, revokedAt])
+}
+
+model PersonaAssignment {
+  id          String                       @id @default(uuid()) @db.Uuid
+  userId      String                       @db.Uuid
+  kind        PersonaKind
+  status      PersonaAssignmentStatus      @default(ACTIVE)
+  source      PersonaAssignmentSource
+  version     Int                          @default(1)
+  activatedAt DateTime                     @db.Timestamptz(3)
+  suspendedAt DateTime?                    @db.Timestamptz(3)
+  revokedAt   DateTime?                    @db.Timestamptz(3)
+  createdAt   DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                     @updatedAt @db.Timestamptz(3)
+  user        User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  events      PersonaAssignmentEvent[]
+
+  @@unique([userId, kind])
+  @@unique([id, userId, kind])
+  @@index([userId, status, kind])
+  @@index([status, updatedAt, id])
+}
+
+model PersonaAssignmentEvent {
+  id                  String                      @id @default(uuid()) @db.Uuid
+  personaAssignmentId String                      @db.Uuid
+  kind                PersonaAssignmentEventKind
+  fromStatus          PersonaAssignmentStatus?
+  toStatus            PersonaAssignmentStatus
+  source              PersonaAssignmentSource
+  actorUserId         String?                     @db.Uuid
+  reasonCode          String?                     @db.VarChar(64)
+  correlationId       String                      @db.VarChar(128)
+  createdAt           DateTime                    @default(now()) @db.Timestamptz(3)
+  personaAssignment   PersonaAssignment           @relation(fields: [personaAssignmentId], references: [id], onDelete: Restrict)
+
+  @@index([personaAssignmentId, createdAt, id])
+  @@index([actorUserId, createdAt])
 }
 
 model PasswordResetToken {
@@ -4275,6 +4357,8 @@ model AuditLog {
   targetType    AuditTargetType
   targetId      String          @db.Uuid
   companyId     String?         @db.Uuid
+  portalContext PortalContextKind?
+  sessionContextVersion Int?
   result        AuditResult
   reasonCode    String?         @db.VarChar(64)
   correlationId String          @db.VarChar(128)
@@ -4289,6 +4373,7 @@ model AuditLog {
   @@index([targetType, targetId, createdAt])
   @@index([companyId, createdAt])
   @@index([actorUserId, createdAt])
+  @@index([portalContext, createdAt])
   @@index([action, createdAt])
   @@index([retainUntil])
 }
@@ -4493,6 +4578,8 @@ model AnalyticsEvent {
   pseudonymousActorId       String?            @db.VarChar(128)
   pseudonymousSessionId     String?            @db.VarChar(128)
   companyId                 String?            @db.Uuid
+  portalContext             PortalContextKind?
+  sessionContextVersion     Int?
   jobId                     String?            @db.Uuid
   actorProvenanceSnapshot   DataProvenance?
   companyProvenanceSnapshot DataProvenance?
@@ -4505,6 +4592,7 @@ model AnalyticsEvent {
   @@unique([producer, dedupeKey])
   @@index([kind, occurredAt])
   @@index([companyId, occurredAt])
+  @@index([portalContext, occurredAt])
   @@index([jobId, occurredAt])
   @@index([retainUntil])
 }

@@ -13,6 +13,7 @@ import {
   PHASE17_NETWORK_POLICY,
   PHASE17_QUALITY_CONTRACT,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
+  PHASE26_COMPANY_TRUST_QUALITY_FILE,
   type Phase17RunIdentity,
   validatePhase17RunManifest,
 } from "@/tests/e2e/manifest-contract";
@@ -64,7 +65,13 @@ describe("Phase 17 manifest contract", () => {
 
   it("rejects a missing mobile quality case even when Playwright says passed", () => {
     const manifest = validFullManifest();
-    const quality = manifest.quality.slice(0, -1);
+    const quality = manifest.quality.filter(
+      ({ file, project }) =>
+        !(
+          file === PHASE26_COMPANY_TRUST_QUALITY_FILE &&
+          project === PHASE17_MOBILE_PROJECT
+        ),
+    );
     const incomplete = {
       ...manifest,
       counts: resultCounts({ passed: FULL_RESULT_COUNT - 1 }),

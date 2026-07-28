@@ -4,25 +4,26 @@
 
 | Dimension | Status |
 | --- | --- |
-| Planstatus | `DEFERRED (P3, DEMAND-GATE OFFEN)` |
-| Technikstatus | `NICHT IMPLEMENTIERT` |
-| Quality-Gate | `NICHT GELAUFEN` |
+| Planstatus | `TECHNISCH AKTIVIERT DURCH OWNER; DEMAND-GATE OFFEN` |
+| Technikstatus | `LOCAL/CI CONTRACT IMPLEMENTIERT` |
+| Quality-Gate | `TARGETED PASS; FINALER G3-WIEDERHOLUNGSLAUF LÄUFT` |
 | Aktivierung | `DISABLED` |
 
-Phase 27 liegt standardmäßig **nicht** auf dem kritischen Pfad. Vor einem
-expliziten Persona-Demand-`GO` werden kein Produktcode, keine Schemaänderung,
-keine Route, kein Feature Flag und keine UI vorbereitet. Ein `NO-GO` ist ein
-gültiger Abschluss des Discovery-Entscheids: Phase 27 bleibt deferred, die
-bestehenden getrennten Konten/Rollen bleiben unverändert und es folgt kein
-Implementierungsschritt.
+Phase 27 liegt weiterhin **nicht** auf dem kritischen Markt-/Launchpfad. Der
+Repository-Owner hat am 28. Juli 2026 den vollständigen technischen Scope
+ausdrücklich aktiviert. Das erlaubt einen additiven, standardmässig
+deaktivierten Local-/CI-Vertrag, ersetzt aber weder moderierte Demand-Evidence
+noch Product-, Security-, Privacy- oder Operationsfreigaben. Allgemeine
+Aktivierung, Marketingclaim und Launchscope bleiben deshalb `DISABLED`.
 
 ## 2. Ziel und messbarer Business-/Nutzerwert
 
-Nur falls reale Forschung einen materiellen, häufigen und nicht günstiger
-lösbaren Bedarf belegt, soll eine Person Candidate und Company-Mitglied sein
-können, ohne doppelte E-Mail-Konten, fragmentierte Privacy-Historie oder
-automatische Rechteerweiterung. Interne Adminrollen und Company-Tenantautorität
-bleiben strikt getrennt.
+Der technische Vertrag ermöglicht einer Person Candidate- und
+Company-Kontexte ohne doppelte E-Mail-Konten, fragmentierte
+Privacy-Historie oder automatische Rechteerweiterung. Interne Adminrollen und
+Company-Tenantautorität bleiben strikt getrennt. Ob und für welche Kohorte
+dieser Vertrag aktiviert werden darf, entscheidet weiterhin die reale
+Forschung.
 
 Der erste messbare Zielwert ist deshalb nicht Code, sondern ein
 preregistrierter Demand-Entscheid:
@@ -40,15 +41,16 @@ preregistrierter Demand-Entscheid:
   sowie Engineering den XL-Blast-Radius schriftlich akzeptieren.
 
 Die Schwelle wird vor Research eingefroren. Wird sie verfehlt, lautet der
-Entscheid `NO-GO / DEFERRED`; daraus entsteht kein Codeauftrag.
+Markt-/Aktivierungsentscheid `NO-GO / DEFERRED`; der deaktivierte technische
+Vertrag bleibt dann unsichtbar und wird nicht als Produktversprechen genutzt.
 
 ## 3. Tatsächlicher Repositoryzustand
 
-- `STH-012` ist als strategische Lücke bestätigt: `User` besitzt eine exklusive
-  globale Rolle; `emailNormalized` verhindert ein zweites Konto mit derselben
-  Adresse.
-- Candidate/Admin kann deshalb eine Company Invitation nicht in jeder
-  Kombination mit derselben Identity annehmen.
+- `User.role` bleibt als N-1-Kompatibilitätsfeld erhalten; fachliche
+  Candidate-/Employer-Berechtigung wird additiv durch `PersonaAssignment`
+  und den gebundenen Sessionkontext abgebildet.
+- Eine bestehende Identity kann nach aktueller Invitation-, Seat-, Role-,
+  Membership- und Step-up-Prüfung eine Employer-Persona erhalten.
 - Company Membership und Job Assignment unterstützen bereits mehrere Firmen
   tenant-sicher und sind die Autorität des Employer-Portals.
 - Das ist kein aktueller Cross-Tenant-Defekt und kein Launchblocker für einen
@@ -56,18 +58,21 @@ Entscheid `NO-GO / DEFERRED`; daraus entsteht kein Codeauftrag.
 - Der Umbau berührt Auth, Session, Registration, Invitation, Safe Next,
   Navigation, Candidate/Employer/Admin Guards, Privacy, Audit, Analytics,
   Notifications, Suspension, Seeds und nahezu alle Cross-role-Tests.
-- Es gibt keine Demand-Evidence, keine freigegebene Identity-/Persona-ADR-
-  Version und keine Phase-27-Technik-/Quality-Evidence.
-
-Diese Ausgangslage wird erst nach `GO` auf dem dann aktuellen grünen Baseline-
-Commit erneut inventarisiert.
+- Der aktive Persona-/Portal-/Company-Kontext ist auf der Session persistiert
+  und versioniert; Contextwechsel widerruft gebundene Step-up-Grants.
+- `/account/portal` sowie Candidate-/Employer-Navigation zeigen nur
+  serverseitig autorisierte Kontexte.
+- Audit, Analytics, Notification, Suspension und identity-weite
+  Privacy-Projektion sind integriert.
+- Demand-Evidence, externe Owner-Sign-offs, Staging-Canary und
+  Marktaktivierung fehlen weiterhin.
 
 ## 4. Findings und Requirements
 
 | ID | Vertrag |
 | --- | --- |
 | `STH-012` | exklusive globale Rolle verhindert bestimmte sichere Doppelrollen |
-| `REQ-PER-001` | Phase 27 bleibt P3/deferred und beginnt nur nach explizitem Scope-Go |
+| `REQ-PER-001` | Technik nur nach expliziter Owner-Scope-Aktivierung; Marktaktivierung nur nach Demand-Go |
 | `REQ-UX-003` | moderierte Nutzerforschung und messbare Demand-Evidence |
 | `REQ-ID-004` | Persona-/Portalwechsel ersetzt keine Step-up- oder Hochrisikoprüfung |
 | `REQ-ADM-007` | interne Admin-Grants bleiben getrennt |
@@ -79,7 +84,7 @@ Stichprobe, Rohdatenminimierung, Schwelle, Resultat, Owner und Ablaufdatum.
 
 ## 5. In Scope
 
-### Vor einem GO
+### Demand-/Aktivierungsscope — weiterhin offen
 
 - preregistrierte moderierte Research mit qualifizierten Dual-Persona-Nutzern;
 - Analyse realer Invitation-, Login-, Portal-, Support-, Consent- und
@@ -88,7 +93,7 @@ Stichprobe, Rohdatenminimierung, Schwelle, Resultat, Owner und Ablaufdatum.
 - Security-/Privacy-/Migration-/Support-Blast-Radius und Kostenabschätzung;
 - dokumentierter `GO`, `NO-GO` oder zeitlich begrenztes `DEFERRED`.
 
-### Nur nach einem GO
+### Technischer Owner-Scope — implementiert und default-off
 
 - Identity getrennt von fachlicher Persona und interner Plattformrolle;
 - optionale Candidate Persona/Profile sowie null bis viele Company
@@ -102,7 +107,7 @@ Stichprobe, Rohdatenminimierung, Schwelle, Resultat, Owner und Ablaufdatum.
 
 ## 6. Out of Scope und deaktivierte Nachbarfunktionen
 
-- jeder Produktcode, jede Migration, Route, CTA oder Flag vor `GO`;
+- öffentliche Aktivierung, Marketingclaim oder breite Kohorte vor Demand-Go;
 - Ersetzen von Company Membership/Job Assignment durch globale Persona;
 - Vermischen interner Adminrollen/Capabilities mit Candidate-/Employerpersona;
 - automatische Accountzusammenführung anhand Name, Domain oder ähnlicher
@@ -112,8 +117,8 @@ Stichprobe, Rohdatenminimierung, Schwelle, Resultat, Owner und Ablaufdatum.
 - generisches Household-/Family-/Organization-Identity-Modell;
 - Pflichtabhängigkeit für Phase 24, 26, 28, 30, 31 oder den ersten Launch.
 
-Bei `NO-GO` bleiben alle Multi-Persona-Claims aus Navigation, Marketing, API,
-Schema und Worker absent.
+Bei `NO-GO` bleiben alle Multi-Persona-Claims aus Marketing und aktiviertem
+Launchscope absent; die technischen Flags bleiben `DISABLED`.
 
 ## 7. Benutzerrollen und organisatorische Owner
 
@@ -327,15 +332,15 @@ Replay-, stale-Session- und Support-Abuse-Gegenfälle.
 | Engineering/Operations Cost | Engineering/Ops | Migration-, Test-, Support-/Merge-/On-call-Aufwand |
 | Scope-Decision | Product+Security+Privacy+Engineering | datiertes `GO`, `NO-GO` oder `DEFERRED` mit Ablauf |
 
-Nur bei `GO` folgen technische ADR, Owner, Migration und Aktivierungsplan.
-Externe Provider oder allgemeine LIVE-Gates werden durch Research nicht
-geschlossen.
+Die technische ADR und additive Migration wurden durch die explizite
+Owner-Scope-Aktivierung erstellt. Demand-, externe Provider- und allgemeine
+LIVE-Gates werden dadurch nicht geschlossen.
 
 ## 18. Interphase-Abhängigkeiten
 
 Research kann nach Phase 19 parallel beginnen und benötigt `REQ-UX-003`.
 
-Technik nur nach `GO` und:
+Der technische Owner-Scope baute auf folgenden abgeschlossenen Verträgen auf:
 
 - Phase 20: verifizierte Identity, Reverification, Recovery, Outbox;
 - Phase 22: identity-weite Privacy-/Consent-/Erasure-Matrix;
@@ -350,7 +355,7 @@ zurückkehren.
 
 ## 19. Geordnete Implementierungsschritte
 
-### Discovery — immer zuerst
+### Discovery — vor jeder Marktaktivierung
 
 1. Researchplan, Qualifikationskriterien, Alternativen, Schwellen und Consent
    preregistrieren.
@@ -358,10 +363,10 @@ zurückkehren.
 3. Security-/Privacy-/Migration-/Operations-Blast-Radius und günstigere
    Mitigations bewerten.
 4. datierten `GO|NO-GO|DEFERRED`-Entscheid veröffentlichen.
-5. Bei `NO-GO/DEFERRED`: **stoppen; kein Code, kein Schema, keine Route, kein
-   Flag.**
+5. Bei `NO-GO/DEFERRED`: keine Kohorte, keine sichtbare Produktbehauptung und
+   alle technischen Flags `DISABLED`.
 
-### Technik — ausschließlich nach GO
+### Technik — durch Owner ausdrücklich aktiviert
 
 6. Identity-/Persona-/Context-/Suspension-/Privacy-ADR und vollständige
    Route×Role×Tenant×Action-Matrix freigeben.
@@ -374,13 +379,12 @@ zurückkehren.
 12. Privacy, Audit, Analytics, Notifications, Suspension und Duplicate Queue.
 13. Migration-/Rollback-, Cross-persona/-tenant-, Security-, E2E- und
     Mobile/A11y-Gates.
-14. kleine Allowlist-Canary; keine allgemeine Aktivierung vor G3/G4.
+14. kleine Allowlist-Canary erst nach Demand-Go; keine allgemeine Aktivierung
+    vor G3/G4 und den externen Owner-Sign-offs.
 
 ## 20. Feature Flags, Kill Switch und Aktivierung
 
-Vor `GO`: Es existiert **kein** Phase-27-Featureflag.
-
-Nur bei `GO`:
+Der deaktivierte technische Vertrag besitzt:
 
 - `IDENTITY_PERSONA_V2`: Dual Read/observe;
 - `EXISTING_IDENTITY_INVITATION`: enge Allowlist;
@@ -388,7 +392,7 @@ Nur bei `GO`:
 - `PERSONA_PRIVACY_V2`: identity-weite Export-/Deleteprojektion;
 - `PERSONA_LEGACY_CONTRACT`: erst nach vollständigem Backfill/G3.
 
-Aktivierung:
+Alle Defaults bleiben `DISABLED` beziehungsweise `false`. Aktivierung:
 `DISABLED → DUAL_READ → INTERNAL → ALLOWLIST → LAUNCH_SCOPE`. Kill Switch
 stoppt neue Persona/Invitation/Switches, entfernt aber keine gültigen
 Memberships. Er darf nie Tenantprüfungen umgehen oder Legacy-All-Role
@@ -396,9 +400,9 @@ reaktivieren.
 
 ## 21. Akzeptanzkriterien und vollständige AC→Test-Matrix
 
-Die ersten beiden Kriterien prüfen den Demand-/No-Code-Vertrag. Alle
-technischen Testdateien sind nur bei einem dokumentierten `GO` geplant und
-werden vorher nicht angelegt.
+Die ersten beiden Kriterien trennen Demand-Evidence von der ausdrücklich
+autorisierten technischen Umsetzung. Technische Tests belegen keine Nachfrage
+und keine Aktivierungsfreigabe.
 
 | Criterion/Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -415,6 +419,13 @@ werden vorher nicht angelegt.
 | `P27-AC-11` / `REQ-PER-001` | P0: Cross-persona/-tenant Browserleak | E2E | Candidate↔Employer, Company A/B, Direct URL, Invite, Recovery | jeder autorisierte Wechsel und Rückweg funktioniert | direct URL, stale tab, expired invite, unsupported merge, suspended context | Candidate/Owner/Admin | Candidate/Employer/Admin UI | all legacy roles + dual identity + Company A/B | Chromium, nur nach GO | `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase27-persona-switch.spec.ts --project=chromium-journeys` | autorisierte Journeys je 1 Pass; Cross-persona/-tenant/Direct-URL-Leak `0`; Retry 0 | Playwright/trace-safe Report | Identity + Security QA | `PLANNED (NUR NACH GO)` |
 | `P27-AC-12` / `REQ-QA-003` | P1: mobile/a11y Switch unbrauchbar | E2E + A11y | Switcher/Invite/Locked/Conflict bei 360 | Tastatur/Touch/Screenreader vollständig | Fokusverlust, hidden Context, clipping, color-only, nicht erreichbare Company | alle User | Navigation/Auth UI | 1/2/many companies, every UX state | Chromium Desktop + 360, nur nach GO | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase27-persona-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase27-persona-quality.spec.ts --project=chromium-mobile-360` | Axe serious/critical 0; Clipping kritischer Action 0; aktiver Context programmatisch eindeutig | Playwright/Axe/Screenshots | UX + Accessibility + QA | `PLANNED (NUR NACH GO)` |
 | `P27-AC-13` / `REQ-QA-003` | P0: Rollback regrantet/verliert Context | Migration/Recovery | dual-read cutover/rollback | alte/new reader konvergieren, Flag stoppt neue Switches | Contract zu früh, N-1 misliest Persona, old session, partial backfill | System/Ops | App/DB/Session | N/N-1 artifact, partial migration, active sessions | Staging, nur nach GO | `npx vitest run --config vitest.integration.config.ts tests/integration/auth/persona-cutover-postgres.test.ts`; manuell: dual-read canary, Flag off, N-1/roll-forward drill | Grant-/Tenantabweichung 0; bestehende Memberships erhalten; alte unklare Sessions widerrufen; kein destruktiver Contract vor G3 | Cutover-/Rollback-/Session-Manifest | Identity + Ops + DBA | `PLANNED (NUR NACH GO)` |
+
+### Phase-27 Audit-log extension matrix
+
+| Audit Action | Auslöser | Mindestmetadaten | Ziel |
+| --- | --- | --- | --- |
+| `PERSONA_ASSIGNMENT_CHANGED` | Persona wird erstellt, aktiviert, suspendiert oder widerrufen | Persona-Kind, alter/neuer Status, Quelle, Version und Reason | `USER` |
+| `PERSONA_CONTEXT_SWITCHED` | autorisierte Session wechselt Portal- oder Company-Kontext | alter/neuer Portal-Kontext, Persona, Company, Session-Kontextversion und invalidierte Step-up-Grants | `SESSION` |
 
 ## 22. Performance und Scale
 
@@ -488,15 +499,14 @@ Nur bei `GO` zusätzlich:
 
 ## 26. Definition of Done
 
-### Bei NO-GO/DEFERRED
+### Bei Demand-NO-GO/DEFERRED
 
 - Research und Entscheidung sind vollständig und datiert;
-- kein Phase-27-Produktcode, Schema, Route, Flag oder CTA wurde angelegt;
-- Planstatus bleibt `DEFERRED`, Technik `NICHT IMPLEMENTIERT`, Aktivierung
-  `DISABLED`;
+- keine Kohorte, Marketingbehauptung oder allgemeine Aktivierung;
+- Technik bleibt hinter `DISABLED`, Aktivierung `DISABLED`;
 - keine andere Phase nennt Multi-Persona als versteckte Launchvoraussetzung.
 
-### Nur bei GO und späterer Umsetzung
+### Für den ausdrücklich aktivierten technischen Vertrag
 
 - alle In-Scope-Verträge, Migrationen, UIs, Guards, Privacy-/Auditwirkungen und
   Tests sind implementiert;
@@ -523,7 +533,7 @@ Ein `GO` allein ist keine technische Completion oder LIVE-Freigabe.
 
 ## 28. Was diese Phase nicht beweist
 
-Research beziehungsweise eine spätere Phase-27-Umsetzung beweist nicht:
+Research beziehungsweise die Phase-27-Technikumsetzung beweist nicht:
 
 - dass Multi-Persona für den ersten Cluster oder die Mehrheit der Nutzer nötig
   ist;
@@ -537,5 +547,6 @@ Research beziehungsweise eine spätere Phase-27-Umsetzung beweist nicht:
   Phasen geschlossen sind;
 - allgemeine Produktions- oder Skalierungsreife.
 
-Der Standardentscheid bleibt: enges, segmentiertes Produkt ohne Phase-27-Code,
-bis echte moderierte Demand-Evidence das Gegenteil belegt.
+Der Standardentscheid bleibt: enges, segmentiertes Produkt mit vollständig
+deaktiviertem Phase-27-Vertrag, bis echte moderierte Demand-Evidence und die
+weiteren Aktivierungsgates einen konkreten Scope freigeben.

@@ -355,7 +355,7 @@ Headroom, Forecast, Alert und Owner.
 | [x] 24 | [Reales Billing und Finance](./24-real-billing-finance.md) | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031` | Candidate `f785944`: deaktivierter Local-/CI-Stripe-Testvertrag und lokales G3 `PASS` für Hosted Checkout, Webhook-Inbox, Reconciliation, Refund/Chargeback/Dunning und Service-Recovery; WTP/Tax/Legal/Finance/Phase-25/Staging/LIVE bleiben externe Gates, siehe [Evidence](./evidence/2026-07-27-phase-24.md) |
 | [x] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031` | Candidate `eb8cbcd`: 25A Admin-Least-Privilege/SoD/Break-glass, 25B Non-Admin-Step-up und 25C Fraud-/Scam-/ATO-Abwehr im deaktivierten Local-/CI-Vertrag mit lokalem G3 `PASS`; externe Security-/Trust-/Staging-/LIVE-Gates bleiben blockiert, siehe [Evidence](./evidence/2026-07-28-phase-25.md) |
 | [ ] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md) | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034` | beweisgestützter, vier-Augen-fähiger Trust-Lifecycle mit Ablauf, Re-Review und schneller Sperrung |
-| [ ] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md) | `STH-012` | additive Plattform-/Company-Personas mit explizitem aktivem Kontext |
+| [ ] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md) | `STH-012` | owner-aktivierter, default-off Local-/CI-Vertrag für additive Personas und expliziten Session-/Company-Kontext; Demand-/Launch-Go offen |
 | [ ] 28 | [Recruiting-Workflows](./28-recruiting-workflows.md) | `STH-015`, `STH-016` | zwei unabhängige, nachgewiesen nachgefragte optionale Tracks: 28A externer Statusimport und 28B persistente Interviewplanung |
 | [ ] 29 | [Research, UX, Mobile und Accessibility](./29-ux-mobile-accessibility.md) | `STH-023`, `STH-025`, `STH-033`; UX-Regression `STH-026` | früher moderierter Research-Track und später bedienbare Cross-Browser-/Mobile-/A11y-Abnahme |
 | [ ] 30 | [Startcluster-Suche, Freshness und Scale Operations](./30-search-scale-operations.md) | 30A: `STH-019`, `STH-036`; 30B: `STH-020/021`; 30C: `STH-027`; 30D: `STH-032` | gemeinsamer berufsfachlicher Suchvertrag samt sicherem Lernkreislauf, Job-Freshness in allen Consumern sowie triggerbasierte Scale-/Sitemap-Arbeit |
@@ -691,12 +691,14 @@ Retention geschützt, nicht öffentlich.
 
 ### [ ] 27 — Multi-Persona Identity
 
-**Status/Priorität:** standardmässig `DEFERRED`, P3. Ohne datierten,
-moderierten Persona-Bedarf, Product-/Security-Go und explizite Zielklasse
-entstehen keine Route, CTA oder Migration; Phase 27 liegt nicht auf dem
-Standard-Critical-Path.
+**Status/Priorität:** Der Repository-Owner hat den technischen Scope am
+28. Juli 2026 ausdrücklich aktiviert; der additive Local-/CI-Vertrag ist
+implementiert und bleibt default-off. Markt-/Kohortenaktivierung bleibt
+`DEFERRED`, P3, bis datierter moderierter Persona-Bedarf, Product-/Security-/
+Privacy-/Engineering-Go und eine explizite Zielklasse vorliegen. Phase 27
+liegt weiterhin nicht auf dem Standard-Launch-Critical-Path.
 
-**Zweck bei aktiviertem Demand-Gate:** Personen können additive Plattform- und Company-Personas
+**Zweck des technischen Vertrags:** Personen können additive Plattform- und Company-Personas
 besitzen, ohne Tenant-, Rollen- oder Sessiongrenzen zu verwischen. Ein
 expliziter aktiver Kontext bestimmt Navigation und Komfort; jede
 Serveraktion autorisiert dennoch erneut gegen die persistierten
@@ -721,7 +723,7 @@ Multi-Company-Recruiter sowie negative Cross-Tenant-/Direct-Action-Fälle
 werden geprüft. Context-Switch invalidiert keine berechtigte andere
 Persona, aber entzogene Membership wirkt sofort. Die alte Einzelrolle bleibt
 während des Backfills lesbar; ein Rollback darf niemals globale Rechte
-verleihen.
+verleihen. Alle Phase-27-Flags bleiben bis zum Demand-/Cohort-Go deaktiviert.
 
 ### [ ] 28 — Optionale Recruiting-Workflows
 
@@ -983,7 +985,8 @@ behandelt.
   -> 32 zielklassenspezifischer G4-Release-Audit
 
 Optionale Seitenpfade, nicht Standard-Critical-Path:
-  27 nur nach explizitem Multi-Persona-Go
+  27 Technik owner-aktiviert/default-off; Marktaktivierung nur nach
+     explizitem Multi-Persona-Demand-/Cohort-Go
   28A Tracker und 28B Scheduler jeweils nur nach eigenem Demand-Go
   30B nur bei Query-/Queue-/Volumentrigger
   30C Shards nur bei Count-/Byte-/Forecasttrigger

@@ -84,6 +84,18 @@ export const PHASE22_DATA_INVENTORY_V1 = Object.freeze([
     flowScope: "PRIVACY_RIGHTS",
   }),
   row({
+    entityKey: "PERSONA_ASSIGNMENT",
+    fieldScope:
+      "persona kind, lifecycle status, source, version and context-safe history",
+    subjectClass: "USER",
+    purposeCode: "ACCOUNT_AND_SECURITY",
+    exportOutcome: "INCLUDE",
+    correctionOutcome: "RETAIN",
+    erasureOutcome: "ANONYMIZE",
+    retentionDays: 400,
+    flowScope: "PRIVACY_RIGHTS",
+  }),
+  row({
     entityKey: "CANDIDATE_PROFILE",
     fieldScope: "profile, preferences, salary and location choices",
     subjectClass: "CANDIDATE",

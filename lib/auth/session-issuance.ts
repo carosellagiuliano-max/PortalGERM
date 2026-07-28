@@ -10,8 +10,19 @@ import {
 } from "@/lib/auth/session";
 import type { KeyringEntry } from "@/lib/config/env-schema";
 import { hashIpWithFirstKey } from "@/lib/utils/hash";
+import {
+  legacyPortalForRole,
+  type LegacyIdentityRole,
+  type PortalContextV2,
+} from "@/lib/auth/persona-policy";
 
 type SessionCreatePort = Readonly<{
+  user: Readonly<{
+    findUnique(input: Readonly<{
+      where: Readonly<{ id: string }>;
+      select: Readonly<{ role: true }>;
+    }>): Promise<Readonly<{ role: LegacyIdentityRole }> | null>;
+  }>;
   session: Readonly<{
     create(input: Readonly<{
       data: Readonly<{
@@ -22,6 +33,10 @@ type SessionCreatePort = Readonly<{
         createdAt: Date;
         userAgent: string | null;
         ipHash: string | null;
+        activePortal: PortalContextV2;
+        activeCompanyId: string | null;
+        contextVersion: number;
+        contextChangedAt: Date;
       }>;
       select: typeof SESSION_SELECT;
     }>): Promise<SessionRecord>;
@@ -39,6 +54,10 @@ const SESSION_SELECT = {
   revokedAt: true,
   userAgent: true,
   ipHash: true,
+  activePortal: true,
+  activeCompanyId: true,
+  contextVersion: true,
+  contextChangedAt: true,
 } as const;
 
 export async function issueSession(
@@ -51,8 +70,21 @@ export async function issueSession(
       "production" | "sourceIp" | "userAgent"
     >;
     auditIpKeyring: readonly KeyringEntry<"AUDIT_IP_HASH_KEYS">[];
+    activePortal?: PortalContextV2;
+    activeCompanyId?: string | null;
   }>,
 ): Promise<CreatedSession> {
+  const identity = await port.user.findUnique({
+    where: { id: input.userId },
+    select: { role: true },
+  });
+  if (identity === null) {
+    throw new Error("Cannot issue a session for an unknown identity.");
+  }
+  const activePortal =
+    input.activePortal ?? legacyPortalForRole(identity.role);
+  const activeCompanyId =
+    activePortal === "EMPLOYER" ? (input.activeCompanyId ?? null) : null;
   const token = randomBytes(SESSION_POLICY_V1.tokenBytes).toString("base64url");
   const absoluteExpiresAt = new Date(
     input.now.getTime() + SESSION_POLICY_V1.absoluteTtlMilliseconds,
@@ -73,6 +105,10 @@ export async function issueSession(
         input.auditIpKeyring,
         "AUDIT_IP_HASH_KEYS",
       ),
+      activePortal,
+      activeCompanyId,
+      contextVersion: 1,
+      contextChangedAt: new Date(input.now),
     },
     select: SESSION_SELECT,
   });

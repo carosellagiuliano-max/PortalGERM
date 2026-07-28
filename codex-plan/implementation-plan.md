@@ -675,15 +675,23 @@ flowchart TD
    [Phase-26-Evidence](./evidence/2026-07-28-phase-26.md). Job Freshness ist
    der nächste Fachvertrag. Alle Phase-25-/26-Aktivierungsflags bleiben bis
    Owner-/RP-ID-/Risk-/Provider-/Legal-/Capacity-/Pager-Gates geschlossen.
-8. **Phase 24 technisch abgeschlossen, Aktivierung nur bei LC5-Go**:
+8. **Phase 27 technisch owner-aktiviert und abgeschlossen; Demand-Go offen**:
+   additive PersonaAssignments, versionierter Session-/Company-Kontext,
+   Existing-Identity-Invitation, Candidate-Self-Service, identity-weite
+   Privacy und getrennte Admin-Autorität sind im deaktivierten Local-/CI-
+   Vertrag verifiziert; siehe
+   [Phase-27-Evidence](./evidence/2026-07-28-phase-27.md). Alle Flags,
+   Kohorten und Marktclaims bleiben bis moderierter Demand-Evidence, vier
+   Owner-Sign-offs, Canary/Staging und G4 geschlossen.
+9. **Phase 24 technisch abgeschlossen, Aktivierung nur bei LC5-Go**:
    Candidate `f785944` besitzt den grünen fail-closed Local-/CI-Zahlungs- und
    Service-Recovery-Vertrag; kein Staging-/Paid-/LIVE-Start vor WTP-,
    Phase-25-, Provider-, Tax-/Legal-, Finance- und Operations-Go. Siehe
    [Phase-24-Evidence](./evidence/2026-07-27-phase-24.md).
-9. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
+10. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
    final usability-/mobile-/a11y-prüfen; erst danach genau das lieferbare
    Angebot/den Cluster aktivieren.
-10. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
+11. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
    Artefakt prüfen.
 
 ### Parallel zulässig
@@ -699,11 +707,13 @@ flowchart TD
 - Phasen 25 und 26 sind technisch abgeschlossen. Admin-/Assurance-Enforcement,
   reale Company-Provider und Public-Trust-Wirkung werden trotzdem nicht im
   selben Aktivierungsfenster gecutovert.
+- Phase 27 ist technisch abgeschlossen, aber kein Launchconsumer darf den
+  Persona-Switch ohne separates Demand-/Cohort-Go sichtbar aktivieren.
 
 ### Bewusst ausserhalb des Standardpfads
 
-- Phase 27 Multi-Persona bleibt P3/deferred, bis ein dokumentierter Persona-
-  Bedarf besteht.
+- Phase 27 Multi-Persona bleibt für Markt-/Kohortenaktivierung P3/deferred,
+  obwohl der owner-aktivierte technische Vertrag default-off vorhanden ist.
 - Phase 28A externer Tracker und 28B Vollscheduler besitzen getrennte
   Research-Gates; der bestehende interne Bewerbungsflow hängt nicht davon ab.
 - Phase 30B beginnt bei gemessenem Queue-/Query-/Latenztrigger.

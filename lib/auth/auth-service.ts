@@ -31,6 +31,8 @@ import { createInitialEmailVerification } from "@/lib/auth/email-verification-se
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { resolveSafeNext, type AuthRoleV1 } from "@/lib/auth/safe-next";
 import { issueSession } from "@/lib/auth/session-issuance";
+import { ensurePersonaAssignment } from "@/lib/auth/persona-context";
+import { listAvailablePortalContexts } from "@/lib/auth/persona-policy";
 import type { CreatedSession } from "@/lib/auth/session";
 import { PASSWORD_HASH_POLICY_V1 } from "@/lib/auth/password";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
@@ -187,6 +189,14 @@ export async function loginWithPassword(
               status: true,
               emailVerifiedAt: true,
               identityAssurance: true,
+              personaAssignments: {
+                select: {
+                  id: true,
+                  kind: true,
+                  status: true,
+                  version: true,
+                },
+              },
               credential: {
                 select: {
                   passwordHash: true,
@@ -240,6 +250,10 @@ export async function loginWithPassword(
       session: created,
       emailVerifiedAt: lockedUser.emailVerifiedAt,
       identityAssurance: lockedUser.identityAssurance,
+      availablePortals: listAvailablePortalContexts(
+        lockedUser.role,
+        lockedUser.personaAssignments,
+      ),
     });
   });
   if (authentication === null) {
@@ -256,6 +270,12 @@ export async function loginWithPassword(
       (authentication.emailVerifiedAt === null ||
         authentication.identityAssurance !== "VERIFIED_EMAIL")
         ? "/verify-email"
+        : dependencies.environment.EXISTING_IDENTITY_INVITATION &&
+            input.next === "/invite/resume"
+          ? "/invite/resume"
+        : dependencies.environment.PERSONA_PORTAL_SWITCH &&
+            authentication.availablePortals.length > 1
+          ? "/account/portal"
         : resolveSafeNext(input.next, authentication.role),
   });
 }
@@ -296,6 +316,15 @@ export async function registerCandidate(
           data: { userId: user.id, onboardingStatus: "DRAFT" },
           select: { id: true },
         });
+        const persona = await ensurePersonaAssignment(transaction, {
+          userId: user.id,
+          kind: "CANDIDATE",
+          source: "REGISTRATION",
+          actorUserId: user.id,
+          correlationId: dependencies.request.correlationId,
+          now,
+        });
+        if (!persona.ok) throw new Error("CANDIDATE_PERSONA_CREATE_FAILED");
         await transaction.candidateOnboardingEvent.create({
           data: {
             candidateProfileId: profile.id,
@@ -480,6 +509,15 @@ export async function registerEmployer(
           },
           select: { id: true },
         });
+        const persona = await ensurePersonaAssignment(transaction, {
+          userId: user.id,
+          kind: "EMPLOYER",
+          source: "REGISTRATION",
+          actorUserId: user.id,
+          correlationId: dependencies.request.correlationId,
+          now,
+        });
+        if (!persona.ok) throw new Error("EMPLOYER_PERSONA_CREATE_FAILED");
         await persistRegistrationConsents(
           transaction,
           user.id,
@@ -514,6 +552,7 @@ export async function registerEmployer(
 
         let branch: "COMPANY_CREATED" | "COMPANY_CLAIM";
         let destination: "/employer/dashboard" | "/employer/company/claim-pending";
+        let sessionCompanyId: string | null = null;
         const candidate = candidates[0];
         if (candidate === undefined) {
           const company = await transaction.company.create({
@@ -588,6 +627,7 @@ export async function registerEmployer(
           );
           branch = "COMPANY_CREATED";
           destination = "/employer/dashboard";
+          sessionCompanyId = company.id;
         } else {
           const matchSignalCodes = getCompanyClaimSignalCodes(
             persistedSignals,
@@ -639,6 +679,8 @@ export async function registerEmployer(
 
         const session = await issueSession(transaction, {
           userId: user.id,
+          activePortal: "EMPLOYER",
+          activeCompanyId: sessionCompanyId,
           now,
           request: dependencies.request,
           auditIpKeyring:

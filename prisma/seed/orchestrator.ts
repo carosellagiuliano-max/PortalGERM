@@ -18,6 +18,7 @@ import {
   type CandidateWorkflowSeedCryptoConfig,
 } from "@/prisma/seed/blocks/candidate-workflows";
 import { seedDemoAccountsCompaniesAndJobs } from "@/prisma/seed/blocks/companies-jobs";
+import { reconcileDemoPersonaCompatibility } from "@/prisma/seed/blocks/persona-compatibility";
 import {
   REFERENCE_CATALOG_SEED_IDENTITIES,
   seedReferenceCatalog,
@@ -84,6 +85,7 @@ export type SeedOrchestrationPorts = Readonly<{
   seedCandidateWorkflows: typeof seedCandidateWorkflows;
   seedCompaniesJobs: typeof seedDemoAccountsCompaniesAndJobs;
   seedEmployerCore: typeof seedEmployerCoreFixtures;
+  reconcilePersonaCompatibility: typeof reconcileDemoPersonaCompatibility;
   seedReferenceCatalog: typeof seedReferenceCatalog;
   verifyDatabase: typeof verifyDemoSeedDatabase;
 }>;
@@ -130,6 +132,7 @@ const DEFAULT_ORCHESTRATION_PORTS: SeedOrchestrationPorts = Object.freeze({
   seedCandidateWorkflows,
   seedCompaniesJobs: seedDemoAccountsCompaniesAndJobs,
   seedEmployerCore: seedEmployerCoreFixtures,
+  reconcilePersonaCompatibility: reconcileDemoPersonaCompatibility,
   seedReferenceCatalog,
   verifyDatabase: verifyDemoSeedDatabase,
 });
@@ -230,6 +233,7 @@ async function executeSeedRun(
     },
     candidateWorkflowCrypto,
   );
+  await ports.reconcilePersonaCompatibility(database, anchorAt);
   const billingOps = await ports.seedBillingOpsContent({
     adminUserId: planning.adminUserId,
     anchorAt,

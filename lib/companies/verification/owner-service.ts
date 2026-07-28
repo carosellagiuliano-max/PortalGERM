@@ -455,27 +455,25 @@ export async function beginCompanyVerification(
             createdAt: now,
           },
         });
-        await Promise.all([
-          writeAudit(transaction, dependencies, now, {
-            action: "COMPANY_VERIFICATION_SUBMITTED_V2",
-            capability: "COMPANY_VERIFICATION_SUBMIT",
-            targetId: requestId,
-            targetType: "VERIFICATION_REQUEST",
-            reasonCode: "STRUCTURED_V2_SUBMISSION",
-            companyId: parsed.data.companyId,
-          }),
-          writeAudit(transaction, dependencies, now, {
-            action: "COMPANY_VERIFICATION_CHECKED_V2",
-            capability: "COMPANY_REGISTER_CHECK",
-            targetId: registerCheck.id,
-            targetType: "COMPANY_VERIFICATION_CHECK",
-            reasonCode:
-              registerResult.result === "EXACT_MATCH"
-                ? "REGISTER_EXACT_MATCH"
-                : "REGISTER_NOT_VERIFIED",
-            companyId: parsed.data.companyId,
-          }),
-        ]);
+        await writeAudit(transaction, dependencies, now, {
+          action: "COMPANY_VERIFICATION_SUBMITTED_V2",
+          capability: "COMPANY_VERIFICATION_SUBMIT",
+          targetId: requestId,
+          targetType: "VERIFICATION_REQUEST",
+          reasonCode: "STRUCTURED_V2_SUBMISSION",
+          companyId: parsed.data.companyId,
+        });
+        await writeAudit(transaction, dependencies, now, {
+          action: "COMPANY_VERIFICATION_CHECKED_V2",
+          capability: "COMPANY_REGISTER_CHECK",
+          targetId: registerCheck.id,
+          targetType: "COMPANY_VERIFICATION_CHECK",
+          reasonCode:
+            registerResult.result === "EXACT_MATCH"
+              ? "REGISTER_EXACT_MATCH"
+              : "REGISTER_NOT_VERIFIED",
+          companyId: parsed.data.companyId,
+        });
         return success({
           requestId,
           challengeId,

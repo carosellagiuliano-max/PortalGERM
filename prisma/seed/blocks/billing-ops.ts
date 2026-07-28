@@ -2479,12 +2479,14 @@ export function buildAnalyticsSeedFixtures(
     });
   }
 
-  // The 300-row Phase-05 analytics stream is sealed evidence. Phase 09 adds
-  // EXTERNAL_APPLY_CLICKED to the runtime taxonomy, but inserting it into this
-  // modulo stream would silently rewrite every subsequent deterministic row.
-  // External-click behavior has dedicated action/contract tests instead.
+  // The 300-row Phase-05 analytics stream is sealed evidence. Later phases add
+  // runtime events, but inserting them into this modulo stream would silently
+  // rewrite every subsequent deterministic row. Those events have dedicated
+  // action/contract tests instead.
   const sealedSeedKinds = ANALYTICS_EVENT_KINDS_V1.filter(
-    (kind) => kind !== AnalyticsEventKind.EXTERNAL_APPLY_CLICKED,
+    (kind) =>
+      kind !== AnalyticsEventKind.EXTERNAL_APPLY_CLICKED &&
+      kind !== AnalyticsEventKind.PERSONA_CONTEXT_SWITCHED,
   );
   const backgroundCount = ANALYTICS_COUNT - specs.length;
   if (backgroundCount < sealedSeedKinds.length) {
@@ -2696,6 +2698,13 @@ function analyticsProperties(
       };
     case AnalyticsEventKind.MODERATION_ACTIONED:
       return { fromStatus: "OPEN", toStatus: "IN_REVIEW" };
+    case AnalyticsEventKind.PERSONA_CONTEXT_SWITCHED:
+      return {
+        fromPortal: index % 2 === 0 ? "CANDIDATE" : "EMPLOYER",
+        toPortal: index % 2 === 0 ? "EMPLOYER" : "CANDIDATE",
+        contextVersion: index + 1,
+        companySelected: index % 2 === 0,
+      };
     case AnalyticsEventKind.COMPANY_VERIFICATION_SUBMITTED:
     case AnalyticsEventKind.COMPANY_VERIFIED:
     case AnalyticsEventKind.EMPLOYER_RESPONSE_RECORDED:

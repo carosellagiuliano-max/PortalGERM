@@ -92,6 +92,19 @@ function metadataFor(
       return { signalCodes: ["EMAIL_DOMAIN"] };
     case "CATALOG_VERSION_SCHEDULED":
       return { sourceVersionId: deterministicUuid(0, 3) };
+    case "PERSONA_ASSIGNMENT_CHANGED":
+      return {
+        kind: "CANDIDATE",
+        fromStatus: null,
+        toStatus: "ACTIVE",
+        version: 1,
+      };
+    case "PERSONA_CONTEXT_SWITCHED":
+      return {
+        fromPortal: "CANDIDATE",
+        toPortal: "EMPLOYER",
+        contextVersion: 2,
+      };
     case "RATE_LIMITED":
       return { preset: "LOGIN", scope: "IP_EMAIL" };
     default:

@@ -1,4 +1,4 @@
-export const PHASE17_FIXTURE_VERSION = "phase17-e2e-v2" as const;
+export const PHASE17_FIXTURE_VERSION = "phase17-e2e-v3" as const;
 
 export const PHASE17_CASES = Object.freeze([
   Object.freeze({

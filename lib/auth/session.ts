@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import type { KeyringEntry } from "@/lib/config/env-schema";
 import { hashIpWithFirstKey } from "@/lib/utils/hash";
+import type { PortalContextV2 } from "@/lib/auth/persona-policy";
 
 export const SESSION_POLICY_V1 = Object.freeze({
   cookieName: "session",
@@ -22,6 +23,10 @@ export type SessionRecord = Readonly<{
   revokedAt: Date | null;
   userAgent: string | null;
   ipHash: string | null;
+  activePortal?: PortalContextV2 | null;
+  activeCompanyId?: string | null;
+  contextVersion?: number;
+  contextChangedAt?: Date | null;
 }>;
 
 export type SessionCreateRecord = Omit<
@@ -138,6 +143,10 @@ export async function createSession(
             input.ipContext.keyring,
             "AUDIT_IP_HASH_KEYS",
           ),
+    activePortal: null,
+    activeCompanyId: null,
+    contextVersion: 1,
+    contextChangedAt: new Date(dependencies.clock.now),
   });
   const options = getSessionCookieOptions(absoluteExpiresAt, input.production);
 

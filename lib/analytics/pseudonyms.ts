@@ -20,3 +20,20 @@ export function candidateAnalyticsSubjectV1(userId: string): string {
     .slice(0, 32);
   return `candidate-v1-${digest}`;
 }
+
+/**
+ * Identity-level operational events must not reuse a Candidate-only namespace
+ * when the same account is acting in Employer or Admin context.
+ */
+export function identityAnalyticsSubjectV1(userId: string): string {
+  if (!UUID_PATTERN.test(userId)) {
+    throw new TypeError("Identity analytics requires a valid User id.");
+  }
+  const digest = createHash("sha256")
+    .update("identity-analytics-subject-v1", "utf8")
+    .update(HASH_SEPARATOR, "utf8")
+    .update(userId.toLocaleLowerCase("en-US"), "utf8")
+    .digest("hex")
+    .slice(0, 32);
+  return `identity-v1-${digest}`;
+}

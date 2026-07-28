@@ -35,7 +35,13 @@ export default async function InviteResumePage() {
   const invitation =
     token === null
       ? Object.freeze({ state: "INVALID" as const })
-      : await inspectCompanyInvitation(token, getDatabase(), user);
+      : await inspectCompanyInvitation(
+          token,
+          getDatabase(),
+          user,
+          new Date(),
+          environment.EXISTING_IDENTITY_INVITATION,
+        );
 
   if (invitation.state === "READY") {
     return (
@@ -48,6 +54,18 @@ export default async function InviteResumePage() {
           authenticated
           companyName={invitation.companyName}
           intendedRole={invitation.intendedRole}
+          personaStepUp={
+            invitation.requiresPersonaStepUp
+              ? {
+                  companyId: invitation.companyId,
+                  invitationId: invitation.invitationId,
+                  securityHref:
+                    user === null
+                      ? "/login"
+                      : securityHrefForRole(user.role),
+                }
+              : undefined
+          }
         />
       </AuthCard>
     );
@@ -100,6 +118,18 @@ function stateMessage(state: string) {
       "Diese Einladung ist nicht für das angemeldete Konto bestimmt.",
     ACCOUNT_TYPE_UNSUPPORTED:
       "Bitte verwende ein separates Arbeitgeberkonto oder kontaktiere den Support.",
+    PERSONA_SUSPENDED:
+      "Der Arbeitgeber-Arbeitsbereich dieses Kontos ist gesperrt. Bitte kontaktiere den Support.",
+    PERSONA_REVOKED:
+      "Der Arbeitgeber-Arbeitsbereich dieses Kontos wurde widerrufen. Bitte kontaktiere den Support.",
   };
   return messages[state] ?? "Der Link ist ungültig oder nicht mehr verfügbar.";
+}
+
+function securityHrefForRole(
+  role: "CANDIDATE" | "EMPLOYER" | "RECRUITER" | "ADMIN",
+) {
+  if (role === "ADMIN") return "/admin/security/authenticators";
+  if (role === "CANDIDATE") return "/candidate/settings/security";
+  return "/employer/settings/security";
 }

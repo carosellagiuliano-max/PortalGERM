@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { PrivateShell } from "@/components/auth/private-shell";
+import { PersonaContextSwitcher } from "@/components/auth/persona-context-switcher";
+import { getCurrentPersonaContextOverview } from "@/lib/auth/persona-page";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
@@ -53,10 +55,13 @@ export default async function CandidateLayout({
       </PrivateShell>
     );
   }
-  const profile = await getDatabase().candidateProfile.findUnique({
-    where: { userId: user.id },
-    select: { firstName: true, lastName: true, publicDisplayName: true },
-  });
+  const [profile, personaOverview] = await Promise.all([
+    getDatabase().candidateProfile.findUnique({
+      where: { userId: user.id },
+      select: { firstName: true, lastName: true, publicDisplayName: true },
+    }),
+    getCurrentPersonaContextOverview(),
+  ]);
   const legalName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
   const displayName = profile?.publicDisplayName?.trim() || legalName || user.name || user.email;
   return (
@@ -65,6 +70,16 @@ export default async function CandidateLayout({
       navigation={navigation}
       navigationVariant="sidebar"
       identity={{ displayName, secondaryLabel: "Kandidat/in" }}
+      contextControl={
+        personaOverview === null ? undefined : (
+          <PersonaContextSwitcher
+            activePortal={personaOverview.activePortal}
+            portals={personaOverview.portals}
+            companies={personaOverview.companies}
+            compact
+          />
+        )
+      }
     >
       {children}
     </PrivateShell>

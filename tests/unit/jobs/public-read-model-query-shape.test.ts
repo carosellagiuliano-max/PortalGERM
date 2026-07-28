@@ -83,6 +83,7 @@ import {
   PUBLIC_CLUSTER_DISCOVERY_POLICY_V1,
   emptyPublicJobSearchInput,
   getPublicJobBySlug,
+  getPublicJobsBySlugs,
   listPublicClusterLinks,
   listPublicJobs,
   loadPublicOpenJobCounts,
@@ -831,6 +832,45 @@ describe("public Job query data minimization", () => {
     }));
     expect(JSON.stringify(result)).not.toContain("public/company-logos/");
     expect(databaseMocks.jobRevisionFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("hydrates a bounded detail batch in one eligibility snapshot and preserves order", async () => {
+    const first = eligibleDetailRow();
+    const secondRevisionId = "33333333-3333-4333-8333-333333333334";
+    const second = {
+      ...eligibleDetailRow(),
+      id: JOB_ID_2,
+      slug: "data-engineer",
+      currentRevisionId: secondRevisionId,
+      publishedRevisionId: secondRevisionId,
+      publishedRevision: {
+        ...eligibleDetailRow().publishedRevision,
+        id: secondRevisionId,
+        title: "Data Engineer",
+      },
+    };
+    databaseMocks.jobFindMany.mockResolvedValue([second, first]);
+
+    const result = await getPublicJobsBySlugs(
+      ["software-engineer", "data-engineer"],
+      { now: NOW },
+    );
+
+    expect(result.map(({ slug }) => slug)).toEqual([
+      "software-engineer",
+      "data-engineer",
+    ]);
+    expect(databaseMocks.jobFindMany).toHaveBeenCalledTimes(1);
+    expect(databaseMocks.jobFindMany.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          slug: { in: ["software-engineer", "data-engineer"] },
+          status: "PUBLISHED",
+        }),
+        orderBy: { slug: "asc" },
+        take: 2,
+      }),
+    );
   });
 
   it("excludes a PUBLISHED row when current and published revisions diverge", async () => {

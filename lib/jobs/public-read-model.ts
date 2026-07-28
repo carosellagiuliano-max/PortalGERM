@@ -59,6 +59,7 @@ const MAXIMUM_SEARCH_PAGE_SIZE = 50;
 const MAXIMUM_SPONSORED_SEARCH_RESULTS = 3;
 const MAXIMUM_SEARCH_PAGE_HYDRATION =
   MAXIMUM_SEARCH_PAGE_SIZE + 1 + MAXIMUM_SPONSORED_SEARCH_RESULTS;
+const MAXIMUM_PUBLIC_JOB_DETAIL_BATCH_SIZE = 50;
 const DAY_MS = 86_400_000;
 const SEARCH_COMBINING_MARK_PATTERN = "[\u0300-\u036f]";
 const UUID_REFERENCE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -531,6 +532,35 @@ export async function getPublicJobBySlug(
   const now = validNow(options.now);
   const row = await loadEligibleDetailJob(slug, now);
   return row === null ? null : toDetailModel(row, now);
+}
+
+/**
+ * Hydrates a bounded set of public Job details in one eligibility snapshot.
+ * This keeps recommendation surfaces from opening one interactive transaction
+ * per card and preserves the caller's requested order.
+ */
+export async function getPublicJobsBySlugs(
+  slugs: readonly string[],
+  options: Readonly<{ now?: Date }> = {},
+): Promise<readonly PublicJobDetailModel[]> {
+  if (slugs.length > MAXIMUM_PUBLIC_JOB_DETAIL_BATCH_SIZE) {
+    throw new RangeError(
+      `Public Job detail batches are limited to ${MAXIMUM_PUBLIC_JOB_DETAIL_BATCH_SIZE}.`,
+    );
+  }
+  const requestedSlugs = [...new Set(slugs.filter(isSafeSlug))];
+  if (requestedSlugs.length === 0) return Object.freeze([]);
+  const now = validNow(options.now);
+  const rows = await loadEligibleDetailJobs(requestedSlugs, now);
+  const detailBySlug = new Map(
+    rows.map((row) => [row.slug, toDetailModel(row, now)] as const),
+  );
+  return Object.freeze(
+    requestedSlugs.flatMap((slug) => {
+      const detail = detailBySlug.get(slug);
+      return detail === undefined ? [] : [detail];
+    }),
+  );
 }
 
 export async function listRelatedPublicJobs(
@@ -1744,6 +1774,29 @@ async function loadEligibleDetailJob(
   return eligibleRows[0] ?? null;
 }
 
+async function loadEligibleDetailJobs(
+  slugs: readonly string[],
+  now: Date,
+): Promise<EligiblePublicJobDetailRow[]> {
+  const database = getDatabase();
+  const dataContext = getPublicDataContext();
+  const input = emptyPublicJobSearchInput();
+  return loadEligibleRowsInSnapshot<PublicJobDetailRow>(
+    database,
+    now,
+    dataContext.eligibilityEnvironment,
+    (transaction) => transaction.job.findMany({
+      where: {
+        ...buildPublicJobWhere(input, now, dataContext.liveOnly, {}),
+        slug: { in: [...slugs] },
+      },
+      orderBy: { slug: "asc" },
+      take: slugs.length,
+      select: buildPublicJobDetailSelect(now),
+    }),
+  );
+}
+
 async function loadExactPublicClusterCounts(now: Date): Promise<Readonly<{
   cantonCounts: ReadonlyMap<string, ClusterCount<PublicJobClusterCanton>>;
   categoryCounts: ReadonlyMap<string, ClusterCount<PublicJobClusterCategory>>;
@@ -1979,28 +2032,28 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
   database: PublicReadTransaction,
 ): Promise<EligibleRow<Row>[]> {
   if (rows.length === 0) return [];
-  const [restrictions, trustByCompanyId] = await Promise.all([
-    database.moderationRestriction.findMany({
-      where: {
-        status: "ACTIVE",
-        startsAt: { lte: now },
-        liftedAt: null,
-        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
-        AND: [{
-          OR: [
-            { targetType: "HIDE_JOB", targetId: { in: rows.map((row) => row.id) } },
-            { targetType: "PAUSE_COMPANY", targetId: { in: rows.map((row) => row.companyId) } },
-          ],
-        }],
-      },
-      select: { targetType: true, targetId: true },
-    }),
-    evaluateCompanyTrustForCompanies(
-      database,
-      rows.map((row) => row.companyId),
-      { now },
-    ),
-  ]);
+  // Interactive transactions own one PostgreSQL client. Keep their queries
+  // sequential so the adapter never attempts concurrent client.query calls.
+  const restrictions = await database.moderationRestriction.findMany({
+    where: {
+      status: "ACTIVE",
+      startsAt: { lte: now },
+      liftedAt: null,
+      OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+      AND: [{
+        OR: [
+          { targetType: "HIDE_JOB", targetId: { in: rows.map((row) => row.id) } },
+          { targetType: "PAUSE_COMPANY", targetId: { in: rows.map((row) => row.companyId) } },
+        ],
+      }],
+    },
+    select: { targetType: true, targetId: true },
+  });
+  const trustByCompanyId = await evaluateCompanyTrustForCompanies(
+    database,
+    rows.map((row) => row.companyId),
+    { now },
+  );
   const hiddenJobs = new Set(
     restrictions.filter((row) => row.targetType === "HIDE_JOB").map((row) => row.targetId),
   );

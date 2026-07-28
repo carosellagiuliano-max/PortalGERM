@@ -1,7 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import {
   getAuthRequestContext,
   isValidAuthMutationOrigin,
@@ -68,7 +66,6 @@ export async function beginCompanyVerificationAction(
     security.dependencies,
   );
   if (!result.ok) return resultState(result);
-  revalidateVerificationPaths();
   return Object.freeze({
     status: "success",
     message: result.replay
@@ -113,7 +110,6 @@ export async function verifyCompanyDomainAction(
     security.dependencies,
   );
   if (!result.ok) return resultState(result);
-  revalidateVerificationPaths();
   return Object.freeze({
     status: "success",
     message:
@@ -151,7 +147,6 @@ export async function submitCompanyVerificationAppealAction(
     security.dependencies,
   );
   if (!result.ok) return resultState(result);
-  revalidateVerificationPaths();
   return Object.freeze({
     status: "success",
     message: result.replay
@@ -187,7 +182,6 @@ export async function attachCompanyVerificationDocumentAction(
     security.dependencies,
   );
   if (!result.ok) return resultState(result);
-  revalidateVerificationPaths();
   return Object.freeze({
     status: "success",
     message: result.replay
@@ -306,17 +300,4 @@ function invalidState(): CompanyVerificationActionState {
     code: "INVALID_INPUT",
     message: "Das Formular ist unvollständig oder enthält unerwartete Felder.",
   });
-}
-
-function revalidateVerificationPaths() {
-  for (const path of [
-    "/employer/verification",
-    "/employer/company",
-    "/employer/dashboard",
-    "/employer/talent-radar",
-    "/companies",
-    "/jobs",
-  ]) {
-    revalidatePath(path);
-  }
 }

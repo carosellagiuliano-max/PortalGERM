@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   acceptCompanyInvitation: vi.fn(),
   cookies: vi.fn(),
   getAuthRequestContext: vi.fn(),
-  getCurrentUser: vi.fn(),
+  getCurrentAuthContext: vi.fn(),
   getDatabase: vi.fn(() => ({ kind: "database" })),
   getServerEnvironment: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(() => true),
@@ -21,7 +21,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: mocks.cookies }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/auth/current-user", () => ({
-  getCurrentUser: mocks.getCurrentUser,
+  getCurrentAuthContext: mocks.getCurrentAuthContext,
 }));
 vi.mock("@/lib/auth/employer-context", () => ({
   setEmployerCompanyContext: mocks.setEmployerCompanyContext,
@@ -87,7 +87,12 @@ describe("invitation resume actions", () => {
     );
     cookieStore.get.mockReturnValue({ value: resume.value });
     mocks.cookies.mockResolvedValue(cookieStore);
-    mocks.getCurrentUser.mockResolvedValue(USER);
+    mocks.getCurrentAuthContext.mockResolvedValue({
+      user: USER,
+      session: {
+        id: "55555555-5555-4555-8555-555555555555",
+      },
+    });
     mocks.getAuthRequestContext.mockResolvedValue(REQUEST);
     mocks.getServerEnvironment.mockReturnValue(ENVIRONMENT);
   });
@@ -114,7 +119,15 @@ describe("invitation resume actions", () => {
         database: { kind: "database" },
         request: REQUEST,
         environment: ENVIRONMENT,
+        stepUpActor: {
+          sessionId: "55555555-5555-4555-8555-555555555555",
+          globalRole: USER.role,
+        },
       }),
+      {
+        stepUpEvidenceId: undefined,
+        stepUpGrantToken: undefined,
+      },
     );
     expect(mocks.acceptCompanyInvitation).not.toHaveBeenCalledWith(
       MALICIOUS_FORM_TOKEN,

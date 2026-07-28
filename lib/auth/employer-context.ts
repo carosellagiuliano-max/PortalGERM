@@ -8,9 +8,17 @@ import {
   createCompanyContextCookie,
   verifyCompanyContextCookie,
 } from "@/lib/auth/company-context-cookie";
-import { getCurrentUser, type CurrentUser } from "@/lib/auth/current-user";
+import {
+  getCurrentAuthContext,
+  getCurrentUser,
+  type CurrentUser,
+} from "@/lib/auth/current-user";
 import { isIdentityActionAllowed } from "@/lib/auth/email-verification-policy";
-import { shouldUseSecureAuthCookies } from "@/lib/auth/request-context";
+import { switchPersonaContext } from "@/lib/auth/persona-context";
+import {
+  getAuthRequestContext,
+  shouldUseSecureAuthCookies,
+} from "@/lib/auth/request-context";
 import { listBoundaryAccessibleMembershipIds } from "@/lib/billing/membership-access";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
@@ -32,7 +40,8 @@ export type EmployerContext = Readonly<{
 }>;
 
 export async function getEmployerContext(): Promise<EmployerContext | null> {
-  const user = await getCurrentUser();
+  const authContext = await getCurrentAuthContext();
+  const user = authContext?.user ?? null;
   const environment = getServerEnvironment();
   if (
     user === null ||
@@ -104,9 +113,14 @@ export async function getEmployerContext(): Promise<EmployerContext | null> {
     { userId: user.id, now },
     environment.secrets.session,
   );
+  const selectedCompanyId =
+    environment.IDENTITY_PERSONA_V2 !== "disabled" &&
+    authContext?.session.activePortal === "EMPLOYER"
+      ? authContext.session.activeCompanyId ?? undefined
+      : payload?.companyId;
   const current = resolveEmployerContextSelection(
     memberships,
-    payload?.companyId,
+    selectedCompanyId,
   );
 
   return Object.freeze({
@@ -132,8 +146,36 @@ export async function setEmployerCompanyContext(
   companyId: string,
 ): Promise<boolean> {
   if (!z.uuid().safeParse(companyId).success) return false;
-  const user = await getCurrentUser();
   const environment = getServerEnvironment();
+  if (
+    environment.PERSONA_PORTAL_SWITCH &&
+    environment.IDENTITY_PERSONA_V2 !== "disabled" &&
+    environment.IDENTITY_PERSONA_V2 !== "dual_read"
+  ) {
+    const [context, request] = await Promise.all([
+      getCurrentAuthContext(),
+      getAuthRequestContext(),
+    ]);
+    if (context === null) return false;
+    const result = await switchPersonaContext(
+      { portal: "EMPLOYER", companyId },
+      {
+        userId: context.user.id,
+        identityRole: context.user.identityRole ?? context.user.role,
+        sessionId: context.session.id,
+        currentPortal: context.session.activePortal,
+        activeCompanyId: context.session.activeCompanyId,
+        contextVersion: context.session.contextVersion,
+      },
+      {
+        database: getDatabase(),
+        environment,
+        request,
+      },
+    );
+    return result.ok;
+  }
+  const user = await getCurrentUser();
   if (
     user === null ||
     (user.role !== "EMPLOYER" && user.role !== "RECRUITER") ||

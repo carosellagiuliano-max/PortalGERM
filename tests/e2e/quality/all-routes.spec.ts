@@ -23,7 +23,7 @@ import {
   type PageObservation,
 } from "@/tests/e2e/fixtures/phase17-test";
 
-const EXPECTED_PAGE_COUNT = 122;
+const EXPECTED_PAGE_COUNT = 123;
 const EXPECTED_HANDLER_COUNT = 19;
 const ROUTE_TEST_TIMEOUT_MILLISECONDS = 90_000;
 const QUALITY_TAGS = "@quality-desktop @quality-mobile";

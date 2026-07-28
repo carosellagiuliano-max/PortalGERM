@@ -12,11 +12,11 @@ import type {
 } from "@/lib/generated/prisma/enums";
 import {
   emptyPublicJobSearchInput,
-  getPublicJobBySlug,
+  getPublicJobsBySlugs,
   listPublicJobs,
 } from "@/lib/jobs/public-read-model";
 import { parseNotificationPayloadV1 } from "@/lib/notifications/payloads-v1";
-import type { PublicJobCardModel, PublicJobDetailModel } from "@/lib/public/types";
+import type { PublicJobCardModel } from "@/lib/public/types";
 import { calculateCandidateMatchV1 } from "@/lib/scoring/match-score";
 
 import {
@@ -325,8 +325,10 @@ async function loadRecommendations(profile: RecommendationProfile, now: Date) {
     const seen = new Set(jobs.map(({ id }) => id));
     jobs.push(...fallbackPage.jobs.filter(({ id }) => !seen.has(id)));
   }
-  const details = (await Promise.all(jobs.map((job) => getPublicJobBySlug(job.slug, { now }))))
-    .filter((job): job is PublicJobDetailModel => job !== null);
+  const details = await getPublicJobsBySlugs(
+    jobs.map((job) => job.slug),
+    { now },
+  );
   const ranked = details.map((job) => Object.freeze({
     job: job as PublicJobCardModel,
     match: calculateCandidateMatchV1({

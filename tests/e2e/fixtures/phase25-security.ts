@@ -102,11 +102,34 @@ export async function createCompanyTrustCase(
       role: "EMPLOYER",
       name: `Phase 25 Trust Owner ${entitySuffix}`,
       status: "ACTIVE",
+      dataProvenance: "TEST",
       emailVerifiedAt: now,
       identityAssurance: "VERIFIED_EMAIL",
       credential: {
         create: {
           ...credentialTemplate.credential,
+        },
+      },
+      personaAssignments: {
+        create: {
+          kind: "EMPLOYER",
+          status: "ACTIVE",
+          source: "SUPPORT_LINK",
+          version: 1,
+          activatedAt: now,
+          createdAt: now,
+          updatedAt: now,
+          events: {
+            create: {
+              kind: "CREATED",
+              toStatus: "ACTIVE",
+              source: "SUPPORT_LINK",
+              actorUserId: null,
+              reasonCode: "PHASE25_BROWSER_FIXTURE",
+              correlationId: randomUUID(),
+              createdAt: now,
+            },
+          },
         },
       },
     },

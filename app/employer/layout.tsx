@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 
 import { PrivateShell } from "@/components/auth/private-shell";
+import { PersonaContextSwitcher } from "@/components/auth/persona-context-switcher";
 import { CompanyContextPicker } from "@/components/employer/company-context-picker";
 import { getEmployerContext } from "@/lib/auth/employer-context";
 import { requireEmployerPage } from "@/lib/auth/route-guards";
+import { getCurrentPersonaContextOverview } from "@/lib/auth/persona-page";
 import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quota";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
@@ -59,7 +61,10 @@ export default async function EmployerLayout({
       </PrivateShell>
     );
   }
-  const context = await getEmployerContext();
+  const [context, personaOverview] = await Promise.all([
+    getEmployerContext(),
+    getCurrentPersonaContextOverview(),
+  ]);
   const current = context?.current ?? null;
   let planLabel = "Free Basic";
   if (current !== null) {
@@ -88,12 +93,27 @@ export default async function EmployerLayout({
         secondaryLabel: current?.membershipRole ?? user.role,
       }}
       contextControl={
-        context === null || context.memberships.length === 0 ? undefined : (
-          <CompanyContextPicker
-            memberships={context.memberships}
-            current={current}
-            planLabel={planLabel}
-          />
+        context === null ||
+        (context.memberships.length === 0 && personaOverview === null) ? (
+          undefined
+        ) : (
+          <div className="grid min-w-0 gap-3">
+            {personaOverview === null ? null : (
+              <PersonaContextSwitcher
+                activePortal={personaOverview.activePortal}
+                portals={personaOverview.portals}
+                companies={personaOverview.companies}
+                compact
+              />
+            )}
+            {context.memberships.length === 0 ? null : (
+              <CompanyContextPicker
+                memberships={context.memberships}
+                current={current}
+                planLabel={planLabel}
+              />
+            )}
+          </div>
         )
       }
     >

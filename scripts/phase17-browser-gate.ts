@@ -67,6 +67,13 @@ const companyTrustTestEnvironment = Object.freeze({
   COMPANY_DOMAIN_PROVIDER_MODE: "deterministic_sandbox",
   COMPANY_VERIFICATION_COHORT: "test",
 });
+const phase27TestEnvironment = Object.freeze({
+  IDENTITY_PERSONA_V2: "internal",
+  EXISTING_IDENTITY_INVITATION: "true",
+  PERSONA_PORTAL_SWITCH: "true",
+  PERSONA_PRIVACY_V2: "true",
+  PERSONA_LEGACY_CONTRACT: "false",
+});
 
 type ChildExit = Readonly<{
   code: number | null;
@@ -133,6 +140,7 @@ async function main() {
       DOCUMENT_STORAGE_ROOT: documentStorageRoot,
       DOCUMENT_STORAGE_REGION: "local-test",
       ...companyTrustTestEnvironment,
+      ...phase27TestEnvironment,
     });
     await runDemoSeed({
       APP_ENV: "local",
@@ -255,6 +263,7 @@ async function startServer(
         DOCUMENT_STORAGE_ROOT: documentStorageRoot,
         DOCUMENT_STORAGE_REGION: "local-test",
         ...companyTrustTestEnvironment,
+        ...phase27TestEnvironment,
         STRIPE_SECRET_KEY: "",
         EMAIL_PROVIDER_API_KEY: "",
         OPENAI_API_KEY: "",
@@ -356,6 +365,7 @@ async function runPlaywright(input: Readonly<{
         PHASE17_NPM_VERSION: input.runIdentity.runtime.npm,
         PHASE25_SECURITY_MODE: phase25SecurityMode,
         ...companyTrustTestEnvironment,
+        ...phase27TestEnvironment,
       },
       shell: false,
       stdio: "inherit",

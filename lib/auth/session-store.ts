@@ -12,6 +12,10 @@ const SESSION_SELECT = {
   revokedAt: true,
   userAgent: true,
   ipHash: true,
+  activePortal: true,
+  activeCompanyId: true,
+  contextVersion: true,
+  contextChangedAt: true,
 } as const;
 
 export function createPrismaSessionStore(database: DatabaseClient): SessionStore {

@@ -561,13 +561,11 @@ async function setupExportExecution(
       return failure("INVENTORY_UNAVAILABLE");
     }
     const subjectClass = subjectClassForRole(request.requester.role);
-    const applicableSubjectClasses = new Set([
-      "USER",
-      subjectClass,
-      "INVITEE",
-      "LEAD",
-      "REPORTER",
-    ]);
+    const applicableSubjectClasses = await subjectClassesForIdentity(
+      transaction,
+      request.requesterUserId,
+      request.requester.role,
+    );
     const relevantEntries = inventory.entries.filter(
       (entry) =>
         applicableSubjectClasses.has(entry.subjectClass) &&
@@ -772,6 +770,7 @@ async function prepareOwnedPackage(
     notificationPreferences,
     supportCases,
     reports,
+    personaAssignments,
     memberships,
     invitations,
     salesLeads,
@@ -825,6 +824,34 @@ async function prepareOwnedPackage(
         description: true,
         status: true,
         createdAt: true,
+      },
+    }),
+    database.personaAssignment.findMany({
+      where: { userId: ownerUserId },
+      orderBy: [{ kind: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        kind: true,
+        status: true,
+        source: true,
+        version: true,
+        activatedAt: true,
+        suspendedAt: true,
+        revokedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        events: {
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            kind: true,
+            fromStatus: true,
+            toStatus: true,
+            source: true,
+            reasonCode: true,
+            createdAt: true,
+          },
+        },
       },
     }),
     database.companyMembership.findMany({
@@ -998,6 +1025,7 @@ async function prepareOwnedPackage(
     section("talentRadar", "postgres-primary", candidateData.radar),
     section("supportCases", "postgres-primary", supportCases),
     section("abuseReports", "postgres-primary", reports),
+    section("personaAssignments", "postgres-primary", personaAssignments),
     section("memberships", "postgres-primary", memberships),
     section("invitations", "postgres-primary", invitations),
     section("salesLeads", "postgres-primary", salesLeads),
@@ -1922,6 +1950,42 @@ function subjectClassForRole(role: string) {
     : role === "EMPLOYER" || role === "RECRUITER"
       ? ("EMPLOYER_MEMBER" as const)
       : ("USER" as const);
+}
+
+async function subjectClassesForIdentity(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  legacyRole: string,
+) {
+  const [candidateProfileCount, membershipCount, assignments] =
+    await Promise.all([
+      transaction.candidateProfile.count({ where: { userId } }),
+      transaction.companyMembership.count({ where: { userId } }),
+      transaction.personaAssignment.findMany({
+        where: { userId },
+        select: { kind: true },
+      }),
+    ]);
+  const classes = new Set<string>([
+    "USER",
+    "INVITEE",
+    "LEAD",
+    "REPORTER",
+    subjectClassForRole(legacyRole),
+  ]);
+  if (
+    candidateProfileCount > 0 ||
+    assignments.some(({ kind }) => kind === "CANDIDATE")
+  ) {
+    classes.add("CANDIDATE");
+  }
+  if (
+    membershipCount > 0 ||
+    assignments.some(({ kind }) => kind === "EMPLOYER")
+  ) {
+    classes.add("EMPLOYER_MEMBER");
+  }
+  return classes;
 }
 
 function encodeLine(value: unknown) {

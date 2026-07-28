@@ -12,6 +12,7 @@ import { consumeAuthRateLimit } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { writeAuthSecurityEvent } from "@/lib/auth/security-events";
 import { issueSession } from "@/lib/auth/session-issuance";
+import { ensurePersonaAssignment } from "@/lib/auth/persona-context";
 import {
   getEffectiveEntitlements,
 } from "@/lib/billing/entitlements";
@@ -71,6 +72,10 @@ const invitationRegistrationSchema = z.strictObject({
   acceptedTerms: z.literal(true),
   marketingConsent: z.boolean(),
 });
+const invitationAcceptanceSchema = z.strictObject({
+  stepUpEvidenceId: z.uuid().optional(),
+  stepUpGrantToken: z.string().min(32).max(128).optional(),
+});
 
 type Actor = Readonly<{
   userId: string;
@@ -84,7 +89,7 @@ type CommandDependencies = Readonly<{
   emailProvider?: EmailProvider;
   stepUpActor?: Readonly<{
     sessionId: string;
-    globalRole: "EMPLOYER" | "RECRUITER";
+    globalRole: "CANDIDATE" | "EMPLOYER" | "RECRUITER" | "ADMIN";
   }>;
   now?: Date;
 }>;
@@ -711,11 +716,17 @@ export function hashInvitationToken(rawToken: string) {
   return createHash("sha256").update(rawToken, "utf8").digest("hex");
 }
 
-export async function inspectCompanyInvitation(rawToken: string, database: DatabaseClient, user?: Readonly<{ id: string; email: string; role: string }> | null, now = new Date()) {
+export async function inspectCompanyInvitation(
+  rawToken: string,
+  database: DatabaseClient,
+  user?: Readonly<{ id: string; email: string; role: string }> | null,
+  now = new Date(),
+  existingIdentityInvitation = false,
+) {
   if (!isPlausibleToken(rawToken)) return Object.freeze({ state: "INVALID" as const });
   const invitation = await database.companyInvitation.findUnique({
     where: { tokenHash: hashInvitationToken(rawToken) },
-    select: { id: true, status: true, expiresAt: true, inviteeEmailNormalized: true, intendedRole: true, company: { select: { name: true, status: true } } },
+    select: { id: true, companyId: true, status: true, expiresAt: true, inviteeEmailNormalized: true, intendedRole: true, company: { select: { name: true, status: true } } },
   });
   if (invitation === null) return Object.freeze({ state: "INVALID" as const });
   if (invitation.status === "ACCEPTED") return Object.freeze({ state: "USED" as const });
@@ -724,14 +735,56 @@ export async function inspectCompanyInvitation(rawToken: string, database: Datab
   if (invitation.company.status !== "ACTIVE") return Object.freeze({ state: "COMPANY_INACTIVE" as const });
   if (user === undefined || user === null) return Object.freeze({ state: "AUTH_REQUIRED" as const });
   if (user.email.trim().toLowerCase() !== invitation.inviteeEmailNormalized) return Object.freeze({ state: "EMAIL_MISMATCH" as const });
-  if (user.role !== "EMPLOYER" && user.role !== "RECRUITER") return Object.freeze({ state: "ACCOUNT_TYPE_UNSUPPORTED" as const });
-  return Object.freeze({ state: "READY" as const, companyName: invitation.company.name, intendedRole: invitation.intendedRole });
+  if (
+    user.role !== "EMPLOYER" &&
+    user.role !== "RECRUITER" &&
+    !existingIdentityInvitation
+  ) {
+    return Object.freeze({ state: "ACCOUNT_TYPE_UNSUPPORTED" as const });
+  }
+  const employerPersona = existingIdentityInvitation
+    ? await database.personaAssignment.findUnique({
+        where: {
+          userId_kind: { userId: user.id, kind: "EMPLOYER" },
+        },
+        select: { status: true },
+      })
+    : null;
+  if (employerPersona?.status === "SUSPENDED") {
+    return Object.freeze({ state: "PERSONA_SUSPENDED" as const });
+  }
+  if (employerPersona?.status === "REVOKED") {
+    return Object.freeze({ state: "PERSONA_REVOKED" as const });
+  }
+  return Object.freeze({
+    state: "READY" as const,
+    companyName: invitation.company.name,
+    intendedRole: invitation.intendedRole,
+    companyId: invitation.companyId,
+    invitationId: invitation.id,
+    requiresPersonaStepUp:
+      existingIdentityInvitation && employerPersona === null,
+  });
 }
 
-export async function acceptCompanyInvitation(rawToken: string, user: Readonly<{ id: string; email: string; role: string }>, dependencies: CommandDependencies): Promise<CommandResult<{ companyId: string; membershipId: string }>> {
-  if (!isPlausibleToken(rawToken)) return { ok: false, code: "INVALID" };
+export async function acceptCompanyInvitation(
+  rawToken: string,
+  user: Readonly<{ id: string; email: string; role: string }>,
+  dependencies: CommandDependencies,
+  rawInput: unknown = {},
+): Promise<CommandResult<{ companyId: string; membershipId: string }>> {
+  const parsed = invitationAcceptanceSchema.safeParse(rawInput);
+  if (!isPlausibleToken(rawToken) || !parsed.success) {
+    return { ok: false, code: "INVALID_INPUT" };
+  }
   const now = dependencies.now ?? new Date();
-  return acceptInvitationTransaction(hashInvitationToken(rawToken), user, dependencies, now);
+  return acceptInvitationTransaction(
+    hashInvitationToken(rawToken),
+    user,
+    parsed.data,
+    dependencies,
+    now,
+  );
 }
 
 export async function registerAndAcceptCompanyInvitation(
@@ -792,13 +845,39 @@ export async function registerAndAcceptCompanyInvitation(
           credential: { create: { passwordHash, algorithm: PASSWORD_HASH_POLICY_V1.algorithm, algorithmVersion: PASSWORD_HASH_POLICY_V1.algorithmVersion, passwordChangedAt: now } },
         }, select: { id: true, email: true, role: true },
       });
+      const persona = await ensurePersonaAssignment(tx, {
+        userId: user.id,
+        kind: "EMPLOYER",
+        source: "REGISTRATION",
+        actorUserId: user.id,
+        correlationId: dependencies.request.correlationId,
+        now,
+      });
+      if (!persona.ok) {
+        throw new InvitationAcceptanceRollback(persona.code);
+      }
       const terms = createRegistrationTermsConsent({ userId: user.id, effectiveAt: now });
       const marketing = createRegistrationMarketingConsent({ userId: user.id, effectiveAt: now, granted: parsed.data.marketingConsent });
       await tx.userConsentEvent.createMany({ data: [terms, marketing] });
       await writeTeamAudit(tx, "USER_REGISTERED", user.id, null, user.id, "USER", "AUTH_REGISTER_INVITATION", dependencies.request, now, undefined, { role: globalRole });
-      const accepted = await acceptLockedInvitation(tx, invitation, user, dependencies, now);
+      const accepted = await acceptLockedInvitation(
+        tx,
+        invitation,
+        user,
+        {},
+        dependencies,
+        now,
+      );
       if (!accepted.ok) throw new InvitationAcceptanceRollback(accepted.code);
-      const session = await issueSession(tx, { userId: user.id, now, request: dependencies.request, auditIpKeyring: dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS });
+      const session = await issueSession(tx, {
+        userId: user.id,
+        activePortal: "EMPLOYER",
+        activeCompanyId: accepted.companyId,
+        now,
+        request: dependencies.request,
+        auditIpKeyring:
+          dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
+      });
       return { ...accepted, session };
     });
   } catch (error) {
@@ -806,8 +885,20 @@ export async function registerAndAcceptCompanyInvitation(
   }
 }
 
-async function acceptInvitationTransaction(tokenHash: string, user: Readonly<{ id: string; email: string; role: string }>, dependencies: CommandDependencies, now: Date): Promise<CommandResult<{ companyId: string; membershipId: string }>> {
-  if (user.role !== "EMPLOYER" && user.role !== "RECRUITER") return { ok: false, code: "ACCOUNT_TYPE_UNSUPPORTED" };
+async function acceptInvitationTransaction(
+  tokenHash: string,
+  user: Readonly<{ id: string; email: string; role: string }>,
+  securityInput: z.output<typeof invitationAcceptanceSchema>,
+  dependencies: CommandDependencies,
+  now: Date,
+): Promise<CommandResult<{ companyId: string; membershipId: string }>> {
+  if (
+    user.role !== "EMPLOYER" &&
+    user.role !== "RECRUITER" &&
+    !dependencies.environment.EXISTING_IDENTITY_INVITATION
+  ) {
+    return { ok: false, code: "ACCOUNT_TYPE_UNSUPPORTED" };
+  }
   const normalizedEmail = user.email.trim().toLowerCase();
   try {
     const scope = await resolveInvitationCompanyScope(dependencies.database, tokenHash);
@@ -816,12 +907,26 @@ async function acceptInvitationTransaction(tokenHash: string, user: Readonly<{ i
       await lockCompany(tx, scope.companyId);
       const invitation = await lockInvitationByToken(tx, tokenHash, scope.companyId);
       if (invitation === null || invitation.inviteeEmailNormalized !== normalizedEmail) return { ok: false as const, code: "INVALID" };
-      return acceptLockedInvitation(tx, invitation, user, dependencies, now);
+      return acceptLockedInvitation(
+        tx,
+        invitation,
+        user,
+        securityInput,
+        dependencies,
+        now,
+      );
     });
   } catch { return { ok: false, code: "WRITE_FAILED" }; }
 }
 
-async function acceptLockedInvitation(tx: Prisma.TransactionClient, invitation: LockedInvitation, user: { id: string; email: string; role: string }, dependencies: CommandDependencies, now: Date): Promise<CommandResult<{ companyId: string; membershipId: string }>> {
+async function acceptLockedInvitation(
+  tx: Prisma.TransactionClient,
+  invitation: LockedInvitation,
+  user: { id: string; email: string; role: string },
+  securityInput: z.output<typeof invitationAcceptanceSchema>,
+  dependencies: CommandDependencies,
+  now: Date,
+): Promise<CommandResult<{ companyId: string; membershipId: string }>> {
   if (invitation.status !== "PENDING" || invitation.expiresAt.getTime() <= now.getTime()) return { ok: false, code: "INVALID" };
   const company = await tx.company.findFirst({ where: { id: invitation.companyId, status: "ACTIVE" }, select: { id: true } });
   if (company === null) return { ok: false, code: "COMPANY_INACTIVE" };
@@ -848,6 +953,57 @@ async function acceptLockedInvitation(tx: Prisma.TransactionClient, invitation: 
   }
   const intendedRole = z.enum(membershipRoles).safeParse(invitation.intendedRole);
   if (!intendedRole.success) return { ok: false, code: "INVALID" };
+  const existingPersona = await tx.personaAssignment.findUnique({
+    where: {
+      userId_kind: { userId: user.id, kind: "EMPLOYER" },
+    },
+    select: { status: true },
+  });
+  if (existingPersona?.status === "SUSPENDED") {
+    return { ok: false, code: "PERSONA_SUSPENDED" };
+  }
+  if (existingPersona?.status === "REVOKED") {
+    return { ok: false, code: "PERSONA_REVOKED" };
+  }
+  if (
+    existingPersona === null &&
+    dependencies.environment.EXISTING_IDENTITY_INVITATION
+  ) {
+    const stepUpActor = dependencies.stepUpActor;
+    if (
+      stepUpActor === undefined ||
+      stepUpActor.globalRole !== user.role ||
+      securityInput.stepUpEvidenceId === undefined ||
+      securityInput.stepUpGrantToken === undefined ||
+      !(await consumeStepUpGrant(tx, {
+        evidenceId: securityInput.stepUpEvidenceId,
+        grantToken: securityInput.stepUpGrantToken,
+        actor: {
+          userId: user.id,
+          sessionId: stepUpActor.sessionId,
+          role: stepUpActor.globalRole,
+          status: "ACTIVE",
+        },
+        purpose: "IDENTITY_PERSONA",
+        action: "PERSONA_EMPLOYER_CREATE",
+        tenantId: invitation.companyId,
+        resourceId: invitation.id,
+        correlationId: dependencies.request.correlationId,
+        now,
+      }))
+    ) {
+      return { ok: false, code: "STEP_UP_REQUIRED" };
+    }
+  }
+  const persona = await ensurePersonaAssignment(tx, {
+    userId: user.id,
+    kind: "EMPLOYER",
+    source: "COMPANY_INVITATION",
+    actorUserId: user.id,
+    correlationId: dependencies.request.correlationId,
+    now,
+  });
+  if (!persona.ok) return { ok: false, code: persona.code };
   const existing = await tx.companyMembership.findUnique({ where: { companyId_userId: { companyId: invitation.companyId, userId: user.id } }, select: { id: true, status: true, role: true } });
   let membershipId: string;
   if (existing === null) {
@@ -908,6 +1064,15 @@ async function acceptLockedInvitation(tx: Prisma.TransactionClient, invitation: 
     );
   }
   await writeTeamAudit(tx, "INVITATION_ACCEPTED", user.id, invitation.companyId, invitation.id, "INVITATION", "COMPANY_TEAM_INVITE_ACCEPT", dependencies.request, now);
+  await writeNotificationExactlyOnce(createPrismaNotificationPort(tx), {
+    recipientUserId: user.id,
+    kind: "TEAM_MEMBERSHIP_CHANGED",
+    dedupeKey: `invitation-accepted:${invitation.id}`,
+    payload: {
+      membershipId,
+      status: "ACTIVE",
+    },
+  });
   return { ok: true, companyId: invitation.companyId, membershipId };
 }
 

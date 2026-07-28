@@ -1,3 +1,5 @@
+import type { PortalContextV2 } from "@/lib/auth/persona-policy";
+
 export const AUTH_ROLES_V1 = [
   "CANDIDATE",
   "EMPLOYER",
@@ -20,6 +22,18 @@ export const SAFE_NEXT_PREFIXES_BY_ROLE_V1 = Object.freeze({
   RECRUITER: Object.freeze(["/employer"]),
   ADMIN: Object.freeze(["/admin"]),
 } as const satisfies Readonly<Record<AuthRoleV1, readonly string[]>>);
+
+export const DEFAULT_AUTH_PATH_BY_PORTAL_V2 = Object.freeze({
+  CANDIDATE: "/candidate/dashboard",
+  EMPLOYER: "/employer/dashboard",
+  ADMIN: "/admin",
+} as const satisfies Readonly<Record<PortalContextV2, string>>);
+
+export const SAFE_NEXT_PREFIXES_BY_PORTAL_V2 = Object.freeze({
+  CANDIDATE: Object.freeze(["/candidate"]),
+  EMPLOYER: Object.freeze(["/employer"]),
+  ADMIN: Object.freeze(["/admin"]),
+} as const satisfies Readonly<Record<PortalContextV2, readonly string[]>>);
 
 const SAFE_NEXT_BASE = "https://safe-next.invalid";
 const ENCODED_PATH_SEPARATOR_OR_CONTROL = /%(?:00|0a|0d|25|2f|5c)/iu;
@@ -87,4 +101,66 @@ export function resolveSafeNext(
   role: AuthRoleV1,
 ): string {
   return parseSafeNext(value, role) ?? DEFAULT_AUTH_PATH_BY_ROLE_V1[role];
+}
+
+export function parseSafeNextForPortals(
+  value: string | null | undefined,
+  availablePortals: readonly PortalContextV2[],
+): string | null {
+  if (
+    value == null ||
+    value.length === 0 ||
+    value.length > 2_048 ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("\\") ||
+    /[\u0000-\u001f\u007f]/u.test(value) ||
+    ENCODED_PATH_SEPARATOR_OR_CONTROL.test(value)
+  ) {
+    return null;
+  }
+  const allowed = new Set(availablePortals);
+  try {
+    const url = new URL(value, SAFE_NEXT_BASE);
+    if (url.origin !== SAFE_NEXT_BASE || url.username || url.password) {
+      return null;
+    }
+    const portalPath = availablePortals.some((portal) =>
+      SAFE_NEXT_PREFIXES_BY_PORTAL_V2[portal].some(
+        (prefix) =>
+          url.pathname === prefix || url.pathname.startsWith(`${prefix}/`),
+      ),
+    );
+    const candidateJobIntent =
+      allowed.has("CANDIDATE") &&
+      url.hash === "" &&
+      isStructurallySafeCandidateJobIntentPath(url.pathname, url.searchParams);
+    const invitationResume =
+      allowed.has("EMPLOYER") &&
+      url.search === "" &&
+      url.hash === "" &&
+      url.pathname === "/invite/resume";
+    const contextSelection =
+      url.search === "" &&
+      url.hash === "" &&
+      url.pathname === "/account/portal";
+    return portalPath ||
+      candidateJobIntent ||
+      invitationResume ||
+      contextSelection
+      ? `${url.pathname}${url.search}${url.hash}`
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveSafeNextForPortal(
+  value: string | null | undefined,
+  portal: PortalContextV2,
+): string {
+  return (
+    parseSafeNextForPortals(value, [portal]) ??
+    DEFAULT_AUTH_PATH_BY_PORTAL_V2[portal]
+  );
 }

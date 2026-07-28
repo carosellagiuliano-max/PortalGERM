@@ -88,6 +88,7 @@ describe("Phase-06 seed orchestrator", () => {
       "auth-rbac",
       "employer-core",
       "candidate-workflows",
+      "persona-compatibility",
       "billing-ops",
       "database-verification",
       "complete",
@@ -138,6 +139,7 @@ describe("Phase-06 seed orchestrator", () => {
       "auth-rbac",
       "employer-core",
       "candidate-workflows",
+      "persona-compatibility",
       "billing-ops",
       "database-verification",
     ]);
@@ -293,6 +295,14 @@ function createSuccessfulPorts(
         })),
         contactRequests: [],
         conversations: [],
+      };
+    }),
+    reconcilePersonaCompatibility: vi.fn(async () => {
+      calls.push("persona-compatibility");
+      return {
+        assignmentCount: 0,
+        eventCount: 0,
+        identityCount: 0,
       };
     }),
     seedBillingOpsContent: vi.fn(async () => {

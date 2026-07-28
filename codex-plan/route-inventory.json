@@ -8,6 +8,13 @@
   },
   {
     "kind": "page",
+    "path": "/account/portal",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "page",
     "path": "/admin",
     "roles": [
       "ADMIN"

@@ -298,12 +298,16 @@ async function setupExecution(
     });
     if (inventory === null) return setupFailure("INVENTORY_UNAVAILABLE");
     const subjectClass = subjectClassForRole(request.requester.role);
+    const applicableSubjectClasses = await subjectClassesForIdentity(
+      transaction,
+      request.requesterUserId,
+      request.requester.role,
+    );
     const outcomeKey =
       kind === "CORRECTION" ? "correctionOutcome" : "erasureOutcome";
     const relevant = inventory.entries.filter(
       (entry) =>
-        (entry.subjectClass === subjectClass ||
-          entry.subjectClass === "USER") &&
+        applicableSubjectClasses.has(entry.subjectClass) &&
         entry[outcomeKey] !== "EXCLUDE",
     );
     if (relevant.length === 0) return setupFailure("INVENTORY_UNAVAILABLE");
@@ -582,6 +586,40 @@ async function executePostgresErasure(
       );
     const accountHold = held("USER_ACCOUNT");
     if (accountHold === undefined) {
+      const activeAssignments =
+        await transaction.personaAssignment.findMany({
+          where: { userId: user.id, status: "ACTIVE" },
+          select: {
+            id: true,
+            status: true,
+            source: true,
+            version: true,
+          },
+        });
+      for (const assignment of activeAssignments) {
+        await transaction.personaAssignment.update({
+          where: { id: assignment.id },
+          data: {
+            status: "SUSPENDED",
+            version: assignment.version + 1,
+            suspendedAt: now,
+            updatedAt: now,
+          },
+        });
+        await transaction.personaAssignmentEvent.create({
+          data: {
+            personaAssignmentId: assignment.id,
+            kind: "SUSPENDED",
+            fromStatus: assignment.status,
+            toStatus: "SUSPENDED",
+            source: assignment.source,
+            actorUserId: null,
+            reasonCode: "IDENTITY_ERASURE",
+            correlationId: randomUUID(),
+            createdAt: now,
+          },
+        });
+      }
       await transaction.session.updateMany({
         where: { userId: user.id, revokedAt: null },
         data: { revokedAt: now },
@@ -598,6 +636,9 @@ async function executePostgresErasure(
         },
       });
       proofs.push(proof("USER_ACCOUNT", "ANONYMIZED"));
+      if (activeAssignments.length > 0) {
+        proofs.push(proof("PERSONA_ASSIGNMENT", "ANONYMIZED"));
+      }
     } else {
       proofs.push(
         proof("USER_ACCOUNT", "RETAINED", accountHold.basisRef),
@@ -1284,6 +1325,39 @@ function subjectClassForRole(role: string): Setup["subjectClass"] {
     : role === "EMPLOYER" || role === "RECRUITER"
       ? "EMPLOYER_MEMBER"
       : "USER";
+}
+
+async function subjectClassesForIdentity(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  legacyRole: string,
+) {
+  const [candidateProfileCount, membershipCount, assignments] =
+    await Promise.all([
+      transaction.candidateProfile.count({ where: { userId } }),
+      transaction.companyMembership.count({ where: { userId } }),
+      transaction.personaAssignment.findMany({
+        where: { userId },
+        select: { kind: true },
+      }),
+    ]);
+  const classes = new Set<string>([
+    "USER",
+    subjectClassForRole(legacyRole),
+  ]);
+  if (
+    candidateProfileCount > 0 ||
+    assignments.some(({ kind }) => kind === "CANDIDATE")
+  ) {
+    classes.add("CANDIDATE");
+  }
+  if (
+    membershipCount > 0 ||
+    assignments.some(({ kind }) => kind === "EMPLOYER")
+  ) {
+    classes.add("EMPLOYER_MEMBER");
+  }
+  return classes;
 }
 
 function stableReceipt(setup: Setup, processorKey: string, value: unknown) {

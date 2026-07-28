@@ -74,11 +74,17 @@ const validProperties = {
     placement: "SEARCH_SPONSORED",
   },
   MODERATION_ACTIONED: { fromStatus: "OPEN", toStatus: "RESOLVED" },
+  PERSONA_CONTEXT_SWITCHED: {
+    fromPortal: "CANDIDATE",
+    toPortal: "EMPLOYER",
+    contextVersion: 2,
+    companySelected: true,
+  },
 } as const satisfies Record<AnalyticsEventKindValue, Readonly<Record<string, unknown>>>;
 
 describe("analytics event contracts v1", () => {
-  it("covers all and only the 35 Prisma event kinds", () => {
-    expect(ANALYTICS_EVENT_KINDS_V1).toHaveLength(35);
+  it("covers all and only the 36 Prisma event kinds", () => {
+    expect(ANALYTICS_EVENT_KINDS_V1).toHaveLength(36);
     expect(Object.keys(ANALYTICS_EVENT_CONTRACTS_V1).sort()).toEqual(
       Object.values(AnalyticsEventKind).sort(),
     );

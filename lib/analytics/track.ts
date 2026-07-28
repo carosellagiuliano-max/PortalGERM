@@ -24,6 +24,8 @@ export type AnalyticsWriteRecord = Readonly<{
   pseudonymousActorId: string | null;
   pseudonymousSessionId: string | null;
   companyId: string | null;
+  portalContext: "CANDIDATE" | "EMPLOYER" | "ADMIN" | null;
+  sessionContextVersion: number | null;
   jobId: string | null;
   actorProvenanceSnapshot: DataProvenance | null;
   companyProvenanceSnapshot: DataProvenance | null;
@@ -70,6 +72,8 @@ export async function trackAnalyticsEventV1(
     pseudonymousActorId: event.pseudonymousActorId ?? null,
     pseudonymousSessionId: event.pseudonymousSessionId ?? null,
     companyId: event.companyId ?? null,
+    portalContext: event.portalContext ?? null,
+    sessionContextVersion: event.sessionContextVersion ?? null,
     jobId: event.jobId ?? null,
     actorProvenanceSnapshot: context.provenance?.actor ?? null,
     companyProvenanceSnapshot: context.provenance?.company ?? null,

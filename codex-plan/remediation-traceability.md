@@ -73,7 +73,7 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | STH-009 | Kein autonomer Worker | technisch lokal/CI adressiert; Productionausführung extern blockiert | P0 für unbeaufsichtigten Self-Service | Worker/Outbox/Ops | 23 | 19, STH-013, Monitoring | gemeinsame PostgreSQL-Queue mit Lease/Heartbeat/Fencing, Retry/DLQ/Replay, Scheduler, WorkerRun, Handlerledger und Backpressure implementiert; Default `PAUSED` | Unit/PostgreSQL/Crash/Restart/Rolling-Deploy/10’000×4/Desktop/360 `PASS` im Worktree; formales G3/Staging/Pager offen | `lib/ops/worker-runtime.ts`; `scripts/phase23-worker.ts`; `codex-plan/runbooks/worker-operations.md` | Workerhosting, externes Monitoring/Pager/On-call, SLO-Freigabe |
 | STH-010 | Alle Admin-Capabilities hängen am globalen ADMIN | technisch Local/CI gelöst; Activation extern blockiert | P0 vor Admin-LIVE | Admin-RBAC | 25 | 19, Rollen-/Duties-Matrix | deny-by-default Resolution aus zehn persistierten Rollen, zeitgebundenen Assignments/Grants und Break-glass; globale Rolle allein gewährt 0 | Unit/PostgreSQL/Direct-Action/Browser `PASS`; Revoke wirkt im nächsten Read | `lib/admin/role-policy.ts`; `lib/admin/capabilities.ts`; [Phase-25-Evidence](./evidence/2026-07-28-phase-25.md) | benannte Support/Moderation/Finance/Privacy/Security/Trust-Owner weiterhin extern |
 | STH-011 | Kein Admin-MFA/Step-up | technisch Local/CI gelöst; Production-RP-ID/Policy extern blockiert | P0 vor privilegiertem LIVE-Zugriff | Admin Security | 25 | 19/20/23, STH-001/013 | Passkey/WebAuthn, verschlüsseltes TOTP, gehashte Single-use-Recovery-Codes, Session-AAL2 und action-bound Step-up | Unit/PostgreSQL/Desktop/360 `PASS`; replay/stale/wrong origin/RP-ID/recovery/direct action negativ | `lib/auth/assurance/**`; `/admin/security/authenticators`; [Phase-25-Evidence](./evidence/2026-07-28-phase-25.md) | Geräte-/Recoverypolicy, Production-RP-ID, getrennte Recovery-Owner und On-call weiterhin extern |
-| STH-012 | Exklusive globale Rolle verhindert Multi-Persona | bestätigt | P3 default/deferred; P0 nur bei explizitem Persona-Scope | Identity/Persona | 27 | 19, STH-010/011, Tenant-RBAC, Bedarfsgate | offen; CompanyMembership löst nur Unternehmenskontext | Rollen-/Company-Tests vorhanden, keine Persona-Kombination | `prisma/schema.prisma:10-15,1129-1137`; `lib/auth/route-guards.ts:10-23`; `prisma/schema.prisma:1536-1555` | Produktentscheidung und moderierter Bedarf |
+| STH-012 | Exklusive globale Rolle verhindert Multi-Persona | technisch Local/CI gelöst; Marktaktivierung deferred | P3 default; P0 nur für explizit aktivierten Persona-Scope | Identity/Persona | 27 | 19/20/22/23/25, Tenant-RBAC, Bedarfsgate | additive PersonaAssignments, versionierter Session-/Company-Kontext, Invitation/Self-Service-Step-up, Privacy/Suspension/Audit implementiert; Defaults disabled | Unit/PostgreSQL/Migration/Desktop/360 `PASS`; vollständiger G3-Abschluss siehe Evidence | [Phase-27-Evidence](./evidence/2026-07-28-phase-27.md); `lib/auth/persona-context.ts`; `/account/portal`; `prisma/migrations/20260728160000_phase_27_multi_persona_identity` | moderierter Bedarf, vier Owner-Sign-offs, Canary/Staging/G4 |
 | STH-013 | Kein dauerhafter E-Mail-Outbox-/Retry-Vertrag | technisch gelöst; autonome Productionausführung bleibt offen | P0 | E-Mail/Worker | 20 | 19, STH-004/009 | atomare Outbox, Attempts, Lease, Heartbeat, Retry, Suppression, DLQ und auditiertes Sandbox-Replay implementiert | 105-Message-Two-Worker-, Crash-, Restart-, Bounce-, Poison- und DLQ-Tests `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `lib/notifications/outbox.ts`; `lib/notifications/dispatcher.ts` | Zustellprovider, Phase-23-Monitoring/Pager |
 | STH-014 | Company Verification beruhte auf Text/Referenz | technisch Local/CI gelöst; öffentliche Aktivierung extern blockiert | P0 für Trust-/Publish-Gate | Company Trust | 26 | 19/21/23/25, STH-003/004, Legal/Operations | strukturierte Evidence/Checks/Challenges/Decisions/Projection, Vault, Expiry/Re-review, SoD, Appeal und gleiche Badge-/Job-/Radar-Revocation implementiert | Unit/PostgreSQL/HTTP/Desktop/360 `PASS`; fehlende/mismatched/expired/revoked/Legacy Evidence erzeugt `0` starken Trust | [Phase-26-Evidence](./evidence/2026-07-28-phase-26.md); `lib/companies/verification/**`; `/employer/verification`; `/admin/company-verification` | reale Register-/Domainprovider, Nutzungsrecht/DPA/Region, Reviewer-Capacity, Staging/Pager und Public-Go |
 | STH-015 | Externe Bewerbung endet beim Klick | bestätigt | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Application | 28A | 19, 29A-Bedarf, STH-009/013/026, Phase-22-Privacy-Lifecycle | offen; nur Analytics-Klick, keine Candidate-owned Journey | Redirect/Privacy-Test vorhanden, kein Outcome-/Export/Delete/Correct-E2E | `app/(public)/jobs/actions.ts:92-110,251-278`; `lib/applications/service.ts:193-197` | moderierter Bedarf; optional ATS-/Mail-Signale |
@@ -82,7 +82,7 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | STH-018 | Marketplace-Liquidität unbewiesen | externe Voraussetzung; technische Gate-Mechanik vorhanden | P0 Markt-Gate | Marketplace/Go-to-market | 31 | 19, reale Kohorten/Analytics und STH-019-Evidence je Startcluster | kein generischer Codefix; LIVE-Evidence offen | Gate, Seed, Dual Approval und Revoke getestet; Search-Quality-Gate fehlt | `lib/seo/cluster-launch-policy.ts:3-15`; `prisma/schema.prisma:2918-2963`; `lib/admin/cluster-launch.ts:36-287` | reale Arbeitgeber/Kandidaten/Jobs/Responses und Fachreview der Suchmenge |
 | STH-019 | Startcluster-Suche ohne gemeinsamen Berufs-/Ort-/Qualifikations-/Skill-/Branchenvertrag | bestätigt; normalisierte MVP-Suche vorhanden | P0 je aktivem LC3+-Cluster; P1 Design Partner, P2 Demo | Search | 30A | 19, versionierte Taxonomie, Pflege-/Engineering-Korpus, Golden-/Negativkorpus und Clusterfreigabe | offen; Search, Alert und Recommendations besitzen keinen gemeinsamen Konzeptvertrag | deterministische Basis-Tests, aber kein Startcluster-Recall-/Parity-Benchmark | `lib/search/relevance.ts:7-38`; `lib/jobs/public-read-model.ts:1412-1439`; `lib/candidate/job-alerts.ts:1444-1462`; `lib/candidate/dashboard.ts:318-386` | Fachreview je tatsächlich aktiviertem Cluster |
 | STH-020 | Admin-Queues mit harten Caps | bestätigt | P1 vor hohem Betriebsvolumen | Admin Operations/Scale | 30B | 19, STH-010, Cursor-/Indexvertrag | offen | Bounded-read-Tests, keine >250-Erreichbarkeitsmatrix | `lib/admin/companies.ts:33-45`; `lib/admin/jobs.ts:68-79`; `lib/admin/users.ts:18-25`; `lib/admin/support.ts:99-103` | keine |
-| STH-021 | Dashboard-Empfehlungen mit Query-Fan-out | bestätigt | P1 Performance | Candidate/DB Scale | 30B | 19, Batch-Read-/Rankingvertrag | offen | Ranking-/Read-Model-Tests, kein Query-Count-Ceiling | `lib/candidate/dashboard.ts:318-386` | keine |
+| STH-021 | Dashboard-Empfehlungen mit Query-Fan-out | technisch wesentlich mitigiert; finales Query-count/p95-Gate offen | P1 Performance | Candidate/DB Scale | 27 Mitigation; 30B Abschluss | 19, Batch-Read-/Rankingvertrag | Jobdetails werden in einem bounded Eligibility-Snapshot statt N parallelen Transaktionen hydratisiert; Notification-/Gesamtquery-Ceiling bleibt Phase 30B | Batch-Query-Shape und Phase-27-Browserregression `PASS`; 48-Job-Instrumentierung offen | `lib/jobs/public-read-model.ts`; `lib/candidate/dashboard.ts`; `tests/unit/jobs/public-read-model-query-shape.test.ts` | keine |
 | STH-022 | Business/Enterprise nur eingeschränkt lieferbar | teilweise bestätigt; bewusst gegatet | P1 nach WTP, XL je Integration | Monetization/Enterprise | 31 | 19, STH-004/009/024, Marktvalidierung | offen; Kernentitlements vorhanden, Integrationen fehlen | Release-/Grant-Tests vorhanden, bewusst kein ImportRun | `prisma/seed/fixtures/plans.ts:138-168,263-282`; `components/marketing/pricing-card.tsx:120-157`; `prisma/schema.prisma:3472-3528` | Design-Partner, SLA/DPA, Integrationszugänge |
 | STH-023 | Browser-/Accessibility-Matrix unvollständig | teilweise bestätigt; Chromium-Breite vorhanden | P1 | UX/A11y/Browser | 29 | 19, CI-Browser, manuelle AT-Matrix | offen | Desktop/Mobile Chromium und Critical-Axe; Firefox/WebKit/Serious/AT fehlen | `playwright.config.ts:28-57`; `tests/e2e/fixtures/phase17-test.ts:155-175,224-260` | NVDA/VoiceOver-Geräte/Tester |
 | STH-024 | Manueller Walkthrough nicht auf aktuellem Release-Commit | bestätigt | P0 Release-Gate | Release Evidence | 32 | alle Remediation-Phasen, sauberes Artefakt | offen; Walkthrough muss auf finalem Commit neu laufen | Automation auf neueren Commits, manueller Lauf auf Vorgänger | `BUILD_REPORT.md:3-19,141-165`; `codex-plan/evidence/2026-07-24-commercial-launch-follow-up.md:46-69` | Staging/Release-Artefakt und Rollen-Tester |
@@ -550,21 +550,28 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 ### STH-012 — Exklusive globale Rolle verhindert Multi-Persona
 
-- **Status / Priorität / Phase:** bestätigt; P1; Phase 27
+- **Status / Priorität / Phase:** technisch im deaktivierten Local-/CI-Vertrag
+  gelöst; Markt-/Demand-Aktivierung bleibt P3/deferred; Phase 27
   `27-multi-persona-identity.md`.
-- **Fundstellen:** `Role` ist ein einzelnes Enum-Feld mit vier exklusiven
-  Werten (`prisma/schema.prisma:10-15,1129-1137`). Die Routengrenzen verzweigen
-  danach (`lib/auth/route-guards.ts:10-23`). Company-Rollen sind zwar
-  relational in `prisma/schema.prisma:1536-1555`, werden aber nur von globalen
-  EMPLOYER/RECRUITER-Personas erreicht.
+- **Phase-27-Abschluss:** `User` bleibt Identity/N-1-Projektion;
+  `PersonaAssignment` und append-oriented Events modellieren Candidate und
+  Employer. Sessions binden genau einen versionierten Portal-/Company-Kontext,
+  `/account/portal` wechselt ihn nur nach aktueller Assignment-/Membership-
+  Prüfung und widerruft context-bound Step-up-Grants. Bestehende Identity-
+  Invitations und Candidate-Self-Service sind action-bound step-up-geschützt.
+- **Fundstellen:** `prisma/schema.prisma`,
+  `prisma/migrations/20260728160000_phase_27_multi_persona_identity`,
+  `lib/auth/persona-policy.ts`, `lib/auth/persona-context.ts`,
+  `lib/auth/current-user.ts`, `app/account/portal`, ADR-039 und
+  [Phase-27-Evidence](./evidence/2026-07-28-phase-27.md).
 - **Betroffene Modelle:** `User`, `CompanyMembership`,
   `RecruiterMandate`, Session/CurrentUser; neu globale Persona-/RoleAssignment-
   Historie oder abgeleitete Capabilities.
 - **Betroffene Rollen:** Personen, die Kandidat:in und Employer/Recruiter sind,
   sowie Admins mit getrenntem normalen Konto.
-- **Ist:** Eine E-Mail entspricht genau einer globalen Persona; zusätzliche
-  Company-Kontexte lösen Multi-Tenant, nicht Candidate↔Employer oder
-  Admin↔Normal-User.
+- **Ist:** Eine E-Mail entspricht einer Identity mit optionaler Candidate- und
+  Employer-Persona. Company- und Adminrechte bleiben separate aktuelle
+  Autoritäten; die technische UI/Mutation bleibt default-off.
 - **Soll:** eine Identität mit explizit aktivierbaren Personas, klare
   Context-Auswahl, unveränderliche Membership-/Mandate-Rechte und keine
   Capability-Union über Persona-Grenzen.
@@ -579,9 +586,11 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 - **Geeignete Tests:** Candidate+Employer, Recruiter in mehreren Companies,
   Admin+Normalpersona, Context-Switch CSRF, Cross-Persona direct action,
   Invite/Claim/Reset, Suspend einer Persona sowie Audit-Actor/Context.
-- **Abnahmekriterium:** Eine Person kann erlaubte Personas explizit wechseln,
-  aber jeder Request besitzt genau einen serverseitig gebundenen Persona- und
-  Tenant-Kontext; Rechte werden nie implizit vereinigt.
+- **Abnahmekriterium:** technisch `PASS`: Eine Person kann erlaubte Personas
+  explizit wechseln, aber jeder Request besitzt genau einen serverseitig
+  gebundenen Persona- und Tenant-Kontext; Rechte werden nie implizit
+  vereinigt. Moderierte Nachfrage, Canary/Staging und G4 bleiben externe
+  Aktivierungsgates.
 
 ### STH-013 — Keine dauerhafte E-Mail-Outbox mit Retry
 
@@ -928,17 +937,24 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 ### STH-021 — Kandidatenempfehlungen erzeugen Query-Fan-out
 
-- **Status / Priorität / Phase:** bestätigt; P1 Performance; Track 30B.
-- **Fundstellen:** `lib/candidate/dashboard.ts:318-327` lädt bis zu 24
-  bevorzugte und 24 Fallback-Jobkandidaten; `328-360` ruft pro Kandidat
-  `getPublicJobBySlug` auf und reduziert danach auf sechs. `364-386` kann
-  Notification-Links ebenfalls einzeln autorisieren. Ein Query-Count-Ceiling
-  fehlt.
+- **Status / Priorität / Phase:** technisch wesentlich mitigiert; P1-
+  Abschlussmessung bleibt Track 30B.
+- **Phase-27-Mitigation:** Der 360-px-Browserlauf reproduzierte Pool-Erschöpfung
+  durch parallele Detail-Snapshot-Transaktionen. `getPublicJobsBySlugs`
+  hydriert jetzt höchstens 50 Details in genau einem Eligibility-Snapshot,
+  erhält die angeforderte Reihenfolge und führt Transaktionsqueries
+  sequenziell aus. Der Query-Shape-Vertrag und der zusammenhängende
+  Candidate↔Employer-Desktop-/360-Lauf sind grün.
+- **Fundstellen:** `lib/candidate/dashboard.ts`,
+  `lib/jobs/public-read-model.ts`,
+  `tests/unit/jobs/public-read-model-query-shape.test.ts`. Notification-Links
+  und ein instrumentiertes Gesamt-Query-Count-/p95-Ceiling bleiben offen.
 - **Betroffene Modelle:** `CandidateProfile/Preference/Skill/Language`,
   `Job/JobRevision`, Notifications und Public Eligibility.
 - **Betroffene Rollen:** Kandidat:innen; mittelbar DB-/Operations-Owner.
-- **Ist:** bis ungefähr 48 vollständige Einzeljob-Projektionen für sechs
-  Karten, funktional korrekt durch Wiederverwendung des Public Read Models.
+- **Ist:** zwei bounded Suchseiten plus eine einzige bounded
+  Detailprojektion; keine Transaktion pro Empfehlungskarte. Eine vollständige
+  48-Job-Instrumentierung des gesamten Dashboards fehlt noch.
 - **Soll:** ein Batch-Read beziehungsweise materialisierte, versionierte
   Match-Projektion mit identischer Eligibility/Privacy und begrenzter
   Queryanzahl.

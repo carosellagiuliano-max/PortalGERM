@@ -231,10 +231,13 @@ darf nicht gegen eine persönliche oder gemeinsame Datenbank laufen.
 | G3 Portal-Golden | vollständiges Repository-Gate, E2E-01–07, Security/Provider/Worker-Failure | Auth/RBAC, grosse Migration, Privacy, Payment, Worker, Trust, Search-Cutover sowie Ende zusammenhängender Tracks |
 | G4 Release-Golden | G3 plus clean clone, Migration/Seed, Backup/Restore, deploytes Artefakt, Vier-Rollen-/Mobile-/AT-Walkthrough | vor LC4, LC5, LC6 und Phase 32 |
 
-G3 ist zwingend nach Phase 20, 22, 23, 25, 26, 30A/30B und 24 bei
+G3 ist zwingend nach Phase 20, 22, 23, 25, 26, 27, 30A/30B und 24 bei
 Paid-Scope. Phase 21 benötigt G3, wenn interne Bewerbungen auf reale
-Dokumentbytes umgestellt werden. Phase 27 und die optionalen Phase-28-Tracks
-benötigen G3 nur bei tatsächlicher Aktivierung. Phase 32 besitzt G4.
+Dokumentbytes umgestellt werden. Phase 27 benötigt wegen der ausdrücklichen
+technischen Owner-Aktivierung ein lokales G3; Demand-/Kohortenaktivierung
+benötigt erneut aktuelle zielklassengültige Evidence. Die optionalen
+Phase-28-Tracks benötigen G3 nur bei tatsächlicher Aktivierung. Phase 32
+besitzt G4.
 
 ## 8. Akzeptanz-zu-Test-Matrix
 
@@ -315,9 +318,10 @@ nicht still umgedeutet.
   gemeinsame Auth-/Role-/Company-Migrationen werden nicht gleichzeitig
   gemergt.
 - Phase 24 beginnt technisch erst nach WTP-Go und nur für LC5-Scope.
-- Phase 27 sowie die externen Tracker-/Vollscheduler-Tracks aus Phase 28
-  bleiben ausserhalb des kritischen Pfads, bis moderierte Research einen
-  Bedarf belegt.
+- Der default-off Phase-27-Technikvertrag ist owner-aktiviert; seine
+  Markt-/Kohortenaktivierung sowie die externen Tracker-/Vollscheduler-Tracks
+  aus Phase 28 bleiben ausserhalb des kritischen Pfads, bis moderierte
+  Research einen Bedarf belegt.
 - 30C bleibt P3, solange der Capacity-Trigger nicht erreicht ist.
 - Phase 29 poliert nur stabilisierte Fachverträge; moderierte Research startet
   früh und liefert Feedback an die besitzende Fachphase.
