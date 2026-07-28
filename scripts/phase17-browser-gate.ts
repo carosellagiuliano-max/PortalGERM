@@ -54,6 +54,19 @@ const phase25SecurityMode = playwrightArguments.some((argument) =>
 )
   ? "enforce"
   : "observe";
+const companyTrustTestEnvironment = Object.freeze({
+  COMPANY_TRUST_V2: "enforce",
+  COMPANY_DOMAIN_CHALLENGE: "true",
+  COMPANY_REGISTER_CHECK: "true",
+  COMPANY_VERIFICATION_DOCUMENT: "true",
+  COMPANY_STRONG_BADGE: "true",
+  COMPANY_TRUST_PUBLIC_ELIGIBILITY: "true",
+  COMPANY_TRUST_RAPID_REVOKE: "true",
+  LEGACY_COMPANY_REVERIFY: "true",
+  COMPANY_REGISTER_PROVIDER_MODE: "deterministic_sandbox",
+  COMPANY_DOMAIN_PROVIDER_MODE: "deterministic_sandbox",
+  COMPANY_VERIFICATION_COHORT: "test",
+});
 
 type ChildExit = Readonly<{
   code: number | null;
@@ -119,6 +132,7 @@ async function main() {
       DOCUMENT_VAULT_COHORT: "test",
       DOCUMENT_STORAGE_ROOT: documentStorageRoot,
       DOCUMENT_STORAGE_REGION: "local-test",
+      ...companyTrustTestEnvironment,
     });
     await runDemoSeed({
       APP_ENV: "local",
@@ -240,6 +254,7 @@ async function startServer(
         DOCUMENT_VAULT_COHORT: "test",
         DOCUMENT_STORAGE_ROOT: documentStorageRoot,
         DOCUMENT_STORAGE_REGION: "local-test",
+        ...companyTrustTestEnvironment,
         STRIPE_SECRET_KEY: "",
         EMAIL_PROVIDER_API_KEY: "",
         OPENAI_API_KEY: "",
@@ -340,6 +355,7 @@ async function runPlaywright(input: Readonly<{
           input.runIdentity.runtime.playwright,
         PHASE17_NPM_VERSION: input.runIdentity.runtime.npm,
         PHASE25_SECURITY_MODE: phase25SecurityMode,
+        ...companyTrustTestEnvironment,
       },
       shell: false,
       stdio: "inherit",

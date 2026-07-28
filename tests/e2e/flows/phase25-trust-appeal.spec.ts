@@ -10,6 +10,7 @@ import {
 import {
   applyReversibleBrowserContainment,
   createCompanyTrustCase,
+  createFreshCompanyTrustEvidence,
   enrollTotp,
 } from "@/tests/e2e/fixtures/phase25-security";
 
@@ -19,7 +20,7 @@ const ENFORCED = process.env.PHASE25_SECURITY_MODE === "enforce";
 
 test.describe.configure({ mode: "serial" });
 
-test("[P25C-AC-05] @journey submits one safe appeal and restores only through an independent approver", async ({
+test("[P25C-AC-05][P26-AC-06] @journey restores an appeal only after fresh company evidence and an independent approver", async ({
   browser,
   page,
 }) => {
@@ -66,6 +67,15 @@ test("[P25C-AC-05] @journey submits one safe appeal and restores only through an
     });
     expect(appealed.status).toBe("APPEALED");
     expect(appealed.appeals).toHaveLength(1);
+    const freshTrust = await createFreshCompanyTrustEvidence(database, {
+      companyId: trustCase.companyId,
+      requestedByUserId: trustCase.employerUserId,
+      reviewerUserId: reviewer.id,
+      verifiedAfter: trustCase.now,
+    });
+    expect(freshTrust.verifiedAt.getTime()).toBeGreaterThan(
+      trustCase.now.getTime(),
+    );
 
     const approver = await openActor(
       browser,

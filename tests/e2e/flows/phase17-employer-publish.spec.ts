@@ -69,6 +69,7 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
     expect(company.verificationRequests).toHaveLength(0);
 
     await page.getByLabel("Branche").fill("Prüftechnik");
+    await page.getByLabel("UID (optional)").fill("CHE-117.170.002");
     await page.getByLabel("Website").fill("https://phase17-pruefwerk.example");
     await page
       .getByLabel("Öffentliche Beschreibung")
@@ -117,54 +118,96 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
       EMPLOYER.companyName,
     );
 
-    await page.reload();
-    await page
-      .getByLabel("Beschreibung des Nachweises")
-      .fill(
-        "Der Handelsregisterauszug bestätigt den fiktiven Firmennamen und den Schweizer Hauptsitz.",
-      );
-    await page
-      .getByLabel("Nachweis-Referenz")
-      .fill("HR-PHASE17-VERIFICATION-001");
+    await page.goto("/employer/verification");
+    await expect(
+      page.getByRole("heading", { name: "Firmenidentität prüfen" }),
+    ).toBeVisible();
+    await page.getByLabel("UID").fill("CHE-117.170.002");
     await page
       .getByRole("button", {
-        name: "Prüfzyklus starten und einreichen",
+        name: "Register prüfen und Challenge starten",
       })
       .click();
     await expect(
-      page
-        .getByRole("alert")
-        .filter({ hasText: "Aktueller Prüfstatus" })
-        .getByText("In Prüfung", { exact: true }),
+      page.getByRole("heading", { name: "Domainkontrolle bestätigen" }),
+    ).toBeVisible();
+    const challengeToken = await page
+      .getByLabel("Challenge-Geheimnis")
+      .inputValue();
+    expect(challengeToken).toMatch(/^[A-Za-z0-9_-]{32,128}$/u);
+    await expect(page.getByLabel("Gefundener Nachweis")).toHaveValue(
+      `sth-domain-verification=${challengeToken}`,
+    );
+    await page
+      .getByRole("button", { name: "Domainnachweis prüfen" })
+      .click();
+    await expect(
+      page.getByText(
+        "Domainkontrolle bestätigt. Der Antrag ist bereit für die unabhängige Prüfung.",
+      ),
     ).toBeVisible();
 
     const verification = await database.companyVerificationRequest.findFirstOrThrow({
-      where: { companyId: company.id, supersededBy: null },
-      select: { id: true, status: true },
+      where: {
+        companyId: company.id,
+        supersededBy: null,
+        policyVersion: "COMPANY_TRUST_POLICY_V2",
+      },
+      select: {
+        id: true,
+        status: true,
+        evidence: {
+          select: { type: true, status: true },
+          orderBy: { type: "asc" },
+        },
+      },
     });
     expect(verification.status).toBe("PENDING");
+    expect(verification.evidence).toEqual([
+      { type: "UID_REGISTER", status: "VALID" },
+      { type: "DOMAIN_CHALLENGE", status: "VALID" },
+    ]);
     expect(
       (await page.request.get(`/companies/${company.slug}`)).status(),
     ).toBe(200);
 
     const admin = await openActor(browser, "admin@demo.ch");
     try {
-      await admin.page.goto(`/admin/companies/${company.id}`);
+      await admin.page.goto(`/admin/company-verification/${verification.id}`);
       await expect(
         admin.page.getByRole("heading", { name: EMPLOYER.companyName }),
       ).toBeVisible();
       await admin.page
-        .getByRole("button", { name: "Verifizieren" })
+        .getByRole("button", { name: "Mir zur Prüfung zuweisen" })
         .click();
-      await expect(
-        admin.page.getByText("VERIFIED", { exact: true }).first(),
-      ).toBeVisible();
       await expect
-        .poll(async () =>
-          database.companyVerificationRequest.findUnique({
-            where: { id: verification.id },
-            select: { status: true },
-          }),
+        .poll(
+          async () =>
+            database.companyVerificationRequest.findUnique({
+              where: { id: verification.id },
+              select: {
+                assignedReviewerUserId: true,
+                version: true,
+              },
+            }),
+          { timeout: 30_000 },
+        )
+        .toMatchObject({
+          assignedReviewerUserId: expect.any(String),
+          version: 2,
+        });
+      await admin.page.reload();
+      await admin.page
+        .getByRole("button", { name: "Identität freigeben" })
+        .click();
+      await expect
+        .poll(
+          async () =>
+            database.companyVerificationRequest.findUnique({
+              where: { id: verification.id },
+              select: { status: true },
+            }),
+          { timeout: 30_000 },
         )
         .toEqual({ status: "VERIFIED" });
     } finally {
@@ -176,7 +219,7 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
     expect(await publicCompany.text()).toContain(EMPLOYER.companyName);
     await page.goto(`/companies/${company.slug}`);
     await expect(
-      page.getByText("Verifiziert", { exact: true }),
+      page.getByText("Firmenidentität geprüft", { exact: true }).first(),
     ).toBeVisible();
 
     await page.goto("/employer/jobs/new");

@@ -2,6 +2,10 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 
 import type { Page } from "@playwright/test";
 
+import {
+  COMPANY_TRUST_POLICY_V2,
+  companyTrustEvidenceDigest,
+} from "@/lib/companies/verification/policy-v2";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { expect } from "@/tests/e2e/fixtures/phase17-test";
 
@@ -328,6 +332,203 @@ export async function createCompanyTrustCase(
   });
 }
 
+export async function createFreshCompanyTrustEvidence(
+  database: DatabaseClient,
+  input: Readonly<{
+    companyId: string;
+    requestedByUserId: string;
+    reviewerUserId: string;
+    verifiedAfter: Date;
+  }>,
+) {
+  const verifiedAt = new Date(
+    Math.max(Date.now(), input.verifiedAfter.getTime() + 1),
+  );
+  const validTo = new Date(verifiedAt.getTime() + 180 * 86_400_000);
+  const company = await database.company.findUniqueOrThrow({
+    where: { id: input.companyId },
+    select: {
+      uid: true,
+      website: true,
+      verificationRequests: {
+        where: { supersededBy: null },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 1,
+        select: { id: true, status: true },
+      },
+    },
+  });
+  const predecessor = company.verificationRequests[0];
+  if (
+    predecessor === undefined ||
+    !["VERIFIED", "REJECTED", "REVOKED"].includes(predecessor.status)
+  ) {
+    throw new Error(
+      "Fresh Company Trust requires one terminal predecessor cycle.",
+    );
+  }
+  const uid = company.uid ?? syntheticUid(input.companyId);
+  if (company.uid === null) {
+    await database.company.update({
+      where: { id: input.companyId },
+      data: { uid, updatedAt: verifiedAt },
+    });
+  }
+  const domain = websiteDomain(company.website);
+  const requestId = randomUUID();
+  const challengeId = randomUUID();
+  const uidResponseDigest = digest(`fresh-register:${requestId}`);
+  const domainResponseDigest = digest(`fresh-domain:${requestId}`);
+  const evidenceDigest = companyTrustEvidenceDigest([
+    {
+      type: "UID_REGISTER",
+      responseDigest: uidResponseDigest,
+      validTo,
+    },
+    {
+      type: "DOMAIN_CHALLENGE",
+      responseDigest: domainResponseDigest,
+      validTo,
+    },
+  ]);
+
+  return database.$transaction(async (transaction) => {
+    const request = await transaction.companyVerificationRequest.create({
+      data: {
+        id: requestId,
+        companyId: input.companyId,
+        requestedByUserId: input.requestedByUserId,
+        supersedesRequestId: predecessor.id,
+        assignedReviewerUserId: input.reviewerUserId,
+        status: "VERIFIED",
+        riskLevel: "NORMAL",
+        policyVersion: COMPANY_TRUST_POLICY_V2.version,
+        priority: 80,
+        assignedAt: verifiedAt,
+        reviewStartedAt: verifiedAt,
+        reviewDueAt: new Date(verifiedAt.getTime() + 3 * 86_400_000),
+        decidedAt: verifiedAt,
+        createdAt: verifiedAt,
+        updatedAt: verifiedAt,
+      },
+    });
+    const challenge = await transaction.companyDomainChallenge.create({
+      data: {
+        id: challengeId,
+        verificationRequestId: request.id,
+        companyId: input.companyId,
+        issuedByUserId: input.requestedByUserId,
+        domain,
+        tokenHash: digest(`fresh-challenge-token:${request.id}`),
+        proofDigest: digest(`fresh-challenge-proof:${request.id}`),
+        status: "VERIFIED",
+        issuedAt: verifiedAt,
+        expiresAt: validTo,
+        verifiedAt,
+        createdAt: verifiedAt,
+      },
+    });
+    await transaction.companyVerificationEvidence.createMany({
+      data: [
+        {
+          verificationRequestId: request.id,
+          companyId: input.companyId,
+          createdByUserId: input.requestedByUserId,
+          type: "UID_REGISTER",
+          scope: "COMPANY_IDENTITY",
+          status: "VALID",
+          source: "phase25_browser_fresh_register",
+          providerKey: "deterministic_sandbox",
+          normalizedIdentifier: uid,
+          responseDigest: uidResponseDigest,
+          checkedAt: verifiedAt,
+          validFrom: verifiedAt,
+          validTo,
+          createdAt: verifiedAt,
+        },
+        {
+          verificationRequestId: request.id,
+          companyId: input.companyId,
+          createdByUserId: input.requestedByUserId,
+          domainChallengeId: challenge.id,
+          type: "DOMAIN_CHALLENGE",
+          scope: "COMPANY_IDENTITY",
+          status: "VALID",
+          source: "phase25_browser_fresh_domain",
+          providerKey: "deterministic_sandbox",
+          normalizedIdentifier: domain,
+          responseDigest: domainResponseDigest,
+          checkedAt: verifiedAt,
+          validFrom: verifiedAt,
+          validTo,
+          createdAt: verifiedAt,
+        },
+      ],
+    });
+    const decision = await transaction.companyVerificationDecision.create({
+      data: {
+        verificationRequestId: request.id,
+        companyId: input.companyId,
+        decidedByUserId: input.reviewerUserId,
+        kind: "APPROVED",
+        scope: "COMPANY_IDENTITY",
+        riskLevel: "NORMAL",
+        policyVersion: COMPANY_TRUST_POLICY_V2.version,
+        reasonCode: "POST_INCIDENT_REVERIFICATION",
+        evidenceDigest,
+        idempotencyKey: `phase25-browser-fresh:${request.id}`,
+        validFrom: verifiedAt,
+        validTo,
+        decidedAt: verifiedAt,
+        createdAt: verifiedAt,
+      },
+    });
+    const projection = await transaction.companyTrustProjection.upsert({
+      where: {
+        companyId_scope: {
+          companyId: input.companyId,
+          scope: "COMPANY_IDENTITY",
+        },
+      },
+      create: {
+        companyId: input.companyId,
+        verificationRequestId: request.id,
+        decisionId: decision.id,
+        scope: "COMPANY_IDENTITY",
+        level: "STRONG",
+        status: "ACTIVE",
+        riskState: "CLEAR",
+        policyVersion: COMPANY_TRUST_POLICY_V2.version,
+        evidenceDigest,
+        reasonCode: "POST_INCIDENT_REVERIFICATION",
+        verifiedAt,
+        expiresAt: validTo,
+        changedAt: verifiedAt,
+        createdAt: verifiedAt,
+      },
+      update: {
+        verificationRequestId: request.id,
+        decisionId: decision.id,
+        level: "STRONG",
+        status: "ACTIVE",
+        riskState: "CLEAR",
+        policyVersion: COMPANY_TRUST_POLICY_V2.version,
+        evidenceDigest,
+        reasonCode: "POST_INCIDENT_REVERIFICATION",
+        verifiedAt,
+        expiresAt: validTo,
+        changedAt: verifiedAt,
+        version: { increment: 1 },
+      },
+    });
+    return Object.freeze({
+      requestId: request.id,
+      projectionId: projection.id,
+      verifiedAt,
+    });
+  });
+}
+
 export async function applyReversibleBrowserContainment(
   database: DatabaseClient,
   trustCase: Readonly<{
@@ -375,6 +576,26 @@ export async function applyReversibleBrowserContainment(
       },
     ],
   });
+}
+
+function websiteDomain(value: string | null) {
+  if (value === null) {
+    throw new Error("Fresh Company Trust requires a registered website.");
+  }
+  const parsed = new URL(value);
+  if (parsed.protocol !== "https:") {
+    throw new Error("Fresh Company Trust requires an HTTPS website.");
+  }
+  return parsed.hostname.toLowerCase();
+}
+
+function syntheticUid(companyId: string) {
+  const digits = (
+    BigInt(`0x${digest(companyId).slice(0, 15)}`) % 1_000_000_000n
+  )
+    .toString()
+    .padStart(9, "0");
+  return `CHE-${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
 }
 
 function decodeBase32(value: string): Buffer {

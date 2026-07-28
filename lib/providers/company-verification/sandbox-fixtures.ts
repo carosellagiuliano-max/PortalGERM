@@ -18,4 +18,10 @@ export const COMPANY_VERIFICATION_SANDBOX_FIXTURES = Object.freeze([
     cantonCode: "BS",
     providerReference: "sandbox-register:carevia:v1",
   }),
+  Object.freeze({
+    uid: "CHE-117.170.002",
+    legalName: "Phase 17 Prüfwerk AG",
+    cantonCode: "ZH",
+    providerReference: "sandbox-register:phase17-pruefwerk:v1",
+  }),
 ] as const satisfies readonly CompanyRegisterSandboxFixture[]);

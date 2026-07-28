@@ -87,14 +87,28 @@ test("[P26-AC-06][P26-AC-11] @journey completes sandbox register/domain review a
     await page
       .getByRole("button", { name: "Mir zur Prüfung zuweisen" })
       .click();
-    await expect(
-      page.getByText("Die Trust-Aktion wurde vollständig gespeichert."),
-    ).toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          database.companyVerificationRequest.findUnique({
+            where: { id: request.id },
+            select: { assignedReviewerUserId: true },
+          }),
+        { timeout: 30_000 },
+      )
+      .toMatchObject({ assignedReviewerUserId: expect.any(String) });
     await page.reload();
     await page.getByRole("button", { name: "Identität freigeben" }).click();
-    await expect(
-      page.getByText("Die Trust-Aktion wurde vollständig gespeichert."),
-    ).toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          database.companyVerificationRequest.findUnique({
+            where: { id: request.id },
+            select: { status: true },
+          }),
+        { timeout: 30_000 },
+      )
+      .toEqual({ status: "VERIFIED" });
 
     const [persisted, projection, auditCount] = await Promise.all([
       database.companyVerificationRequest.findUniqueOrThrow({
