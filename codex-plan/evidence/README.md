@@ -41,6 +41,9 @@ gelten nicht als Nachweis.
 - [`2026-07-26-phase-21.md`](./2026-07-26-phase-21.md) — quarantänisierter Document-/CV-Vault, immutable Application-Versionen, Single-use-Downloads, Reconciliation und fail-closed Storage-/Scanner-Sandboxvertrag.
 - [`2026-07-26-phase-22.md`](./2026-07-26-phase-22.md) — technischer Privacy-/Legal-/Analytics-Sandboxvertrag mit Processor-Reconciliation, Restore-Schutz und explizit offenen Counsel-/Research-Gates.
 - [`2026-07-27-phase-23.md`](./2026-07-27-phase-23.md) — commitgebundener Local-/CI-Worker-, Lease-/DLQ-/Replay-, Provider-Ledger-, Capacity- und Ops-Cockpit-Kandidat; reales Staging/Pager/Backup/SLO bleibt blockiert.
+- [`2026-07-27-phase-24.md`](./2026-07-27-phase-24.md) — deaktivierter Local-/CI-Zahlungs-, Webhook-, Reconciliation-, Finance- und Service-Recovery-Vertrag; WTP, PSP, Tax/Legal/Finance, Staging und LIVE bleiben blockiert.
+- [`2026-07-28-phase-25.md`](./2026-07-28-phase-25.md) — Least-Privilege-Adminrollen, MFA/Recovery, Step-up sowie Trust-&-Safety-Containment und Appeal; Production-RP-ID, Duty-Owner, Risk/DSFA, Pager und LIVE bleiben blockiert.
+- [`2026-07-28-phase-26.md`](./2026-07-28-phase-26.md) — strukturierte Company-Trust-Evidence, Providerports, Vault, unabhängige Decisions, Re-review und gemeinsame Badge-/Job-/Radar-Revocation; reale Provider, Legal/Capacity, Staging und Public-Go bleiben blockiert.
 
 ## Pflichtfelder eines Records
 

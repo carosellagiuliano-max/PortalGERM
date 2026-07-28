@@ -660,8 +660,13 @@ flowchart LR
 - scope-basierte Containment-Effekte sperren Sessions/Assurance, Company,
   Verification, Public Jobs, Radar-Kontakte und ausstehende Paymentwirkung
   idempotent; aktuelle Reads bleiben auch bei Worker-Verzögerung fail-closed;
-- company evidence is structured, sourced, expiring and re-reviewable;
-  die fachliche Reverification/Badge-Projektion bleibt Phase 26;
+- Phase 26 implementiert versionierte `CompanyTrustEvidence`,
+  Providerchecks, Domain-Challenges, unabhängige Decisions, aktuelle
+  Trustprojektionen, Expiry/Re-review und Appeals; der zentrale aktuelle
+  Reader entscheidet fail-closed über Badge, Public Company/Jobs und Radar;
+- lokale deterministische Register-/Domainadapter und Vault-Evidence belegen
+  den Technikvertrag, aber keinen realen Provider-, Legal- oder
+  Aktivierungsvertrag;
 - review, hold, revoke, appeal and false-positive correction append events and
   audits without exposing secret risk weights. Alle Phase-25-Flags bleiben
   standardmässig `disabled` beziehungsweise `observe`; Production-RP-ID,
@@ -692,7 +697,7 @@ normative current and planned delta is maintained in
 launchclass, role/capability, tenant/owner guard, data class, UX states,
 feature flag, owning test and activation gate.
 
-Implemented route families through Phase 25:
+Implemented route families through Phase 26:
 
 - email verify/resend, login-email change and Candidate-/Employer-/Admin-
   Security-/Step-up settings;
@@ -700,6 +705,10 @@ Implemented route families through Phase 25:
 - public legal/terms/privacy/imprint pages and secure export artifact access;
 - Admin roles/grants/authenticators/break-glass and Trust-&-Safety
   Queue/Detail/Appeal;
+- Employer Company-Verification-Workflow, Admin Verification
+  Queue/Detail/Decision und owner-geschützter Verification-Dokumentupload;
+- Public Company-/Job-/Radar-Reads konsumieren dieselbe aktuelle
+  Company-Trust-Projektion; private Evidence wird nicht projiziert;
 - payment webhook is implemented by Phase 24 and remains behind explicit
   test-PSP config, ProviderActivation and independent ingestion/projection
   switches;

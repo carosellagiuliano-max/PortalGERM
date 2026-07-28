@@ -1,6 +1,6 @@
 # Route- und Rollenmatrix
 
-> **Stand:** Phase-25-Technikbaum, 119 Seiten und 18 Route Handler. Die
+> **Stand:** Phase-26-Technikbaum, 122 Seiten und 19 Route Handler. Die
 > maschinenlesbare Inventarbasis ist
 > [`route-inventory.json`](./route-inventory.json); `npm run route:audit`
 > vergleicht sie mit dem tatsächlichen `app/`-Baum. Diese Matrix dokumentiert
@@ -243,15 +243,14 @@ redigiert.
   LIVE-Paymentbeleg. Der Dokumenten-Read ist ausschließlich grant-gebunden und
   Sandbox-only.
 
-## Verbleibendes geplantes Route-/Prozessdelta Phase 22–32
+## Technischer Ist-Stand und verbleibendes Route-/Prozessdelta Phase 22–32
 
-> Diese Tabelle ist ein Zielregister. Phase-22-Routen sind inzwischen im
-> maschinenlesbaren Ist-Inventar enthalten und automatisiert verifiziert,
-> bleiben aber wegen externer Gates deaktiviert; die übrigen Zeilen sind
-> weiterhin nicht implementiertes Delta. Eine neue Zeile wird erst nach
-> vorhandener Route, serverseitigem Guard, UX-/A11y-Abnahme und grünem
-> Owning-Test in das Ist-Inventar übernommen. Der genaue Pfad darf die Phase
-> per ADR konsolidieren, solange Rollen, Guard und Zustand erhalten bleiben.
+> Diese Tabelle trennt implementierten Technikstand von geplantem Delta.
+> Routen der Phasen 22 bis 26 sind im maschinenlesbaren Ist-Inventar enthalten
+> und automatisiert verifiziert, bleiben aber je nach externem Gate
+> deaktiviert. Die Zeilen ab Phase 27/30D sind weiterhin geplantes Delta. Eine
+> neue Zeile wird erst nach vorhandener Route, serverseitigem Guard,
+> UX-/A11y-Abnahme und grünem Owning-Test in das Ist-Inventar übernommen.
 
 | Phase / Requirement | Geplanter Einstieg | Rollen / Capability und Tenantgrenze | Zustände / Datenklasse | Flag, Test und Aktivierung |
 | --- | --- | --- | --- | --- |
@@ -261,8 +260,8 @@ redigiert.
 | 24 · `REQ-PAY-001` | **Technischer Ist-Stand:** `/employer/billing/subscription`, `/api/webhooks/payments/[provider]`, `/admin/finance/reconciliation` plus bestehende Billing-/Invoice-Routen | Owner-Guard; Webhook-Signatur+Inbox; Finance read-only, Mutationen zusätzlich Capability/Step-up/SoD | locked/pending/paid/failed/refunded/disputed/reconciled; financial | Local-/CI-Sandboxvertrag; LC5 WTP, PSP/Tax/Legal/Finance/Phase-25-Step-up und LIVE bleiben `BLOCKED` |
 | 24 · `REQ-BIL-010` | **Technischer Ist-Stand:** `/admin/finance/service-recovery`, bestehende Order-/Boost-/Radarobjekte und ServiceDelivery-Worker | gleiche Company-/OrderLine-/Serviceinstanz; Finance/Support-Ausführung fail-closed | assessed, extended, credit-restored, escalated/refund; exactly-once | Policy-/PostgreSQL-/Replaytests technisch; konkrete Paid-Servicepolicy, Support-SLA und LIVE-Aktivierung offen |
 | 25 · `REQ-ADM-007` | **Technischer Ist-Stand:** `/admin/security/{authenticators,roles,grants,break-glass}` | Security Admin getrennt von Support/Moderation/Finance/Privacy; SoD serverseitig | enroll/recover/pending-second-approval/expired/revoked/break-glass | deny-by-default RBAC/MFA/Recovery/SoD PostgreSQL und Browser `PASS`; Production-Owner/RP-ID/On-call `BLOCKED` |
-| 25/26 · `REQ-TRUST-001` | **Phase-25-Ist:** `/admin/trust-safety`, `/admin/trust-safety/[id]` plus bounded Appeal in Candidate-/Employer-Security | Trust & Safety/Security/Finance scoped je Fall; Subjects sehen nur sicheren Grund und Appeal | open/held/revoked/appealed/false-positive/resolved; interne Evidence verborgen | Phase-25 Policy/PG/E2E/Worker-Failure `PASS`; fachliche Firmen-Reverification bleibt 26, externe Risk-/DSFA-/Capacity-Freigabe `BLOCKED` |
-| 26 · `REQ-EMP-008` | existing Company verification plus structured evidence/re-review | Company Owner submits; independent reviewers approve; no self-approval | draft/pending/needs-info/verified/expiring/expired/revoked/appealed | evidence provider + dual review; Badge/Job/Radar same-read revocation |
+| 25/26 · `REQ-TRUST-001` | **Technischer Ist-Stand:** `/admin/trust-safety`, `/admin/trust-safety/[id]` plus bounded Appeal in Candidate-/Employer-Security und Company-Reverification | Trust & Safety/Security/Finance scoped je Fall; Subjects sehen nur sicheren Grund und Appeal; Restore verlangt frische starke Evidence und unabhängigen Entscheider | open/held/revoked/appealed/false-positive/resolved; interne Evidence verborgen | Phase-25/26 Policy/PG/E2E/Worker-Failure `PASS`; externe Risk-/DSFA-/Provider-/Capacity-Freigabe `BLOCKED` |
+| 26 · `REQ-EMP-008` | **Technischer Ist-Stand:** `/employer/verification`, `/admin/company-verification`, `/admin/company-verification/[id]`, `/api/company-verification/documents/upload-intents` plus Public-Company-/Job-/Radar-Consumer | Company Owner/Admin submitten nur im eigenen Tenant; Reviewer benötigt persistierte Verification-Capability und Step-up; Self-Approval/SoD fail-closed; Upload-Handler erzwingt Owner-Auth trotz generischer Dateisystemklassifikation | draft/pending/needs-info/verified/expiring/expired/revoked/appealed; private Evidence bleibt aus Public DTOs entfernt | Candidate `96933aa`, Unit/PostgreSQL/HTTP/Desktop/360 `PASS`; reale Provider, Legal/DPA/Region, Capacity, Staging/Pager und Public-Flags `BLOCKED`; [Evidence](./evidence/2026-07-28-phase-26.md) |
 | 30D · `REQ-JOB-007` | Employer reconfirm/fill action; public/candidate „nicht verfügbar“ report | own Company Job; public bounded report; Trust/Moderation review | due/grace/reconfirmed/filled/expired/duplicate-review/appeal | freshness policy+worker; Search/Sitemap/Alert/Recommendation parity tests |
 
 Conditional routes:

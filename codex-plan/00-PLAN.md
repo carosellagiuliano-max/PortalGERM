@@ -241,9 +241,16 @@ single-use Step-up und Trust-&-Safety-Case/Appeal/Containment. Lokales G3
 Freigabe, Staging, Pager/On-call und LIVE bleiben externe Gates. Siehe
 [Phase-25-Evidence](./evidence/2026-07-28-phase-25.md).
 
-### [ ] 26 — Company Trust und Verifikation
+### [x] 26 — Company Trust und Verifikation
 
-[`26-company-trust-verification.md`](./26-company-trust-verification.md) · strukturierte Evidenz, Vier-Augen-Freigabe, Ablauf und Widerruf.
+[`26-company-trust-verification.md`](./26-company-trust-verification.md) ·
+commitgebunden verifizierter Local-/CI-Vertrag `96933aa` für strukturierte
+Register-/Domain-/Vault-Evidence, unabhängige Freigabe, Expiry/Re-review,
+Appeal sowie nächste-Read-Widerruf von Badge, Jobs und Radar. Lokales G3
+`PASS`; reale Register-/Domainprovider, Legal/DPA/Region,
+Reviewer-Capacity, Staging/Pager und öffentliche Aktivierung bleiben
+`BLOCKED`. Siehe
+[Phase-26-Evidence](./evidence/2026-07-28-phase-26.md).
 
 ### [ ] 27 — Multi-Persona Identity
 
@@ -273,7 +280,11 @@ triggerbasiertes Sharding statt unnötigem Sofortumbau.
 
 [`32-production-release-audit.md`](./32-production-release-audit.md) · vollständige automatische, manuelle, betriebliche und externe Evidence auf exakt einem Releasecommit/Artefakt.
 
-Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in [`implementation-plan.md`](./implementation-plan.md). Für die abgeschlossenen Phasen 19 und 20 sowie die offenen Phasen 21 bis 32 sind Reihenfolge, Parallelisierung und Konfliktgrenzen verbindlich in [`remediation-masterplan.md`](./remediation-masterplan.md) festgelegt.
+Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in
+[`implementation-plan.md`](./implementation-plan.md). Für die technisch
+bearbeiteten Phasen 19 bis 26 sowie die offenen Phasen 27 bis 32 sind
+Reihenfolge, Parallelisierung und Konfliktgrenzen verbindlich in
+[`remediation-masterplan.md`](./remediation-masterplan.md) festgelegt.
 
 ## 7. Verantwortungsauflösung alter Konflikte
 

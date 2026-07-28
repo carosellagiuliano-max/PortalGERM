@@ -601,10 +601,10 @@ Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert u
 ## Prospektiver Ausführungsplan Phase 19–32
 
 > Dieser Abschnitt ist das ausdrücklich freigegebene Folgepaket auf
-> Planungsebene. Phasen 19 bis 25 sind technisch implementiert und ihre
+> Planungsebene. Phasen 19 bis 26 sind technisch implementiert und ihre
 > jeweiligen lokalen/CI-Gates grün. Aktivierung, Realprovider, Staging und
 > externe Fach-/Operationsfreigaben bleiben je Phase getrennt
-> `DISABLED`/`BLOCKED`; Phasen 26–32 bleiben offen.
+> `DISABLED`/`BLOCKED`; Phasen 27–32 bleiben offen.
 > Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
 > Folgephasengate-Vertrag aus
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md).
@@ -665,13 +665,16 @@ flowchart TD
 6. **Phasen 22→23 — technisch abgeschlossen**: Datenschutz/Legal/Analytics
    sowie Lease-/Retry-/DLQ-/Replay-Operations bauen auf dem
    Phase-21-Sandboxvertrag auf; externe Counsel-/Provider-/Pager-Gates bleiben.
-7. **Phase 25 — technisch abgeschlossen; danach 26→30D**: persistierte
+7. **Phasen 25 und 26 — technisch abgeschlossen; danach 30D**: persistierte
    Admin-Least-Privilege-Rollen, MFA/Recovery, non-admin Step-up und
    Fraud-/Scam-/ATO-Case/Appeal bestehen auf Candidate `eb8cbcd` das lokale
-   G3; siehe [Phase-25-Evidence](./evidence/2026-07-28-phase-25.md). Company
-   Trust und Job Freshness bleiben die nächsten Fachverträge; alle
-   Phase-25-Enforcement-Flags bleiben bis Owner-/RP-ID-/Risk-/Capacity-/
-   Pager-Gates geschlossen.
+   G3; siehe [Phase-25-Evidence](./evidence/2026-07-28-phase-25.md).
+   Strukturierte Company-Evidence, Providerports, Re-review, unabhängige
+   Decisions und gleiche Badge-/Job-/Radar-Revocation bestehen auf Candidate
+   `96933aa` das lokale G3; siehe
+   [Phase-26-Evidence](./evidence/2026-07-28-phase-26.md). Job Freshness ist
+   der nächste Fachvertrag. Alle Phase-25-/26-Aktivierungsflags bleiben bis
+   Owner-/RP-ID-/Risk-/Provider-/Legal-/Capacity-/Pager-Gates geschlossen.
 8. **Phase 24 technisch abgeschlossen, Aktivierung nur bei LC5-Go**:
    Candidate `f785944` besitzt den grünen fail-closed Local-/CI-Zahlungs- und
    Service-Recovery-Vertrag; kein Staging-/Paid-/LIVE-Start vor WTP-,
@@ -693,8 +696,8 @@ flowchart TD
   deren stabilem fachlichem Contract. Die technische Queue-/Lease-/Retry-/
   DLQ-/Replay-Grundlage und die registrierten Phase-20–22-Adapter sind im
   lokalen Candidate vorhanden; Production-Aktivierung folgt daraus nicht.
-- Phase 25 ist technisch abgeschlossen. Phase 26 baut auf diesem Vertrag auf;
-  Admin-/Assurance-Enforcement und Company-Migration werden trotzdem nicht im
+- Phasen 25 und 26 sind technisch abgeschlossen. Admin-/Assurance-Enforcement,
+  reale Company-Provider und Public-Trust-Wirkung werden trotzdem nicht im
   selben Aktivierungsfenster gecutovert.
 
 ### Bewusst ausserhalb des Standardpfads

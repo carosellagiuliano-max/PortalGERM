@@ -75,7 +75,7 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | STH-011 | Kein Admin-MFA/Step-up | technisch Local/CI gelöst; Production-RP-ID/Policy extern blockiert | P0 vor privilegiertem LIVE-Zugriff | Admin Security | 25 | 19/20/23, STH-001/013 | Passkey/WebAuthn, verschlüsseltes TOTP, gehashte Single-use-Recovery-Codes, Session-AAL2 und action-bound Step-up | Unit/PostgreSQL/Desktop/360 `PASS`; replay/stale/wrong origin/RP-ID/recovery/direct action negativ | `lib/auth/assurance/**`; `/admin/security/authenticators`; [Phase-25-Evidence](./evidence/2026-07-28-phase-25.md) | Geräte-/Recoverypolicy, Production-RP-ID, getrennte Recovery-Owner und On-call weiterhin extern |
 | STH-012 | Exklusive globale Rolle verhindert Multi-Persona | bestätigt | P3 default/deferred; P0 nur bei explizitem Persona-Scope | Identity/Persona | 27 | 19, STH-010/011, Tenant-RBAC, Bedarfsgate | offen; CompanyMembership löst nur Unternehmenskontext | Rollen-/Company-Tests vorhanden, keine Persona-Kombination | `prisma/schema.prisma:10-15,1129-1137`; `lib/auth/route-guards.ts:10-23`; `prisma/schema.prisma:1536-1555` | Produktentscheidung und moderierter Bedarf |
 | STH-013 | Kein dauerhafter E-Mail-Outbox-/Retry-Vertrag | technisch gelöst; autonome Productionausführung bleibt offen | P0 | E-Mail/Worker | 20 | 19, STH-004/009 | atomare Outbox, Attempts, Lease, Heartbeat, Retry, Suppression, DLQ und auditiertes Sandbox-Replay implementiert | 105-Message-Two-Worker-, Crash-, Restart-, Bounce-, Poison- und DLQ-Tests `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `lib/notifications/outbox.ts`; `lib/notifications/dispatcher.ts` | Zustellprovider, Phase-23-Monitoring/Pager |
-| STH-014 | Company Verification beruht auf Text/Referenz | bestätigt; Lifecycle selbst ist robust | P0 für Trust-/Publish-Gate | Company Trust | 26 | 19, STH-003/004, Legal/Operations | offen; keine Dokumentbytes/Registry-Validierung | Cycle-/Concurrency-Tests vorhanden, keine Evidenzvalidierung | `prisma/schema.prisma:1665-1699`; `components/employer/verification-panel.tsx:160-195`; `lib/employer/company.ts:1120-1144` | Registerzugang, Prüfpolicy, Reviewer |
+| STH-014 | Company Verification beruhte auf Text/Referenz | technisch Local/CI gelöst; öffentliche Aktivierung extern blockiert | P0 für Trust-/Publish-Gate | Company Trust | 26 | 19/21/23/25, STH-003/004, Legal/Operations | strukturierte Evidence/Checks/Challenges/Decisions/Projection, Vault, Expiry/Re-review, SoD, Appeal und gleiche Badge-/Job-/Radar-Revocation implementiert | Unit/PostgreSQL/HTTP/Desktop/360 `PASS`; fehlende/mismatched/expired/revoked/Legacy Evidence erzeugt `0` starken Trust | [Phase-26-Evidence](./evidence/2026-07-28-phase-26.md); `lib/companies/verification/**`; `/employer/verification`; `/admin/company-verification` | reale Register-/Domainprovider, Nutzungsrecht/DPA/Region, Reviewer-Capacity, Staging/Pager und Public-Go |
 | STH-015 | Externe Bewerbung endet beim Klick | bestätigt | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Application | 28A | 19, 29A-Bedarf, STH-009/013/026, Phase-22-Privacy-Lifecycle | offen; nur Analytics-Klick, keine Candidate-owned Journey | Redirect/Privacy-Test vorhanden, kein Outcome-/Export/Delete/Correct-E2E | `app/(public)/jobs/actions.ts:92-110,251-278`; `lib/applications/service.ts:193-197` | moderierter Bedarf; optional ATS-/Mail-Signale |
 | STH-016 | Keine persistente Interviewplanung | bestätigt | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Scheduling | 28B | 19, 29A-Bedarf, STH-009/013, Application-RBAC, Phase-22-Privacy-Lifecycle | offen; Pipeline-Status/Mock-Text statt Termin | Status-Tests vorhanden, keine Slot/DST/ICS-/Privacy-Lifecycle-Tests | `prisma/schema.prisma:264-288`; `lib/policies/status/application.ts:105-113`; `lib/employer/applications.ts:328-335` | moderierter Bedarf; optional Kalenderprovider |
 | STH-017 | Produktionsanalytics deaktiviert | technische Consent-/Gate-Policy gelöst; Productionactivation bewusst blockiert | P1; Legal-Gate vor Aktivierung | Analytics/Consent | 22 | 19, STH-007/026, Legal/Data Governance | eventfamilienweise default-off Policy, exakte Publication/Approval/Consent/Retention/Property-Allowlist und sofortiger Revoke implementiert; Search Learning fail-closed | Unit/PostgreSQL/50-parallel-Last/Browser/G3 `PASS` auf `0636a875`; optionale LIVE-Events weiterhin 0 ohne Gate | [Phase-22-Evidence](./evidence/2026-07-26-phase-22.md); `lib/analytics/live-consent-policy.ts` | Consent-/DPA-/Retention-/Region-Freigabe; moderierte Forschung |
@@ -626,40 +626,46 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 ### STH-014 — Company Verification nutzt nur Text und Referenz
 
-- **Status / Priorität / Phase:** bestätigt, bei vorhandenem robustem
-  Lifecycle; P0 für einen vertrauensbasierten LIVE-Publishpfad; Phase 26
+- **Status / Priorität / Phase:** technisch im deaktivierten Local-/CI-Vertrag
+  geschlossen; P0 für einen vertrauensbasierten LIVE-Publishpfad; Phase 26
   `26-company-trust-verification.md`.
-- **Fundstellen:** `CompanyVerificationRequest` speichert ein generisches
-  `evidenceMetadata Json?`, Events nur `evidenceRef`
-  (`prisma/schema.prisma:1665-1699`). Die UI akzeptiert Beschreibung und
-  Freitextreferenz (`components/employer/verification-panel.tsx:160-195`).
-  Der Codec enthält nur `summary/reference`
-  (`lib/employer/company.ts:1120-1144`).
+- **Implementierung:** additive strukturierte Evidence-, Check-, Domain-
+  Challenge-, Decision-, Projection- und Appealmodelle in `prisma/schema.prisma`;
+  zentrale Policy/Reads/Owner-/Adminservices unter
+  `lib/companies/verification/**`; Vault-Upload in
+  `/api/company-verification/documents/upload-intents`; Workflows unter
+  `/employer/verification` und `/admin/company-verification`.
 - **Betroffene Modelle:** `Company`, `CompanyVerificationRequest/Event`,
-  `CandidateDocumentMetadata` beziehungsweise neuer TrustEvidence-
-  Dokument-/Registry-Snapshot.
+  `CompanyTrustEvidence`, `CompanyVerificationCheck`,
+  `CompanyDomainChallenge`, `CompanyTrustDecision`,
+  `CompanyTrustProjection`, `CompanyTrustAppeal` und Vault-Dokumentmetadaten.
 - **Betroffene Rollen:** Employer Owner/Admin als Antragsteller,
   Trust/Verification Reviewer, Platform/Security Ops.
-- **Ist:** Single-cycle-/Supersession-, Status-, Concurrency-, Notification-
-  und Auditvertrag sind vorhanden; die Evidenz selbst wird weder hochgeladen
-  noch gegen UID/Handelsregister oder Domain kontrolliert.
-- **Soll:** versionierte Prüfpolicy, erlaubte Evidenzarten, sichere Dokument-
-  oder Register-Snapshots, Vier-Augen-/Reason-Code-Prüfung, Ablauf/Reverify und
-  klare Wirkung auf Company-/Job-/Radar-Gates.
+- **Ist:** Versionierte Prüfpolicy, strukturierte UID-/Domain-/Vault-Evidence,
+  typed Providerports, unabhängige Reason-Code-Decision, Expiry/Re-review,
+  Appeal und nächste-Read-Wirkung auf Company-/Job-/Radar-Gates sind
+  implementiert. Legacy-Freitext bleibt schwach und erzeugt kein starkes Badge.
+- **Extern offen:** reale Register-/Domainprovider samt Nutzungsrecht,
+  DPA/Region und Contract-Evidence; Reviewer-Staffing, reale Handling-Zeit,
+  Cost/Fall, Staging/Pager/Rollback und Public-Rollout.
 - **Root Cause:** Verification-Orchestrierung wurde vor realem Storage und
   offizieller Registerintegration gebaut.
 - **Impact:** Admin kann eine unbelegte Freitextbehauptung genehmigen; das
   schwächt Arbeitgebervertrauen und Missbrauchsschutz.
 - **Änderungsrisiko:** sehr hoch; Firmenidentität, sensible Dokumente,
   False-positive Registry Matches und Widerruf mit abhängigen Jobs/Radar.
-- **Abhängigkeiten:** STH-003/004, Registerzugang/Lizenz, Trust-Policy,
-  Retention, Reviewer-Ownership und STH-010.
-- **Geeignete Tests:** Evidenztyp/Magic Bytes, UID-/Name-/Canton-Mismatch,
-  Cross-Company-Denial, doppelte/abgelaufene Evidenz, Reviewer-Duty,
-  Concurrent approve/revoke und abhängige Visibility-Entziehung.
-- **Abnahmekriterium:** VERIFIED ist nur aus nachvollziehbarer, gültiger,
-  versionierter Evidenz ableitbar; jede Entscheidung nennt Snapshot, Policy,
-  Reviewer und Grund, und Widerruf greift sofort.
+- **Abhängigkeiten:** STH-003/004, Phase-21-Vault, Phase-23-Worker,
+  Phase-25-Assurance/Trust, Registerzugang/Lizenz, Retention,
+  Reviewer-Ownership und STH-010.
+- **Evidence:** Providercontract-, Policy-, Vault-, Authorization-, Migration-,
+  Legacy-, Validity-, Failure-, Capacity-, Compromise-, Eligibility-,
+  Desktop- und 360px-Tests sind auf `96933aa` grün; siehe
+  [Phase-26-Evidence](./evidence/2026-07-28-phase-26.md).
+- **Abnahmekriterium:** technisch `PASS`: Strong VERIFIED ist nur aus
+  nachvollziehbarer, gültiger, versionierter Evidence ableitbar; jede
+  Decision nennt Scope, Policy, Reviewer und Grund, und Widerruf greift beim
+  nächsten Read. Öffentliche Aktivierung bleibt bis zu den externen Gates
+  `BLOCKED`.
 
 ### STH-015 — Externe Bewerbungen enden nach dem Klick
 

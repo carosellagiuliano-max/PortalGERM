@@ -615,3 +615,42 @@ marketplace or prove willingness to pay.
 
 Referenced by: Phase 23/26/29/30/31/32; `REQ-JOB-007`,
 `REQ-SRCH-002/003`, `REQ-COM-001`.
+
+---
+
+## ADR-038 — Company Trust is an evidence-backed current projection
+
+**Status:** accepted for the disabled Phase-26 Local-/CI contract; production
+activation remains prospective.
+
+**Decision:** Strong Company Trust is derived only from current, versioned and
+purpose-bound evidence. UID/register checks and domain-control challenges use
+typed provider ports; supporting documents use the private Phase-21 Vault.
+Evidence, checks, decisions and projections are separate append-oriented
+records. A strong decision requires the configured evidence set, exact
+provider results, current validity, reviewer capability, fresh action-bound
+step-up and separation of duties. Manual/Legacy text never becomes strong
+trust by migration or payment.
+
+One central current-trust reader is authoritative for Public Company copy,
+Company/Job eligibility and Talent Radar. Missing, mismatched, expired,
+held, revoked, superseded or wrong-policy evidence removes strong effects at
+the next read. Restore after an incident requires fresh strong post-incident
+evidence and an independent decision; historical evidence is not overwritten.
+Public DTOs expose only the approved scope, method and validity, never document
+keys/bytes, provider raw data, challenge secrets or reviewer notes.
+
+Deterministic local adapters prove the provider contract but cannot activate
+public trust. Production requires separately approved real register/domain
+providers, usage rights, DPA/region, legal policy, reviewer capacity,
+staging/pager/rollback evidence and cohort activation. A narrow Local/CI demo
+compatibility projection may preserve existing demo flows while public trust
+flags are disabled, but it emits no strong badge and is impossible under the
+production environment contract.
+
+**Why:** A mutable text field or once-only status cannot justify a public
+identity claim, and independent eligibility implementations would allow stale
+or revoked trust to remain visible.
+
+Referenced by: Phase 21/23/25/26/30/32; `REQ-EMP-008`,
+`REQ-TRUST-001`, `REQ-DOC-002`, `STH-014`.
