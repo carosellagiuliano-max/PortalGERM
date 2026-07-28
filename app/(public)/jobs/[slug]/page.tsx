@@ -7,10 +7,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowLeftIcon,
-  BadgeCheckIcon,
 } from "lucide-react";
 
 import { BoostedBadge } from "@/components/billing/boosted-badge";
+import { CompanyTrustBadge } from "@/components/public/company-trust-badge";
 import { CandidateMatch } from "@/components/public/candidate-match";
 import {
   ApplyIntentConfirmation,
@@ -131,7 +131,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
               <JobTypeBadge jobType={job.jobType} />
             </div>
             <h1 className="mt-5 text-balance text-4xl leading-tight font-semibold tracking-tight sm:text-5xl">{job.title}</h1>
-            <Link href={`/companies/${job.company.slug}`} className="mt-4 inline-flex items-center gap-2 text-lg font-medium underline-offset-4 hover:text-primary hover:underline">{job.company.name}<BadgeCheckIcon className="size-5 text-primary" aria-label="Verifiziertes Unternehmen" /></Link>
+            <Link href={`/companies/${job.company.slug}`} className="mt-4 inline-flex flex-wrap items-center gap-2 text-lg font-medium underline-offset-4 hover:text-primary hover:underline">{job.company.name}{job.company.trust ? <CompanyTrustBadge trust={job.company.trust} showDetails /> : null}</Link>
             <JobFacts
               facts={{
                 locationLabel: job.city?.name ?? job.canton?.name ?? job.locationLabel ?? "Schweiz",
@@ -218,7 +218,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
             <Card>
               <CardHeader><CardTitle as="h2">Arbeitgeber</CardTitle></CardHeader>
               <CardContent>
-                <p className="flex items-center gap-2 font-medium">{job.company.name}<BadgeCheckIcon className="size-4 text-primary" aria-label="Verifiziertes Unternehmen" /></p>
+                <p className="flex flex-wrap items-center gap-2 font-medium">{job.company.name}{job.company.trust ? <CompanyTrustBadge trust={job.company.trust} /> : null}</p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">Öffentliches Firmenprofil und weitere aktuelle Stellen ansehen.</p>
                 <Link href={`/companies/${job.company.slug}`} className={buttonVariants({ variant: "outline", className: "mt-4 w-full" })}>Firmenprofil öffnen</Link>
               </CardContent>

@@ -78,6 +78,7 @@ describe("Phase 11 admin policy boundary", () => {
       "/admin",
       "/admin/jobs",
       "/admin/companies",
+      "/admin/company-verification",
       "/admin/users",
       "/admin/taxonomy",
       "/admin/reports",

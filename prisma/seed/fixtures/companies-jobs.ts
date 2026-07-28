@@ -123,6 +123,7 @@ export interface CompanyFixture extends CompanyDefinition {
   readonly ownerUserId: string;
   readonly ownerEmail: string;
   readonly ownerMembershipId: string;
+  readonly uid: string;
   readonly cantonCode: string;
   readonly cityId: string;
   readonly cantonId: string;
@@ -166,6 +167,7 @@ export const COMPANY_FIXTURES: readonly Readonly<CompanyFixture>[] =
             "company-membership",
             `${slug}:${ownerEmail}`,
           ),
+          uid: `CHE-${String(100 + index).padStart(3, "0")}.000.001`,
           cantonCode: city.cantonCode,
           cantonId: stableSeedId("canton", city.cantonCode),
           cityId: stableSeedId("city", `${city.cantonCode}:${city.slug}`),
@@ -602,6 +604,27 @@ function buildCompaniesJobsSeedIdentities(): SeedIdentityRecord[] {
     register("company-verification-request", `${company.slug}:current`);
     for (const suffix of ["draft", "submitted", "verified"]) {
       register("company-verification-event", `${company.slug}:current:${suffix}`);
+    }
+    if (company.slug === DEMO_COMPANY_SLUG) {
+      register("company-domain-challenge", `${company.slug}:phase26`);
+      register(
+        "company-verification-evidence",
+        `${company.slug}:phase26:register`,
+      );
+      register(
+        "company-verification-evidence",
+        `${company.slug}:phase26:domain`,
+      );
+      register(
+        "company-verification-check",
+        `${company.slug}:phase26:register`,
+      );
+      register(
+        "company-verification-check",
+        `${company.slug}:phase26:domain`,
+      );
+      register("company-verification-decision", `${company.slug}:phase26`);
+      register("company-trust-projection", `${company.slug}:phase26`);
     }
   }
   register("company-claim-request", "pending-duplicate-demo");

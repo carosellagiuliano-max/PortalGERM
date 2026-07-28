@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { BadgeCheckIcon, BriefcaseBusinessIcon, Building2Icon, MapPinIcon } from "lucide-react";
+import { BriefcaseBusinessIcon, Building2Icon, MapPinIcon } from "lucide-react";
 
+import { CompanyTrustBadge } from "@/components/public/company-trust-badge";
 import { ResponseSignal } from "@/components/public/response-signal";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +21,7 @@ export function CompanyCard({
         <CardTitle as={headingLevel} className="text-lg">
           <Link href={`/companies/${company.slug}`} className="underline-offset-4 hover:text-primary hover:underline">{company.name}</Link>
         </CardTitle>
-        {company.verified ? <Badge variant="secondary"><BadgeCheckIcon aria-hidden="true" /> Verifiziert</Badge> : <Badge variant="outline">Öffentliches Profil</Badge>}
+        {company.trust ? <CompanyTrustBadge trust={company.trust} /> : <Badge variant="outline">Öffentliches Profil</Badge>}
       </CardHeader>
       <CardContent className="mt-auto grid gap-3 text-sm">
         {company.industry === null ? null : <p className="text-muted-foreground">{company.industry}</p>}

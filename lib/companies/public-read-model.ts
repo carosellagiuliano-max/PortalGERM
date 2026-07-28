@@ -12,6 +12,11 @@ import {
   type PlanVersionEntitlementSource,
   type SubscriptionEntitlementSource,
 } from "@/lib/billing/entitlements";
+import type { CompanyTrustActivation } from "@/lib/companies/verification/policy-v2";
+import {
+  companyTrustActivationFromEnvironment,
+  evaluateCompanyTrustForCompanies,
+} from "@/lib/companies/verification/read-model";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -25,6 +30,7 @@ import type {
   PublicCompanyCardModel,
   PublicCompanyDetailModel,
   PublicCompanyDirectoryPage,
+  PublicCompanyTrustBadge,
   PublicJobCardModel,
   PublicResponseEvidence,
 } from "@/lib/public/types";
@@ -53,6 +59,7 @@ export type PublicCompanyCardProjectionSource =
         canton: Readonly<{ name: string }>;
       }>[];
       currentVerifiedCycleIds: readonly string[];
+      trust?: PublicCompanyTrustBadge | null;
     }>;
 
 type PublicCompanyEnhancedCardProjectionSource =
@@ -78,6 +85,9 @@ export type PublicCompanyReadOptions = Readonly<{
   dataContext?: PublicDataContext;
   /** Test seam; production callers use the guarded session secret. */
   cursorSecret?: string;
+  /** Test seams; runtime callers use the validated activation contract. */
+  trustActivation?: CompanyTrustActivation;
+  trustEnvironment?: "local" | "ci" | "preview" | "staging" | "production";
 }>;
 
 export type PublicCompanyJobsLoader = (
@@ -226,7 +236,8 @@ export function projectPublicCompanyCard(
     size: boundedOptionalText(source.size, 64),
     city: boundedOptionalText(location?.city.name ?? null, 200),
     canton: boundedOptionalText(location?.canton.name ?? null, 200),
-    verified: source.currentVerifiedCycleIds.length === 1,
+    verified: source.trust !== undefined && source.trust !== null,
+    trust: source.trust ?? null,
     openJobCount,
     benefitsPreview:
       input.enhancedProfile && hasEnhancedCardSource(source)
@@ -322,6 +333,10 @@ export async function listPublicCompanyDirectory(
   if (!isValidDate(now)) return emptyCompanyDirectoryPage(false);
   const database = options.database ?? getDatabase();
   const dataContext = options.dataContext ?? getPublicDataContext();
+  const trustActivation =
+    options.trustActivation ?? companyTrustActivationFromEnvironment();
+  const trustEnvironment =
+    options.trustEnvironment ?? getServerEnvironment().APP_ENV;
   const queryHash = createCompanyDirectoryQueryHash(
     normalizedInput,
     dataContext.liveOnly,
@@ -334,30 +349,38 @@ export async function listPublicCompanyDirectory(
         options,
       );
   const invalidCursor = input.cursor !== undefined && decodedCursor === null;
+  if (
+    normalizedInput.verifiedOnly &&
+    (trustActivation.policyMode !== "enforce" || !trustActivation.strongBadge)
+  ) {
+    return emptyCompanyDirectoryPage(invalidCursor);
+  }
 
   const loaded = await database.$transaction(
     async (transaction) => {
-      const restrictions = await transaction.moderationRestriction.findMany({
-        where: {
-          targetType: "PAUSE_COMPANY",
-          status: "ACTIVE",
-          startsAt: { lte: now },
-          liftedAt: null,
-          OR: [{ endsAt: null }, { endsAt: { gt: now } }],
-        },
-        select: { targetId: true },
-      });
-      const ambiguousVerificationRows = normalizedInput.verifiedOnly
-        ? await transaction.companyVerificationRequest.groupBy({
-            by: ["companyId"],
-            where: { status: "VERIFIED", supersededBy: null },
-            having: { companyId: { _count: { gt: 1 } } },
-          })
-        : [];
+      const [restrictions, activeContainments] = await Promise.all([
+        transaction.moderationRestriction.findMany({
+          where: {
+            targetType: "PAUSE_COMPANY",
+            status: "ACTIVE",
+            startsAt: { lte: now },
+            liftedAt: null,
+            OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+          },
+          select: { targetId: true },
+        }),
+        transaction.trustSafetyContainmentEffect.findMany({
+          where: {
+            targetType: "COMPANY",
+            reversedAt: null,
+          },
+          select: { targetId: true },
+        }),
+      ]);
       const excludedIds = [
         ...new Set([
           ...restrictions.map((restriction) => restriction.targetId),
-          ...ambiguousVerificationRows.map((row) => row.companyId),
+          ...activeContainments.map((containment) => containment.targetId),
         ]),
       ];
       const where: Prisma.CompanyWhereInput = {
@@ -392,8 +415,54 @@ export async function listPublicCompanyDirectory(
             }),
         ...(normalizedInput.verifiedOnly
           ? {
-              verificationRequests: {
-                some: { status: "VERIFIED", supersededBy: null },
+              trustProjections: {
+                some: {
+                  scope: "COMPANY_IDENTITY",
+                  level: "STRONG",
+                  status: { in: ["ACTIVE", "EXPIRING"] },
+                  riskState: "CLEAR",
+                  policyVersion: "COMPANY_TRUST_POLICY_V2",
+                  verifiedAt: { lte: now },
+                  expiresAt: { gt: now },
+                  decision: {
+                    is: {
+                      kind: { in: ["APPROVED", "RESTORED"] },
+                      policyVersion: "COMPANY_TRUST_POLICY_V2",
+                      validFrom: { lte: now },
+                      validTo: { gt: now },
+                    },
+                  },
+                  verificationRequest: {
+                    is: {
+                      AND: [
+                        {
+                          evidence: {
+                            some: {
+                              type: "UID_REGISTER",
+                              scope: "COMPANY_IDENTITY",
+                              status: "VALID",
+                              revokedAt: null,
+                              validFrom: { lte: now },
+                              validTo: { gt: now },
+                            },
+                          },
+                        },
+                        {
+                          evidence: {
+                            some: {
+                              type: "DOMAIN_CHALLENGE",
+                              scope: "COMPANY_IDENTITY",
+                              status: "VALID",
+                              revokedAt: null,
+                              validFrom: { lte: now },
+                              validTo: { gt: now },
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
               },
             }
           : {}),
@@ -423,15 +492,30 @@ export async function listPublicCompanyDirectory(
         select: PUBLIC_COMPANY_CARD_SELECT,
       });
       const pageRows = companies.slice(0, limit);
+      const trustByCompanyId = await evaluateCompanyTrustForCompanies(
+        transaction,
+        pageRows.map((company) => company.id),
+        {
+          now,
+          activation: trustActivation,
+          environment: trustEnvironment,
+        },
+      );
       const sources = pageRows
         .map((company) =>
-          toPublicCompanyCardProjectionSource(company, false),
+          toPublicCompanyCardProjectionSource(
+            company,
+            false,
+            toPublicTrustBadge(
+              trustByCompanyId.get(company.id)?.badge ?? null,
+            ),
+          ),
         )
         .filter((source) =>
           evaluatePublicCompanyEligibility(
             source,
             dataContext.eligibilityEnvironment,
-          ),
+          ) && (!normalizedInput.verifiedOnly || source.trust !== null),
         );
       const enhancedProfileByCompanyId =
         await loadEnhancedCompanyProfileAccessByCompanyId(
@@ -579,14 +663,22 @@ async function loadCardProjectionSource(
         select: PUBLIC_COMPANY_CARD_SELECT,
       });
       if (company === null) return null;
-      const restrictionCount = await countEffectiveCompanyPauses(
-        transaction,
-        company.id,
-        now,
-      );
+      const [restrictionCount, trustByCompanyId] = await Promise.all([
+        countEffectiveCompanyPauses(transaction, company.id, now),
+        evaluateCompanyTrustForCompanies(transaction, [company.id], {
+          now,
+          activation:
+            options.trustActivation ?? companyTrustActivationFromEnvironment(),
+          environment:
+            options.trustEnvironment ?? getServerEnvironment().APP_ENV,
+        }),
+      ]);
       const source = toPublicCompanyCardProjectionSource(
         company,
         restrictionCount > 0,
+        toPublicTrustBadge(
+          trustByCompanyId.get(company.id)?.badge ?? null,
+        ),
       );
       return evaluatePublicCompanyEligibility(
         source,
@@ -625,14 +717,22 @@ async function loadDetailProjectionSource(
       });
       if (company === null) return null;
 
-      const restrictionCount = await countEffectiveCompanyPauses(
-        transaction,
-        company.id,
-        now,
-      );
+      const [restrictionCount, trustByCompanyId] = await Promise.all([
+        countEffectiveCompanyPauses(transaction, company.id, now),
+        evaluateCompanyTrustForCompanies(transaction, [company.id], {
+          now,
+          activation:
+            options.trustActivation ?? companyTrustActivationFromEnvironment(),
+          environment:
+            options.trustEnvironment ?? getServerEnvironment().APP_ENV,
+        }),
+      ]);
       const source = toPublicCompanyProjectionSource(
         company,
         restrictionCount > 0,
+        toPublicTrustBadge(
+          trustByCompanyId.get(company.id)?.badge ?? null,
+        ),
       );
       if (
         !evaluatePublicCompanyEligibility(
@@ -679,6 +779,7 @@ async function countEffectiveCompanyPauses(
 function toPublicCompanyCardProjectionSource(
   company: PublicCompanyCardSourceRow,
   hasEffectivePauseRestriction: boolean,
+  trust: PublicCompanyTrustBadge | null,
 ): PublicCompanyCardProjectionSource {
   return {
     id: company.id,
@@ -692,6 +793,7 @@ function toPublicCompanyCardProjectionSource(
     currentVerifiedCycleIds: company.verificationRequests.map(
       (request) => request.id,
     ),
+    trust,
     hasEffectivePauseRestriction,
   };
 }
@@ -699,11 +801,13 @@ function toPublicCompanyCardProjectionSource(
 function toPublicCompanyProjectionSource(
   company: PublicCompanyDetailSourceRow,
   hasEffectivePauseRestriction: boolean,
+  trust: PublicCompanyTrustBadge | null,
 ): PublicCompanyProjectionSource {
   return {
     ...toPublicCompanyCardProjectionSource(
       company,
       hasEffectivePauseRestriction,
+      trust,
     ),
     website: company.website,
     about: company.about,
@@ -726,6 +830,28 @@ function toPublicCompanyEnhancedCardProjectionSource(
     responseSampleSize: enhancement.responseSampleSize,
     responseWithinTargetBps: enhancement.responseWithinTargetBps,
   };
+}
+
+function toPublicTrustBadge(
+  badge: Readonly<{
+    label: "Firmenidentität geprüft";
+    scopeLabel: "UID-Register und Domainkontrolle";
+    method: "UID_REGISTER_AND_DOMAIN_CHALLENGE";
+    policyVersion: "COMPANY_TRUST_POLICY_V2";
+    verifiedAt: Date;
+    validUntil: Date;
+  }> | null,
+): PublicCompanyTrustBadge | null {
+  return badge === null
+    ? null
+    : Object.freeze({
+        label: badge.label,
+        scopeLabel: badge.scopeLabel,
+        method: badge.method,
+        policyVersion: badge.policyVersion,
+        verifiedAt: new Date(badge.verifiedAt),
+        validUntil: new Date(badge.validUntil),
+      });
 }
 
 /**

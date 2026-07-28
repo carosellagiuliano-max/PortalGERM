@@ -603,6 +603,12 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260728125500_phase_25_security_incident_task",
       "20260728130000_phase_25_authenticator_reset_audit",
       "20260728131000_phase_25_trust_effects",
+      "20260728140000_phase_26_company_trust",
+      "20260728141000_phase_26_company_verification_capabilities",
+      "20260728142000_phase_26_company_verification_approval",
+      "20260728143000_phase_26_verification_re_review_cycles",
+      "20260728144000_phase_26_company_trust_audit_contract",
+      "20260728145000_phase_26_verification_document_read_audience",
     ]);
     expect(
       migrations.rows.every(

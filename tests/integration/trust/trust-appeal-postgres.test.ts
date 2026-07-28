@@ -1,9 +1,15 @@
+import { createHash, randomUUID } from "node:crypto";
+
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   beginStepUpChallenge,
   completeStepUpChallenge,
 } from "@/lib/auth/assurance/step-up-service";
+import {
+  COMPANY_TRUST_POLICY_V2,
+  companyTrustEvidenceDigest,
+} from "@/lib/companies/verification/policy-v2";
 import { recordAndDecideRiskSignal } from "@/lib/security/risk/risk-service";
 import {
   assignTrustSafetyCase,
@@ -140,12 +146,21 @@ describe("Phase 25 false-positive appeal and restore", () => {
       ),
     ).toEqual({ ok: false, code: "CONFLICT" });
 
+    const reverifiedAt = new Date(fixture.now.getTime() + 3_000);
+    await createFreshStrongTrust(
+      fixture,
+      scenario.company.id,
+      scenario.verification.id,
+      reverifiedAt,
+    );
+    const restoreAt = new Date(reverifiedAt.getTime() + 1_000);
     const restoreGrant = await issueTrustGrant(
       fixture,
       fixture.trustApprover,
       "TRUST_APPEAL_APPROVE",
       scenario.company.id,
       signal.value.caseId,
+      restoreAt,
     );
     const restored = await decideTrustSafetyAppeal(
       {
@@ -156,7 +171,7 @@ describe("Phase 25 false-positive appeal and restore", () => {
         stepUpEvidenceId: restoreGrant.evidenceId,
         stepUpGrantToken: restoreGrant.grantToken,
       },
-      trustAdminDependencies(fixture, fixture.trustApprover),
+      trustAdminDependencies(fixture, fixture.trustApprover, restoreAt),
     );
     expect(restored.ok).toBe(true);
 
@@ -193,8 +208,9 @@ async function issueTrustGrant(
   action: string,
   tenantId: string,
   resourceId: string,
+  now = fixture.now,
 ) {
-  const dependencies = fixture.stepUpDependencies(actor);
+  const dependencies = fixture.stepUpDependencies(actor, now);
   const challenge = await beginStepUpChallenge(
     {
       purpose: "TRUST_SAFETY",
@@ -214,4 +230,156 @@ async function issueTrustGrant(
   );
   if (!grant.ok) throw new Error(grant.code);
   return grant.value;
+}
+
+async function createFreshStrongTrust(
+  fixture: Phase25SecurityFixture,
+  companyId: string,
+  supersedesRequestId: string,
+  verifiedAt: Date,
+) {
+  const validTo = new Date(verifiedAt.getTime() + 180 * 86_400_000);
+  const request = await fixture.database.companyVerificationRequest.create({
+    data: {
+      companyId,
+      requestedByUserId: fixture.employer.userId,
+      supersedesRequestId,
+      assignedReviewerUserId: fixture.trustReviewer.userId,
+      status: "VERIFIED",
+      riskLevel: "NORMAL",
+      policyVersion: COMPANY_TRUST_POLICY_V2.version,
+      priority: 80,
+      assignedAt: verifiedAt,
+      reviewStartedAt: verifiedAt,
+      reviewDueAt: new Date(verifiedAt.getTime() + 3 * 86_400_000),
+      decidedAt: verifiedAt,
+      createdAt: verifiedAt,
+    },
+  });
+  const challenge = await fixture.database.companyDomainChallenge.create({
+    data: {
+      verificationRequestId: request.id,
+      companyId,
+      issuedByUserId: fixture.employer.userId,
+      domain: "phase25.example",
+      tokenHash: hash(`phase25-trust-token:${request.id}`),
+      proofDigest: hash(`phase25-trust-proof:${request.id}`),
+      status: "VERIFIED",
+      issuedAt: verifiedAt,
+      expiresAt: validTo,
+      verifiedAt,
+      createdAt: verifiedAt,
+    },
+  });
+  const [uidEvidence, domainEvidence] = await Promise.all([
+    fixture.database.companyVerificationEvidence.create({
+      data: {
+        verificationRequestId: request.id,
+        companyId,
+        createdByUserId: fixture.employer.userId,
+        type: "UID_REGISTER",
+        scope: "COMPANY_IDENTITY",
+        status: "VALID",
+        source: "phase25_regression_fixture",
+        providerKey: "deterministic_sandbox",
+        normalizedIdentifier: "CHE-111.222.333",
+        responseDigest: hash(`phase25-uid:${request.id}`),
+        checkedAt: verifiedAt,
+        validFrom: verifiedAt,
+        validTo,
+        createdAt: verifiedAt,
+      },
+    }),
+    fixture.database.companyVerificationEvidence.create({
+      data: {
+        verificationRequestId: request.id,
+        companyId,
+        createdByUserId: fixture.employer.userId,
+        domainChallengeId: challenge.id,
+        type: "DOMAIN_CHALLENGE",
+        scope: "COMPANY_IDENTITY",
+        status: "VALID",
+        source: "phase25_regression_fixture",
+        providerKey: "deterministic_sandbox",
+        normalizedIdentifier: "phase25.example",
+        responseDigest: hash(`phase25-domain:${request.id}`),
+        checkedAt: verifiedAt,
+        validFrom: verifiedAt,
+        validTo,
+        createdAt: verifiedAt,
+      },
+    }),
+  ]);
+  const evidenceDigest = companyTrustEvidenceDigest([
+    {
+      type: uidEvidence.type,
+      responseDigest: uidEvidence.responseDigest,
+      validTo: uidEvidence.validTo,
+    },
+    {
+      type: domainEvidence.type,
+      responseDigest: domainEvidence.responseDigest,
+      validTo: domainEvidence.validTo,
+    },
+  ]);
+  const decision = await fixture.database.companyVerificationDecision.create({
+    data: {
+      verificationRequestId: request.id,
+      companyId,
+      decidedByUserId: fixture.trustReviewer.userId,
+      kind: "APPROVED",
+      scope: "COMPANY_IDENTITY",
+      riskLevel: "NORMAL",
+      policyVersion: COMPANY_TRUST_POLICY_V2.version,
+      reasonCode: "REVERIFICATION_CONFIRMED",
+      evidenceDigest,
+      idempotencyKey: `phase25-regression:${randomUUID()}`,
+      validFrom: verifiedAt,
+      validTo,
+      decidedAt: verifiedAt,
+      createdAt: verifiedAt,
+    },
+  });
+  await fixture.database.companyTrustProjection.upsert({
+    where: {
+      companyId_scope: {
+        companyId,
+        scope: "COMPANY_IDENTITY",
+      },
+    },
+    create: {
+      companyId,
+      verificationRequestId: request.id,
+      decisionId: decision.id,
+      scope: "COMPANY_IDENTITY",
+      level: "STRONG",
+      status: "ACTIVE",
+      riskState: "CLEAR",
+      policyVersion: COMPANY_TRUST_POLICY_V2.version,
+      evidenceDigest,
+      reasonCode: "REVERIFICATION_CONFIRMED",
+      verifiedAt,
+      expiresAt: validTo,
+      changedAt: verifiedAt,
+      createdAt: verifiedAt,
+    },
+    update: {
+      verificationRequestId: request.id,
+      decisionId: decision.id,
+      level: "STRONG",
+      status: "ACTIVE",
+      riskState: "CLEAR",
+      policyVersion: COMPANY_TRUST_POLICY_V2.version,
+      evidenceDigest,
+      reasonCode: "REVERIFICATION_CONFIRMED",
+      verifiedAt,
+      expiresAt: validTo,
+      changedAt: verifiedAt,
+      version: { increment: 1 },
+    },
+  });
+}
+
+function hash(value: string) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }

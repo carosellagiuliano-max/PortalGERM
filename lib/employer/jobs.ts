@@ -11,6 +11,7 @@ import type { FeatureGateReason } from "@/lib/billing/feature-gates";
 import { createPrismaPublishQuotaPort } from "@/lib/billing/prisma-publish-quota";
 import { publishWithQuota } from "@/lib/billing/usage";
 import type { UpgradePrompt } from "@/lib/billing/upgrade-prompt";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import type { DatabaseClient } from "@/lib/db/factory";
 import {
   APPLICATION_CONTACT_KINDS,
@@ -1336,8 +1337,14 @@ export async function reactivateEmployerJob(
     if (revision === null || loaded.status !== "PAUSED" || loaded.currentRevisionId !== loaded.publishedRevisionId) return failure("CONFLICT");
     if (loaded.version !== parsed.data.expectedJobVersion || revision.version !== parsed.data.expectedRevisionVersion) return failure("CONFLICT");
     if (revision.approvedAt === null || revision.rejectedAt !== null || !isFuturePublicationDate(revision.validThrough, now)) return failure("CONFLICT");
-    const verifiedCount = await transaction.companyVerificationRequest.count({ where: { companyId: dependencies.actor.companyId, status: "VERIFIED", supersededBy: null } });
-    if (verifiedCount !== 1) return failure("VERIFICATION_REQUIRED");
+    const companyTrust = await evaluateCompanyTrustForCompany(
+      transaction,
+      dependencies.actor.companyId,
+      { now },
+    );
+    if (!companyTrust.publicEligible) {
+      return failure("VERIFICATION_REQUIRED");
+    }
     const restrictionCount = await transaction.moderationRestriction.count({
       where: {
         status: "ACTIVE",

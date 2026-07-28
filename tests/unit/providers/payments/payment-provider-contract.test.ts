@@ -79,12 +79,13 @@ describe("Phase-24 Stripe hosted provider contract", () => {
 
   it("verifies the exact raw body, timestamp and merchant account", () => {
     const { provider, stripe } = providerWithStripe();
+    const signedAt = Math.floor(Date.now() / 1_000);
     const payload = JSON.stringify({
       id: "evt_phase24valid",
       object: "event",
       api_version: "2026-06-30.basil",
       account: ACCOUNT,
-      created: 1_785_192_000,
+      created: signedAt,
       livemode: false,
       type: "checkout.session.completed",
       data: {
@@ -105,7 +106,7 @@ describe("Phase-24 Stripe hosted provider contract", () => {
     const signatureHeader = stripe.webhooks.generateTestHeaderString({
       payload,
       secret: SECRET,
-      timestamp: 1_785_192_000,
+      timestamp: signedAt,
     });
     expect(
       provider.verifyWebhook({

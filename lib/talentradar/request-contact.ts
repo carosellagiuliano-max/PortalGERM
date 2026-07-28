@@ -18,6 +18,7 @@ import { consumeOneCompanyCreditInLockedTransaction } from "@/lib/billing/credit
 import { getEffectiveEntitlements } from "@/lib/billing/entitlements";
 import { canRequestContact } from "@/lib/billing/feature-gates";
 import { createPrismaEntitlementRepository } from "@/lib/billing/prisma-publish-quota";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import type {
   SecretHandle,
   ServerEnvironment,
@@ -613,15 +614,12 @@ export async function sendContactRequest(
       dependencies.actor,
     );
     if (employer === null) return contactFailure("FORBIDDEN");
-    const currentVerificationCount =
-      await transaction.companyVerificationRequest.count({
-        where: {
-          companyId: dependencies.actor.companyId,
-          status: "VERIFIED",
-          supersededBy: null,
-        },
-      });
-    if (currentVerificationCount !== 1) return contactFailure("FORBIDDEN");
+    const trust = await evaluateCompanyTrustForCompany(
+      transaction,
+      dependencies.actor.companyId,
+      { now },
+    );
+    if (!trust.radarEligible) return contactFailure("FORBIDDEN");
 
     const entitlements = await getEffectiveEntitlements(
       dependencies.actor.companyId,

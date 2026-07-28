@@ -196,6 +196,9 @@ export async function assertCriticalAccessibility(page: Page) {
   const critical = result.violations.filter(
     (violation) => violation.impact === "critical",
   );
+  const serious = result.violations.filter(
+    (violation) => violation.impact === "serious",
+  );
   expect(
     critical.map((violation) => ({
       id: violation.id,
@@ -205,9 +208,18 @@ export async function assertCriticalAccessibility(page: Page) {
   ).toEqual([]);
   return Object.freeze({
     critical: critical.length,
-    serious: result.violations.filter(
-      (violation) => violation.impact === "serious",
-    ).length,
+    serious: serious.length,
+    seriousViolations: Object.freeze(
+      serious.map((violation) =>
+        Object.freeze({
+          id: violation.id,
+          help: violation.help,
+          targets: Object.freeze(
+            violation.nodes.map((node) => Object.freeze([...node.target])),
+          ),
+        }),
+      ),
+    ),
     total: result.violations.length,
   });
 }

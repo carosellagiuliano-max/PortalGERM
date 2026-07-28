@@ -57,6 +57,20 @@
   },
   {
     "kind": "page",
+    "path": "/admin/company-verification",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/admin/company-verification/[id]",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
     "path": "/admin/content",
     "roles": [
       "ADMIN"
@@ -303,6 +317,13 @@
   {
     "kind": "page",
     "path": "/alerts/unsubscribe/[token]",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/company-verification/documents/upload-intents",
     "roles": [
       "PUBLIC"
     ]
@@ -728,6 +749,14 @@
   {
     "kind": "page",
     "path": "/employer/team/invitations",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/verification",
     "roles": [
       "EMPLOYER",
       "RECRUITER"

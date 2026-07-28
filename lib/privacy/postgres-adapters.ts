@@ -4,6 +4,7 @@ import {
   writeRequiredAudit,
   type AuditPersistenceRecord,
 } from "@/lib/audit/log";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 import { Prisma } from "@/lib/generated/prisma/client";
@@ -337,6 +338,13 @@ export function createPostgresRevealConfirmationPort(
           `;
           await transaction.$queryRaw<Array<{ id: string }>>`
             SELECT "id"
+            FROM "CompanyTrustProjection"
+            WHERE "companyId" = ${lockedRequest.companyId}::uuid
+            ORDER BY "id"
+            FOR UPDATE
+          `;
+          await transaction.$queryRaw<Array<{ id: string }>>`
+            SELECT "id"
             FROM "Conversation"
             WHERE "contactRequestId" = ${input.contactRequestId}::uuid
             FOR UPDATE
@@ -371,17 +379,10 @@ export function createPostgresRevealConfirmationPort(
             where: { contactRequestId: request.id },
             select: { id: true },
           });
-          const currentVerifications =
-            await transaction.companyVerificationRequest.findMany({
-              where: {
-                companyId: request.companyId,
-                status: "VERIFIED",
-                supersededBy: null,
-              },
-              orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-              take: 2,
-              select: { id: true },
-            });
+          const trust = await evaluateCompanyTrustForCompany(
+            transaction,
+            request.companyId,
+          );
           const revealGrant = await transaction.identityRevealGrant.findUnique({
             where: { contactRequestId: request.id },
             select: {
@@ -394,8 +395,7 @@ export function createPostgresRevealConfirmationPort(
           });
 
           const conversationId = conversation?.id ?? null;
-          const hasExactlyOneCurrentVerification =
-            currentVerifications.length === 1;
+          const hasExactlyOneCurrentVerification = trust.radarEligible;
           if (
             candidateProfile.userId !== input.actorUserId ||
             candidateUser?.status !== "ACTIVE" ||

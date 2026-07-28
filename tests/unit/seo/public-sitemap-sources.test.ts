@@ -6,6 +6,15 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/seo/cluster-indexability", () => ({
   listIndexableClusterLandings,
 }));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: () => ({
+    APP_ENV: "ci",
+    COMPANY_TRUST_V2: "enforce",
+    COMPANY_STRONG_BADGE: true,
+    COMPANY_TRUST_PUBLIC_ELIGIBILITY: true,
+    COMPANY_TRUST_RAPID_REVOKE: true,
+  }),
+}));
 
 import {
   listEligibleClusterSitemapRows,
@@ -14,9 +23,11 @@ import {
   listEligibleJobSitemapRows,
   PublicSitemapCapacityError,
 } from "@/lib/seo/public-sitemap";
+import { companyTrustReadRow } from "@/tests/fixtures/company-trust-read-model";
 
 const NOW = new Date("2026-07-22T10:00:00.000Z");
 const UPDATED_AT = new Date("2026-07-21T08:00:00.000Z");
+const COMPANY_ID = "00000000-0000-4000-8000-000000000010";
 
 function databaseWithTransaction(transaction: object) {
   return {
@@ -30,7 +41,7 @@ function eligibleJobRow(id: string, slug: string) {
   return {
     id,
     slug,
-    companyId: "00000000-0000-4000-8000-000000000010",
+    companyId: COMPANY_ID,
     status: "PUBLISHED",
     dataProvenance: "LIVE",
     currentRevisionId: `${id.slice(0, -2)}20`,
@@ -113,6 +124,14 @@ describe("Phase 15 sitemap database sources", () => {
     const database = databaseWithTransaction({
       job: { findMany: jobFindMany },
       moderationRestriction: { findMany: moderationRestrictionFindMany },
+      company: {
+        findMany: vi.fn().mockResolvedValue([
+          companyTrustReadRow({ companyId: COMPANY_ID, now: NOW }),
+        ]),
+      },
+      trustSafetyContainmentEffect: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     });
 
     await expect(

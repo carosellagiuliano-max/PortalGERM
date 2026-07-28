@@ -15,6 +15,8 @@ const databaseMocks = vi.hoisted(() => ({
   queryRaw: vi.fn(),
   jobRevisionFindFirst: vi.fn(),
   restrictionFindMany: vi.fn(),
+  companyFindMany: vi.fn(),
+  containmentFindMany: vi.fn(),
   transactionOptions: vi.fn(),
 }));
 
@@ -36,6 +38,10 @@ vi.mock("@/lib/db/client", () => ({
       canton: { findMany: databaseMocks.cantonFindMany },
       city: { findMany: databaseMocks.cityFindMany },
       moderationRestriction: { findMany: databaseMocks.restrictionFindMany },
+      company: { findMany: databaseMocks.companyFindMany },
+      trustSafetyContainmentEffect: {
+        findMany: databaseMocks.containmentFindMany,
+      },
       $queryRaw: databaseMocks.queryRaw,
     };
     return {
@@ -58,7 +64,12 @@ vi.mock("@/lib/public/environment", () => ({
 
 vi.mock("@/lib/config/env", () => ({
   getServerEnvironment: () => ({
+    APP_ENV: "ci",
     APP_URL: "https://swisstalenthub.test",
+    COMPANY_TRUST_V2: "enforce",
+    COMPANY_STRONG_BADGE: true,
+    COMPANY_TRUST_PUBLIC_ELIGIBILITY: true,
+    COMPANY_TRUST_RAPID_REVOKE: true,
     secrets: {
       session: {
         withValue: (consumer: (secret: string) => unknown) =>
@@ -77,6 +88,7 @@ import {
   loadPublicOpenJobCounts,
 } from "@/lib/jobs/public-read-model";
 import { parsePublicJobSearchParams } from "@/lib/public/query-params";
+import { companyTrustReadRow } from "@/tests/fixtures/company-trust-read-model";
 
 const NOW = new Date("2026-07-20T12:00:00.000Z");
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
@@ -142,6 +154,13 @@ describe("public Job query data minimization", () => {
     installDatabaseRanking({ organic: [], totalEligible: 0 });
     databaseMocks.jobRevisionFindFirst.mockResolvedValue(null);
     databaseMocks.restrictionFindMany.mockResolvedValue([]);
+    databaseMocks.containmentFindMany.mockResolvedValue([]);
+    databaseMocks.companyFindMany.mockImplementation(
+      async (query: { where?: { id?: { in?: readonly string[] } } }) =>
+        (query.where?.id?.in ?? []).map((companyId) =>
+          companyTrustReadRow({ companyId, now: NOW })
+        ),
+    );
   });
 
   it("keeps list queries on the card projection without detail-only fields", async () => {

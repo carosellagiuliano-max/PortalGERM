@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
+import { hasCurrentStrongCompanyTrustEvidence } from "@/lib/companies/verification/read-model";
 import {
   adminFailure,
   adminNow,
@@ -649,7 +650,7 @@ export async function decideTrustSafetyAppeal(
         }
         if (
           parsed.data.decision === "APPROVE" &&
-          !(await restorePreconditionsMet(transaction, trustCase))
+          !(await restorePreconditionsMet(transaction, trustCase, now))
         ) {
           return adminFailure("VERIFICATION_REQUIRED");
         }
@@ -812,17 +813,15 @@ async function restorePreconditionsMet(
     subjectType: string;
     subjectId: string;
     companyId: string | null;
+    createdAt: Date;
   }>,
+  now: Date,
 ): Promise<boolean> {
   if (trustCase.companyId !== null) {
-    return (
-      (await transaction.companyVerificationRequest.count({
-        where: {
-          companyId: trustCase.companyId,
-          status: "VERIFIED",
-          supersededBy: null,
-        },
-      })) === 1
+    return hasCurrentStrongCompanyTrustEvidence(
+      transaction,
+      trustCase.companyId,
+      { now, verifiedAfter: trustCase.createdAt },
     );
   }
   if (trustCase.subjectType === "USER") {

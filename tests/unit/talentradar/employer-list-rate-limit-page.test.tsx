@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   consumeRequestRateLimit: vi.fn(),
   database: {
-    company: { findUnique: vi.fn() },
+    company: { findUnique: vi.fn(), findMany: vi.fn() },
     skill: { findMany: vi.fn() },
+    trustSafetyContainmentEffect: { findMany: vi.fn() },
   },
   getAuthRequestContext: vi.fn(),
   getDatabase: vi.fn(),
@@ -71,6 +72,7 @@ vi.mock("@/lib/talentradar/request-contact", () => ({
 }));
 
 import EmployerTalentRadarPage from "@/app/employer/talent-radar/page";
+import { companyTrustReadRow } from "@/tests/fixtures/company-trust-read-model";
 
 const USER_ID = "94000000-0000-4000-8000-000000000001";
 const COMPANY_ID = "94000000-0000-4000-8000-000000000002";
@@ -85,7 +87,11 @@ const secretKey = Object.freeze({
   },
 });
 const ENVIRONMENT = Object.freeze({
-  APP_ENV: "production",
+  APP_ENV: "ci",
+  COMPANY_TRUST_V2: "enforce",
+  COMPANY_STRONG_BADGE: true,
+  COMPANY_TRUST_PUBLIC_ELIGIBILITY: true,
+  COMPANY_TRUST_RAPID_REVOKE: true,
   secrets: {
     session: secretKey,
     keyrings: {
@@ -114,6 +120,10 @@ describe("employer Radar list rate-limit denial", () => {
       status: "ACTIVE",
       verificationRequests: [{ id: "verified" }],
     });
+    mocks.database.company.findMany.mockResolvedValue([
+      companyTrustReadRow({ companyId: COMPANY_ID, now: new Date() }),
+    ]);
+    mocks.database.trustSafetyContainmentEffect.findMany.mockResolvedValue([]);
     mocks.database.skill.findMany.mockResolvedValue([]);
     mocks.getPrismaEffectiveEntitlements.mockResolvedValue({
       ok: true,

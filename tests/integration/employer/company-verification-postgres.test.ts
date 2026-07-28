@@ -449,7 +449,7 @@ describe.sequential("Phase-10 Company onboarding and verification", () => {
   );
 
   it(
-    "serializes successor creation and predecessor reopening in both lock orders",
+    "serializes successor creation and terminal predecessor transitions in both lock orders",
     async () => {
       const target = rawPool();
       const now = "2026-07-21T08:10:00.000Z";
@@ -461,7 +461,7 @@ describe.sequential("Phase-10 Company onboarding and verification", () => {
         null,
         now,
       );
-      await expectSerializedVerificationConflict(
+      await expectSerializedVerificationSuccess(
         target,
         verificationInsertStatement({
           id: IDS.childFirstSuccessor,
@@ -505,7 +505,7 @@ describe.sequential("Phase-10 Company onboarding and verification", () => {
         null,
         now,
       );
-      await expectSerializedVerificationConflict(
+      await expectSerializedVerificationSuccess(
         target,
         verificationStatusStatement(
           IDS.predecessorFirstPredecessor,
@@ -540,7 +540,7 @@ describe.sequential("Phase-10 Company onboarding and verification", () => {
   );
 });
 
-async function expectSerializedVerificationConflict(
+async function expectSerializedVerificationSuccess(
   target: Pool,
   winningStatement: SqlStatement,
   competingStatement: SqlStatement,
@@ -577,14 +577,7 @@ async function expectSerializedVerificationConflict(
     await winner.query("COMMIT");
 
     const outcome = await competingWrite;
-    expect(outcome.ok).toBe(false);
-    if (!outcome.ok) {
-      expect(outcome.error).toBeInstanceOf(Error);
-      expect(outcome.error).toMatchObject({
-        code: "23514",
-        constraint: "company_verification_supersession_terminal",
-      });
-    }
+    expect(outcome).toEqual({ ok: true });
   } finally {
     await winner.query("ROLLBACK").catch(() => undefined);
     if (competingWrite) {

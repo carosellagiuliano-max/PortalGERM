@@ -110,6 +110,7 @@ const nextConfig = (phase: string): NextConfig => {
       : baseSecurityHeaders;
 
   return {
+    allowedDevOrigins: ["127.0.0.1"],
     outputFileTracingRoot: projectRoot,
     experimental: {
       authInterrupts: true,

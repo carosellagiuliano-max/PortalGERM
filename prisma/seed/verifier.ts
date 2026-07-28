@@ -739,6 +739,107 @@ async function loadObservedSeedState(
     },
     orderBy: { slug: "asc" },
   });
+  const structuredDemoCompanyTrust =
+    await db.companyTrustProjection.findUnique({
+      where: {
+        companyId_scope: {
+          companyId: stableSeedId("company", DEMO_COMPANY_SLUG),
+          scope: "COMPANY_IDENTITY",
+        },
+      },
+      select: {
+        id: true,
+        companyId: true,
+        verificationRequestId: true,
+        decisionId: true,
+        scope: true,
+        level: true,
+        status: true,
+        riskState: true,
+        policyVersion: true,
+        evidenceDigest: true,
+        reasonCode: true,
+        verifiedAt: true,
+        expiresAt: true,
+        changedAt: true,
+        decision: {
+          select: {
+            id: true,
+            kind: true,
+            scope: true,
+            riskLevel: true,
+            policyVersion: true,
+            reasonCode: true,
+            evidenceDigest: true,
+            decidedByUserId: true,
+            approvedByUserId: true,
+            validFrom: true,
+            validTo: true,
+            decidedAt: true,
+          },
+        },
+        verificationRequest: {
+          select: {
+            id: true,
+            companyId: true,
+            requestedByUserId: true,
+            assignedReviewerUserId: true,
+            status: true,
+            riskLevel: true,
+            policyVersion: true,
+            priority: true,
+            evidence: {
+              orderBy: [{ type: "asc" }, { id: "asc" }],
+              select: {
+                id: true,
+                type: true,
+                scope: true,
+                status: true,
+                source: true,
+                providerKey: true,
+                normalizedIdentifier: true,
+                responseDigest: true,
+                reasonCode: true,
+                checkedAt: true,
+                validFrom: true,
+                validTo: true,
+                domainChallenge: {
+                  select: {
+                    id: true,
+                    domain: true,
+                    status: true,
+                    issuedAt: true,
+                    expiresAt: true,
+                    verifiedAt: true,
+                  },
+                },
+                checks: {
+                  orderBy: [{ providerUseCase: "asc" }, { id: "asc" }],
+                  select: {
+                    id: true,
+                    providerUseCase: true,
+                    adapterKey: true,
+                    adapterVersion: true,
+                    inputSchemaVersion: true,
+                    outputSchemaVersion: true,
+                    result: true,
+                    uidMatched: true,
+                    nameMatched: true,
+                    cantonMatched: true,
+                    domainMatched: true,
+                    responseDigest: true,
+                    retryable: true,
+                    latencyMs: true,
+                    providerRequestKey: true,
+                    checkedAt: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
   const jobs = await db.job.findMany({
     where: { dataProvenance: "DEMO" },
     include: {
@@ -988,6 +1089,7 @@ async function loadObservedSeedState(
     subscriptionSchedules,
     subscriptions,
     suspendedAuthActor,
+    structuredDemoCompanyTrust,
   };
 }
 
@@ -1787,6 +1889,276 @@ function verifyCompanies(
     expected.companies.length,
     SEED_GOLDEN_COUNTS.companies,
   );
+  verifyStructuredDemoCompanyTrust(context, observed, anchorAt);
+}
+
+function verifyStructuredDemoCompanyTrust(
+  context: VerificationContext,
+  observed: Awaited<ReturnType<typeof loadObservedSeedState>>,
+  anchorAt: Date,
+) {
+  const fixture = COMPANY_FIXTURES.find(
+    (company) => company.slug === DEMO_COMPANY_SLUG,
+  );
+  if (fixture === undefined) {
+    throw new Error("Canonical Phase 26 demo company fixture is missing.");
+  }
+  const checkedAt = shiftDays(anchorAt, -14);
+  const validTo = shiftDays(anchorAt, 166);
+  const registerValidTo = shiftDays(anchorAt, 351);
+  const domain = `${fixture.slug}.example.test`;
+  const registerDigest = sha256Utf8(
+    `phase26:register:${fixture.uid}:${fixture.name}:${fixture.cantonCode}`,
+  );
+  const domainDigest = sha256Utf8(
+    `phase26:domain:${domain}:verified`,
+  );
+  const evidenceDigest = sha256Utf8(
+    JSON.stringify([
+      {
+        type: "DOMAIN_CHALLENGE",
+        responseDigest: domainDigest,
+        validTo: validTo.toISOString(),
+      },
+      {
+        type: "UID_REGISTER",
+        responseDigest: registerDigest,
+        validTo: registerValidTo.toISOString(),
+      },
+    ]),
+  );
+  const trust = observed.structuredDemoCompanyTrust;
+  const summary =
+    trust === null
+      ? null
+      : {
+          id: trust.id,
+          companyId: trust.companyId,
+          verificationRequestId: trust.verificationRequestId,
+          decisionId: trust.decisionId,
+          scope: trust.scope,
+          level: trust.level,
+          status: trust.status,
+          riskState: trust.riskState,
+          policyVersion: trust.policyVersion,
+          evidenceDigest: trust.evidenceDigest,
+          reasonCode: trust.reasonCode,
+          verifiedAt: trust.verifiedAt?.toISOString() ?? null,
+          expiresAt: trust.expiresAt?.toISOString() ?? null,
+          changedAt: trust.changedAt.toISOString(),
+          decision:
+            trust.decision === null
+              ? null
+              : {
+                  ...trust.decision,
+                  validFrom:
+                    trust.decision.validFrom?.toISOString() ?? null,
+                  validTo: trust.decision.validTo?.toISOString() ?? null,
+                  decidedAt: trust.decision.decidedAt.toISOString(),
+                },
+          request: {
+            id: trust.verificationRequest.id,
+            companyId: trust.verificationRequest.companyId,
+            requestedByUserId:
+              trust.verificationRequest.requestedByUserId,
+            assignedReviewerUserId:
+              trust.verificationRequest.assignedReviewerUserId,
+            status: trust.verificationRequest.status,
+            riskLevel: trust.verificationRequest.riskLevel,
+            policyVersion: trust.verificationRequest.policyVersion,
+            priority: trust.verificationRequest.priority,
+            evidence: trust.verificationRequest.evidence
+              .map((evidence) => ({
+                id: evidence.id,
+                type: evidence.type,
+                scope: evidence.scope,
+                status: evidence.status,
+                source: evidence.source,
+                providerKey: evidence.providerKey,
+                normalizedIdentifier: evidence.normalizedIdentifier,
+                responseDigest: evidence.responseDigest,
+                reasonCode: evidence.reasonCode,
+                checkedAt: evidence.checkedAt?.toISOString() ?? null,
+                validFrom: evidence.validFrom?.toISOString() ?? null,
+                validTo: evidence.validTo?.toISOString() ?? null,
+                domainChallenge:
+                  evidence.domainChallenge === null
+                    ? null
+                    : {
+                        ...evidence.domainChallenge,
+                        issuedAt:
+                          evidence.domainChallenge.issuedAt.toISOString(),
+                        expiresAt:
+                          evidence.domainChallenge.expiresAt.toISOString(),
+                        verifiedAt:
+                          evidence.domainChallenge.verifiedAt?.toISOString() ??
+                          null,
+                      },
+                checks: evidence.checks.map((verificationCheck) => ({
+                  ...verificationCheck,
+                  checkedAt: verificationCheck.checkedAt.toISOString(),
+                })),
+              }))
+              .sort((left, right) => left.type.localeCompare(right.type)),
+          },
+        };
+  const reviewerUserId = stableSeedId("user", "admin@demo.ch");
+  const requestId = stableSeedId(
+    "company-verification-request",
+    `${fixture.slug}:current`,
+  );
+  const decisionId = stableSeedId(
+    "company-verification-decision",
+    `${fixture.slug}:phase26`,
+  );
+  const domainChallengeId = stableSeedId(
+    "company-domain-challenge",
+    `${fixture.slug}:phase26`,
+  );
+  const expected = {
+    id: stableSeedId(
+      "company-trust-projection",
+      `${fixture.slug}:phase26`,
+    ),
+    companyId: fixture.id,
+    verificationRequestId: requestId,
+    decisionId,
+    scope: "COMPANY_IDENTITY",
+    level: "STRONG",
+    status: "ACTIVE",
+    riskState: "CLEAR",
+    policyVersion: "COMPANY_TRUST_POLICY_V2",
+    evidenceDigest,
+    reasonCode: "SANDBOX_REGISTER_AND_DOMAIN_REVIEWED",
+    verifiedAt: checkedAt.toISOString(),
+    expiresAt: validTo.toISOString(),
+    changedAt: checkedAt.toISOString(),
+    decision: {
+      id: decisionId,
+      kind: "APPROVED",
+      scope: "COMPANY_IDENTITY",
+      riskLevel: "NORMAL",
+      policyVersion: "COMPANY_TRUST_POLICY_V2",
+      reasonCode: "SANDBOX_REGISTER_AND_DOMAIN_REVIEWED",
+      evidenceDigest,
+      decidedByUserId: reviewerUserId,
+      approvedByUserId: null,
+      validFrom: checkedAt.toISOString(),
+      validTo: validTo.toISOString(),
+      decidedAt: checkedAt.toISOString(),
+    },
+    request: {
+      id: requestId,
+      companyId: fixture.id,
+      requestedByUserId: fixture.ownerUserId,
+      assignedReviewerUserId: reviewerUserId,
+      status: "VERIFIED",
+      riskLevel: "NORMAL",
+      policyVersion: "COMPANY_TRUST_POLICY_V2",
+      priority: 80,
+      evidence: [
+        {
+          id: stableSeedId(
+            "company-verification-evidence",
+            `${fixture.slug}:phase26:domain`,
+          ),
+          type: "DOMAIN_CHALLENGE",
+          scope: "COMPANY_IDENTITY",
+          status: "VALID",
+          source: "domain_challenge",
+          providerKey: "deterministic_sandbox",
+          normalizedIdentifier: domain,
+          responseDigest: domainDigest,
+          reasonCode: "DOMAIN_EXACT_MATCH",
+          checkedAt: checkedAt.toISOString(),
+          validFrom: checkedAt.toISOString(),
+          validTo: validTo.toISOString(),
+          domainChallenge: {
+            id: domainChallengeId,
+            domain,
+            status: "VERIFIED",
+            issuedAt: shiftDays(anchorAt, -15).toISOString(),
+            expiresAt: checkedAt.toISOString(),
+            verifiedAt: checkedAt.toISOString(),
+          },
+          checks: [
+            {
+              id: stableSeedId(
+                "company-verification-check",
+                `${fixture.slug}:phase26:domain`,
+              ),
+              providerUseCase: "COMPANY_DOMAIN_CHALLENGE",
+              adapterKey: "deterministic_sandbox",
+              adapterVersion: "v1",
+              inputSchemaVersion: "v1",
+              outputSchemaVersion: "v1",
+              result: "EXACT_MATCH",
+              uidMatched: null,
+              nameMatched: null,
+              cantonMatched: null,
+              domainMatched: true,
+              responseDigest: domainDigest,
+              retryable: false,
+              latencyMs: 0,
+              providerRequestKey: `seed:phase26:domain:${fixture.slug}`,
+              checkedAt: checkedAt.toISOString(),
+            },
+          ],
+        },
+        {
+          id: stableSeedId(
+            "company-verification-evidence",
+            `${fixture.slug}:phase26:register`,
+          ),
+          type: "UID_REGISTER",
+          scope: "COMPANY_IDENTITY",
+          status: "VALID",
+          source: "company_register",
+          providerKey: "deterministic_sandbox",
+          normalizedIdentifier: fixture.uid,
+          responseDigest: registerDigest,
+          reasonCode: "REGISTER_EXACT_MATCH",
+          checkedAt: checkedAt.toISOString(),
+          validFrom: checkedAt.toISOString(),
+          validTo: registerValidTo.toISOString(),
+          domainChallenge: null,
+          checks: [
+            {
+              id: stableSeedId(
+                "company-verification-check",
+                `${fixture.slug}:phase26:register`,
+              ),
+              providerUseCase: "COMPANY_REGISTER_CHECK",
+              adapterKey: "deterministic_sandbox",
+              adapterVersion: "v1",
+              inputSchemaVersion: "v1",
+              outputSchemaVersion: "v1",
+              result: "EXACT_MATCH",
+              uidMatched: true,
+              nameMatched: true,
+              cantonMatched: true,
+              domainMatched: null,
+              responseDigest: registerDigest,
+              retryable: false,
+              latencyMs: 0,
+              providerRequestKey: `seed:phase26:register:${fixture.slug}`,
+              checkedAt: checkedAt.toISOString(),
+            },
+          ],
+        },
+      ],
+    },
+  };
+  check(
+    context,
+    "Phase 26 structured demo company trust contract",
+    summary,
+    expected,
+  );
+}
+
+function shiftDays(value: Date, days: number) {
+  return new Date(value.getTime() + days * 86_400_000);
 }
 
 function verifyEmployerCore(

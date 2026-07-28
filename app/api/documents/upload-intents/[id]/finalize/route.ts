@@ -25,7 +25,9 @@ export async function POST(
     getAuthRequestContext(),
   ]);
   if (
-    user?.role !== "CANDIDATE" ||
+    (user?.role !== "CANDIDATE" &&
+      user?.role !== "EMPLOYER" &&
+      user?.role !== "RECRUITER") ||
     !isValidAuthMutationOrigin(context)
   ) {
     return documentJson({ code: "NOT_FOUND" }, 404);

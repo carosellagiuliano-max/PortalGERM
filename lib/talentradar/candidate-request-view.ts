@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { evaluateCompanyTrustForCompanies } from "@/lib/companies/verification/read-model";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { RevealField } from "@/lib/generated/prisma/enums";
 import { isContactRequestEffectiveAt } from "@/lib/talentradar/contact-requests";
@@ -85,10 +86,16 @@ export async function listCandidateRadarRequests(
       },
     },
   });
+  const trustByCompanyId = await evaluateCompanyTrustForCompanies(
+    database,
+    requests.map((request) => request.company.id),
+    { now },
+  );
 
   return Object.freeze(
     requests.map((request) => {
-      const verified = request.company.verificationRequests.length === 1;
+      const trust = trustByCompanyId.get(request.company.id);
+      const verified = trust?.strongVerified === true && trust.badge !== null;
       return Object.freeze({
         id: request.id,
         company: Object.freeze({
@@ -99,7 +106,7 @@ export async function listCandidateRadarRequests(
         subject: request.subject,
         messagePreview: request.messagePreview,
         status: effectiveStatus(request, now),
-        trusted: request.company.status === "ACTIVE" && verified,
+        trusted: trust?.radarEligible === true,
         createdAt: new Date(request.createdAt),
         expiresAt: new Date(request.expiresAt),
       });
@@ -161,8 +168,13 @@ export async function getCandidateRadarRequest(
   });
   if (request === null) return null;
 
-  const verified = request.company.verificationRequests.length === 1;
-  const trusted = request.company.status === "ACTIVE" && verified;
+  const trust = await evaluateCompanyTrustForCompanies(
+    database,
+    [request.company.id],
+    { now },
+  ).then((evaluations) => evaluations.get(request.company.id));
+  const verified = trust?.strongVerified === true && trust.badge !== null;
+  const trusted = trust?.radarEligible === true;
   const grant = request.revealGrant;
 
   return Object.freeze({

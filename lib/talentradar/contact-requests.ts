@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { writeRequiredAudit } from "@/lib/audit/log";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
@@ -86,7 +87,7 @@ export async function cancelEmployerContactRequest(
       actor.companyId,
       input.requestId,
     );
-    if (!(await hasCurrentEmployerTrust(transaction, actor))) {
+    if (!(await hasCurrentEmployerTrust(transaction, actor, now))) {
       return lifecycleFailure("NOT_FOUND");
     }
 
@@ -352,7 +353,7 @@ async function transitionCandidateContactRequest(
       },
     });
     if (request === null) return lifecycleFailure("NOT_FOUND");
-    if (!(await hasCurrentCompanyTrust(transaction, request.companyId))) {
+    if (!(await hasCurrentCompanyTrust(transaction, request.companyId, now))) {
       return lifecycleFailure("TRUST_REQUIRED");
     }
 
@@ -532,6 +533,7 @@ function parseLifecycleInput(
 async function hasCurrentEmployerTrust(
   transaction: Prisma.TransactionClient,
   actor: EmployerRadarContactActor,
+  now: Date,
 ): Promise<boolean> {
   const membership = await transaction.companyMembership.findFirst({
     where: {
@@ -549,29 +551,24 @@ async function hasCurrentEmployerTrust(
     },
     select: { id: true },
   });
-  return membership !== null &&
-    (await currentVerificationCount(transaction, actor.companyId)) === 1;
+  if (membership === null) return false;
+  const trust = await evaluateCompanyTrustForCompany(
+    transaction,
+    actor.companyId,
+    { now },
+  );
+  return trust.radarEligible;
 }
 
 async function hasCurrentCompanyTrust(
   transaction: Prisma.TransactionClient,
   companyId: string,
+  now: Date,
 ): Promise<boolean> {
-  const company = await transaction.company.findUnique({
-    where: { id: companyId },
-    select: { status: true },
+  const trust = await evaluateCompanyTrustForCompany(transaction, companyId, {
+    now,
   });
-  return company?.status === "ACTIVE" &&
-    (await currentVerificationCount(transaction, companyId)) === 1;
-}
-
-async function currentVerificationCount(
-  transaction: Prisma.TransactionClient,
-  companyId: string,
-): Promise<number> {
-  return transaction.companyVerificationRequest.count({
-    where: { companyId, status: "VERIFIED", supersededBy: null },
-  });
+  return trust.radarEligible;
 }
 
 async function loadCurrentCompanyRecipients(

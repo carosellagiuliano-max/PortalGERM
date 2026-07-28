@@ -19,16 +19,35 @@ const versions = await database.documentVersion.findMany({
   select: {
     id: true,
     candidateProfile: { select: { userId: true } },
+    company: {
+      select: {
+        memberships: {
+          where: {
+            status: "ACTIVE",
+            removedAt: null,
+            role: { in: ["OWNER", "ADMIN"] },
+            user: { status: "ACTIVE" },
+          },
+          orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+          take: 1,
+          select: { userId: true },
+        },
+      },
+    },
   },
 });
 const objectStore = createDocumentObjectStore(environment);
 const scanner = createDocumentMalwareScanner(environment);
 const outcomes = [];
 for (const version of versions) {
+  const scanActorUserId =
+    version.candidateProfile?.userId ??
+    version.company?.memberships[0]?.userId;
+  if (scanActorUserId === undefined) continue;
   outcomes.push(
     await scanDocumentVersion(
       {
-        actorUserId: version.candidateProfile.userId,
+        actorUserId: scanActorUserId,
         documentVersionId: version.id,
         correlationId: randomUUID(),
       },

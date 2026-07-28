@@ -396,6 +396,18 @@ Alle Testdateien sind geplant und werden erst in Phase 26 angelegt.
 | `P26-AC-11` / `REQ-QA-003` | P1: Trustprozess unverständlich/unzugänglich | E2E + A11y | Submit→Challenge/Register/Document→Review→Badge; Changes/Expiry/Revoke/Appeal | klare states/next steps | error/locked/conflict/expired, private evidence leak, narrow viewport | Owner/Reviewer/Public | Employer/Admin/Public UI | alle UX-Zustände, Company A/B | Chromium Desktop + 360 | `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase26-company-trust-quality.spec.ts --project=chromium-journeys`; `npx playwright test --config=playwright.config.ts tests/e2e/quality/phase26-company-trust-quality.spec.ts --project=chromium-mobile-360` | Axe serious/critical 0; Clipping kritischer Actions 0; Public private fields/URLs 0; Scope/Datum/Status verständlich | Playwright/Axe/Screenshots | UX + Accessibility + Privacy | `PLANNED` |
 | `P26-AC-12` / `REQ-EMP-008` | P0: Gate nur UI-seitig | Route/API Security | Badge/Public Job/Radar vor/nach Gate | current strong trust erlaubt freigegebenen Scope | Flag off, missing/expired/revoked/held trust, direkte Route/API/old cache | Visitor/Candidate/Owner | Public Company/Jobs/Radar/API | every trust status, flag state, cluster | real PostgreSQL + HTTP/E2E | `npx vitest run --config vitest.integration.config.ts tests/integration/jobs/company-trust-eligibility-postgres.test.ts`; `npm run test:e2e:http` | alle ineligible states `0` public strong badge/jobs/radar results; Flag off vollständig fail-closed | Eligibility-/HTTP-Manifest | Trust + Jobs + Radar + QA | `PLANNED` |
 
+### Phase-26 Audit-log extension matrix
+
+| Audit Action | Auslöser | Mindestmetadaten | Ziel |
+| --- | --- | --- | --- |
+| `COMPANY_VERIFICATION_SUBMITTED_V2` | Owner startet einen strukturierten Prüfzyklus | Request-, Company-, Policy- und Evidence-Scope | `COMPANY_VERIFICATION` |
+| `COMPANY_VERIFICATION_CHECKED_V2` | Register-, Domain- oder Dokumentcheck endet | Checktyp, Resultat, Provider-Key und redigierter Digest | `COMPANY_VERIFICATION` |
+| `COMPANY_VERIFICATION_ASSIGNED_V2` | Reviewer übernimmt oder erhält einen Fall | Assignee, SLA und Request-Version | `COMPANY_VERIFICATION` |
+| `COMPANY_VERIFICATION_DECIDED_V2` | Reviewer/Approver entscheidet | Decision, Reason, Risiko, Policy, Gültigkeit und SoD | `COMPANY_VERIFICATION` |
+| `COMPANY_VERIFICATION_APPEALED_V2` | Owner oder Trust Operations eröffnet einen Appeal | Request-, Decision- und Appeal-Reason | `COMPANY_VERIFICATION` |
+| `COMPANY_TRUST_CHANGED_V2` | Trustprojektion wird gehalten, widerrufen oder wiederhergestellt | alter/neuer Status, Scope, Reason und Decision | `COMPANY` |
+| `COMPANY_TRUST_EXPIRED_V2` | Current-Trust-Gültigkeit endet | Scope, Policy, Ablauf und Projektion | `COMPANY` |
+
 ## 22. Performance und Scale
 
 - Public current-Trust-Prüfung verwendet indexierte/bounded Projection und fügt

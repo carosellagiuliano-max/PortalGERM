@@ -1,6 +1,6 @@
 export const SEED_MANIFEST_SCHEMA_VERSION =
   "20260720120000_phase_05_seed_manifest_contract" as const;
-export const SEED_DATASET_VERSION = "phase-25-demo-v14" as const;
+export const SEED_DATASET_VERSION = "phase-26-demo-v16" as const;
 /**
  * Phase 14 is an additive release over the sealed Phase-05 dataset. Existing
  * semantic UUIDs and deterministic fixture streams must therefore keep their
@@ -11,8 +11,9 @@ export const SEED_DATA_PROVENANCE = "DEMO" as const;
 export const SEED_NAMESPACE = "swisstalenthub-demo" as const;
 
 /**
- * Exact active fixture contract. Phase-14 adds two terminal Talent Radar
- * request examples; all other published business counts remain sealed.
+ * Exact active fixture contract. Phase 26 adds structured, explicitly
+ * sandbox-only company trust evidence while all published business counts
+ * remain sealed.
  */
 export const SEED_GOLDEN_COUNTS = Object.freeze({
   cantons: 26,

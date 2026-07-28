@@ -1,12 +1,12 @@
 import Link from "next/link";
 import {
-  BadgeCheckIcon,
   BanknoteIcon,
   BriefcaseBusinessIcon,
   MapPinIcon,
 } from "lucide-react";
 
 import { BoostedBadge } from "@/components/billing/boosted-badge";
+import { CompanyTrustBadge } from "@/components/public/company-trust-badge";
 import { FairScoreBadge } from "@/components/public/fair-score";
 import { PublicJobActions } from "@/components/public/apply-save-actions";
 import { ResponseSignal } from "@/components/public/response-signal";
@@ -59,7 +59,7 @@ export function JobCard({ job }: Readonly<{ job: PublicJobCardModel }>) {
           href={`/companies/${job.company.slug}`}
         >
           {job.company.name}
-          <BadgeCheckIcon className="size-4 text-primary" aria-label="Verifiziertes Unternehmen" />
+          {job.company.trust ? <CompanyTrustBadge trust={job.company.trust} /> : null}
         </Link>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">

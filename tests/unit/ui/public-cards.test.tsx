@@ -27,7 +27,7 @@ describe("public discovery cards", () => {
       "href",
       "/companies/acme",
     );
-    expect(screen.getByLabelText("Verifiziertes Unternehmen")).toBeInTheDocument();
+    expect(screen.getByText("Firmenidentität geprüft")).toBeInTheDocument();
     expect(screen.getByText(/CHF/)).toBeInTheDocument();
     expect(screen.getByText("84% antworten innert 10 Tagen")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /bewerben/i })).not.toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("public discovery cards", () => {
   it("distinguishes verified and unverified company profiles", () => {
     const { rerender } = render(<CompanyCard company={companyFixture()} />);
 
-    expect(screen.getByText("Verifiziert")).toBeInTheDocument();
+    expect(screen.getByText("Firmenidentität geprüft")).toBeInTheDocument();
     expect(screen.getByText("1 offene Stelle")).toBeInTheDocument();
     expect(screen.getByText("ÖV-Beitrag")).toBeInTheDocument();
     expect(screen.getByText("84% antworten innert 10 Tagen")).toBeInTheDocument();
@@ -73,6 +73,7 @@ describe("public discovery cards", () => {
       <CompanyCard
         company={companyFixture({
           verified: false,
+          trust: null,
           openJobCount: 2,
           response: {
             known: false,
@@ -100,7 +101,13 @@ function jobFixture(
     slug: "senior-engineer",
     title: "Senior Engineer",
     description: "Baue zugängliche und sichere Produkte.",
-    company: { id: "company-1", slug: "acme", name: "Acme", verified: true },
+    company: {
+      id: "company-1",
+      slug: "acme",
+      name: "Acme",
+      verified: true,
+      trust: trustFixture(),
+    },
     category: { id: "category-1", name: "IT", slug: "it" },
     canton: { id: "canton-zh", name: "Zürich", slug: "zuerich", code: "ZH" },
     city: { id: "city-zuerich", name: "Zürich", slug: "zuerich" },
@@ -142,6 +149,7 @@ function companyFixture(
     city: "Zürich",
     canton: "ZH",
     verified: true,
+    trust: trustFixture(),
     openJobCount: 1,
     benefitsPreview: ["ÖV-Beitrag", "Weiterbildung"],
     response: {
@@ -152,5 +160,16 @@ function companyFixture(
     },
     dataProvenance: "LIVE",
     ...overrides,
+  };
+}
+
+function trustFixture() {
+  return {
+    label: "Firmenidentität geprüft" as const,
+    scopeLabel: "UID-Register und Domainkontrolle" as const,
+    method: "UID_REGISTER_AND_DOMAIN_CHALLENGE" as const,
+    policyVersion: "COMPANY_TRUST_POLICY_V2" as const,
+    verifiedAt: new Date("2026-07-01T08:00:00.000Z"),
+    validUntil: new Date("2027-01-01T08:00:00.000Z"),
   };
 }

@@ -115,6 +115,92 @@ enum CompanyVerificationEventKind {
   REVOKED
 }
 
+enum CompanyVerificationEvidenceType {
+  UID_REGISTER
+  DOMAIN_CHALLENGE
+  DOCUMENT
+  MANUAL_EXCEPTION
+  LEGACY_MANUAL
+}
+
+enum CompanyVerificationEvidenceStatus {
+  PENDING
+  VALID
+  MISMATCH
+  FAILED
+  EXPIRED
+  REVOKED
+}
+
+enum CompanyVerificationScope {
+  LEGACY_PROFILE
+  COMPANY_IDENTITY
+  DOMAIN_CONTROL
+  REPRESENTATION
+}
+
+enum CompanyVerificationCheckResult {
+  EXACT_MATCH
+  PARTIAL_MATCH
+  MISMATCH
+  NOT_FOUND
+  MALFORMED
+  TIMEOUT
+  RATE_LIMITED
+  PROVIDER_ERROR
+}
+
+enum CompanyDomainChallengeStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  SUPERSEDED
+  REVOKED
+}
+
+enum CompanyVerificationRiskLevel {
+  NORMAL
+  HIGH
+  MANUAL_EXCEPTION
+}
+
+enum CompanyVerificationDecisionKind {
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+  REVOKED
+  RESTORED
+}
+
+enum CompanyVerificationAppealStatus {
+  OPEN
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum CompanyTrustLevel {
+  NONE
+  LEGACY
+  STRONG
+}
+
+enum CompanyTrustStatus {
+  PENDING
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  ON_HOLD
+  REVOKED
+}
+
+enum CompanyTrustRiskState {
+  CLEAR
+  REVIEW
+  HOLD
+  REVOKED
+}
+
 enum OnboardingStatus {
   DRAFT
   COMPLETE
@@ -128,6 +214,7 @@ enum CandidateOnboardingEventKind {
 
 enum DocumentPurpose {
   CV
+  COMPANY_VERIFICATION
 }
 
 enum DocumentStatus {
@@ -1406,6 +1493,12 @@ enum AuditTargetType {
   RISK_DECISION
   TRUST_SAFETY_CASE
   TRUST_SAFETY_APPEAL
+  COMPANY_VERIFICATION_EVIDENCE
+  COMPANY_VERIFICATION_CHECK
+  COMPANY_VERIFICATION_DECISION
+  COMPANY_DOMAIN_CHALLENGE
+  COMPANY_VERIFICATION_APPEAL
+  COMPANY_TRUST_PROJECTION
 }
 
 enum AuditAction {
@@ -1598,6 +1691,13 @@ enum AuditAction {
   RISK_DECISION_RECORDED
   TRUST_SAFETY_CASE_CHANGED
   TRUST_SAFETY_APPEAL_CHANGED
+  COMPANY_VERIFICATION_SUBMITTED_V2
+  COMPANY_VERIFICATION_CHECKED_V2
+  COMPANY_VERIFICATION_ASSIGNED_V2
+  COMPANY_VERIFICATION_DECIDED_V2
+  COMPANY_VERIFICATION_APPEALED_V2
+  COMPANY_TRUST_CHANGED_V2
+  COMPANY_TRUST_EXPIRED_V2
 }
 
 enum AnalyticsPurpose {
@@ -1715,87 +1815,94 @@ enum ReferralAttributionKind {
 }
 
 model User {
-  id                                String                        @id @default(uuid()) @db.Uuid
-  email                             String                        @db.VarChar(320)
-  emailNormalized                   String                        @unique @db.VarChar(320)
-  emailAddressEpoch                 Int                           @default(1)
-  identityAssurance                 IdentityAssuranceLevel        @default(LOW_ASSURANCE)
-  role                              Role
-  name                              String?                       @db.VarChar(160)
-  status                            UserStatus                    @default(ACTIVE)
-  dataProvenance                    DataProvenance                @default(LIVE)
-  emailVerifiedAt                   DateTime?                     @db.Timestamptz(3)
-  lastLoginAt                       DateTime?                     @db.Timestamptz(3)
-  createdAt                         DateTime                      @default(now()) @db.Timestamptz(3)
-  updatedAt                         DateTime                      @updatedAt @db.Timestamptz(3)
-  credential                        Credential?
-  sessions                          Session[]
-  passwordResetTokens               PasswordResetToken[]
-  emailVerificationChallenges       EmailVerificationChallenge[]
-  pendingEmailChanges               PendingEmailChange[]
-  authAssuranceEvidence             AuthAssuranceEvidence[]
-  notificationOutbox                NotificationOutbox[]
-  notificationPreferences           NotificationPreference[]
-  notificationPreferenceEvents      NotificationPreferenceEvent[] @relation("NotificationPreferenceOwner")
-  notificationPreferenceEventsActed NotificationPreferenceEvent[] @relation("NotificationPreferenceActor")
-  authSecurityEvents                AuthSecurityEvent[]
-  candidateProfile                  CandidateProfile?
-  employerProfile                   EmployerProfile?
-  companyMemberships                CompanyMembership[]
-  claimRequests                     CompanyClaimRequest[]         @relation("ClaimRequester")
-  verificationRequests              CompanyVerificationRequest[]  @relation("VerificationRequester")
-  invitationsSent                   CompanyInvitation[]           @relation("InvitationInviter")
-  invitationsAccepted               CompanyInvitation[]           @relation("InvitationAcceptor")
-  notifications                     Notification[]
-  userConsents                      UserConsentEvent[]            @relation("ConsentOwner")
-  userConsentsActed                 UserConsentEvent[]            @relation("UserConsentActor")
-  candidateConsentsActed            CandidateConsent[]            @relation("CandidateConsentActor")
-  privacyRequests                   PrivacyRequest[]              @relation("PrivacyRequester")
-  privacyRequestsAssigned           PrivacyRequest[]              @relation("PrivacyAssignee")
-  privacyChallenges                 PrivacyIdentityChallenge[]
-  privacyExecutionsApproved         PrivacyExecution[]            @relation("PrivacyExecutionApprover")
-  privacyExportArtifacts            PrivacyExportArtifact[]
-  privacyLegalHolds                 LegalHold[]                   @relation("LegalHoldSubject")
-  privacyLegalHoldsCreated          LegalHold[]                   @relation("LegalHoldCreator")
-  privacyLegalHoldsReviewed         LegalHold[]                   @relation("LegalHoldReviewer")
-  analyticsConsentEvents            AnalyticsConsentEvent[]       @relation("AnalyticsConsentOwner")
-  analyticsConsentEventsActed       AnalyticsConsentEvent[]       @relation("AnalyticsConsentActor")
-  conversationParticipants          ConversationParticipant[]
-  revealConfirmations               IdentityRevealConfirmation[]
-  revealGrantsRevoked               IdentityRevealGrant[]         @relation("RevealGrantRevoker")
-  messages                          Message[]
-  contactRequestsMade               EmployerContactRequest[]
-  ordersCreated                     Order[]
-  abuseReportsFiled                 AbuseReport[]                 @relation("AbuseReporter")
-  abuseReportsAssigned              AbuseReport[]                 @relation("AbuseAssignee")
-  auditLogs                         AuditLog[]
-  salesLeadsOwned                   SalesLead[]
-  systemTasksOwned                  SystemTask[]
-  supportCasesRequested             SupportCase[]                 @relation("SupportRequester")
-  supportCasesAssigned              SupportCase[]                 @relation("SupportAssignee")
-  recruiterMandates                 RecruiterMandate[]            @relation("MandateRecruiter")
-  recruiterMandatesGranted          RecruiterMandate[]            @relation("MandateGrantor")
-  jobAssignmentsCreated             JobAssignment[]               @relation("JobAssignmentAssigner")
-  taxRatesReviewed                  TaxRateVersion[]              @relation("TaxRateReviewer")
-  productReleaseDecisions           ProductReleaseDecision[]
-  documentUploadIntents             DocumentUploadIntent[]        @relation("DocumentUploadActor")
-  documentReadGrants                DocumentReadGrant[]           @relation("DocumentReadGrantActor")
-  documentAccessEvents              DocumentAccessEvent[]         @relation("DocumentAccessActor")
-  paidScopeDecisions                PaidScopeDecision[]           @relation("PaidScopeDecisionActor")
-  reconciliationRuns                ReconciliationRun[]           @relation("ReconciliationRunActor")
-  reconciliationItemsResolved       ReconciliationItem[]          @relation("ReconciliationItemResolver")
-  refundsRequested                  Refund[]                      @relation("RefundRequester")
-  refundsApproved                   Refund[]                      @relation("RefundApprover")
-  serviceDeliveryApprovals          ServiceDeliveryAssessment[]   @relation("ServiceDeliveryApprover")
-  serviceDeliveryEvents             ServiceDeliveryEvent[]        @relation("ServiceDeliveryEventActor")
-  paymentRiskDecisions              PaymentRiskDecision[]         @relation("PaymentRiskDecisionActor")
-  adminRoleAssignments              AdminRoleAssignment[]         @relation("AdminRoleAssignee")
-  adminCapabilityGrants             AdminCapabilityGrant[]        @relation("AdminCapabilityGrantee")
-  authenticators                    Authenticator[]               @relation("AuthenticatorOwner")
-  authenticatorChallenges           AuthenticatorChallenge[]      @relation("AuthenticatorChallengeOwner")
-  recoveryCodes                     RecoveryCode[]                @relation("RecoveryCodeOwner")
-  sessionAssurances                 SessionAssurance[]            @relation("SessionAssuranceOwner")
-  stepUpChallenges                  StepUpChallenge[]             @relation("StepUpChallengeOwner")
+  id                                  String                        @id @default(uuid()) @db.Uuid
+  email                               String                        @db.VarChar(320)
+  emailNormalized                     String                        @unique @db.VarChar(320)
+  emailAddressEpoch                   Int                           @default(1)
+  identityAssurance                   IdentityAssuranceLevel        @default(LOW_ASSURANCE)
+  role                                Role
+  name                                String?                       @db.VarChar(160)
+  status                              UserStatus                    @default(ACTIVE)
+  dataProvenance                      DataProvenance                @default(LIVE)
+  emailVerifiedAt                     DateTime?                     @db.Timestamptz(3)
+  lastLoginAt                         DateTime?                     @db.Timestamptz(3)
+  createdAt                           DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                           DateTime                      @updatedAt @db.Timestamptz(3)
+  credential                          Credential?
+  sessions                            Session[]
+  passwordResetTokens                 PasswordResetToken[]
+  emailVerificationChallenges         EmailVerificationChallenge[]
+  pendingEmailChanges                 PendingEmailChange[]
+  authAssuranceEvidence               AuthAssuranceEvidence[]
+  notificationOutbox                  NotificationOutbox[]
+  notificationPreferences             NotificationPreference[]
+  notificationPreferenceEvents        NotificationPreferenceEvent[] @relation("NotificationPreferenceOwner")
+  notificationPreferenceEventsActed   NotificationPreferenceEvent[] @relation("NotificationPreferenceActor")
+  authSecurityEvents                  AuthSecurityEvent[]
+  candidateProfile                    CandidateProfile?
+  employerProfile                     EmployerProfile?
+  companyMemberships                  CompanyMembership[]
+  claimRequests                       CompanyClaimRequest[]         @relation("ClaimRequester")
+  verificationRequests                CompanyVerificationRequest[]  @relation("VerificationRequester")
+  invitationsSent                     CompanyInvitation[]           @relation("InvitationInviter")
+  invitationsAccepted                 CompanyInvitation[]           @relation("InvitationAcceptor")
+  notifications                       Notification[]
+  userConsents                        UserConsentEvent[]            @relation("ConsentOwner")
+  userConsentsActed                   UserConsentEvent[]            @relation("UserConsentActor")
+  candidateConsentsActed              CandidateConsent[]            @relation("CandidateConsentActor")
+  privacyRequests                     PrivacyRequest[]              @relation("PrivacyRequester")
+  privacyRequestsAssigned             PrivacyRequest[]              @relation("PrivacyAssignee")
+  privacyChallenges                   PrivacyIdentityChallenge[]
+  privacyExecutionsApproved           PrivacyExecution[]            @relation("PrivacyExecutionApprover")
+  privacyExportArtifacts              PrivacyExportArtifact[]
+  privacyLegalHolds                   LegalHold[]                   @relation("LegalHoldSubject")
+  privacyLegalHoldsCreated            LegalHold[]                   @relation("LegalHoldCreator")
+  privacyLegalHoldsReviewed           LegalHold[]                   @relation("LegalHoldReviewer")
+  analyticsConsentEvents              AnalyticsConsentEvent[]       @relation("AnalyticsConsentOwner")
+  analyticsConsentEventsActed         AnalyticsConsentEvent[]       @relation("AnalyticsConsentActor")
+  conversationParticipants            ConversationParticipant[]
+  revealConfirmations                 IdentityRevealConfirmation[]
+  revealGrantsRevoked                 IdentityRevealGrant[]         @relation("RevealGrantRevoker")
+  messages                            Message[]
+  contactRequestsMade                 EmployerContactRequest[]
+  ordersCreated                       Order[]
+  abuseReportsFiled                   AbuseReport[]                 @relation("AbuseReporter")
+  abuseReportsAssigned                AbuseReport[]                 @relation("AbuseAssignee")
+  auditLogs                           AuditLog[]
+  salesLeadsOwned                     SalesLead[]
+  systemTasksOwned                    SystemTask[]
+  supportCasesRequested               SupportCase[]                 @relation("SupportRequester")
+  supportCasesAssigned                SupportCase[]                 @relation("SupportAssignee")
+  recruiterMandates                   RecruiterMandate[]            @relation("MandateRecruiter")
+  recruiterMandatesGranted            RecruiterMandate[]            @relation("MandateGrantor")
+  jobAssignmentsCreated               JobAssignment[]               @relation("JobAssignmentAssigner")
+  taxRatesReviewed                    TaxRateVersion[]              @relation("TaxRateReviewer")
+  productReleaseDecisions             ProductReleaseDecision[]
+  documentUploadIntents               DocumentUploadIntent[]        @relation("DocumentUploadActor")
+  documentReadGrants                  DocumentReadGrant[]           @relation("DocumentReadGrantActor")
+  documentAccessEvents                DocumentAccessEvent[]         @relation("DocumentAccessActor")
+  companyVerificationEvidenceCreated  CompanyVerificationEvidence[] @relation("CompanyVerificationEvidenceCreator")
+  companyDomainChallengesIssued       CompanyDomainChallenge[]      @relation("CompanyDomainChallengeIssuer")
+  companyVerificationRequestsAssigned CompanyVerificationRequest[]  @relation("CompanyVerificationAssignedReviewer")
+  companyVerificationDecisions        CompanyVerificationDecision[] @relation("CompanyVerificationDecisionReviewer")
+  companyVerificationApprovals        CompanyVerificationDecision[] @relation("CompanyVerificationDecisionApprover")
+  companyVerificationAppeals          CompanyVerificationAppeal[]   @relation("CompanyVerificationAppealAppellant")
+  companyVerificationAppealsDecided   CompanyVerificationAppeal[]   @relation("CompanyVerificationAppealDecider")
+  paidScopeDecisions                  PaidScopeDecision[]           @relation("PaidScopeDecisionActor")
+  reconciliationRuns                  ReconciliationRun[]           @relation("ReconciliationRunActor")
+  reconciliationItemsResolved         ReconciliationItem[]          @relation("ReconciliationItemResolver")
+  refundsRequested                    Refund[]                      @relation("RefundRequester")
+  refundsApproved                     Refund[]                      @relation("RefundApprover")
+  serviceDeliveryApprovals            ServiceDeliveryAssessment[]   @relation("ServiceDeliveryApprover")
+  serviceDeliveryEvents               ServiceDeliveryEvent[]        @relation("ServiceDeliveryEventActor")
+  paymentRiskDecisions                PaymentRiskDecision[]         @relation("PaymentRiskDecisionActor")
+  adminRoleAssignments                AdminRoleAssignment[]         @relation("AdminRoleAssignee")
+  adminCapabilityGrants               AdminCapabilityGrant[]        @relation("AdminCapabilityGrantee")
+  authenticators                      Authenticator[]               @relation("AuthenticatorOwner")
+  authenticatorChallenges             AuthenticatorChallenge[]      @relation("AuthenticatorChallengeOwner")
+  recoveryCodes                       RecoveryCode[]                @relation("RecoveryCodeOwner")
+  sessionAssurances                   SessionAssurance[]            @relation("SessionAssuranceOwner")
+  stepUpChallenges                    StepUpChallenge[]             @relation("StepUpChallengeOwner")
 
   @@index([status, role])
   @@index([dataProvenance, status])
@@ -2075,56 +2182,65 @@ model CandidateDocumentMetadata {
 
 model Document {
   id                 String            @id @default(uuid()) @db.Uuid
-  candidateProfileId String            @db.Uuid
+  candidateProfileId String?           @db.Uuid
+  companyId          String?           @db.Uuid
   purpose            DocumentPurpose
   currentVersionId   String?           @unique @db.Uuid
   createdAt          DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
-  candidateProfile   CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
-  currentVersion     DocumentVersion?  @relation("CurrentDocumentVersion", fields: [currentVersionId, candidateProfileId], references: [id, candidateProfileId], onDelete: Restrict)
+  candidateProfile   CandidateProfile? @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  company            Company?          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  currentVersion     DocumentVersion?  @relation("CurrentDocumentVersion", fields: [currentVersionId], references: [id], onDelete: Restrict)
   versions           DocumentVersion[] @relation("DocumentVersions")
 
   @@unique([candidateProfileId, purpose])
+  @@unique([companyId, purpose])
   @@unique([id, candidateProfileId])
-  @@unique([currentVersionId, candidateProfileId])
+  @@unique([id, companyId])
   @@index([candidateProfileId, updatedAt])
+  @@index([companyId, purpose, updatedAt])
 }
 
 model DocumentVersion {
-  id                    String                          @id @default(uuid()) @db.Uuid
-  documentId            String                          @db.Uuid
-  candidateProfileId    String                          @db.Uuid
-  sequence              Int
-  objectKey             String                          @unique @db.VarChar(512)
-  providerObjectVersion String                          @db.VarChar(128)
-  safeFilename          String                          @db.VarChar(255)
-  declaredMimeType      String                          @db.VarChar(128)
-  detectedMimeType      String?                         @db.VarChar(128)
-  sizeBytes             Int?
-  sha256                String?                         @db.Char(64)
-  classification        DocumentClassification          @default(HIGHLY_SENSITIVE)
-  status                VaultDocumentStatus             @default(UPLOADING)
-  encryptionKeyVersion  String                          @db.VarChar(32)
-  storageRegion         String                          @db.VarChar(32)
-  uploadedAt            DateTime?                       @db.Timestamptz(3)
-  scanCompletedAt       DateTime?                       @db.Timestamptz(3)
-  replacedAt            DateTime?                       @db.Timestamptz(3)
-  deleteRequestedAt     DateTime?                       @db.Timestamptz(3)
-  createdAt             DateTime                        @default(now()) @db.Timestamptz(3)
-  document              Document                        @relation("DocumentVersions", fields: [documentId, candidateProfileId], references: [id, candidateProfileId], onDelete: Restrict)
-  currentForDocument    Document?                       @relation("CurrentDocumentVersion")
-  candidateProfile      CandidateProfile                @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
-  metadataProjection    CandidateDocumentMetadata?
-  uploadIntent          DocumentUploadIntent?
-  scanAttempts          DocumentScanAttempt[]
-  readGrants            DocumentReadGrant[]
-  accessEvents          DocumentAccessEvent[]
-  lifecycleOutcomes     ObjectLifecycleOutcome[]
-  applicationLinks      ApplicationSubmissionDocument[]
+  id                          String                          @id @default(uuid()) @db.Uuid
+  documentId                  String                          @db.Uuid
+  candidateProfileId          String?                         @db.Uuid
+  companyId                   String?                         @db.Uuid
+  sequence                    Int
+  objectKey                   String                          @unique @db.VarChar(512)
+  providerObjectVersion       String                          @db.VarChar(128)
+  safeFilename                String                          @db.VarChar(255)
+  declaredMimeType            String                          @db.VarChar(128)
+  detectedMimeType            String?                         @db.VarChar(128)
+  sizeBytes                   Int?
+  sha256                      String?                         @db.Char(64)
+  classification              DocumentClassification          @default(HIGHLY_SENSITIVE)
+  status                      VaultDocumentStatus             @default(UPLOADING)
+  encryptionKeyVersion        String                          @db.VarChar(32)
+  storageRegion               String                          @db.VarChar(32)
+  uploadedAt                  DateTime?                       @db.Timestamptz(3)
+  scanCompletedAt             DateTime?                       @db.Timestamptz(3)
+  replacedAt                  DateTime?                       @db.Timestamptz(3)
+  deleteRequestedAt           DateTime?                       @db.Timestamptz(3)
+  createdAt                   DateTime                        @default(now()) @db.Timestamptz(3)
+  document                    Document                        @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Restrict)
+  currentForDocument          Document?                       @relation("CurrentDocumentVersion")
+  candidateProfile            CandidateProfile?               @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  company                     Company?                        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  metadataProjection          CandidateDocumentMetadata?
+  companyVerificationEvidence CompanyVerificationEvidence?
+  uploadIntent                DocumentUploadIntent?
+  scanAttempts                DocumentScanAttempt[]
+  readGrants                  DocumentReadGrant[]
+  accessEvents                DocumentAccessEvent[]
+  lifecycleOutcomes           ObjectLifecycleOutcome[]
+  applicationLinks            ApplicationSubmissionDocument[]
 
   @@unique([documentId, sequence])
   @@unique([id, candidateProfileId])
+  @@unique([id, companyId])
   @@index([candidateProfileId, status, createdAt])
+  @@index([companyId, status, createdAt])
   @@index([status, uploadedAt])
   @@index([sha256])
 }
@@ -2132,7 +2248,8 @@ model DocumentVersion {
 model DocumentUploadIntent {
   id                 String                     @id @default(uuid()) @db.Uuid
   documentVersionId  String                     @unique @db.Uuid
-  candidateProfileId String                     @db.Uuid
+  candidateProfileId String?                    @db.Uuid
+  companyId          String?                    @db.Uuid
   actorUserId        String                     @db.Uuid
   purpose            DocumentPurpose
   idempotencyKey     String                     @db.VarChar(128)
@@ -2147,13 +2264,16 @@ model DocumentUploadIntent {
   failureCode        String?                    @db.VarChar(64)
   createdAt          DateTime                   @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime                   @updatedAt @db.Timestamptz(3)
-  documentVersion    DocumentVersion            @relation(fields: [documentVersionId, candidateProfileId], references: [id, candidateProfileId], onDelete: Restrict)
-  candidateProfile   CandidateProfile           @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  documentVersion    DocumentVersion            @relation(fields: [documentVersionId], references: [id], onDelete: Restrict)
+  candidateProfile   CandidateProfile?          @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  company            Company?                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
   actorUser          User                       @relation("DocumentUploadActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@unique([actorUserId, idempotencyKey])
   @@unique([documentVersionId, candidateProfileId])
+  @@unique([documentVersionId, companyId])
   @@index([candidateProfileId, purpose, status, expiresAt])
+  @@index([companyId, purpose, status, expiresAt])
   @@index([status, expiresAt])
 }
 
@@ -2250,38 +2370,47 @@ model EmployerProfile {
 }
 
 model Company {
-  id                                String                       @id @default(uuid()) @db.Uuid
-  name                              String                       @db.VarChar(200)
-  slug                              String                       @unique @db.VarChar(200)
-  uid                               String?                      @unique @db.VarChar(32)
-  registrationEmailDomainNormalized String?                      @db.VarChar(253)
-  registrationNameNormalized        String?                      @db.VarChar(200)
-  registrationCantonId              String?                      @db.Uuid
-  industry                          String?                      @db.VarChar(160)
-  size                              String?                      @db.VarChar(64)
-  website                           String?                      @db.VarChar(512)
-  logoStorageKey                    String?                      @db.VarChar(512)
-  coverStorageKey                   String?                      @db.VarChar(512)
-  linkedinUrl                       String?                      @db.VarChar(512)
-  facebookUrl                       String?                      @db.VarChar(512)
-  instagramUrl                      String?                      @db.VarChar(512)
-  about                             String?                      @db.VarChar(5000)
-  values                            String[]                     @default([])
-  benefits                          String[]                     @default([])
+  id                                String                        @id @default(uuid()) @db.Uuid
+  name                              String                        @db.VarChar(200)
+  slug                              String                        @unique @db.VarChar(200)
+  uid                               String?                       @unique @db.VarChar(32)
+  registrationEmailDomainNormalized String?                       @db.VarChar(253)
+  registrationNameNormalized        String?                       @db.VarChar(200)
+  registrationCantonId              String?                       @db.Uuid
+  industry                          String?                       @db.VarChar(160)
+  size                              String?                       @db.VarChar(64)
+  website                           String?                       @db.VarChar(512)
+  logoStorageKey                    String?                       @db.VarChar(512)
+  coverStorageKey                   String?                       @db.VarChar(512)
+  linkedinUrl                       String?                       @db.VarChar(512)
+  facebookUrl                       String?                       @db.VarChar(512)
+  instagramUrl                      String?                       @db.VarChar(512)
+  about                             String?                       @db.VarChar(5000)
+  values                            String[]                      @default([])
+  benefits                          String[]                      @default([])
   responseTargetDays                Int?
-  responseSampleSize                Int                          @default(0)
+  responseSampleSize                Int                           @default(0)
   responseWithinTargetBps           Int?
-  status                            CompanyStatus                @default(DRAFT)
-  dataProvenance                    DataProvenance               @default(LIVE)
-  createdAt                         DateTime                     @default(now()) @db.Timestamptz(3)
-  updatedAt                         DateTime                     @updatedAt @db.Timestamptz(3)
-  registrationCanton                Canton?                      @relation("CompanyRegistrationCanton", fields: [registrationCantonId], references: [id], onDelete: Restrict)
+  status                            CompanyStatus                 @default(DRAFT)
+  dataProvenance                    DataProvenance                @default(LIVE)
+  createdAt                         DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                         DateTime                      @updatedAt @db.Timestamptz(3)
+  registrationCanton                Canton?                       @relation("CompanyRegistrationCanton", fields: [registrationCantonId], references: [id], onDelete: Restrict)
   statusEvents                      CompanyStatusEvent[]
   memberships                       CompanyMembership[]
   locations                         CompanyLocation[]
   invitations                       CompanyInvitation[]
   claimRequests                     CompanyClaimRequest[]
   verificationRequests              CompanyVerificationRequest[]
+  verificationEvidence              CompanyVerificationEvidence[]
+  verificationChecks                CompanyVerificationCheck[]
+  domainChallenges                  CompanyDomainChallenge[]
+  verificationDecisions             CompanyVerificationDecision[]
+  verificationAppeals               CompanyVerificationAppeal[]
+  trustProjections                  CompanyTrustProjection[]
+  vaultDocuments                    Document[]
+  documentVersions                  DocumentVersion[]
+  documentUploadIntents             DocumentUploadIntent[]
   jobs                              Job[]
   jobAssignments                    JobAssignment[]
   applicationEmployerNotes          ApplicationEmployerNote[]
@@ -2475,23 +2604,40 @@ model CompanyClaimEvent {
 }
 
 model CompanyVerificationRequest {
-  id                  String                      @id @default(uuid()) @db.Uuid
-  companyId           String                      @db.Uuid
-  requestedByUserId   String                      @db.Uuid
-  supersedesRequestId String?                     @unique @db.Uuid
-  status              CompanyVerificationStatus   @default(DRAFT)
-  evidenceMetadata    Json?
-  createdAt           DateTime                    @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime                    @updatedAt @db.Timestamptz(3)
-  company             Company                     @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  requestedBy         User                        @relation("VerificationRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  supersedes          CompanyVerificationRequest? @relation("VerificationSupersession", fields: [supersedesRequestId, companyId], references: [id, companyId], onDelete: Restrict)
-  supersededBy        CompanyVerificationRequest? @relation("VerificationSupersession")
-  events              CompanyVerificationEvent[]
+  id                     String                        @id @default(uuid()) @db.Uuid
+  companyId              String                        @db.Uuid
+  requestedByUserId      String                        @db.Uuid
+  supersedesRequestId    String?                       @unique @db.Uuid
+  assignedReviewerUserId String?                       @db.Uuid
+  status                 CompanyVerificationStatus     @default(DRAFT)
+  riskLevel              CompanyVerificationRiskLevel  @default(NORMAL)
+  policyVersion          String                        @default("COMPANY_TRUST_POLICY_V1") @db.VarChar(48)
+  priority               Int                           @default(50)
+  version                Int                           @default(1)
+  evidenceMetadata       Json?
+  assignedAt             DateTime?                     @db.Timestamptz(3)
+  reviewDueAt            DateTime?                     @db.Timestamptz(3)
+  reviewStartedAt        DateTime?                     @db.Timestamptz(3)
+  decidedAt              DateTime?                     @db.Timestamptz(3)
+  createdAt              DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                      @updatedAt @db.Timestamptz(3)
+  company                Company                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  requestedBy            User                          @relation("VerificationRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  assignedReviewer       User?                         @relation("CompanyVerificationAssignedReviewer", fields: [assignedReviewerUserId], references: [id], onDelete: Restrict)
+  supersedes             CompanyVerificationRequest?   @relation("VerificationSupersession", fields: [supersedesRequestId, companyId], references: [id, companyId], onDelete: Restrict)
+  supersededBy           CompanyVerificationRequest?   @relation("VerificationSupersession")
+  events                 CompanyVerificationEvent[]
+  evidence               CompanyVerificationEvidence[]
+  domainChallenges       CompanyDomainChallenge[]
+  decisions              CompanyVerificationDecision[]
+  appeals                CompanyVerificationAppeal[]
+  trustProjections       CompanyTrustProjection[]
 
   @@unique([id, companyId])
   @@unique([supersedesRequestId, companyId])
   @@index([companyId, status, createdAt])
+  @@index([status, priority, reviewDueAt, id])
+  @@index([assignedReviewerUserId, status, reviewDueAt, id])
 }
 
 model CompanyVerificationEvent {
@@ -2509,6 +2655,176 @@ model CompanyVerificationEvent {
   verificationRequest   CompanyVerificationRequest   @relation(fields: [verificationRequestId], references: [id], onDelete: Restrict)
 
   @@index([verificationRequestId, createdAt])
+}
+
+model CompanyVerificationEvidence {
+  id                    String                            @id @default(uuid()) @db.Uuid
+  verificationRequestId String                            @db.Uuid
+  companyId             String                            @db.Uuid
+  createdByUserId       String?                           @db.Uuid
+  documentVersionId     String?                           @unique @db.Uuid
+  domainChallengeId     String?                           @unique @db.Uuid
+  type                  CompanyVerificationEvidenceType
+  scope                 CompanyVerificationScope
+  status                CompanyVerificationEvidenceStatus @default(PENDING)
+  source                String                            @db.VarChar(64)
+  providerKey           String?                           @db.VarChar(64)
+  normalizedIdentifier  String?                           @db.VarChar(255)
+  responseDigest        String                            @db.Char(64)
+  reasonCode            String?                           @db.VarChar(64)
+  checkedAt             DateTime?                         @db.Timestamptz(3)
+  validFrom             DateTime?                         @db.Timestamptz(3)
+  validTo               DateTime?                         @db.Timestamptz(3)
+  revokedAt             DateTime?                         @db.Timestamptz(3)
+  createdAt             DateTime                          @default(now()) @db.Timestamptz(3)
+  verificationRequest   CompanyVerificationRequest        @relation(fields: [verificationRequestId, companyId], references: [id, companyId], onDelete: Restrict)
+  company               Company                           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  createdBy             User?                             @relation("CompanyVerificationEvidenceCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  documentVersion       DocumentVersion?                  @relation(fields: [documentVersionId], references: [id], onDelete: Restrict)
+  domainChallenge       CompanyDomainChallenge?           @relation(fields: [domainChallengeId], references: [id], onDelete: Restrict)
+  checks                CompanyVerificationCheck[]
+
+  @@unique([id, companyId])
+  @@index([verificationRequestId, type, status, validTo])
+  @@index([companyId, scope, status, validTo])
+  @@index([status, validTo, id])
+}
+
+model CompanyVerificationCheck {
+  id                  String                         @id @default(uuid()) @db.Uuid
+  evidenceId          String                         @db.Uuid
+  companyId           String                         @db.Uuid
+  providerUseCase     String                         @db.VarChar(96)
+  adapterKey          String                         @db.VarChar(64)
+  adapterVersion      String                         @db.VarChar(32)
+  inputSchemaVersion  String                         @db.VarChar(32)
+  outputSchemaVersion String                         @db.VarChar(32)
+  result              CompanyVerificationCheckResult
+  uidMatched          Boolean?
+  nameMatched         Boolean?
+  cantonMatched       Boolean?
+  domainMatched       Boolean?
+  requestDigest       String                         @db.Char(64)
+  responseDigest      String                         @db.Char(64)
+  failureClass        WorkFailureClass?
+  failureCode         String?                        @db.VarChar(64)
+  retryable           Boolean                        @default(false)
+  latencyMs           Int
+  providerRequestKey  String                         @unique @db.VarChar(160)
+  checkedAt           DateTime                       @db.Timestamptz(3)
+  createdAt           DateTime                       @default(now()) @db.Timestamptz(3)
+  evidence            CompanyVerificationEvidence    @relation(fields: [evidenceId, companyId], references: [id, companyId], onDelete: Restrict)
+  company             Company                        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([evidenceId, checkedAt, id])
+  @@index([companyId, result, checkedAt])
+}
+
+model CompanyDomainChallenge {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  verificationRequestId String                       @db.Uuid
+  companyId             String                       @db.Uuid
+  issuedByUserId        String                       @db.Uuid
+  supersedesChallengeId String?                      @unique @db.Uuid
+  domain                String                       @db.VarChar(253)
+  tokenHash             String                       @unique @db.Char(64)
+  proofDigest           String?                      @db.Char(64)
+  status                CompanyDomainChallengeStatus @default(PENDING)
+  issuedAt              DateTime                     @db.Timestamptz(3)
+  expiresAt             DateTime                     @db.Timestamptz(3)
+  verifiedAt            DateTime?                    @db.Timestamptz(3)
+  supersededAt          DateTime?                    @db.Timestamptz(3)
+  revokedAt             DateTime?                    @db.Timestamptz(3)
+  createdAt             DateTime                     @default(now()) @db.Timestamptz(3)
+  verificationRequest   CompanyVerificationRequest   @relation(fields: [verificationRequestId, companyId], references: [id, companyId], onDelete: Restrict)
+  company               Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  issuedBy              User                         @relation("CompanyDomainChallengeIssuer", fields: [issuedByUserId], references: [id], onDelete: Restrict)
+  supersedes            CompanyDomainChallenge?      @relation("CompanyDomainChallengeSupersession", fields: [supersedesChallengeId], references: [id], onDelete: Restrict)
+  supersededBy          CompanyDomainChallenge?      @relation("CompanyDomainChallengeSupersession")
+  evidence              CompanyVerificationEvidence?
+
+  @@unique([id, companyId])
+  @@index([companyId, status, expiresAt])
+  @@index([verificationRequestId, status, issuedAt])
+}
+
+model CompanyVerificationDecision {
+  id                    String                          @id @default(uuid()) @db.Uuid
+  verificationRequestId String                          @db.Uuid
+  companyId             String                          @db.Uuid
+  decidedByUserId       String                          @db.Uuid
+  approvedByUserId      String?                         @db.Uuid
+  kind                  CompanyVerificationDecisionKind
+  scope                 CompanyVerificationScope
+  riskLevel             CompanyVerificationRiskLevel
+  policyVersion         String                          @db.VarChar(48)
+  reasonCode            String                          @db.VarChar(64)
+  evidenceDigest        String                          @db.Char(64)
+  idempotencyKey        String                          @unique @db.VarChar(160)
+  validFrom             DateTime?                       @db.Timestamptz(3)
+  validTo               DateTime?                       @db.Timestamptz(3)
+  decidedAt             DateTime                        @db.Timestamptz(3)
+  createdAt             DateTime                        @default(now()) @db.Timestamptz(3)
+  verificationRequest   CompanyVerificationRequest      @relation(fields: [verificationRequestId, companyId], references: [id, companyId], onDelete: Restrict)
+  company               Company                         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  decidedBy             User                            @relation("CompanyVerificationDecisionReviewer", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+  approvedBy            User?                           @relation("CompanyVerificationDecisionApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  trustProjections      CompanyTrustProjection[]
+
+  @@unique([id, companyId])
+  @@index([verificationRequestId, decidedAt, id])
+  @@index([companyId, kind, decidedAt])
+}
+
+model CompanyTrustProjection {
+  id                    String                       @id @default(uuid()) @db.Uuid
+  companyId             String                       @db.Uuid
+  verificationRequestId String                       @db.Uuid
+  decisionId            String?                      @db.Uuid
+  scope                 CompanyVerificationScope
+  level                 CompanyTrustLevel
+  status                CompanyTrustStatus
+  riskState             CompanyTrustRiskState        @default(CLEAR)
+  policyVersion         String                       @db.VarChar(48)
+  evidenceDigest        String                       @db.Char(64)
+  reasonCode            String                       @db.VarChar(64)
+  verifiedAt            DateTime?                    @db.Timestamptz(3)
+  expiresAt             DateTime?                    @db.Timestamptz(3)
+  changedAt             DateTime                     @db.Timestamptz(3)
+  version               Int                          @default(1)
+  createdAt             DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                     @updatedAt @db.Timestamptz(3)
+  company               Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  verificationRequest   CompanyVerificationRequest   @relation(fields: [verificationRequestId, companyId], references: [id, companyId], onDelete: Restrict)
+  decision              CompanyVerificationDecision? @relation(fields: [decisionId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([companyId, scope])
+  @@index([status, expiresAt, id])
+  @@index([companyId, status, riskState])
+  @@index([verificationRequestId, status])
+}
+
+model CompanyVerificationAppeal {
+  id                    String                          @id @default(uuid()) @db.Uuid
+  verificationRequestId String                          @db.Uuid
+  companyId             String                          @db.Uuid
+  appellantUserId       String                          @db.Uuid
+  decidedByUserId       String?                         @db.Uuid
+  status                CompanyVerificationAppealStatus @default(OPEN)
+  safeStatement         String                          @db.VarChar(2000)
+  statementDigest       String                          @db.Char(64)
+  decisionReasonCode    String?                         @db.VarChar(64)
+  decidedAt             DateTime?                       @db.Timestamptz(3)
+  createdAt             DateTime                        @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                        @updatedAt @db.Timestamptz(3)
+  verificationRequest   CompanyVerificationRequest      @relation(fields: [verificationRequestId, companyId], references: [id, companyId], onDelete: Restrict)
+  company               Company                         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  appellant             User                            @relation("CompanyVerificationAppealAppellant", fields: [appellantUserId], references: [id], onDelete: Restrict)
+  decidedBy             User?                           @relation("CompanyVerificationAppealDecider", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([verificationRequestId, status, createdAt])
+  @@index([companyId, status, createdAt])
+  @@index([appellantUserId, status, createdAt])
 }
 
 model Job {
@@ -5762,6 +6078,7 @@ enum PrivilegedApprovalKind {
   TRUST_RESTORE
   FINANCE
   PRIVACY
+  COMPANY_VERIFICATION
 }
 
 enum PrivilegedApprovalStatus {
@@ -5922,18 +6239,18 @@ model AdminCapabilityGrant {
 }
 
 model Authenticator {
-  id                String               @id @default(uuid()) @db.Uuid
-  userId            String               @db.Uuid
+  id                String                   @id @default(uuid()) @db.Uuid
+  userId            String                   @db.Uuid
   kind              AuthenticatorKind
-  status            AuthenticatorStatus  @default(PENDING)
-  label             String               @db.VarChar(100)
-  verifiedAt        DateTime?            @db.Timestamptz(3)
-  lastUsedAt        DateTime?            @db.Timestamptz(3)
-  revokedAt         DateTime?            @db.Timestamptz(3)
-  revokedByUserId   String?              @db.Uuid
-  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
-  user              User                 @relation("AuthenticatorOwner", fields: [userId], references: [id], onDelete: Restrict)
+  status            AuthenticatorStatus      @default(PENDING)
+  label             String                   @db.VarChar(100)
+  verifiedAt        DateTime?                @db.Timestamptz(3)
+  lastUsedAt        DateTime?                @db.Timestamptz(3)
+  revokedAt         DateTime?                @db.Timestamptz(3)
+  revokedByUserId   String?                  @db.Uuid
+  createdAt         DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                 @updatedAt @db.Timestamptz(3)
+  user              User                     @relation("AuthenticatorOwner", fields: [userId], references: [id], onDelete: Restrict)
   webauthn          WebAuthnCredential?
   totp              TotpCredential?
   events            AuthenticatorEvent[]
@@ -6160,26 +6477,26 @@ model TrustRiskDecision {
 }
 
 model TrustSafetyCase {
-  id             String                 @id @default(uuid()) @db.Uuid
-  riskDecisionId String                 @unique @db.Uuid
+  id             String                         @id @default(uuid()) @db.Uuid
+  riskDecisionId String                         @unique @db.Uuid
   subjectType    RiskSubjectType
-  subjectId      String                 @db.VarChar(160)
-  companyId      String?                @db.Uuid
+  subjectId      String                         @db.VarChar(160)
+  companyId      String?                        @db.Uuid
   category       RiskSignalKind
   severity       TrustSafetySeverity
-  status         TrustSafetyCaseStatus  @default(OPEN)
-  policyVersion  String                 @db.VarChar(48)
-  safeReasonCode String                 @db.VarChar(64)
-  evidenceDigest String                 @db.Char(64)
-  dedupeKey      String                 @unique @db.VarChar(160)
-  assigneeUserId String?                @db.Uuid
-  reviewDueAt    DateTime               @db.Timestamptz(3)
-  holdExpiresAt  DateTime?              @db.Timestamptz(3)
-  version        Int                    @default(1)
-  resolvedAt     DateTime?              @db.Timestamptz(3)
-  createdAt      DateTime               @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime               @updatedAt @db.Timestamptz(3)
-  riskDecision   TrustRiskDecision      @relation(fields: [riskDecisionId], references: [id], onDelete: Restrict)
+  status         TrustSafetyCaseStatus          @default(OPEN)
+  policyVersion  String                         @db.VarChar(48)
+  safeReasonCode String                         @db.VarChar(64)
+  evidenceDigest String                         @db.Char(64)
+  dedupeKey      String                         @unique @db.VarChar(160)
+  assigneeUserId String?                        @db.Uuid
+  reviewDueAt    DateTime                       @db.Timestamptz(3)
+  holdExpiresAt  DateTime?                      @db.Timestamptz(3)
+  version        Int                            @default(1)
+  resolvedAt     DateTime?                      @db.Timestamptz(3)
+  createdAt      DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                       @updatedAt @db.Timestamptz(3)
+  riskDecision   TrustRiskDecision              @relation(fields: [riskDecisionId], references: [id], onDelete: Restrict)
   events         TrustSafetyCaseEvent[]
   appeals        TrustSafetyAppeal[]
   effects        TrustSafetyContainmentEffect[]

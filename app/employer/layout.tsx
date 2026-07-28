@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 const navigation = [
   { href: "/employer/dashboard", label: "Dashboard" },
   { href: "/employer/company", label: "Firma" },
+  { href: "/employer/verification", label: "Firmenprüfung" },
   { href: "/employer/team", label: "Team" },
   { href: "/employer/jobs", label: "Jobs" },
   { href: "/employer/applicants", label: "Bewerber:innen" },

@@ -10,6 +10,7 @@ import { z } from "zod";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { RevealField } from "@/lib/generated/prisma/enums";
@@ -166,11 +167,15 @@ export async function buildCandidateRevealPreview(
       },
     },
   });
+  const trust = request === null
+    ? null
+    : await evaluateCompanyTrustForCompany(database, request.companyId, {
+        now: command.now,
+      });
   if (
     request === null ||
     request.conversation?.kind !== "TALENT_RADAR" ||
-    request.company.status !== "ACTIVE" ||
-    request.company.verificationRequests.length !== 1 ||
+    trust?.radarEligible !== true ||
     request.candidateProfile.user.status !== "ACTIVE" ||
     request.revealGrant?.revokedAt != null
   ) {
@@ -637,6 +642,10 @@ export async function getEmployerRadarRequestView(
     },
   });
   if (request === null) return null;
+  const trust = await evaluateCompanyTrustForCompany(
+    database,
+    request.companyId,
+  );
   const grant = request.revealGrant;
   const conversationId = request.conversation?.id ?? null;
   const guard =
@@ -644,7 +653,7 @@ export async function getEmployerRadarRequestView(
     canSeeRadarIdentity({
       candidateUserStatus: request.candidateProfile.user.status,
       companyStatus: request.company.status,
-      companyVerificationCount: request.company.verificationRequests.length,
+      companyVerificationCount: trust.radarEligible ? 1 : 0,
       conversationKind: request.conversation?.kind ?? "NONE",
       requestId: request.id,
       requestStatus: request.status,

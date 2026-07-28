@@ -9,6 +9,7 @@ import type {
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { getDatabase } from "@/lib/db/client";
 import type { DatabaseClient } from "@/lib/db/factory";
+import { evaluateCompanyTrustForCompanies } from "@/lib/companies/verification/read-model";
 import type { PublicJobProjection } from "@/lib/search/types";
 
 export type PublicEligibilityEnvironment = "production" | "non-production";
@@ -28,6 +29,12 @@ export type PublicEligibilitySnapshot = Readonly<{
     status: string;
     dataProvenance: DataProvenance;
     hasCurrentVerifiedCycle: boolean;
+    /**
+     * Runtime readers always populate the Phase-26 trust decision. Optionality
+     * only preserves the pure historical fixture contract while old tests are
+     * migrated; it is never omitted by a database-backed public read.
+     */
+    hasCurrentTrustEligibility?: boolean;
   }>;
   revision: Readonly<{
     id: string;
@@ -136,7 +143,8 @@ export function evaluatePublicJobEligibility(
     snapshot.expiresAt.getTime() !== revision.validThrough.getTime() ||
     !revision.categoryIsActive ||
     snapshot.company.status !== "ACTIVE" ||
-    !snapshot.company.hasCurrentVerifiedCycle ||
+    !(snapshot.company.hasCurrentTrustEligibility ??
+      snapshot.company.hasCurrentVerifiedCycle) ||
     snapshot.hasEffectivePublicHideRestriction ||
     (environment === "production" &&
       (snapshot.dataProvenance !== "LIVE" ||
@@ -258,26 +266,33 @@ async function loadPublicEligibilitySnapshots(
   });
   if (jobs.length === 0) return new Map();
 
-  const restrictions = await database.moderationRestriction.findMany({
-    where: {
-      status: "ACTIVE",
-      startsAt: { lte: now },
-      liftedAt: null,
-      OR: [{ endsAt: null }, { endsAt: { gt: now } }],
-      AND: [
-        {
-          OR: [
-            { targetType: "HIDE_JOB", targetId: { in: jobs.map(({ id }) => id) } },
-            {
-              targetType: "PAUSE_COMPANY",
-              targetId: { in: jobs.map(({ companyId }) => companyId) },
-            },
-          ],
-        },
-      ],
-    },
-    select: { targetType: true, targetId: true },
-  });
+  const [restrictions, trustByCompanyId] = await Promise.all([
+    database.moderationRestriction.findMany({
+      where: {
+        status: "ACTIVE",
+        startsAt: { lte: now },
+        liftedAt: null,
+        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+        AND: [
+          {
+            OR: [
+              { targetType: "HIDE_JOB", targetId: { in: jobs.map(({ id }) => id) } },
+              {
+                targetType: "PAUSE_COMPANY",
+                targetId: { in: jobs.map(({ companyId }) => companyId) },
+              },
+            ],
+          },
+        ],
+      },
+      select: { targetType: true, targetId: true },
+    }),
+    evaluateCompanyTrustForCompanies(
+      database,
+      jobs.map(({ companyId }) => companyId),
+      { now },
+    ),
+  ]);
   const hiddenJobIds = new Set(
     restrictions
       .filter(({ targetType }) => targetType === "HIDE_JOB")
@@ -294,6 +309,7 @@ async function loadPublicEligibilitySnapshots(
       toPublicEligibilitySnapshot(
         job,
         hiddenJobIds.has(job.id) || pausedCompanyIds.has(job.companyId),
+        trustByCompanyId.get(job.companyId)?.publicEligible === true,
       ),
     ]),
   );
@@ -302,6 +318,7 @@ async function loadPublicEligibilitySnapshots(
 function toPublicEligibilitySnapshot(
   job: PublicEligibilityJobRow,
   hasEffectivePublicHideRestriction: boolean,
+  hasCurrentTrustEligibility: boolean,
 ): PublicEligibilitySnapshot {
   const revision = job.publishedRevision;
   return {
@@ -319,6 +336,7 @@ function toPublicEligibilitySnapshot(
       status: job.company.status,
       dataProvenance: job.company.dataProvenance,
       hasCurrentVerifiedCycle: job.company.verificationRequests.length === 1,
+      hasCurrentTrustEligibility,
     },
     revision:
       revision === null

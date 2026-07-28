@@ -9,6 +9,7 @@ export const ADMIN_NAVIGATION: readonly CapabilityNavigationItem[] = Object.free
     { href: "/admin", label: "Übersicht", capabilities: ["ADMIN_OVERVIEW_READ"] },
     { href: "/admin/jobs", label: "Jobs", capabilities: ["ADMIN_JOB_REVIEW"] },
     { href: "/admin/companies", label: "Unternehmen", capabilities: ["ADMIN_COMPANY_REVIEW", "ADMIN_COMPANY_MODERATE"] },
+    { href: "/admin/company-verification", label: "Firmenprüfungen", capabilities: ["COMPANY_VERIFICATION_REVIEW", "COMPANY_VERIFICATION_APPROVE"] },
     { href: "/admin/users", label: "Benutzer", capabilities: ["ADMIN_USER_MODERATE"] },
     { href: "/admin/taxonomy", label: "Taxonomie", capabilities: ["ADMIN_TAXONOMY_MANAGE"] },
     { href: "/admin/reports", label: "Reports", capabilities: ["ADMIN_REPORT_REVIEW", "TRUST_SAFETY_REVIEW"] },

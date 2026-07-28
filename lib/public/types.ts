@@ -18,6 +18,15 @@ export type PublicResponseEvidence = Readonly<{
   sampleSizeBucket: "20–49" | "50+" | null;
 }>;
 
+export type PublicCompanyTrustBadge = Readonly<{
+  label: "Firmenidentität geprüft";
+  scopeLabel: "UID-Register und Domainkontrolle";
+  method: "UID_REGISTER_AND_DOMAIN_CHALLENGE";
+  policyVersion: "COMPANY_TRUST_POLICY_V2";
+  verifiedAt: Date;
+  validUntil: Date;
+}>;
+
 export type PublicJobCardModel = Readonly<{
   id: string;
   slug: string;
@@ -27,7 +36,8 @@ export type PublicJobCardModel = Readonly<{
     id: string;
     slug: string;
     name: string;
-    verified: true;
+    verified: boolean;
+    trust?: PublicCompanyTrustBadge | null;
   }>;
   category: Readonly<{ id: string; name: string; slug: string }>;
   canton: Readonly<{ id: string; name: string; slug: string; code: string }> | null;
@@ -107,6 +117,7 @@ export type PublicCompanyCardModel = Readonly<{
   city: string | null;
   canton: string | null;
   verified: boolean;
+  trust?: PublicCompanyTrustBadge | null;
   openJobCount: number;
   benefitsPreview: readonly string[];
   response: PublicResponseEvidence;

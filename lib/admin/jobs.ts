@@ -15,6 +15,7 @@ import {
   type BoostProjectionResult,
 } from "@/lib/billing/boosts";
 import { publishWithQuota } from "@/lib/billing/usage";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
@@ -382,10 +383,14 @@ export async function publishAdminJob(
       (revision.city !== null && (!revision.city.isActive || revision.city.cantonId !== revision.cantonId))
     ) return adminFailure("CONFLICT");
 
-    const verificationCount = await transaction.companyVerificationRequest.count({
-      where: { companyId: job.companyId, status: "VERIFIED", supersededBy: null },
-    });
-    if (verificationCount !== 1) return adminFailure("VERIFICATION_REQUIRED");
+    const companyTrust = await evaluateCompanyTrustForCompany(
+      transaction,
+      job.companyId,
+      { now },
+    );
+    if (!companyTrust.publicEligible) {
+      return adminFailure("VERIFICATION_REQUIRED");
+    }
     const restrictionCount = await transaction.moderationRestriction.count({
       where: {
         status: "ACTIVE",

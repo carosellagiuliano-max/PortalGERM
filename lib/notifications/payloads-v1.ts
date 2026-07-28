@@ -39,6 +39,8 @@ export const COMPANY_VERIFICATION_REASON_CODES_V1 = [
   "VERIFIED",
   "REJECTED",
   "REVOKED",
+  "REVIEW_DUE",
+  "EXPIRED",
 ] as const;
 
 export const TEAM_MEMBERSHIP_REASON_CODES_V1 = [
@@ -169,6 +171,7 @@ export const NOTIFICATION_PAYLOADS_V1 = Object.freeze({
       "VERIFIED",
       "REJECTED",
       "REVOKED",
+      "EXPIRED",
     ]),
     reasonCode: z.enum(COMPANY_VERIFICATION_REASON_CODES_V1).optional(),
   }),

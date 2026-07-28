@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { buildNotificationPersistenceRecord } from "@/lib/notifications/writer";
@@ -205,6 +206,12 @@ export async function getCandidateConversation(
         },
       });
       if (conversation === null) return null;
+      const companyTrust = conversation.kind === "TALENT_RADAR"
+        ? await evaluateCompanyTrustForCompany(
+            transaction,
+            conversation.company.id,
+          )
+        : null;
 
       const anchor = options.beforeMessageId === undefined
         ? null
@@ -249,7 +256,7 @@ export async function getCandidateConversation(
       const messageSendAvailability = deriveCandidateMessageSendAvailability({
         kind: conversation.kind,
         companyStatus: conversation.company.status,
-        currentVerifiedCycles: conversation.company.verificationRequests.length,
+        currentVerifiedCycles: companyTrust?.radarEligible ? 1 : 0,
       });
 
       return Object.freeze({
@@ -352,6 +359,13 @@ export async function sendCandidateMessage(
         },
       });
       if (conversation === null) return Object.freeze({ ok: false as const, code: "NOT_FOUND" as const });
+      const companyTrust = conversation.kind === "TALENT_RADAR"
+        ? await evaluateCompanyTrustForCompany(
+            transaction,
+            conversation.companyId,
+            { now },
+          )
+        : null;
 
       const existing = await transaction.message.findUnique({
         where: { idempotencyKey: parsed.data.idempotencyKey },
@@ -367,7 +381,7 @@ export async function sendCandidateMessage(
       if (!deriveCandidateMessageSendAvailability({
         kind: conversation.kind,
         companyStatus: conversation.company.status,
-        currentVerifiedCycles: conversation.company.verificationRequests.length,
+        currentVerifiedCycles: companyTrust?.radarEligible ? 1 : 0,
       }).allowed) {
         return Object.freeze({
           ok: false as const,

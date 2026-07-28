@@ -32,7 +32,7 @@ const SIZE_BYTES = 8;
 const HASH_BYTES = 32;
 const FOOTER_BYTES = AUTH_TAG_BYTES + SIZE_BYTES + HASH_BYTES;
 const DOCUMENT_OBJECT_KEY_PATTERN =
-  /^candidate-cv\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+  /^(?:candidate-cv|company-verification)\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const OBJECT_FILE_PATTERN = /^[a-f0-9]{64}\.sthobj$/u;
 
 type ParsedObjectFile = Readonly<{

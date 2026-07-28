@@ -42,6 +42,7 @@ import {
   CANDIDATE_FIXTURES,
   CANDIDATE_WORKFLOW_BLOCK_DIGEST,
   CANDIDATE_WORKFLOW_SEED_IDENTITIES,
+  COMPANY_FIXTURES,
   DEMO_ACCOUNT_FIXTURES,
   DEMO_GUIDE_FIXTURES,
 } from "@/prisma/seed/fixtures";
@@ -473,11 +474,18 @@ export function buildStaticSeedBlockDigests(
         email,
         role,
       })),
-      companies: planning.companies.map(({ id, slug, planCode }) => ({
-        id,
-        slug,
-        planCode,
-      })),
+      companies: planning.companies.map(({ id, slug, planCode }) => {
+        const fixture = COMPANY_FIXTURES.find((company) => company.id === id);
+        if (fixture === undefined) {
+          throw new Error(`Missing Company fixture for seed digest ${id}.`);
+        }
+        return {
+          id,
+          slug,
+          planCode,
+          uid: fixture.uid,
+        };
+      }),
       jobs: planning.jobs.map(({ id, slug, status, companyId }) => ({
         id,
         slug,

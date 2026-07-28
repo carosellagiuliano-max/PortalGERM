@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
+
 import {
   PASSWORD_HASH_POLICY_V1,
   hashPassword,
   verifyPassword,
 } from "@/lib/auth/password";
+import { normalizeCompanyNameSignal } from "@/lib/auth/employer-registration-signals";
 import type { Prisma, PrismaClient } from "@/lib/generated/prisma/client";
 import { companyMediaOptions } from "@/lib/security/company-media-manifest";
 import type { CanonicalJsonValue } from "@/prisma/seed/canonical-json";
@@ -40,6 +43,7 @@ export type CompanySeedHandle = Readonly<{
   id: string;
   slug: string;
   name: string;
+  uid: string;
   planCode: PlanCode;
   ownerUserId: string;
   ownerMembershipId: string;
@@ -100,11 +104,12 @@ export async function seedDemoAccountsCompaniesAndJobs(
   );
   const companies = Object.freeze(
     COMPANY_FIXTURES.map(
-      ({ id, slug, name, planCode, ownerUserId, ownerMembershipId }) =>
+      ({ id, slug, name, uid, planCode, ownerUserId, ownerMembershipId }) =>
         Object.freeze({
           id,
           slug,
           name,
+          uid,
           planCode,
           ownerUserId,
           ownerMembershipId,
@@ -131,7 +136,12 @@ export async function seedDemoAccountsCompaniesAndJobs(
     identities: COMPANIES_JOBS_SEED_IDENTITIES,
     blockDigest: createSeedBlockDigest("companies-jobs", 144, {
       accounts: demoAccounts.map(({ id, email, role }) => ({ id, email, role })),
-      companies: companies.map(({ id, slug, planCode }) => ({ id, slug, planCode })),
+      companies: companies.map(({ id, slug, uid, planCode }) => ({
+        id,
+        slug,
+        uid,
+        planCode,
+      })),
       jobs: jobHandles.map(({ id, slug, status, companyId }) => ({
         id,
         slug,
@@ -348,6 +358,10 @@ async function seedCompany(
     id: fixture.id,
     name: fixture.name,
     slug: fixture.slug,
+    uid: fixture.uid,
+    registrationEmailDomainNormalized: `${fixture.slug}.example.test`,
+    registrationNameNormalized: normalizeCompanyNameSignal(fixture.name),
+    registrationCantonId: fixture.cantonId,
     industry: fixture.industry,
     size: fixture.size,
     website: `https://${fixture.slug}.example.test`,
@@ -361,6 +375,23 @@ async function seedCompany(
     responseWithinTargetBps: fixture.responseWithinTargetBps,
     dataProvenance: "DEMO" as const,
   };
+  await transaction.company.updateMany({
+    where: {
+      id: fixture.id,
+      OR: [
+        { uid: null },
+        { registrationEmailDomainNormalized: null },
+        { registrationNameNormalized: null },
+        { registrationCantonId: null },
+      ],
+    },
+    data: {
+      uid: fixture.uid,
+      registrationEmailDomainNormalized: `${fixture.slug}.example.test`,
+      registrationNameNormalized: normalizeCompanyNameSignal(fixture.name),
+      registrationCantonId: fixture.cantonId,
+    },
+  });
   await createOrVerifySeedRecord({
     entity: "Company",
     naturalKey: fixture.slug,
@@ -373,6 +404,11 @@ async function seedCompany(
       id: row.id,
       name: row.name,
       slug: row.slug,
+      uid: row.uid,
+      registrationEmailDomainNormalized:
+        row.registrationEmailDomainNormalized,
+      registrationNameNormalized: row.registrationNameNormalized,
+      registrationCantonId: row.registrationCantonId,
       industry: row.industry,
       size: row.size,
       website: row.website,
@@ -563,6 +599,35 @@ async function seedCompanyVerification(
   }
 
   const currentId = stableSeedId("company-verification-request", `${fixture.slug}:current`);
+  const currentEvidenceMetadata: CanonicalJsonValue =
+    fixture.slug === DEMO_COMPANY_SLUG
+      ? {
+          provenance: "DEMO",
+          schemaVersion: "2",
+          sandboxOnly: true,
+          evidenceTypes: ["UID_REGISTER", "DOMAIN_CHALLENGE"],
+        }
+      : {
+          provenance: "DEMO",
+          cycle: supersedesRequestId ? 2 : 1,
+          reviewedEvidence: ["mock-domain", "mock-register"],
+        };
+  if (fixture.slug === DEMO_COMPANY_SLUG) {
+    await transaction.companyVerificationRequest.updateMany({
+      where: { id: currentId, companyId: fixture.id },
+      data: {
+        assignedReviewerUserId: stableSeedId("user", "admin@demo.ch"),
+        assignedAt: addDays(anchorAt, -15),
+        reviewStartedAt: addDays(anchorAt, -15),
+        reviewDueAt: addDays(anchorAt, -12),
+        decidedAt: addDays(anchorAt, -14),
+        policyVersion: "COMPANY_TRUST_POLICY_V2",
+        riskLevel: "NORMAL",
+        priority: 80,
+        evidenceMetadata: currentEvidenceMetadata,
+      },
+    });
+  }
   await ensureVerificationRequest(transaction, {
     id: currentId,
     naturalKey: `${fixture.slug}:current`,
@@ -570,9 +635,307 @@ async function seedCompanyVerification(
     status: "VERIFIED",
     supersedesRequestId,
     createdAt: addDays(anchorAt, -160),
-    evidenceMetadata: { provenance: "DEMO", cycle: supersedesRequestId ? 2 : 1, reviewedEvidence: ["mock-domain", "mock-register"] },
+    evidenceMetadata: currentEvidenceMetadata,
   });
   await ensureVerificationEvents(transaction, fixture, "current", currentId, ["DRAFT_CREATED", "SUBMITTED", "VERIFIED"], addDays(anchorAt, -160));
+  if (fixture.slug === DEMO_COMPANY_SLUG) {
+    await seedStructuredCompanyTrust(transaction, fixture, currentId, anchorAt);
+  } else {
+    await seedLegacyCompanyTrustProjection(
+      transaction,
+      fixture,
+      currentId,
+      anchorAt,
+    );
+  }
+}
+
+async function seedStructuredCompanyTrust(
+  transaction: SeedTransaction,
+  fixture: CompanyFixture,
+  requestId: string,
+  anchorAt: Date,
+) {
+  const reviewerUserId = stableSeedId("user", "admin@demo.ch");
+  const checkedAt = addDays(anchorAt, -14);
+  const validTo = addDays(anchorAt, 166);
+  const domainChallengeId = stableSeedId(
+    "company-domain-challenge",
+    `${fixture.slug}:phase26`,
+  );
+  const registerEvidenceId = stableSeedId(
+    "company-verification-evidence",
+    `${fixture.slug}:phase26:register`,
+  );
+  const domainEvidenceId = stableSeedId(
+    "company-verification-evidence",
+    `${fixture.slug}:phase26:domain`,
+  );
+  const registerDigest = seedDigest(
+    `phase26:register:${fixture.uid}:${fixture.name}:${fixture.cantonCode}`,
+  );
+  const domain = `${fixture.slug}.example.test`;
+  const domainDigest = seedDigest(`phase26:domain:${domain}:verified`);
+  const evidenceDigest = createHash("sha256")
+    .update(
+      JSON.stringify([
+        {
+          type: "DOMAIN_CHALLENGE",
+          responseDigest: domainDigest,
+          validTo: validTo.toISOString(),
+        },
+        {
+          type: "UID_REGISTER",
+          responseDigest: registerDigest,
+          validTo: addDays(anchorAt, 351).toISOString(),
+        },
+      ]),
+      "utf8",
+    )
+    .digest("hex");
+  const decisionId = stableSeedId(
+    "company-verification-decision",
+    `${fixture.slug}:phase26`,
+  );
+
+  await transaction.companyVerificationRequest.update({
+    where: { id: requestId },
+    data: {
+      assignedReviewerUserId: reviewerUserId,
+      assignedAt: addDays(anchorAt, -15),
+      reviewStartedAt: addDays(anchorAt, -15),
+      reviewDueAt: addDays(anchorAt, -12),
+      decidedAt: checkedAt,
+      policyVersion: "COMPANY_TRUST_POLICY_V2",
+      riskLevel: "NORMAL",
+      priority: 80,
+      evidenceMetadata: {
+        provenance: "DEMO",
+        schemaVersion: "2",
+        sandboxOnly: true,
+        evidenceTypes: ["UID_REGISTER", "DOMAIN_CHALLENGE"],
+      },
+    },
+  });
+  await transaction.companyDomainChallenge.upsert({
+    where: { id: domainChallengeId },
+    update: {},
+    create: {
+      id: domainChallengeId,
+      verificationRequestId: requestId,
+      companyId: fixture.id,
+      issuedByUserId: fixture.ownerUserId,
+      domain,
+      tokenHash: seedDigest(`phase26:challenge-token:${fixture.slug}`),
+      proofDigest: seedDigest(`sth-domain-verification:${fixture.slug}`),
+      status: "VERIFIED",
+      issuedAt: addDays(anchorAt, -15),
+      expiresAt: addDays(anchorAt, -14),
+      verifiedAt: checkedAt,
+      createdAt: addDays(anchorAt, -15),
+    },
+  });
+  await transaction.companyVerificationEvidence.upsert({
+    where: { id: registerEvidenceId },
+    update: {},
+    create: {
+      id: registerEvidenceId,
+      verificationRequestId: requestId,
+      companyId: fixture.id,
+      createdByUserId: fixture.ownerUserId,
+      type: "UID_REGISTER",
+      scope: "COMPANY_IDENTITY",
+      status: "VALID",
+      source: "company_register",
+      providerKey: "deterministic_sandbox",
+      normalizedIdentifier: fixture.uid,
+      responseDigest: registerDigest,
+      reasonCode: "REGISTER_EXACT_MATCH",
+      checkedAt,
+      validFrom: checkedAt,
+      validTo: addDays(anchorAt, 351),
+      createdAt: checkedAt,
+    },
+  });
+  await transaction.companyVerificationEvidence.upsert({
+    where: { id: domainEvidenceId },
+    update: {},
+    create: {
+      id: domainEvidenceId,
+      verificationRequestId: requestId,
+      companyId: fixture.id,
+      createdByUserId: fixture.ownerUserId,
+      domainChallengeId,
+      type: "DOMAIN_CHALLENGE",
+      scope: "COMPANY_IDENTITY",
+      status: "VALID",
+      source: "domain_challenge",
+      providerKey: "deterministic_sandbox",
+      normalizedIdentifier: domain,
+      responseDigest: domainDigest,
+      reasonCode: "DOMAIN_EXACT_MATCH",
+      checkedAt,
+      validFrom: checkedAt,
+      validTo,
+      createdAt: checkedAt,
+    },
+  });
+  await transaction.companyVerificationCheck.upsert({
+    where: { providerRequestKey: `seed:phase26:register:${fixture.slug}` },
+    update: {},
+    create: {
+      id: stableSeedId(
+        "company-verification-check",
+        `${fixture.slug}:phase26:register`,
+      ),
+      evidenceId: registerEvidenceId,
+      companyId: fixture.id,
+      providerUseCase: "COMPANY_REGISTER_CHECK",
+      adapterKey: "deterministic_sandbox",
+      adapterVersion: "v1",
+      inputSchemaVersion: "v1",
+      outputSchemaVersion: "v1",
+      result: "EXACT_MATCH",
+      uidMatched: true,
+      nameMatched: true,
+      cantonMatched: true,
+      requestDigest: seedDigest(`phase26:register-request:${fixture.slug}`),
+      responseDigest: registerDigest,
+      retryable: false,
+      latencyMs: 0,
+      providerRequestKey: `seed:phase26:register:${fixture.slug}`,
+      checkedAt,
+      createdAt: checkedAt,
+    },
+  });
+  await transaction.companyVerificationCheck.upsert({
+    where: { providerRequestKey: `seed:phase26:domain:${fixture.slug}` },
+    update: {},
+    create: {
+      id: stableSeedId(
+        "company-verification-check",
+        `${fixture.slug}:phase26:domain`,
+      ),
+      evidenceId: domainEvidenceId,
+      companyId: fixture.id,
+      providerUseCase: "COMPANY_DOMAIN_CHALLENGE",
+      adapterKey: "deterministic_sandbox",
+      adapterVersion: "v1",
+      inputSchemaVersion: "v1",
+      outputSchemaVersion: "v1",
+      result: "EXACT_MATCH",
+      domainMatched: true,
+      requestDigest: seedDigest(`phase26:domain-request:${fixture.slug}`),
+      responseDigest: domainDigest,
+      retryable: false,
+      latencyMs: 0,
+      providerRequestKey: `seed:phase26:domain:${fixture.slug}`,
+      checkedAt,
+      createdAt: checkedAt,
+    },
+  });
+  await transaction.companyVerificationDecision.upsert({
+    where: { id: decisionId },
+    update: {},
+    create: {
+      id: decisionId,
+      verificationRequestId: requestId,
+      companyId: fixture.id,
+      decidedByUserId: reviewerUserId,
+      kind: "APPROVED",
+      scope: "COMPANY_IDENTITY",
+      riskLevel: "NORMAL",
+      policyVersion: "COMPANY_TRUST_POLICY_V2",
+      reasonCode: "SANDBOX_REGISTER_AND_DOMAIN_REVIEWED",
+      evidenceDigest,
+      idempotencyKey: `seed:phase26:decision:${fixture.slug}`,
+      validFrom: checkedAt,
+      validTo,
+      decidedAt: checkedAt,
+      createdAt: checkedAt,
+    },
+  });
+  await transaction.companyTrustProjection.upsert({
+    where: {
+      companyId_scope: {
+        companyId: fixture.id,
+        scope: "COMPANY_IDENTITY",
+      },
+    },
+    update: {
+      verificationRequestId: requestId,
+      decisionId,
+      level: "STRONG",
+      status: "ACTIVE",
+      riskState: "CLEAR",
+      policyVersion: "COMPANY_TRUST_POLICY_V2",
+      evidenceDigest,
+      reasonCode: "SANDBOX_REGISTER_AND_DOMAIN_REVIEWED",
+      verifiedAt: checkedAt,
+      expiresAt: validTo,
+      changedAt: checkedAt,
+    },
+    create: {
+      id: stableSeedId(
+        "company-trust-projection",
+        `${fixture.slug}:phase26`,
+      ),
+      companyId: fixture.id,
+      verificationRequestId: requestId,
+      decisionId,
+      scope: "COMPANY_IDENTITY",
+      level: "STRONG",
+      status: "ACTIVE",
+      riskState: "CLEAR",
+      policyVersion: "COMPANY_TRUST_POLICY_V2",
+      evidenceDigest,
+      reasonCode: "SANDBOX_REGISTER_AND_DOMAIN_REVIEWED",
+      verifiedAt: checkedAt,
+      expiresAt: validTo,
+      changedAt: checkedAt,
+      createdAt: checkedAt,
+    },
+  });
+}
+
+async function seedLegacyCompanyTrustProjection(
+  transaction: SeedTransaction,
+  fixture: CompanyFixture,
+  requestId: string,
+  anchorAt: Date,
+) {
+  const verifiedAt = addDays(anchorAt, -156);
+  await transaction.companyTrustProjection.upsert({
+    where: {
+      companyId_scope: {
+        companyId: fixture.id,
+        scope: "LEGACY_PROFILE",
+      },
+    },
+    update: {},
+    create: {
+      id: stableSeedId(
+        "company-trust-projection",
+        `${fixture.slug}:legacy`,
+      ),
+      companyId: fixture.id,
+      verificationRequestId: requestId,
+      scope: "LEGACY_PROFILE",
+      level: "LEGACY",
+      status: "ACTIVE",
+      riskState: "CLEAR",
+      policyVersion: "COMPANY_TRUST_POLICY_V1",
+      evidenceDigest: seedDigest(`legacy:${fixture.slug}:${requestId}`),
+      reasonCode: "LEGACY_MANUAL_CLASSIFICATION",
+      verifiedAt,
+      changedAt: verifiedAt,
+      createdAt: verifiedAt,
+    },
+  });
+}
+
+function seedDigest(value: string) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
 async function ensureVerificationRequest(

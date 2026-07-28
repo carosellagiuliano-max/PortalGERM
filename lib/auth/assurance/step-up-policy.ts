@@ -127,6 +127,15 @@ export const STEP_UP_POLICIES_V1: readonly StepUpPolicy[] = Object.freeze([
     "REQUIRED",
     FIVE_MINUTES,
   ),
+  policy(
+    "ADMIN_COMPANY_VERIFICATION",
+    "COMPANY_VERIFICATION",
+    /^COMPANY_VERIFICATION_(ASSIGN|DECIDE|REVOKE|RESTORE|APPEAL_DECIDE)$/u,
+    ["ADMIN"],
+    "REQUIRED",
+    "REQUIRED",
+    FIVE_MINUTES,
+  ),
 ]);
 
 export type StepUpBindingInput = Readonly<{

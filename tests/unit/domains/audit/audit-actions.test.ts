@@ -126,6 +126,32 @@ function extractPhase25AuditActions(plan: string) {
   ];
 }
 
+function extractPhase26AuditActions(plan: string) {
+  const matrixBlock = plan.match(
+    /### Phase-26 Audit-log extension matrix([\s\S]*?)(?=\r?\n## )/,
+  )?.[1];
+
+  if (!matrixBlock) {
+    throw new Error("Phase 26 audit-log extension matrix was not found");
+  }
+
+  return [
+    ...new Set(
+      matrixBlock
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("| `"))
+        .flatMap((line) => {
+          const actionCell = line.split("|")[1] ?? "";
+
+          return Array.from(
+            actionCell.matchAll(/`([A-Z][A-Z0-9_]*)`/g),
+            (match) => match[1],
+          );
+        }),
+    ),
+  ];
+}
+
 describe("AUDIT_ACTIONS_V1 contract", () => {
   it("keeps the typed constant, Prisma enum and immutable plus remediation matrices synchronized", () => {
     const constantActions = [...AUDIT_ACTIONS_V1];
@@ -144,6 +170,9 @@ describe("AUDIT_ACTIONS_V1 contract", () => {
       ),
       ...extractPhase25AuditActions(
         readRepositoryFile("codex-plan/25-admin-security.md"),
+      ),
+      ...extractPhase26AuditActions(
+        readRepositoryFile("codex-plan/26-company-trust-verification.md"),
       ),
     ];
 

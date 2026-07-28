@@ -6,6 +6,7 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { ANALYTICS_MINIMUM_COHORT_SIZE_V1 } from "@/lib/analytics/metric-contracts";
 import { EMPLOYER_RESPONSE_POLICY_V1 } from "@/lib/analytics/response-policy-v1";
 import { jobHasActiveBoost } from "@/lib/billing/boosts";
+import { evaluateCompanyTrustForCompanies } from "@/lib/companies/verification/read-model";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -23,6 +24,7 @@ import {
 import type {
   PublicCatalog,
   PublicClusterLink,
+  PublicCompanyTrustBadge,
   PublicJobCardModel,
   PublicJobDetailModel,
   PublicJobSearchPage,
@@ -300,6 +302,7 @@ type PublicJobDetailRow = Prisma.JobGetPayload<{
 }>;
 type EligibleRow<Row extends PublicJobEligibilityRow> = Row & Readonly<{
   publishedRevision: NonNullable<Row["publishedRevision"]>;
+  companyTrustBadge: PublicCompanyTrustBadge | null;
 }>;
 type EligiblePublicJobRow = EligibleRow<PublicJobRow>;
 type EligiblePublicJobClusterRow = EligibleRow<PublicJobClusterRow>;
@@ -1976,21 +1979,28 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
   database: PublicReadTransaction,
 ): Promise<EligibleRow<Row>[]> {
   if (rows.length === 0) return [];
-  const restrictions = await database.moderationRestriction.findMany({
-    where: {
-      status: "ACTIVE",
-      startsAt: { lte: now },
-      liftedAt: null,
-      OR: [{ endsAt: null }, { endsAt: { gt: now } }],
-      AND: [{
-        OR: [
-          { targetType: "HIDE_JOB", targetId: { in: rows.map((row) => row.id) } },
-          { targetType: "PAUSE_COMPANY", targetId: { in: rows.map((row) => row.companyId) } },
-        ],
-      }],
-    },
-    select: { targetType: true, targetId: true },
-  });
+  const [restrictions, trustByCompanyId] = await Promise.all([
+    database.moderationRestriction.findMany({
+      where: {
+        status: "ACTIVE",
+        startsAt: { lte: now },
+        liftedAt: null,
+        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+        AND: [{
+          OR: [
+            { targetType: "HIDE_JOB", targetId: { in: rows.map((row) => row.id) } },
+            { targetType: "PAUSE_COMPANY", targetId: { in: rows.map((row) => row.companyId) } },
+          ],
+        }],
+      },
+      select: { targetType: true, targetId: true },
+    }),
+    evaluateCompanyTrustForCompanies(
+      database,
+      rows.map((row) => row.companyId),
+      { now },
+    ),
+  ]);
   const hiddenJobs = new Set(
     restrictions.filter((row) => row.targetType === "HIDE_JOB").map((row) => row.targetId),
   );
@@ -1999,13 +2009,22 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
   );
   const eligibleRows: EligibleRow<Row>[] = [];
   for (const row of rows) {
+    const companyTrust = trustByCompanyId.get(row.companyId);
     const result = evaluatePublicJobEligibility(
-      toPublicEligibilitySnapshot(row, hiddenJobs, pausedCompanies),
+      toPublicEligibilitySnapshot(
+        row,
+        hiddenJobs,
+        pausedCompanies,
+        companyTrust?.publicEligible === true,
+      ),
       now,
       environment,
     );
     if (result.eligible && row.publishedRevision !== null) {
-      eligibleRows.push(row as EligibleRow<Row>);
+      eligibleRows.push(Object.freeze({
+        ...row,
+        companyTrustBadge: toPublicTrustBadge(companyTrust?.badge ?? null),
+      }) as EligibleRow<Row>);
     }
   }
   return eligibleRows;
@@ -2039,6 +2058,7 @@ function toPublicEligibilitySnapshot<Row extends PublicJobEligibilityRow>(
   row: Row,
   hiddenJobs: ReadonlySet<string>,
   pausedCompanies: ReadonlySet<string>,
+  hasCurrentTrustEligibility: boolean,
 ): PublicEligibilitySnapshot {
   const revision = row.publishedRevision;
   return Object.freeze({
@@ -2056,6 +2076,7 @@ function toPublicEligibilitySnapshot<Row extends PublicJobEligibilityRow>(
       status: row.company.status,
       dataProvenance: row.company.dataProvenance,
       hasCurrentVerifiedCycle: row.company.verificationRequests.length === 1,
+      hasCurrentTrustEligibility,
     }),
     revision: revision === null
       ? null
@@ -2281,7 +2302,8 @@ function toCardModel(
       id: row.company.id,
       slug: row.company.slug,
       name: stripUnsafeHtml(row.company.name),
-      verified: true as const,
+      verified: row.companyTrustBadge !== null,
+      trust: row.companyTrustBadge,
     }),
     category: Object.freeze({
       id: revision.category.id,
@@ -2308,6 +2330,28 @@ function toCardModel(
     activeBoost: hasActiveBoost(row, now),
     sponsored,
   });
+}
+
+function toPublicTrustBadge(
+  badge: Readonly<{
+    label: "Firmenidentität geprüft";
+    scopeLabel: "UID-Register und Domainkontrolle";
+    method: "UID_REGISTER_AND_DOMAIN_CHALLENGE";
+    policyVersion: "COMPANY_TRUST_POLICY_V2";
+    verifiedAt: Date;
+    validUntil: Date;
+  }> | null,
+): PublicCompanyTrustBadge | null {
+  return badge === null
+    ? null
+    : Object.freeze({
+        label: badge.label,
+        scopeLabel: badge.scopeLabel,
+        method: badge.method,
+        policyVersion: badge.policyVersion,
+        verifiedAt: new Date(badge.verifiedAt),
+        validUntil: new Date(badge.validUntil),
+      });
 }
 
 function toDetailModel(

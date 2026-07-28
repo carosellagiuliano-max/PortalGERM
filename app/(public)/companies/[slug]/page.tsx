@@ -2,8 +2,9 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeftIcon, BadgeCheckIcon, Building2Icon, ExternalLinkIcon, MapPinIcon, ShieldQuestionIcon } from "lucide-react";
+import { ArrowLeftIcon, Building2Icon, ExternalLinkIcon, MapPinIcon, ShieldQuestionIcon } from "lucide-react";
 
+import { CompanyTrustBadge } from "@/components/public/company-trust-badge";
 import { JobGrid } from "@/components/public/job-grid";
 import { ReportForm } from "@/components/public/report-form";
 import { ResponseSignal } from "@/components/public/response-signal";
@@ -48,7 +49,7 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
       <section className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
         <div>
           <span className="grid size-12 place-items-center rounded-xl bg-secondary text-secondary-foreground"><Building2Icon className="size-6" aria-hidden="true" /></span>
-          <div className="mt-5 flex flex-wrap items-center gap-3"><h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl">{company.name}</h1>{company.verified ? <Badge variant="secondary"><BadgeCheckIcon aria-hidden="true" /> Verifiziert</Badge> : null}</div>
+          <div className="mt-5 flex flex-wrap items-center gap-3"><h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl">{company.name}</h1>{company.trust ? <CompanyTrustBadge trust={company.trust} showDetails /> : null}</div>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-muted-foreground">
             {company.industry === null ? null : <span>{company.industry}</span>}
             {company.city === null && company.canton === null ? null : <span className="inline-flex items-center gap-1.5"><MapPinIcon className="size-4" aria-hidden="true" />{[company.city, company.canton].filter(Boolean).join(", ")}</span>}

@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 
 import type { Pool } from "pg";
@@ -29,6 +30,10 @@ vi.mock("@/lib/config/env", () => ({
 }));
 
 import { parseEnvironment } from "@/lib/config/env-schema";
+import {
+  COMPANY_TRUST_POLICY_V2,
+  companyTrustEvidenceDigest,
+} from "@/lib/companies/verification/policy-v2";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import {
   emptyPublicJobSearchInput,
@@ -44,6 +49,7 @@ const NOW = new Date("2026-07-20T12:00:00.000Z");
 const DAY = 86_400_000;
 const IDS = {
   user: "07000000-0000-4000-8000-000000000001",
+  reviewer: "07000000-0000-4000-8000-000000000053",
   cantonZh: "07000000-0000-4000-8000-000000000002",
   cityZurich: "07000000-0000-4000-8000-000000000003",
   cantonBe: "07000000-0000-4000-8000-000000000004",
@@ -127,6 +133,7 @@ beforeAll(async () => {
   globalThis.swissTalentHubDatabase = database;
   setRuntimeEnvironment("local");
   await insertFixtures(pool());
+  await installStrongTrustFixtures(database);
 });
 
 afterEach(async () => {
@@ -590,10 +597,14 @@ function setRuntimeEnvironment(appEnvironment: "local" | "production") {
   if (migrated === undefined) {
     throw new Error("Cannot configure the runtime before database migration.");
   }
-  runtime.environment = parseEnvironment({
-    APP_ENV: appEnvironment,
+  const validatedEnvironment = parseEnvironment({
+    // The isolated test cohort proves the post-approval technical contract.
+    // Production configuration remains blocked by the real-provider/legal gate.
+    APP_ENV: appEnvironment === "production" ? "ci" : "local",
     NODE_ENV: "test",
-    DATABASE_URL: migrated.connectionString,
+    DATABASE_URL:
+      "postgresql://app_test:test-only@127.0.0.1:5435/phase07_runtime_test?schema=public",
+    TEST_DATABASE_URL: migrated.connectionString,
     APP_URL:
       appEnvironment === "production"
         ? "https://phase07.example.test"
@@ -611,6 +622,19 @@ function setRuntimeEnvironment(appEnvironment: "local" | "production") {
     ENABLE_LOCAL_MOCK_MAILBOX: "false",
     ABUSE_REPORT_ADMIN_EMAILS: "admin@phase07.example.test",
     LOG_LEVEL: "error",
+    COMPANY_TRUST_V2: "enforce",
+    COMPANY_DOMAIN_CHALLENGE: "true",
+    COMPANY_REGISTER_CHECK: "true",
+    COMPANY_STRONG_BADGE: "true",
+    COMPANY_TRUST_PUBLIC_ELIGIBILITY: "true",
+    COMPANY_TRUST_RAPID_REVOKE: "true",
+    COMPANY_REGISTER_PROVIDER_MODE: "deterministic_sandbox",
+    COMPANY_DOMAIN_PROVIDER_MODE: "deterministic_sandbox",
+    COMPANY_VERIFICATION_COHORT: "test",
+  });
+  runtime.environment = Object.freeze({
+    ...validatedEnvironment,
+    APP_ENV: appEnvironment,
   });
 }
 
@@ -906,6 +930,136 @@ async function insertFixtures(target: Pool) {
     ],
   );
   await restoreRestriction(target);
+}
+
+async function installStrongTrustFixtures(target: DatabaseClient) {
+  const validFrom = atDay(-10);
+  const validTo = atDay(10);
+  await target.user.create({
+    data: {
+      id: IDS.reviewer,
+      email: "phase26-reviewer@example.test",
+      emailNormalized: "phase26-reviewer@example.test",
+      role: "ADMIN",
+      status: "ACTIVE",
+      dataProvenance: "TEST",
+    },
+  });
+  for (const [companyId, requestId] of [
+    [IDS.verifiedCompany, IDS.verifiedRequest],
+    [IDS.secondVerifiedCompany, IDS.secondVerifiedRequest],
+    [IDS.demoCompany, IDS.demoVerifiedRequest],
+  ] as const) {
+    await target.companyVerificationRequest.update({
+      where: { id: requestId },
+      data: {
+        assignedReviewerUserId: IDS.reviewer,
+        policyVersion: COMPANY_TRUST_POLICY_V2.version,
+        assignedAt: validFrom,
+        reviewStartedAt: validFrom,
+        decidedAt: validFrom,
+      },
+    });
+    const challenge = await target.companyDomainChallenge.create({
+      data: {
+        verificationRequestId: requestId,
+        companyId,
+        issuedByUserId: IDS.user,
+        domain: `${companyId.slice(0, 8)}.phase26.example.test`,
+        tokenHash: sha256(`challenge:${companyId}`),
+        proofDigest: sha256(`proof:${companyId}`),
+        status: "VERIFIED",
+        issuedAt: validFrom,
+        expiresAt: validTo,
+        verifiedAt: validFrom,
+      },
+    });
+    const uidEvidence = await target.companyVerificationEvidence.create({
+      data: {
+        verificationRequestId: requestId,
+        companyId,
+        createdByUserId: IDS.user,
+        type: "UID_REGISTER",
+        scope: "COMPANY_IDENTITY",
+        status: "VALID",
+        source: "phase26_unit_register",
+        providerKey: "deterministic_sandbox",
+        normalizedIdentifier: `CHE-${companyId.slice(-9)}`,
+        responseDigest: sha256(`uid:${companyId}`),
+        checkedAt: validFrom,
+        validFrom,
+        validTo,
+      },
+    });
+    const domainEvidence = await target.companyVerificationEvidence.create({
+      data: {
+        verificationRequestId: requestId,
+        companyId,
+        createdByUserId: IDS.user,
+        domainChallengeId: challenge.id,
+        type: "DOMAIN_CHALLENGE",
+        scope: "COMPANY_IDENTITY",
+        status: "VALID",
+        source: "phase26_unit_domain",
+        providerKey: "deterministic_sandbox",
+        normalizedIdentifier: challenge.domain,
+        responseDigest: sha256(`domain:${companyId}`),
+        checkedAt: validFrom,
+        validFrom,
+        validTo,
+      },
+    });
+    const evidenceDigest = companyTrustEvidenceDigest([
+      {
+        type: uidEvidence.type,
+        responseDigest: uidEvidence.responseDigest,
+        validTo: uidEvidence.validTo,
+      },
+      {
+        type: domainEvidence.type,
+        responseDigest: domainEvidence.responseDigest,
+        validTo: domainEvidence.validTo,
+      },
+    ]);
+    const decision = await target.companyVerificationDecision.create({
+      data: {
+        verificationRequestId: requestId,
+        companyId,
+        decidedByUserId: IDS.reviewer,
+        kind: "APPROVED",
+        scope: "COMPANY_IDENTITY",
+        riskLevel: "NORMAL",
+        policyVersion: COMPANY_TRUST_POLICY_V2.version,
+        reasonCode: "PHASE26_TECHNICAL_TEST_APPROVED",
+        evidenceDigest,
+        idempotencyKey: `phase26-public-read:${companyId}`,
+        validFrom,
+        validTo,
+        decidedAt: validFrom,
+      },
+    });
+    await target.companyTrustProjection.create({
+      data: {
+        companyId,
+        verificationRequestId: requestId,
+        decisionId: decision.id,
+        scope: "COMPANY_IDENTITY",
+        level: "STRONG",
+        status: "ACTIVE",
+        riskState: "CLEAR",
+        policyVersion: COMPANY_TRUST_POLICY_V2.version,
+        evidenceDigest,
+        reasonCode: "PHASE26_TECHNICAL_TEST_APPROVED",
+        verifiedAt: validFrom,
+        expiresAt: validTo,
+        changedAt: validFrom,
+      },
+    });
+  }
+}
+
+function sha256(value: string) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
 async function insertCompany(

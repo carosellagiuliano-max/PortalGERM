@@ -145,6 +145,12 @@ export const WORKER_HANDLER_CATALOG = Object.freeze([
     sloRef: "codex-plan/25-admin-security.md#22",
   }),
   handler({
+    handlerKey: "company-trust.expiry-review",
+    owner: "Company Trust / Platform",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/26-company-trust-verification.md#22",
+  }),
+  handler({
     execution: "CATALOG_ONLY_REQUIRES_OWNING_PHASE",
     handlerKey: "jobs.freshness",
     owner: "Jobs Domain / Trust",

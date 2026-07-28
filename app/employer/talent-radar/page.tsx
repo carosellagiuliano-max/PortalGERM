@@ -17,6 +17,7 @@ import { getAuthRequestContext } from "@/lib/auth/request-context";
 import { createPostgresRadarDistinctFilterBudget } from "@/lib/auth/rate-limit";
 import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quota";
 import { buildCatalogUpgradePrompt } from "@/lib/billing/upgrade-prompt";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import { getServerEnvironment } from "@/lib/config/env";
 import type { KeyringEntry, ServerEnvironment } from "@/lib/config/env-schema";
 import { getDatabase } from "@/lib/db/client";
@@ -317,7 +318,7 @@ async function loadRadarGate({
   if (membershipRole === "VIEWER") {
     return Object.freeze({ allowed: false, reason: "ROLE" });
   }
-  const [company, entitlements] = await Promise.all([
+  const [company, entitlements, trust] = await Promise.all([
     database.company.findUnique({
       where: { id: companyId },
       select: {
@@ -330,11 +331,12 @@ async function loadRadarGate({
       },
     }),
     getPrismaEffectiveEntitlements(companyId, now, database),
+    evaluateCompanyTrustForCompany(database, companyId, { now }),
   ]);
   if (company?.status !== "ACTIVE") {
     return Object.freeze({ allowed: false, reason: "COMPANY_INACTIVE" });
   }
-  if (company.verificationRequests.length !== 1) {
+  if (!trust.radarEligible) {
     return Object.freeze({ allowed: false, reason: "COMPANY_UNVERIFIED" });
   }
   if (!entitlements.ok || !entitlements.value.rights.TALENT_RADAR_ACCESS) {

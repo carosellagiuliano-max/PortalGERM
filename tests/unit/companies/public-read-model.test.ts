@@ -22,6 +22,11 @@ import {
 } from "@/lib/companies/public-read-model";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { PublicJobCardModel } from "@/lib/public/types";
+import {
+  companyTrustReadRow,
+  TEST_COMPANY_TRUST_ENVIRONMENT,
+  TEST_STRONG_COMPANY_TRUST_ACTIVATION,
+} from "@/tests/fixtures/company-trust-read-model";
 
 const NOW = new Date("2026-07-20T12:00:00.000Z");
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
@@ -30,6 +35,10 @@ const PRODUCTION_DATA_CONTEXT = Object.freeze({
   liveOnly: true,
   publicIndexingAllowed: true,
   showDemoBanner: false,
+});
+const TEST_COMPANY_TRUST_OPTIONS = Object.freeze({
+  trustActivation: TEST_STRONG_COMPANY_TRUST_ACTIVATION,
+  trustEnvironment: TEST_COMPANY_TRUST_ENVIRONMENT,
 });
 
 const SOURCE: PublicCompanyProjectionSource = Object.freeze({
@@ -291,6 +300,7 @@ describe("public Company directory", () => {
         now: NOW,
         database,
         dataContext: PRODUCTION_DATA_CONTEXT,
+        ...TEST_COMPANY_TRUST_OPTIONS,
       },
     );
 
@@ -332,7 +342,7 @@ describe("public Company directory", () => {
     expect(transaction.planVersion.findMany).toHaveBeenCalledTimes(1);
     expect(transaction.employerSubscription.findMany).toHaveBeenCalledTimes(1);
     expect(transaction.entitlementGrant.findMany).toHaveBeenCalledTimes(1);
-    expect(transaction.company.findMany).toHaveBeenCalledTimes(1);
+    expect(transaction.company.findMany).toHaveBeenCalledTimes(2);
     expect(transaction.employerSubscription.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -375,6 +385,7 @@ describe("public Company directory", () => {
         now: NOW,
         database,
         dataContext: PRODUCTION_DATA_CONTEXT,
+        ...TEST_COMPANY_TRUST_OPTIONS,
       },
     );
 
@@ -404,8 +415,8 @@ describe("public Company directory", () => {
     expect(transaction.planVersion.findMany).toHaveBeenCalledTimes(1);
     expect(transaction.employerSubscription.findMany).toHaveBeenCalledTimes(1);
     expect(transaction.entitlementGrant.findMany).toHaveBeenCalledTimes(1);
-    expect(transaction.company.findMany).toHaveBeenCalledTimes(2);
-    expect(transaction.company.findMany.mock.calls[1]?.[0]).toEqual({
+    expect(transaction.company.findMany).toHaveBeenCalledTimes(3);
+    expect(transaction.company.findMany.mock.calls[2]?.[0]).toEqual({
       where: { id: { in: [entitled.id] } },
       select: {
         id: true,
@@ -450,6 +461,7 @@ describe("public Company directory", () => {
         now: NOW,
         database,
         dataContext: PRODUCTION_DATA_CONTEXT,
+        ...TEST_COMPANY_TRUST_OPTIONS,
       },
     );
 
@@ -480,6 +492,7 @@ describe("public Company directory", () => {
         now: NOW,
         database,
         dataContext: PRODUCTION_DATA_CONTEXT,
+        ...TEST_COMPANY_TRUST_OPTIONS,
       },
     );
 
@@ -514,6 +527,7 @@ describe("public Company directory", () => {
             now: NOW,
             database,
             dataContext: PRODUCTION_DATA_CONTEXT,
+            ...TEST_COMPANY_TRUST_OPTIONS,
           },
         ),
       ).rejects.toThrow(RangeError);
@@ -542,6 +556,7 @@ describe("public Company directory", () => {
         now: NOW,
         database,
         dataContext: PRODUCTION_DATA_CONTEXT,
+        ...TEST_COMPANY_TRUST_OPTIONS,
       },
     );
 
@@ -572,6 +587,7 @@ describe("public Company directory", () => {
       database,
       dataContext: PRODUCTION_DATA_CONTEXT,
       cursorSecret: "company-directory-test-secret-32-characters",
+      ...TEST_COMPANY_TRUST_OPTIONS,
     } as const;
     const loadCounts = vi.fn(async (companyIds: readonly string[]) =>
       new Map(companyIds.map((id) => [id, 0])));
@@ -700,6 +716,7 @@ function directoryDatabase(
       findMany: vi.fn(async ({
         where,
         take,
+        select,
       }: {
         where: Record<string, unknown>;
         take?: number;
@@ -707,6 +724,19 @@ function directoryDatabase(
       }) => {
         const requestedIds = ((where.id as Record<string, unknown> | undefined)
           ?.in as readonly string[] | undefined);
+        if (select?.trustProjections !== undefined) {
+          const ids = requestedIds ?? rows.map((row) => row.id);
+          return rows
+            .filter((row) => ids.includes(row.id))
+            .map((row) =>
+              companyTrustReadRow({
+                companyId: row.id,
+                now: NOW,
+                status: row.status,
+                strong: row.verificationRequests.length === 1,
+              })
+            );
+        }
         const filtered = requestedIds === undefined
           ? filterDirectoryRows(rows, restrictedIds, where)
           : rows.filter((row) => requestedIds.includes(row.id));
@@ -716,6 +746,9 @@ function directoryDatabase(
     moderationRestriction: {
       findMany: vi.fn(async () =>
         restrictedIds.map((targetId) => ({ targetId }))),
+    },
+    trustSafetyContainmentEffect: {
+      findMany: vi.fn(async () => []),
     },
     planVersion: {
       findMany: vi.fn(async () => [databasePlanVersion(false)]),
@@ -762,7 +795,7 @@ function filterDirectoryRows(
       | readonly string[]
       | undefined) ?? []),
   ]);
-  const verifiedOnly = where.verificationRequests !== undefined;
+  const verifiedOnly = where.trustProjections !== undefined;
   const query = ((where.name as Record<string, unknown> | undefined)
     ?.contains as string | undefined)?.toLocaleLowerCase("de-CH");
   const industry = ((where.industry as Record<string, unknown> | undefined)

@@ -106,6 +106,7 @@ export const ADMIN_ROLE_CATALOG_V2 = Object.freeze({
     capabilities: Object.freeze([
       "TRUST_SAFETY_READ",
       "TRUST_SAFETY_REVIEW",
+      "COMPANY_VERIFICATION_REVIEW",
       "ADMIN_REPORT_REVIEW",
       "ADMIN_RESTRICTION_MANAGE",
     ] satisfies readonly AdminCapability[]),
@@ -115,6 +116,7 @@ export const ADMIN_ROLE_CATALOG_V2 = Object.freeze({
     capabilities: Object.freeze([
       "TRUST_SAFETY_READ",
       "TRUST_SAFETY_RESTORE",
+      "COMPANY_VERIFICATION_APPROVE",
       "ADMIN_SECURITY_APPROVE",
       "ADMIN_AUDIT_READ",
     ] satisfies readonly AdminCapability[]),

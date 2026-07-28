@@ -6,6 +6,7 @@ import type {
 } from "@/lib/auth/rate-limit";
 import { getEffectiveEntitlements } from "@/lib/billing/entitlements";
 import { createPrismaEntitlementRepository } from "@/lib/billing/prisma-publish-quota";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import {
@@ -731,11 +732,16 @@ export function createPrismaRadarCandidateListRepository(
         },
       });
       if (membership === null) return null;
-      const entitlements = await getEffectiveEntitlements(
-        membership.companyId,
-        input.now,
-        createPrismaEntitlementRepository(database),
-      );
+      const [entitlements, trust] = await Promise.all([
+        getEffectiveEntitlements(
+          membership.companyId,
+          input.now,
+          createPrismaEntitlementRepository(database),
+        ),
+        evaluateCompanyTrustForCompany(database, membership.companyId, {
+          now: input.now,
+        }),
+      ]);
       return Object.freeze({
         membershipId: membership.id,
         membershipUserId: membership.userId,
@@ -744,8 +750,7 @@ export function createPrismaRadarCandidateListRepository(
         membershipRole: membership.role,
         userStatus: membership.user.status,
         companyStatus: membership.company.status,
-        currentVerifiedEvidenceCount:
-          membership.company.verificationRequests.length,
+        currentVerifiedEvidenceCount: trust.radarEligible ? 1 : 0,
         talentRadarAccess:
           entitlements.ok && entitlements.value.rights.TALENT_RADAR_ACCESS,
       });

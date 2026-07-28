@@ -125,6 +125,44 @@ const rawEnvironmentSchema = z
     TRUST_RISK_MODE: z
       .enum(["observe", "hold"])
       .default("observe"),
+    COMPANY_TRUST_V2: z
+      .enum(["disabled", "observe", "enforce"])
+      .default("disabled"),
+    COMPANY_DOMAIN_CHALLENGE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMPANY_REGISTER_CHECK: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMPANY_VERIFICATION_DOCUMENT: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMPANY_STRONG_BADGE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMPANY_TRUST_PUBLIC_ELIGIBILITY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMPANY_TRUST_RAPID_REVOKE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    LEGACY_COMPANY_REVERIFY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMPANY_REGISTER_PROVIDER_MODE: z
+      .enum(["disabled", "deterministic_sandbox"])
+      .default("disabled"),
+    COMPANY_DOMAIN_PROVIDER_MODE: z
+      .enum(["disabled", "deterministic_sandbox"])
+      .default("disabled"),
+    COMPANY_VERIFICATION_COHORT: z.enum(["none", "test"]).default("none"),
     BREAK_GLASS_ENABLED: z
       .enum(["true", "false"])
       .default("false")
@@ -408,6 +446,102 @@ const rawEnvironmentSchema = z
         code: "custom",
         path: ["PRIVILEGED_STEP_UP_MODE"],
         message: "requires verified-identity enforcement",
+      });
+    }
+
+    const companyTrustPublicCapability =
+      environment.COMPANY_STRONG_BADGE ||
+      environment.COMPANY_TRUST_PUBLIC_ELIGIBILITY;
+    const companyProviderSandboxSelected =
+      environment.COMPANY_REGISTER_PROVIDER_MODE ===
+        "deterministic_sandbox" ||
+      environment.COMPANY_DOMAIN_PROVIDER_MODE === "deterministic_sandbox";
+    if (
+      companyProviderSandboxSelected &&
+      (!["local", "ci"].includes(environment.APP_ENV) ||
+        environment.COMPANY_VERIFICATION_COHORT !== "test")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["COMPANY_VERIFICATION_COHORT"],
+        message:
+          "deterministic company-verification providers require the isolated Local/CI test cohort",
+      });
+    }
+    if (
+      environment.COMPANY_REGISTER_CHECK &&
+      environment.COMPANY_REGISTER_PROVIDER_MODE === "disabled"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["COMPANY_REGISTER_CHECK"],
+        message: "requires an explicit company register provider mode",
+      });
+    }
+    if (
+      environment.COMPANY_DOMAIN_CHALLENGE &&
+      environment.COMPANY_DOMAIN_PROVIDER_MODE === "disabled"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["COMPANY_DOMAIN_CHALLENGE"],
+        message: "requires an explicit company domain provider mode",
+      });
+    }
+    if (
+      environment.COMPANY_VERIFICATION_DOCUMENT &&
+      (!environment.DOCUMENT_VAULT_WRITES ||
+        environment.DOCUMENT_STORAGE_MODE === "disabled" ||
+        environment.DOCUMENT_SCANNER_MODE === "disabled")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["COMPANY_VERIFICATION_DOCUMENT"],
+        message:
+          "requires enabled vault writes plus explicit storage and scanner modes",
+      });
+    }
+    if (
+      companyTrustPublicCapability &&
+      environment.COMPANY_TRUST_V2 !== "enforce"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["COMPANY_TRUST_V2"],
+        message:
+          "must be enforce before a strong badge or trust-based public eligibility can be enabled",
+      });
+    }
+    if (
+      companyTrustPublicCapability &&
+      (!environment.COMPANY_REGISTER_CHECK ||
+        !environment.COMPANY_DOMAIN_CHALLENGE)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["COMPANY_TRUST_PUBLIC_ELIGIBILITY"],
+        message:
+          "requires both register and domain evidence gates to be enabled",
+      });
+    }
+    if (productionLike && companyTrustPublicCapability) {
+      context.addIssue({
+        code: "custom",
+        path: ["COMPANY_STRONG_BADGE"],
+        message:
+          "must remain false until a legally approved LIVE register/domain provider mode exists",
+      });
+    }
+    if (
+      environment.LEGACY_COMPANY_REVERIFY &&
+      (!["local", "ci"].includes(environment.APP_ENV) ||
+        environment.COMPANY_VERIFICATION_COHORT !== "test")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["LEGACY_COMPANY_REVERIFY"],
+        message:
+          "is limited to the bounded Local/CI test cohort until capacity and provider gates are approved",
       });
     }
 
@@ -1046,6 +1180,19 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     adminMfaRequired: environment.ADMIN_MFA_REQUIRED,
     privilegedStepUpMode: environment.PRIVILEGED_STEP_UP_MODE,
     trustRiskMode: environment.TRUST_RISK_MODE,
+    companyTrustV2: environment.COMPANY_TRUST_V2,
+    companyDomainChallenge: environment.COMPANY_DOMAIN_CHALLENGE,
+    companyRegisterCheck: environment.COMPANY_REGISTER_CHECK,
+    companyVerificationDocument: environment.COMPANY_VERIFICATION_DOCUMENT,
+    companyStrongBadge: environment.COMPANY_STRONG_BADGE,
+    companyTrustPublicEligibility:
+      environment.COMPANY_TRUST_PUBLIC_ELIGIBILITY,
+    companyTrustRapidRevoke: environment.COMPANY_TRUST_RAPID_REVOKE,
+    legacyCompanyReverify: environment.LEGACY_COMPANY_REVERIFY,
+    companyRegisterProviderMode:
+      environment.COMPANY_REGISTER_PROVIDER_MODE,
+    companyDomainProviderMode: environment.COMPANY_DOMAIN_PROVIDER_MODE,
+    companyVerificationCohort: environment.COMPANY_VERIFICATION_COHORT,
     breakGlassEnabled: environment.BREAK_GLASS_ENABLED,
     notificationOutboxProducersEnabled:
       environment.NOTIFICATION_OUTBOX_PRODUCERS,

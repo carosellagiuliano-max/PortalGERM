@@ -1,12 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: () => ({
+    APP_ENV: "ci",
+    COMPANY_TRUST_V2: "enforce",
+    COMPANY_STRONG_BADGE: true,
+    COMPANY_TRUST_PUBLIC_ELIGIBILITY: true,
+    COMPANY_TRUST_RAPID_REVOKE: true,
+  }),
+}));
 
 import type { DatabaseClient } from "@/lib/db/factory";
 import {
   getCandidateRadarRequest,
   listCandidateRadarRequests,
 } from "@/lib/talentradar/candidate-request-view";
+import { companyTrustReadRow } from "@/tests/fixtures/company-trust-read-model";
 
 const USER_ID = "10000000-0000-4000-8000-000000000001";
 const REQUEST_ID = "20000000-0000-4000-8000-000000000001";
@@ -23,6 +33,7 @@ describe("candidate Talent Radar request views", () => {
         createdAt: new Date("2026-07-20T12:00:00.000Z"),
         expiresAt: new Date("2026-08-03T12:00:00.000Z"),
         company: {
+          id: "30000000-0000-4000-8000-000000000001",
           name: "Beispiel AG",
           status: "ACTIVE",
           verificationRequests: [{ id: "verified" }],
@@ -31,6 +42,17 @@ describe("candidate Talent Radar request views", () => {
     ]);
     const database = {
       employerContactRequest: { findMany },
+      company: {
+        findMany: vi.fn().mockResolvedValue([
+          companyTrustReadRow({
+            companyId: "30000000-0000-4000-8000-000000000001",
+            now: NOW,
+          }),
+        ]),
+      },
+      trustSafetyContainmentEffect: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     } as unknown as DatabaseClient;
 
     const result = await listCandidateRadarRequests(database, USER_ID, NOW);
@@ -68,6 +90,7 @@ describe("candidate Talent Radar request views", () => {
       createdAt: new Date("2026-07-08T12:00:00.000Z"),
       expiresAt,
       company: {
+        id: "30000000-0000-4000-8000-000000000001",
         name: "Beispiel AG",
         slug: "beispiel-ag",
         status: "ACTIVE",
@@ -78,6 +101,17 @@ describe("candidate Talent Radar request views", () => {
     });
     const database = {
       employerContactRequest: { findFirst },
+      company: {
+        findMany: vi.fn().mockResolvedValue([
+          companyTrustReadRow({
+            companyId: "30000000-0000-4000-8000-000000000001",
+            now: NOW,
+          }),
+        ]),
+      },
+      trustSafetyContainmentEffect: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     } as unknown as DatabaseClient;
 
     const result = await getCandidateRadarRequest(

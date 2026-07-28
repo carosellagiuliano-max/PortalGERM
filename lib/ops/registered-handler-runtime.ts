@@ -12,6 +12,7 @@ import { reconcilePersistedPayments } from "@/lib/billing/finance-reconciliation
 import { projectDueDunningCases } from "@/lib/billing/dunning";
 import { projectApprovedServiceRecoveries } from "@/lib/billing/service-delivery-policy";
 import { runJobAlertDigestMock } from "@/lib/candidate/job-alerts";
+import { projectCompanyTrustLifecycle } from "@/lib/companies/verification/lifecycle";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { reconcileDocumentObjects } from "@/lib/documents/reconciliation";
@@ -312,6 +313,14 @@ async function invokeHandler(
       return digestSummary(
         await projectExpiredTrustCases(dependencies.database, now),
       );
+    case "company-trust.expiry-review":
+      return digestSummary(
+        await projectCompanyTrustLifecycle({
+          database: dependencies.database,
+          correlationId,
+          now,
+        }),
+      );
     case "radar.contact-expiry":
       return digestSummary(
         await expireDueContactRequests({
@@ -336,7 +345,24 @@ async function invokeHandler(
         .parse(claimed.payloadReference);
       const version = await dependencies.database.documentVersion.findUnique({
         where: { id: payload.documentVersionId },
-        select: { candidateProfile: { select: { userId: true } } },
+        select: {
+          candidateProfile: { select: { userId: true } },
+          company: {
+            select: {
+              memberships: {
+                where: {
+                  status: "ACTIVE",
+                  removedAt: null,
+                  role: { in: ["OWNER", "ADMIN"] },
+                  user: { status: "ACTIVE" },
+                },
+                orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+                take: 1,
+                select: { userId: true },
+              },
+            },
+          },
+        },
       });
       if (version === null) {
         throw new HandlerFailure(
@@ -344,9 +370,18 @@ async function invokeHandler(
           "DOCUMENT_VERSION_NOT_FOUND",
         );
       }
+      const scanActorUserId =
+        version.candidateProfile?.userId ??
+        version.company?.memberships[0]?.userId;
+      if (scanActorUserId === undefined) {
+        throw new HandlerFailure(
+          "PERMANENT_VALIDATION",
+          "DOCUMENT_SUBJECT_OWNER_NOT_FOUND",
+        );
+      }
       const summary = await scanDocumentVersion(
         {
-          actorUserId: version.candidateProfile.userId,
+          actorUserId: scanActorUserId,
           documentVersionId: payload.documentVersionId,
           correlationId,
         },

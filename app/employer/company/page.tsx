@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,7 +7,6 @@ import {
   CompanyOnboardingForm,
   type CompanyFormInitialValues,
 } from "@/components/employer/company-form";
-import { VerificationPanel } from "@/components/employer/verification-panel";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -22,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { requireEmployerPage } from "@/lib/auth/route-guards";
 import { buildCatalogUpgradePrompt } from "@/lib/billing/upgrade-prompt";
+import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
 import { getDatabase } from "@/lib/db/client";
 import {
   EmployerCompanyDomainError,
@@ -48,14 +46,17 @@ export default async function EmployerCompanyPage() {
     membershipId: context.membershipId,
     actorUserId: user.id,
   }, database);
-  const enhancedProfileUpgradePrompt = await buildCatalogUpgradePrompt(
-    {
-      reason: "ENHANCED_PROFILE_NOT_INCLUDED",
-      suggestedPlanSlug: "pro",
-      actorRole: workspace.membershipRole,
-    },
-    { database, now },
-  );
+  const [enhancedProfileUpgradePrompt, companyTrust] = await Promise.all([
+    buildCatalogUpgradePrompt(
+      {
+        reason: "ENHANCED_PROFILE_NOT_INCLUDED",
+        suggestedPlanSlug: "pro",
+        actorRole: workspace.membershipRole,
+      },
+      { database, now },
+    ),
+    evaluateCompanyTrustForCompany(database, context.companyId, { now }),
+  ]);
   const initial: CompanyFormInitialValues = Object.freeze({
     expectedUpdatedAt: workspace.company.updatedAt.toISOString(),
     name: workspace.company.name,
@@ -103,10 +104,10 @@ export default async function EmployerCompanyPage() {
           <Badge variant={workspace.company.status === "ACTIVE" ? "default" : "outline"}>
             {workspace.company.status === "ACTIVE" ? "Profil aktiv" : "Profilentwurf"}
           </Badge>
-          <Badge variant={workspace.verification.verified ? "default" : "secondary"}>
-            {workspace.verification.verified ? "Verifiziert" : "Nicht verifiziert"}
+          <Badge variant={companyTrust.badge ? "default" : "secondary"}>
+            {companyTrust.badge?.label ?? "Kein starkes Trust-Abzeichen"}
           </Badge>
-          {workspace.company.status === "ACTIVE" && workspace.verification.verified ? (
+          {workspace.company.status === "ACTIVE" ? (
             <Link
               href={`/companies/${workspace.company.slug}`}
               className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -170,17 +171,22 @@ export default async function EmployerCompanyPage() {
         <CardHeader>
           <CardTitle as="h2">Firmenverifizierung</CardTitle>
           <CardDescription>
-            Nachweise bleiben innerhalb eines offenen Prüfzyklus. Ein neuer Zyklus
-            ist erst nach Ablehnung oder Widerruf möglich.
+            Der frühere Freitextprozess bleibt nur als Historie erhalten.
+            Register, Domain, Ablauf und Einspruch laufen über den strukturierten
+            Phase-26-Prozess.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <VerificationPanel
-            current={workspace.verification.current}
-            history={workspace.verification.history}
-            canManage={workspace.canManage}
-            idempotencyKey={randomUUID()}
-          />
+        <CardContent className="grid gap-3">
+          <p className="text-sm leading-6 text-muted-foreground">
+            Historische Freitextnachweise werden nicht als Register- oder
+            Domainprüfung ausgegeben und können kein starkes Abzeichen erzeugen.
+          </p>
+          <Link
+            href="/employer/verification"
+            className={buttonVariants({ className: "w-fit" })}
+          >
+            Strukturierte Firmenprüfung öffnen
+          </Link>
         </CardContent>
       </Card>
     </section>
