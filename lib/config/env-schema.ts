@@ -166,6 +166,12 @@ const rawEnvironmentSchema = z
     IDENTITY_PERSONA_V2: z
       .enum(["disabled", "dual_read", "internal", "allowlist", "launch_scope"])
       .default("disabled"),
+    EXTERNAL_APPLICATION_TRACKER: z
+      .enum(["disabled", "test", "allowlist", "live"])
+      .default("disabled"),
+    INTERVIEW_SCHEDULER: z
+      .enum(["disabled", "test", "allowlist", "live"])
+      .default("disabled"),
     EXISTING_IDENTITY_INVITATION: z
       .enum(["true", "false"])
       .default("false")
@@ -560,6 +566,28 @@ const rawEnvironmentSchema = z
         path: ["PERSONA_LEGACY_CONTRACT"],
         message:
           "requires launch_scope plus invitation, switch and privacy contracts",
+      });
+    }
+    if (
+      environment.EXTERNAL_APPLICATION_TRACKER === "test" &&
+      !["local", "ci"].includes(environment.APP_ENV)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["EXTERNAL_APPLICATION_TRACKER"],
+        message:
+          "Phase-28 test activation is limited to isolated Local/CI environments",
+      });
+    }
+    if (
+      environment.INTERVIEW_SCHEDULER === "test" &&
+      !["local", "ci"].includes(environment.APP_ENV)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["INTERVIEW_SCHEDULER"],
+        message:
+          "Phase-28 test activation is limited to isolated Local/CI environments",
       });
     }
     if (
@@ -1255,6 +1283,8 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     companyDomainProviderMode: environment.COMPANY_DOMAIN_PROVIDER_MODE,
     companyVerificationCohort: environment.COMPANY_VERIFICATION_COHORT,
     identityPersonaV2: environment.IDENTITY_PERSONA_V2,
+    externalApplicationTracker: environment.EXTERNAL_APPLICATION_TRACKER,
+    interviewScheduler: environment.INTERVIEW_SCHEDULER,
     existingIdentityInvitation: environment.EXISTING_IDENTITY_INVITATION,
     personaPortalSwitch: environment.PERSONA_PORTAL_SWITCH,
     personaPrivacyV2: environment.PERSONA_PRIVACY_V2,

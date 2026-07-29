@@ -1,17 +1,21 @@
 import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ApplicantDetailActions } from "@/components/employer/applicant-detail-actions";
 import { DocumentDownloadButton } from "@/components/employer/DocumentDownloadButton";
 import { EmployerApplicantReportForm } from "@/components/employer/applicant-report-form";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getEmployerContext } from "@/lib/auth/employer-context";
 import { getDatabase } from "@/lib/db/client";
 import { getEmployerApplicationDetail } from "@/lib/employer/applications";
 import { requireEmployerCompanyContext } from "@/lib/employer/context";
+import { getServerEnvironment } from "@/lib/config/env";
+import { isRecruitingFeatureAvailableV1 } from "@/lib/recruiting/feature-gates";
 
 export const metadata: Metadata = { title: "Bewerbungsdetail" };
 export const dynamic = "force-dynamic";
@@ -24,6 +28,7 @@ export default async function EmployerApplicantDetailPage({
     requireEmployerCompanyContext(),
     getEmployerContext(),
   ]);
+  const database = getDatabase();
   const application = await getEmployerApplicationDetail(
     id,
     {
@@ -32,9 +37,19 @@ export default async function EmployerApplicantDetailPage({
       userId: context!.user.id,
       membershipRole: current.membershipRole,
     },
-    getDatabase(),
+    database,
   );
   if (application === null) notFound();
+  const interviewHistoryCount = await database.interview.count({
+    where: {
+      applicationId: application.id,
+      companyId: current.companyId,
+    },
+  });
+  const interviewSchedulingAvailable = isRecruitingFeatureAvailableV1(
+    getServerEnvironment(),
+    "interview_scheduler",
+  );
   const snapshot = application.submissionSnapshot;
 
   return (
@@ -180,6 +195,25 @@ export default async function EmployerApplicantDetailPage({
         </div>
 
         <aside className="grid content-start gap-5">
+          {interviewSchedulingAvailable || interviewHistoryCount > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle as="h2">Interviewplanung</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Zeitvorschläge, Bestätigung, Kalenderdatei und Absage getrennt
+                  vom älteren Bewerbungsstatus verwalten.
+                </p>
+                <Link
+                  href={`/employer/applicants/${application.id}/interviews`}
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  Interviews öffnen
+                </Link>
+              </CardContent>
+            </Card>
+          ) : null}
           <ApplicantDetailActions
             applicationId={application.id}
             currentStatus={application.status}

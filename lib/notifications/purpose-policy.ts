@@ -52,6 +52,11 @@ export const EMAIL_NOTIFICATION_POLICY = Object.freeze({
   credits_granted: mandatory("USAGE_OPERATIONAL"),
   commercial_lifecycle_signal: optional("COMMERCIAL_OPTIONAL"),
   privacy_request_changed: mandatory("PRIVACY_REQUEST"),
+  external_application_reminder: optional(
+    "EXTERNAL_APPLICATION_REMINDER",
+  ),
+  interview_changed: mandatory("INTERVIEW_SCHEDULING"),
+  interview_reminder: mandatory("INTERVIEW_SCHEDULING"),
 } satisfies Record<EmailTemplateKey, NotificationPurposePolicy>);
 
 export const MUTABLE_NOTIFICATION_PURPOSES = Object.freeze(

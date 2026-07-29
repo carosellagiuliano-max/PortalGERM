@@ -601,10 +601,10 @@ Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert u
 ## Prospektiver Ausführungsplan Phase 19–32
 
 > Dieser Abschnitt ist das ausdrücklich freigegebene Folgepaket auf
-> Planungsebene. Phasen 19 bis 26 sind technisch implementiert und ihre
+> Planungsebene. Phasen 19 bis 28 sind technisch implementiert und ihre
 > jeweiligen lokalen/CI-Gates grün. Aktivierung, Realprovider, Staging und
 > externe Fach-/Operationsfreigaben bleiben je Phase getrennt
-> `DISABLED`/`BLOCKED`; Phasen 27–32 bleiben offen.
+> `DISABLED`/`BLOCKED`; Phasen 29–32 bleiben offen.
 > Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
 > Folgephasengate-Vertrag aus
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md).
@@ -682,16 +682,24 @@ flowchart TD
    Vertrag verifiziert; siehe
    [Phase-27-Evidence](./evidence/2026-07-28-phase-27.md). Alle Flags,
    Kohorten und Marktclaims bleiben bis moderierter Demand-Evidence, vier
-   Owner-Sign-offs, Canary/Staging und G4 geschlossen.
-9. **Phase 24 technisch abgeschlossen, Aktivierung nur bei LC5-Go**:
+    Owner-Sign-offs, Canary/Staging und G4 geschlossen.
+9. **Phase 28 technisch owner-aktiviert und abgeschlossen; getrennte
+   Demand-Gates offen**: Candidate-owned externer Tracker und persistenter
+   Interview-Scheduler sind als zwei unabhängige default-off Local-/CI-
+   Verträge mit Ownership/Tenant, Privacy, Queue/Reminder, ICS, Desktop/360
+   und A11y verifiziert; siehe
+   [Phase-28-Evidence](./evidence/2026-07-29-phase-28.md). Click bleibt
+   ungleich Submitted, der Termin bleibt getrennt vom Pipeline-Status und
+   weder ATS-/Calendar-Provider noch Markt-/LIVE-Reife werden behauptet.
+10. **Phase 24 technisch abgeschlossen, Aktivierung nur bei LC5-Go**:
    Candidate `f785944` besitzt den grünen fail-closed Local-/CI-Zahlungs- und
    Service-Recovery-Vertrag; kein Staging-/Paid-/LIVE-Start vor WTP-,
    Phase-25-, Provider-, Tax-/Legal-, Finance- und Operations-Go. Siehe
    [Phase-24-Evidence](./evidence/2026-07-27-phase-24.md).
-10. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
+11. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
    final usability-/mobile-/a11y-prüfen; erst danach genau das lieferbare
    Angebot/den Cluster aktivieren.
-11. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
+12. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
    Artefakt prüfen.
 
 ### Parallel zulässig
@@ -709,13 +717,17 @@ flowchart TD
   selben Aktivierungsfenster gecutovert.
 - Phase 27 ist technisch abgeschlossen, aber kein Launchconsumer darf den
   Persona-Switch ohne separates Demand-/Cohort-Go sichtbar aktivieren.
+- Phase 28 ist technisch abgeschlossen, aber beide Tracks bleiben unabhängig
+  default-off; nur die jeweils freigegebene Kohorte darf nach eigenem Demand-,
+  Privacy-, Ops-/Support- und gegebenenfalls Providergate aktiviert werden.
 
 ### Bewusst ausserhalb des Standardpfads
 
 - Phase 27 Multi-Persona bleibt für Markt-/Kohortenaktivierung P3/deferred,
   obwohl der owner-aktivierte technische Vertrag default-off vorhanden ist.
-- Phase 28A externer Tracker und 28B Vollscheduler besitzen getrennte
-  Research-Gates; der bestehende interne Bewerbungsflow hängt nicht davon ab.
+- Phase 28A externer Tracker und 28B Vollscheduler sind technisch vorhanden,
+  besitzen aber weiterhin getrennte Research-/Aktivierungsgates; der
+  bestehende interne Bewerbungsflow hängt nicht davon ab.
 - Phase 30B beginnt bei gemessenem Queue-/Query-/Latenztrigger.
 - Phase 30C baut Index/Shards erst bei gemessenem Sitemap-Trigger; das heutige
   fail-closed/no-truncation-Verhalten bleibt.

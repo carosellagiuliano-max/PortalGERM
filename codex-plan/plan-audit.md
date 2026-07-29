@@ -221,7 +221,7 @@ Plan-Evidence; die Phase bleibt bis zur späteren Implementierung offen.
 | Payment/Refund | technisch als fail-closed Testprovider-/Finance-Vertrag gelöst | Phase 24 Hosted Checkout/Webhook/Reconciliation/Fraud/Service-Recovery, Phase 25 Assurance/Trust; WTP/PSP/Tax/Legal/Finance/LIVE offen |
 | Admin ist Superrolle | technisch Local/CI gelöst; globale Rolle besitzt allein 0 Capabilities | Phase 25A persistierte Least Privilege/SoD/Break-glass, 25B Non-Admin-Step-up und 25C Fraud/ATO/Scam `PASS`; Owner/RP-ID/Risk-/Capacity-/Pager-Gates offen |
 | Firmenprüfung | teilweise gelöst; Lifecycle vorhanden, Evidenz/Expiry/Re-review schwach | Phase 26 und zwingendes Public-Trust-Gate |
-| Multi-Persona/Tracker/Scheduler | echte mögliche Lücken, aber Nachfrage nicht belegt | Phase 27, 28A und 28B jeweils P3/DEFERRED mit eigenem Demand-Go |
+| Multi-Persona/Tracker/Scheduler | technische default-off Verträge der Phasen 27/28 owner-aktiviert; Nachfrage weiterhin nicht belegt | Markt-/Kohortenaktivierung von Phase 27, 28A und 28B bleibt jeweils P3/DEFERRED mit eigenem Demand-Go |
 | moderierte Forschung | bestätigt; Automation stark, Zielgruppenbeleg fehlt | Phase 29A früh; 29B finale Cross-browser/Mobile/A11y-Evidence |
 | Startcluster-Suche | bestätigt; Semantik driftet je Consumer | Phase 30A Shared Concepts für Beruf/Ort/Qualifikation/Zertifikat/Skill/Branche und getrennte Clusterkorpora |
 | Zero-Result-Lernen | teilweise falsch; Result-count-Buckets existieren bereits | Phase 30A ergänzt nur privacy-safe Unknown-Term-/Review-Loop (`STH-036`) |

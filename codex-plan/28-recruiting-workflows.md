@@ -1,12 +1,14 @@
 # Phase 28 — Bedarfsgegatete Recruiting-Workflows
 
-> **Planstatus: GEPLANT, standardmässig DEFERRED. Technikstatus: NICHT
-> IMPLEMENTIERT. Quality-Gate: NICHT GELAUFEN. Aktivierung: DISABLED.**
+> **Planstatus: TECHNISCH ABGESCHLOSSEN; track-spezifische Demand-Gates
+> OFFEN. Technikstatus: 28A/28B IMPLEMENTIERT. Quality-Gate: LOCAL G3
+> PASSED. Aktivierung: DISABLED.**
 > Diese Phase besteht aus zwei unabhängig freigebbaren P3-Tracks. Weder ein
 > externer Bewerbungs-Tracker noch ein Vollscheduler ist Voraussetzung für den
-> bestehenden internen Bewerbungsflow. Ein Track wird erst nach dokumentiertem
-> Demand-Gate umgesetzt und ist danach P0 nur für eine Launchklasse, die ihn
-> ausdrücklich verspricht.
+> bestehenden internen Bewerbungsflow. Der Repository-Owner hat beide
+> technischen Tracks zur Implementierung freigegeben; ein Demand-Gate für
+> Markt-, Kohorten- oder LIVE-Aktivierung ist damit nicht ersetzt. Ein Track
+> wird P0 nur für eine Launchklasse, die ihn ausdrücklich verspricht.
 
 Die gemeinsamen Regeln aus
 [`remediation-execution-contract.md`](./remediation-execution-contract.md)
@@ -18,10 +20,11 @@ gelten vollständig. Die folgende Instanziierung darf sie nicht abschwächen.
 
 | Track | Plan | Technik | Quality-Gate | Aktivierung | Standardpriorität |
 |---|---|---|---|---|---|
-| 28A externer Tracker | `DEFERRED` bis Demand-Go | nicht implementiert | nicht gelaufen | `DISABLED` | P3; P0 nur falls im Angebot versprochen |
-| 28B Interview-Scheduler | `DEFERRED` bis Demand-Go | nicht implementiert | nicht gelaufen | `DISABLED` | P3; P0 nur falls im Angebot versprochen |
+| 28A externer Tracker | technischer Scope abgeschlossen; Demand-Go offen | implementiert | `LOCAL G3 PASS` | `DISABLED` | P3; P0 nur falls im Angebot versprochen |
+| 28B Interview-Scheduler | technischer Scope abgeschlossen; Demand-Go offen | implementiert | `LOCAL G3 PASS` | `DISABLED` | P3; P0 nur falls im Angebot versprochen |
 
-Ein Research-Go erlaubt Planung/Prototyping, aber noch keine Produktaktivierung.
+Die technische Owner-Freigabe erlaubt Implementierung und Local-/CI-Evidence,
+aber noch keine Produktaktivierung.
 
 ### 2. Ziel und messbarer Nutzerwert
 
@@ -38,15 +41,24 @@ Ein Research-Go erlaubt Planung/Prototyping, aber noch keine Produktaktivierung.
 
 ### 3. Tatsächlicher Repositoryzustand
 
-- `STH-015`: `app/(public)/jobs/actions.ts` schreibt bei `APPLY_URL` nur
-  `EXTERNAL_APPLY_CLICKED`; `lib/applications/service.ts` lehnt externe Jobs für
-  interne Applications korrekt ab.
-- `STH-016`: `INTERVIEW`/`SCHEDULED_INTERVIEW` sind Status-/Mock-Semantik ohne
-  persistente Slots, RSVP, Zeitzone, ICS oder Reminder.
+- `STH-015`: `app/(public)/jobs/actions.ts` hält den anonymen
+  `EXTERNAL_APPLY_CLICKED` strikt von Submitted getrennt und erzeugt für
+  eingeloggte Candidates einen kurzlebigen Resume-Intent.
+  `lib/recruiting/external-tracker.ts` sowie
+  `/candidate/applications/external/**` implementieren candidate-owned
+  Snapshot, Status, Reminder und append-only Timeline.
+- `STH-016`: `lib/recruiting/interviews.ts`,
+  `/candidate/interviews/**`,
+  `/employer/applicants/[id]/interviews/**` und der geschützte Calendar-
+  Handler implementieren persistente Slots, RSVP, IANA-Zeitzone, ICS und
+  Reminder. Der Termin bleibt getrennt von `INTERVIEW`/
+  `SCHEDULED_INTERVIEW` der Application-Pipeline.
 - Interne Application-, Conversation-, Snapshot-, Assignment- und
-  Tenant-Grenzen sind implementiert und historisch verifiziert.
-- Es gibt noch keine Demand-Evidence, die Bau und Betrieb beider Tracks
-  rechtfertigt.
+  Tenant-Grenzen bleiben unverändert und sind in der vollständigen Regression
+  geschützt.
+- Die technische Umsetzung wurde vom Repository-Owner ausdrücklich aktiviert.
+  Es gibt weiterhin keine Demand-, Provider- oder Operations-Evidence, die
+  Markt-/Kohorten- oder LIVE-Aktivierung eines Tracks rechtfertigt.
 
 ### 4. Findings und Requirements
 
@@ -63,11 +75,11 @@ Ein Research-Go erlaubt Planung/Prototyping, aber noch keine Produktaktivierung.
 
 ### 5. In Scope
 
-- **28A nach Demand-Go:** begun/submitted/interview/offer/rejected/hired/
+- **28A technisch umgesetzt, Aktivierung nach Demand-Go:** begun/submitted/interview/offer/rejected/hired/
   withdrawn/archived, immutable Job-/Company-Snapshot, Resume nach
   unauthentifiziertem Klick, freiwillige Reminder und klare Herkunft
   `CANDIDATE_CONFIRMED`.
-- **28B nach Demand-Go:** Interview, Slot/Proposal, IANA-Zeitzone,
+- **28B technisch umgesetzt, Aktivierung nach Demand-Go:** Interview, Slot/Proposal, IANA-Zeitzone,
   Teilnehmer, RSVP, Accept/Decline/Reschedule/Cancel, ICS, Reminder und
   Timeline.
 - Version, Idempotency Key, Eventhistorie, Privacy-Lifecycle, Notifications,
@@ -81,9 +93,10 @@ Ein Research-Go erlaubt Planung/Prototyping, aber noch keine Produktaktivierung.
 - Talent Pool, automatische Auswahl/Ablehnung, Arbeitgeberranking nach
   Candidate Match Score sowie ATS-/Kalender-Sync ohne separaten Provider-,
   Legal- und Demand-Go.
-- Solange ein Track deferred ist: keine Navigation/CTA, kein Event, kein
-  Worker, keine Marketingbehauptung; Direct Actions und geplante Routen
-  antworten fail-closed.
+- Solange ein Track deaktiviert ist: keine Navigation/CTA, kein neuer
+  Fachevent und kein Reminder-Worker; Direct Actions und Routen antworten
+  fail-closed. Historische Owner-Reads, Privacy-Export und sichere
+  Termin-Stornierung bleiben nach Kill Switch möglich.
 
 ### 7. Rollen und Owner
 
@@ -99,14 +112,15 @@ Ein Research-Go erlaubt Planung/Prototyping, aber noch keine Produktaktivierung.
 
 - Bestehend zu schützen: Public Apply, `/candidate/applications/**`,
   `/employer/applicants/**`, Conversations und Notifications.
-- Geplant hinter getrennten Flags:
+- Implementiert hinter getrennten default-off Flags:
   `/candidate/applications/external/**`,
   `/candidate/interviews/**`,
   `/employer/applicants/[id]/interviews/**`.
 - Services: `lib/recruiting/external-tracker.ts`,
   `lib/recruiting/interviews.ts`, Privacy-Serializer, Outbox-Templates.
-- Worker: Reminder/Expiry erst über Phase-23-Queue; Calendar-/ATS-Port bleibt
-  optional und standardmässig `DISABLED`.
+- Worker: Reminder/Expiry nutzt den Phase-23-Queue-/Lease-/Retry-/DLQ-Vertrag;
+  Calendar-/ATS-Port bleibt nicht implementiert und standardmässig
+  `DISABLED`.
 
 ### 9. Datenmodell, Constraints, Indizes und Klassifikation
 
@@ -188,6 +202,8 @@ farblich unterschieden.
 
 ### 17. Externe und organisatorische Voraussetzungen
 
+- Die technische Local-/CI-Umsetzung wurde durch die Owner-Anweisung
+  freigegeben; dies ersetzt keines der folgenden Aktivierungsgates.
 - Datierte Demand-Evidence aus Phase 29: mindestens fünf Kandidat:innen für
   28A beziehungsweise fünf Employer/Recruiter plus fünf Kandidat:innen für 28B,
   klarer wiederkehrender Bedarf und ein benannter Product Owner.
@@ -204,14 +220,16 @@ farblich unterschieden.
 
 ### 19. Geordnete Implementierungsschritte
 
-1. Research-/Demand-Gate je Track dokumentieren.
-2. Separaten Status-/Ownership-/Retention-ADR freigeben.
-3. Additive Migration und Backfill-/Rollbacktests.
+1. Owner-Aktivierung und weiterhin offene Research-/Demand-Gates je Track
+   getrennt dokumentieren.
+2. Status-/Ownership-/Retention-ADR 040 freigeben.
+3. Additive Migration und Upgrade-/Rollbacktests.
 4. Domain-State-Machine, Idempotenz, RBAC und Audit.
-5. Privacy-Serializer und Outbox/Worker.
+5. Privacy-Serializer sowie Outbox-/Reminder-Worker.
 6. UI-Zustände und Route-/Rolleninventar.
 7. Unit/PostgreSQL/Failure/E2E/Mobile/A11y.
-8. G3, Allowlist, Smoke und erst danach Aktivierungsentscheid.
+8. G3 und technisches Evidence abschliessen; Allowlist/LIVE erst nach
+   separater Aktivierungsentscheidung.
 
 ### 20. Feature-Flags, Kill Switch und Aktivierung
 
@@ -236,16 +254,29 @@ farblich unterschieden.
 
 | Criterion / Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| AC-28-01 / REQ-REC-028-002 | P0 Regression | PostgreSQL + E2E | interner Apply→Pipeline→Message bei beiden Flags aus | bestehende Reise bleibt vollständig | Direct Action darf kein neues Trackmodell voraussetzen | Candidate, Employer | Public/Candidate/Employer | interner LIVE-like Job, zwei Tenants | isoliertes PostgreSQL + Chromium | `npx vitest run --config vitest.integration.config.ts tests/integration/employer/applications-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase17-journeys.spec.ts --project=chromium-journeys` | 100 % bestehende Assertions grün; 0 neue Trackrows | Testreport + DB-Fingerprint | Recruiting Engineering | PLANNED |
-| AC-28-02 / STH-015 | P3 default | Contract/Security | 28A ohne Demand-Go | Route/CTA/Event/Worker fehlen | Direct Action/URL/Flagmanipulation bleibt denied | Candidate/Public | Router, Server Action | Flag off, Candidate | Test | `npx vitest run --config vitest.config.ts tests/unit/recruiting/phase28-demand-gates.test.ts` | 0 persistierte Tracker/Events; definierter `FEATURE_UNAVAILABLE` | Unitreport | Product + Security | PLANNED |
-| AC-28-03 / REQ-REC-028A-001 | P0 falls aktiviert | Unit + PostgreSQL | click→resume→candidate-confirmed submit→outcome | Events in erlaubter Reihenfolge, Snapshot stabil | fremder Candidate, Replay, Click-as-submit und invalid transition denied | Candidate | 28A Service/Portal | anonymer Klick, zwei Candidates, expired Job | isoliertes PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/recruiting/external-application-tracker.test.ts && npx vitest run --config vitest.integration.config.ts tests/integration/recruiting/external-application-tracker-postgres.test.ts` | Click erzeugt 0 Submitted; Retry erzeugt genau 1 Event; Cross-user 0 Reads/Writes | JUnit + Eventtimeline | Recruiting Engineering | PLANNED |
-| AC-28-04 / STH-016 | P3 default | Contract/Security | 28B ohne Demand-Go | keine Schedulerbehauptung | alte `INTERVIEW`-Zeile wird nicht als Termin ausgegeben | Candidate, Employer | UI/Service | Legacy status-only Application | Test | `npx vitest run --config vitest.config.ts tests/unit/recruiting/phase28-demand-gates.test.ts` | 0 Interviewrows; UI nennt keinen Termin | Unitreport/Snapshot | Product + Security | PLANNED |
-| AC-28-05 / REQ-REC-028B-001 | P0 falls aktiviert | Unit + PostgreSQL | propose→accept→reschedule→cancel; DST und ICS | beide Seiten sehen denselben Instant | parallele Accept/Reschedule, stale Version, doppelte Reminder | Candidate, Recruiter | Scheduler/Outbox | Zürich DST, zwei Slots, duplicate delivery | isoliertes PostgreSQL + Fake Clock | `npx vitest run --config vitest.config.ts tests/unit/recruiting/interview-scheduler.test.ts && npx vitest run --config vitest.integration.config.ts tests/integration/recruiting/interview-scheduler-postgres.test.ts` | genau 1 aktive Version/ICS/Reminder je Dedupe-Key; Instant identisch | JUnit + ICS Golden + DB Counts | Recruiting + Ops | PLANNED |
-| AC-28-06 / STH-030/031 | P0 | Security/PostgreSQL | Rollen×Tenant×Assignment×Participant | berechtigter Actor liest/minimiert | Company B, Viewer mutation, stale Step-up, Masseneinladung denied/alerted | Candidate, Owner, Recruiter, Viewer | Repositories/Actions | Company A/B, suspended actor | isoliertes PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/recruiting/recruiting-authorization-postgres.test.ts` | 0 Foreign-Canary-Leaks; 100 % Denials ohne Zielmutation | Securitymatrix + Audit | Security Owner | PLANNED |
-| AC-28-06 / Phase 22 | P0 Privacy | PostgreSQL | Export/Delete/Correct/Retention/Hold | eigene erlaubte Daten vollständig | fremde Notes/ICS/Participant-Canary ausgeschlossen | Candidate, Privacy Admin | Privacy lifecycle | beide Tracks, foreign tenant canaries | isoliertes PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/recruiting-lifecycle-postgres.test.ts` | Vollständigkeitscount stimmt; 0 fremde Canaries; Hold unverändert | Exportmanifest + DB Report | Privacy Owner | PLANNED |
-| AC-28-07 / STH-009/013 | P0 falls aktiviert | Migration + Worker Failure | clean/upgrade/interrupted migration; crash/retry/DLQ | wiederaufnehmbar, dedupliziert | Poison, out-of-order, Provider timeout | System/Ops | DB/Queue/Outbox | Legacy INTERVIEW, queued reminder | PostgreSQL + Worker Test Harness | `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase28-recruiting-migration-postgres.test.ts tests/integration/recruiting/recruiting-worker-postgres.test.ts` | Orphans 0; doppelte Fachwirkung 0; Poison nach Retrybudget genau 1 DLQ | Migration-/Workerreport | DB + Ops Owner | PLANNED |
-| AC-28-08 | P0 falls aktiviert | Browser/A11y | komplette 28A- und 28B-Reise | Hauptaufgaben abschliessbar | locked/error/conflict/expired/cancelled und fremde URL sicher | Candidate, Employer, Recruiter | Candidate/Employer | alle Zustände, 320/360/Desktop | Chromium; Phase 29 zusätzlich 3 Engines/AT | `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase28-external-tracker.spec.ts tests/e2e/flows/phase28-interview-scheduler.spec.ts --project=chromium-journeys && npx playwright test --config=playwright.config.ts tests/e2e/quality/phase28-recruiting-mobile.spec.ts --project=chromium-mobile-360` | Retry 0; 0 critical/serious Axe; keine versteckte Hauptaktion | Playwright HTML + Screens | QA/A11y Owner | PLANNED |
-| AC-28-01–08 | G3 | Vollregression | technischer Trackabschluss | alle owning + globale Gates grün | Skip/Retry/anderer Commit macht Gate rot | Engineering/Ops | gesamtes Repository | isolierte DB/Fixtures | CI/PostgreSQL 16 | `npm run lint && npm run typecheck && npm test && npm run test:integration && npm run build && npm run test:e2e:http && npm run test:e2e:browser` | Exit 0; Fail/Skip/Retry 0; exakt ein Zielcommit | Phase-28-Evidence | Release Owner | PLANNED |
+| AC-28-01 / REQ-REC-028-002 | P0 Regression | PostgreSQL + E2E | interner Apply→Pipeline→Message bei beiden Flags aus | bestehende Reise bleibt vollständig | Direct Action darf kein neues Trackmodell voraussetzen | Candidate, Employer | Public/Candidate/Employer | interner LIVE-like Job, zwei Tenants | isoliertes PostgreSQL + Chromium | `npx vitest run --config vitest.integration.config.ts tests/integration/employer/applications-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase17-journeys.spec.ts --project=chromium-journeys` | 100 % bestehende Assertions grün; 0 neue Trackrows | Testreport + DB-Fingerprint | Recruiting Engineering | PASS |
+| AC-28-02 / STH-015 | P3 default | Contract/Security | 28A ohne Demand-Go | Navigation/CTA bleiben abwesend; direkte Route/Action ist fail-closed | Direct Action/URL/Flagmanipulation bleibt denied | Candidate/Public | Router, Server Action | Flag off, Candidate | Test | `npx vitest run --config vitest.config.ts tests/unit/recruiting/phase28-demand-gates.test.ts` | 0 persistierte Tracker/Events; definierter `FEATURE_UNAVAILABLE` | Unitreport | Product + Security | PASS |
+| AC-28-03 / REQ-REC-028A-001 | P0 falls aktiviert | Unit + PostgreSQL | click→resume→candidate-confirmed submit→outcome | Events in erlaubter Reihenfolge, Snapshot stabil | fremder Candidate, Replay, Click-as-submit und invalid transition denied | Candidate | 28A Service/Portal | anonymer Klick, zwei Candidates, expired Job | isoliertes PostgreSQL | `npx vitest run --config vitest.config.ts tests/unit/recruiting/external-application-tracker.test.ts && npx vitest run --config vitest.integration.config.ts tests/integration/recruiting/external-application-tracker-postgres.test.ts` | Click erzeugt 0 Submitted; Retry erzeugt genau 1 Event; Cross-user 0 Reads/Writes | JUnit + Eventtimeline | Recruiting Engineering | PASS |
+| AC-28-04 / STH-016 | P3 default | Contract/Security | 28B ohne Demand-Go | keine Schedulerbehauptung | alte `INTERVIEW`-Zeile wird nicht als Termin ausgegeben | Candidate, Employer | UI/Service | Legacy status-only Application | Test | `npx vitest run --config vitest.config.ts tests/unit/recruiting/phase28-demand-gates.test.ts` | 0 Interviewrows; UI nennt keinen Termin | Unitreport/Snapshot | Product + Security | PASS |
+| AC-28-05 / REQ-REC-028B-001 | P0 falls aktiviert | Unit + PostgreSQL | propose→accept→reschedule→cancel; DST und ICS | beide Seiten sehen denselben Instant | parallele Accept/Reschedule, stale Version, doppelte Reminder | Candidate, Recruiter | Scheduler/Outbox | Zürich DST, zwei Slots, duplicate delivery | isoliertes PostgreSQL + Fake Clock | `npx vitest run --config vitest.config.ts tests/unit/recruiting/interview-scheduler.test.ts && npx vitest run --config vitest.integration.config.ts tests/integration/recruiting/interview-scheduler-postgres.test.ts` | genau 1 aktive Version/ICS/Reminder je Dedupe-Key; Instant identisch | JUnit + ICS Golden + DB Counts | Recruiting + Ops | PASS |
+| AC-28-06 / STH-030/031 | P0 | Security/PostgreSQL | Rollen×Tenant×Assignment×Participant | berechtigter Actor liest/minimiert | Company B, Viewer mutation, stale Step-up, Masseneinladung denied/alerted | Candidate, Owner, Recruiter, Viewer | Repositories/Actions | Company A/B, suspended actor | isoliertes PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/recruiting/recruiting-authorization-postgres.test.ts` | 0 Foreign-Canary-Leaks; 100 % Denials ohne Zielmutation | Securitymatrix + Audit | Security Owner | PASS |
+| AC-28-06 / Phase 22 | P0 Privacy | PostgreSQL | Export/Delete/Correct/Retention/Hold | eigene erlaubte Daten vollständig | fremde Notes/ICS/Participant-Canary ausgeschlossen | Candidate, Privacy Admin | Privacy lifecycle | beide Tracks, foreign tenant canaries | isoliertes PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/privacy/recruiting-lifecycle-postgres.test.ts` | Vollständigkeitscount stimmt; 0 fremde Canaries; Hold unverändert | Exportmanifest + DB Report | Privacy Owner | PASS |
+| AC-28-07 / STH-009/013 | P0 falls aktiviert | Migration + Worker Failure | clean/upgrade/interrupted migration; crash/retry/DLQ | wiederaufnehmbar, dedupliziert | Poison, out-of-order, Provider timeout | System/Ops | DB/Queue/Outbox | Legacy INTERVIEW, queued reminder | PostgreSQL + Worker Test Harness | `npx vitest run --config vitest.integration.config.ts tests/integration/schema/phase28-recruiting-migration-postgres.test.ts tests/integration/recruiting/recruiting-worker-postgres.test.ts` | Orphans 0; doppelte Fachwirkung 0; Poison nach Retrybudget genau 1 DLQ | Migration-/Workerreport | DB + Ops Owner | PASS |
+| AC-28-08 | P0 falls aktiviert | Browser/A11y | komplette 28A- und 28B-Reise | Hauptaufgaben abschliessbar | locked/error/conflict/expired/cancelled und fremde URL sicher | Candidate, Employer, Recruiter | Candidate/Employer | alle Zustände, 320/360/Desktop | Chromium; Phase 29 zusätzlich 3 Engines/AT | `npx playwright test --config=playwright.config.ts tests/e2e/flows/phase28-external-tracker.spec.ts tests/e2e/flows/phase28-interview-scheduler.spec.ts --project=chromium-journeys && npx playwright test --config=playwright.config.ts tests/e2e/quality/phase28-recruiting-mobile.spec.ts --project=chromium-journeys --project=chromium-mobile-360` | Retry 0; 0 critical/serious Axe; keine versteckte Hauptaktion | Playwright HTML + Screens | QA/A11y Owner | PASS |
+| AC-28-01–08 | G3 | Vollregression | technischer Trackabschluss | alle owning + globale Gates grün | Skip/Retry/anderer Commit macht Gate rot | Engineering/Ops | gesamtes Repository | isolierte DB/Fixtures | CI/PostgreSQL 16 | `npm run lint && npm run typecheck && npm test && npm run test:integration && npm run build && npm run test:e2e:http && npm run test:e2e:browser` | Exit 0; Fail/Skip/Retry 0; exakt ein Zielcommit | Phase-28-Evidence | Release Owner | PASS |
+
+### Phase-28 Audit-log extension matrix
+
+| AuditAction | Auslöser | Ziel / Ergebnis | Metadata-Minimierung |
+| --- | --- | --- | --- |
+| `EXTERNAL_APPLICATION_CREATED` | Candidate übernimmt einen externen Bewerbungsweg | Tracker / succeeded oder denied | Quelle, Snapshotfingerprint und Idempotenz; keine freie Notiz |
+| `EXTERNAL_APPLICATION_STATUS_CHANGED` | Candidate bestätigt einen externen Status | Tracker / succeeded oder denied | alter/neuer Status, Version und Herkunft; keine ATS-Behauptung |
+| `EXTERNAL_APPLICATION_REMINDER_CHANGED` | Candidate setzt oder entfernt eigenen Reminder | Tracker / succeeded oder denied | Reminderzustand und Version; kein Nachrichtentext |
+| `INTERVIEW_PROPOSED` | berechtigter Employer schlägt Slots vor | Interview / succeeded oder denied | Version, Slotanzahl und Zeitzone; keine Teilnehmer-PII |
+| `INTERVIEW_RESPONDED` | Candidate akzeptiert oder lehnt ab | Interview / succeeded oder denied | Antwort, Proposalversion und Idempotenz |
+| `INTERVIEW_RESCHEDULED` | berechtigter Actor ersetzt den Termin | Interview / succeeded oder denied | alte/neue Version und Actorseite; keine private Notiz |
+| `INTERVIEW_CANCELLED` | berechtigter Actor storniert | Interview / succeeded oder denied | Version und Actorseite; keine freie Begründung |
+| `INTERVIEW_REMINDER_PROCESSED` | Worker liefert, wiederholt oder verwirft Reminder | Reminder / succeeded, failed oder denied | Attempt, Dedupe und Fehlerklasse; kein Providerpayload |
 
 ### 22. Performance- und Skalierungsgrenzen
 
@@ -275,18 +306,22 @@ Historie. Nach extern versandter ICS gilt Roll-forward/Cancel statt
 
 ### 25. Evidence
 
-Demand-Protokoll, Start-/Zielcommit, Migrationcounts, State-Machine-Golden,
+Der technische Abschluss ist in
+[`evidence/2026-07-29-phase-28.md`](./evidence/2026-07-29-phase-28.md)
+dokumentiert. Er enthält Start-/Zielstand, Migrationcounts, State-Machine-Golden,
 Rollen-/Tenantmatrix, Worker-/DLQ-Report, ICS-Artefakte ohne PII, Privacy-
 Vollständigkeit, Playwright/A11y/Mobile, Flags, Providerstatus und Go/No-go je
-Track.
+Track. Ein reales Demand-Protokoll bleibt ausdrücklich offen.
 
 ### 26. Definition of Done
 
 Ein Track ist technisch fertig, wenn AC-28-01–08, Migration, G3 und sein
 vollständiger E2E auf demselben Commit grün sind. LIVE ist er erst nach
 Demand-, Privacy-, Ops-, Support- und gegebenenfalls Providerfreigabe.
-Die Gesamtphase bleibt offen, solange ein Track nur geplant oder deferred ist;
-deferred ist kein Defekt, wenn sämtliche Oberflächen fail-closed sind.
+Der owner-aktivierte technische Scope kann deshalb `[x]` sein, während beide
+Markt-/Kohortenaktivierungen weiterhin deferred und `DISABLED` bleiben.
+Deferred Activation ist kein Defekt, wenn sämtliche Oberflächen fail-closed
+sind und keine Produktbehauptung vorwegnehmen.
 
 ### 27. Folgephasen-Gate
 

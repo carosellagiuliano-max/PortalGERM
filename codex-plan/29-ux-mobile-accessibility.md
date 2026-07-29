@@ -72,8 +72,10 @@ Es gilt der vollständige
 - Kein generischer Redesign, keine Native App, keine doppelte mobile
   Businesslogik und keine clientseitige Autorisierung.
 - Kein Research mit echten Daten ohne Consent/Privacy-Protokoll.
-- Phase 27 und 28A/28B nur bei eigenem Demand-Go; Paid UI nur bei LC5/
-  Phase-24-Freigabe, andernfalls vollständig Locked/Unavailable.
+- Markt-/Kohorten-Research und Aktivierungsabnahme für Phase 27 sowie 28A/28B
+  nur bei eigenem Demand-Go; ihre default-off Technik bleibt in der
+  automatisierten Regression. Paid UI nur bei LC5/Phase-24-Freigabe,
+  andernfalls vollständig Locked/Unavailable.
 - Keine Accessibility-Ausnahme ohne Owner, Reproduktionsfall und Ablaufdatum.
 
 ### 7. Rollen und Owner

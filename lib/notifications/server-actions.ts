@@ -14,6 +14,7 @@ import { setNotificationPreference } from "@/lib/notifications/preferences";
 
 const MUTABLE_PURPOSES = [
   "JOB_ALERT",
+  "EXTERNAL_APPLICATION_REMINDER",
   "COMMERCIAL_OPTIONAL",
 ] as const satisfies readonly NotificationPurpose[];
 

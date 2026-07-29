@@ -409,6 +409,13 @@
   },
   {
     "kind": "handler",
+    "path": "/api/recruiting/interviews/[id]/calendar",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
+    "kind": "handler",
     "path": "/api/webhooks/payments/[provider]",
     "roles": [
       "PUBLIC"
@@ -437,7 +444,35 @@
   },
   {
     "kind": "page",
+    "path": "/candidate/applications/external",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/applications/external/[id]",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
     "path": "/candidate/dashboard",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/interviews",
+    "roles": [
+      "CANDIDATE"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/candidate/interviews/[id]",
     "roles": [
       "CANDIDATE"
     ]
@@ -580,6 +615,22 @@
   {
     "kind": "page",
     "path": "/employer/applicants/[id]",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/applicants/[id]/interviews",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "page",
+    "path": "/employer/applicants/[id]/interviews/[interviewId]",
     "roles": [
       "EMPLOYER",
       "RECRUITER"

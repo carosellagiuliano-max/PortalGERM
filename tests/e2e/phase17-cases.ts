@@ -1,4 +1,4 @@
-export const PHASE17_FIXTURE_VERSION = "phase17-e2e-v3" as const;
+export const PHASE17_FIXTURE_VERSION = "phase17-e2e-v4" as const;
 
 export const PHASE17_CASES = Object.freeze([
   Object.freeze({
@@ -91,6 +91,24 @@ export const PHASE17_CASES = Object.freeze([
     ]),
     summary:
       "Owner-only privacy case, fail-closed V2 execution and absence of mock completion while activation gates are disabled.",
+  }),
+  Object.freeze({
+    id: "E2E-28A",
+    requirements: Object.freeze([
+      "REQ-REC-028A-001",
+      "REQ-REC-028-002",
+    ]),
+    summary:
+      "External click, explicit candidate-owned tracking, status and voluntary reminder remain distinct.",
+  }),
+  Object.freeze({
+    id: "E2E-28B",
+    requirements: Object.freeze([
+      "REQ-REC-028B-001",
+      "REQ-REC-028-002",
+    ]),
+    summary:
+      "Separate interview proposal, RSVP, reschedule, ICS, reminder and cancellation lifecycle.",
   }),
 ] as const);
 

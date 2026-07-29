@@ -31,6 +31,9 @@ export const EMAIL_TEMPLATE_KEYS = [
   "credits_granted",
   "commercial_lifecycle_signal",
   "privacy_request_changed",
+  "external_application_reminder",
+  "interview_changed",
+  "interview_reminder",
 ] as const;
 
 export type EmailTemplateKey = (typeof EMAIL_TEMPLATE_KEYS)[number];

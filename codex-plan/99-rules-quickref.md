@@ -211,10 +211,12 @@ Build SwissTalentHub like it could become a serious Swiss company. Every feature
 - Non-Admin-Step-up, Fraud/ATO/Scam, Company Trust, Job Freshness,
   moderierter Research, Supportkapazität/Stückkosten und Paid-Service-
   Recovery sind Launchverträge, keine kosmetischen Nacharbeiten.
-- Phase 27 ist technisch durch den Owner aktiviert und default-off
-  implementiert; ihre Markt-/Kohortenaktivierung sowie 28A/28B bleiben an
-  explizite Demand-Gates gebunden. 30B/30C bleiben triggerabhängig. Phase 26
-  ist vor öffentlichem Company Trust, Firmenjobs oder Radar zwingend.
+- Phasen 27 sowie 28A/28B sind technisch durch den Owner aktiviert und
+  default-off implementiert. Ihre Markt-/Kohortenaktivierung bleibt an
+  getrennte explizite Demand-Gates gebunden; Phase 28 verlangt zusätzlich
+  Privacy-/Ops-/Support- und gegebenenfalls Providerfreigabe. 30B/30C bleiben
+  triggerabhängig. Phase 26 ist vor öffentlichem Company Trust, Firmenjobs oder
+  Radar zwingend.
 - G4 umfasst Clean Clone, Migration, Seed zweimal, Full Suite,
   Security/Route/Plan-Audits, Provider-/Worker-/Restore-Drills und manuellen
   Rollen-Walkthrough auf exakt demselben Commit/Artefakt. Jede Änderung nach

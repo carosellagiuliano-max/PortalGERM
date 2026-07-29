@@ -569,12 +569,14 @@ describe.sequential("Phase 14 Talent Radar ContactRequest transaction", () => {
     ).resolves.toEqual({ ok: false, code: "NOT_FOUND" });
 
     const expiredAt = getRadarOpaqueEpoch(NOW).validTo;
+    const proofIssuedAt = new Date(expiredAt.getTime() - MINUTE);
     const expiredProof = await createSearchProof({
       employer: owner,
       candidateProfileId: candidate.candidateProfileId,
       opaqueCandidateId: candidate.opaqueCandidateId,
       suffix: "expired-token",
-      at: expiredAt,
+      filters: { remotePreference: "HYBRID" },
+      at: proofIssuedAt,
     });
     await expect(
       send(

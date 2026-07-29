@@ -84,6 +84,19 @@ const VALID_PAYLOADS = {
     status: "IDENTITY_CHECK",
     reasonCode: "IDENTITY_CHECK_REQUIRED",
   },
+  EXTERNAL_APPLICATION_CHANGED: {
+    trackerId: id(25),
+    status: "SUBMITTED",
+    reasonCode: "STATUS_CHANGED",
+  },
+  INTERVIEW_CHANGED: {
+    interviewId: id(26),
+    status: "SCHEDULED",
+  },
+  INTERVIEW_REMINDER: {
+    interviewId: id(27),
+    status: "REMINDER",
+  },
 } as const satisfies NotificationPayloadsV1;
 
 const ROUTE_ID_KEYS = {
@@ -108,6 +121,9 @@ const ROUTE_ID_KEYS = {
   SUPPORT_CASE_CHANGED: "caseId",
   MODERATION_CHANGED: "reportId",
   PRIVACY_REQUEST_CHANGED: "requestId",
+  EXTERNAL_APPLICATION_CHANGED: "trackerId",
+  INTERVIEW_CHANGED: "interviewId",
+  INTERVIEW_REMINDER: "interviewId",
 } as const satisfies Record<NotificationKind, string>;
 
 describe("NOTIFICATION_PAYLOADS_V1", () => {
@@ -115,7 +131,7 @@ describe("NOTIFICATION_PAYLOADS_V1", () => {
     expect(Object.keys(NOTIFICATION_PAYLOADS_V1)).toEqual(
       Object.values(NotificationKinds),
     );
-    expect(Object.keys(NOTIFICATION_PAYLOADS_V1)).toHaveLength(21);
+    expect(Object.keys(NOTIFICATION_PAYLOADS_V1)).toHaveLength(24);
   });
 
   it("accepts one strict recipient-scoped payload for every kind", () => {

@@ -719,3 +719,57 @@ existing Membership, Assignment, capability, privacy and rollback contracts.
 
 Referenced by: Phase 20/22/23/25/27/29/32; `REQ-PER-001`,
 `REQ-ID-004`, `REQ-ADM-007`, `REQ-PRIV-004`, `STH-012`.
+
+---
+
+## ADR-040 — Externer Bewerbungs-Tracker und Interview-Scheduler bleiben getrennte, candidate-kontrollierte Verträge
+
+**Status:** accepted for the owner-activated, disabled Phase-28 Local-/CI
+contract; Demand-, Provider-, Cohort- and LIVE activation remain prospective.
+
+**Decision:** Phase 28 implements two independent, additive state machines
+behind separate server-side modes `DISABLED → TEST → ALLOWLIST → LIVE`.
+`EXTERNAL_APPLICATION_TRACKER` and `INTERVIEW_SCHEDULER` default to
+`DISABLED`; Local/CI may use `TEST`, while Production rejects that mode. One
+track never activates or authorizes the other.
+
+An `APPLY_URL` click remains analytics evidence only and is never interpreted
+as a submitted application. A Candidate may explicitly resume that click into
+an owner-scoped `ExternalApplicationTracker`, whose status changes are marked
+`CANDIDATE_CONFIRMED`. Its immutable job/company snapshot preserves what the
+Candidate acted on without claiming ATS delivery, employer confirmation or
+hire causality. Events are append-only, versioned and idempotent; export,
+correction, erasure, retention and hold follow the Phase-22 privacy contract.
+
+An `Interview` is a separate persisted object and never reinterprets the
+legacy `Application.INTERVIEW` pipeline value as a scheduled appointment.
+Proposals, participants, responses, calendar artifacts, reminders and events
+have their own optimistic version and idempotency boundaries. Instants are
+stored in UTC together with validated IANA time zones; DST-invalid or stale
+proposals fail closed. Candidate participation and RSVP remain candidate-
+controlled. Employer reads and mutations additionally require a current
+Company Membership plus the existing Application/Job assignment boundary;
+Viewer access stays read-only.
+
+ICS generation is an internal deterministic export, not proof of external
+calendar delivery. Reminder work uses the Phase-23 lease/retry/dedupe/DLQ
+contract and minimal typed e-mail templates. A kill switch blocks new tracker
+and scheduling mutations and reminder delivery while retaining owner reads,
+privacy export and safe cancellation/roll-forward paths. No ATS ingestion,
+mailbox reading, video hosting, Calendar provider, automated selection or
+external outcome verification is introduced.
+
+The technical Local-/CI completion does not satisfy the phase's moderated
+Demand thresholds. Any `ALLOWLIST` or `LIVE` promotion requires an explicit
+track-specific Product decision, current Privacy/Retention and Operations/
+Support evidence, Phase-29 UX evidence, and provider/legal approval where an
+external adapter is added.
+
+**Why:** A click, a self-reported outcome, a recruiting pipeline label and a
+real calendar appointment are materially different facts. Keeping them
+separate avoids false product claims, preserves Candidate agency and prevents
+one optional workflow from widening tenant or activation authority.
+
+Referenced by: Phase 22/23/25/28/29/31/32; `REQ-REC-003`,
+`REQ-REC-028-002`, `REQ-REC-028A-001`, `REQ-REC-028B-001`,
+`STH-015`, `STH-016`.

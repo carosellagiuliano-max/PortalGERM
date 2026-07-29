@@ -38,6 +38,7 @@ import {
 } from "@/lib/providers/storage/document-storage-composition";
 import { expireDueContactRequests } from "@/lib/talentradar/contact-requests";
 import { projectExpiredTrustCases } from "@/lib/trust-safety/case-service";
+import { processRecruitingReminderExpiry } from "@/lib/recruiting/reminder-worker";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const uuidSchema = z.uuid();
@@ -318,6 +319,14 @@ async function invokeHandler(
         await projectCompanyTrustLifecycle({
           database: dependencies.database,
           correlationId,
+          now,
+        }),
+      );
+    case "recruiting.reminder-expiry":
+      return digestSummary(
+        await processRecruitingReminderExpiry({
+          database: dependencies.database,
+          environment: dependencies.environment,
           now,
         }),
       );

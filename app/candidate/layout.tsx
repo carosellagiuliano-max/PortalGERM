@@ -6,6 +6,7 @@ import { getCurrentPersonaContextOverview } from "@/lib/auth/persona-page";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
+import { isRecruitingFeatureAvailableV1 } from "@/lib/recruiting/feature-gates";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -55,19 +56,56 @@ export default async function CandidateLayout({
       </PrivateShell>
     );
   }
-  const [profile, personaOverview] = await Promise.all([
-    getDatabase().candidateProfile.findUnique({
+  const database = getDatabase();
+  const [profile, personaOverview, externalHistoryCount, interviewHistoryCount] =
+    await Promise.all([
+    database.candidateProfile.findUnique({
       where: { userId: user.id },
       select: { firstName: true, lastName: true, publicDisplayName: true },
     }),
     getCurrentPersonaContextOverview(),
+    database.externalApplicationTracker.count({
+      where: { candidateProfile: { userId: user.id } },
+    }),
+    database.interview.count({
+      where: {
+        candidateProfile: { userId: user.id },
+        participants: {
+          some: { userId: user.id, kind: "CANDIDATE" },
+        },
+      },
+    }),
   ]);
   const legalName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
   const displayName = profile?.publicDisplayName?.trim() || legalName || user.name || user.email;
+  const visibleNavigation = navigation.flatMap((item) =>
+    item.href !== "/candidate/applications"
+      ? [item]
+      : [
+          item,
+          ...(isRecruitingFeatureAvailableV1(
+            environment,
+            "external_application_tracker",
+          ) || externalHistoryCount > 0
+            ? [
+                {
+                  href: "/candidate/applications/external",
+                  label: "Externe Verläufe",
+                },
+              ]
+            : []),
+          ...(isRecruitingFeatureAvailableV1(
+            environment,
+            "interview_scheduler",
+          ) || interviewHistoryCount > 0
+            ? [{ href: "/candidate/interviews", label: "Interviews" }]
+            : []),
+        ],
+  );
   return (
     <PrivateShell
       area="Kandidatenportal"
-      navigation={navigation}
+      navigation={visibleNavigation}
       navigationVariant="sidebar"
       identity={{ displayName, secondaryLabel: "Kandidat/in" }}
       contextControl={

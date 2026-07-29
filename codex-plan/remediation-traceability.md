@@ -76,8 +76,8 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | STH-012 | Exklusive globale Rolle verhindert Multi-Persona | technisch auf `291b953` Local/CI gelöst; Marktaktivierung deferred | P3 default; P0 nur für explizit aktivierten Persona-Scope | Identity/Persona | 27 | 19/20/22/23/25, Tenant-RBAC, Bedarfsgate | additive PersonaAssignments, versionierter Session-/Company-Kontext, Invitation/Self-Service-Step-up, Privacy/Suspension/Audit implementiert; Defaults disabled | Unit/PostgreSQL/Migration/Desktop/360 und lokales G3 `PASS`; vollständiger Abschluss siehe Evidence | [Phase-27-Evidence](./evidence/2026-07-28-phase-27.md); `lib/auth/persona-context.ts`; `/account/portal`; `prisma/migrations/20260728160000_phase_27_multi_persona_identity` | moderierter Bedarf, vier Owner-Sign-offs, Canary/Staging/G4 |
 | STH-013 | Kein dauerhafter E-Mail-Outbox-/Retry-Vertrag | technisch gelöst; autonome Productionausführung bleibt offen | P0 | E-Mail/Worker | 20 | 19, STH-004/009 | atomare Outbox, Attempts, Lease, Heartbeat, Retry, Suppression, DLQ und auditiertes Sandbox-Replay implementiert | 105-Message-Two-Worker-, Crash-, Restart-, Bounce-, Poison- und DLQ-Tests `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `lib/notifications/outbox.ts`; `lib/notifications/dispatcher.ts` | Zustellprovider, Phase-23-Monitoring/Pager |
 | STH-014 | Company Verification beruhte auf Text/Referenz | technisch Local/CI gelöst; öffentliche Aktivierung extern blockiert | P0 für Trust-/Publish-Gate | Company Trust | 26 | 19/21/23/25, STH-003/004, Legal/Operations | strukturierte Evidence/Checks/Challenges/Decisions/Projection, Vault, Expiry/Re-review, SoD, Appeal und gleiche Badge-/Job-/Radar-Revocation implementiert | Unit/PostgreSQL/HTTP/Desktop/360 `PASS`; fehlende/mismatched/expired/revoked/Legacy Evidence erzeugt `0` starken Trust | [Phase-26-Evidence](./evidence/2026-07-28-phase-26.md); `lib/companies/verification/**`; `/employer/verification`; `/admin/company-verification` | reale Register-/Domainprovider, Nutzungsrecht/DPA/Region, Reviewer-Capacity, Staging/Pager und Public-Go |
-| STH-015 | Externe Bewerbung endet beim Klick | bestätigt | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Application | 28A | 19, 29A-Bedarf, STH-009/013/026, Phase-22-Privacy-Lifecycle | offen; nur Analytics-Klick, keine Candidate-owned Journey | Redirect/Privacy-Test vorhanden, kein Outcome-/Export/Delete/Correct-E2E | `app/(public)/jobs/actions.ts:92-110,251-278`; `lib/applications/service.ts:193-197` | moderierter Bedarf; optional ATS-/Mail-Signale |
-| STH-016 | Keine persistente Interviewplanung | bestätigt | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Scheduling | 28B | 19, 29A-Bedarf, STH-009/013, Application-RBAC, Phase-22-Privacy-Lifecycle | offen; Pipeline-Status/Mock-Text statt Termin | Status-Tests vorhanden, keine Slot/DST/ICS-/Privacy-Lifecycle-Tests | `prisma/schema.prisma:264-288`; `lib/policies/status/application.ts:105-113`; `lib/employer/applications.ts:328-335` | moderierter Bedarf; optional Kalenderprovider |
+| STH-015 | Externe Bewerbung endet beim Klick | technisch Local/CI gelöst; Marktaktivierung deferred | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Application | 28A | 19/20/22/23/25, 29A-Bedarf und STH-009/013/026 | Candidate-owned Tracker trennt Click, Resume, bestätigtes Submit und Outcome; immutable Snapshot, Reminder, Audit und Privacy-Lifecycle; default disabled | Unit/PostgreSQL/Migration/Privacy/Desktop/360/A11y und interne Application-Regression `PASS` | [Phase-28-Evidence](./evidence/2026-07-29-phase-28.md); `lib/recruiting/external-tracker.ts`; `/candidate/applications/external/**` | moderierter Bedarf, Product/Privacy/Ops/Support; optionale ATS-/Mail-Signale |
+| STH-016 | Keine persistente Interviewplanung | technisch Local/CI gelöst; Marktaktivierung deferred | P3 default/discovery; P0 nur wenn als Launchfunktion versprochen | Recruiting/Scheduling | 28B | 19/20/22/23/25, 29A-Bedarf und Application-RBAC | persistente getrennte Interview-State-Machine mit IANA/DST, RSVP, Reschedule/Cancel, ICS, Reminder, Audit und Privacy; default disabled | Unit/PostgreSQL/Migration/Worker/Privacy/Desktop/360/A11y und Tenant-/Assignment-Matrix `PASS` | [Phase-28-Evidence](./evidence/2026-07-29-phase-28.md); `lib/recruiting/interviews.ts`; `/candidate/interviews/**`; `/employer/applicants/[id]/interviews/**` | moderierter Bedarf, Product/Privacy/Ops/Support; optionaler Kalenderprovider |
 | STH-017 | Produktionsanalytics deaktiviert | technische Consent-/Gate-Policy gelöst; Productionactivation bewusst blockiert | P1; Legal-Gate vor Aktivierung | Analytics/Consent | 22 | 19, STH-007/026, Legal/Data Governance | eventfamilienweise default-off Policy, exakte Publication/Approval/Consent/Retention/Property-Allowlist und sofortiger Revoke implementiert; Search Learning fail-closed | Unit/PostgreSQL/50-parallel-Last/Browser/G3 `PASS` auf `0636a875`; optionale LIVE-Events weiterhin 0 ohne Gate | [Phase-22-Evidence](./evidence/2026-07-26-phase-22.md); `lib/analytics/live-consent-policy.ts` | Consent-/DPA-/Retention-/Region-Freigabe; moderierte Forschung |
 | STH-018 | Marketplace-Liquidität unbewiesen | externe Voraussetzung; technische Gate-Mechanik vorhanden | P0 Markt-Gate | Marketplace/Go-to-market | 31 | 19, reale Kohorten/Analytics und STH-019-Evidence je Startcluster | kein generischer Codefix; LIVE-Evidence offen | Gate, Seed, Dual Approval und Revoke getestet; Search-Quality-Gate fehlt | `lib/seo/cluster-launch-policy.ts:3-15`; `prisma/schema.prisma:2918-2963`; `lib/admin/cluster-launch.ts:36-287` | reale Arbeitgeber/Kandidaten/Jobs/Responses und Fachreview der Suchmenge |
 | STH-019 | Startcluster-Suche ohne gemeinsamen Berufs-/Ort-/Qualifikations-/Skill-/Branchenvertrag | bestätigt; normalisierte MVP-Suche vorhanden | P0 je aktivem LC3+-Cluster; P1 Design Partner, P2 Demo | Search | 30A | 19, versionierte Taxonomie, Pflege-/Engineering-Korpus, Golden-/Negativkorpus und Clusterfreigabe | offen; Search, Alert und Recommendations besitzen keinen gemeinsamen Konzeptvertrag | deterministische Basis-Tests, aber kein Startcluster-Recall-/Parity-Benchmark | `lib/search/relevance.ts:7-38`; `lib/jobs/public-read-model.ts:1412-1439`; `lib/candidate/job-alerts.ts:1444-1462`; `lib/candidate/dashboard.ts:318-386` | Fachreview je tatsächlich aktiviertem Cluster |
@@ -678,19 +678,23 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 ### STH-015 — Externe Bewerbungen enden nach dem Klick
 
-- **Status / Priorität / Phase:** bestätigt; P1; Phase 28
-  `28-recruiting-workflows.md`.
-- **Fundstellen:** APPLY_URL wird in
-  `app/(public)/jobs/actions.ts:92-110` validiert und extern weitergeleitet;
-  `251-278` schreibt nur `EXTERNAL_APPLY_CLICKED`. Interne Bewerbung lehnt
-  externe Jobs in `lib/applications/service.ts:193-197` ab.
-  `prisma/schema.prisma:1973-2002` kennt nur intern eingereichte Applications.
-- **Betroffene Modelle:** `Job/JobRevision`, `AnalyticsEvent`; neu
-  Candidate-owned ExternalApplicationJourney/Event/Snapshot.
+- **Status / Priorität / Phase:** technisch Local/CI gelöst; P3 default und P0
+  nur bei explizitem Produktversprechen; Phase 28
+  `28-recruiting-workflows.md`. Aktivierung bleibt deferred/default-off.
+- **Fundstellen:** `app/(public)/jobs/actions.ts` hält
+  `EXTERNAL_APPLY_CLICKED` von Submitted getrennt und erzeugt einen
+  Candidate-Resume-Intent. `lib/recruiting/external-tracker.ts` und
+  `/candidate/applications/external/**` implementieren Owner-Reads,
+  Transitionen, Snapshot, Reminder und Eventhistorie.
+- **Betroffene Modelle:** `Job/JobRevision`, `AnalyticsEvent`,
+  `ExternalApplicationTracker`, `ExternalJobSnapshot` und
+  `ExternalApplicationEvent`.
 - **Betroffene Rollen:** Kandidat:in als Owner, Arbeitgeber/Admin nur
   datensparsam aggregiert, anonyme Klicker ohne Bewerbungsbehauptung.
-- **Ist:** Es existiert datensparsame Klick-Telemetrie. Klick ist korrekt keine
-  Bewerbung, danach besitzt die Plattform aber keinen Outcome.
+- **Ist:** Klick bleibt datensparsame Telemetrie und ausdrücklich keine
+  Bewerbung. Ein eingeloggter Candidate kann ihn freiwillig in einen eigenen
+  Tracker übernehmen, einen Submit oder Outcome als `CANDIDATE_CONFIRMED`
+  fortschreiben und die Daten exportieren, korrigieren oder löschen.
 - **Soll:** freiwilliger Kandidaten-Tracker für begonnen, extern eingereicht,
   Interview, Absage, Angebot/eingestellt; Job-Snapshot, Reminder und klare
   Unknown-Zustände ohne ATS-Behauptung.
@@ -707,27 +711,31 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
   Transitionen, Snapshot nach Jobablauf, anonymer Resume, Reminder-Suppression,
   Export/Delete/Correct/Retention/Hold samt Foreign-Canary und E2E
   Klick→Bestätigung→Dashboard.
-- **Abnahmekriterium:** Externe Outcomes sind klar als kandidatenbestätigt oder
-  integriert gekennzeichnet, bleiben owned/auditierbar und verfälschen weder
-  Application- noch Funnel-Metriken.
+- **Abnahmekriterium:** technisch `PASS`: Externe Outcomes sind klar als
+  kandidatenbestätigt gekennzeichnet, bleiben owned/auditierbar und
+  verfälschen weder Application- noch Funnel-Metriken. Demand-/Product-/
+  Privacy-/Ops-/Support- und LIVE-Go bleiben offen; es gibt keine
+  ATS-Bestätigungsbehauptung.
 
 ### STH-016 — Keine echte Interviewplanung
 
-- **Status / Priorität / Phase:** bestätigt; P1; Phase 28.
-- **Fundstellen:** Schema besitzt nur Pipeline-Status `INTERVIEW` und
-  Eventwert `SCHEDULED_INTERVIEW`
-  (`prisma/schema.prisma:264-288`). `SCHEDULE_INTERVIEW` wechselt in
-  `lib/policies/status/application.ts:105-113` lediglich den Status.
-  `lib/employer/applications.ts:328-335` erzeugt eine Mock-Einladung mit
-  leeren `suggestedSlots`; die UI
-  `components/employer/applicant-detail-actions.tsx:17-21` bietet keine
-  persistenten Slots.
+- **Status / Priorität / Phase:** technisch Local/CI gelöst; P3 default und P0
+  nur bei explizitem Produktversprechen; Phase 28. Aktivierung bleibt
+  deferred/default-off.
+- **Fundstellen:** `lib/recruiting/interviews.ts`,
+  `/candidate/interviews/**`,
+  `/employer/applicants/[id]/interviews/**` und
+  `/api/recruiting/interviews/[id]/calendar` bilden den persistenten
+  Terminvertrag. Der bestehende Pipeline-Status bleibt separat und erzeugt
+  keinen Termin.
 - **Betroffene Modelle:** `Application`, `ApplicationEvent`, `Conversation`,
-  `Notification`; neu `Interview`, Slot/Participant/Response/Event.
+  `Notification`, `Interview`, `InterviewProposal`, `InterviewParticipant`,
+  `InterviewResponse`, `InterviewEvent`, `CalendarArtifact` und Reminder.
 - **Betroffene Rollen:** Employer Owner/Admin oder berechtigter Recruiter,
   Kandidat:in; System Worker.
-- **Ist:** Pipeline-Stufe plus editierbarer Nachrichtentext, aber kein Termin,
-  keine Zeitzone, Zusage, Verschiebung, ICS oder Erinnerung.
+- **Ist:** Pipeline und Termin sind getrennt. Berechtigte Company-Actors können
+  versionierte IANA-Zeitzonen-Slots vorschlagen; Candidate RSVP, Verschiebung,
+  Storno, minimale ICS-Artefakte und deduplizierte Reminder sind persistent.
 - **Soll:** Status und Termin getrennt; versionierte Einladung mit Slots/
   Zeitzone/Teilnehmern, Accept/Decline/Reschedule/Cancel, ICS und deduplizierte
   Reminder.
@@ -744,9 +752,11 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
   Assignment-Denials, idempotente ICS-Sequenz, Cancel, Reminder-Retry,
   Export/Delete/Correct/Retention/Hold für Termin-/Participant-/ICS-Daten und
   Employer↔Candidate-Browserreise.
-- **Abnahmekriterium:** Termin und Pipeline besitzen getrennte,
-  nachvollziehbare Zustände; beide Seiten sehen denselben Zeitpunkt und jede
-  Änderung ist idempotent, autorisiert und benachrichtigt.
+- **Abnahmekriterium:** technisch `PASS`: Termin und Pipeline besitzen
+  getrennte, nachvollziehbare Zustände; beide Seiten sehen denselben Zeitpunkt
+  und jede Änderung ist idempotent, autorisiert und benachrichtigt.
+  Demand-/Product-/Privacy-/Ops-/Support-/Provider- und LIVE-Go bleiben offen;
+  ICS ist kein Nachweis einer externen Calendar-Zustellung.
 
 ### STH-017 — Produktionsanalytics ist nur teilweise deaktiviert
 

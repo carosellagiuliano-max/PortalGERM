@@ -408,5 +408,6 @@ Product-Market-Fit, nationale Skalierbarkeit, künftige Providerverfügbarkeit,
 Rechtsbeständigkeit, Finanzierung oder neue Cluster/Offers. LC1/LC2 beweisen
 keine Public Readiness, LC3 keine öffentliche Skalierung, LC4 keine
 Zahlungsbereitschaft, LC5 keine breite Skalierung. Unter Trigger deferred
-30B/30C sind nicht implementiert; deaktivierte Phase-27/28-/Salary-/SSO-/
-Success-Fee-Funktionen sind nicht geliefert.
+30B/30C sind nicht implementiert; die technisch vorhandenen, aber
+deaktivierten Phase-27/28-Verträge sowie Salary-/SSO-/Success-Fee-Funktionen
+sind keiner Launchkohorte geliefert.

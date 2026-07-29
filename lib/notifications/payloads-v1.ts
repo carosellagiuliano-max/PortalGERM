@@ -242,6 +242,35 @@ export const NOTIFICATION_PAYLOADS_V1 = Object.freeze({
     ]),
     reasonCode: z.enum(PRIVACY_REQUEST_REASON_CODES_V1).optional(),
   }),
+  [NotificationKinds.EXTERNAL_APPLICATION_CHANGED]: z.strictObject({
+    trackerId: routeId,
+    status: z.enum([
+      "BEGUN",
+      "SUBMITTED",
+      "INTERVIEW",
+      "OFFER",
+      "REJECTED",
+      "HIRED",
+      "WITHDRAWN",
+      "ARCHIVED",
+    ]),
+    reasonCode: z.enum(["REMINDER_DUE", "STATUS_CHANGED"]).optional(),
+  }),
+  [NotificationKinds.INTERVIEW_CHANGED]: z.strictObject({
+    interviewId: routeId,
+    status: z.enum([
+      "PROPOSED",
+      "SCHEDULED",
+      "RESCHEDULE_PENDING",
+      "DECLINED",
+      "CANCELLED",
+      "COMPLETED",
+    ]),
+  }),
+  [NotificationKinds.INTERVIEW_REMINDER]: z.strictObject({
+    interviewId: routeId,
+    status: z.literal("REMINDER"),
+  }),
 } satisfies Record<NotificationKind, z.ZodType>);
 
 export type NotificationPayloadsV1 = {

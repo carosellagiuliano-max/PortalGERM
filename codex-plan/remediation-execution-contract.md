@@ -318,10 +318,10 @@ nicht still umgedeutet.
   gemeinsame Auth-/Role-/Company-Migrationen werden nicht gleichzeitig
   gemergt.
 - Phase 24 beginnt technisch erst nach WTP-Go und nur für LC5-Scope.
-- Der default-off Phase-27-Technikvertrag ist owner-aktiviert; seine
-  Markt-/Kohortenaktivierung sowie die externen Tracker-/Vollscheduler-Tracks
-  aus Phase 28 bleiben ausserhalb des kritischen Pfads, bis moderierte
-  Research einen Bedarf belegt.
+- Die default-off Technikverträge der Phasen 27 und 28 sind owner-aktiviert;
+  ihre jeweils getrennte Markt-/Kohortenaktivierung bleibt ausserhalb des
+  kritischen Pfads, bis moderierte Research den konkreten Bedarf und die
+  zusätzlichen Aktivierungsgates belegt.
 - 30C bleibt P3, solange der Capacity-Trigger nicht erreicht ist.
 - Phase 29 poliert nur stabilisierte Fachverträge; moderierte Research startet
   früh und liefert Feedback an die besitzende Fachphase.

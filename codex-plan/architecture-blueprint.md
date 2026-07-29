@@ -8,10 +8,13 @@
 > `e34262e3074565840e371c336a5d2ba5cf3efbac`. Phase 19 hat die aktuelle
 > Architektur-/Governance-Baseline anschliessend auf Candidate
 > `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` verifiziert; die
-> Remediation-Phasen 20–32 sind noch nicht implementiert. Abschnitte 1–16
-> beschreiben den geschützten MVP-Kern, die prospektive Erweiterung steht ab
-> Abschnitt 17. Ist-Routen kommen aus `route-inventory.json`, geplante Routen
-> dürfen dort nicht vorweggenommen werden.
+> Remediation-Phasen 20–28 sind inzwischen in ihren jeweils dokumentierten
+> default-off Local-/CI-Verträgen technisch umgesetzt; externe Fach-,
+> Provider-, Staging- und LIVE-Gates bleiben davon getrennt. Phasen 29–32
+> bleiben offen. Abschnitte 1–16 beschreiben den geschützten MVP-Kern, die
+> Remediation-Architektur steht ab Abschnitt 17. Ist-Routen kommen aus
+> `route-inventory.json`, geplante Routen dürfen dort nicht vorweggenommen
+> werden.
 
 ## 1. Architekturziele und Leitprinzipien
 
@@ -673,7 +676,27 @@ flowchart LR
   benannte getrennte Owner, Risk-/DSFA-Freigabe, Reviewer-/On-call-Kapazität
   und Staging-G4 bleiben extern.
 
-### 17.6 Search, learning and freshness
+### 17.6 Candidate-owned external tracking and interview scheduling
+
+- `ExternalApplicationTracker` is owner-scoped and keeps click, explicit
+  Candidate resume, candidate-confirmed submission and later outcome as
+  separate facts; an immutable source/job/company snapshot prevents historical
+  reinterpretation without claiming ATS confirmation;
+- tracker and interview events are append-only, versioned and idempotent, while
+  Privacy export/correction/erasure/retention uses the Phase-22 lifecycle;
+- `Interview`, proposals, participants, responses, calendar artifacts and
+  reminders form a separate state machine from the legacy Application pipeline
+  status; UTC instants plus validated IANA zones preserve DST-correct views;
+- Candidate participant and current Company Membership plus existing
+  Application/Job assignment are independent read/write authorities; portal
+  context is never authorization;
+- reminders consume the Phase-23 lease/retry/dedupe/DLQ contract and ICS is a
+  minimal deterministic export, not Calendar-provider delivery evidence;
+- `EXTERNAL_APPLICATION_TRACKER` and `INTERVIEW_SCHEDULER` are independent,
+  default-off gates. Technical Local/CI evidence does not satisfy Demand,
+  Privacy/Ops/Support, provider, cohort or LIVE activation.
+
+### 17.7 Search, learning and freshness
 
 - immutable `OccupationConcept` plus versioned aliases for neutral/gendered,
   singular/plural, abbreviation, Swiss/regional and controlled typo forms;
@@ -697,7 +720,7 @@ normative current and planned delta is maintained in
 launchclass, role/capability, tenant/owner guard, data class, UX states,
 feature flag, owning test and activation gate.
 
-Implemented route families through Phase 27:
+Implemented route families through Phase 28:
 
 - email verify/resend, login-email change and Candidate-/Employer-/Admin-
   Security-/Step-up settings;
@@ -719,6 +742,10 @@ Implemented route families through Phase 27:
   PersonaAssignment plus Membership-authorized destinations. Existing-
   identity Employer invitations and Candidate Persona creation use
   action-bound step-up. All Phase-27 flags remain disabled by default.
+- Candidate-owned external-application list/detail, Candidate interview
+  list/detail, Employer application interview list/detail and guarded calendar
+  export are implemented. Both Phase-28 tracks remain independently disabled
+  by default and make no ATS, Calendar-provider, Demand or LIVE claim.
 
 Still planned, subject to the owning ADR and phase:
 
@@ -727,9 +754,10 @@ Still planned, subject to the owning ADR and phase:
 
 Multi-Persona market activation remains absent unless its explicit
 moderated-demand and cohort gates pass; the disabled technical route is not a
-product/market claim. External tracker and full scheduler routes remain absent
-unless their own moderated-demand gates pass. Sitemap index/shard routes remain
-absent until the measured capacity trigger.
+product/market claim. External tracker and full scheduler market activation
+remains absent unless each own moderated-demand and operational gate passes;
+their default-off technical routes are not a product/market claim. Sitemap
+index/shard routes remain absent until the measured capacity trigger.
 
 ## 19. Migration and compatibility topology
 

@@ -44,6 +44,10 @@ const EXPECTED_SUBJECTS = {
     "Neue Kontaktanfrage über Talent Radar",
   talent_radar_credits_low: "Talent-Radar-Guthaben wird knapp",
   usage_warning: "Hinweis zu deiner aktuellen Nutzung",
+  external_application_reminder:
+    "Erinnerung zu deinem externen Bewerbungsverlauf",
+  interview_changed: "Interviewtermin wurde aktualisiert",
+  interview_reminder: "Erinnerung an deinen Interviewtermin",
 } satisfies Record<EmailTemplateKey, string>;
 
 const TEMPLATE_DATA = Object.freeze({
@@ -72,13 +76,14 @@ const TEMPLATE_DATA = Object.freeze({
   verificationUrl:
     "http://127.0.0.1:3000/verify-email#token=secret",
   statusLabel: "freigegeben",
+  timeLabel: "31.07.2026, 14:00 MESZ",
   signalLabel: "Verlängerung prüfen",
   used: 4,
 });
 
 describe("German email template registry", () => {
   it("renders every declared key with its authoritative German subject", () => {
-    expect(EMAIL_TEMPLATE_KEYS).toHaveLength(32);
+    expect(EMAIL_TEMPLATE_KEYS).toHaveLength(35);
     expect(Object.keys(EXPECTED_SUBJECTS).sort()).toEqual(
       [...EMAIL_TEMPLATE_KEYS].sort(),
     );

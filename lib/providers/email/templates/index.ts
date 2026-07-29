@@ -10,9 +10,12 @@ import { creditsExpiringTemplate } from "./credits-expiring";
 import { creditsGrantedTemplate } from "./credits-granted";
 import { demoRequestReceivedTemplate } from "./demo-request-received";
 import { employerMessageReceivedTemplate } from "./employer-message-received";
+import { externalApplicationReminderTemplate } from "./external-application-reminder";
 import { identityRevealedTemplate } from "./identity-revealed";
 import { identityVerificationTemplate } from "./identity-verification";
 import { invoiceIssuedTemplate } from "./invoice-issued";
+import { interviewChangedTemplate } from "./interview-changed";
+import { interviewReminderTemplate } from "./interview-reminder";
 import { jobAlertDigestMockTemplate } from "./job-alert-digest-mock";
 import { jobAlertPreviewTemplate } from "./job-alert-preview";
 import { jobApprovedTemplate } from "./job-approved";
@@ -48,9 +51,12 @@ const TEMPLATE_REGISTRY = assertTemplateRegistryComplete({
   credits_granted: creditsGrantedTemplate,
   demo_request_received: demoRequestReceivedTemplate,
   employer_message_received: employerMessageReceivedTemplate,
+  external_application_reminder: externalApplicationReminderTemplate,
   identity_revealed: identityRevealedTemplate,
   identity_verification: identityVerificationTemplate,
   invoice_issued: invoiceIssuedTemplate,
+  interview_changed: interviewChangedTemplate,
+  interview_reminder: interviewReminderTemplate,
   job_alert_digest_mock: jobAlertDigestMockTemplate,
   job_alert_preview: jobAlertPreviewTemplate,
   job_approved: jobApprovedTemplate,

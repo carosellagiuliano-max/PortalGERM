@@ -17,6 +17,7 @@ import {
   decideLegalGateV1,
   projectPersistedLegalGateV1,
 } from "@/lib/privacy/legal-gate-policy";
+import { applyRecruitingPrivacyErasureV1 } from "@/lib/privacy/recruiting-lifecycle";
 import { applyCandidateRadarEligibilityLoss } from "@/lib/talentradar/eligibility-loss-effects";
 
 const UUID = z.string().uuid();
@@ -642,6 +643,35 @@ async function executePostgresErasure(
     } else {
       proofs.push(
         proof("USER_ACCOUNT", "RETAINED", accountHold.basisRef),
+      );
+    }
+    const recruitingErasure = await applyRecruitingPrivacyErasureV1(
+      transaction,
+      {
+        userId: user.id,
+        candidateProfileId: user.candidateProfile?.id ?? null,
+        requestId: setup.requestId,
+        now,
+      },
+    );
+    if (recruitingErasure.ownedInterviews > 0) {
+      proofs.push(
+        proof(
+          "INTERVIEW_SCHEDULING",
+          "RETAINED",
+          held("INTERVIEW_SCHEDULING")?.basisRef ??
+            "INTERVIEW_EVIDENCE_RETENTION",
+        ),
+      );
+    }
+    if (recruitingErasure.externalTrackers > 0) {
+      proofs.push(
+        proof(
+          "EXTERNAL_APPLICATION_TRACKER",
+          "RETAINED",
+          held("EXTERNAL_APPLICATION_TRACKER")?.basisRef ??
+            "APPLICATION_EVIDENCE_RETENTION",
+        ),
       );
     }
     if (user.candidateProfile !== null) {

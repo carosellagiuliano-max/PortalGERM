@@ -1,6 +1,19 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** Stand 27. Juli 2026. **Phasen 01 bis 21 sowie der lokale Technikvertrag von Phase 23 sind im Zielrepository implementiert und commitgebunden verifiziert.** Phase 22 besitzt einen commitgebundenen, automatisiert grünen Local-/CI-Sandboxvertrag, bleibt wegen Counsel, alternativer Identity und moderierter Forschung ungeschlossen. Phase 23 ist auf `d16a2d9d48a5fa387f6590fdd24b1bfe37ecddd3` technisch geschlossen; ihre Realprovider bleiben deaktiviert. Auf ausdrückliche Product-Owner-Vorgabe wird Staging erst am Ende eingerichtet. Reales Staging, Provider-Sandbox, Pager/On-call, automatischer Backup-Lifecycle und genehmigte SLO/RPO/RTO werden deshalb als zwingende Phase-32-/G4-Aktivierungsgates weitergeführt. Siehe [Phase-22-Evidence](./evidence/2026-07-26-phase-22.md) und [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md). Weder historische Evidence noch eine grüne lokale LC1-/Sandbox-Baseline ist eine Pilot- oder Produktionsfreigabe. AVG/Legal/Privacy/Tax, Providerverträge, bezahlte Marktvalidierung, Cashflow/Runway, LIVE-Daten, Incident Ownership und Operationskapazität benötigen zusätzlich externe oder organisatorische Freigaben. Mock Payment umfasst weder Stripe noch echte Webhooks und belegt keine Zahlungsbereitschaft. Das separat gegatete `REQ-REC-002`-Paket bleibt offen.
+> **Planstatus:** Stand 29. Juli 2026. **Phasen 01 bis 28 besitzen den
+> jeweils dokumentierten technischen Zielstand; die Remediation-Verträge
+> 20–28 sind Local/CI und überwiegend default-off.** Phase 22 bleibt trotz
+> automatisiert grünem Technikvertrag wegen Counsel, alternativer Identity und
+> moderierter Forschung fachlich ungeschlossen. Reales Staging,
+> Provider-Sandbox, Pager/On-call, automatischer Backup-Lifecycle und
+> genehmigte SLO/RPO/RTO bleiben zwingende Phase-32-/G4-Aktivierungsgates.
+> Phase 27 und die unabhängigen Tracks 28A/28B sind technisch owner-aktiviert,
+> aber Demand-/Kohorten-/LIVE-seitig weiterhin `DISABLED`. Weder historische
+> Evidence noch eine grüne lokale Sandbox ist eine Pilot- oder
+> Produktionsfreigabe. AVG/Legal/Privacy/Tax, Providerverträge, bezahlte
+> Marktvalidierung, Cashflow/Runway, LIVE-Daten, Incident Ownership und
+> Operationskapazität benötigen zusätzlich externe oder organisatorische
+> Freigaben. Das separat gegatete `REQ-REC-002`-Paket bleibt offen.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -27,7 +40,9 @@ Die folgende Liste ist die empfohlene **Lesereihenfolge**, nicht die Konflikthie
 15. [`runbooks/remediation-production-target.md`](./runbooks/remediation-production-target.md)
     — geplanter LC2–LC6-Ops-/Recovery-Vertrag; noch nicht ausgeführt.
 16. Die Detailphasen `01` bis `18` — implementierte technische Deliverables und ihre Evidence.
-17. Die Detailphasen `19` und `20` — abgeschlossene Remediation-Arbeitspakete — sowie `21` bis `32` als offene Arbeitspakete; ein Plandokument ist keine Erledigung.
+17. Die Detailphasen `19` bis `28` mit ihrem jeweils getrennten Technik-,
+    Quality- und Aktivierungsstatus sowie `29` bis `32` als offene
+    Arbeitspakete; ein Plandokument ist keine Erledigung.
 18. [`remediation-evidence-template.md`](./remediation-evidence-template.md)
     — leere, nicht rückwirkende Evidence-Vorlage für Phase 19+.
 
@@ -263,9 +278,15 @@ identity-weite Privacy sowie getrennte Tenant-/Adminautorität. Lokales G3
 `OPEN / DISABLED`. Siehe
 [Phase-27-Evidence](./evidence/2026-07-28-phase-27.md).
 
-### [ ] 28 — Recruiting-Workflows
+### [x] 28 — Recruiting-Workflows
 
-[`28-recruiting-workflows.md`](./28-recruiting-workflows.md) · ehrlicher externer Bewerbungsstatus und persistente Interviewplanung.
+[`28-recruiting-workflows.md`](./28-recruiting-workflows.md) ·
+owner-aktivierte, getrennte und standardmässig deaktivierte Local-/CI-
+Technikverträge für candidate-owned externe Bewerbungszustände und persistente
+Interviewplanung mit IANA/DST, RSVP, ICS, Reminder, Privacy- und Tenantgrenzen.
+Lokales G3 `PASS`; Track-spezifische Demand-, Privacy-/Ops-/Support-,
+Provider-, Staging- und LIVE-Gates bleiben offen. Siehe
+[Phase-28-Evidence](./evidence/2026-07-29-phase-28.md).
 
 ### [ ] 29 — UX, Mobile und Accessibility
 
@@ -289,7 +310,7 @@ triggerbasiertes Sharding statt unnötigem Sofortumbau.
 
 Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in
 [`implementation-plan.md`](./implementation-plan.md). Für die technisch
-bearbeiteten Phasen 19 bis 26 sowie die offenen Phasen 27 bis 32 sind
+bearbeiteten Phasen 19 bis 28 sowie die offenen Phasen 29 bis 32 sind
 Reihenfolge, Parallelisierung und Konfliktgrenzen verbindlich in
 [`remediation-masterplan.md`](./remediation-masterplan.md) festgelegt.
 
@@ -448,7 +469,11 @@ Phase 32/G4 übertragenen Pflichtgates gesperrt.
 Phase 27 ist auf `291b953` als default-off Local-/CI-Technikvertrag
 geschlossen; ihr Demand-, Kohorten-, Staging- und LIVE-Scope bleibt gemäss
 [Evidence](./evidence/2026-07-28-phase-27.md) offen und ist keine
-Launchvoraussetzung. Nichtaktivierende frühe
+Launchvoraussetzung. Phase 28 ist mit zwei getrennten default-off
+Local-/CI-Techniktracks geschlossen; externer Tracker und Interview-Scheduler
+bleiben gemäss [Evidence](./evidence/2026-07-29-phase-28.md) bis zu ihren
+jeweiligen Demand-/Privacy-/Operations-/Support- und optionalen Providergates
+ausgeschaltet. Nichtaktivierende frühe
 Research-Tracks 29A/31A dürfen gemäss der
 Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md)
 parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates

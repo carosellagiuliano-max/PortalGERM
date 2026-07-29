@@ -1,6 +1,6 @@
 # Route- und Rollenmatrix
 
-> **Stand:** Phase-26-Technikbaum, 122 Seiten und 19 Route Handler. Die
+> **Stand:** Phase-28-Technikbaum, 129 Seiten und 20 Route Handler. Die
 > maschinenlesbare Inventarbasis ist
 > [`route-inventory.json`](./route-inventory.json); `npm run route:audit`
 > vergleicht sie mit dem tatsächlichen `app/`-Baum. Diese Matrix dokumentiert
@@ -28,11 +28,12 @@ Pending-Zustände. Über den privaten Root-Segmenten liegt bewusst keine
 HTTP-404-Status setzen können, bevor Antwort-Header gesendet werden.
 Root-Error und Root-404 bleiben generisch.
 
-## Öffentliche und Auth-Seiten — 28
+## Öffentliche und Auth-Seiten — 32
 
 | Route(n) | Eintritt | Server-/Privacy-Grenze |
 | --- | --- | --- |
 | `/` | Public | freigegebene Demo/LIVE-Provenienz, keine privaten Daten |
+| `/account/portal` | Authenticated | genau ein servervalidierter Persona-/Company-Kontext; Wechsel erteilt keine Rolle oder Membership |
 | `/jobs` | Public | nur veröffentlichte/aktuelle Jobs; allowlisted Filter, globale Rangfolge |
 | `/jobs/[slug]` | Public | Published-only Read Model; Match nur für berechtigten Candidate |
 | `/jobs/kanton/[slug]` | Public | Content-/Liquiditätsgate vor Indexierung |
@@ -43,6 +44,9 @@ Root-Error und Root-404 bleiben generisch.
 | `/salary-radar` | Public | versionierter APPROVED-Datensatz, Mindestmenge/Fallback |
 | `/guide` | Public | nur freigegebener Content |
 | `/guide/[slug]` | Public | Published Revision; sicheres Rendering |
+| `/legal/imprint` | Public | exakt veröffentlichte, versionierte Rechtsseite |
+| `/legal/privacy` | Public | exakt veröffentlichte Datenschutzfassung und Zweckinformationen |
+| `/legal/terms` | Public | exakt veröffentlichte, versionierte Nutzungsbedingungen |
 | `/pricing` | Public | aktiver Katalog; keine Clientpreise |
 | `/employers` | Public | Arbeitgeber-Marketing, keine Firmenmitgliedschaft nötig |
 | `/employers/demo` | Public | rate-limitierter, consent-gebundener Lead |
@@ -89,7 +93,7 @@ gültiges, actor-gebundenes und einmalig konsumierbares Grant.
 | `/api/documents/read` | Authenticated | actor-gebundenes Single-use-Grant; Provider-Hash erneut geprüft; private/no-store |
 | `/api/documents/read-grants/[id]/revoke` | Authenticated | nur eigenes, noch nicht konsumiertes Grant; idempotenter Widerruf |
 
-## Candidate — 18
+## Candidate — 22
 
 Alle Routen verlangen eine aktive `CANDIDATE`-Session. Detailobjekte werden
 bereits in der ersten Query auf Candidate/User/Conversation-Eigentum
@@ -102,6 +106,10 @@ eingeschränkt.
 | `/candidate/saved-jobs` | eigene SavedJobs; unique Candidate×Job |
 | `/candidate/applications` | eigene Applications |
 | `/candidate/applications/[id]` | Candidate-scoped Safe 404; Timeline/Withdraw/Message |
+| `/candidate/applications/external` | eigener, candidate-bestätigter externer Tracker; Flag fail-closed |
+| `/candidate/applications/external/[id]` | Candidate owner; immutable Quelle/Snapshot, versionierte Status-/Reminderaktionen |
+| `/candidate/interviews` | nur eigene Participant-Termine; Zeitzone und Status getrennt vom Pipelinewert |
+| `/candidate/interviews/[id]` | Candidate participant; RSVP/Reschedule/Cancel versioniert und fremde ID als Safe 404 |
 | `/candidate/alerts` | eigene Alerts und separater Delivery-Consent |
 | `/candidate/notifications` | Low-Assurance-Security-Einstieg oder eigenes Preference Center; Pflichtzwecke unveränderbar, optionale Zustellung separat gegatet |
 | `/candidate/messages` | participant-scoped Conversations |
@@ -123,7 +131,7 @@ eingeschränkt.
 | `/support` | Authenticated | nur eigene Cases; Company-Auswahl nur aus aktiven Memberships |
 | `/support/[id]` | Authenticated | requester-scoped Safe 404; Reply nur im erlaubten Status |
 
-## Employer und Recruiter — 25
+## Employer und Recruiter — 28
 
 Das `/employer`-Layout akzeptiert globale Rollen `EMPLOYER` und `RECRUITER`.
 Firmenbezogene Daten verlangen eine aktive Membership im aktuell
@@ -144,12 +152,15 @@ erhalten einen sicheren Locked/404-Zustand.
 | `/employer/jobs/[id]/boost` | Owner/Admin, eigener publizierter Job, Produkt-/Credit-Gate |
 | `/employer/applicants` | Job-/Assignment-scope; Viewer ohne Mutation |
 | `/employer/applicants/[id]` | Company+Assignment Safe 404; Application/Reveal-PII-Regeln |
+| `/employer/applicants/[id]/interviews` | Company Membership plus Application-/Job-Assignment; Viewer read-only |
+| `/employer/applicants/[id]/interviews/[interviewId]` | gleicher Tenant/Assignment; Proposal/Reschedule/Cancel versioniert |
 | `/employer/talent-radar` | ACTIVE+VERIFIED+Entitlement vor Candidate-Query; Viewer locked |
 | `/employer/talent-radar/requests` | Owner/Admin/Recruiter; Viewer 404 |
 | `/employer/talent-radar/requests/[id]` | Company-scoped Request; Identität nur nach gültigem Reveal |
 | `/employer/analytics` | Company scope, Planlevel und Small-count-Suppression |
 | `/employer/notifications` | Low-Assurance-Security-Einstieg oder eigenes Preference Center; keine fremden Company-/User-Präferenzen |
 | `/employer/settings/security` | eigene Session/Faktoren/Recovery; Appeals nur zu Firmen mit eigener aktiver Membership, ohne interne Risk-Evidence |
+| `/employer/verification` | Owner/Admin; versionierte Company-Evidence, Challenge und Re-review ohne Public-Trust-Vorwegnahme |
 | `/employer/billing` | Owner/Admin read; Planwechsel/Kündigung Owner |
 | `/employer/billing/profile` | Owner/Admin; vollständiges Billingprofil |
 | `/employer/billing/checkout` | Plan Owner; One-time Product Owner/Admin |
@@ -165,7 +176,7 @@ erhalten einen sicheren Locked/404-Zustand.
 | --- | --- | --- |
 | `/mock/checkout/[orderId]` | Employer mit aktiver Company-Membership | gespeicherte Order/Company; Plan nur Owner, One-time Product Owner/Admin; Production-Provider bleibt Mock |
 
-## Admin — 41
+## Admin — 44
 
 Alle Routen verlangen eine aktive globale Adminrolle. Diese globale Rolle
 gewährt selbst `0` Fachcapabilities. Die Server-Use-Cases lösen aktuelle,
@@ -184,6 +195,8 @@ redigiert.
 | `/admin/jobs/[id]` | Review/Publish-Capabilities; Reason/Confirmation/Quota |
 | `/admin/companies` | `ADMIN_COMPANY_REVIEW`; bounded Filter |
 | `/admin/companies/[id]` | Company/Claim/Verification/Moderation/Billing-Capabilities |
+| `/admin/company-verification` | persistierte Verification-Read/Review-Capability; bounded Queue |
+| `/admin/company-verification/[id]` | Review/Approve/Revoke mit Step-up, SoD und aktueller Evidence |
 | `/admin/users` | `ADMIN_USER_MODERATE`; bounded Userliste |
 | `/admin/users/[id]` | Suspend/Reaktivieren/Session-Revoke; globale Rolle read-only |
 | `/admin/taxonomy` | `ADMIN_TAXONOMY_MANAGE`; referenzsichere Änderungen |
@@ -198,6 +211,7 @@ redigiert.
 | `/admin/content/clusters/[id]` | Product-/Ops-Dual-Approval und Launchstatus |
 | `/admin/leads` | `ADMIN_LEAD_MANAGE`; consent-/purpose-bounded |
 | `/admin/leads/[id]` | Assignment/Notiz/Status/Follow-up |
+| `/admin/legal` | getrennte Legal-Read/Publish-Capabilities und versionierte Freigabe |
 | `/admin/billing` | `ADMIN_BILLING_READ`; Mock-Finanzübersicht |
 | `/admin/finance/reconciliation` | `ADMIN_BILLING_READ`; redigierte Inbox-/Attempt-/Mismatch-/Run-Ansicht, Phase 24 read-only |
 | `/admin/finance/service-recovery` | `ADMIN_BILLING_READ`; Dunning-/Refund-/Service-Assessment-Status, Remedy-Ausführung standardmässig gesperrt |
@@ -231,6 +245,14 @@ redigiert.
 | --- | --- | --- |
 | `/api/webhooks/payments/[provider]` | keine Userrolle; exakte Providerkennung, Raw-Body-Signatur, Testaccount/-environment und Ingestion-Flag | durable, deduplizierte Inbox vor Antwort; keine Domainwirkung bei ungültiger Signatur/Account/Environment; keine Raw-Payload-Ausgabe |
 
+## Privacy-, Verification- und Recruiting-Handler — 3
+
+| Handler | Autorität | Antwortgrenze |
+| --- | --- | --- |
+| `/api/privacy/exports/[id]` | verifizierter Case-Owner mit kurzlebigem Downloadgrant | expiring/no-store; keine fremden Case- oder Artefaktdaten |
+| `/api/company-verification/documents/upload-intents` | Company Owner/Admin im exakten Tenant | private Evidence, Typ-/Größen-/Vault-/Step-up-Grenze |
+| `/api/recruiting/interviews/[id]/calendar` | Candidate participant oder aktuelle Company Membership plus Assignment | minimale ICS-Datei; Flag/Owner/Tenant/Version geprüft, keine Providerbehauptung |
+
 ## Nicht vorhandene/deferred Routen
 
 - `/employer/mandates` und `/employer/mandates/[id]` bleiben zusammen mit
@@ -246,9 +268,9 @@ redigiert.
 ## Technischer Ist-Stand und verbleibendes Route-/Prozessdelta Phase 22–32
 
 > Diese Tabelle trennt implementierten Technikstand von geplantem Delta.
-> Routen der Phasen 22 bis 27 sind im maschinenlesbaren Ist-Inventar enthalten
+> Routen der Phasen 22 bis 28 sind im maschinenlesbaren Ist-Inventar enthalten
 > und automatisiert verifiziert, bleiben aber je nach externem Gate
-> deaktiviert. Die Zeilen ab Phase 28/30D sind weiterhin geplantes Delta. Eine
+> deaktiviert. Nicht implementierte Zeilen ab Phase 30D bleiben geplantes Delta. Eine
 > neue Zeile wird erst nach vorhandener Route, serverseitigem Guard,
 > UX-/A11y-Abnahme und grünem Owning-Test in das Ist-Inventar übernommen.
 
@@ -263,6 +285,7 @@ redigiert.
 | 25/26 · `REQ-TRUST-001` | **Technischer Ist-Stand:** `/admin/trust-safety`, `/admin/trust-safety/[id]` plus bounded Appeal in Candidate-/Employer-Security und Company-Reverification | Trust & Safety/Security/Finance scoped je Fall; Subjects sehen nur sicheren Grund und Appeal; Restore verlangt frische starke Evidence und unabhängigen Entscheider | open/held/revoked/appealed/false-positive/resolved; interne Evidence verborgen | Phase-25/26 Policy/PG/E2E/Worker-Failure `PASS`; externe Risk-/DSFA-/Provider-/Capacity-Freigabe `BLOCKED` |
 | 26 · `REQ-EMP-008` | **Technischer Ist-Stand:** `/employer/verification`, `/admin/company-verification`, `/admin/company-verification/[id]`, `/api/company-verification/documents/upload-intents` plus Public-Company-/Job-/Radar-Consumer | Company Owner/Admin submitten nur im eigenen Tenant; Reviewer benötigt persistierte Verification-Capability und Step-up; Self-Approval/SoD fail-closed; Upload-Handler erzwingt Owner-Auth trotz generischer Dateisystemklassifikation | draft/pending/needs-info/verified/expiring/expired/revoked/appealed; private Evidence bleibt aus Public DTOs entfernt | Candidate `96933aa`, Unit/PostgreSQL/HTTP/Desktop/360 `PASS`; reale Provider, Legal/DPA/Region, Capacity, Staging/Pager und Public-Flags `BLOCKED`; [Evidence](./evidence/2026-07-28-phase-26.md) |
 | 27 · `REQ-PER-001` | **Technischer Ist-Stand:** `/account/portal` plus eingebettete Candidate-/Employer-Context-Switcher und bestehender `/invite/resume`-Flow | aktuelle Identity plus aktive PersonaAssignment; Employer zusätzlich exakte aktive CompanyMembership; Admin ausschließlich persistierte Admin-Grants; Candidate-Self-Service und erste Existing-Identity-Employer-Persona action-bound step-up | loading/empty/locked/pending/error/retry/conflict/expired/cancelled/success; Identity/Persona/Company-Kontext und Privacy-sensitive | Phase-27-Unit/PostgreSQL/Migration/Desktop/360 `PASS`; `IDENTITY_PERSONA_V2`, Invitation, Switch, Privacy und Legacy-Cutover default `DISABLED`; Demand/Canary/Staging/G4 offen; [Evidence](./evidence/2026-07-28-phase-27.md) |
+| 28 · `REQ-REC-003` | **Technischer Ist-Stand:** `/candidate/applications/external/**`, `/candidate/interviews/**`, `/employer/applicants/[id]/interviews/**` und `/api/recruiting/interviews/[id]/calendar` | Tracker ausschließlich Candidate owner; Scheduler Candidate participant oder aktuelle Company Membership plus Application-/Job-Assignment; Viewer read-only; ein Portalwechsel erteilt keine Autorität | loading/empty/locked/pending/error/retry/conflict/expired/cancelled/success; candidate-confirmed Trackerdaten sowie private Interview-/ICS-Daten | Phase-28-Unit/PostgreSQL/Migration/Desktop/360/A11y technisch verifiziert; beide Flags default `DISABLED`; Demand/Privacy/Ops/Support/Provider/Staging/G4 offen; [Evidence](./evidence/2026-07-29-phase-28.md) |
 | 30D · `REQ-JOB-007` | Employer reconfirm/fill action; public/candidate „nicht verfügbar“ report | own Company Job; public bounded report; Trust/Moderation review | due/grace/reconfirmed/filled/expired/duplicate-review/appeal | freshness policy+worker; Search/Sitemap/Alert/Recommendation parity tests |
 
 Conditional routes:
@@ -270,8 +293,10 @@ Conditional routes:
 - Phase 27 market/cohort activation remains P3/deferred until the moderated
   `REQ-PER-001` demand decision; the owner-activated technical route remains
   default disabled and does not satisfy that gate.
-- Phase 28A external tracker and 28B full scheduler remain absent until
-  separate `REQ-REC-003` moderated-demand gates.
+- Phase 28A external tracker and 28B full scheduler are technically present
+  behind independent default-off gates. Their market/cohort activation remains
+  absent until separate `REQ-REC-003` moderated-demand decisions and the
+  documented Privacy/Ops/Support gates pass.
 - Phase 30C sitemap index/shards remain absent until the documented
   Count-/Byte-/Forecast trigger; the current single sitemap continues to
   fail closed without truncation.

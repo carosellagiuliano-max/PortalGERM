@@ -489,6 +489,92 @@ enum ApplicationEventKind {
   SCHEDULED_INTERVIEW
 }
 
+enum ExternalApplicationStatus {
+  BEGUN
+  SUBMITTED
+  INTERVIEW
+  OFFER
+  REJECTED
+  HIRED
+  WITHDRAWN
+  ARCHIVED
+}
+
+enum ExternalApplicationSource {
+  CANDIDATE_CONFIRMED
+}
+
+enum ExternalApplicationEventKind {
+  CREATED
+  STATUS_CHANGED
+  REMINDER_CHANGED
+  ARCHIVED
+}
+
+enum InterviewStatus {
+  PROPOSED
+  SCHEDULED
+  RESCHEDULE_PENDING
+  DECLINED
+  CANCELLED
+  COMPLETED
+}
+
+enum InterviewProposalStatus {
+  OPEN
+  ACCEPTED
+  DECLINED
+  SUPERSEDED
+  CANCELLED
+  EXPIRED
+}
+
+enum InterviewParticipantKind {
+  CANDIDATE
+  COMPANY_MEMBER
+}
+
+enum InterviewParticipantStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum InterviewResponseKind {
+  ACCEPT
+  DECLINE
+  RESCHEDULE
+}
+
+enum InterviewEventKind {
+  PROPOSED
+  ACCEPTED
+  DECLINED
+  RESCHEDULE_REQUESTED
+  RESCHEDULED
+  CANCELLED
+  REMINDER_QUEUED
+  REMINDER_SENT
+  REMINDER_FAILED
+}
+
+enum CalendarArtifactMethod {
+  REQUEST
+  CANCEL
+}
+
+enum CalendarArtifactStatus {
+  ACTIVE
+  SUPERSEDED
+  CANCELLED
+}
+
+enum InterviewReminderStatus {
+  PENDING
+  QUEUED
+  CANCELLED
+}
+
 enum ConversationKind {
   APPLICATION
   TALENT_RADAR
@@ -965,6 +1051,8 @@ enum NotificationPurpose {
   JOB_MODERATION
   ABUSE_REPORT
   PRIVACY_REQUEST
+  EXTERNAL_APPLICATION_REMINDER
+  INTERVIEW_SCHEDULING
   COMMERCIAL_OPTIONAL
 }
 
@@ -1441,6 +1529,9 @@ enum NotificationKind {
   SUPPORT_CASE_CHANGED
   MODERATION_CHANGED
   PRIVACY_REQUEST_CHANGED
+  EXTERNAL_APPLICATION_CHANGED
+  INTERVIEW_CHANGED
+  INTERVIEW_REMINDER
 }
 
 enum AuditActorKind {
@@ -1468,6 +1559,10 @@ enum AuditTargetType {
   JOB_REVISION
   JOB_ASSIGNMENT
   APPLICATION
+  EXTERNAL_APPLICATION_TRACKER
+  INTERVIEW
+  INTERVIEW_PROPOSAL
+  CALENDAR_ARTIFACT
   CONVERSATION
   MESSAGE
   RADAR_PROFILE
@@ -1595,6 +1690,14 @@ enum AuditAction {
   APPLICATION_STATUS_CHANGED
   APPLICATION_WITHDRAWN
   APPLICATION_EMPLOYER_NOTE_ADDED
+  EXTERNAL_APPLICATION_CREATED
+  EXTERNAL_APPLICATION_STATUS_CHANGED
+  EXTERNAL_APPLICATION_REMINDER_CHANGED
+  INTERVIEW_PROPOSED
+  INTERVIEW_RESPONDED
+  INTERVIEW_RESCHEDULED
+  INTERVIEW_CANCELLED
+  INTERVIEW_REMINDER_PROCESSED
   MESSAGE_SENT
   CANDIDATE_ONBOARDING_COMPLETED
   CANDIDATE_ONBOARDING_REOPENED
@@ -1941,6 +2044,7 @@ model User {
   sessionAssurances                   SessionAssurance[]            @relation("SessionAssuranceOwner")
   stepUpChallenges                    StepUpChallenge[]             @relation("StepUpChallengeOwner")
   personaAssignments                  PersonaAssignment[]
+  interviewParticipations             InterviewParticipant[]        @relation("InterviewParticipantUser")
 
   @@index([status, role])
   @@index([dataProvenance, status])
@@ -1988,18 +2092,18 @@ model Session {
 }
 
 model PersonaAssignment {
-  id          String                       @id @default(uuid()) @db.Uuid
-  userId      String                       @db.Uuid
+  id          String                   @id @default(uuid()) @db.Uuid
+  userId      String                   @db.Uuid
   kind        PersonaKind
-  status      PersonaAssignmentStatus      @default(ACTIVE)
+  status      PersonaAssignmentStatus  @default(ACTIVE)
   source      PersonaAssignmentSource
-  version     Int                          @default(1)
-  activatedAt DateTime                     @db.Timestamptz(3)
-  suspendedAt DateTime?                    @db.Timestamptz(3)
-  revokedAt   DateTime?                    @db.Timestamptz(3)
-  createdAt   DateTime                     @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime                     @updatedAt @db.Timestamptz(3)
-  user        User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  version     Int                      @default(1)
+  activatedAt DateTime                 @db.Timestamptz(3)
+  suspendedAt DateTime?                @db.Timestamptz(3)
+  revokedAt   DateTime?                @db.Timestamptz(3)
+  createdAt   DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                 @updatedAt @db.Timestamptz(3)
+  user        User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
   events      PersonaAssignmentEvent[]
 
   @@unique([userId, kind])
@@ -2009,17 +2113,17 @@ model PersonaAssignment {
 }
 
 model PersonaAssignmentEvent {
-  id                  String                      @id @default(uuid()) @db.Uuid
-  personaAssignmentId String                      @db.Uuid
+  id                  String                     @id @default(uuid()) @db.Uuid
+  personaAssignmentId String                     @db.Uuid
   kind                PersonaAssignmentEventKind
   fromStatus          PersonaAssignmentStatus?
   toStatus            PersonaAssignmentStatus
   source              PersonaAssignmentSource
-  actorUserId         String?                     @db.Uuid
-  reasonCode          String?                     @db.VarChar(64)
-  correlationId       String                      @db.VarChar(128)
-  createdAt           DateTime                    @default(now()) @db.Timestamptz(3)
-  personaAssignment   PersonaAssignment           @relation(fields: [personaAssignmentId], references: [id], onDelete: Restrict)
+  actorUserId         String?                    @db.Uuid
+  reasonCode          String?                    @db.VarChar(64)
+  correlationId       String                     @db.VarChar(128)
+  createdAt           DateTime                   @default(now()) @db.Timestamptz(3)
+  personaAssignment   PersonaAssignment          @relation(fields: [personaAssignmentId], references: [id], onDelete: Restrict)
 
   @@index([personaAssignmentId, createdAt, id])
   @@index([actorUserId, createdAt])
@@ -2162,6 +2266,8 @@ model CandidateProfile {
   documentVersions      DocumentVersion[]
   documentUploadIntents DocumentUploadIntent[]
   applications          Application[]
+  externalApplications  ExternalApplicationTracker[]
+  interviews            Interview[]
   savedJobs             SavedJob[]
   jobAlerts             JobAlert[]
   radarConsents         CandidateConsent[]
@@ -2496,6 +2602,7 @@ model Company {
   jobs                              Job[]
   jobAssignments                    JobAssignment[]
   applicationEmployerNotes          ApplicationEmployerNote[]
+  interviews                        Interview[]
   billingProfile                    CompanyBillingProfile?
   subscriptions                     EmployerSubscription[]
   orders                            Order[]
@@ -3205,6 +3312,7 @@ model Application {
   conversation                 Conversation?
   documentReadGrants           DocumentReadGrant[]
   documentAccessEvents         DocumentAccessEvent[]
+  interviews                   Interview[]
 
   @@unique([jobId, candidateProfileId])
   @@unique([candidateProfileId, idempotencyKey])
@@ -3273,6 +3381,210 @@ model ApplicationEvent {
   application    Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
 
   @@index([applicationId, createdAt])
+}
+
+model ExternalApplicationTracker {
+  id                  String                     @id @default(uuid()) @db.Uuid
+  candidateProfileId  String                     @db.Uuid
+  source              ExternalApplicationSource  @default(CANDIDATE_CONFIRMED)
+  status              ExternalApplicationStatus  @default(BEGUN)
+  snapshotFingerprint String                     @db.Char(64)
+  version             Int                        @default(1)
+  reminderAt          DateTime?                  @db.Timestamptz(3)
+  archivedAt          DateTime?                  @db.Timestamptz(3)
+  createdAt           DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                   @updatedAt @db.Timestamptz(3)
+  candidateProfile    CandidateProfile           @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  snapshot            ExternalJobSnapshot?
+  events              ExternalApplicationEvent[]
+
+  @@unique([candidateProfileId, snapshotFingerprint])
+  @@unique([id, candidateProfileId])
+  @@index([candidateProfileId, status, updatedAt, id])
+  @@index([status, reminderAt, id])
+}
+
+model ExternalJobSnapshot {
+  id                  String                     @id @default(uuid()) @db.Uuid
+  trackerId           String                     @unique @db.Uuid
+  sourceJobId         String                     @db.Uuid
+  sourceJobRevisionId String                     @db.Uuid
+  jobSlug             String                     @db.VarChar(220)
+  jobTitle            String                     @db.VarChar(200)
+  companyId           String                     @db.Uuid
+  companyName         String                     @db.VarChar(200)
+  companySlug         String                     @db.VarChar(200)
+  applicationUrl      String                     @db.VarChar(512)
+  applicationUrlHash  String                     @db.Char(64)
+  payloadHash         String                     @db.Char(64)
+  source              ExternalApplicationSource  @default(CANDIDATE_CONFIRMED)
+  capturedAt          DateTime                   @db.Timestamptz(3)
+  tracker             ExternalApplicationTracker @relation(fields: [trackerId], references: [id], onDelete: Restrict)
+
+  @@unique([trackerId, payloadHash])
+  @@index([sourceJobId, sourceJobRevisionId])
+}
+
+model ExternalApplicationEvent {
+  id             String                       @id @default(uuid()) @db.Uuid
+  trackerId      String                       @db.Uuid
+  kind           ExternalApplicationEventKind
+  fromStatus     ExternalApplicationStatus?
+  toStatus       ExternalApplicationStatus?
+  source         ExternalApplicationSource    @default(CANDIDATE_CONFIRMED)
+  actorUserId    String                       @db.Uuid
+  reasonCode     String?                      @db.VarChar(64)
+  idempotencyKey String                       @unique @db.VarChar(160)
+  correlationId  String                       @db.VarChar(128)
+  createdAt      DateTime                     @default(now()) @db.Timestamptz(3)
+  tracker        ExternalApplicationTracker   @relation(fields: [trackerId], references: [id], onDelete: Restrict)
+
+  @@index([trackerId, createdAt, id])
+}
+
+model Interview {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  applicationId         String                 @db.Uuid
+  companyId             String                 @db.Uuid
+  candidateProfileId    String                 @db.Uuid
+  status                InterviewStatus        @default(PROPOSED)
+  timeZone              String                 @db.VarChar(64)
+  scheduledStartAt      DateTime?              @db.Timestamptz(3)
+  scheduledEndAt        DateTime?              @db.Timestamptz(3)
+  activeProposalVersion Int                    @default(1)
+  version               Int                    @default(1)
+  subject               String                 @db.VarChar(200)
+  location              String?                @db.VarChar(300)
+  createdByUserId       String                 @db.Uuid
+  updatedByUserId       String                 @db.Uuid
+  cancelledAt           DateTime?              @db.Timestamptz(3)
+  completedAt           DateTime?              @db.Timestamptz(3)
+  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @db.Timestamptz(3)
+  application           Application            @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  company               Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  candidateProfile      CandidateProfile       @relation(fields: [candidateProfileId], references: [id], onDelete: Restrict)
+  proposals             InterviewProposal[]
+  participants          InterviewParticipant[]
+  responses             InterviewResponse[]
+  events                InterviewEvent[]
+  calendarArtifacts     CalendarArtifact[]
+  reminders             InterviewReminder[]
+
+  @@unique([id, companyId])
+  @@unique([id, candidateProfileId])
+  @@index([applicationId, createdAt, id])
+  @@index([companyId, status, scheduledStartAt, id])
+  @@index([candidateProfileId, status, scheduledStartAt, id])
+}
+
+model InterviewProposal {
+  id              String                  @id @default(uuid()) @db.Uuid
+  interviewId     String                  @db.Uuid
+  version         Int
+  slotIndex       Int
+  startsAt        DateTime                @db.Timestamptz(3)
+  endsAt          DateTime                @db.Timestamptz(3)
+  timeZone        String                  @db.VarChar(64)
+  status          InterviewProposalStatus @default(OPEN)
+  createdByUserId String                  @db.Uuid
+  expiresAt       DateTime                @db.Timestamptz(3)
+  createdAt       DateTime                @default(now()) @db.Timestamptz(3)
+  interview       Interview               @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+  responses       InterviewResponse[]
+
+  @@unique([interviewId, version, slotIndex])
+  @@index([interviewId, version, status, startsAt])
+  @@index([status, expiresAt, id])
+}
+
+model InterviewParticipant {
+  id          String                     @id @default(uuid()) @db.Uuid
+  interviewId String                     @db.Uuid
+  userId      String                     @db.Uuid
+  kind        InterviewParticipantKind
+  status      InterviewParticipantStatus @default(PENDING)
+  required    Boolean                    @default(true)
+  respondedAt DateTime?                  @db.Timestamptz(3)
+  createdAt   DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                   @updatedAt @db.Timestamptz(3)
+  interview   Interview                  @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+  user        User                       @relation("InterviewParticipantUser", fields: [userId], references: [id], onDelete: Restrict)
+  responses   InterviewResponse[]
+
+  @@unique([interviewId, userId])
+  @@unique([id, interviewId])
+  @@index([userId, status, interviewId])
+}
+
+model InterviewResponse {
+  id                String                @id @default(uuid()) @db.Uuid
+  interviewId       String                @db.Uuid
+  proposalId        String?               @db.Uuid
+  participantId     String                @db.Uuid
+  kind              InterviewResponseKind
+  requestedStartAt  DateTime?             @db.Timestamptz(3)
+  requestedEndAt    DateTime?             @db.Timestamptz(3)
+  requestedTimeZone String?               @db.VarChar(64)
+  idempotencyKey    String                @unique @db.VarChar(160)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+  interview         Interview             @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+  proposal          InterviewProposal?    @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  participant       InterviewParticipant  @relation(fields: [participantId, interviewId], references: [id, interviewId], onDelete: Restrict)
+
+  @@index([interviewId, createdAt, id])
+  @@index([participantId, createdAt])
+}
+
+model InterviewEvent {
+  id              String             @id @default(uuid()) @db.Uuid
+  interviewId     String             @db.Uuid
+  kind            InterviewEventKind
+  actorUserId     String?            @db.Uuid
+  proposalVersion Int?
+  idempotencyKey  String             @unique @db.VarChar(160)
+  correlationId   String             @db.VarChar(128)
+  reasonCode      String?            @db.VarChar(64)
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  interview       Interview          @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+
+  @@index([interviewId, createdAt, id])
+}
+
+model CalendarArtifact {
+  id               String                 @id @default(uuid()) @db.Uuid
+  interviewId      String                 @db.Uuid
+  interviewVersion Int
+  uid              String                 @db.VarChar(255)
+  sequence         Int
+  method           CalendarArtifactMethod
+  status           CalendarArtifactStatus @default(ACTIVE)
+  payloadHash      String                 @db.Char(64)
+  issuedAt         DateTime               @db.Timestamptz(3)
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  interview        Interview              @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+
+  @@unique([interviewId, interviewVersion, sequence, method])
+  @@unique([uid, sequence, method])
+  @@index([interviewId, status, sequence])
+}
+
+model InterviewReminder {
+  id              String                  @id @default(uuid()) @db.Uuid
+  interviewId     String                  @db.Uuid
+  recipientUserId String                  @db.Uuid
+  dueAt           DateTime                @db.Timestamptz(3)
+  status          InterviewReminderStatus @default(PENDING)
+  dedupeKey       String                  @unique @db.VarChar(160)
+  outboxId        String?                 @db.Uuid
+  queuedAt        DateTime?               @db.Timestamptz(3)
+  cancelledAt     DateTime?               @db.Timestamptz(3)
+  createdAt       DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                @updatedAt @db.Timestamptz(3)
+  interview       Interview               @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+
+  @@index([status, dueAt, id])
+  @@index([recipientUserId, status, dueAt])
 }
 
 model ApplicationCandidateNote {
@@ -4349,26 +4661,26 @@ model ModerationRestriction {
 }
 
 model AuditLog {
-  id            String          @id @default(uuid()) @db.Uuid
-  actorUserId   String?         @db.Uuid
-  actorKind     AuditActorKind
-  capability    String          @db.VarChar(128)
-  action        AuditAction
-  targetType    AuditTargetType
-  targetId      String          @db.Uuid
-  companyId     String?         @db.Uuid
-  portalContext PortalContextKind?
+  id                    String             @id @default(uuid()) @db.Uuid
+  actorUserId           String?            @db.Uuid
+  actorKind             AuditActorKind
+  capability            String             @db.VarChar(128)
+  action                AuditAction
+  targetType            AuditTargetType
+  targetId              String             @db.Uuid
+  companyId             String?            @db.Uuid
+  portalContext         PortalContextKind?
   sessionContextVersion Int?
-  result        AuditResult
-  reasonCode    String?         @db.VarChar(64)
-  correlationId String          @db.VarChar(128)
-  metadata      Json?
-  ipHash        String?         @db.VarChar(128)
-  ipHashVersion String?         @db.VarChar(32)
-  retainUntil   DateTime        @db.Timestamptz(3)
-  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
-  company       Company?        @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  actor         User?           @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  result                AuditResult
+  reasonCode            String?            @db.VarChar(64)
+  correlationId         String             @db.VarChar(128)
+  metadata              Json?
+  ipHash                String?            @db.VarChar(128)
+  ipHashVersion         String?            @db.VarChar(32)
+  retainUntil           DateTime           @db.Timestamptz(3)
+  createdAt             DateTime           @default(now()) @db.Timestamptz(3)
+  company               Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  actor                 User?              @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([targetType, targetId, createdAt])
   @@index([companyId, createdAt])

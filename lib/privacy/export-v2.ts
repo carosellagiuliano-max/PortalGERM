@@ -24,6 +24,7 @@ import {
   decideLegalGateV1,
   projectPersistedLegalGateV1,
 } from "@/lib/privacy/legal-gate-policy";
+import { collectRecruitingPrivacyExportV1 } from "@/lib/privacy/recruiting-lifecycle";
 
 const UUID = z.string().uuid();
 const SHA256 = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -776,6 +777,7 @@ async function prepareOwnedPackage(
     salesLeads,
     emailLogs,
     analyticsConsents,
+    recruitingData,
   ] = await Promise.all([
     database.userConsentEvent.findMany({
       where: { userId: ownerUserId },
@@ -936,6 +938,7 @@ async function prepareOwnedPackage(
         effectiveAt: true,
       },
     }),
+    collectRecruitingPrivacyExportV1(database, ownerUserId),
   ]);
 
   const candidateData =
@@ -943,6 +946,7 @@ async function prepareOwnedPackage(
       ? {
           candidateConsents: [],
           applications: [],
+          externalApplications: [],
           radar: [],
           documentVersions: [],
         }
@@ -973,6 +977,7 @@ async function prepareOwnedPackage(
               updatedAt: true,
             },
           }),
+          externalApplications: recruitingData.externalApplications,
           radar: await database.radarProfile.findMany({
             where: { candidateProfileId: candidateProfile.id },
             orderBy: { id: "asc" },
@@ -1022,6 +1027,16 @@ async function prepareOwnedPackage(
       candidateData.candidateConsents,
     ),
     section("applications", "postgres-primary", candidateData.applications),
+    section(
+      "externalApplications",
+      "postgres-primary",
+      candidateData.externalApplications,
+    ),
+    section(
+      "interviewScheduling",
+      "postgres-primary",
+      recruitingData.interviews,
+    ),
     section("talentRadar", "postgres-primary", candidateData.radar),
     section("supportCases", "postgres-primary", supportCases),
     section("abuseReports", "postgres-primary", reports),

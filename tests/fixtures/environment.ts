@@ -50,6 +50,8 @@ export function createValidEnvironment(
     COMPANY_DOMAIN_PROVIDER_MODE: "disabled",
     COMPANY_VERIFICATION_COHORT: "none",
     IDENTITY_PERSONA_V2: "disabled",
+    EXTERNAL_APPLICATION_TRACKER: "disabled",
+    INTERVIEW_SCHEDULER: "disabled",
     EXISTING_IDENTITY_INVITATION: "false",
     PERSONA_PORTAL_SWITCH: "false",
     PERSONA_PRIVACY_V2: "false",

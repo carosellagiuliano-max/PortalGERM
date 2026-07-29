@@ -74,6 +74,10 @@ const phase27TestEnvironment = Object.freeze({
   PERSONA_PRIVACY_V2: "true",
   PERSONA_LEGACY_CONTRACT: "false",
 });
+const phase28TestEnvironment = Object.freeze({
+  EXTERNAL_APPLICATION_TRACKER: "test",
+  INTERVIEW_SCHEDULER: "test",
+});
 
 type ChildExit = Readonly<{
   code: number | null;
@@ -141,6 +145,7 @@ async function main() {
       DOCUMENT_STORAGE_REGION: "local-test",
       ...companyTrustTestEnvironment,
       ...phase27TestEnvironment,
+      ...phase28TestEnvironment,
     });
     await runDemoSeed({
       APP_ENV: "local",
@@ -264,6 +269,7 @@ async function startServer(
         DOCUMENT_STORAGE_REGION: "local-test",
         ...companyTrustTestEnvironment,
         ...phase27TestEnvironment,
+        ...phase28TestEnvironment,
         STRIPE_SECRET_KEY: "",
         EMAIL_PROVIDER_API_KEY: "",
         OPENAI_API_KEY: "",
@@ -366,6 +372,7 @@ async function runPlaywright(input: Readonly<{
         PHASE25_SECURITY_MODE: phase25SecurityMode,
         ...companyTrustTestEnvironment,
         ...phase27TestEnvironment,
+        ...phase28TestEnvironment,
       },
       shell: false,
       stdio: "inherit",

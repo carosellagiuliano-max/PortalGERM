@@ -3,6 +3,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { z } from "zod";
 
 import {
@@ -17,6 +18,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import {
   getAuthRequestContext,
   isValidAuthMutationOrigin,
+  shouldUseSecureAuthCookies,
 } from "@/lib/auth/request-context";
 import {
   buildJobIntentNextPath,
@@ -27,6 +29,11 @@ import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { publicApplicationHref } from "@/lib/jobs/job-json-ld";
 import { getPublicJobBySlug } from "@/lib/jobs/public-read-model";
+import {
+  EXTERNAL_APPLICATION_RESUME_POLICY_V1,
+  signExternalApplicationResumeIntent,
+} from "@/lib/recruiting/external-application-intent";
+import { isRecruitingFeatureAvailableV1 } from "@/lib/recruiting/feature-gates";
 
 const startIntentSchema = z.strictObject({
   action: z.enum(JOB_INTENT_ACTIONS_V1),
@@ -107,6 +114,42 @@ export async function startPublicJobIntentAction(
       productAnalyticsEnabled,
       now,
     );
+    if (
+      isRecruitingFeatureAvailableV1(
+        environment,
+        "external_application_tracker",
+      )
+    ) {
+      const source = await getDatabase().job.findUnique({
+        where: { id: job.id },
+        select: { publishedRevisionId: true },
+      });
+      if (source?.publishedRevisionId !== null && source?.publishedRevisionId !== undefined) {
+        const token = signExternalApplicationResumeIntent(
+          {
+            jobId: job.id,
+            jobRevisionId: source.publishedRevisionId,
+            jobSlug: job.slug,
+            now,
+          },
+          environment.secrets.session,
+        );
+        const cookieStore = await cookies();
+        cookieStore.set(
+          EXTERNAL_APPLICATION_RESUME_POLICY_V1.cookieName,
+          token,
+          {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: shouldUseSecureAuthCookies(environment.APP_ENV),
+            path: "/",
+            maxAge: Math.floor(
+              EXTERNAL_APPLICATION_RESUME_POLICY_V1.ttlMilliseconds / 1_000,
+            ),
+          },
+        );
+      }
+    }
     redirect(href);
   }
 

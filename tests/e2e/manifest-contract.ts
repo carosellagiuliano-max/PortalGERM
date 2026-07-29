@@ -53,6 +53,8 @@ export const PHASE27_PERSONA_FLOW_FILE =
   "flows/phase27-persona-switch.spec.ts" as const;
 export const PHASE27_PERSONA_QUALITY_FILE =
   "quality/phase27-persona-quality.spec.ts" as const;
+export const PHASE28_RECRUITING_QUALITY_FILE =
+  "quality/phase28-recruiting-mobile.spec.ts" as const;
 export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE17_QUALITY_FILE,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
@@ -75,6 +77,7 @@ export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE26_COMPANY_TRUST_QUALITY_FILE,
   PHASE27_PERSONA_FLOW_FILE,
   PHASE27_PERSONA_QUALITY_FILE,
+  PHASE28_RECRUITING_QUALITY_FILE,
 ] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
@@ -94,13 +97,13 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     project: PHASE17_JOURNEY_PROJECT,
     tag: "@quality-desktop",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 124,
+    expectedCount: 130,
   }),
   Object.freeze({
     project: PHASE17_MOBILE_PROJECT,
     tag: "@quality-mobile",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 124,
+    expectedCount: 130,
   }),
   Object.freeze({
     project: PHASE17_JOURNEY_PROJECT,
@@ -270,6 +273,18 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     file: PHASE27_PERSONA_QUALITY_FILE,
     expectedCount: 1,
   }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@quality-desktop",
+    file: PHASE28_RECRUITING_QUALITY_FILE,
+    expectedCount: 2,
+  }),
+  Object.freeze({
+    project: PHASE17_MOBILE_PROJECT,
+    tag: "@quality-mobile",
+    file: PHASE28_RECRUITING_QUALITY_FILE,
+    expectedCount: 2,
+  }),
 ] as const);
 
 export type Phase17ResultId =
@@ -374,7 +389,7 @@ export function classifyPhase17Result(
   title: string,
   normalizedRelativeFile: string,
 ): Phase17ResultId {
-  const match = /\[(E2E-(?:0[1-7]|21|22))\]/u.exec(title);
+  const match = /\[(E2E-(?:0[1-7]|21|22|28A|28B))\]/u.exec(title);
   if (match?.[1] !== undefined) {
     return match[1] as Phase17CaseId;
   }

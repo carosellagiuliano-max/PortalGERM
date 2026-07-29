@@ -118,6 +118,42 @@ export const PHASE22_DATA_INVENTORY_V1 = Object.freeze([
     flowScope: "APPLICATION_WORKFLOW",
   }),
   row({
+    entityKey: "EXTERNAL_APPLICATION_TRACKER",
+    fieldScope:
+      "candidate-confirmed status, immutable job snapshot, reminder and event history",
+    subjectClass: "CANDIDATE",
+    purposeCode: "EXTERNAL_APPLICATION_TRACKING",
+    exportOutcome: "INCLUDE",
+    correctionOutcome: "CORRECT",
+    erasureOutcome: "RETAIN",
+    retentionDays: 400,
+    flowScope: "EXTERNAL_APPLICATION_TRACKING",
+  }),
+  row({
+    entityKey: "INTERVIEW_SCHEDULING",
+    fieldScope:
+      "owned participant, proposals, responses, calendar metadata, reminder and event history",
+    subjectClass: "CANDIDATE",
+    purposeCode: "INTERVIEW_SCHEDULING",
+    exportOutcome: "INCLUDE",
+    correctionOutcome: "CORRECT",
+    erasureOutcome: "RETAIN",
+    retentionDays: 400,
+    flowScope: "INTERVIEW_SCHEDULING",
+  }),
+  row({
+    entityKey: "INTERVIEW_SCHEDULING",
+    fieldScope:
+      "owned company-participant, proposals, responses, calendar metadata, reminder and event history",
+    subjectClass: "EMPLOYER_MEMBER",
+    purposeCode: "INTERVIEW_SCHEDULING",
+    exportOutcome: "INCLUDE",
+    correctionOutcome: "CORRECT",
+    erasureOutcome: "RETAIN",
+    retentionDays: 400,
+    flowScope: "INTERVIEW_SCHEDULING",
+  }),
+  row({
     entityKey: "EMPLOYER_PRIVATE_NOTE",
     fieldScope: "employer-authored assessment and internal notes",
     subjectClass: "CANDIDATE",

@@ -151,6 +151,12 @@ export const WORKER_HANDLER_CATALOG = Object.freeze([
     sloRef: "codex-plan/26-company-trust-verification.md#22",
   }),
   handler({
+    handlerKey: "recruiting.reminder-expiry",
+    owner: "Recruiting / Privacy / Platform",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/28-recruiting-workflows.md#22-performance--und-skalierungsgrenzen",
+  }),
+  handler({
     execution: "CATALOG_ONLY_REQUIRES_OWNING_PHASE",
     handlerKey: "jobs.freshness",
     owner: "Jobs Domain / Trust",

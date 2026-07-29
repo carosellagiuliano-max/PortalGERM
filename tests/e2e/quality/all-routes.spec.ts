@@ -23,8 +23,8 @@ import {
   type PageObservation,
 } from "@/tests/e2e/fixtures/phase17-test";
 
-const EXPECTED_PAGE_COUNT = 123;
-const EXPECTED_HANDLER_COUNT = 19;
+const EXPECTED_PAGE_COUNT = 129;
+const EXPECTED_HANDLER_COUNT = 20;
 const ROUTE_TEST_TIMEOUT_MILLISECONDS = 90_000;
 const QUALITY_TAGS = "@quality-desktop @quality-mobile";
 const MISSING_UUID = "00000000-0000-4000-8000-000000000018";
@@ -277,7 +277,7 @@ function substituteDynamicSegments(path: string) {
 }
 
 function safeInvalidSegmentValue(segment: string) {
-  if (["id", "threadId", "orderId"].includes(segment)) {
+  if (["id", "threadId", "orderId", "interviewId"].includes(segment)) {
     return MISSING_UUID;
   }
   if (segment === "token") return INVALID_TOKEN;
