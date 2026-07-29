@@ -696,9 +696,13 @@ flowchart TD
    Service-Recovery-Vertrag; kein Staging-/Paid-/LIVE-Start vor WTP-,
    Phase-25-, Provider-, Tax-/Legal-, Finance- und Operations-Go. Siehe
    [Phase-24-Evidence](./evidence/2026-07-27-phase-24.md).
-11. **29B → 31B**: stabile Fachverträge und noch deaktivierte Angebotscopy
-   final usability-/mobile-/a11y-prüfen; erst danach genau das lieferbare
-   Angebot/den Cluster aktivieren.
+11. **29B → 31B**: Die technische Responsive-/JobPass-/3-Engine-/A11y-
+   Automationsbasis ist lokal grün; siehe
+   [Phase-29-Evidence](./evidence/2026-07-29-phase-29.md). Stabile
+   Fachverträge und noch deaktivierte Angebotscopy müssen nach 30A/30D auf dem
+   finalen Scope mit moderierten Runden und realen NVDA-/VoiceOver-Smokes
+   geprüft werden; erst danach genau das lieferbare Angebot/den Cluster
+   aktivieren.
 12. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
    Artefakt prüfen.
 

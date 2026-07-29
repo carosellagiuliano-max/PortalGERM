@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { BillingProfileForm } from "@/components/billing/billing-profile-form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";

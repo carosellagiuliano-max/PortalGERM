@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { AuditFeed } from "@/components/admin/AuditFeed";
 import { MetricCard } from "@/components/admin/MetricCard";

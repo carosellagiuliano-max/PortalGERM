@@ -84,10 +84,10 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | STH-020 | Admin-Queues mit harten Caps | bestätigt | P1 vor hohem Betriebsvolumen | Admin Operations/Scale | 30B | 19, STH-010, Cursor-/Indexvertrag | offen | Bounded-read-Tests, keine >250-Erreichbarkeitsmatrix | `lib/admin/companies.ts:33-45`; `lib/admin/jobs.ts:68-79`; `lib/admin/users.ts:18-25`; `lib/admin/support.ts:99-103` | keine |
 | STH-021 | Dashboard-Empfehlungen mit Query-Fan-out | technisch wesentlich mitigiert; finales Query-count/p95-Gate offen | P1 Performance | Candidate/DB Scale | 27 Mitigation; 30B Abschluss | 19, Batch-Read-/Rankingvertrag | Jobdetails werden in einem bounded Eligibility-Snapshot statt N parallelen Transaktionen hydratisiert; Notification-/Gesamtquery-Ceiling bleibt Phase 30B | Batch-Query-Shape und Phase-27-Browserregression `PASS`; 48-Job-Instrumentierung offen | `lib/jobs/public-read-model.ts`; `lib/candidate/dashboard.ts`; `tests/unit/jobs/public-read-model-query-shape.test.ts` | keine |
 | STH-022 | Business/Enterprise nur eingeschränkt lieferbar | teilweise bestätigt; bewusst gegatet | P1 nach WTP, XL je Integration | Monetization/Enterprise | 31 | 19, STH-004/009/024, Marktvalidierung | offen; Kernentitlements vorhanden, Integrationen fehlen | Release-/Grant-Tests vorhanden, bewusst kein ImportRun | `prisma/seed/fixtures/plans.ts:138-168,263-282`; `components/marketing/pricing-card.tsx:120-157`; `prisma/schema.prisma:3472-3528` | Design-Partner, SLA/DPA, Integrationszugänge |
-| STH-023 | Browser-/Accessibility-Matrix unvollständig | teilweise bestätigt; Chromium-Breite vorhanden | P1 | UX/A11y/Browser | 29 | 19, CI-Browser, manuelle AT-Matrix | offen | Desktop/Mobile Chromium und Critical-Axe; Firefox/WebKit/Serious/AT fehlen | `playwright.config.ts:28-57`; `tests/e2e/fixtures/phase17-test.ts:155-175,224-260` | NVDA/VoiceOver-Geräte/Tester |
+| STH-023 | Browser-/Accessibility-Matrix unvollständig | technisch weitgehend gelöst; reale AT-Abnahme offen | P1 | UX/A11y/Browser | 29 | 19, CI-Browser, manuelle AT-Matrix | Chromium/Firefox/WebKit, serious+critical Axe, Keyboard, Reflow, Contrast und Motion lokal `PASS`; Releaseartefakt-Retest offen | 340/340 Browsertests; gezielte Phase-29-Matrix 16/16, Retry/Skip 0 | `playwright.config.ts`; `tests/e2e/quality/phase29-*.spec.ts`; [Phase-29-Evidence](./evidence/2026-07-29-phase-29.md) | NVDA/VoiceOver-Geräte/Tester |
 | STH-024 | Manueller Walkthrough nicht auf aktuellem Release-Commit | bestätigt | P0 Release-Gate | Release Evidence | 32 | alle Remediation-Phasen, sauberes Artefakt | offen; Walkthrough muss auf finalem Commit neu laufen | Automation auf neueren Commits, manueller Lauf auf Vorgänger | `BUILD_REPORT.md:3-19,141-165`; `codex-plan/evidence/2026-07-24-commercial-launch-follow-up.md:46-69` | Staging/Release-Artefakt und Rollen-Tester |
-| STH-025 | Mobile Tabellen bleiben horizontale Desktoptabellen | bestätigt, technisch mitigiert | P2; P1 für häufige mobile Aufgaben | Mobile UX | 29 | 19, Responsive-List-Pattern | offen; Scrollregionen sind bounded/fokusfähig | Overflow-Allowlist/Teiltests, keine mobile Action-Parität | `app/admin/invoices/page.tsx:17`; `app/admin/audit/page.tsx:96-103`; `components/employer/jobs-table.tsx:51-60` | mobile Nutzungsprioritäten |
-| STH-026 | Kein zentrales Notification Preference Center | fachlicher Kern gelöst; Phase-29-Gesamtregression und Legalaktivierung offen | P1, vor realer Zustellung | Notification/Consent | 20, UX-Regression 29 | 19, STH-007/009/013/017 | Candidate-/Employer-Center, versionierte Projection/Event-Historie und geschlossene Mandatory/Optional-Matrix implementiert | Unit/PostgreSQL/Desktop/360px/Axe `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); `/candidate/notifications`; `/employer/notifications` | Legal-Klassifikation und optionale LIVE-Freigabe |
+| STH-025 | Mobile Tabellen bleiben horizontale Desktoptabellen | im aktuellen Repository technisch gelöst; Researchpriorisierung offen | P2; P1 für häufige mobile Aufgaben | Mobile UX | 29 | 19, Responsive-List-Pattern | gemeinsames semantisches Table→Card-Pattern mit einem Action-/Wertebaum in allen inventarisierten Admin-/Employer-/Billing-/Privacy-Tabellen | Unit-Parität und 320/360/768/Desktop-Browseroperationen `PASS`; kein Dokumentoverflow | `components/ui/responsive-table.tsx`; `tests/unit/ui/phase29-responsive-parity.test.tsx`; `tests/e2e/quality/phase29-responsive-operations.spec.ts` | reale mobile Nutzungsprioritäten |
+| STH-026 | Kein zentrales Notification Preference Center | fachlicher Kern und automatische Phase-29-Gesamtregression gelöst; Legal-/Research-/LIVE-Aktivierung offen | P1, vor realer Zustellung | Notification/Consent | 20, UX-Regression 29 | 19, STH-007/009/013/017 | Candidate-/Employer-Center, versionierte Projection/Event-Historie und geschlossene Mandatory/Optional-Matrix implementiert | Unit/PostgreSQL/Desktop/320/360/Cross-Browser/Axe `PASS` | [Phase-20-Evidence](./evidence/2026-07-26-phase-20.md); [Phase-29-Evidence](./evidence/2026-07-29-phase-29.md); `/candidate/notifications`; `/employer/notifications` | Legal-Klassifikation, moderierter Teach-back und optionale LIVE-Freigabe |
 | STH-027 | Einzelne Sitemap stoppt bei 50.000 URLs | bestätigte spätere Kapazitätsgrenze; aktuelles fail-closed ist korrekt/sicher | P3 kapazitätsabhängige Skalierung; Eskalation nur nach Mess-/Forecast-Gate | SEO/Scale | 30C | 19, LIVE-Count-/Byte-/Wachstumsbaseline und Monitoring; Shardstrategie erst bei Trigger | mitigiert solange unter Trigger; Messung/Alerts offen, Index/Shards konditional deferred | Capacity-Error/no-truncation getestet; kein LIVE-Monitoring, kein Index-/Shard-Test | `lib/seo/public-sitemap.ts:20,85-136,428-435`; `app/sitemap.ts:7-18` | reale Zielumgebungszahl, Growth Forecast, Search Console/Ops Owner |
 | STH-028 | Demo-/Preis-Copy nennt Hypothesen | bewusst anders / aktuell korrekt | Schutz-Gate, kein Defect-Prioritätswert | Commercial Copy | 31 | STH-005/007/018/022, WTP/Legal | keine Entfernung vor Gates; später mode-getrennte Copy | aktuelle Mock-/Pricing-Copy getestet | `app/(public)/pricing/page.tsx:16-19,80-143`; `components/marketing/pricing-card.tsx:24-32,113-124` | echter Geldtest, Legal/Tax, freigegebener Katalog |
 
@@ -1025,21 +1025,24 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 
 ### STH-023 — Browser- und Accessibility-Abdeckung ist unvollständig
 
-- **Status / Priorität / Phase:** teilweise bestätigt; P1; Phase 29
+- **Status / Priorität / Phase:** automatische technische Matrix weitgehend
+  gelöst, reale AT-/Release-Abnahme offen; P1; Phase 29
   `29-ux-mobile-accessibility.md`.
-- **Fundstellen:** `playwright.config.ts:28-57` konfiguriert Desktop/Mobile
-  Chromium, nicht Firefox/WebKit. Axe lässt in
-  `tests/e2e/fixtures/phase17-test.ts:155-175` nur `critical` scheitern und
-  zählt `serious`; ab `224` existiert ein einzelner Tab-/Focus-Smoke.
-  `tests/unit/ui/phase18-accessibility-regressions.test.tsx:23-130` ergänzt
-  gezielte Regressionen, ersetzt aber keine Assistive-Technology-Matrix.
+- **Aktuelle Fundstellen:** `playwright.config.ts` konfiguriert Chromium,
+  Firefox und WebKit für kritische Journeys.
+  `tests/e2e/quality/phase29-accessibility.spec.ts` prüft Axe
+  `critical + serious`, Keyboard, 200/400-%-Reflow, High Contrast und Reduced
+  Motion; `phase29-critical-journeys.spec.ts` prüft den fachlichen Abschluss
+  in allen drei Engines.
 - **Betroffene Bereiche:** Public-, Auth-, Candidate-, Employer-, Admin- und
   Dialog-/Form-Komponenten; Browser-/CI-Infrastruktur.
 - **Betroffene Rollen:** alle Nutzer, besonders Keyboard- und
   Screenreader-Nutzer.
-- **Ist:** ungewöhnlich breite 100-Seiten-Chromium-Matrix in Desktop/360 px,
-  Critical-Axe-Gate, Clipping-/Console-/Focus-Checks. Firefox, WebKit,
-  Serious-Gate und dokumentierte NVDA/VoiceOver-Runs fehlen.
+- **Ist:** vollständige bestehende Route-/Browservollregression plus
+  risikobasierte Chromium-/Firefox-/WebKit-Matrix, serious+critical Axe,
+  Keyboard, Reflow, Contrast und Motion bestehen lokal. Dokumentierte reale
+  NVDA-/VoiceOver-Runs und derselbe Nachweis auf dem finalen Releaseartefakt
+  fehlen.
 - **Soll:** risikobasierte Cross-Browser-Journeys, `critical + serious = 0`
   oder explizit befristete Ausnahmen, vollständige Keyboard-/Dialog-Flows,
   Zoom/Reduced Motion/Contrast und manuelle AT-Smokes.
@@ -1092,24 +1095,22 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
   automatisiert und manuell geprüften sowie deployten Artefakt; jede spätere
   Runtime-Änderung macht Phase 32 wieder offen.
 
-### STH-025 — Mobile Tabellen sind weiterhin horizontale Desktoptabellen
+### STH-025 — Mobile Tabellen waren horizontale Desktoptabellen
 
-- **Status / Priorität / Phase:** bestätigt, jedoch kontrolliert mitigiert; P2,
-  für häufige mobile Operationen nach Nutzungsdaten P1; Phase 29.
-- **Fundstellen:** Beispiele sind `app/admin/invoices/page.tsx:17`
-  (`min-w-[60rem]`), `app/admin/orders/page.tsx:16`,
-  `app/admin/audit/page.tsx:96-103`,
-  `components/admin/JobReviewTable.tsx:28-35`,
-  `components/employer/jobs-table.tsx:51-60` und
-  `app/employer/billing/page.tsx:180-188`. Der bestehende Test
-  `tests/unit/employer/jobs-table.test.tsx:42-47` schützt absichtlich die
-  Scrollregion.
+- **Status / Priorität / Phase:** im aktuellen Repository technisch gelöst;
+  reale mobile Nutzungsprioritäten bleiben offen; P2, für häufige mobile
+  Operationen nach Nutzungsdaten P1; Phase 29.
+- **Fundstellen:** `components/ui/responsive-table.tsx`,
+  `app/globals.css`, `tests/unit/ui/phase29-responsive-parity.test.tsx` und
+  `tests/e2e/quality/phase29-responsive-operations.spec.ts`.
 - **Betroffene Bereiche:** Employer-/Recruiter- und Admin-Listen, besonders
   Jobs, Applicants, Billing, Audit, Moderation und Support.
 - **Betroffene Rollen:** mobile Employer/Recruiter und Operations/Admin.
-- **Ist:** kein unkontrollierter Dokumentoverflow; Scrollregionen sind teils
-  fokusfähig/beschriftet und Aktionen sticky. Dennoch muss man breite
-  Desktoptabellen horizontal bedienen.
+- **Ist:** die inventarisierten Admin-/Employer-/Billing-/Privacy-Tabellen
+  verwenden ein semantisches gemeinsames Primitive. Dieselben Zellen und
+  Aktionen werden bei kleinen Viewports als Cards dargestellt; es gibt keinen
+  divergierenden zweiten DOM- oder Actionbaum und keinen unkontrollierten
+  Dokumentoverflow.
 - **Soll:** gemeinsames Responsive-List-Pattern mit priorisierten Spalten,
   mobilen Cards/Disclosure, sichtbarer Hauptaktion und vollständiger Desktop-
   Parität.
@@ -1292,7 +1293,7 @@ Realmodus weiterhin fail-closed hält. Die Details stehen in
 | `STH-030` | **technisch Local/CI gelöst:** Passkey/TOTP/Recovery, Session-AAL2 und `STEP_UP_POLICY_V1` orchestrieren kurzlebige, opaque, actor-/session-/purpose-/action-/tenant-/resource-bound Single-use-Grants für Candidate-, Employer-, Billing-, Privacy-, Reveal- und Admin-Hochrisikoaktionen. | 25B technisch / 20, 22, 24, 26 Consumer | Candidate, Employer Owner, Billing, Admin; `lib/auth/assurance/**`, Security-Routen und eingebettete `StepUpGrantControl`; bestehende Ownership/Membership bleibt vorgeschaltet | Phase-20 Identity; Session-, safe-next-, tenant-, candidate-owner-, Reveal-, Privacy- und Billing-Autorisierung bleibt erhalten | Unit/PostgreSQL/Desktop/360 `PASS`: stale/replay/cross-purpose/-actor/-tenant/-resource/direct action 0 Wirkung, erlaubte Action genau einmal; Account-Recovery widerruft alte Sessions/Grants | [Phase-25-Evidence](./evidence/2026-07-28-phase-25.md); Geräte-/Recoverypolicy, Production-RP-ID/HTTPS, Security Owner und Enforcement extern `BLOCKED`, Technikbefund geschlossen |
 | `STH-031` | **technisch Local/CI gelöst:** `TRUST_RISK_POLICY_V1`, persistierte minimierte Signal/Decision/Case/Event/Appeal-Evidence, bounded Queue, scope-basiertes Hold/Revoke, SoD-Appeal/Restore und Phase-23-Expiry-/Failure-Handler bilden den kohärenten Fraud-/Scam-/ATO-Vertrag. | 25C technisch / 23, 24, 26, 30D Consumer | alle Nutzer, Trust & Safety, Security, Finance; `lib/security/risk/**`, `lib/trust-safety/**`, Admin-/User-Security-Routen; interne Evidence bleibt aus Support-/Subject-DTOs entfernt | Identity/Workers/Payment geschützt; Phase 26 liefert fachliche Company-Reverification, 30D Duplicate-Fachsignal | Policy/PostgreSQL/E2E prüfen Stuffing, Compromise, Scam/Duplicate, Mass Contact, Complaint, Reveal/Export/Payment, Dedupe, false-positive Control, nächste-Read-Sperre, Appeal und Worker-Recovery `PASS` | [Phase-25-Evidence](./evidence/2026-07-28-phase-25.md); Risk-/Retention-/DSFA-Freigabe, benannte Reviewer, Capacity, Pager/Staging extern `BLOCKED`, Technikbefund geschlossen |
 | `STH-032` | **teilweise bestätigt:** Job-Ablauf und öffentliche Ausblendung sind fail-closed; Reconfirmation, Reminder, „besetzt/nicht verfügbar“-Feedback, Copy-/Dublettenreview und schnelle kanalübergreifende Deaktivierung fehlen. | 30D / 23 Worker, 26 Trust, 31 Cluster | Visitor, Candidate, Employer, Admin; Public Search/Detail, Employer Jobs, Admin Queue; `lib/jobs/effective-status.ts`, `lib/jobs/public-eligibility.ts`, Alerts/Sitemap/Recommendations | 23 Notifications/Worker und 26 Trust; bestehende Publish-/Revision-/Quota-/Slug-/Boost-/Eligibility-Verträge | Time-travel, concurrency, filled/report, exact/near-duplicate, appeal; identische Ausblendung aus Search, Sitemap, Alerts, Recommendations und Analytics; keine Promotion veralteter Dublette; G2/G3 vor Public | fachliche Freshness-/Duplicate-Policy, Moderationskapazität; **offen** |
-| `STH-033` | **bestätigt:** Browser-, Mobile- und Axe-Tests beweisen keine Verständlichkeit oder Vertrauen; es gibt kein rekrutiertes, moderiertes Research-Protokoll mit Schwellen. | frühe 29A / 26, 30, 31; 29B Abschluss | Candidate, Employer, Admin/Support; JobPass, Search, Fair Score, Verification, Radar/Reveal, CV/Privacy, Pricing/Limits/Kündigung; `playwright.config.ts`, `tests/e2e/quality/*`, Phase 29 | nach Phase 19 früh möglich; keine PII in Research; Defekte gehen in owning Phase statt UI-Kaschierung | vorab definierte Segmente/Tasks, Task success, Zeit, Fehler, Abbruch, Comprehension/Trust; anonymisiertes Research-Repository, Moderatorprotokoll und Go/No-go | Rekrutierung, Research/Privacy Owner; externe Nutzerhypothesen bleiben **offen** |
+| `STH-033` | **teilweise bearbeitet:** Browser-, Mobile- und Axe-Tests beweisen weiterhin keine Verständlichkeit oder Vertrauen. Protocol v1 und eine ausdrücklich leere aggregierte Ergebnisvorlage definieren nun Consent, Segmente, Tasks, Schwellen, Teach-back, Severity und zwei Runden; es wurden noch keine Teilnehmenden rekrutiert oder Sessions durchgeführt. | frühe 29A / 26, 30, 31; 29B Abschluss | Candidate, Employer, Admin/Support; JobPass, Search, Fair Score, Verification, Radar/Reveal, CV/Privacy, Pricing/Limits/Kündigung; `codex-plan/research/phase29-*`, Phase 29 | keine PII in Git; Defekte gehen in owning Phase statt UI-Kaschierung; 30A/30D-Scope vor finalem Re-Test | ≥5 Candidate, ≥5 Employer/Recruiter, ≥3 Admin/Ops in zwei Runden; Task success, Zeit, Fehler, Abbruch, Comprehension/Trust; anonymisierter Report und Go/No-go | [Phase-29-Evidence](./evidence/2026-07-29-phase-29.md); Rekrutierung, Research/Privacy Owner und externe Nutzerhypothesen bleiben **offen** |
 | `STH-034` | **bestätigt:** SLA-/Queue-Alter existieren, aber kein Minuten-/Arrival-/Backlog-/Staffing-/Coverage-/Unit-Cost-Modell je Verification, Moderation, Import, Privacy, Support und Fraud. | frühe 31A / Telemetrie 23, Queues 25/26/30 | Ops, Support, Privacy, Trust, Commercial; `lib/admin/sla.ts`, `lib/admin/support.ts`, `product-strategy.md`, Phase 31 | reale oder kontrolliert gemessene Fälle; STH-033 Research; Demo-Zeitwerte nicht als Marktbeleg | p50/p95 Handling Time, Arrival, Backlog Age, FTE/Vertretung/On-call, Automation- und Aufnahme-Stopp, max. Concierge-COGS; Capacity-/Cost-Report mit Owner | Staffing-/Kosten-/Servicelevel-Freigabe; **offen** |
 | `STH-035` | **technisch Local/CI gelöst:** Phase 24 klassifiziert Plattformfehler getrennt von normalem Outcome, User- und Providerfehler und erzwingt genau eine Credit-Wiederherstellung, Boostverlängerung oder Refund-Eskalation. ADR-028 bleibt für normale Ablehnung/Ablauf/Kündigung unverändert. | 24 technisch / Policy 31, Trust 26 | Employer Owner, Finance, Support, System; `lib/billing/service-delivery-policy.ts`, `lib/billing/finance-operations.ts`, Billing/Radar/Boost | WTP-Go, echte Zahlung, Trust-/Provider-Failureklassifikation; Ledger/Invoice/Order immutable und idempotent | Policy-/PostgreSQL-Matrix mit Replay/Parallelität und unberechtigten Klassen Local/CI `PASS`; konkrete Paid-Servicepolicy und LIVE-Incident bleiben extern | [Phase-24-Evidence](./evidence/2026-07-27-phase-24.md); Finance/Legal/Support-Freigabe und konkretes Paid-Versprechen **offen** |
 | `STH-036` | **teilweise bestätigt:** datenschutzarme Result-Count-Buckets einschließlich Nulltreffer existieren; unbekannte/schlechte Suchbegriffe können nicht sicher in Taxonomiepflege zurückgeführt werden. | 30A / Privacy 22, Fachreview 31A | Visitor/Candidate, Search/Data/Privacy; `lib/analytics/event-contracts.ts`, `app/(public)/jobs/actions.ts`, `lib/search/relevance.ts` | STH-017 Analytics/Consent und STH-019 Taxonomie; keine Rohquery-/PII-/Rare-query-Leaks, Demo/LIVE getrennt | redaction/tokenization, k-/Mindestmengen-Suppression, Retention, Access, Poisoning/Bias, Review→TaxonomyVersion→publish/revoke und Re-identification-negativ; Data/Privacy Evidence | Privacy/Data-/Fachfreigabe; **offen, bestehende Bucket-Erfassung bereits gelöst** |

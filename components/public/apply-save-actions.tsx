@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { BookmarkIcon, SendIcon } from "lucide-react";
 
 import { startPublicJobIntentAction } from "@/app/(public)/jobs/actions";

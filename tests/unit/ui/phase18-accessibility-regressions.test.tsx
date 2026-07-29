@@ -67,11 +67,16 @@ describe("Phase-18 accessibility regressions", () => {
     );
 
     expect(
-      screen.getByRole("region", { name: "Job-Prüfungstabelle" }),
-    ).toHaveAttribute("data-e2e-horizontal-scroll", "true");
+      screen.getByRole("region", {
+        name: "Job-Prüfung und verfügbare Aktionen",
+      }),
+    ).toHaveAttribute("data-responsive-table-region", "true");
     const reviewLink = screen.getByRole("link", { name: "Prüfen" });
     expect(reviewLink).toHaveClass("whitespace-nowrap");
-    expect(reviewLink.closest("td")).toHaveClass("sticky", "right-0");
+    expect(reviewLink.closest("td")).toHaveAttribute(
+      "data-responsive-actions",
+      "true",
+    );
   });
 
   it("names each member role selector with the affected team member", () => {

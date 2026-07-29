@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import type { RevealField } from "@/lib/generated/prisma/enums";
 import type { RevealValue } from "@/lib/privacy/reveal-dto";
+import { IDENTITY_REVEAL_REVOCATION_LIMIT_COPY } from "@/lib/ux/trust-copy";
 
 const INITIAL_STATE: CandidateRadarActionState = Object.freeze({
   status: "idle",
@@ -257,8 +258,8 @@ function RevokeDialog({
           <DialogTitle>Identitätsfreigabe widerrufen?</DialogTitle>
           <DialogDescription>
             Nach dem Widerruf erhält {companyName} über SwissTalentHub keinen
-            weiteren Zugriff auf die freigegebenen Felder. Bereits gesehene oder
-            kopierte Daten können technisch nicht ungesehen gemacht werden.
+            weiteren Zugriff auf die freigegebenen Felder.{" "}
+            {IDENTITY_REVEAL_REVOCATION_LIMIT_COPY}
           </DialogDescription>
         </DialogHeader>
         <form action={action} className="grid gap-4">

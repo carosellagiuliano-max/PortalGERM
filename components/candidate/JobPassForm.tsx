@@ -1,7 +1,21 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
-import { FileCheck2Icon, SaveIcon, ShieldCheckIcon } from "lucide-react";
+import {
+  startTransition,
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CloudCheckIcon,
+  FileCheck2Icon,
+  SaveIcon,
+  ShieldCheckIcon,
+} from "lucide-react";
 
 import {
   completeCandidateOnboardingAction,
@@ -45,6 +59,25 @@ const JOB_TYPES = [
   ["APPRENTICESHIP", "Lehrstelle"],
   ["HOLIDAY_JOB", "Ferienjob"],
 ] as const;
+const JOBPASS_STEPS = Object.freeze([
+  Object.freeze({
+    label: "Person",
+    description: "Kontaktdaten und Kurzprofil",
+  }),
+  Object.freeze({
+    label: "Beruf",
+    description: "Ziele, Kompetenzen und Sprachen",
+  }),
+  Object.freeze({
+    label: "Rahmen",
+    description: "Pensum, Lohn und Verfügbarkeit",
+  }),
+  Object.freeze({
+    label: "Sichtbarkeit",
+    description: "Talent Radar prüfen und speichern",
+  }),
+] as const);
+const JOBPASS_AUTOSAVE_DELAY_MILLISECONDS = 750;
 
 export type JobPassFormInitialValues = Readonly<{
   revision: string;
@@ -93,22 +126,154 @@ export function JobPassForm({
   radarNotice: string;
   legacyCvMetadataEnabled?: boolean;
 }>) {
-  const [state, action, pending] = useActionState(
-    saveCandidateProfileAction,
-    INITIAL_PROFILE_ACTION_STATE,
-  );
+  const [activeStep, setActiveStep] = useState(0);
+  const [revision, setRevision] = useState(initial.revision);
+  const [autosaveStatus, setAutosaveStatus] = useState<
+    "saved" | "dirty" | "saving" | "error"
+  >("saved");
+  const formRef = useRef<HTMLFormElement>(null);
+  const autosaveButtonRef = useRef<HTMLButtonElement>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirtyRef = useRef(false);
+  const pendingRef = useRef(false);
   const otherLanguage = initial.languages.find(
     ({ code }) => !LANGUAGE_OPTIONS.some((option) => option.code === code),
   );
 
+  const scheduleAutosave = useCallback(() => {
+    dirtyRef.current = true;
+    setAutosaveStatus("dirty");
+    if (autosaveTimerRef.current !== null) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null;
+      if (pendingRef.current) return;
+      dirtyRef.current = false;
+      setAutosaveStatus("saving");
+      formRef.current?.requestSubmit(autosaveButtonRef.current ?? undefined);
+    }, JOBPASS_AUTOSAVE_DELAY_MILLISECONDS);
+  }, []);
+
+  const profileAction = useCallback(
+    async (
+      previousState: CandidateProfileActionState,
+      formData: FormData,
+    ) => {
+      setAutosaveStatus("saving");
+      const result = await saveCandidateProfileAction(previousState, formData);
+      if (result.status === "success") {
+        if (result.revision !== undefined) setRevision(result.revision);
+        setAutosaveStatus("saved");
+        if (dirtyRef.current) scheduleAutosave();
+      } else {
+        setAutosaveStatus("error");
+        const firstErrorStep = firstStepWithError(result);
+        if (firstErrorStep !== null) setActiveStep(firstErrorStep);
+        window.requestAnimationFrame(() => {
+          document.querySelector<HTMLElement>("[data-jobpass-feedback]")?.focus();
+        });
+      }
+      return result;
+    },
+    [scheduleAutosave],
+  );
+  const [state, action, pending] = useActionState(
+    profileAction,
+    INITIAL_PROFILE_ACTION_STATE,
+  );
+
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
+
+  useEffect(
+    () => () => {
+      if (autosaveTimerRef.current !== null) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  function submitManually() {
+    dirtyRef.current = false;
+    if (autosaveTimerRef.current !== null) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    setAutosaveStatus("saving");
+  }
+
   return (
-    <form action={action} className="grid gap-8" noValidate>
-      <input type="hidden" name="revision" value={initial.revision} />
+    <form
+      ref={formRef}
+      action={action}
+      className="grid gap-6"
+      onChange={scheduleAutosave}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const submitter = event.nativeEvent.submitter as HTMLButtonElement | null;
+        if (submitter?.value !== "autosave") submitManually();
+        const formData = new FormData(event.currentTarget);
+        if (submitter?.name) {
+          formData.set(submitter.name, submitter.value);
+        }
+        startTransition(() => action(formData));
+      }}
+      noValidate
+    >
+      <input type="hidden" name="revision" value={revision} />
+      <button
+        ref={autosaveButtonRef}
+        type="submit"
+        name="saveMode"
+        value="autosave"
+        hidden
+        tabIndex={-1}
+      >
+        Entwurf automatisch speichern
+      </button>
       <ActionFeedback state={state} />
-      <div key={initial.revision} className="grid gap-8">
+      <nav aria-label="SwissJobPass-Fortschritt">
+        <ol className="grid gap-2 sm:grid-cols-4">
+          {JOBPASS_STEPS.map((step, index) => (
+            <li key={step.label}>
+              <button
+                type="button"
+                className={cn(
+                  "min-h-11 w-full rounded-xl border px-3 py-2 text-left transition-colors",
+                  index === activeStep
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-card hover:bg-muted",
+                )}
+                aria-current={index === activeStep ? "step" : undefined}
+                onClick={() => setActiveStep(index)}
+              >
+                <span className="block text-xs font-semibold">
+                  Schritt {index + 1} von {JOBPASS_STEPS.length}
+                </span>
+                <span className="block font-medium">{step.label}</span>
+                <span
+                  className={cn(
+                    "mt-0.5 block text-xs",
+                    index === activeStep
+                      ? "text-primary-foreground/80"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {step.description}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </nav>
+      <div className="grid gap-8">
         <FieldGroup
           title="Persönliche Angaben"
           description="Diese Angaben gehören zu deinem Konto. Im anonymen Talent Radar werden sie nicht ausgegeben."
+          hidden={activeStep !== 0}
         >
           <div className="grid gap-5 sm:grid-cols-2">
             <TextField name="firstName" label="Vorname" defaultValue={initial.firstName} state={state} maxLength={100} autoComplete="given-name" />
@@ -139,7 +304,7 @@ export function JobPassForm({
           </div>
         </FieldGroup>
 
-        <FieldGroup title="Berufliche Ziele" description="Diese Präferenzen helfen später bei nachvollziehbaren Job-Empfehlungen.">
+        <FieldGroup title="Berufliche Ziele" description="Diese Präferenzen helfen später bei nachvollziehbaren Job-Empfehlungen." hidden={activeStep !== 1}>
           <div className="grid gap-5">
             <div className="grid gap-2">
               <Label htmlFor="desiredTitles">Wunschberufe</Label>
@@ -153,7 +318,7 @@ export function JobPassForm({
           </div>
         </FieldGroup>
 
-        <FieldGroup title="Sprachen" description="Wähle mindestens eine Sprache und das passende Niveau.">
+        <FieldGroup title="Sprachen" description="Wähle mindestens eine Sprache und das passende Niveau." hidden={activeStep !== 1}>
           <div className="grid gap-3 sm:grid-cols-2">
             {LANGUAGE_OPTIONS.map((language) => {
               const current = initial.languages.find(({ code }) => code === language.code);
@@ -174,7 +339,7 @@ export function JobPassForm({
           <FieldError state={state} field="languages" />
         </FieldGroup>
 
-        <FieldGroup title="Rahmenbedingungen" description="Optionale Lohnangaben werden nur als grober Bucket in der anonymen Vorschau gezeigt.">
+        <FieldGroup title="Rahmenbedingungen" description="Optionale Lohnangaben werden nur als grober Bucket in der anonymen Vorschau gezeigt." hidden={activeStep !== 2}>
           <div className="grid gap-5 sm:grid-cols-2">
             <NumberField name="workloadMin" label="Pensum min. (%)" defaultValue={initial.workloadMin} state={state} min={1} max={100} step={1} />
             <NumberField name="workloadMax" label="Pensum max. (%)" defaultValue={initial.workloadMax} state={state} min={1} max={100} step={1} />
@@ -199,7 +364,7 @@ export function JobPassForm({
         </FieldGroup>
 
         {legacyCvMetadataEnabled ? (
-          <FieldGroup title="CV-Metadaten (Legacy)" description="Solange der sichere Dokumenten-Vault deaktiviert ist, erfasst dieser Demo-Pfad weiterhin nur Dateiname, Grösse und MIME-Typ. Es werden hier keine Dateibytes übertragen oder als Download angeboten.">
+          <FieldGroup title="CV-Metadaten (Legacy)" description="Solange der sichere Dokumenten-Vault deaktiviert ist, erfasst dieser Demo-Pfad weiterhin nur Dateiname, Grösse und MIME-Typ. Es werden hier keine Dateibytes übertragen oder als Download angeboten." hidden={activeStep !== 2}>
             <CvMetadataFields
               key={initial.revision}
               currentDocument={initial.currentDocument}
@@ -208,7 +373,7 @@ export function JobPassForm({
           </FieldGroup>
         ) : null}
 
-        <FieldGroup title="Anonymer Talent Radar" description="Die Einwilligung ist freiwillig und getrennt von Marketing oder Nutzungsbedingungen.">
+        <FieldGroup title="Anonymer Talent Radar" description="Die Einwilligung ist freiwillig und getrennt von Marketing oder Nutzungsbedingungen." hidden={activeStep !== 3}>
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
             <label className="flex items-start gap-3">
               <input type="checkbox" name="radarVisible" value="true" defaultChecked={initial.radarVisible} className="mt-1 size-4 shrink-0 accent-primary" />
@@ -221,10 +386,54 @@ export function JobPassForm({
         </FieldGroup>
       </div>
 
-      <Button type="submit" size="lg" className="h-11 w-full sm:w-fit" disabled={pending}>
-        <SaveIcon aria-hidden="true" />
-        {pending ? "SwissJobPass wird gespeichert …" : "SwissJobPass speichern"}
-      </Button>
+      <div className="sticky bottom-3 z-10 grid gap-3 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:items-center">
+        <Button
+          type="button"
+          variant="outline"
+          className={cn("min-h-11", activeStep === 0 && "invisible")}
+          disabled={activeStep === 0}
+          onClick={() => setActiveStep((step) => Math.max(0, step - 1))}
+        >
+          <ArrowLeftIcon aria-hidden="true" />
+          Zurück
+        </Button>
+        <p className="flex min-h-6 items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
+          <CloudCheckIcon className="size-4 shrink-0" aria-hidden="true" />
+          {pending || autosaveStatus === "saving"
+            ? "Entwurf wird gespeichert …"
+            : autosaveStatus === "dirty"
+              ? "Änderungen warten auf Autosave."
+              : autosaveStatus === "error"
+                ? "Autosave benötigt deine Prüfung."
+                : "Entwurf sicher gespeichert."}
+        </p>
+        {activeStep < JOBPASS_STEPS.length - 1 ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11"
+            onClick={() =>
+              setActiveStep((step) =>
+                Math.min(JOBPASS_STEPS.length - 1, step + 1),
+              )
+            }
+          >
+            Weiter
+            <ArrowRightIcon aria-hidden="true" />
+          </Button>
+        ) : null}
+        <Button
+          type="submit"
+          name="saveMode"
+          value="manual"
+          size="lg"
+          className="h-11 w-full sm:w-fit"
+          disabled={pending}
+        >
+          <SaveIcon aria-hidden="true" />
+          {pending ? "Wird gespeichert …" : "Jetzt speichern"}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -306,9 +515,22 @@ export function CompleteProfileForm({
   );
 }
 
-function FieldGroup({ title, description, children }: Readonly<{ title: string; description: string; children: React.ReactNode }>) {
+function FieldGroup({
+  title,
+  description,
+  children,
+  hidden = false,
+}: Readonly<{
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  hidden?: boolean;
+}>) {
   return (
-    <fieldset className="grid min-w-0 gap-5 rounded-xl border p-4 sm:p-5">
+    <fieldset
+      className="grid min-w-0 gap-5 rounded-xl border p-4 sm:p-5"
+      hidden={hidden}
+    >
       <legend className="px-1 text-lg font-semibold">{title}</legend>
       <p className="-mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
       {children}
@@ -483,7 +705,12 @@ function LanguageRow({ code, label, level, enabled }: Readonly<{ code: string; l
 function ActionFeedback({ state }: Readonly<{ state: CandidateProfileActionState }>) {
   if (state.status === "idle") return null;
   return (
-    <Alert variant={state.status === "error" ? "destructive" : "default"} aria-live="polite">
+    <Alert
+      variant={state.status === "error" ? "destructive" : "default"}
+      aria-live="polite"
+      data-jobpass-feedback
+      tabIndex={-1}
+    >
       <AlertTitle>
         {state.status === "success"
           ? "Gespeichert"
@@ -517,6 +744,45 @@ function FieldError({ state, field }: Readonly<{ state: CandidateProfileActionSt
 
 function hasError(state: CandidateProfileActionState, field: string) {
   return Boolean(state.fieldErrors?.[field]?.length);
+}
+
+function firstStepWithError(state: CandidateProfileActionState) {
+  const fieldNames = Object.entries(state.fieldErrors ?? {})
+    .filter(([, messages]) => messages !== undefined && messages.length > 0)
+    .map(([field]) => field);
+  const stepFields = [
+    [
+      "firstName",
+      "lastName",
+      "publicDisplayName",
+      "phone",
+      "cantonId",
+      "cityLabel",
+      "summary",
+      "workPermitType",
+    ],
+    ["desiredTitles", "skillIds", "languages", "categoryIds", "jobTypes"],
+    [
+      "workloadMin",
+      "workloadMax",
+      "desiredSalaryMin",
+      "desiredSalaryMax",
+      "desiredSalaryPeriod",
+      "remotePreference",
+      "mobilityRadiusKm",
+      "availabilityDate",
+      "cv",
+      "cvFileName",
+      "cvMimeType",
+      "cvSizeBytes",
+    ],
+    ["radarVisible"],
+  ] as const;
+
+  const step = stepFields.findIndex((fields) =>
+    fieldNames.some((field) => fields.includes(field as never)),
+  );
+  return step === -1 ? null : step;
 }
 
 function nativeControlClassName(invalid: boolean) {

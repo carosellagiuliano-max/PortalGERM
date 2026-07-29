@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { cache, Suspense } from "react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { notFound } from "next/navigation";
 import {
   ArrowLeftIcon,

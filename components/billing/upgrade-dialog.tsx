@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { ArrowRightIcon, LockKeyholeIcon } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";

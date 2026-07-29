@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { LogInIcon } from "lucide-react";
 
 import { BrandLink } from "@/components/layout/brand-link";

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { notFound } from "next/navigation";
 import { CheckCircle2Icon } from "lucide-react";
 import { z } from "zod";

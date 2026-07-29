@@ -54,5 +54,23 @@ export default defineConfig({
         hasTouch: true,
       },
     },
+    {
+      name: "firefox-journeys",
+      testMatch: "**/quality/phase29-critical-journeys.spec.ts",
+      grep: /@journey/u,
+      use: {
+        ...devices["Desktop Firefox"],
+        viewport: { width: 1_440, height: 900 },
+      },
+    },
+    {
+      name: "webkit-journeys",
+      testMatch: "**/quality/phase29-critical-journeys.spec.ts",
+      grep: /@journey/u,
+      use: {
+        ...devices["Desktop Safari"],
+        viewport: { width: 1_440, height: 900 },
+      },
+    },
   ],
 });

@@ -2,13 +2,17 @@
 
 import { useActionState } from "react";
 
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { FilePlus2Icon } from "lucide-react";
 
 import { UpgradeDialog } from "@/components/billing/upgrade-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  ResponsiveTable,
+  ResponsiveTableCell,
+} from "@/components/ui/responsive-table";
 import {
   INITIAL_EMPLOYER_JOB_FORM_STATE,
   type EmployerJobFormState,
@@ -49,18 +53,10 @@ export function JobsTable({
     );
   }
   return (
-    <div
-      className="max-w-full overflow-x-auto rounded-xl border bg-card"
-      data-e2e-horizontal-scroll="true"
-      role="region"
-      aria-label="Jobtabelle"
-      tabIndex={0}
-    >
-      <table className="w-full min-w-[70rem] text-left text-sm">
+    <ResponsiveTable label="Jobs und verfügbare Aktionen">
         <thead className="border-b bg-muted/40 text-xs text-muted-foreground"><tr><th className="px-4 py-3">Titel</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Standort</th><th className="px-4 py-3">Bewerbungen</th><th className="px-4 py-3">Views</th><th className="px-4 py-3">Saves</th><th className="px-4 py-3">Fair-Job-Score</th><th className="px-4 py-3">Boost</th><th className="px-4 py-3">Aktionen</th></tr></thead>
         <tbody className="divide-y">{jobs.map((job) => <JobRow key={job.id} job={job} actions={actions} keys={idempotencyKeys[job.id] ?? {}} />)}</tbody>
-      </table>
-    </div>
+    </ResponsiveTable>
   );
 }
 
@@ -76,13 +72,15 @@ function JobRow({ job, actions, keys }: Readonly<{ job: EmployerJobListItem; act
   const states = [submitState, pauseState, pauseEditState, clonePausedState, cloneRejectedState, duplicateState, reactivateState, closeState];
   return (
     <tr className="align-top">
-      <td className="px-4 py-4"><Link href={`/employer/jobs/${job.id}`} className="font-medium text-primary hover:underline">{job.title}</Link>{job.capabilities.assignmentRole === null ? null : <p className="mt-1 text-xs text-muted-foreground">Zuweisung: {job.capabilities.assignmentRole}</p>}</td>
-      <td className="px-4 py-4"><Badge variant={job.status === "REJECTED" ? "destructive" : "outline"}>{job.status}</Badge></td>
-      <td className="px-4 py-4 text-muted-foreground">{job.location}</td>
-      <td className="px-4 py-4">{job.applications}</td><td className="px-4 py-4">{job.views}</td><td className="px-4 py-4">{job.saves}</td>
-      <td className="px-4 py-4">{job.score === null ? "Noch kein Snapshot" : `${job.score.points}/${job.score.maxPoints}`}</td>
-      <td className="px-4 py-4">{job.boostStatus ?? "—"}</td>
-      <td className="px-4 py-4">
+      <ResponsiveTableCell className="px-4 py-4" label="Titel" primary><Link href={`/employer/jobs/${job.id}`} className="font-medium text-primary hover:underline">{job.title}</Link>{job.capabilities.assignmentRole === null ? null : <p className="mt-1 text-xs text-muted-foreground">Zuweisung: {job.capabilities.assignmentRole}</p>}</ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Status"><Badge variant={job.status === "REJECTED" ? "destructive" : "outline"}>{job.status}</Badge></ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4 text-muted-foreground" label="Standort">{job.location}</ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Bewerbungen">{job.applications}</ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Views">{job.views}</ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Saves">{job.saves}</ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Fair-Job-Score">{job.score === null ? "Noch kein Snapshot" : `${job.score.points}/${job.score.maxPoints}`}</ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Boost">{job.boostStatus ?? "—"}</ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Aktionen" actions>
         <div className="flex max-w-[24rem] flex-wrap gap-2">
           <Link href={`/employer/jobs/${job.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>Öffnen</Link>
           {job.capabilities.manageLifecycle && job.status === "PUBLISHED" ? (
@@ -106,7 +104,7 @@ function JobRow({ job, actions, keys }: Readonly<{ job: EmployerJobListItem; act
         </div>
         {states.flatMap((state) => state.status === "idle" || state.message === undefined ? [] : [state.message]).map((message, index) => <p key={`${message}-${index}`} className="mt-2 max-w-sm text-xs text-muted-foreground" role="status">{message}</p>)}
         {states.map((state, index) => state.upgradePrompt === undefined ? null : <div className="mt-2" key={`${state.nextIdempotencyKey ?? state.upgradePrompt.reason}-${index}`}><UpgradeDialog prompt={state.upgradePrompt} defaultOpen /></div>)}
-      </td>
+      </ResponsiveTableCell>
     </tr>
   );
 }

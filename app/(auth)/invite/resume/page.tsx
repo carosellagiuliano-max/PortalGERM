@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { cookies } from "next/headers";
 
 import { AuthCard, AuthTextLink } from "@/components/auth/auth-card";

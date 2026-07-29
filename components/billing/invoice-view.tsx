@@ -6,6 +6,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  ResponsiveTable,
+  ResponsiveTableCell,
+} from "@/components/ui/responsive-table";
 import { formatChfFromRappen, formatDate } from "@/lib/utils/format";
 
 type InvoiceViewModel = Readonly<{
@@ -78,22 +82,20 @@ export function InvoiceView({ invoice }: Readonly<{ invoice: InvoiceViewModel }>
             {invoice.paidAt === null ? null : <p className="mt-2 text-emerald-700">Bezahlt am {formatDate(invoice.paidAt)}</p>}
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[44rem] text-left text-sm">
+        <ResponsiveTable label={`Positionen der Rechnung ${invoice.number}`}>
             <thead className="text-muted-foreground"><tr><th className="pb-2">Position</th><th className="pb-2 text-right">Menge</th><th className="pb-2 text-right">Einzel netto</th><th className="pb-2 text-right">MWST</th><th className="pb-2 text-right">Total</th></tr></thead>
             <tbody>
               {invoice.lines.map((line) => (
                 <tr key={line.id} className="border-t">
-                  <td className="py-3">{line.descriptionSnapshot}</td>
-                  <td className="py-3 text-right tabular-nums">{line.quantity}</td>
-                  <td className="py-3 text-right tabular-nums">{formatChfFromRappen(line.unitNetRappen)}</td>
-                  <td className="py-3 text-right tabular-nums">{formatChfFromRappen(line.vatRappen)} ({(line.taxRateBasisPoints / 100).toLocaleString("de-CH")} %)</td>
-                  <td className="py-3 text-right font-medium tabular-nums">{formatChfFromRappen(line.totalRappen)}</td>
+                  <ResponsiveTableCell className="px-3 py-3" label="Position" primary>{line.descriptionSnapshot}</ResponsiveTableCell>
+                  <ResponsiveTableCell className="px-3 py-3 text-right tabular-nums" label="Menge">{line.quantity}</ResponsiveTableCell>
+                  <ResponsiveTableCell className="px-3 py-3 text-right tabular-nums" label="Einzel netto">{formatChfFromRappen(line.unitNetRappen)}</ResponsiveTableCell>
+                  <ResponsiveTableCell className="px-3 py-3 text-right tabular-nums" label="MWST">{formatChfFromRappen(line.vatRappen)} ({(line.taxRateBasisPoints / 100).toLocaleString("de-CH")} %)</ResponsiveTableCell>
+                  <ResponsiveTableCell className="px-3 py-3 text-right font-medium tabular-nums" label="Total">{formatChfFromRappen(line.totalRappen)}</ResponsiveTableCell>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </ResponsiveTable>
         <dl className="ml-auto grid w-full max-w-sm gap-2 text-sm">
           <TotalRow label="Netto" value={invoice.netTotalRappen} />
           <TotalRow label="MWST" value={invoice.vatTotalRappen} />

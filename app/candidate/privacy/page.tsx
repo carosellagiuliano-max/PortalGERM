@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import {
   updateCandidateAnalyticsConsentAction,
@@ -15,6 +15,10 @@ import { RadarVisibilityForm } from "@/components/candidate/RadarVisibilityForm"
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ResponsiveTable,
+  ResponsiveTableCell,
+} from "@/components/ui/responsive-table";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getCandidatePrivacyDashboard } from "@/lib/candidate/privacy-dashboard";
 import { getDatabase } from "@/lib/db/client";
@@ -83,7 +87,7 @@ export default async function CandidatePrivacyPage() {
           <CardHeader><CardTitle as="h2">Einwilligungsprotokoll</CardTitle></CardHeader>
           <CardContent>
             {dashboard.consents.length === 0 ? <p className="text-muted-foreground">Noch keine Talent-Radar-Entscheidung protokolliert.</p> : (
-              <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="py-2 pr-4">Datum</th><th className="py-2 pr-4">Art</th><th className="py-2 pr-4">Wert</th><th className="py-2">Version</th></tr></thead><tbody>{dashboard.consents.map((consent) => <tr key={consent.id} className="border-b last:border-0"><td className="py-2 pr-4">{formatDate(consent.effectiveAt)}</td><td className="py-2 pr-4">Talent Radar</td><td className="py-2 pr-4">{consent.granted ? "Ein" : "Aus"}</td><td className="py-2">{consent.noticeVersion}</td></tr>)}</tbody></table></div>
+              <ResponsiveTable label="Einwilligungsprotokoll"><thead><tr className="border-b"><th className="p-3">Datum</th><th className="p-3">Art</th><th className="p-3">Wert</th><th className="p-3">Version</th></tr></thead><tbody>{dashboard.consents.map((consent) => <tr key={consent.id} className="border-b last:border-0"><ResponsiveTableCell className="p-3" label="Datum" primary>{formatDate(consent.effectiveAt)}</ResponsiveTableCell><ResponsiveTableCell className="p-3" label="Art">Talent Radar</ResponsiveTableCell><ResponsiveTableCell className="p-3" label="Wert">{consent.granted ? "Ein" : "Aus"}</ResponsiveTableCell><ResponsiveTableCell className="p-3" label="Version">{consent.noticeVersion}</ResponsiveTableCell></tr>)}</tbody></ResponsiveTable>
             )}
           </CardContent>
         </Card>

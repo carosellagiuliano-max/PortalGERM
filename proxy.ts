@@ -27,14 +27,22 @@ export function proxy(request: NextRequest) {
   const correlationId = normalizeCorrelationId(
     request.headers.get(CORRELATION_ID_HEADER),
   );
-  const nonce = createContentSecurityPolicyNonce();
-  const contentSecurityPolicy = buildContentSecurityPolicy(nonce, {
-    development: process.env.NODE_ENV === "development",
-  });
+  const prefetch = isRouterPrefetch(request);
+  const nonce = prefetch ? null : createContentSecurityPolicyNonce();
+  const contentSecurityPolicy =
+    nonce === null
+      ? null
+      : buildContentSecurityPolicy(nonce, {
+          development: process.env.NODE_ENV === "development",
+        });
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(CORRELATION_ID_HEADER, correlationId);
-  requestHeaders.set(CONTENT_SECURITY_POLICY_HEADER, contentSecurityPolicy);
-  requestHeaders.set(CONTENT_SECURITY_POLICY_NONCE_HEADER, nonce);
+  requestHeaders.delete(CONTENT_SECURITY_POLICY_HEADER);
+  requestHeaders.delete(CONTENT_SECURITY_POLICY_NONCE_HEADER);
+  if (contentSecurityPolicy !== null && nonce !== null) {
+    requestHeaders.set(CONTENT_SECURITY_POLICY_HEADER, contentSecurityPolicy);
+    requestHeaders.set(CONTENT_SECURITY_POLICY_NONCE_HEADER, nonce);
+  }
   requestHeaders.set(
     TRUSTED_PATHNAME_HEADER,
     `${request.nextUrl.pathname}${request.nextUrl.search}`,
@@ -77,14 +85,23 @@ export function proxy(request: NextRequest) {
 function setDynamicSecurityHeaders(
   headers: Headers,
   values: Readonly<{
-    contentSecurityPolicy: string;
+    contentSecurityPolicy: string | null;
     correlationId: string;
   }>,
 ) {
   headers.set(CORRELATION_ID_HEADER, values.correlationId);
-  headers.set(
-    CONTENT_SECURITY_POLICY_HEADER,
-    values.contentSecurityPolicy,
+  if (values.contentSecurityPolicy !== null) {
+    headers.set(
+      CONTENT_SECURITY_POLICY_HEADER,
+      values.contentSecurityPolicy,
+    );
+  }
+}
+
+function isRouterPrefetch(request: NextRequest) {
+  return (
+    request.headers.has("next-router-prefetch") ||
+    request.headers.get("purpose")?.toLowerCase() === "prefetch"
   );
 }
 
@@ -123,6 +140,13 @@ function parseTrustedProxyHops(value: string | undefined) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+    {
+      source:
+        "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
+    },
   ],
 };

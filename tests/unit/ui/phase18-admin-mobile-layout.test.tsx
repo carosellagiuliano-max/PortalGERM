@@ -99,32 +99,42 @@ describe("Phase-18 admin mobile layout", () => {
     expect(correlation).toHaveClass("w-full", "min-w-0");
     expect(correlation.closest("form")).toHaveClass("min-w-0");
     expect(
-      screen.getByRole("region", { name: "Audit-Evidenztabelle" }),
-    ).toHaveAttribute("data-e2e-horizontal-scroll", "true");
+      screen.getByRole("region", { name: "Audit-Evidenz" }),
+    ).toHaveAttribute("data-responsive-table-region", "true");
   });
 
-  it("keeps invoice actions reachable in a named scroll region", async () => {
+  it("keeps invoice actions reachable in a named responsive region", async () => {
     render(await AdminInvoicesPage());
 
-    const region = screen.getByRole("region", { name: "Rechnungstabelle" });
-    expect(region).toHaveAttribute("data-e2e-horizontal-scroll", "true");
+    const region = screen.getByRole("region", {
+      name: "Rechnungen und Belege",
+    });
+    expect(region).toHaveAttribute("data-responsive-table-region", "true");
     const action = screen.getByRole("link", { name: "Anzeigen" });
     expect(action).toHaveClass("whitespace-nowrap");
-    expect(action.closest("td")).toHaveClass("sticky", "right-0");
+    expect(action.closest("td")).toHaveAttribute(
+      "data-responsive-actions",
+      "true",
+    );
   });
 
   it("contains order links and keeps the primary action reachable", async () => {
     render(await AdminOrdersPage());
 
-    const region = screen.getByRole("region", { name: "Bestellungstabelle" });
-    expect(region).toHaveAttribute("data-e2e-horizontal-scroll", "true");
+    const region = screen.getByRole("region", {
+      name: "Bestellungen und Belege",
+    });
+    expect(region).toHaveAttribute("data-responsive-table-region", "true");
     expect(
       screen.getByRole("link", { name: "Beispiel AG" }).closest(
-        '[data-e2e-horizontal-scroll="true"]',
+        '[data-responsive-table-region="true"]',
       ),
     ).toBe(region);
     const action = screen.getByRole("link", { name: "Prüfen" });
     expect(action).toHaveClass("whitespace-nowrap");
-    expect(action.closest("td")).toHaveClass("sticky", "right-0");
+    expect(action.closest("td")).toHaveAttribute(
+      "data-responsive-actions",
+      "true",
+    );
   });
 });

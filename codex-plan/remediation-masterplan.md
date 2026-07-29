@@ -357,7 +357,7 @@ Headroom, Forecast, Alert und Owner.
 | [ ] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md) | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034` | beweisgestützter, vier-Augen-fähiger Trust-Lifecycle mit Ablauf, Re-Review und schneller Sperrung |
 | [x] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md) | `STH-012` | Candidate `291b953`: owner-aktivierter, default-off Local-/CI-Vertrag und lokales G3 `PASS` für additive Personas, expliziten Session-/Company-Kontext, Invitation, Privacy und Admintrennung; Demand-/Staging-/Launch-Go offen, siehe [Evidence](./evidence/2026-07-28-phase-27.md) |
 | [x] 28 | [Recruiting-Workflows](./28-recruiting-workflows.md) | `STH-015`, `STH-016` | owner-aktivierte, getrennte default-off Local-/CI-Technikverträge für candidate-owned externen Tracker und persistente Interviewplanung; Demand-/Privacy-/Ops-/Support-/Provider-/Staging-/LIVE-Gates bleiben offen, siehe [Evidence](./evidence/2026-07-29-phase-28.md) |
-| [ ] 29 | [Research, UX, Mobile und Accessibility](./29-ux-mobile-accessibility.md) | `STH-023`, `STH-025`, `STH-033`; UX-Regression `STH-026` | früher moderierter Research-Track und später bedienbare Cross-Browser-/Mobile-/A11y-Abnahme |
+| [ ] 29 | [Research, UX, Mobile und Accessibility](./29-ux-mobile-accessibility.md) | `STH-023`, `STH-025`, `STH-033`; UX-Regression `STH-026` | technische Responsive-/JobPass-/3-Engine-/A11y-Automationsbasis lokal `PASS`; zwei reale Research-Runden, NVDA/VoiceOver und finaler Release-Scope-Re-Test offen, siehe [Evidence](./evidence/2026-07-29-phase-29.md) |
 | [ ] 30 | [Startcluster-Suche, Freshness und Scale Operations](./30-search-scale-operations.md) | 30A: `STH-019`, `STH-036`; 30B: `STH-020/021`; 30C: `STH-027`; 30D: `STH-032` | gemeinsamer berufsfachlicher Suchvertrag samt sicherem Lernkreislauf, Job-Freshness in allen Consumern sowie triggerbasierte Scale-/Sitemap-Arbeit |
 | [ ] 31 | [Monetarisierung und Marktvalidierung](./31-monetization-market-validation.md) | `STH-018`, `STH-022`, `STH-028`, `STH-034`, `STH-035`, `STH-037` | genau ein erster Cluster, WTP vor Ausbau, real lieferbare Basis-/Serviceangebote sowie belegte Kapazität, Stückkosten, Cashflow und Service-Recovery |
 | [ ] 32 | [Finaler Production-Release-Audit](./32-production-release-audit.md) | `STH-024` und Abschluss aller `STH-001`–`STH-037` | zielklassenspezifische Freigabe eines exakten Commits/Artefakts mit vollständiger automatischer, manueller und externer Evidence |
@@ -773,6 +773,16 @@ default-off Flags umgesetzt. Der vollständige lokale G3-Nachweis steht in
 Demand-, Provider-, Staging- oder LIVE-Go.
 
 ### [ ] 29 — Research, UX, Mobile und Accessibility
+
+**Aktueller Stand 2026-07-29:** Die technische 29B-Basis ist implementiert
+und lokal vollständig regressionsgeprüft: gemeinsames Responsive-Table-
+Pattern, JobPass Stepper/Autosave, zentraler Trust-Copy-Vertrag, Chromium/
+Firefox/WebKit sowie automatisierte Axe-/Keyboard-/Reflow-/Contrast-/Motion-
+Prüfungen. Protocol v1 und die leere Ergebnisvorlage für 29A sind
+vorregistriert. Die Phase bleibt `[ ]`, weil keine echten moderierten Runden
+und keine realen NVDA-/VoiceOver-Smokes durchgeführt wurden und der nach
+30A/30D stabile Release-Scope erneut geprüft werden muss. Siehe
+[Phase-29-Evidence](./evidence/2026-07-29-phase-29.md).
 
 **Zweck:** 29A startet nach Phase 19 mit moderierten Candidate-, Employer-
 und Operator-Aufgaben und misst Task Success, Zeit, Fehler, Abbruch und

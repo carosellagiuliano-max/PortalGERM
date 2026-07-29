@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { CheckoutPreview } from "@/lib/billing/employer-read-model";
+import { CHECKOUT_CALCULATION_COPY } from "@/lib/ux/trust-copy";
 import { formatChfFromRappen } from "@/lib/utils/format";
 
 export function CheckoutSummary({ preview }: Readonly<{ preview: CheckoutPreview }>) {
@@ -56,8 +57,8 @@ export function CheckoutSummary({ preview }: Readonly<{ preview: CheckoutPreview
             />
           </dl>
           <p className="text-xs leading-5 text-muted-foreground">
-            Alle Beträge werden serverseitig in Rappen berechnet. Die MWST wird
-            pro Rechnungszeile gerundet. Dies ist ein lokaler Mock-Zahlungsvorgang.
+            {CHECKOUT_CALCULATION_COPY} Dies ist ein lokaler
+            Mock-Zahlungsvorgang.
           </p>
         </CardContent>
       </Card>

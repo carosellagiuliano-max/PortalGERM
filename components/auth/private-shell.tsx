@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { LogOutIcon } from "lucide-react";
 
 import { SessionRefresh } from "@/components/auth/session-refresh";

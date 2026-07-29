@@ -16,6 +16,7 @@ import type {
   EmployerCompanyActionState,
   EmployerVerificationView,
 } from "@/lib/employer/company";
+import { COMPANY_VERIFICATION_SCOPE_COPY } from "@/lib/ux/trust-copy";
 
 const INITIAL_ACTION_STATE: EmployerCompanyActionState = Object.freeze({
   status: "idle",
@@ -91,7 +92,7 @@ function VerificationSummary({
         <AlertTitle>Noch kein Prüfzyklus</AlertTitle>
         <AlertDescription>
           {canManage
-            ? "Reiche nachvollziehbare Firmennachweise ein. Das aktive Firmenprofil und das Verifizierungsabzeichen bleiben zwei getrennte Zustände."
+            ? `Reiche nachvollziehbare Firmennachweise ein. ${COMPANY_VERIFICATION_SCOPE_COPY}`
             : "Für diese Firma wurde noch keine Verifizierungsanfrage gespeichert."}
         </AlertDescription>
       </Alert>

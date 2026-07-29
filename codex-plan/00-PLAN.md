@@ -290,7 +290,11 @@ Provider-, Staging- und LIVE-Gates bleiben offen. Siehe
 
 ### [ ] 29 — UX, Mobile und Accessibility
 
-[`29-ux-mobile-accessibility.md`](./29-ux-mobile-accessibility.md) · Cross-Browser-/Assistive-Technology-Abnahme und mobile Action-Parität.
+[`29-ux-mobile-accessibility.md`](./29-ux-mobile-accessibility.md) · Die
+responsive, Cross-Browser- und automatisierte A11y-Technikbasis ist lokal
+grün; echte moderierte Runden, NVDA/VoiceOver und der finale Release-Scope-
+Re-Test bleiben offen. Siehe
+[Phase-29-Evidence](./evidence/2026-07-29-phase-29.md).
 
 ### [ ] 30 — Startcluster-Suche und Scale Operations
 

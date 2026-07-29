@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 const items = [
   { href: "/admin/security/roles", label: "Rollen" },

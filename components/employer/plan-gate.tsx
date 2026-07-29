@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { LockKeyholeIcon } from "lucide-react";
 
 import { UpgradeDialog } from "@/components/billing/upgrade-dialog";

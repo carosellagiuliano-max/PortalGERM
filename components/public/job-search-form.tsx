@@ -1,5 +1,5 @@
 import { SearchIcon } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

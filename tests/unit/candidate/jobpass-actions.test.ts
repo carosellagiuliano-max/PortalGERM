@@ -139,6 +139,39 @@ describe("Phase-09 JobPass server actions", () => {
     );
   });
 
+  it("returns the persisted revision and explicit autosave mode for safe resume", async () => {
+    const savedRevision = new Date("2026-07-20T08:01:00.000Z");
+    mocks.save.mockResolvedValue({
+      outcome: "SAVED",
+      reopened: false,
+      consentChanged: false,
+      radarState: "OFF",
+      revision: savedRevision,
+    });
+    const formData = profileFormData();
+    formData.set("saveMode", "autosave");
+
+    const result = await saveCandidateProfileAction(INITIAL, formData);
+
+    expect(result).toMatchObject({
+      status: "success",
+      message: "Entwurf automatisch gespeichert.",
+      revision: savedRevision.toISOString(),
+      saveMode: "autosave",
+    });
+  });
+
+  it("rejects an unknown save mode before profile persistence", async () => {
+    const formData = profileFormData();
+    formData.set("saveMode", "background");
+
+    const result = await saveCandidateProfileAction(INITIAL, formData);
+
+    expect(result).toMatchObject({ status: "error" });
+    expect(result.message).toContain("Speichermodus");
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid CV metadata before touching persistence", async () => {
     const formData = profileFormData();
     formData.set("cvFileName", "payload.exe");

@@ -101,10 +101,14 @@ describe("employer Billing overview", () => {
     const ledger = screen.getByRole("region", {
       name: "Letzte Guthabenbewegungen",
     });
-    expect(orders).toHaveAttribute("data-e2e-horizontal-scroll", "true");
-    expect(ledger).toHaveAttribute("data-e2e-horizontal-scroll", "true");
-    expect(orders).toHaveClass("contain-paint");
-    expect(ledger).toHaveClass("contain-paint");
+    expect(orders).toHaveAttribute("data-responsive-table-region", "true");
+    expect(ledger).toHaveAttribute("data-responsive-table-region", "true");
+    expect(
+      screen.getByRole("table", { name: "Letzte Bestellungen" }),
+    ).toHaveAttribute("data-responsive-table", "true");
+    expect(
+      screen.getByRole("table", { name: "Letzte Guthabenbewegungen" }),
+    ).toHaveAttribute("data-responsive-table", "true");
     expect(orders.closest('[data-slot="card-content"]')).toHaveClass("min-w-0");
     expect(ledger.closest('[data-slot="card"]')).toHaveClass("min-w-0");
   });

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { CirclePauseIcon, EyeIcon, EyeOffIcon, LockKeyholeIcon, ShieldCheckIcon } from "lucide-react";
 
 import { AnonymousPreview } from "@/components/candidate/AnonymousPreview";

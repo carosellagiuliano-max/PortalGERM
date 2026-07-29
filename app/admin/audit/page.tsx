@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  ResponsiveTable,
+  ResponsiveTableCell,
+} from "@/components/ui/responsive-table";
 import { listAdminAuditEntries } from "@/lib/admin/audit-read";
 import { requireAdminPage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
@@ -94,14 +98,7 @@ export default async function AdminAuditPage({
           Keine Audit-Evidenz für diesen Filter.
         </p>
       ) : (
-        <div
-          className="overflow-x-auto rounded-lg border"
-          data-e2e-horizontal-scroll="true"
-          role="region"
-          aria-label="Audit-Evidenztabelle"
-          tabIndex={0}
-        >
-          <table className="min-w-[70rem] text-left text-sm">
+        <ResponsiveTable label="Audit-Evidenz">
             <thead className="bg-muted/50">
               <tr>
                 <th className="p-3">Zeit / Ergebnis</th>
@@ -114,7 +111,11 @@ export default async function AdminAuditPage({
             <tbody className="divide-y">
               {result.entries.map((entry) => (
                 <tr key={entry.id}>
-                  <td className="p-3 align-top">
+                  <ResponsiveTableCell
+                    className="p-3 align-top"
+                    label="Zeit und Ergebnis"
+                    primary
+                  >
                     <Badge
                       variant={
                         entry.result === "SUCCEEDED"
@@ -125,17 +126,20 @@ export default async function AdminAuditPage({
                       {entry.result}
                     </Badge>
                     <p className="mt-2">{formatDateTime(entry.createdAt)}</p>
-                  </td>
-                  <td className="p-3 align-top">
+                  </ResponsiveTableCell>
+                  <ResponsiveTableCell
+                    className="p-3 align-top"
+                    label="Aktion und Capability"
+                  >
                     <strong>{entry.action}</strong>
                     <p className="text-xs text-muted-foreground">
                       {entry.capability} · {entry.reasonCode ?? "ohne Reason-Code"}
                     </p>
-                  </td>
-                  <td className="p-3 align-top">
+                  </ResponsiveTableCell>
+                  <ResponsiveTableCell className="p-3 align-top" label="Akteur">
                     {entry.actor?.name ?? entry.actor?.email ?? entry.actorKind}
-                  </td>
-                  <td className="p-3 align-top">
+                  </ResponsiveTableCell>
+                  <ResponsiveTableCell className="p-3 align-top" label="Ziel">
                     {entry.targetType} · {entry.targetId}
                     <p className="text-xs text-muted-foreground">
                       {entry.company?.name ??
@@ -143,18 +147,20 @@ export default async function AdminAuditPage({
                           ? "ohne Firmenkontext"
                           : entry.companyId)}
                     </p>
-                  </td>
-                  <td className="p-3 align-top font-mono text-xs">
+                  </ResponsiveTableCell>
+                  <ResponsiveTableCell
+                    className="p-3 align-top font-mono text-xs"
+                    label="Correlation und Retention"
+                  >
                     {entry.correlationId}
                     <p className="mt-2 font-sans text-muted-foreground">
                       Aufbewahrung bis {formatDateTime(entry.retainUntil)}
                     </p>
-                  </td>
+                  </ResponsiveTableCell>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </ResponsiveTable>
       )}
     </div>
   );

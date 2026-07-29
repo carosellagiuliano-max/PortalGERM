@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { RADAR_CANTON_CODES_V1 } from "@/lib/talentradar/privacy-policy-v1";
 

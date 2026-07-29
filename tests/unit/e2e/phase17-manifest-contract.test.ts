@@ -348,6 +348,12 @@ function validFullManifest() {
       }),
     ),
   );
+  const projects = [
+    ...new Set([
+      ...cases.flatMap(({ results }) => results.map(({ project }) => project)),
+      ...quality.map(({ project }) => project),
+    ]),
+  ];
   return {
     schemaVersion: PHASE17_MANIFEST_SCHEMA_VERSION,
     fixtureVersion: PHASE17_FIXTURE_VERSION,
@@ -358,7 +364,7 @@ function validFullManifest() {
       node: "v24.18.0",
       npm: "11.16.0",
       playwright: "1.61.1",
-      projects: [PHASE17_JOURNEY_PROJECT, PHASE17_MOBILE_PROJECT],
+      projects,
     },
     database: {
       anonymousRunId: "b".repeat(24),

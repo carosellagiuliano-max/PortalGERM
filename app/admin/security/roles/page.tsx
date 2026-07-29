@@ -4,6 +4,10 @@ import { forbidden } from "next/navigation";
 import { SecurityActionForm } from "@/components/admin/security-action-form";
 import { SecurityTabs } from "@/components/admin/security-tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  ResponsiveTable,
+  ResponsiveTableCell,
+} from "@/components/ui/responsive-table";
 import { hasAdminCapability } from "@/lib/admin/capabilities";
 import { listAdminSecurityGovernance } from "@/lib/admin/security-governance";
 import { requireAdminPage } from "@/lib/auth/route-guards";
@@ -192,8 +196,7 @@ export default async function AdminSecurityRolesPage() {
             Keine aktive Zuweisung.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border" role="region" aria-label="Aktive Adminrollen" tabIndex={0}>
-            <table className="min-w-[58rem] text-left text-sm">
+          <ResponsiveTable label="Aktive Adminrollen">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="p-3">Person</th>
@@ -205,24 +208,24 @@ export default async function AdminSecurityRolesPage() {
               <tbody className="divide-y">
                 {model.assignments.map((assignment) => (
                   <tr key={assignment.id}>
-                    <td className="p-3">
+                    <ResponsiveTableCell className="p-3" label="Person" primary>
                       {assignment.user.name ?? assignment.user.email}
                       <p className="text-xs text-muted-foreground">
                         {assignment.user.email} · {assignment.user.status}
                       </p>
-                    </td>
-                    <td className="p-3">
+                    </ResponsiveTableCell>
+                    <ResponsiveTableCell className="p-3" label="Rolle und Duty">
                       {assignment.adminRole.name}
                       <p className="font-mono text-xs text-muted-foreground">
                         {assignment.adminRole.code} ·{" "}
                         {assignment.adminRole.duty}
                       </p>
-                    </td>
-                    <td className="p-3">
+                    </ResponsiveTableCell>
+                    <ResponsiveTableCell className="p-3" label="Gültigkeit">
                       {formatDateTime(assignment.validFrom)} –{" "}
                       {formatDateTime(assignment.validTo)}
-                    </td>
-                    <td className="p-3">
+                    </ResponsiveTableCell>
+                    <ResponsiveTableCell className="p-3" label="Aktion" actions>
                       <SecurityActionForm>
                         <input
                           name="operation"
@@ -246,12 +249,11 @@ export default async function AdminSecurityRolesPage() {
                           Sofort widerrufen
                         </button>
                       </SecurityActionForm>
-                    </td>
+                    </ResponsiveTableCell>
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+          </ResponsiveTable>
         )}
       </section>
     </div>

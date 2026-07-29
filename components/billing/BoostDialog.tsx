@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import {
   activateIncludedBoostAction,

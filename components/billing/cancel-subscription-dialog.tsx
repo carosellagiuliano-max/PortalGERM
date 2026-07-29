@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { INITIAL_BILLING_ACTION_STATE } from "@/lib/billing/employer-action-state";
 import { formatDate } from "@/lib/utils/format";
 import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
+import { SUBSCRIPTION_CANCELLATION_EFFECT_COPY } from "@/lib/ux/trust-copy";
 
 export function CancelSubscriptionDialog({
   periodEnd,
@@ -65,9 +66,7 @@ export function CancelSubscriptionDialog({
         <form action={action} className="grid gap-4">
           <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
           <div className="rounded-lg bg-muted p-3 text-sm leading-6">
-            Teammitglieder über der Free-Sitzplatzlimite werden am Stichtag
-            suspendiert. Offene Einladungen werden widerrufen. Historische
-            Bewerbungen und Rechnungen bleiben lesbar.
+            {SUBSCRIPTION_CANCELLATION_EFFECT_COPY}
           </div>
           <fieldset className="grid gap-2 rounded-lg border p-3">
             <legend className="px-1 text-sm font-semibold">

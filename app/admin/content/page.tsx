@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { ClusterEvaluationForm } from "@/components/admin/ClusterEvaluationForm";
 import { ContentEditor } from "@/components/admin/ContentEditor";

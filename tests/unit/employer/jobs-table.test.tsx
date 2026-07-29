@@ -40,10 +40,19 @@ const reviewerJob: EmployerJobListItem = {
 describe("employer jobs table duplicate capability", () => {
   it("does not expose the mutating duplicate action to a read-only Reviewer", () => {
     const { rerender } = render(<JobsTable jobs={[reviewerJob]} actions={actions} idempotencyKeys={{}} />);
-    expect(screen.getByRole("region", { name: "Jobtabelle" })).toHaveAttribute(
-      "data-e2e-horizontal-scroll",
+    expect(
+      screen.getByRole("region", {
+        name: "Jobs und verfügbare Aktionen",
+      }),
+    ).toHaveAttribute(
+      "data-responsive-table-region",
       "true",
     );
+    expect(
+      screen.getByRole("table", {
+        name: "Jobs und verfügbare Aktionen",
+      }),
+    ).toHaveAttribute("data-responsive-table", "true");
     expect(screen.queryByRole("button", { name: "Duplizieren" })).not.toBeInTheDocument();
 
     rerender(<JobsTable jobs={[{

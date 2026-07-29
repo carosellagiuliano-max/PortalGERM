@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { EmployerApplicantReportForm } from "@/components/employer/applicant-report-form";
 import { Badge } from "@/components/ui/badge";

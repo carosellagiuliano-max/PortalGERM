@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { CheckCircle2Icon, EyeIcon, ShieldCheckIcon, Trash2Icon } from "lucide-react";
 
 import { AnonymousPreview } from "@/components/candidate/AnonymousPreview";

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { MessageCircleIcon } from "lucide-react";
 
 import { MessagePagination } from "@/components/candidate/message-pagination";

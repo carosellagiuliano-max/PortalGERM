@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { notFound } from "next/navigation";
 
 import {
@@ -8,6 +8,10 @@ import {
 } from "@/components/admin/action-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ResponsiveTable,
+  ResponsiveTableCell,
+} from "@/components/ui/responsive-table";
 import { requireAdminPage } from "@/lib/auth/route-guards";
 import { getAdminInvoiceDetail } from "@/lib/billing/admin-billing";
 import { getDatabase } from "@/lib/db/client";
@@ -131,8 +135,7 @@ export default async function AdminInvoiceDetailPage({
               </p>
             </div>
           </section>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[44rem] text-left text-sm">
+          <ResponsiveTable label={`Positionen der Rechnung ${invoice.number}`}>
               <thead className="border-y text-muted-foreground">
                 <tr>
                   <th className="py-3">Position</th>
@@ -146,30 +149,29 @@ export default async function AdminInvoiceDetailPage({
               <tbody className="divide-y">
                 {invoice.lines.map((line) => (
                   <tr key={line.id}>
-                    <td className="py-3">
+                    <ResponsiveTableCell className="px-3 py-3" label="Position" primary>
                       {line.descriptionSnapshot}
                       <span className="block text-xs text-muted-foreground">
                         Satz {(line.taxRateBasisPoints / 100).toFixed(2)} %
                       </span>
-                    </td>
-                    <td className="py-3 text-right">{line.quantity}</td>
-                    <td className="py-3 text-right">
+                    </ResponsiveTableCell>
+                    <ResponsiveTableCell className="px-3 py-3 text-right" label="Menge">{line.quantity}</ResponsiveTableCell>
+                    <ResponsiveTableCell className="px-3 py-3 text-right" label="Einzel netto">
                       {formatChfFromRappen(line.unitNetRappen)}
-                    </td>
-                    <td className="py-3 text-right">
+                    </ResponsiveTableCell>
+                    <ResponsiveTableCell className="px-3 py-3 text-right" label="Netto">
                       {formatChfFromRappen(line.netRappen)}
-                    </td>
-                    <td className="py-3 text-right">
+                    </ResponsiveTableCell>
+                    <ResponsiveTableCell className="px-3 py-3 text-right" label="MWST">
                       {formatChfFromRappen(line.vatRappen)}
-                    </td>
-                    <td className="py-3 text-right font-medium">
+                    </ResponsiveTableCell>
+                    <ResponsiveTableCell className="px-3 py-3 text-right font-medium" label="Total">
                       {formatChfFromRappen(line.totalRappen)}
-                    </td>
+                    </ResponsiveTableCell>
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+          </ResponsiveTable>
           <dl className="ml-auto grid w-full max-w-sm gap-2 text-sm">
             <div className="flex justify-between">
               <dt>Netto</dt>

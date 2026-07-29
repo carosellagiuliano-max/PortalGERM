@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { notFound, redirect } from "next/navigation";
 import { ChevronRightIcon } from "lucide-react";
 

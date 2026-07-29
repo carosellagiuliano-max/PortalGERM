@@ -7,6 +7,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import {
+  ResponsiveTable,
+  ResponsiveTableCell,
+} from "@/components/ui/responsive-table";
 import type { EmployerBillingUsage } from "@/lib/billing/employer-read-model";
 import { formatDate } from "@/lib/utils/format";
 
@@ -115,14 +119,7 @@ export function CreditSourceOverview({
               Noch keine Guthabenbewegungen.
             </p>
           ) : (
-            <div
-              className="max-w-full contain-paint overflow-x-auto"
-              data-e2e-horizontal-scroll="true"
-              role="region"
-              aria-label="Letzte Guthabenbewegungen"
-              tabIndex={0}
-            >
-              <table className="w-full min-w-[42rem] text-left text-sm">
+            <ResponsiveTable label="Letzte Guthabenbewegungen">
                 <thead className="text-muted-foreground">
                   <tr>
                     <th className="pb-2">Datum</th>
@@ -135,19 +132,18 @@ export function CreditSourceOverview({
                 <tbody>
                   {usage.ledgerHistory.map((entry) => (
                     <tr key={entry.id} className="border-t">
-                      <td className="py-3">{formatDate(entry.createdAt)}</td>
-                      <td className="py-3">{creditTypeLabel(entry.creditType)}</td>
-                      <td className="py-3">{fundingLabel(entry.fundingSource)}</td>
-                      <td className="py-3">{ledgerKindLabel(entry.kind)}</td>
-                      <td className="py-3 text-right font-medium tabular-nums">
+                      <ResponsiveTableCell className="px-3 py-3" label="Datum" primary>{formatDate(entry.createdAt)}</ResponsiveTableCell>
+                      <ResponsiveTableCell className="px-3 py-3" label="Typ">{creditTypeLabel(entry.creditType)}</ResponsiveTableCell>
+                      <ResponsiveTableCell className="px-3 py-3" label="Quelle">{fundingLabel(entry.fundingSource)}</ResponsiveTableCell>
+                      <ResponsiveTableCell className="px-3 py-3" label="Bewegung">{ledgerKindLabel(entry.kind)}</ResponsiveTableCell>
+                      <ResponsiveTableCell className="px-3 py-3 text-right font-medium tabular-nums" label="Menge">
                         {entry.amount > 0 ? "+" : ""}
                         {entry.amount}
-                      </td>
+                      </ResponsiveTableCell>
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+            </ResponsiveTable>
           )}
         </CardContent>
       </Card>

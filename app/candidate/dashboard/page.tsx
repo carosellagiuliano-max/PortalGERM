@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { JobCard } from "@/components/public/job-card";
 import { Badge } from "@/components/ui/badge";

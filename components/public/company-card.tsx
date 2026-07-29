@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { BriefcaseBusinessIcon, Building2Icon, MapPinIcon } from "lucide-react";
 
 import { CompanyTrustBadge } from "@/components/public/company-trust-badge";

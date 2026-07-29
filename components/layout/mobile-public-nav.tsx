@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { useState } from "react";
 import { LogInIcon, MenuIcon, XIcon } from "lucide-react";
 

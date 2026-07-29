@@ -1,6 +1,6 @@
 import { cache } from "react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon, Building2Icon, ExternalLinkIcon, MapPinIcon, ShieldQuestionIcon } from "lucide-react";
 

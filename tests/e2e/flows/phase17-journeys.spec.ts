@@ -191,6 +191,8 @@ async function completeSwissJobPass(page: import("@playwright/test").Page) {
     .locator('select[name="cantonId"]')
     .selectOption({ label: "Zürich (ZH)" });
   await page.locator('input[name="cityLabel"]').fill("Zürich");
+  await page.getByRole("button", { name: "Weiter", exact: true }).click();
+
   await page
     .locator('textarea[name="desiredTitles"]')
     .fill("Phase 17 Service Specialist");
@@ -212,12 +214,15 @@ async function completeSwissJobPass(page: import("@playwright/test").Page) {
     .check();
   await page.getByLabel("Festanstellung", { exact: true }).check();
   await page.getByLabel("Deutsch", { exact: true }).check();
+  await page.getByRole("button", { name: "Weiter", exact: true }).click();
+
   await page.locator('input[name="workloadMin"]').fill("80");
   await page.locator('input[name="workloadMax"]').fill("100");
   await page.locator('select[name="remotePreference"]').selectOption("ANY");
+  await page.getByRole("button", { name: "Weiter", exact: true }).click();
 
   await page
-    .getByRole("button", { name: "SwissJobPass speichern" })
+    .getByRole("button", { name: "Jetzt speichern", exact: true })
     .click();
   await expect(
     page.getByText(/SwissJobPass.*gespeichert\./u).first(),

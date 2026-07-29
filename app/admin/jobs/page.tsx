@@ -1,4 +1,4 @@
-import type { Metadata } from "next"; import Link from "next/link";
+import type { Metadata } from "next"; import Link from "@/components/shared/app-link";
 import { AdminActionForm } from "@/components/admin/action-form"; import { JobReviewTable } from "@/components/admin/JobReviewTable"; import { listAdminJobs } from "@/lib/admin/jobs"; import { requireAdminPage } from "@/lib/auth/route-guards"; import { getDatabase } from "@/lib/db/client";
 export const metadata: Metadata = { title: "Job-Prüfung" };
 const tabs = [{ key: "PENDING", label: "Pending Review" }, { key: "APPROVED", label: "Approved" }, { key: "PUBLISHED", label: "Published" }, { key: "REJECTED", label: "Rejected" }, { key: "CLOSED", label: "Closed" }, { key: "ALL", label: "All" }] as const;

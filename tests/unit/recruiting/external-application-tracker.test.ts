@@ -67,6 +67,22 @@ describe("Phase 28 external application tracker contract", () => {
         environment.secrets.session,
       ),
     ).toBeNull();
+    const [encoded, signature] = token.split(".") as [string, string];
+    const base64UrlAlphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const canonicalLastIndex = base64UrlAlphabet.indexOf(signature.at(-1)!);
+    const nonCanonicalSignature =
+      `${signature.slice(0, -1)}${base64UrlAlphabet[canonicalLastIndex + 1]}`;
+    expect(
+      Buffer.from(nonCanonicalSignature, "base64url"),
+    ).toEqual(Buffer.from(signature, "base64url"));
+    expect(
+      verifyExternalApplicationResumeIntent(
+        `${encoded}.${nonCanonicalSignature}`,
+        now,
+        environment.secrets.session,
+      ),
+    ).toBeNull();
     expect(
       verifyExternalApplicationResumeIntent(
         token,

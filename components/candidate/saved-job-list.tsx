@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { BookmarkMinusIcon, ExternalLinkIcon } from "lucide-react";
 
 import { removeSavedJobAction } from "@/app/candidate/saved-jobs/actions";

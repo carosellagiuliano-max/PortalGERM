@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { AdminActionForm, adminInputClass, adminTextareaClass } from "@/components/admin/action-form";
 import { Badge } from "@/components/ui/badge";

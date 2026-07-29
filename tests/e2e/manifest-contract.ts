@@ -11,6 +11,8 @@ export const PHASE17_MANIFEST_SCHEMA_VERSION =
 export const PHASE17_NETWORK_POLICY = "loopback-only" as const;
 export const PHASE17_JOURNEY_PROJECT = "chromium-journeys" as const;
 export const PHASE17_MOBILE_PROJECT = "chromium-mobile-360" as const;
+export const PHASE29_FIREFOX_PROJECT = "firefox-journeys" as const;
+export const PHASE29_WEBKIT_PROJECT = "webkit-journeys" as const;
 export const PHASE17_QUALITY_FILE =
   "quality/critical-routes.spec.ts" as const;
 export const PHASE18_ALL_ROUTES_QUALITY_FILE =
@@ -55,6 +57,12 @@ export const PHASE27_PERSONA_QUALITY_FILE =
   "quality/phase27-persona-quality.spec.ts" as const;
 export const PHASE28_RECRUITING_QUALITY_FILE =
   "quality/phase28-recruiting-mobile.spec.ts" as const;
+export const PHASE29_RESPONSIVE_QUALITY_FILE =
+  "quality/phase29-responsive-operations.spec.ts" as const;
+export const PHASE29_CRITICAL_JOURNEYS_FILE =
+  "quality/phase29-critical-journeys.spec.ts" as const;
+export const PHASE29_ACCESSIBILITY_FILE =
+  "quality/phase29-accessibility.spec.ts" as const;
 export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE17_QUALITY_FILE,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
@@ -78,6 +86,9 @@ export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE27_PERSONA_FLOW_FILE,
   PHASE27_PERSONA_QUALITY_FILE,
   PHASE28_RECRUITING_QUALITY_FILE,
+  PHASE29_RESPONSIVE_QUALITY_FILE,
+  PHASE29_CRITICAL_JOURNEYS_FILE,
+  PHASE29_ACCESSIBILITY_FILE,
 ] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
@@ -284,6 +295,42 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     tag: "@quality-mobile",
     file: PHASE28_RECRUITING_QUALITY_FILE,
     expectedCount: 2,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@quality-desktop",
+    file: PHASE29_RESPONSIVE_QUALITY_FILE,
+    expectedCount: 2,
+  }),
+  Object.freeze({
+    project: PHASE17_MOBILE_PROJECT,
+    tag: "@quality-mobile",
+    file: PHASE29_RESPONSIVE_QUALITY_FILE,
+    expectedCount: 2,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE29_CRITICAL_JOURNEYS_FILE,
+    expectedCount: 3,
+  }),
+  Object.freeze({
+    project: PHASE29_FIREFOX_PROJECT,
+    tag: "@journey",
+    file: PHASE29_CRITICAL_JOURNEYS_FILE,
+    expectedCount: 3,
+  }),
+  Object.freeze({
+    project: PHASE29_WEBKIT_PROJECT,
+    tag: "@journey",
+    file: PHASE29_CRITICAL_JOURNEYS_FILE,
+    expectedCount: 3,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@quality-desktop",
+    file: PHASE29_ACCESSIBILITY_FILE,
+    expectedCount: 3,
   }),
 ] as const);
 

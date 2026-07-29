@@ -96,6 +96,8 @@ export type CandidateProfileActionState = Readonly<{
   code?: "PROFILE_CONFLICT";
   fieldErrors?: Readonly<Record<string, readonly string[]>>;
   missingRequirements?: readonly CandidateRequirementCode[];
+  revision?: string;
+  saveMode?: "manual" | "autosave";
 }>;
 
 export type CandidateProfileWorkspace = Awaited<
@@ -483,6 +485,10 @@ export async function saveOwnedCandidateProfile(
           now: command.now,
         });
       }
+      const savedRevision = await transaction.candidateProfile.findUniqueOrThrow({
+        where: { id: updated.id },
+        select: { updatedAt: true },
+      });
 
       return Object.freeze({
         outcome: "SAVED" as const,
@@ -496,6 +502,7 @@ export async function saveOwnedCandidateProfile(
             : Object.freeze([] as string[]),
         activeDocumentName:
           uploaded?.safeFilename ?? updated.documents[0]?.safeFilename ?? null,
+        revision: savedRevision.updatedAt,
       });
     }, transactionOptions);
 

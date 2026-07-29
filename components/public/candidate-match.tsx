@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { SparklesIcon } from "lucide-react";
 
 import { getCurrentCandidateMatchForJob } from "@/lib/jobs/public-match";

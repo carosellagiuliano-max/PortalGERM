@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import type { LucideIcon } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";

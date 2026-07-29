@@ -81,7 +81,11 @@ export function verifyExternalApplicationResumeIntent(
     const valid = key.withValue((secret) => {
       const supplied = Buffer.from(suppliedSignature, "base64url");
       const expected = signature(encoded, secret);
-      return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+      return (
+        supplied.toString("base64url") === suppliedSignature &&
+        supplied.length === expected.length &&
+        timingSafeEqual(supplied, expected)
+      );
     });
     if (!valid) return null;
     const parsed = payloadSchema.safeParse(

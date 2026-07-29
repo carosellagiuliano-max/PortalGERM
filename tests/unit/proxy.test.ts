@@ -109,6 +109,38 @@ describe("proxy", () => {
     expect(requestPolicy).not.toContain("script-src *");
   });
 
+  it("keeps a CSP-free defensive fallback if a router prefetch reaches the proxy", () => {
+    const response = proxy(
+      new NextRequest("https://swisstalenthub.test/candidate/jobpass", {
+        headers: {
+          cookie: `session=${"A".repeat(43)}`,
+          "next-router-prefetch": "1",
+          [CONTENT_SECURITY_POLICY_NONCE_HEADER]: "attacker-nonce",
+          [CONTENT_SECURITY_POLICY_HEADER]: "script-src *",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get(CONTENT_SECURITY_POLICY_HEADER)).toBeNull();
+    expect(
+      response.headers.get(
+        `x-middleware-request-${CONTENT_SECURITY_POLICY_NONCE_HEADER}`,
+      ),
+    ).toBeNull();
+    expect(
+      response.headers.get(
+        `x-middleware-request-${CONTENT_SECURITY_POLICY_HEADER}`,
+      ),
+    ).toBeNull();
+    expect(
+      response.headers.get(`x-middleware-request-${TRUSTED_PATHNAME_HEADER}`),
+    ).toBe("/candidate/jobpass");
+    expect(
+      response.headers.get(`x-middleware-request-${TRUSTED_SOURCE_IP_HEADER}`),
+    ).toBe("127.0.0.1");
+  });
+
   it("redirects anonymous private requests and preserves the intended local path", () => {
     const request = new NextRequest(
       "https://swisstalenthub.test/employer/dashboard?tab=team",
@@ -206,6 +238,21 @@ describe("proxy", () => {
         config,
         nextConfig: {},
         url,
+      }),
+    ).toBe(expected);
+  });
+
+  it.each([
+    [{ "next-router-prefetch": "1" }, false],
+    [{ purpose: "prefetch" }, false],
+    [{ purpose: "navigate" }, true],
+  ] as const)("matches request headers %o: %s", (headers, expected) => {
+    expect(
+      doesProxyMatch({
+        config,
+        nextConfig: {},
+        url: "/jobs",
+        headers,
       }),
     ).toBe(expected);
   });

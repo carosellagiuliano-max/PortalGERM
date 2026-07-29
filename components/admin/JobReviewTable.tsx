@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
 
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { AdminActionForm, adminInputClass } from "@/components/admin/action-form";
 import { Badge } from "@/components/ui/badge";
+import {
+  ResponsiveTable,
+  ResponsiveTableCell,
+} from "@/components/ui/responsive-table";
 import { formatDateTime } from "@/lib/utils/format";
 
 type JobReviewRow = Readonly<{
@@ -25,14 +29,7 @@ export function JobReviewTable({ jobs }: Readonly<{ jobs: readonly JobReviewRow[
     return <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">Keine Jobs in dieser Queue.</p>;
   }
   return (
-    <div
-      className="overflow-x-auto rounded-lg border"
-      data-e2e-horizontal-scroll="true"
-      role="region"
-      aria-label="Job-Prüfungstabelle"
-      tabIndex={0}
-    >
-      <table className="w-full min-w-[68rem] text-left text-sm">
+    <ResponsiveTable label="Job-Prüfung und verfügbare Aktionen">
         <thead className="bg-muted/60">
           <tr><th className="p-3">Job</th><th className="p-3">Firma</th><th className="p-3">Status</th><th className="p-3">Score</th><th className="p-3">Boost</th><th className="sticky right-0 border-l bg-muted p-3"><span className="sr-only">Öffnen</span></th></tr>
         </thead>
@@ -41,11 +38,11 @@ export function JobReviewTable({ jobs }: Readonly<{ jobs: readonly JobReviewRow[
             const boost = job.boosts[0];
             return (
               <tr key={job.id} className="align-top">
-                <td className="p-3 font-medium">{job.currentRevision?.title ?? "Ohne Titel"}</td>
-                <td className="p-3">{job.company.name}</td>
-                <td className="p-3"><Badge variant="outline">{job.status}</Badge></td>
-                <td className="p-3 tabular-nums">{job.currentRevision?.scoreSnapshots?.[0] ? `${job.currentRevision.scoreSnapshots[0].scorePoints}/${job.currentRevision.scoreSnapshots[0].maxPoints}` : "–"}</td>
-                <td className="p-3">
+                <ResponsiveTableCell className="p-3 font-medium" label="Job" primary>{job.currentRevision?.title ?? "Ohne Titel"}</ResponsiveTableCell>
+                <ResponsiveTableCell className="p-3" label="Firma">{job.company.name}</ResponsiveTableCell>
+                <ResponsiveTableCell className="p-3" label="Status"><Badge variant="outline">{job.status}</Badge></ResponsiveTableCell>
+                <ResponsiveTableCell className="p-3 tabular-nums" label="Score">{job.currentRevision?.scoreSnapshots?.[0] ? `${job.currentRevision.scoreSnapshots[0].scorePoints}/${job.currentRevision.scoreSnapshots[0].maxPoints}` : "–"}</ResponsiveTableCell>
+                <ResponsiveTableCell className="p-3" label="Boost">
                   {boost === undefined ? "–" : (
                     <div className="grid gap-2">
                       <Badge>Geboostet bis {formatDateTime(boost.endsAt)}</Badge>
@@ -61,13 +58,18 @@ export function JobReviewTable({ jobs }: Readonly<{ jobs: readonly JobReviewRow[
                       </AdminActionForm>
                     </div>
                   )}
-                </td>
-                <td className="sticky right-0 border-l bg-background p-3 text-right shadow-[-6px_0_8px_-8px_rgba(15,23,42,0.35)]"><Link className="whitespace-nowrap text-primary underline" href={`/admin/jobs/${job.id}`}>Prüfen</Link></td>
+                </ResponsiveTableCell>
+                <ResponsiveTableCell
+                  className="sticky right-0 border-l bg-background p-3 text-right shadow-[-6px_0_8px_-8px_rgba(15,23,42,0.35)]"
+                  label="Aktion"
+                  actions
+                >
+                  <Link className="whitespace-nowrap text-primary underline" href={`/admin/jobs/${job.id}`}>Prüfen</Link>
+                </ResponsiveTableCell>
               </tr>
             );
           })}
         </tbody>
-      </table>
-    </div>
+    </ResponsiveTable>
   );
 }

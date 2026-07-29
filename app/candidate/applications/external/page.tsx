@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { notFound } from "next/navigation";
 
 import { ExternalTrackerResumeForm } from "@/components/candidate/external-application-actions";

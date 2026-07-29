@@ -65,6 +65,16 @@ export async function saveCandidateProfileAction(
         "Die Profilversion konnte nicht sicher bestätigt werden. Lade den SwissJobPass neu und versuche es nochmals.",
     });
   }
+  const saveMode = formData.has("saveMode")
+    ? saveModeSchema.safeParse(singleString(formData, "saveMode"))
+    : saveModeSchema.safeParse("manual");
+  if (!saveMode.success) {
+    return Object.freeze({
+      status: "error" as const,
+      message:
+        "Der Speichermodus konnte nicht sicher bestätigt werden. Bitte lade den SwissJobPass neu.",
+    });
+  }
 
   const parsed = swissJobPassSchema.safeParse(readProfileForm(formData));
   if (!parsed.success) {
@@ -90,7 +100,14 @@ export async function saveCandidateProfileAction(
         ? "SwissJobPass gespeichert. Weil eine Pflichtangabe entfernt wurde, ist das Profil wieder ein Entwurf und im Talent Radar pausiert. Ergänze die Angaben und schliesse es erneut ab."
         : result.consentChanged
           ? "SwissJobPass und deine ausdrückliche Talent-Radar-Wahl wurden gespeichert."
-          : "SwissJobPass gespeichert.",
+          : saveMode.data === "autosave"
+            ? "Entwurf automatisch gespeichert."
+            : "SwissJobPass gespeichert.",
+      revision:
+        result.revision instanceof Date
+          ? result.revision.toISOString()
+          : revision.data,
+      saveMode: saveMode.data,
     });
   } catch (error) {
     if (error instanceof CandidateProfileReferenceError) {
@@ -393,6 +410,7 @@ function profileFailureState(error: unknown): CandidateProfileActionState {
 }
 
 const profileRevisionSchema = z.iso.datetime({ offset: true });
+const saveModeSchema = z.enum(["manual", "autosave"]);
 
 function revalidateCandidateProfilePaths() {
   revalidatePath("/candidate/jobpass");

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { notFound } from "next/navigation";
 
 import { PrivacyIdentityVerifyForm } from "@/components/candidate/privacy-identity-verify-form";

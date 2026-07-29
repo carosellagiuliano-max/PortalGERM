@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import {
   INITIAL_CANDIDATE_PRIVACY_ACTION_STATE,

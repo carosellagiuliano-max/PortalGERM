@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { CheckoutSubmitForm } from "@/components/billing/checkout-submit-form";
 import { CheckoutSummary } from "@/components/billing/checkout-summary";

@@ -105,6 +105,91 @@
   }
 }
 
+@media (max-width: 1023px) {
+  [data-responsive-table-region="true"] {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  [data-responsive-table="true"],
+  [data-responsive-table="true"] tbody {
+    display: grid;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  [data-responsive-table="true"] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  [data-responsive-table="true"] tbody > tr {
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--card);
+  }
+
+  [data-responsive-table="true"] [data-responsive-cell="true"] {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 0.42fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border);
+    text-align: left;
+  }
+
+  [data-responsive-table="true"]
+    [data-responsive-cell="true"]:first-child {
+    border-top: 0;
+  }
+
+  [data-responsive-table="true"] [data-responsive-label="true"] {
+    display: block;
+  }
+
+  [data-responsive-table="true"] [data-responsive-primary="true"],
+  [data-responsive-table="true"] [data-responsive-actions="true"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-responsive-table="true"] [data-responsive-primary="true"] {
+    padding-block: 1rem;
+    background: color-mix(in oklch, var(--muted) 45%, transparent);
+  }
+
+  [data-responsive-table="true"] [data-responsive-actions="true"] {
+    position: static;
+    border-left: 0;
+    background: var(--card);
+    box-shadow: none;
+  }
+
+  [data-responsive-table="true"] [data-responsive-cell="true"] form {
+    width: 100%;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 359px) {
+  [data-responsive-table="true"] [data-responsive-cell="true"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

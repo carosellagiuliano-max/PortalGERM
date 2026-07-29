@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import { LayoutGridIcon, ListIcon, SearchIcon } from "lucide-react";
 
 import { ApplicationKanban } from "@/components/candidate/application-kanban";

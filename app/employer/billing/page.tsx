@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 import {
   ArrowRightIcon,
   BriefcaseBusinessIcon,
@@ -22,6 +22,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  ResponsiveTable,
+  ResponsiveTableCell,
+} from "@/components/ui/responsive-table";
 import { requireEmployerBillingPage } from "@/lib/billing/employer-page-access";
 import { getEmployerBillingOverview } from "@/lib/billing/employer-read-model";
 import { getDatabase } from "@/lib/db/client";
@@ -236,14 +240,7 @@ export default async function EmployerBillingPage() {
               Noch keine Bestellungen.
             </p>
           ) : (
-            <div
-              className="max-w-full contain-paint overflow-x-auto"
-              data-e2e-horizontal-scroll="true"
-              role="region"
-              aria-label="Letzte Bestellungen"
-              tabIndex={0}
-            >
-              <table className="w-full min-w-[42rem] text-left text-sm">
+            <ResponsiveTable label="Letzte Bestellungen">
                 <thead className="text-muted-foreground">
                   <tr>
                     <th className="pb-2">Datum</th>
@@ -258,9 +255,9 @@ export default async function EmployerBillingPage() {
                 <tbody>
                   {overview.recentOrders.map((order) => (
                     <tr key={order.id} className="border-t">
-                      <td className="py-3">{formatDate(order.createdAt)}</td>
-                      <td className="py-3 font-medium">{order.label}</td>
-                      <td className="py-3">
+                      <ResponsiveTableCell className="px-3 py-3" label="Datum" primary>{formatDate(order.createdAt)}</ResponsiveTableCell>
+                      <ResponsiveTableCell className="px-3 py-3 font-medium" label="Produkt oder Plan">{order.label}</ResponsiveTableCell>
+                      <ResponsiveTableCell className="px-3 py-3" label="Status">
                         <Badge
                           variant={
                             order.status === "PAID" ? "default" : "outline"
@@ -268,11 +265,11 @@ export default async function EmployerBillingPage() {
                         >
                           {orderStatusLabel(order.status)}
                         </Badge>
-                      </td>
-                      <td className="py-3 text-right tabular-nums">
+                      </ResponsiveTableCell>
+                      <ResponsiveTableCell className="px-3 py-3 text-right tabular-nums" label="Total">
                         {formatChfFromRappen(order.totalRappen)}
-                      </td>
-                      <td className="py-3 text-right">
+                      </ResponsiveTableCell>
+                      <ResponsiveTableCell className="px-3 py-3 text-right" label="Aktion" actions>
                         {order.status === "PAID" ? (
                           <Link
                             href={`/employer/billing/success?order=${encodeURIComponent(order.id)}`}
@@ -284,12 +281,11 @@ export default async function EmployerBillingPage() {
                             Details
                           </Link>
                         ) : null}
-                      </td>
+                      </ResponsiveTableCell>
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+            </ResponsiveTable>
           )}
         </CardContent>
       </Card>

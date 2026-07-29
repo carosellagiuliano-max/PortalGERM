@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/shared/app-link";
 
 import { JobsTable } from "@/components/employer/jobs-table";
 import { buttonVariants } from "@/components/ui/button";
