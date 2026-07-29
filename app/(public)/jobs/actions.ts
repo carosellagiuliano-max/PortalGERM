@@ -20,6 +20,7 @@ import {
   isValidAuthMutationOrigin,
   shouldUseSecureAuthCookies,
 } from "@/lib/auth/request-context";
+import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import {
   buildJobIntentNextPath,
   JOB_INTENT_ACTIONS_V1,
@@ -29,6 +30,8 @@ import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { publicApplicationHref } from "@/lib/jobs/job-json-ld";
 import { getPublicJobBySlug } from "@/lib/jobs/public-read-model";
+import { resolveSearchConceptKeysV2 } from "@/lib/search/concepts-v2";
+import { recordSearchLearningObservation } from "@/lib/search/learning";
 import {
   EXTERNAL_APPLICATION_RESUME_POLICY_V1,
   signExternalApplicationResumeIntent,
@@ -52,12 +55,35 @@ const publicProductAnalyticsSchema = z.discriminatedUnion("kind", [
     analyticsSessionId: z.string().uuid(),
     resultCountBucket: z.enum(["0", "1-9", "10-24", "25-49", "50+"]),
     sort: z.enum(["relevance", "newest", "fair-score", "salary", "response"]),
-    cantonCode: z.string().regex(/^[A-Z]{2}$/u).optional(),
+    cantonCode: z
+      .string()
+      .regex(/^[A-Z]{2}$/u)
+      .optional(),
     categorySlug: z
       .string()
       .min(1)
       .max(120)
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u)
+      .optional(),
+    searchQuery: z.string().trim().min(1).max(160).optional(),
+    searchFilters: z
+      .strictObject({
+        canton: safeLearningTokenList().optional(),
+        city: safeLearningTokenList().optional(),
+        radius: z.number().int().min(1).max(200).optional(),
+        category: safeLearningTokenList().optional(),
+        workloadMin: z.number().int().min(0).max(100).optional(),
+        workloadMax: z.number().int().min(0).max(100).optional(),
+        jobType: safeLearningTokenList().optional(),
+        remoteType: safeLearningTokenList().optional(),
+        language: safeLearningTokenList().optional(),
+        applicationEffort: safeLearningTokenList().optional(),
+        salaryPeriod: safeLearningTokenList().optional(),
+        salaryDisclosed: z.boolean().optional(),
+        evidence: safeLearningTokenList().optional(),
+        companyVerified: z.boolean().optional(),
+        sort: safeLearningTokenList().optional(),
+      })
       .optional(),
   }),
   z.strictObject({
@@ -80,9 +106,7 @@ export async function startPublicJobIntentAction(
   const parsed = startIntentSchema.safeParse({
     action: formData.get("action"),
     jobSlug: formData.get("jobSlug"),
-    analyticsSessionId: optionalFormString(
-      formData.get("analyticsSessionId"),
-    ),
+    analyticsSessionId: optionalFormString(formData.get("analyticsSessionId")),
   });
   if (!parsed.success) redirect("/jobs");
   const now = new Date();
@@ -124,7 +148,10 @@ export async function startPublicJobIntentAction(
         where: { id: job.id },
         select: { publishedRevisionId: true },
       });
-      if (source?.publishedRevisionId !== null && source?.publishedRevisionId !== undefined) {
+      if (
+        source?.publishedRevisionId !== null &&
+        source?.publishedRevisionId !== undefined
+      ) {
         const token = signExternalApplicationResumeIntent(
           {
             jobId: job.id,
@@ -188,13 +215,55 @@ export async function recordPublicJobAnalyticsAction(
 ): Promise<void> {
   const parsed = publicProductAnalyticsSchema.safeParse(rawInput);
   if (!parsed.success) return;
+  const request = await getAuthRequestContext();
+  if (!isValidAuthMutationOrigin(request)) return;
   const environment = getServerEnvironment();
   const runtimeProvenance = getProductAnalyticsRuntimeProvenanceV1(
     environment.APP_ENV,
   );
-  if (runtimeProvenance === null) return;
   const now = new Date();
   if (parsed.data.kind === "SEARCH_RESULTS_VIEWED") {
+    const searchEvent = parsed.data;
+    if (
+      environment.SEARCH_LEARNING_COLLECTION &&
+      searchEvent.searchQuery !== undefined &&
+      (searchEvent.resultCountBucket === "0" ||
+        resolveSearchConceptKeysV2(searchEvent.searchQuery).length === 0)
+    ) {
+      const searchLearningHash = environment.secrets.searchLearningHash;
+      if (searchLearningHash !== undefined) {
+        const database = getDatabase();
+        const rate = await consumeRequestRateLimit(
+          "SEARCH_LEARNING",
+          {},
+          request,
+          now,
+          { database, environment },
+        );
+        if (rate.allowed) {
+          await searchLearningHash.withValue((digestSecret) =>
+            recordSearchLearningObservation(
+              {
+                query: searchEvent.searchQuery as string,
+                // Client session IDs are not a Sybil boundary. A
+                // request-source pseudonym means one source contributes at
+                // most once to the same k-anonymous aggregate.
+                contributorId: searchLearningContributorId(request.sourceIp),
+                locale: "de-CH",
+                resultBucket: searchEvent.resultCountBucket,
+                filters: searchEvent.searchFilters ?? {},
+              },
+              {
+                database,
+                digestSecret,
+                now,
+              },
+            ),
+          );
+        }
+      }
+    }
+    if (runtimeProvenance === null) return;
     await trackAnalyticsEventV1(
       {
         schemaVersion: "1",
@@ -224,6 +293,7 @@ export async function recordPublicJobAnalyticsAction(
     );
     return;
   }
+  if (runtimeProvenance === null) return;
   const job = await getPublicJobBySlug(parsed.data.jobSlug, { now });
   if (job === null) return;
   const provenance = await loadPublicJobAnalyticsProvenance(
@@ -253,6 +323,24 @@ export async function recordPublicJobAnalyticsAction(
     },
     createPrismaAnalyticsWriter(getDatabase()),
   );
+}
+
+function safeLearningTokenList() {
+  return z
+    .string()
+    .min(1)
+    .max(96)
+    .regex(/^[A-Za-z0-9,._-]+$/u);
+}
+
+function searchLearningContributorId(sourceIp: string): string {
+  const digest = createHash("sha256")
+    .update(`search-learning-source-v1\0${sourceIp}`, "utf8")
+    .digest("hex");
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(
+    13,
+    16,
+  )}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
 }
 
 async function recordApplyIntent(

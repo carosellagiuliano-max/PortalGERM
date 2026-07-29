@@ -172,8 +172,12 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     expect(slugs).not.toContain(SLUGS.unverified);
     expect(page.totalEligible).toBe(4);
 
-    await expect(getPublicJobBySlug(SLUGS.draft, { now: NOW })).resolves.toBeNull();
-    await expect(getPublicJobBySlug(SLUGS.expired, { now: NOW })).resolves.toBeNull();
+    await expect(
+      getPublicJobBySlug(SLUGS.draft, { now: NOW }),
+    ).resolves.toBeNull();
+    await expect(
+      getPublicJobBySlug(SLUGS.expired, { now: NOW }),
+    ).resolves.toBeNull();
     await expect(
       getPublicJobBySlug(SLUGS.unverified, { now: NOW }),
     ).resolves.toBeNull();
@@ -229,6 +233,18 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     expect(page.jobs.map((job) => job.slug)).toEqual([SLUGS.platform]);
     expect(page.totalEligible).toBe(1);
     expect(JSON.stringify(page.jobs)).not.toContain("Kubernetes-Plattform");
+  });
+
+  it("uses the Phase-30 de-CH occupation concepts in the database ranking path", async () => {
+    setRuntimeEnvironment("production");
+
+    const page = await listPublicJobs(
+      parsePublicJobSearchParams({ keyword: "Pflegefachkraft" }),
+      { now: NOW },
+    );
+
+    expect(page.jobs.map((job) => job.slug)).toEqual([SLUGS.care]);
+    expect(page.totalEligible).toBe(1);
   });
 
   it("paginates a stable production result with a signed cursor and rejects tampering", async () => {
@@ -327,11 +343,13 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
       expect(second.totalEligible).toBe(1);
       expect(second.nextCursor).toBeNull();
       expect(second.invalidCursor).toBe(false);
-      expect(second.jobs.map((job) => job.slug)).not.toEqual(expect.arrayContaining([
-        SLUGS.platform,
-        SLUGS.care,
-        "phase15-cursor-inserted-after-snapshot",
-      ]));
+      expect(second.jobs.map((job) => job.slug)).not.toEqual(
+        expect.arrayContaining([
+          SLUGS.platform,
+          SLUGS.care,
+          "phase15-cursor-inserted-after-snapshot",
+        ]),
+      );
     } finally {
       await pool().query(
         'UPDATE "Job" SET "status" = \'PUBLISHED\' WHERE "id" = $1',
@@ -342,10 +360,9 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
   });
 
   it("removes an otherwise eligible Job while an effective hide restriction exists", async () => {
-    await pool().query(
-      'DELETE FROM "ModerationRestriction" WHERE "id" = $1',
-      [IDS.restriction],
-    );
+    await pool().query('DELETE FROM "ModerationRestriction" WHERE "id" = $1', [
+      IDS.restriction,
+    ]);
     const beforeRestriction = await listPublicJobs(
       { ...emptyPublicJobSearchInput(), sort: "newest" },
       { now: NOW },
@@ -393,11 +410,14 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
 
   it("accepts UUID catalog references as the same filters as public slugs", async () => {
     setRuntimeEnvironment("production");
-    const page = await listPublicJobs(parsePublicJobSearchParams({
-      canton: IDS.cantonZh,
-      city: IDS.cityZurich,
-      category: IDS.categoryEngineering,
-    }), { now: NOW });
+    const page = await listPublicJobs(
+      parsePublicJobSearchParams({
+        canton: IDS.cantonZh,
+        city: IDS.cityZurich,
+        category: IDS.categoryEngineering,
+      }),
+      { now: NOW },
+    );
 
     expect(page.jobs.map((job) => job.slug)).toEqual([SLUGS.platform]);
   });
@@ -454,7 +474,9 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
       SLUGS.platform,
     ]);
     expect(page.jobs.every((job) => job.response.known)).toBe(true);
-    expect(JSON.stringify(page.jobs)).not.toContain("phase15-response-candidate");
+    expect(JSON.stringify(page.jobs)).not.toContain(
+      "phase15-response-candidate",
+    );
   });
 
   it("keeps a boosted response-sorted Job coherent in the sponsored zone", async () => {
@@ -467,7 +489,12 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
         '  "id", "companyId", "creditType", "fundingSource", "periodStart", "periodEnd"',
         ") VALUES ($1, $2, 'JOB_BOOST', 'ADMIN_GRANT', $3, $4)",
       ].join("\n"),
-      [IDS.responseBoostAccount, IDS.secondVerifiedCompany, fundingStart, fundingEnd],
+      [
+        IDS.responseBoostAccount,
+        IDS.secondVerifiedCompany,
+        fundingStart,
+        fundingEnd,
+      ],
     );
     await pool().query(
       [
@@ -477,7 +504,14 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
         ") VALUES ($1, $2, 'ADMIN_GRANT', 'GRANT', 1, $3, $4,",
         "  'phase15-response-boost-grant', 'TEST_FIXTURE', $5, $6)",
       ].join("\n"),
-      [IDS.responseBoostGrant, IDS.responseBoostAccount, fundingStart, fundingEnd, IDS.user, NOW],
+      [
+        IDS.responseBoostGrant,
+        IDS.responseBoostAccount,
+        fundingStart,
+        fundingEnd,
+        IDS.user,
+        NOW,
+      ],
     );
     await pool().query(
       [
@@ -565,9 +599,7 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
       { now: NOW },
     );
 
-    expect(page.jobs.map((job) => job.slug)).toEqual([
-      "phase15-global-needle",
-    ]);
+    expect(page.jobs.map((job) => job.slug)).toEqual(["phase15-global-needle"]);
     expect(page.totalEligible).toBe(1);
     expect(page.resultCountIsExact).toBe(true);
     expect(page.candidateSetTruncated).toBe(false);
@@ -589,7 +621,9 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     expect(benchmark.explainExecutionMs).toBeGreaterThanOrEqual(0);
     expect(benchmark.broadExplainExecutionMs).toBeGreaterThanOrEqual(0);
     expect(benchmark.structuredExplainIndexes.length).toBeGreaterThan(0);
-    process.stdout.write(`PHASE15_SEARCH_BENCHMARK ${JSON.stringify(benchmark)}\n`);
+    process.stdout.write(
+      `PHASE15_SEARCH_BENCHMARK ${JSON.stringify(benchmark)}\n`,
+    );
   }, 30_000);
 });
 
@@ -720,7 +754,8 @@ async function insertFixtures(target: Pool) {
     companyId: IDS.verifiedCompany,
     slug: SLUGS.platform,
     title: "Senior Platform Engineer",
-    description: "Entwickle sichere Plattformen für den Schweizer Arbeitsmarkt.",
+    description:
+      "Entwickle sichere Plattformen für den Schweizer Arbeitsmarkt.",
     status: "PUBLISHED",
     provenance: "LIVE",
     categoryId: IDS.categoryEngineering,
@@ -1246,14 +1281,10 @@ async function insertJob(
   );
 }
 
-async function retireJobFixture(
-  target: Pool,
-  jobId: string,
-): Promise<void> {
-  await target.query(
-    'UPDATE "Job" SET "status" = \'DRAFT\' WHERE "id" = $1',
-    [jobId],
-  );
+async function retireJobFixture(target: Pool, jobId: string): Promise<void> {
+  await target.query('UPDATE "Job" SET "status" = \'DRAFT\' WHERE "id" = $1', [
+    jobId,
+  ]);
 }
 
 async function restoreRestriction(target: Pool) {
@@ -1288,12 +1319,12 @@ async function insertLargeSearchCohort(target: Pool) {
       'INSERT INTO "Job" (',
       '  "id", "companyId", "slug", "status", "origin", "sourceReference",',
       '  "dataProvenance", "createdByUserId", "createdAt", "updatedAt"',
-      ') SELECT',
+      ") SELECT",
       "  ('15000000-0000-4000-8000-' || lpad(series::text, 12, '0'))::uuid,",
-      '  $1, CASE WHEN series = 2006 THEN \'phase15-global-needle\'',
+      "  $1, CASE WHEN series = 2006 THEN 'phase15-global-needle'",
       "    ELSE 'phase15-global-filler-' || series::text END,",
       "  'DRAFT', 'MANUAL', 'phase15-global-search', 'LIVE', $2, $3, $3",
-      'FROM generate_series(1, 2006) AS series',
+      "FROM generate_series(1, 2006) AS series",
     ].join("\n"),
     [IDS.verifiedCompany, IDS.user, atDay(-50)],
   );
@@ -1309,7 +1340,7 @@ async function insertLargeSearchCohort(target: Pool) {
       '  "inclusionStatement", "applicationContactKind",',
       '  "applicationContactValue", "authoredByUserId", "contentChecksum",',
       '  "submittedAt", "approvedAt", "createdAt"',
-      ') SELECT',
+      ") SELECT",
       "  ('15100000-0000-4000-8000-' || lpad(series::text, 12, '0'))::uuid,",
       "  ('15000000-0000-4000-8000-' || lpad(series::text, 12, '0'))::uuid,",
       "  1, 'DE', CASE WHEN series = 2006 THEN 'Globalneedle Spezialist'",
@@ -1321,7 +1352,7 @@ async function insertLargeSearchCohort(target: Pool) {
       "  'Alle qualifizierten Menschen sind willkommen.', 'EMAIL',",
       "  'jobs@example.test', $5, md5('phase15-global-' || series::text) ||",
       "  md5('phase15-global-extra-' || series::text), $6, $6, $6",
-      'FROM generate_series(1, 2006) AS series',
+      "FROM generate_series(1, 2006) AS series",
     ].join("\n"),
     [
       IDS.categoryEngineering,
@@ -1348,7 +1379,14 @@ async function insertLargeSearchCohort(target: Pool) {
       '  "updatedAt" = $2',
       "WHERE \"sourceReference\" = 'phase15-global-search'",
     ].join("\n"),
-    [atDay(-40), atDay(-1), atDay(30), IDS.categoryEngineering, IDS.cantonZh, IDS.cityZurich],
+    [
+      atDay(-40),
+      atDay(-1),
+      atDay(30),
+      IDS.categoryEngineering,
+      IDS.cantonZh,
+      IDS.cityZurich,
+    ],
   );
 }
 
@@ -1362,12 +1400,12 @@ async function insertResponseMedianCohort(target: Pool) {
       'INSERT INTO "User" (',
       '  "id", "email", "emailNormalized", "role", "status",',
       '  "dataProvenance", "updatedAt"',
-      ') SELECT',
+      ") SELECT",
       "  md5('phase15-response-user-' || series::text)::uuid,",
       "  'phase15-response-candidate-' || series::text || '@example.test',",
       "  'phase15-response-candidate-' || series::text || '@example.test',",
       "  'CANDIDATE', 'ACTIVE', 'LIVE', $1",
-      'FROM generate_series(1, 20) AS series',
+      "FROM generate_series(1, 20) AS series",
     ].join("\n"),
     [NOW],
   );
@@ -1375,12 +1413,12 @@ async function insertResponseMedianCohort(target: Pool) {
     [
       'INSERT INTO "CandidateProfile" (',
       '  "id", "userId", "firstName", "lastName", "onboardingStatus", "updatedAt"',
-      ')',
-      'SELECT',
+      ")",
+      "SELECT",
       "  md5('phase15-response-profile-' || series::text)::uuid,",
       "  md5('phase15-response-user-' || series::text)::uuid,",
       "  'Candidate', series::text, 'DRAFT', $1",
-      'FROM generate_series(1, 20) AS series',
+      "FROM generate_series(1, 20) AS series",
     ].join("\n"),
     [NOW],
   );
@@ -1389,7 +1427,7 @@ async function insertResponseMedianCohort(target: Pool) {
       'INSERT INTO "Application" (',
       '  "id", "jobId", "submittedJobRevisionId", "candidateProfileId",',
       '  "idempotencyKey", "submissionPayloadHash", "status", "submittedAt", "updatedAt"',
-      ') SELECT',
+      ") SELECT",
       "  md5('phase15-response-application-' || series::text)::uuid, $1, $2,",
       "  md5('phase15-response-profile-' || series::text)::uuid,",
       "  'phase15-response-application-' || series::text,",
@@ -1397,7 +1435,7 @@ async function insertResponseMedianCohort(target: Pool) {
       "    md5('phase15-response-payload-extra-' || series::text),",
       "  'SUBMITTED', $3::timestamptz - interval '10 days',",
       "  $3::timestamptz - interval '10 days'",
-      'FROM generate_series(1, 20) AS series',
+      "FROM generate_series(1, 20) AS series",
     ].join("\n"),
     [IDS.careJob, IDS.careRevision, NOW],
   );
@@ -1410,7 +1448,7 @@ async function insertResponseMedianCohort(target: Pool) {
       '  "applicationEffort", "requiredDocumentKinds", "confirmationNoticeVersion",',
       '  "confirmationNoticeHash", "confirmationSnapshotHash",',
       '  "confirmationSnapshotHashVersion", "submittedAt"',
-      ') SELECT',
+      ") SELECT",
       "  md5('phase15-response-snapshot-' || series::text)::uuid,",
       "  md5('phase15-response-application-' || series::text)::uuid, $1,",
       "  'Candidate', series::text,",
@@ -1423,7 +1461,7 @@ async function insertResponseMedianCohort(target: Pool) {
       "    md5('phase15-response-confirmation-extra-' || series::text),",
       "  'application-confirmation-snapshot-v1',",
       "  $2::timestamptz - interval '10 days'",
-      'FROM generate_series(1, 20) AS series',
+      "FROM generate_series(1, 20) AS series",
     ].join("\n"),
     [IDS.careRevision, NOW],
   );
@@ -1432,20 +1470,23 @@ async function insertResponseMedianCohort(target: Pool) {
       'INSERT INTO "ApplicationEvent" (',
       '  "id", "applicationId", "actorUserId", "kind", "idempotencyKey",',
       '  "correlationId", "createdAt"',
-      ') SELECT',
+      ") SELECT",
       "  md5('phase15-response-event-' || series::text)::uuid,",
       "  md5('phase15-response-application-' || series::text)::uuid, $1,",
       "  'MESSAGE_SENT', 'phase15-response-event-' || series::text,",
       "  'phase15-response-correlation-' || series::text,",
       "  $2::timestamptz - interval '10 days' + interval '60 minutes'",
-      'FROM generate_series(1, 20) AS series',
+      "FROM generate_series(1, 20) AS series",
     ].join("\n"),
     [IDS.user, NOW],
   );
 }
 
 async function benchmarkGlobalKeywordSearch() {
-  const input = parsePublicJobSearchParams({ keyword: "globalneedle", pageSize: "1" });
+  const input = parsePublicJobSearchParams({
+    keyword: "globalneedle",
+    pageSize: "1",
+  });
   const broadInput = parsePublicJobSearchParams({
     keyword: "Deterministischer",
     pageSize: "50",
@@ -1460,23 +1501,25 @@ async function benchmarkGlobalKeywordSearch() {
     Plans?: readonly ExplainNode[];
   }>;
   const explain = await pool().query<{
-    "QUERY PLAN": Array<Readonly<{
-      Plan: ExplainNode;
-      "Execution Time": number;
-    }>>;
+    "QUERY PLAN": Array<
+      Readonly<{
+        Plan: ExplainNode;
+        "Execution Time": number;
+      }>
+    >;
   }>(
     [
-      'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)',
+      "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
       'SELECT job."id"',
       'FROM "Job" AS job',
       'JOIN "JobRevision" AS revision ON revision."id" = job."publishedRevisionId"',
       'JOIN "Company" AS company ON company."id" = job."companyId"',
-      'WHERE translate(lower(revision."title"), $1, $2) LIKE \'%globalneedle%\'',
-      '   OR translate(lower(revision."description"), $1, $2) LIKE \'%globalneedle%\'',
-      '   OR translate(lower(COALESCE(revision."offer", \'\')), $1, $2) LIKE \'%globalneedle%\'',
-      '   OR translate(lower(company."name"), $1, $2) LIKE \'%globalneedle%\'',
-      '   OR translate(lower(array_to_string(revision."tasks", \' \')), $1, $2) LIKE \'%globalneedle%\'',
-      '   OR translate(lower(array_to_string(revision."requirements", \' \')), $1, $2) LIKE \'%globalneedle%\'',
+      "WHERE translate(lower(revision.\"title\"), $1, $2) LIKE '%globalneedle%'",
+      "   OR translate(lower(revision.\"description\"), $1, $2) LIKE '%globalneedle%'",
+      "   OR translate(lower(COALESCE(revision.\"offer\", '')), $1, $2) LIKE '%globalneedle%'",
+      "   OR translate(lower(company.\"name\"), $1, $2) LIKE '%globalneedle%'",
+      "   OR translate(lower(array_to_string(revision.\"tasks\", ' ')), $1, $2) LIKE '%globalneedle%'",
+      "   OR translate(lower(array_to_string(revision.\"requirements\", ' ')), $1, $2) LIKE '%globalneedle%'",
       'ORDER BY job."id" ASC LIMIT 500',
     ].join("\n"),
     [
@@ -1487,10 +1530,12 @@ async function benchmarkGlobalKeywordSearch() {
   const plan = explain.rows[0]?.["QUERY PLAN"]?.[0];
   const nodes = plan === undefined ? [] : flattenExplainNodes(plan.Plan);
   const broadExplain = await pool().query<{
-    "QUERY PLAN": Array<Readonly<{
-      Plan: ExplainNode;
-      "Execution Time": number;
-    }>>;
+    "QUERY PLAN": Array<
+      Readonly<{
+        Plan: ExplainNode;
+        "Execution Time": number;
+      }>
+    >;
   }>(
     [
       "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
@@ -1503,7 +1548,7 @@ async function benchmarkGlobalKeywordSearch() {
       '  AND job."publishedAt" <= $1 AND job."expiresAt" > $1',
       "  AND regexp_replace(normalize(lower(revision.\"description\"), NFKD), $2, '', 'g')",
       "    LIKE '%deterministischer%'",
-      "ORDER BY CASE WHEN regexp_replace(normalize(lower(revision.\"description\"), NFKD),",
+      'ORDER BY CASE WHEN regexp_replace(normalize(lower(revision."description"), NFKD),',
       "  $2, '', 'g') LIKE '%deterministischer%' THEN 1 ELSE 0 END DESC,",
       '  job."publishedAt" DESC, job."id" ASC',
       "LIMIT 51",
@@ -1511,12 +1556,15 @@ async function benchmarkGlobalKeywordSearch() {
     [NOW, "[\u0300-\u036f]"],
   );
   const broadPlan = broadExplain.rows[0]?.["QUERY PLAN"]?.[0];
-  const broadNodes = broadPlan === undefined ? [] : flattenExplainNodes(broadPlan.Plan);
+  const broadNodes =
+    broadPlan === undefined ? [] : flattenExplainNodes(broadPlan.Plan);
   const structuredExplain = await pool().query<{
-    "QUERY PLAN": Array<Readonly<{
-      Plan: ExplainNode;
-      "Execution Time": number;
-    }>>;
+    "QUERY PLAN": Array<
+      Readonly<{
+        Plan: ExplainNode;
+        "Execution Time": number;
+      }>
+    >;
   }>(
     [
       "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
@@ -1534,9 +1582,10 @@ async function benchmarkGlobalKeywordSearch() {
     [IDS.categoryHealth, IDS.cantonBe, NOW],
   );
   const structuredPlan = structuredExplain.rows[0]?.["QUERY PLAN"]?.[0];
-  const structuredNodes = structuredPlan === undefined
-    ? []
-    : flattenExplainNodes(structuredPlan.Plan);
+  const structuredNodes =
+    structuredPlan === undefined
+      ? []
+      : flattenExplainNodes(structuredPlan.Plan);
   return Object.freeze({
     dataset: "phase15-global-search-v1",
     eligibleFixtureJobs: 2_006,
@@ -1548,25 +1597,39 @@ async function benchmarkGlobalKeywordSearch() {
     broadP50Ms: roundMillis(percentile(broadSamples, 0.5)),
     broadP95Ms: roundMillis(percentile(broadSamples, 0.95)),
     explainRootNode: plan?.Plan["Node Type"] ?? "UNKNOWN",
-    explainNodeTypes: Object.freeze([...new Set(nodes.map((node) => node["Node Type"]))]),
-    explainIndexes: Object.freeze([...new Set(nodes.flatMap(
-      (node) => node["Index Name"] === undefined ? [] : [node["Index Name"]],
-    ))]),
+    explainNodeTypes: Object.freeze([
+      ...new Set(nodes.map((node) => node["Node Type"])),
+    ]),
+    explainIndexes: Object.freeze([
+      ...new Set(
+        nodes.flatMap((node) =>
+          node["Index Name"] === undefined ? [] : [node["Index Name"]],
+        ),
+      ),
+    ]),
     explainRootActualMs: roundMillis(plan?.Plan["Actual Total Time"] ?? 0),
     explainExecutionMs: roundMillis(plan?.["Execution Time"] ?? 0),
     broadExplainNodeTypes: Object.freeze([
       ...new Set(broadNodes.map((node) => node["Node Type"])),
     ]),
-    broadExplainIndexes: Object.freeze([...new Set(broadNodes.flatMap(
-      (node) => node["Index Name"] === undefined ? [] : [node["Index Name"]],
-    ))]),
+    broadExplainIndexes: Object.freeze([
+      ...new Set(
+        broadNodes.flatMap((node) =>
+          node["Index Name"] === undefined ? [] : [node["Index Name"]],
+        ),
+      ),
+    ]),
     broadExplainExecutionMs: roundMillis(broadPlan?.["Execution Time"] ?? 0),
     structuredExplainNodeTypes: Object.freeze([
       ...new Set(structuredNodes.map((node) => node["Node Type"])),
     ]),
-    structuredExplainIndexes: Object.freeze([...new Set(structuredNodes.flatMap(
-      (node) => node["Index Name"] === undefined ? [] : [node["Index Name"]],
-    ))]),
+    structuredExplainIndexes: Object.freeze([
+      ...new Set(
+        structuredNodes.flatMap((node) =>
+          node["Index Name"] === undefined ? [] : [node["Index Name"]],
+        ),
+      ),
+    ]),
     structuredExplainExecutionMs: roundMillis(
       structuredPlan?.["Execution Time"] ?? 0,
     ),
@@ -1588,9 +1651,9 @@ async function measureSearch(
   return samples.sort((left, right) => left - right);
 }
 
-function flattenExplainNodes<Node extends Readonly<{ Plans?: readonly Node[] }>>(
-  node: Node,
-): readonly Node[] {
+function flattenExplainNodes<
+  Node extends Readonly<{ Plans?: readonly Node[] }>,
+>(node: Node): readonly Node[] {
   return [node, ...(node.Plans ?? []).flatMap(flattenExplainNodes)];
 }
 

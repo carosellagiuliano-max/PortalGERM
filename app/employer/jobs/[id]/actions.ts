@@ -6,7 +6,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getEmployerContext } from "@/lib/auth/employer-context";
-import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
+import {
+  getAuthRequestContext,
+  isValidAuthMutationOrigin,
+} from "@/lib/auth/request-context";
 import {
   buildCatalogUpgradePrompt,
   buildUpgradePrompt,
@@ -33,6 +36,10 @@ import {
 } from "@/lib/employer/jobs";
 import { aiProvider } from "@/lib/providers/ai";
 import { jobroomProvider } from "@/lib/providers/jobroom";
+import {
+  markEmployerJobFilled,
+  reconfirmEmployerJobFreshness,
+} from "@/lib/jobs/freshness";
 
 export async function saveEmployerJobStepAction(
   _previousState: EmployerJobFormState,
@@ -41,9 +48,20 @@ export async function saveEmployerJobStepAction(
   const dependencies = await actionDependencies();
   if (dependencies === null) return genericError();
   const step = Number(formData.get("step"));
-  if (step !== 1 && step !== 2 && step !== 3) return errorState("Dieser Wizard-Schritt ist ungültig.");
-  const data = step === 1 ? parseStepOne(formData) : step === 2 ? parseStepTwo(formData) : parseStepThree(formData);
-  const result = await saveEmployerJobStep({ ...commandEnvelope(formData), step, data } as Parameters<typeof saveEmployerJobStep>[0], dependencies);
+  if (step !== 1 && step !== 2 && step !== 3)
+    return errorState("Dieser Wizard-Schritt ist ungültig.");
+  const data =
+    step === 1
+      ? parseStepOne(formData)
+      : step === 2
+        ? parseStepTwo(formData)
+        : parseStepThree(formData);
+  const result = await saveEmployerJobStep(
+    { ...commandEnvelope(formData), step, data } as Parameters<
+      typeof saveEmployerJobStep
+    >[0],
+    dependencies,
+  );
   if (!result.ok) {
     return commandError(
       result.code,
@@ -63,10 +81,13 @@ export async function runEmployerJobReportingCheckAction(
 ): Promise<EmployerJobFormState> {
   const dependencies = await actionDependencies();
   if (dependencies === null) return genericError();
-  const result = await runEmployerJobReportingCheck({
-    ...commandEnvelope(formData),
-    occupationCodeId: formData.get("occupationCodeId"),
-  } as Parameters<typeof runEmployerJobReportingCheck>[0], dependencies);
+  const result = await runEmployerJobReportingCheck(
+    {
+      ...commandEnvelope(formData),
+      occupationCodeId: formData.get("occupationCodeId"),
+    } as Parameters<typeof runEmployerJobReportingCheck>[0],
+    dependencies,
+  );
   if (!result.ok) return commandError(result.code, result.issues);
   revalidateJob(result.value.jobId);
   redirect(`/employer/jobs/${result.value.jobId}?step=5&checked=1`);
@@ -83,12 +104,17 @@ export async function employerJobAiSuggestionAction(
     operation: stringValue(formData.get("operation")) ?? "",
     text: stringValue(formData.get("text")) ?? "",
   });
-  if (!input.success) return commandError("INVALID_INPUT", input.error.issues.map((issue) => issue.path.join(".") || "input"));
+  if (!input.success)
+    return commandError(
+      "INVALID_INPUT",
+      input.error.issues.map((issue) => issue.path.join(".") || "input"),
+    );
   const result = await getEmployerJobAiSuggestion(input.data, dependencies);
   if (!result.ok) return commandError(result.code, result.issues);
   return Object.freeze({
     status: "success",
-    message: "Der lokale Mock-Assistent hat einen editierbaren Vorschlag erstellt. Es wurde nichts automatisch gespeichert.",
+    message:
+      "Der lokale Mock-Assistent hat einen editierbaren Vorschlag erstellt. Es wurde nichts automatisch gespeichert.",
     suggestion: result.value.suggestion,
     nextIdempotencyKey: randomUUID(),
   });
@@ -100,7 +126,10 @@ export async function submitEmployerJobForReviewAction(
 ): Promise<EmployerJobFormState> {
   const dependencies = await actionDependencies();
   if (dependencies === null) return genericError();
-  const result = await submitEmployerJobForReview(commandEnvelope(formData), dependencies);
+  const result = await submitEmployerJobForReview(
+    commandEnvelope(formData),
+    dependencies,
+  );
   if (!result.ok) return commandError(result.code, result.issues);
   revalidateJob(result.value.jobId);
   redirect(`/employer/jobs/${result.value.jobId}?submitted=1`);
@@ -110,42 +139,75 @@ export async function pauseEmployerJobAction(
   previousState: EmployerJobFormState,
   formData: FormData,
 ) {
-  return lifecycleAction(previousState, formData, pauseEmployerJob, "Das Inserat wurde pausiert.");
+  return lifecycleAction(
+    previousState,
+    formData,
+    pauseEmployerJob,
+    "Das Inserat wurde pausiert.",
+  );
 }
 
 export async function pauseAndCreateEmployerJobRevisionAction(
   previousState: EmployerJobFormState,
   formData: FormData,
 ) {
-  return lifecycleAction(previousState, formData, pauseAndCreateEmployerJobRevision, "Das öffentliche Inserat wurde pausiert und eine neue Revision angelegt.", 2);
+  return lifecycleAction(
+    previousState,
+    formData,
+    pauseAndCreateEmployerJobRevision,
+    "Das öffentliche Inserat wurde pausiert und eine neue Revision angelegt.",
+    2,
+  );
 }
 
 export async function createEmployerJobRevisionFromPausedAction(
   previousState: EmployerJobFormState,
   formData: FormData,
 ) {
-  return lifecycleAction(previousState, formData, createEmployerJobRevisionFromPaused, "Aus dem pausierten Inserat wurde eine neue Revision angelegt.", 2);
+  return lifecycleAction(
+    previousState,
+    formData,
+    createEmployerJobRevisionFromPaused,
+    "Aus dem pausierten Inserat wurde eine neue Revision angelegt.",
+    2,
+  );
 }
 
 export async function createEmployerJobRevisionFromRejectedAction(
   previousState: EmployerJobFormState,
   formData: FormData,
 ) {
-  return lifecycleAction(previousState, formData, createEmployerJobRevisionFromRejected, "Die abgelehnte Revision bleibt erhalten; ein neuer Entwurf wurde angelegt.", 2);
+  return lifecycleAction(
+    previousState,
+    formData,
+    createEmployerJobRevisionFromRejected,
+    "Die abgelehnte Revision bleibt erhalten; ein neuer Entwurf wurde angelegt.",
+    2,
+  );
 }
 
 export async function reactivateEmployerJobAction(
   previousState: EmployerJobFormState,
   formData: FormData,
 ) {
-  return lifecycleAction(previousState, formData, reactivateEmployerJob, "Das unveränderte, weiterhin gültige Inserat wurde reaktiviert.");
+  return lifecycleAction(
+    previousState,
+    formData,
+    reactivateEmployerJob,
+    "Das unveränderte, weiterhin gültige Inserat wurde reaktiviert.",
+  );
 }
 
 export async function closeEmployerJobAction(
   previousState: EmployerJobFormState,
   formData: FormData,
 ) {
-  return lifecycleAction(previousState, formData, closeEmployerJob, "Das Inserat wurde geschlossen.");
+  return lifecycleAction(
+    previousState,
+    formData,
+    closeEmployerJob,
+    "Das Inserat wurde geschlossen.",
+  );
 }
 
 export async function duplicateEmployerJobAction(
@@ -154,11 +216,54 @@ export async function duplicateEmployerJobAction(
 ): Promise<EmployerJobFormState> {
   const dependencies = await actionDependencies();
   if (dependencies === null) return genericError();
-  const result = await duplicateEmployerJob(commandEnvelope(formData), dependencies);
+  const result = await duplicateEmployerJob(
+    commandEnvelope(formData),
+    dependencies,
+  );
   if (!result.ok) return commandError(result.code, result.issues);
   revalidateJob(stringValue(formData.get("jobId")) ?? result.value.jobId);
   revalidateJob(result.value.jobId);
   redirect(`/employer/jobs/${result.value.jobId}?step=1&duplicated=1`);
+}
+
+export async function reconfirmEmployerJobFreshnessAction(
+  _previousState: EmployerJobFormState,
+  formData: FormData,
+): Promise<EmployerJobFormState> {
+  const dependencies = await actionDependencies();
+  if (dependencies === null) return genericError();
+  const result = await reconfirmEmployerJobFreshness(
+    commandEnvelope(formData),
+    dependencies,
+  );
+  if (!result.ok) return freshnessError(result.code);
+  revalidateJob(result.jobId);
+  return Object.freeze({
+    status: "success",
+    message: `Die Stelle ist bestätigt und bleibt bis ${formatFreshnessDate(result.dueAt)} aktuell.`,
+    nextIdempotencyKey: randomUUID(),
+  });
+}
+
+export async function markEmployerJobFilledAction(
+  _previousState: EmployerJobFormState,
+  formData: FormData,
+): Promise<EmployerJobFormState> {
+  const dependencies = await actionDependencies();
+  if (dependencies === null) return genericError();
+  const result = await markEmployerJobFilled(
+    commandEnvelope(formData),
+    dependencies,
+  );
+  if (!result.ok) return freshnessError(result.code);
+  revalidateJob(result.jobId);
+  revalidatePath("/jobs");
+  return Object.freeze({
+    status: "success",
+    message:
+      "Die Stelle wurde als besetzt markiert und sofort aus allen öffentlichen Ausgaben entfernt.",
+    nextIdempotencyKey: randomUUID(),
+  });
 }
 
 async function lifecycleAction(
@@ -184,13 +289,28 @@ async function lifecycleAction(
     );
   }
   revalidateJob(result.value.jobId);
-  if (redirectStep !== undefined) redirect(`/employer/jobs/${result.value.jobId}?step=${redirectStep}&revisionCreated=1`);
-  return Object.freeze({ status: "success", message, nextIdempotencyKey: randomUUID() });
+  if (redirectStep !== undefined)
+    redirect(
+      `/employer/jobs/${result.value.jobId}?step=${redirectStep}&revisionCreated=1`,
+    );
+  return Object.freeze({
+    status: "success",
+    message,
+    nextIdempotencyKey: randomUUID(),
+  });
 }
 
 async function actionDependencies(): Promise<EmployerJobCommandDependencies | null> {
-  const [context, request] = await Promise.all([getEmployerContext(), getAuthRequestContext()]);
-  if (context?.current === null || context?.current === undefined || !isValidAuthMutationOrigin(request)) return null;
+  const [context, request] = await Promise.all([
+    getEmployerContext(),
+    getAuthRequestContext(),
+  ]);
+  if (
+    context?.current === null ||
+    context?.current === undefined ||
+    !isValidAuthMutationOrigin(request)
+  )
+    return null;
   const actor: EmployerJobActor = {
     userId: context.user.id,
     email: context.user.email,
@@ -198,7 +318,14 @@ async function actionDependencies(): Promise<EmployerJobCommandDependencies | nu
     membershipRole: context.current.membershipRole,
     companyId: context.current.companyId,
   };
-  return Object.freeze({ actor, correlationId: request.correlationId, database: getDatabase(), now: new Date(), aiProvider, jobroomProvider });
+  return Object.freeze({
+    actor,
+    correlationId: request.correlationId,
+    database: getDatabase(),
+    now: new Date(),
+    aiProvider,
+    jobroomProvider,
+  });
 }
 
 function commandEnvelope(formData: FormData) {
@@ -241,7 +368,9 @@ function parseStepTwo(formData: FormData) {
     requirements: parseLines(formData.get("requirements")),
     niceToHave: parseLines(formData.get("niceToHave")),
     offer: formData.get("offer"),
-    skillIds: formData.getAll("skillIds").flatMap((value) => typeof value === "string" ? [value] : []),
+    skillIds: formData
+      .getAll("skillIds")
+      .flatMap((value) => (typeof value === "string" ? [value] : [])),
     benefits: parseBenefits(formData.get("benefits")),
   };
 }
@@ -252,9 +381,13 @@ function parseStepThree(formData: FormData) {
     salaryMin: optionalValue(formData.get("salaryMin")),
     salaryMax: optionalValue(formData.get("salaryMax")),
     responseTargetDays: formData.get("responseTargetDays"),
-    applicationProcessSteps: parseLines(formData.get("applicationProcessSteps")),
+    applicationProcessSteps: parseLines(
+      formData.get("applicationProcessSteps"),
+    ),
     applicationEffort: formData.get("applicationEffort"),
-    requiredDocumentKinds: formData.getAll("requiredDocumentKinds").flatMap((value) => typeof value === "string" ? [value] : []),
+    requiredDocumentKinds: formData
+      .getAll("requiredDocumentKinds")
+      .flatMap((value) => (typeof value === "string" ? [value] : [])),
     inclusionStatement: optionalValue(formData.get("inclusionStatement")),
     applicationContactKind: formData.get("applicationContactKind"),
     applicationContactValue: formData.get("applicationContactValue"),
@@ -271,12 +404,18 @@ function parseLanguages(value: FormDataEntryValue | null) {
 function parseBenefits(value: FormDataEntryValue | null) {
   return parseLines(value).map((line) => {
     const [benefitCode = "", ...description] = line.split("|");
-    return { benefitCode: benefitCode.trim(), description: description.join("|").trim() };
+    return {
+      benefitCode: benefitCode.trim(),
+      description: description.join("|").trim(),
+    };
   });
 }
 
 function parseLines(value: FormDataEntryValue | null) {
-  return (stringValue(value) ?? "").split(/\r?\n/gu).map((line) => line.replace(/^[\s*•\-–—]+/u, "").trim()).filter(Boolean);
+  return (stringValue(value) ?? "")
+    .split(/\r?\n/gu)
+    .map((line) => line.replace(/^[\s*•\-–—]+/u, "").trim())
+    .filter(Boolean);
 }
 
 function optionalValue(value: FormDataEntryValue | null) {
@@ -303,34 +442,46 @@ async function commandError(
 ): Promise<EmployerJobFormState> {
   const messages: Readonly<Record<EmployerJobCommandCode, string>> = {
     INVALID_INPUT: "Bitte prüfe die Eingaben dieses Schritts.",
-    NOT_FOUND: "Dieses Inserat ist in deinem aktuellen Firmen- oder Zuweisungskontext nicht verfügbar.",
+    NOT_FOUND:
+      "Dieses Inserat ist in deinem aktuellen Firmen- oder Zuweisungskontext nicht verfügbar.",
     FORBIDDEN: "Diese Aktion ist mit deiner Rolle nicht erlaubt.",
-    CONFLICT: "Der Inseratestand hat sich geändert. Bitte lade die Seite neu; es wurde nichts überschrieben.",
-    INCOMPLETE: "Vor der Einreichung fehlen noch Pflichtangaben oder der Compliance-Check.",
-    PROVIDER_MISMATCH: "Der Mock-Check passt nicht zum versionierten Datensatz und wurde nicht gespeichert.",
-    QUOTA_EXCEEDED: "Das aktive Joblimit ist erreicht. Der Entwurf bleibt unverändert erhalten.",
+    CONFLICT:
+      "Der Inseratestand hat sich geändert. Bitte lade die Seite neu; es wurde nichts überschrieben.",
+    INCOMPLETE:
+      "Vor der Einreichung fehlen noch Pflichtangaben oder der Compliance-Check.",
+    PROVIDER_MISMATCH:
+      "Der Mock-Check passt nicht zum versionierten Datensatz und wurde nicht gespeichert.",
+    QUOTA_EXCEEDED:
+      "Das aktive Joblimit ist erreicht. Der Entwurf bleibt unverändert erhalten.",
     VERIFICATION_REQUIRED: "Die Firma benötigt eine aktuelle Verifizierung.",
-    RESTRICTED: "Eine aktive Moderationseinschränkung verhindert die Reaktivierung.",
+    RESTRICTED:
+      "Eine aktive Moderationseinschränkung verhindert die Reaktivierung.",
+    DUPLICATE:
+      "Ein inhaltlich identisches Inserat dieser Firma ist bereits aktiv.",
     WRITE_FAILED: "Die Aktion konnte nicht vollständig gespeichert werden.",
   };
-  const suffix = issues === undefined || issues.length === 0 ? "" : ` Betroffen: ${issues.join(", ")}.`;
-  const upgradePrompt = code === "QUOTA_EXCEEDED"
-    ? dependencies === undefined
-      ? buildUpgradePrompt({
-          reason: quotaReason ?? "ACTIVE_JOB_LIMIT_REACHED",
-        })
-      : await buildCatalogUpgradePrompt(
-          {
+  const suffix =
+    issues === undefined || issues.length === 0
+      ? ""
+      : ` Betroffen: ${issues.join(", ")}.`;
+  const upgradePrompt =
+    code === "QUOTA_EXCEEDED"
+      ? dependencies === undefined
+        ? buildUpgradePrompt({
             reason: quotaReason ?? "ACTIVE_JOB_LIMIT_REACHED",
-            actorRole: dependencies.actor.membershipRole,
-            suggestedPlanSlug,
-          },
-          {
-            database: dependencies.database,
-            now: dependencies.now ?? new Date(),
-          },
-        )
-    : undefined;
+          })
+        : await buildCatalogUpgradePrompt(
+            {
+              reason: quotaReason ?? "ACTIVE_JOB_LIMIT_REACHED",
+              actorRole: dependencies.actor.membershipRole,
+              suggestedPlanSlug,
+            },
+            {
+              database: dependencies.database,
+              now: dependencies.now ?? new Date(),
+            },
+          )
+      : undefined;
   return Object.freeze({
     status: code === "CONFLICT" ? "conflict" : "error",
     message: `${messages[code]}${suffix}`,
@@ -344,5 +495,30 @@ function genericError() {
 }
 
 function errorState(message: string): EmployerJobFormState {
-  return Object.freeze({ status: "error", message, nextIdempotencyKey: randomUUID() });
+  return Object.freeze({
+    status: "error",
+    message,
+    nextIdempotencyKey: randomUUID(),
+  });
+}
+
+function freshnessError(
+  code: "INVALID_INPUT" | "NOT_FOUND" | "FORBIDDEN" | "CONFLICT",
+): EmployerJobFormState {
+  const message =
+    code === "CONFLICT"
+      ? "Der Stellenstand hat sich geändert. Bitte lade die Seite neu."
+      : code === "FORBIDDEN"
+        ? "Nur Owner oder Admins der Firma dürfen die Aktualität bestätigen."
+        : code === "NOT_FOUND"
+          ? "Die veröffentlichte Stelle ist in diesem Firmenkontext nicht verfügbar."
+          : "Die Aktualitätsaktion war ungültig.";
+  return errorState(message);
+}
+
+function formatFreshnessDate(value: Date): string {
+  return new Intl.DateTimeFormat("de-CH", {
+    dateStyle: "medium",
+    timeZone: "Europe/Zurich",
+  }).format(value);
 }

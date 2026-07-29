@@ -388,6 +388,32 @@ describe("parseEnvironment", () => {
     expectValidationFailure({ [variable]: "not-approved-yet" }, variable);
   });
 
+  it("requires a purpose-separated secret before Phase-30 search learning can collect", () => {
+    expectValidationFailure(
+      { SEARCH_LEARNING_COLLECTION: "true" },
+      "SEARCH_LEARNING_HASH_SECRET",
+    );
+    expectValidationFailure(
+      {
+        SEARCH_LEARNING_COLLECTION: "true",
+        SEARCH_LEARNING_HASH_SECRET: keyMaterial(1),
+      },
+      "SEARCH_LEARNING_HASH_SECRET",
+    );
+
+    const environment = parseEnvironment(
+      createValidEnvironment({
+        SEARCH_LEARNING_COLLECTION: "true",
+        SEARCH_LEARNING_HASH_SECRET: keyMaterial(9),
+      }),
+    );
+    expect(environment.SEARCH_LEARNING_COLLECTION).toBe(true);
+    expect(
+      environment.secrets.searchLearningHash?.withValue((value) => value),
+    ).toBe(keyMaterial(9));
+    expect(JSON.stringify(environment)).not.toContain(keyMaterial(9));
+  });
+
   it("keeps payments disabled by default and permits only an isolated Stripe test sandbox", () => {
     const disabled = parseEnvironment(createValidEnvironment());
     expect(disabled.PAYMENT_PROVIDER_MODE).toBe("disabled");

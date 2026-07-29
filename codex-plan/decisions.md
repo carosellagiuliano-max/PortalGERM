@@ -12,6 +12,7 @@
 **Why:** Next 16 deprecated `middleware.ts`, renamed it to `proxy.ts`, and its Proxy uses Node.js by default. More importantly, a network boundary cannot prove object-level authorization for every Server Action/Route Handler and must not become a single fragile security layer.
 
 **Implications:**
+
 - Proxy/request boundary: cheap redirect for clearly anonymous requests to `/login?next=…`; never the sole security boundary and no unbounded DB work.
 - Every `/candidate|/employer|/admin` layout calls `requireRole(...)` server-side; Company pages establish context with `requireCompanyAccess(companyId)`, while each nested object is authorized in its resource-specific scoped database query per ADR-020.
 - Do not configure a runtime from memory. Phase 01 records the pinned-version convention and tests Proxy/header/auth behavior against the production build.
@@ -27,6 +28,7 @@ Referenced by: Phase 06, Phase 16.
 **Why:** 8.1 % VAT on e.g. CHF 149 = 1206.9 Rappen. Storing billing amounts as CHF major-unit `Int` loses the rappen and produces wrong/rounded VAT. Integer minor units avoid float drift.
 
 **Implications:**
+
 - `computeVat(netRappen, rateBasisPoints)` uses integer arithmetic (`810` = 8.1 %) and returns integer-Rappen net/VAT/total; Order/Invoice snapshot the reviewed `TaxRateVersion`.
 - The CHF formatter (`lib/utils/format.ts`) divides by 100 at the display boundary.
 - Seed prices are in Rappen: Free 0, Starter `14900`, Pro `39900`, Business `89900`; Boost 7d `7900`, etc.
@@ -130,6 +132,7 @@ Referenced by: Phase 11, 12.
 **Decision:** `PortalGERM` pins **Node.js 24.18.0 LTS, npm 11.16.0, Next.js 16.2.10, React/ReactDOM 19.2.7, TypeScript 5.9.3, Tailwind CSS and `@tailwindcss/postcss` 4.3.3, PostCSS 8.5.20, ESLint 9.39.5 with `eslint-config-next` 16.2.10, Prisma CLI/Client/PG adapter 7.8.0, `pg` 8.22.0, Zod 4.4.3, Vitest 4.1.10, Vite 8.1.5 and jsdom 29.1.1**. All direct package versions are exact and npm 11.16.0 generated the committed lockfile. The installed Next 16.2.10 documentation for installation, project structure, Route Handlers, Proxy, ESLint, Vitest and response headers was read before implementing the request boundary. Source-repository versions remain comparison data only and never target evidence.
 
 **Implications of the pinned baseline:**
+
 - **No `tailwind.config.ts`.** Tailwind v4 is CSS-first: theme tokens + brand colors live in `app/globals.css` via `@theme` / `@import "tailwindcss"`. `postcss.config.mjs` uses `@tailwindcss/postcss`.
 - **shadcn/ui** is initialised in its Tailwind-v4 mode (CSS variables + `tw-animate-css`); components target React 19.
 - **Font:** the scaffold ships Geist; we switch the sans font to **Inter** per the plan's Swiss-clean intent.
@@ -160,6 +163,7 @@ Referenced by: Phase 01, 06.
 **Why:** The business goal is a privacy-friendly, demo-ready Swiss MVP with working local behavior and no secrets. Real payments, real email delivery, real AI calls, real storage, real Job-Room integration, or real success-fee billing add legal, security, operations, webhook, data-processing, and compliance risks that are out of scope before the product is validated. A Mock checkout validates only product mechanics and commercial **intent**; it never validates willingness to pay. That assumption must be tested through a separately approved real-money Design-Partner pilot, which may use a lawful manual invoice before a self-service provider exists.
 
 **Allowed in MVP:**
+
 - Mock checkout that creates versioned `Order`/`Invoice`, `SubscriptionEvent`/Entitlement or Credit Ledger effects, and `PaymentEvent` rows exactly once.
 - Mock email that writes `EmailLog` rows and renders German template text.
 - A local/CI-only Mock mailbox may expose a one-time raw reset/invite URL through `/dev/mailbox` or a test capture port **only** when `NODE_ENV !== production`, `ENABLE_LOCAL_MOCK_MAILBOX=true` and a separate `DEV_MAILBOX_SECRET` is supplied. It is secret-authenticated, no-store/noindex, TTL-bounded, single-read, excluded from EmailLog/Audit, and Production startup fails closed if enabled. This makes browser E2E possible without weakening generic forgot-password responses.
@@ -171,6 +175,7 @@ Referenced by: Phase 01, 06.
 **Deferred real-provider work:** Stripe, real email delivery, Supabase/S3 storage, OpenAI, official Job-Room, maps/commute providers, PDF invoice generation, webhooks, retries, delivery monitoring, data-processing agreements, and legal review.
 
 **Implications:**
+
 - Do not add provider-specific schema fields such as external customer/subscription ids unless the real-provider phase is explicitly approved.
 - Do not mark a provider "ready" because a placeholder file exists.
 - Never report `CHECKOUT_COMPLETED` from the Mock flow as paid conversion, collected revenue or willingness-to-pay evidence.
@@ -188,6 +193,7 @@ Referenced by: Phase 04, 09, 12, 18; ADR-029.
 **Why:** The repository currently contains planning documents only. Carrying forward legacy "verified/live" notes creates false confidence and makes later implementation harder to audit.
 
 **Implications:**
+
 - Verification text must be phrased as target checks, not historical claims.
 - Completion reports must list actual commands run, actual outputs, and known limitations.
 - If a command cannot run in the current environment, write "Needs verification" and explain why.
@@ -773,3 +779,72 @@ one optional workflow from widening tenant or activation authority.
 Referenced by: Phase 22/23/25/28/29/31/32; `REQ-REC-003`,
 `REQ-REC-028-002`, `REQ-REC-028A-001`, `REQ-REC-028B-001`,
 `STH-015`, `STH-016`.
+
+---
+
+## ADR-041 — Phase-30 Search und Freshness aktivieren nur über getrennte Evidenzgrenzen
+
+**Status:** accepted für den technisch verifizierten, nicht öffentlich
+aktivierten Phase-30-Local-/CI-Vertrag. Fachreview, Zielumgebungs-Alerts,
+Operationskapazität und jede LIVE-/Clusterfreigabe bleiben offen.
+
+**Decision:** Der technische de-CH-Concept-Vertrag besitzt feste
+Search-/Taxonomy-/Ranking-Versionen und unveränderliche Corpusdigests für
+Occupation, Location, Qualification, Certificate, Skill und Industry. Pflege
+ist `SELECTED`, bleibt aber bis zum signierten Fachreview `NOT_REVIEWED`.
+Engineering ist ein getrenntes `DISCOVERY_ONLY`-Korpus und kann weder Public
+Cluster noch SEO oder Paid Acquisition aktivieren. Eine gespeicherte V1-
+Clusterfreigabe autorisiert V2 nie; die Datenbank verlangt für V2 zusätzlich
+releasegebundene Top-K-, Precision-, Recall-, Coverage- und Expert-Evidence.
+
+Search Learning ist ein unabhängiger, standardmässig deaktivierter Collector.
+Die Rohquery bleibt nur im Request, PII-/Secret-Muster werden verworfen und
+vor der Schwelle werden ausschliesslich HMAC-Tokenbucket, Contributor-HMAC,
+allowlisted Filterfingerprint, Conceptkeys, Resultbucket und Tagesfenster
+persistiert. Erst ab zehn verschiedenen pseudonymen Contributors wird der
+Bucket actionable und erhält den bereits redigierten, normalisierten
+Reviewbegriff; dieser bleibt capability-geschützt und wird mit Contributions
+und Working State nach 30 Tagen entfernt. Review, Promote, Reject und Expiry
+sind versioniert, idempotent und auditiert. Eine Taxonomieänderung erfolgt nie
+automatisch aus einem Suchsignal.
+
+Phase 30B und 30C bleiben triggerbasiert. Der gemessene Recommendation-Fan-out
+überschritt mit 42 Queries das 20-Query-Budget und wurde deshalb auf eine
+bounded, canonical-eligibility-gebundene Zwei-Query-Projektion umgestellt.
+Admin-Pagination/Bulk und Sitemap-Shards werden nicht vorsorglich behauptet:
+unter ihrem 70-%-/Forecast-Trigger bleiben sie datiert
+`DEFERRED / MONITORED`. Der Sitemap-Monitor speichert Count, geschätzte
+unkomprimierte Bytes, Laufzeit, Wachstum, 90-Tage-Prognose, letzten Erfolg,
+Schwellenzustand und Owner; 70/80/90 Prozent bedeuten Plan/Deploy/
+Expansion-Stop.
+
+`JOB_FRESHNESS_POLICY_V1` bestätigt eine Publikation spätestens nach 30 Tagen
+oder früher am `expiresAt`. Reminder liegen sieben Tage und 24 Stunden vor
+dem Due-Instant. Neue Publikationen werden sofort unter dem Vertrag geführt;
+Bestandsjobs erhalten durch die additive Migration einen angekündigten
+30-Tage-Enforcement-Cohort. Employer Owner/Admin können versioniert
+reconfirmieren oder sofort als besetzt schliessen. Ein authentifizierter,
+rate-limitierter Candidate-Hinweis erzeugt Need-to-know-Review-Evidence; nach
+vier Stunden ohne Entscheidung hält die Projektion fail-closed. Exakte
+Duplikate werden pro Firma und explizitem Source-Scope durch Lock plus
+partiellem Unique-Index verhindert; Near-Duplicates erzeugen nur eine
+Reviewaufgabe.
+
+Search, Alerts, Recommendations, Candidate-/Employer-/Adminreads, Company
+Open-Job-Counts, Sitemap und Analytics verwenden dieselbe Public-Eligibility-
+Entscheidung. Ein Rollback darf einen stale, filled, held, revoked oder
+duplizierten Job nicht wieder veröffentlichen. Search Learning kann separat
+gestoppt werden; Cluster bleiben ohne V2-Evidence geschlossen; Shards werden
+nur vorwärts ausgerollt, wenn die Single-Sitemap ihren sicheren Headroom
+verliert.
+
+**Why:** Fachlich ungeprüfte Synonyme, personenbezogene Rohqueries,
+vorsorgliche Skalierungsarbeit und uneinheitliche Ghost-Job-Filter erzeugen
+vier verschiedene Risiken. Getrennte Release-, Privacy-, Capacity- und
+Freshness-Gates erlauben technische Vorbereitung, ohne eine Markt-,
+Fachreview-, Operations- oder LIVE-Reife vorzutäuschen.
+
+Referenced by: Phase 20/22/23/25/26/29/30/31/32;
+`REQ-SRCH-030A-001/002`, `REQ-OPS-030B-001`,
+`REQ-SEO-030C-001`, `REQ-JOB-030D-001`,
+`STH-019/020/021/027/032/036`.

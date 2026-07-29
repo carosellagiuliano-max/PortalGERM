@@ -76,6 +76,7 @@ export function createValidEnvironment(
     OPTIONAL_ANALYTICS_NAVIGATION: "false",
     OPTIONAL_ANALYTICS_CONVERSION: "false",
     SEARCH_LEARNING_COLLECTION: "false",
+    SEARCH_LEARNING_HASH_SECRET: "",
     PAYMENT_PROVIDER_MODE: "disabled",
     PAYMENT_SANDBOX_COHORT: "none",
     REAL_PAYMENT_INGESTION: "false",

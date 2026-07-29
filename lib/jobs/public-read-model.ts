@@ -32,23 +32,19 @@ import type {
 } from "@/lib/public/types";
 import { decodeSearchCursor, encodeSearchCursor } from "@/lib/search/cursor";
 import {
-  calculateRelevanceProxy,
-  normalizedSearchTerms,
-} from "@/lib/search/relevance";
-import {
-  paginateSearchJobs,
-  rankSearchJobs,
-} from "@/lib/search/ranking";
+  resolveSearchTermGroupsV2,
+  SEARCH_POLICY_RELEASE_V2,
+  type SearchTermGroupV2,
+} from "@/lib/search/concepts-v2";
+import { calculateRelevanceProxy } from "@/lib/search/relevance";
+import { paginateSearchJobs, rankSearchJobs } from "@/lib/search/ranking";
 import { projectCanonicalResponseMedianMinutes } from "@/lib/search/response-evidence";
 import type {
   JobSearchSort,
   OrganicCursorTuple,
   RankingCandidate,
 } from "@/lib/search/types";
-import {
-  sanitizePlainText,
-  stripUnsafeHtml,
-} from "@/lib/security/sanitize";
+import { sanitizePlainText, stripUnsafeHtml } from "@/lib/security/sanitize";
 
 /** Bound used only by non-paginated supporting surfaces such as Company cards. */
 const MAXIMUM_BOUNDED_JOB_CANDIDATES = 2_000;
@@ -62,7 +58,8 @@ const MAXIMUM_SEARCH_PAGE_HYDRATION =
 const MAXIMUM_PUBLIC_JOB_DETAIL_BATCH_SIZE = 50;
 const DAY_MS = 86_400_000;
 const SEARCH_COMBINING_MARK_PATTERN = "[\u0300-\u036f]";
-const UUID_REFERENCE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const UUID_REFERENCE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 export type PublicSearchRankingFailureCode =
   | "COUNT_OVERFLOW"
@@ -171,7 +168,9 @@ const PUBLIC_JOB_CARD_BASE_SELECT = {
     select: {
       ...PUBLIC_JOB_ELIGIBILITY_SELECT.publishedRevision.select,
       contentLanguage: true,
-      category: { select: { id: true, name: true, slug: true, isActive: true } },
+      category: {
+        select: { id: true, name: true, slug: true, isActive: true },
+      },
       canton: { select: { id: true, code: true, name: true, slug: true } },
       city: { select: { id: true, name: true, slug: true } },
       locationLabel: true,
@@ -222,7 +221,9 @@ const PUBLIC_JOB_CLUSTER_SELECT = {
   publishedRevision: {
     select: {
       ...PUBLIC_JOB_ELIGIBILITY_SELECT.publishedRevision.select,
-      category: { select: { id: true, name: true, slug: true, isActive: true } },
+      category: {
+        select: { id: true, name: true, slug: true, isActive: true },
+      },
       canton: { select: { id: true, code: true, name: true, slug: true } },
     },
   },
@@ -281,7 +282,11 @@ function buildPublicJobDetailSelect(now: Date) {
         ...PUBLIC_JOB_DETAIL_EXTRAS_SELECT,
         scoreSnapshots: {
           where: { scoreVersion: "v2" },
-          select: { scoreVersion: true, scorePoints: true, factorBreakdown: true },
+          select: {
+            scoreVersion: true,
+            scorePoints: true,
+            factorBreakdown: true,
+          },
           take: 2,
         },
       },
@@ -301,10 +306,11 @@ type PublicJobClusterRow = Prisma.JobGetPayload<{
 type PublicJobDetailRow = Prisma.JobGetPayload<{
   select: ReturnType<typeof buildPublicJobDetailSelect>;
 }>;
-type EligibleRow<Row extends PublicJobEligibilityRow> = Row & Readonly<{
-  publishedRevision: NonNullable<Row["publishedRevision"]>;
-  companyTrustBadge: PublicCompanyTrustBadge | null;
-}>;
+type EligibleRow<Row extends PublicJobEligibilityRow> = Row &
+  Readonly<{
+    publishedRevision: NonNullable<Row["publishedRevision"]>;
+    companyTrustBadge: PublicCompanyTrustBadge | null;
+  }>;
 type EligiblePublicJobRow = EligibleRow<PublicJobRow>;
 type EligiblePublicJobClusterRow = EligibleRow<PublicJobClusterRow>;
 type EligiblePublicJobDetailRow = EligibleRow<PublicJobDetailRow>;
@@ -339,7 +345,8 @@ type LoadedJobs = Readonly<{
 type LoadedSearchPage = Readonly<{
   rows: readonly EligiblePublicJobRow[];
   rowById: ReadonlyMap<string, EligiblePublicJobRow>;
-  page: ReturnType<typeof paginateSearchJobs> & Readonly<{ totalEligible: number }>;
+  page: ReturnType<typeof paginateSearchJobs> &
+    Readonly<{ totalEligible: number }>;
 }>;
 
 type DatabaseRankingRow = Readonly<{
@@ -418,15 +425,21 @@ export function emptyPublicJobSearchInput(): PublicJobSearchInput {
 
 export async function listPublicJobs(
   input: PublicJobSearchInput,
-  options: Readonly<{ pageSize?: number; now?: Date }> = {},
+  options: Readonly<{
+    pageSize?: number;
+    now?: Date;
+    database?: DatabaseClient;
+  }> = {},
 ): Promise<PublicJobSearchPage> {
   const pageSize = options.pageSize ?? input.pageSize;
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) {
     throw new RangeError("Public job page size must be between 1 and 50.");
   }
-  if (hasBlockingPublicJobSearchIssue(input) ||
-      ((input.salaryMin !== undefined || input.sort === "salary") &&
-        input.salaryPeriod === undefined)) {
+  if (
+    hasBlockingPublicJobSearchIssue(input) ||
+    ((input.salaryMin !== undefined || input.sort === "salary") &&
+      input.salaryPeriod === undefined)
+  ) {
     return emptyPublicJobSearchPage();
   }
   const now = validNow(options.now);
@@ -441,39 +454,54 @@ export async function listPublicJobs(
       )
     : undefined;
   let invalidCursor = input.after !== undefined && decoded === null;
-  const rankingAsOf = decoded === undefined || decoded === null
-    ? now
-    : new Date(decoded.rankingAsOf);
+  const rankingAsOf =
+    decoded === undefined || decoded === null
+      ? now
+      : new Date(decoded.rankingAsOf);
   let loaded: LoadedSearchPage;
   try {
-    loaded = await loadExactSearchPage(input, now, {
-      pageSize,
-      queryHash,
-      rankingAsOf,
-      ...(decoded === undefined || decoded === null ? {} : { cursor: decoded }),
-    });
+    loaded = await loadExactSearchPage(
+      input,
+      now,
+      {
+        pageSize,
+        queryHash,
+        rankingAsOf,
+        ...(decoded === undefined || decoded === null
+          ? {}
+          : { cursor: decoded }),
+      },
+      options.database ?? getDatabase(),
+    );
   } catch (error) {
-    if (!(error instanceof PublicSearchRankingContractError) ||
-        error.code !== "RESPONSE_PROJECTION_CHANGED" ||
-        input.sort !== "response" || decoded === undefined || decoded === null) {
+    if (
+      !(error instanceof PublicSearchRankingContractError) ||
+      error.code !== "RESPONSE_PROJECTION_CHANGED" ||
+      input.sort !== "response" ||
+      decoded === undefined ||
+      decoded === null
+    ) {
       throw error;
     }
     // Response projections are mutable unlike revision-owned ranking fields.
     // A signed fingerprint mismatch safely restarts instead of serving a page
     // with possible duplicates or gaps under a stale response tuple.
     invalidCursor = true;
-    loaded = await loadExactSearchPage(input, now, {
-      pageSize,
-      queryHash,
-      rankingAsOf: now,
-    });
+    loaded = await loadExactSearchPage(
+      input,
+      now,
+      {
+        pageSize,
+        queryHash,
+        rankingAsOf: now,
+      },
+      options.database ?? getDatabase(),
+    );
   }
   const page = loaded.page;
   const jobs = page.ranked.flatMap((entry) => {
     const row = loaded.rowById.get(entry.job.id);
-    return row === undefined
-      ? []
-      : [toCardModel(row, now, entry.sponsored)];
+    return row === undefined ? [] : [toCardModel(row, now, entry.sponsored)];
   });
   return Object.freeze({
     jobs: Object.freeze(jobs),
@@ -541,7 +569,7 @@ export async function getPublicJobBySlug(
  */
 export async function getPublicJobsBySlugs(
   slugs: readonly string[],
-  options: Readonly<{ now?: Date }> = {},
+  options: Readonly<{ now?: Date; database?: DatabaseClient }> = {},
 ): Promise<readonly PublicJobDetailModel[]> {
   if (slugs.length > MAXIMUM_PUBLIC_JOB_DETAIL_BATCH_SIZE) {
     throw new RangeError(
@@ -551,7 +579,11 @@ export async function getPublicJobsBySlugs(
   const requestedSlugs = [...new Set(slugs.filter(isSafeSlug))];
   if (requestedSlugs.length === 0) return Object.freeze([]);
   const now = validNow(options.now);
-  const rows = await loadEligibleDetailJobs(requestedSlugs, now);
+  const rows = await loadEligibleDetailJobs(
+    requestedSlugs,
+    now,
+    options.database ?? getDatabase(),
+  );
   const detailBySlug = new Map(
     rows.map((row) => [row.slug, toDetailModel(row, now)] as const),
   );
@@ -571,15 +603,18 @@ export async function listRelatedPublicJobs(
     Object.freeze({
       ...emptyPublicJobSearchInput(),
       categorySlugs: Object.freeze([job.category.slug]),
-      cantonSlugs: job.canton === null
-        ? Object.freeze([])
-        : Object.freeze([job.canton.slug]),
+      cantonSlugs:
+        job.canton === null
+          ? Object.freeze([])
+          : Object.freeze([job.canton.slug]),
       sort: "newest",
     }),
     { pageSize: Math.min(12, (options.limit ?? 4) + 1), now: options.now },
   );
   return Object.freeze(
-    page.jobs.filter((candidate) => candidate.id !== job.id).slice(0, options.limit ?? 4),
+    page.jobs
+      .filter((candidate) => candidate.id !== job.id)
+      .slice(0, options.limit ?? 4),
   );
 }
 
@@ -613,17 +648,18 @@ export async function loadPublicOpenJobCounts(
     database,
     now,
     dataContext.eligibilityEnvironment,
-    (transaction, afterId) => transaction.job.findMany({
-      where: {
-        ...buildPublicJobWhere(input, now, dataContext.liveOnly, {
-          companyIds: ids,
-        }),
-        ...(afterId === undefined ? {} : { id: { gt: afterId } }),
-      },
-      orderBy: { id: "asc" },
-      take: EXACT_COUNT_SCAN_BATCH_SIZE,
-      select: PUBLIC_JOB_ELIGIBILITY_SELECT,
-    }),
+    (transaction, afterId) =>
+      transaction.job.findMany({
+        where: {
+          ...buildPublicJobWhere(input, now, dataContext.liveOnly, {
+            companyIds: ids,
+          }),
+          ...(afterId === undefined ? {} : { id: { gt: afterId } }),
+        },
+        orderBy: { id: "asc" },
+        take: EXACT_COUNT_SCAN_BATCH_SIZE,
+        select: PUBLIC_JOB_ELIGIBILITY_SELECT,
+      }),
     (rows) => {
       for (const row of rows) {
         result.set(row.companyId, (result.get(row.companyId) ?? 0) + 1);
@@ -663,27 +699,34 @@ export async function listPublicClusterLinks(
   options: Readonly<{ limit?: number; now?: Date }> = {},
 ): Promise<readonly PublicClusterLink[]> {
   const now = validNow(options.now);
-  const { cantonCounts, categoryCounts } = await loadExactPublicClusterCounts(now);
+  const { cantonCounts, categoryCounts } =
+    await loadExactPublicClusterCounts(now);
   const links: PublicClusterLink[] = [
     ...[...cantonCounts.values()].map(({ value, count }) => ({
       kind: "canton" as const,
       slug: value.slug,
       label: value.name,
       count,
-      launchable: count >= PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.minimumEligibleJobs,
+      launchable:
+        count >= PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.minimumEligibleJobs,
     })),
     ...[...categoryCounts.values()].map(({ value, count }) => ({
       kind: "category" as const,
       slug: value.slug,
       label: value.name,
       count,
-      launchable: count >= PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.minimumEligibleJobs,
+      launchable:
+        count >= PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.minimumEligibleJobs,
     })),
   ];
   return Object.freeze(
     links
       .filter((link) => link.launchable)
-      .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "de-CH"))
+      .sort(
+        (left, right) =>
+          right.count - left.count ||
+          left.label.localeCompare(right.label, "de-CH"),
+      )
       .slice(0, options.limit ?? 12),
   );
 }
@@ -703,8 +746,8 @@ async function loadExactSearchPage(
     rankingAsOf: Date;
     cursor?: NonNullable<ReturnType<typeof decodeSearchCursor>>;
   }>,
+  database: DatabaseClient,
 ): Promise<LoadedSearchPage> {
-  const database = getDatabase();
   const dataContext = getPublicDataContext();
   return database.$transaction(
     async (transaction) => {
@@ -715,13 +758,14 @@ async function loadExactSearchPage(
       if (projectionFilters === null) {
         return emptyLoadedSearchPage(input, pagination);
       }
-      const radiusCenter = input.radiusKm === undefined
-        ? undefined
-        : await resolveRadiusCenter(
-            transaction,
-            input,
-            projectionFilters.cityIds,
-          );
+      const radiusCenter =
+        input.radiusKm === undefined
+          ? undefined
+          : await resolveRadiusCenter(
+              transaction,
+              input,
+              projectionFilters.cityIds,
+            );
       if (input.radiusKm !== undefined && radiusCenter === null) {
         return emptyLoadedSearchPage(input, pagination);
       }
@@ -745,9 +789,12 @@ async function loadExactSearchPage(
       const totalEligible = exactSearchCount(sponsorEnvelope);
       const responseProjectionFingerprint =
         sponsorEnvelope[0]?.responseProjectionFingerprint ?? "";
-      if (input.sort === "response" && pagination.cursor !== undefined &&
-          pagination.cursor.responseProjectionFingerprint !==
-            responseProjectionFingerprint) {
+      if (
+        input.sort === "response" &&
+        pagination.cursor !== undefined &&
+        pagination.cursor.responseProjectionFingerprint !==
+          responseProjectionFingerprint
+      ) {
         throw new PublicSearchRankingContractError(
           "RESPONSE_PROJECTION_CHANGED",
           "Employer response evidence changed during cursor pagination.",
@@ -756,10 +803,10 @@ async function loadExactSearchPage(
       const sponsoredRows = firstPage
         ? sponsorEnvelope.flatMap(toSponsoredRankingRow)
         : [];
-      if (sponsoredRows.length > Math.min(
-        pagination.pageSize,
-        MAXIMUM_SPONSORED_SEARCH_RESULTS,
-      )) {
+      if (
+        sponsoredRows.length >
+        Math.min(pagination.pageSize, MAXIMUM_SPONSORED_SEARCH_RESULTS)
+      ) {
         throw new PublicSearchRankingContractError(
           "DATABASE_RESULT_BOUND_EXCEEDED",
           "The sponsored ranking query exceeded its formal result bound.",
@@ -797,28 +844,29 @@ async function loadExactSearchPage(
         );
       }
 
-      const hydrated = uniqueIds.length === 0
-        ? []
-        : await transaction.job.findMany({
-            where: {
-              ...buildPublicJobWhere(input, now, dataContext.liveOnly, {
-                publishedAtUpperBound: pagination.rankingAsOf,
-                ...(projectionFilters.categoryIds.length === 0
-                  ? {}
-                  : { publishedCategoryIds: projectionFilters.categoryIds }),
-                ...(projectionFilters.cantonIds.length === 0
-                  ? {}
-                  : { publishedCantonIds: projectionFilters.cantonIds }),
-                ...(projectionFilters.cityIds.length === 0
-                  ? {}
-                  : { publishedCityIds: projectionFilters.cityIds }),
-              }),
-              id: { in: uniqueIds },
-            },
-            orderBy: { id: "asc" },
-            take: uniqueIds.length,
-            select: buildPublicJobCardSelect(now),
-          });
+      const hydrated =
+        uniqueIds.length === 0
+          ? []
+          : await transaction.job.findMany({
+              where: {
+                ...buildPublicJobWhere(input, now, dataContext.liveOnly, {
+                  publishedAtUpperBound: pagination.rankingAsOf,
+                  ...(projectionFilters.categoryIds.length === 0
+                    ? {}
+                    : { publishedCategoryIds: projectionFilters.categoryIds }),
+                  ...(projectionFilters.cantonIds.length === 0
+                    ? {}
+                    : { publishedCantonIds: projectionFilters.cantonIds }),
+                  ...(projectionFilters.cityIds.length === 0
+                    ? {}
+                    : { publishedCityIds: projectionFilters.cityIds }),
+                }),
+                id: { in: uniqueIds },
+              },
+              orderBy: { id: "asc" },
+              take: uniqueIds.length,
+              select: buildPublicJobCardSelect(now),
+            });
       const eligibleRows = await filterEligibleRows(
         hydrated,
         now,
@@ -863,11 +911,13 @@ async function loadExactSearchPage(
         pageSize: pagination.pageSize,
         queryHash: pagination.queryHash,
         rankingAsOf: pagination.rankingAsOf,
-        ...(pagination.cursor === undefined ? {} : { cursor: pagination.cursor }),
+        ...(pagination.cursor === undefined
+          ? {}
+          : { cursor: pagination.cursor }),
       });
-      const expectedIds = (firstPage
-        ? [...sponsoredRows, ...organicRows]
-        : organicRows)
+      const expectedIds = (
+        firstPage ? [...sponsoredRows, ...organicRows] : organicRows
+      )
         .slice(0, pagination.pageSize)
         .map(({ id }) => id);
       const actualIds = paginated.ranked.map(({ job }) => job.id);
@@ -877,14 +927,15 @@ async function loadExactSearchPage(
           "The database and in-process ranking tuples disagree.",
         );
       }
-      const nextCursorPayload = paginated.nextCursorPayload === null
-        ? null
-        : Object.freeze({
-            ...paginated.nextCursorPayload,
-            ...(input.sort === "response"
-              ? { responseProjectionFingerprint }
-              : {}),
-          });
+      const nextCursorPayload =
+        paginated.nextCursorPayload === null
+          ? null
+          : Object.freeze({
+              ...paginated.nextCursorPayload,
+              ...(input.sort === "response"
+                ? { responseProjectionFingerprint }
+                : {}),
+            });
       const pageRows = actualIds.map((id) => rowById.get(id)!);
       return Object.freeze({
         rows: Object.freeze(pageRows),
@@ -907,36 +958,44 @@ async function resolvePublishedProjectionFilters(
   transaction: PublicReadTransaction,
   input: PublicJobSearchInput,
 ): Promise<PublishedProjectionFilters | null> {
-  const categories = input.categorySlugs.length === 0
-    ? []
-    : await transaction.category.findMany({
-        where: { isActive: true, ...catalogIdentityWhere(input.categorySlugs) },
-        orderBy: { id: "asc" },
-        select: { id: true },
-      });
-  const cantons = input.cantonSlugs.length === 0
-    ? []
-    : await transaction.canton.findMany({
-        where: { isActive: true, ...catalogIdentityWhere(input.cantonSlugs) },
-        orderBy: { id: "asc" },
-        select: { id: true },
-      });
-  const cities = input.citySlugs.length === 0
-    ? []
-    : await transaction.city.findMany({
-        where: {
-          isActive: true,
-          ...catalogIdentityWhere(input.citySlugs),
-          ...(input.cantonSlugs.length === 0
-            ? {}
-            : { cantonId: { in: cantons.map(({ id }) => id) } }),
-        },
-        orderBy: { id: "asc" },
-        select: { id: true },
-      });
-  if ((input.categorySlugs.length > 0 && categories.length === 0) ||
-      (input.cantonSlugs.length > 0 && cantons.length === 0) ||
-      (input.citySlugs.length > 0 && cities.length === 0)) {
+  const categories =
+    input.categorySlugs.length === 0
+      ? []
+      : await transaction.category.findMany({
+          where: {
+            isActive: true,
+            ...catalogIdentityWhere(input.categorySlugs),
+          },
+          orderBy: { id: "asc" },
+          select: { id: true },
+        });
+  const cantons =
+    input.cantonSlugs.length === 0
+      ? []
+      : await transaction.canton.findMany({
+          where: { isActive: true, ...catalogIdentityWhere(input.cantonSlugs) },
+          orderBy: { id: "asc" },
+          select: { id: true },
+        });
+  const cities =
+    input.citySlugs.length === 0
+      ? []
+      : await transaction.city.findMany({
+          where: {
+            isActive: true,
+            ...catalogIdentityWhere(input.citySlugs),
+            ...(input.cantonSlugs.length === 0
+              ? {}
+              : { cantonId: { in: cantons.map(({ id }) => id) } }),
+          },
+          orderBy: { id: "asc" },
+          select: { id: true },
+        });
+  if (
+    (input.categorySlugs.length > 0 && categories.length === 0) ||
+    (input.cantonSlugs.length > 0 && cantons.length === 0) ||
+    (input.citySlugs.length > 0 && cities.length === 0)
+  ) {
     return null;
   }
   return Object.freeze({
@@ -951,7 +1010,11 @@ async function resolveRadiusCenter(
   input: PublicJobSearchInput,
   cityIds: readonly string[],
 ): Promise<RadiusCenter | null> {
-  if (input.radiusKm === undefined || input.citySlugs.length !== 1 || cityIds.length !== 1) {
+  if (
+    input.radiusKm === undefined ||
+    input.citySlugs.length !== 1 ||
+    cityIds.length !== 1
+  ) {
     return null;
   }
   const rows = await transaction.city.findMany({
@@ -961,14 +1024,24 @@ async function resolveRadiusCenter(
     select: { latitude: true, longitude: true },
   });
   const center = rows[0];
-  if (rows.length !== 1 || center === undefined ||
-      center.latitude === null || center.longitude === null) {
+  if (
+    rows.length !== 1 ||
+    center === undefined ||
+    center.latitude === null ||
+    center.longitude === null
+  ) {
     return null;
   }
   const latitude = Number(center.latitude);
   const longitude = Number(center.longitude);
-  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
-      !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+  if (
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
     return null;
   }
   return Object.freeze({ latitude, longitude, radiusKm: input.radiusKm });
@@ -983,7 +1056,9 @@ async function loadDatabaseSponsoredRankingEnvelope(
     context,
     context.input.sort === "response",
   );
-  const rows = await transaction.$queryRaw<readonly DatabaseSponsoredEnvelopeRow[]>(Prisma.sql`
+  const rows = await transaction.$queryRaw<
+    readonly DatabaseSponsoredEnvelopeRow[]
+  >(Prisma.sql`
     WITH ${ctes},
     counted AS MATERIALIZED (
       SELECT COUNT(*)::bigint AS "totalEligible" FROM ranked_candidates
@@ -1063,10 +1138,15 @@ async function loadDatabaseOrganicRankingRows(
     context,
     context.input.sort === "response",
   );
-  const cursorPredicate = databaseOrganicCursorPredicate(context.input.sort, after);
+  const cursorPredicate = databaseOrganicCursorPredicate(
+    context.input.sort,
+    after,
+  );
   const sponsorPredicate = databaseSponsoredExclusionPredicate(sponsoredIds);
   const orderBy = databaseOrganicOrderBy(context.input.sort);
-  const rows = await transaction.$queryRaw<readonly DatabaseRankingRow[]>(Prisma.sql`
+  const rows = await transaction.$queryRaw<
+    readonly DatabaseRankingRow[]
+  >(Prisma.sql`
     WITH ${ctes}
     SELECT ranked."id",
       ranked."relevanceTier",
@@ -1098,11 +1178,16 @@ function buildDatabaseRankingCtes(
   context: DatabaseSearchQueryContext,
   includeCanonicalResponse: boolean,
 ): Prisma.Sql {
-  const terms = context.input.keyword === undefined
-    ? []
-    : normalizedSearchTerms(context.input.keyword);
-  const titleText = normalizedDatabaseSearchText(Prisma.raw('revision."title"'));
-  const companyText = normalizedDatabaseSearchText(Prisma.raw('company."name"'));
+  const termGroups =
+    context.input.keyword === undefined
+      ? []
+      : resolveSearchTermGroupsV2(context.input.keyword);
+  const titleText = normalizedDatabaseSearchText(
+    Prisma.raw('revision."title"'),
+  );
+  const companyText = normalizedDatabaseSearchText(
+    Prisma.raw('company."name"'),
+  );
   const bodyText = normalizedDatabaseSearchText(Prisma.sql`
     concat_ws(E'\\n',
       revision."description",
@@ -1112,19 +1197,20 @@ function buildDatabaseRankingCtes(
     )
   `);
   const relevanceScore = Prisma.sql`(
-    ${databaseWeightedMatchScore(titleText, terms, 3)}
-    + ${databaseWeightedMatchScore(companyText, terms, 2)}
-    + ${databaseWeightedMatchScore(bodyText, terms, 1)}
+    ${databaseWeightedMatchScore(titleText, termGroups, 3)}
+    + ${databaseWeightedMatchScore(companyText, termGroups, 2)}
+    + ${databaseWeightedMatchScore(bodyText, termGroups, 1)}
   )`;
   const relevanceTier = Prisma.sql`(
-    ${databaseFieldMatchTier(titleText, terms)}
-    + ${databaseFieldMatchTier(companyText, terms)}
-    + ${databaseFieldMatchTier(bodyText, terms)}
+    ${databaseFieldMatchTier(titleText, termGroups)}
+    + ${databaseFieldMatchTier(companyText, termGroups)}
+    + ${databaseFieldMatchTier(bodyText, termGroups)}
   )`;
   const predicates = databaseSearchPredicates(context);
-  const keywordGate = context.input.keyword === undefined
-    ? Prisma.sql`TRUE`
-    : Prisma.sql`source."relevanceScore" > 0`;
+  const keywordGate =
+    context.input.keyword === undefined
+      ? Prisma.sql`TRUE`
+      : Prisma.sql`source."relevanceScore" > 0`;
   const source = Prisma.sql`
     candidate_source AS MATERIALIZED (
       SELECT job."id",
@@ -1185,7 +1271,8 @@ function buildDatabaseRankingCtes(
   }
 
   const responseWindowStart = new Date(
-    context.rankingAsOf.getTime() - EMPLOYER_RESPONSE_POLICY_V1.rollingWindowDays * DAY_MS,
+    context.rankingAsOf.getTime() -
+      EMPLOYER_RESPONSE_POLICY_V1.rollingWindowDays * DAY_MS,
   );
   return Prisma.sql`${source},
     response_cases AS MATERIALIZED (
@@ -1301,9 +1388,8 @@ function databaseSearchPredicates(
   context: DatabaseSearchQueryContext,
 ): Prisma.Sql[] {
   const { input, now, projectionFilters, radiusCenter } = context;
-  const publishedAtUpperBound = context.rankingAsOf.getTime() < now.getTime()
-    ? context.rankingAsOf
-    : now;
+  const publishedAtUpperBound =
+    context.rankingAsOf.getTime() < now.getTime() ? context.rankingAsOf : now;
   const predicates: Prisma.Sql[] = [
     Prisma.sql`job."status" = 'PUBLISHED'::"JobStatus"`,
     Prisma.sql`job."currentRevisionId" = job."publishedRevisionId"`,
@@ -1315,6 +1401,26 @@ function databaseSearchPredicates(
     Prisma.sql`job."expiresAt" = revision."validThrough"`,
     Prisma.sql`company."status" = 'ACTIVE'::"CompanyStatus"`,
     Prisma.sql`category."isActive"`,
+    Prisma.sql`NOT EXISTS (
+      SELECT 1
+      FROM "JobFreshnessProjection" AS freshness
+      WHERE freshness."jobId" = job."id"
+        AND freshness."enforceAt" <= ${now}
+        AND (
+          freshness."state" IN (
+            'HOLD'::"JobFreshnessState",
+            'STALE'::"JobFreshnessState",
+            'FILLED'::"JobFreshnessState",
+            'CLOSED'::"JobFreshnessState"
+          )
+          OR freshness."dueAt" <= ${now}
+          OR (
+            freshness."state" = 'REVIEW_PENDING'::"JobFreshnessState"
+            AND freshness."reviewDueAt" IS NOT NULL
+            AND freshness."reviewDueAt" <= ${now}
+          )
+        )
+    )`,
     Prisma.sql`(
       SELECT COUNT(*)
       FROM "CompanyVerificationRequest" AS verification
@@ -1401,7 +1507,9 @@ function databaseSearchPredicates(
     predicates.push(Prisma.sql`revision."workloadMin" <= ${input.workloadMax}`);
   }
   if (input.languages.length > 0) {
-    const contentLanguages = input.languages.map((value) => value.toUpperCase());
+    const contentLanguages = input.languages.map((value) =>
+      value.toUpperCase(),
+    );
     const languageCodes = input.languages.map((value) => value.toLowerCase());
     predicates.push(Prisma.sql`(
       revision."contentLanguage"::text IN (
@@ -1453,23 +1561,42 @@ function normalizedDatabaseSearchText(field: Prisma.Sql): Prisma.Sql {
 
 function databaseWeightedMatchScore(
   field: Prisma.Sql,
-  terms: readonly string[],
+  groups: readonly SearchTermGroupV2[],
   weight: number,
 ): Prisma.Sql {
-  if (terms.length === 0) return Prisma.sql`0`;
-  return Prisma.sql`(${Prisma.join(terms.map((term) => Prisma.sql`
-    CASE WHEN ${field} LIKE ${`%${term}%`} THEN ${weight} ELSE 0 END
-  `), " + ")})`;
+  if (groups.length === 0) return Prisma.sql`0`;
+  return Prisma.sql`(${Prisma.join(
+    groups.map(
+      (group) => Prisma.sql`
+    CASE WHEN (${Prisma.join(
+      group.terms.map(
+        (term) => Prisma.sql`
+      ${field} LIKE ${`%${term}%`}
+    `,
+      ),
+      " OR ",
+    )}) THEN ${weight} ELSE 0 END
+  `,
+    ),
+    " + ",
+  )})`;
 }
 
 function databaseFieldMatchTier(
   field: Prisma.Sql,
-  terms: readonly string[],
+  groups: readonly SearchTermGroupV2[],
 ): Prisma.Sql {
-  if (terms.length === 0) return Prisma.sql`0`;
-  return Prisma.sql`CASE WHEN ${Prisma.join(terms.map((term) => Prisma.sql`
-    ${field} LIKE ${`%${term}%`}
-  `), " OR ")} THEN 1 ELSE 0 END`;
+  if (groups.length === 0) return Prisma.sql`0`;
+  return Prisma.sql`CASE WHEN ${Prisma.join(
+    groups.flatMap((group) =>
+      group.terms.map(
+        (term) => Prisma.sql`
+      ${field} LIKE ${`%${term}%`}
+    `,
+      ),
+    ),
+    " OR ",
+  )} THEN 1 ELSE 0 END`;
 }
 
 function pushUuidListPredicate(
@@ -1542,7 +1669,9 @@ function databaseOrganicCursorPredicate(
   )`;
   switch (after.sort) {
     case "newest":
-      return tail(Prisma.sql`ranked."publishedAt" < ${new Date(after.publishedAt)}`);
+      return tail(
+        Prisma.sql`ranked."publishedAt" < ${new Date(after.publishedAt)}`,
+      );
     case "relevance": {
       const fairScore = after.fairScore ?? -1;
       return Prisma.sql`(
@@ -1648,27 +1777,33 @@ function toSponsoredRankingRow(
   row: DatabaseSponsoredEnvelopeRow,
 ): readonly DatabaseRankingRow[] {
   if (row.id === null) return Object.freeze([]);
-  if (row.relevanceTier === null || row.relevanceScore === null ||
-      row.responseEvidenceKnown === null || row.publishedAt === null ||
-      row.activeBoost === null) {
+  if (
+    row.relevanceTier === null ||
+    row.relevanceScore === null ||
+    row.responseEvidenceKnown === null ||
+    row.publishedAt === null ||
+    row.activeBoost === null
+  ) {
     throw new PublicSearchRankingContractError(
       "RANKING_PROJECTION_DRIFT",
       "The sponsored ranking tuple is incomplete.",
     );
   }
-  return Object.freeze([Object.freeze({
-    id: row.id,
-    relevanceTier: row.relevanceTier,
-    relevanceScore: row.relevanceScore,
-    fairScore: row.fairScore,
-    salaryMin: row.salaryMin,
-    salaryMax: row.salaryMax,
-    responseEvidenceKnown: row.responseEvidenceKnown,
-    onTimeRateBps: row.onTimeRateBps,
-    medianFirstResponseMinutes: row.medianFirstResponseMinutes,
-    publishedAt: row.publishedAt,
-    activeBoost: row.activeBoost,
-  })]);
+  return Object.freeze([
+    Object.freeze({
+      id: row.id,
+      relevanceTier: row.relevanceTier,
+      relevanceScore: row.relevanceScore,
+      fairScore: row.fairScore,
+      salaryMin: row.salaryMin,
+      salaryMax: row.salaryMax,
+      responseEvidenceKnown: row.responseEvidenceKnown,
+      onTimeRateBps: row.onTimeRateBps,
+      medianFirstResponseMinutes: row.medianFirstResponseMinutes,
+      publishedAt: row.publishedAt,
+      activeBoost: row.activeBoost,
+    }),
+  ]);
 }
 
 function emptyLoadedSearchPage(
@@ -1700,7 +1835,10 @@ function sameStringSequence(
   left: readonly string[],
   right: readonly string[],
 ): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 async function loadEligibleJobs(
@@ -1721,16 +1859,17 @@ async function loadEligibleJobs(
     dataContext.eligibilityEnvironment,
     candidateLimit,
     detectTruncation,
-    (transaction) => transaction.job.findMany({
-      where: buildPublicJobWhere(input, now, dataContext.liveOnly, scope),
-      orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
-      // The extra row is a sentinel. It is never ranked, but proves that a
-      // global result count would be incomplete without an unbounded query.
-      take: candidateLimit + (detectTruncation ? 1 : 0),
-      select: input.keyword
-        ? buildPublicJobSearchSelect(now)
-        : buildPublicJobCardSelect(now),
-    }),
+    (transaction) =>
+      transaction.job.findMany({
+        where: buildPublicJobWhere(input, now, dataContext.liveOnly, scope),
+        orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+        // The extra row is a sentinel. It is never ranked, but proves that a
+        // global result count would be incomplete without an unbounded query.
+        take: candidateLimit + (detectTruncation ? 1 : 0),
+        select: input.keyword
+          ? buildPublicJobSearchSelect(now)
+          : buildPublicJobCardSelect(now),
+      }),
   );
   const eligibleRows = loaded.rows;
 
@@ -1742,7 +1881,9 @@ async function loadEligibleJobs(
       candidateSetTruncated: loaded.candidateSetTruncated,
     });
   }
-  const candidates = eligibleRows.map((row) => toRankingCandidate(row, input.keyword, now));
+  const candidates = eligibleRows.map((row) =>
+    toRankingCandidate(row, input.keyword, now),
+  );
   const rowById = new Map(eligibleRows.map((row) => [row.id, row]));
 
   return Object.freeze({
@@ -1764,12 +1905,13 @@ async function loadEligibleDetailJob(
     database,
     now,
     dataContext.eligibilityEnvironment,
-    (transaction) => transaction.job.findMany({
-      where: buildPublicJobWhere(input, now, dataContext.liveOnly, { slug }),
-      orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
-      take: 1,
-      select: buildPublicJobDetailSelect(now),
-    }),
+    (transaction) =>
+      transaction.job.findMany({
+        where: buildPublicJobWhere(input, now, dataContext.liveOnly, { slug }),
+        orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+        take: 1,
+        select: buildPublicJobDetailSelect(now),
+      }),
   );
   return eligibleRows[0] ?? null;
 }
@@ -1777,77 +1919,90 @@ async function loadEligibleDetailJob(
 async function loadEligibleDetailJobs(
   slugs: readonly string[],
   now: Date,
+  database: DatabaseClient,
 ): Promise<EligiblePublicJobDetailRow[]> {
-  const database = getDatabase();
   const dataContext = getPublicDataContext();
   const input = emptyPublicJobSearchInput();
   return loadEligibleRowsInSnapshot<PublicJobDetailRow>(
     database,
     now,
     dataContext.eligibilityEnvironment,
-    (transaction) => transaction.job.findMany({
-      where: {
-        ...buildPublicJobWhere(input, now, dataContext.liveOnly, {}),
-        slug: { in: [...slugs] },
-      },
-      orderBy: { slug: "asc" },
-      take: slugs.length,
-      select: buildPublicJobDetailSelect(now),
-    }),
+    (transaction) =>
+      transaction.job.findMany({
+        where: {
+          ...buildPublicJobWhere(input, now, dataContext.liveOnly, {}),
+          slug: { in: [...slugs] },
+        },
+        orderBy: { slug: "asc" },
+        take: slugs.length,
+        select: buildPublicJobDetailSelect(now),
+      }),
   );
 }
 
-async function loadExactPublicClusterCounts(now: Date): Promise<Readonly<{
-  cantonCounts: ReadonlyMap<string, ClusterCount<PublicJobClusterCanton>>;
-  categoryCounts: ReadonlyMap<string, ClusterCount<PublicJobClusterCategory>>;
-}>> {
+async function loadExactPublicClusterCounts(now: Date): Promise<
+  Readonly<{
+    cantonCounts: ReadonlyMap<string, ClusterCount<PublicJobClusterCanton>>;
+    categoryCounts: ReadonlyMap<string, ClusterCount<PublicJobClusterCategory>>;
+  }>
+> {
   const database = getDatabase();
   const input = emptyPublicJobSearchInput();
   const cantonCounts = new Map<string, ClusterCount<PublicJobClusterCanton>>();
-  const categoryCounts = new Map<string, ClusterCount<PublicJobClusterCategory>>();
+  const categoryCounts = new Map<
+    string,
+    ClusterCount<PublicJobClusterCategory>
+  >();
   await scanEligibleRowsInSnapshot<PublicJobClusterRow>(
     database,
     now,
     "production",
-    (transaction, afterId) => transaction.job.findMany({
-      where: {
-        ...buildPublicJobWhere(input, now, true, {}),
-        ...(afterId === undefined ? {} : { id: { gt: afterId } }),
-        AND: [{
-          OR: [
+    (transaction, afterId) =>
+      transaction.job.findMany({
+        where: {
+          ...buildPublicJobWhere(input, now, true, {}),
+          ...(afterId === undefined ? {} : { id: { gt: afterId } }),
+          AND: [
             {
-              publishedRevision: {
-                is: {
-                  canton: {
+              OR: [
+                {
+                  publishedRevision: {
                     is: {
-                      code: {
-                        in: [...PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCantonCodes],
+                      canton: {
+                        is: {
+                          code: {
+                            in: [
+                              ...PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCantonCodes,
+                            ],
+                          },
+                        },
                       },
                     },
                   },
                 },
-              },
-            },
-            {
-              publishedRevision: {
-                is: {
-                  category: {
+                {
+                  publishedRevision: {
                     is: {
-                      slug: {
-                        in: [...PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCategorySlugs],
+                      category: {
+                        is: {
+                          slug: {
+                            in: [
+                              ...PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCategorySlugs,
+                            ],
+                          },
+                        },
                       },
                     },
                   },
                 },
-              },
+              ],
             },
           ],
-        }],
-      },
-      orderBy: { id: "asc" },
-      take: EXACT_COUNT_SCAN_BATCH_SIZE,
-      select: PUBLIC_JOB_CLUSTER_SELECT,
-    }),
+        },
+        orderBy: { id: "asc" },
+        take: EXACT_COUNT_SCAN_BATCH_SIZE,
+        select: PUBLIC_JOB_CLUSTER_SELECT,
+      }),
     (rows) => {
       for (const row of rows) {
         const canton = row.publishedRevision.canton;
@@ -1872,25 +2027,32 @@ function buildPublicJobWhere(
 ): Prisma.JobWhereInput {
   // This bounds the candidate set for performance. The canonical evaluator
   // below remains the final authority for lifecycle and restriction eligibility.
-  const publishedAtUpperBound = scope.publishedAtUpperBound !== undefined &&
-      scope.publishedAtUpperBound.getTime() < now.getTime()
-    ? scope.publishedAtUpperBound
-    : now;
+  const publishedAtUpperBound =
+    scope.publishedAtUpperBound !== undefined &&
+    scope.publishedAtUpperBound.getTime() < now.getTime()
+      ? scope.publishedAtUpperBound
+      : now;
   const publishedSalaryMin = input.salaryDisclosedOnly
     ? { not: null }
     : undefined;
-  const publishedSalaryMax = input.salaryMin !== undefined
-    ? {
-        gte: input.salaryMin,
-        ...(input.salaryDisclosedOnly ? { not: null } : {}),
-      }
-    : input.salaryDisclosedOnly ? { not: null } : undefined;
-  const publishedSalaryPeriod = input.salaryPeriod ??
+  const publishedSalaryMax =
+    input.salaryMin !== undefined
+      ? {
+          gte: input.salaryMin,
+          ...(input.salaryDisclosedOnly ? { not: null } : {}),
+        }
+      : input.salaryDisclosedOnly
+        ? { not: null }
+        : undefined;
+  const publishedSalaryPeriod =
+    input.salaryPeriod ??
     (input.salaryDisclosedOnly ? { not: null } : undefined);
   return {
     ...(scope.slug === undefined ? {} : { slug: scope.slug }),
     ...(scope.companyId === undefined ? {} : { companyId: scope.companyId }),
-    ...(scope.companyIds === undefined ? {} : { companyId: { in: [...scope.companyIds] } }),
+    ...(scope.companyIds === undefined
+      ? {}
+      : { companyId: { in: [...scope.companyIds] } }),
     ...(scope.publishedCategoryIds === undefined
       ? {}
       : { publishedCategoryId: { in: [...scope.publishedCategoryIds] } }),
@@ -1967,10 +2129,12 @@ async function loadBoundedEligibleRowsInSnapshot<
       const candidateRows = await loadRows(transaction);
       const maximumLoadedRows = candidateLimit + (detectTruncation ? 1 : 0);
       if (candidateRows.length > maximumLoadedRows) {
-        throw new RangeError("A public search query exceeded its safety bound.");
+        throw new RangeError(
+          "A public search query exceeded its safety bound.",
+        );
       }
-      const candidateSetTruncated = detectTruncation &&
-        candidateRows.length > candidateLimit;
+      const candidateSetTruncated =
+        detectTruncation && candidateRows.length > candidateLimit;
       const eligibleRows = await filterEligibleRows(
         candidateRows,
         now,
@@ -2006,13 +2170,17 @@ async function scanEligibleRowsInSnapshot<Row extends PublicJobEligibilityRow>(
         const rows = await loadBatch(transaction, afterId);
         if (rows.length === 0) return;
         if (rows.length > EXACT_COUNT_SCAN_BATCH_SIZE) {
-          throw new RangeError("A public count scan batch exceeded its safety bound.");
+          throw new RangeError(
+            "A public count scan batch exceeded its safety bound.",
+          );
         }
         consume(await filterEligibleRows(rows, now, environment, transaction));
         if (rows.length < EXACT_COUNT_SCAN_BATCH_SIZE) return;
         const nextAfterId = rows.at(-1)?.id;
-        if (nextAfterId === undefined ||
-            (afterId !== undefined && nextAfterId <= afterId)) {
+        if (
+          nextAfterId === undefined ||
+          (afterId !== undefined && nextAfterId <= afterId)
+        ) {
           throw new Error("Public count keyset scan did not advance.");
         }
         afterId = nextAfterId;
@@ -2040,12 +2208,20 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
       startsAt: { lte: now },
       liftedAt: null,
       OR: [{ endsAt: null }, { endsAt: { gt: now } }],
-      AND: [{
-        OR: [
-          { targetType: "HIDE_JOB", targetId: { in: rows.map((row) => row.id) } },
-          { targetType: "PAUSE_COMPANY", targetId: { in: rows.map((row) => row.companyId) } },
-        ],
-      }],
+      AND: [
+        {
+          OR: [
+            {
+              targetType: "HIDE_JOB",
+              targetId: { in: rows.map((row) => row.id) },
+            },
+            {
+              targetType: "PAUSE_COMPANY",
+              targetId: { in: rows.map((row) => row.companyId) },
+            },
+          ],
+        },
+      ],
     },
     select: { targetType: true, targetId: true },
   });
@@ -2055,10 +2231,14 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
     { now },
   );
   const hiddenJobs = new Set(
-    restrictions.filter((row) => row.targetType === "HIDE_JOB").map((row) => row.targetId),
+    restrictions
+      .filter((row) => row.targetType === "HIDE_JOB")
+      .map((row) => row.targetId),
   );
   const pausedCompanies = new Set(
-    restrictions.filter((row) => row.targetType === "PAUSE_COMPANY").map((row) => row.targetId),
+    restrictions
+      .filter((row) => row.targetType === "PAUSE_COMPANY")
+      .map((row) => row.targetId),
   );
   const eligibleRows: EligibleRow<Row>[] = [];
   for (const row of rows) {
@@ -2074,27 +2254,37 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
       environment,
     );
     if (result.eligible && row.publishedRevision !== null) {
-      eligibleRows.push(Object.freeze({
-        ...row,
-        companyTrustBadge: toPublicTrustBadge(companyTrust?.badge ?? null),
-      }) as EligibleRow<Row>);
+      eligibleRows.push(
+        Object.freeze({
+          ...row,
+          companyTrustBadge: toPublicTrustBadge(companyTrust?.badge ?? null),
+        }) as EligibleRow<Row>,
+      );
     }
   }
   return eligibleRows;
 }
 
-function buildRevisionWhere(input: PublicJobSearchInput): Prisma.JobRevisionWhereInput {
+function buildRevisionWhere(
+  input: PublicJobSearchInput,
+): Prisma.JobRevisionWhereInput {
   const where: Prisma.JobRevisionWhereInput = {
     category: { is: { isActive: true } },
   };
   if (input.jobTypes.length > 0) where.jobType = { in: [...input.jobTypes] };
-  if (input.remoteTypes.length > 0) where.remoteType = { in: [...input.remoteTypes] };
-  if (input.workloadMin !== undefined) where.workloadMax = { gte: input.workloadMin };
-  if (input.workloadMax !== undefined) where.workloadMin = { lte: input.workloadMax };
-  if (input.efforts.length > 0) where.applicationEffort = { in: [...input.efforts] };
+  if (input.remoteTypes.length > 0)
+    where.remoteType = { in: [...input.remoteTypes] };
+  if (input.workloadMin !== undefined)
+    where.workloadMax = { gte: input.workloadMin };
+  if (input.workloadMax !== undefined)
+    where.workloadMin = { lte: input.workloadMax };
+  if (input.efforts.length > 0)
+    where.applicationEffort = { in: [...input.efforts] };
   if (input.languages.length > 0) {
     const contentLanguages = [...input.languages];
-    const languageCodes = contentLanguages.map((language) => language.toLowerCase());
+    const languageCodes = contentLanguages.map((language) =>
+      language.toLowerCase(),
+    );
     where.AND = [
       {
         OR: [
@@ -2131,31 +2321,33 @@ function toPublicEligibilitySnapshot<Row extends PublicJobEligibilityRow>(
       hasCurrentVerifiedCycle: row.company.verificationRequests.length === 1,
       hasCurrentTrustEligibility,
     }),
-    revision: revision === null
-      ? null
-      : Object.freeze({
-          id: revision.id,
-          title: revision.title,
-          description: revision.description,
-          categoryIsActive: revision.category.isActive,
-          approvedAt: revision.approvedAt,
-          rejectedAt: revision.rejectedAt,
-          validThrough: revision.validThrough,
-          categoryId: revision.categoryId,
-          cantonId: revision.cantonId,
-          cityId: revision.cityId,
-          salaryMin: revision.salaryMin,
-          salaryMax: revision.salaryMax,
-          salaryPeriod: revision.salaryPeriod,
-          responseTargetDays: revision.responseTargetDays,
-          remoteType: revision.remoteType,
-          jobType: revision.jobType,
-          workloadMin: revision.workloadMin,
-          workloadMax: revision.workloadMax,
-          fairScore: revision.scoreSnapshots.length === 1
-            ? (revision.scoreSnapshots[0]?.scorePoints ?? null)
-            : null,
-        }),
+    revision:
+      revision === null
+        ? null
+        : Object.freeze({
+            id: revision.id,
+            title: revision.title,
+            description: revision.description,
+            categoryIsActive: revision.category.isActive,
+            approvedAt: revision.approvedAt,
+            rejectedAt: revision.rejectedAt,
+            validThrough: revision.validThrough,
+            categoryId: revision.categoryId,
+            cantonId: revision.cantonId,
+            cityId: revision.cityId,
+            salaryMin: revision.salaryMin,
+            salaryMax: revision.salaryMax,
+            salaryPeriod: revision.salaryPeriod,
+            responseTargetDays: revision.responseTargetDays,
+            remoteType: revision.remoteType,
+            jobType: revision.jobType,
+            workloadMin: revision.workloadMin,
+            workloadMax: revision.workloadMax,
+            fairScore:
+              revision.scoreSnapshots.length === 1
+                ? (revision.scoreSnapshots[0]?.scorePoints ?? null)
+                : null,
+          }),
     hasEffectivePublicHideRestriction:
       hiddenJobs.has(row.id) || pausedCompanies.has(row.companyId),
   });
@@ -2178,7 +2370,10 @@ async function loadCanonicalResponseMedians(
   const windowStart = new Date(
     now.getTime() - EMPLOYER_RESPONSE_POLICY_V1.rollingWindowDays * DAY_MS,
   );
-  for (const companyIds of chunks([...projections.keys()], RESPONSE_COMPANY_BATCH_SIZE)) {
+  for (const companyIds of chunks(
+    [...projections.keys()],
+    RESPONSE_COMPANY_BATCH_SIZE,
+  )) {
     const applications = await transaction.application.findMany({
       where: {
         job: { companyId: { in: companyIds } },
@@ -2205,16 +2400,20 @@ async function loadCanonicalResponseMedians(
         },
       },
     });
-    const casesByCompany = new Map<string, Array<{
-      applicationId: string;
-      submittedAt: Date;
-      responseTargetDays: number | null;
-      firstResponseAt: Date | null;
-    }>>();
+    const casesByCompany = new Map<
+      string,
+      Array<{
+        applicationId: string;
+        submittedAt: Date;
+        responseTargetDays: number | null;
+        firstResponseAt: Date | null;
+      }>
+    >();
     for (const application of applications) {
       const cases = casesByCompany.get(application.job.companyId) ?? [];
       const firstEmployerResponse = application.events.find(
-        (event) => event.actorUserId !== application.candidateProfile.userId &&
+        (event) =>
+          event.actorUserId !== application.candidateProfile.userId &&
           event.createdAt >= application.submittedAt,
       );
       cases.push({
@@ -2229,11 +2428,14 @@ async function loadCanonicalResponseMedians(
     for (const companyId of companyIds) {
       const projection = projections.get(companyId);
       if (projection === undefined) continue;
-      cache.set(companyId, projectCanonicalResponseMedianMinutes(
-        projection,
-        casesByCompany.get(companyId) ?? [],
-        now,
-      ));
+      cache.set(
+        companyId,
+        projectCanonicalResponseMedianMinutes(
+          projection,
+          casesByCompany.get(companyId) ?? [],
+          now,
+        ),
+      );
     }
   }
 }
@@ -2250,15 +2452,17 @@ function toDatabaseRankingCandidate(
     now,
     responseMedianByCompany,
   );
-  if (projected.id !== ranking.id ||
-      projected.publishedAt.getTime() !== ranking.publishedAt.getTime() ||
-      projected.fairScore !== ranking.fairScore ||
-      projected.salaryMin !== ranking.salaryMin ||
-      projected.salaryMax !== ranking.salaryMax ||
-      projected.activeBoost !== ranking.activeBoost ||
-      projected.responseEvidenceKnown !== ranking.responseEvidenceKnown ||
-      projected.onTimeRateBps !== ranking.onTimeRateBps ||
-      projected.medianFirstResponseMinutes !== ranking.medianFirstResponseMinutes) {
+  if (
+    projected.id !== ranking.id ||
+    projected.publishedAt.getTime() !== ranking.publishedAt.getTime() ||
+    projected.fairScore !== ranking.fairScore ||
+    projected.salaryMin !== ranking.salaryMin ||
+    projected.salaryMax !== ranking.salaryMax ||
+    projected.activeBoost !== ranking.activeBoost ||
+    projected.responseEvidenceKnown !== ranking.responseEvidenceKnown ||
+    projected.onTimeRateBps !== ranking.onTimeRateBps ||
+    projected.medianFirstResponseMinutes !== ranking.medianFirstResponseMinutes
+  ) {
     throw new PublicSearchRankingContractError(
       "RANKING_PROJECTION_DRIFT",
       "A hydrated card disagreed with its database ranking tuple.",
@@ -2285,9 +2489,10 @@ function toRankingCandidate(
         body: searchableRevisionBody(revision),
       })
     : { score: 0, tier: 0 };
-  const score = revision.scoreSnapshots.length === 1
-    ? (revision.scoreSnapshots[0]?.scorePoints ?? null)
-    : null;
+  const score =
+    revision.scoreSnapshots.length === 1
+      ? (revision.scoreSnapshots[0]?.scorePoints ?? null)
+      : null;
   const response = responseEvidence(row.company);
   return Object.freeze({
     id: row.id,
@@ -2324,11 +2529,12 @@ function toRankingCandidate(
 function searchableRevisionBody(
   revision: EligiblePublicJobRow["publishedRevision"],
 ): string {
-  const searchText = revision as typeof revision & Readonly<{
-    tasks?: readonly string[];
-    requirements?: readonly string[];
-    offer?: string | null;
-  }>;
+  const searchText = revision as typeof revision &
+    Readonly<{
+      tasks?: readonly string[];
+      requirements?: readonly string[];
+      offer?: string | null;
+    }>;
   return [
     revision.description,
     ...(searchText.tasks ?? []),
@@ -2343,9 +2549,10 @@ function toCardModel(
   sponsored: boolean,
 ): PublicJobCardModel {
   const revision = row.publishedRevision;
-  const score = revision.scoreSnapshots.length === 1
-    ? (revision.scoreSnapshots[0]?.scorePoints ?? null)
-    : null;
+  const score =
+    revision.scoreSnapshots.length === 1
+      ? (revision.scoreSnapshots[0]?.scorePoints ?? null)
+      : null;
   return Object.freeze({
     id: row.id,
     slug: row.slug,
@@ -2363,7 +2570,8 @@ function toCardModel(
       name: revision.category.name,
       slug: revision.category.slug,
     }),
-    canton: revision.canton === null ? null : Object.freeze({ ...revision.canton }),
+    canton:
+      revision.canton === null ? null : Object.freeze({ ...revision.canton }),
     city: revision.city === null ? null : Object.freeze({ ...revision.city }),
     locationLabel: cleanOptional(revision.locationLabel),
     remoteType: revision.remoteType,
@@ -2428,28 +2636,43 @@ function toDetailModel(
     requirements: cleanList(revision.requirements),
     niceToHave: cleanList(revision.niceToHave),
     offer: cleanOptional(revision.offer),
-    benefits: Object.freeze(revision.benefits.map((benefit) => Object.freeze({
-      code: benefit.benefitCode,
-      description: sanitizePlainText(benefit.description),
-    }))),
-    skills: Object.freeze(revision.skills.map((entry) => Object.freeze({
-      ...entry.skill,
-      name: stripUnsafeHtml(entry.skill.name),
-      required: entry.required,
-    }))),
-    languages: Object.freeze(revision.languages.map((language) => Object.freeze({
-      code: language.code.toLowerCase(),
-      minLevel: language.minLevel,
-    }))),
+    benefits: Object.freeze(
+      revision.benefits.map((benefit) =>
+        Object.freeze({
+          code: benefit.benefitCode,
+          description: sanitizePlainText(benefit.description),
+        }),
+      ),
+    ),
+    skills: Object.freeze(
+      revision.skills.map((entry) =>
+        Object.freeze({
+          ...entry.skill,
+          name: stripUnsafeHtml(entry.skill.name),
+          required: entry.required,
+        }),
+      ),
+    ),
+    languages: Object.freeze(
+      revision.languages.map((language) =>
+        Object.freeze({
+          code: language.code.toLowerCase(),
+          minLevel: language.minLevel,
+        }),
+      ),
+    ),
     applicationProcessSteps: cleanList(revision.applicationProcessSteps),
     requiredDocumentKinds: Object.freeze([...revision.requiredDocumentKinds]),
     inclusionStatement: cleanOptional(revision.inclusionStatement),
-    startDate: revision.startDate === null ? null : new Date(revision.startDate),
+    startDate:
+      revision.startDate === null ? null : new Date(revision.startDate),
     startByArrangement: revision.startByArrangement,
     remoteCountryCode: revision.remoteCountryCode,
     applicationContactKind: revision.applicationContactKind,
     applicationContactValue: revision.applicationContactValue.trim(),
-    fairScoreVersion: safeScoreVersion(revision.scoreSnapshots[0]?.scoreVersion),
+    fairScoreVersion: safeScoreVersion(
+      revision.scoreSnapshots[0]?.scoreVersion,
+    ),
     fairBreakdown: fairBreakdown(revision.scoreSnapshots[0]?.factorBreakdown),
   });
 }
@@ -2459,8 +2682,8 @@ function safePublicCompanyWebsite(value: string | null): string | null {
   try {
     const url = new URL(value);
     return (url.protocol === "http:" || url.protocol === "https:") &&
-        url.username === "" &&
-        url.password === ""
+      url.username === "" &&
+      url.password === ""
       ? url.toString()
       : null;
   } catch {
@@ -2469,22 +2692,29 @@ function safePublicCompanyWebsite(value: string | null): string | null {
 }
 
 function safeScoreVersion(value: string | undefined): string | null {
-  return value !== undefined && value.length <= 32 && /^[a-z0-9._-]+$/iu.test(value)
+  return value !== undefined &&
+    value.length <= 32 &&
+    /^[a-z0-9._-]+$/iu.test(value)
     ? value
     : null;
 }
 
-function responseEvidence(company: Readonly<{
-  responseTargetDays: number | null;
-  responseSampleSize: number;
-  responseWithinTargetBps: number | null;
-}>): PublicResponseEvidence {
-  const known = Number.isSafeInteger(company.responseSampleSize) &&
+function responseEvidence(
+  company: Readonly<{
+    responseTargetDays: number | null;
+    responseSampleSize: number;
+    responseWithinTargetBps: number | null;
+  }>,
+): PublicResponseEvidence {
+  const known =
+    Number.isSafeInteger(company.responseSampleSize) &&
     company.responseSampleSize >= ANALYTICS_MINIMUM_COHORT_SIZE_V1 &&
     Number.isInteger(company.responseTargetDays) &&
     company.responseTargetDays !== null &&
-    company.responseTargetDays >= EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min &&
-    company.responseTargetDays <= EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max &&
+    company.responseTargetDays >=
+      EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min &&
+    company.responseTargetDays <=
+      EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max &&
     Number.isInteger(company.responseWithinTargetBps) &&
     company.responseWithinTargetBps !== null &&
     company.responseWithinTargetBps >= 0 &&
@@ -2494,7 +2724,9 @@ function responseEvidence(company: Readonly<{
     targetDays: known ? company.responseTargetDays : null,
     onTimeRateBps: known ? company.responseWithinTargetBps : null,
     sampleSizeBucket: known
-      ? company.responseSampleSize >= 50 ? "50+" : "20–49"
+      ? company.responseSampleSize >= 50
+        ? "50+"
+        : "20–49"
       : null,
   });
 }
@@ -2522,26 +2754,36 @@ function fairBreakdown(value: unknown): PublicJobDetailModel["fairBreakdown"] {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return Object.freeze([]);
   }
-  const result = Object.entries(value as Record<string, unknown>).flatMap(([key, raw]) => {
-    if (!Object.hasOwn(FACTOR_LABELS, key)) return [];
-    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return [];
-    const item = raw as Record<string, unknown>;
-    return typeof item.pointsAwarded === "number" && typeof item.maxPoints === "number" &&
-      Number.isFinite(item.pointsAwarded) && Number.isFinite(item.maxPoints)
-      ? [Object.freeze({
-          key,
-          label: FACTOR_LABELS[key] as string,
-          points: item.pointsAwarded,
-          maxPoints: item.maxPoints,
-        })]
-      : [];
-  });
+  const result = Object.entries(value as Record<string, unknown>).flatMap(
+    ([key, raw]) => {
+      if (!Object.hasOwn(FACTOR_LABELS, key)) return [];
+      if (raw === null || typeof raw !== "object" || Array.isArray(raw))
+        return [];
+      const item = raw as Record<string, unknown>;
+      return typeof item.pointsAwarded === "number" &&
+        typeof item.maxPoints === "number" &&
+        Number.isFinite(item.pointsAwarded) &&
+        Number.isFinite(item.maxPoints)
+        ? [
+            Object.freeze({
+              key,
+              label: FACTOR_LABELS[key] as string,
+              points: item.pointsAwarded,
+              maxPoints: item.maxPoints,
+            }),
+          ]
+        : [];
+    },
+  );
   return Object.freeze(result);
 }
 
 function createPublicSearchQueryHash(input: PublicJobSearchInput): string {
   const canonical = {
-    version: "public-search-v2",
+    version: "public-search-v3",
+    searchPolicyVersion: SEARCH_POLICY_RELEASE_V2.searchPolicyVersion,
+    taxonomyVersion: SEARCH_POLICY_RELEASE_V2.taxonomyVersion,
+    rankingVersion: SEARCH_POLICY_RELEASE_V2.rankingVersion,
     keyword: input.keyword?.trim().normalize("NFKC").toLowerCase() ?? null,
     cantonSlugs: canonicalSet(input.cantonSlugs),
     citySlugs: canonicalSet(input.citySlugs),
@@ -2561,7 +2803,9 @@ function createPublicSearchQueryHash(input: PublicJobSearchInput): string {
     sort: input.sort,
     pageSize: input.pageSize,
   };
-  return createHash("sha256").update(JSON.stringify(canonical), "utf8").digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(canonical), "utf8")
+    .digest("hex");
 }
 
 function canonicalSet(values: readonly string[]): readonly string[] {

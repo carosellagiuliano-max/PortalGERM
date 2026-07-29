@@ -3,10 +3,7 @@ import { createHash } from "node:crypto";
 import { buildFairJobScoreSnapshotV2 } from "@/lib/scoring/fair-job-snapshot";
 import type { FairJobScoreSnapshotRecordV2 } from "@/lib/scoring/fair-job-snapshot";
 import type { SeedIdentityRecord } from "@/prisma/seed/contract";
-import {
-  createSeedIdentity,
-  stableSeedId,
-} from "@/prisma/seed/ids";
+import { createSeedIdentity, stableSeedId } from "@/prisma/seed/ids";
 import {
   createSeedRandom,
   deterministicShuffle,
@@ -21,8 +18,7 @@ import { SKILL_FIXTURES } from "./skills";
 
 export const DEMO_LOGIN_PASSWORD = "Demo12345!" as const;
 export const DEMO_COMPANY_SLUG = "novarigi-digital" as const;
-export const RADAR_DEMO_COMPANY_SLUG =
-  "carevia-quartiergesundheit" as const;
+export const RADAR_DEMO_COMPANY_SLUG = "carevia-quartiergesundheit" as const;
 
 export type DemoRole = "CANDIDATE" | "EMPLOYER" | "RECRUITER" | "ADMIN";
 export type DemoJobStatus =
@@ -57,12 +53,29 @@ export interface DemoAccountFixture {
 
 export const DEMO_ACCOUNT_FIXTURES: readonly Readonly<DemoAccountFixture>[] =
   Object.freeze(
-    ([
-      ["candidate@demo.ch", "Demo Kandidatin", "CANDIDATE", "candidate-profile"],
-      ["employer@demo.ch", "Demo Arbeitgeber", "EMPLOYER", "employer-profile"],
-      ["recruiter@demo.ch", "Demo Recruiterin", "RECRUITER", "employer-profile"],
-      ["admin@demo.ch", "Demo Administration", "ADMIN", null],
-    ] as const).map(([email, name, role, profileEntity]) =>
+    (
+      [
+        [
+          "candidate@demo.ch",
+          "Demo Kandidatin",
+          "CANDIDATE",
+          "candidate-profile",
+        ],
+        [
+          "employer@demo.ch",
+          "Demo Arbeitgeber",
+          "EMPLOYER",
+          "employer-profile",
+        ],
+        [
+          "recruiter@demo.ch",
+          "Demo Recruiterin",
+          "RECRUITER",
+          "employer-profile",
+        ],
+        ["admin@demo.ch", "Demo Administration", "ADMIN", null],
+      ] as const
+    ).map(([email, name, role, profileEntity]) =>
       Object.freeze({
         id: stableSeedId("user", email),
         email,
@@ -84,31 +97,206 @@ interface CompanyDefinition {
 }
 
 const COMPANY_DEFINITIONS = [
-  ["Alpenfaden Atelier GmbH", "alpenfaden-atelier", "FREE_BASIC", "Detailhandel und Gestaltung", "1-10", "aarau"],
-  ["Seeblick Reparaturwerkstatt GmbH", "seeblick-reparaturwerkstatt", "FREE_BASIC", "Reparatur und Handwerk", "1-10", "uster"],
-  ["Mosaik Lernraum GmbH", "mosaik-lernraum", "FREE_BASIC", "Bildung und Soziales", "1-10", "koeniz"],
-  ["JuraKorn Genusswerk GmbH", "jurakorn-genusswerk", "FREE_BASIC", "Lebensmittel und Gastronomie", "1-10", "olten"],
-  ["Linthlicht Gebäudeservice GmbH", "linthlicht-gebaeudeservice", "FREE_BASIC", "Reinigung und Facility", "1-10", "rapperswil-jona"],
-  ["Rheintal Werkbogen AG", "rheintal-werkbogen", "STARTER", "Produktion und Industrie", "11-50", "winterthur"],
-  ["Bernbogen Administration GmbH", "bernbogen-administration", "STARTER", "Administration und Dienste", "11-50", "bern"],
-  ["Tessin Tavola Servizi SA", "tessin-tavola-servizi", "STARTER", "Gastronomie und Hotellerie", "11-50", "lugano"],
-  ["Romandie Clair Conseil Sàrl", "romandie-clair-conseil", "STARTER", "Beratung und Kundendienst", "11-50", "lausanne"],
-  ["Zugwerk Kundenservice AG", "zugwerk-kundenservice", "STARTER", "Kundendienst", "11-50", "zug"],
-  ["Thurholz Innenausbau GmbH", "thurholz-innenausbau", "STARTER", "Bau und Innenausbau", "11-50", "wil"],
-  ["NovaRigi Digital AG", DEMO_COMPANY_SLUG, "PRO", "Informationstechnologie", "51-200", "zuerich"],
-  ["Aaretakt Engineering AG", "aaretakt-engineering", "PRO", "Engineering und Technik", "51-200", "baden"],
-  ["SäntisWort Kommunikation GmbH", "saentiswort-kommunikation", "PRO", "Marketing und Kommunikation", "51-200", "st-gallen"],
-  ["Bieler Kreislauf Logistik AG", "bieler-kreislauf-logistik", "PRO", "Logistik und Transport", "51-200", "biel-bienne"],
-  ["Léman Lien Social Sàrl", "leman-lien-social", "PRO", "Soziale Dienste", "51-200", "fribourg"],
-  ["Cima Cura Servizi SA", "cima-cura-servizi", "PRO", "Gesundheit und Pflege", "51-200", "bellinzona"],
-  ["Carevia Quartiergesundheit AG", RADAR_DEMO_COMPANY_SLUG, "BUSINESS", "Gesundheit und Pflege", "201-500", "basel"],
-  ["Cloudkern Systeme AG", "cloudkern-systeme", "BUSINESS", "Informationstechnologie", "201-500", "winterthur"],
-  ["Frachtfink Logistik AG", "frachtfink-logistik", "BUSINESS", "Logistik und Transport", "201-500", "dietikon"],
-  ["Panorama Gastwerk AG", "panorama-gastwerk", "BUSINESS", "Gastronomie und Hotellerie", "201-500", "luzern"],
-  ["Klarwert Bildungsverbund AG", "klarwert-bildungsverbund", "BUSINESS", "Bildung und Soziales", "201-500", "neuchatel"],
-  ["Quarzspindel Industriewerke AG", "quarzspindel-industriewerke", "ENTERPRISE_CONTRACT", "Industrie und Produktion", "501+", "chur"],
-  ["Bergfuge Bauverbund AG", "bergfuge-bauverbund", "ENTERPRISE_CONTRACT", "Bau und Infrastruktur", "501+", "thun"],
-  ["Rappenquell Finanzdienste AG", "rappenquell-finanzdienste", "ENTERPRISE_CONTRACT", "Finanzen und Treuhand", "501+", "zug"],
+  [
+    "Alpenfaden Atelier GmbH",
+    "alpenfaden-atelier",
+    "FREE_BASIC",
+    "Detailhandel und Gestaltung",
+    "1-10",
+    "aarau",
+  ],
+  [
+    "Seeblick Reparaturwerkstatt GmbH",
+    "seeblick-reparaturwerkstatt",
+    "FREE_BASIC",
+    "Reparatur und Handwerk",
+    "1-10",
+    "uster",
+  ],
+  [
+    "Mosaik Lernraum GmbH",
+    "mosaik-lernraum",
+    "FREE_BASIC",
+    "Bildung und Soziales",
+    "1-10",
+    "koeniz",
+  ],
+  [
+    "JuraKorn Genusswerk GmbH",
+    "jurakorn-genusswerk",
+    "FREE_BASIC",
+    "Lebensmittel und Gastronomie",
+    "1-10",
+    "olten",
+  ],
+  [
+    "Linthlicht Gebäudeservice GmbH",
+    "linthlicht-gebaeudeservice",
+    "FREE_BASIC",
+    "Reinigung und Facility",
+    "1-10",
+    "rapperswil-jona",
+  ],
+  [
+    "Rheintal Werkbogen AG",
+    "rheintal-werkbogen",
+    "STARTER",
+    "Produktion und Industrie",
+    "11-50",
+    "winterthur",
+  ],
+  [
+    "Bernbogen Administration GmbH",
+    "bernbogen-administration",
+    "STARTER",
+    "Administration und Dienste",
+    "11-50",
+    "bern",
+  ],
+  [
+    "Tessin Tavola Servizi SA",
+    "tessin-tavola-servizi",
+    "STARTER",
+    "Gastronomie und Hotellerie",
+    "11-50",
+    "lugano",
+  ],
+  [
+    "Romandie Clair Conseil Sàrl",
+    "romandie-clair-conseil",
+    "STARTER",
+    "Beratung und Kundendienst",
+    "11-50",
+    "lausanne",
+  ],
+  [
+    "Zugwerk Kundenservice AG",
+    "zugwerk-kundenservice",
+    "STARTER",
+    "Kundendienst",
+    "11-50",
+    "zug",
+  ],
+  [
+    "Thurholz Innenausbau GmbH",
+    "thurholz-innenausbau",
+    "STARTER",
+    "Bau und Innenausbau",
+    "11-50",
+    "wil",
+  ],
+  [
+    "NovaRigi Digital AG",
+    DEMO_COMPANY_SLUG,
+    "PRO",
+    "Informationstechnologie",
+    "51-200",
+    "zuerich",
+  ],
+  [
+    "Aaretakt Engineering AG",
+    "aaretakt-engineering",
+    "PRO",
+    "Engineering und Technik",
+    "51-200",
+    "baden",
+  ],
+  [
+    "SäntisWort Kommunikation GmbH",
+    "saentiswort-kommunikation",
+    "PRO",
+    "Marketing und Kommunikation",
+    "51-200",
+    "st-gallen",
+  ],
+  [
+    "Bieler Kreislauf Logistik AG",
+    "bieler-kreislauf-logistik",
+    "PRO",
+    "Logistik und Transport",
+    "51-200",
+    "biel-bienne",
+  ],
+  [
+    "Léman Lien Social Sàrl",
+    "leman-lien-social",
+    "PRO",
+    "Soziale Dienste",
+    "51-200",
+    "fribourg",
+  ],
+  [
+    "Cima Cura Servizi SA",
+    "cima-cura-servizi",
+    "PRO",
+    "Gesundheit und Pflege",
+    "51-200",
+    "bellinzona",
+  ],
+  [
+    "Carevia Quartiergesundheit AG",
+    RADAR_DEMO_COMPANY_SLUG,
+    "BUSINESS",
+    "Gesundheit und Pflege",
+    "201-500",
+    "basel",
+  ],
+  [
+    "Cloudkern Systeme AG",
+    "cloudkern-systeme",
+    "BUSINESS",
+    "Informationstechnologie",
+    "201-500",
+    "winterthur",
+  ],
+  [
+    "Frachtfink Logistik AG",
+    "frachtfink-logistik",
+    "BUSINESS",
+    "Logistik und Transport",
+    "201-500",
+    "dietikon",
+  ],
+  [
+    "Panorama Gastwerk AG",
+    "panorama-gastwerk",
+    "BUSINESS",
+    "Gastronomie und Hotellerie",
+    "201-500",
+    "luzern",
+  ],
+  [
+    "Klarwert Bildungsverbund AG",
+    "klarwert-bildungsverbund",
+    "BUSINESS",
+    "Bildung und Soziales",
+    "201-500",
+    "neuchatel",
+  ],
+  [
+    "Quarzspindel Industriewerke AG",
+    "quarzspindel-industriewerke",
+    "ENTERPRISE_CONTRACT",
+    "Industrie und Produktion",
+    "501+",
+    "chur",
+  ],
+  [
+    "Bergfuge Bauverbund AG",
+    "bergfuge-bauverbund",
+    "ENTERPRISE_CONTRACT",
+    "Bau und Infrastruktur",
+    "501+",
+    "thun",
+  ],
+  [
+    "Rappenquell Finanzdienste AG",
+    "rappenquell-finanzdienste",
+    "ENTERPRISE_CONTRACT",
+    "Finanzen und Treuhand",
+    "501+",
+    "zug",
+  ],
 ] as const satisfies readonly (readonly [
   string,
   string,
@@ -135,10 +323,26 @@ export interface CompanyFixture extends CompanyDefinition {
 }
 
 const RESPONSE_SCENARIOS = Object.freeze([
-  { responseTargetDays: 7, responseSampleSize: 64, responseWithinTargetBps: 8_281 },
-  { responseTargetDays: 14, responseSampleSize: 8, responseWithinTargetBps: null },
-  { responseTargetDays: null, responseSampleSize: 0, responseWithinTargetBps: null },
-  { responseTargetDays: 21, responseSampleSize: 35, responseWithinTargetBps: 7_143 },
+  {
+    responseTargetDays: 7,
+    responseSampleSize: 64,
+    responseWithinTargetBps: 8_281,
+  },
+  {
+    responseTargetDays: 14,
+    responseSampleSize: 8,
+    responseWithinTargetBps: null,
+  },
+  {
+    responseTargetDays: null,
+    responseSampleSize: 0,
+    responseWithinTargetBps: null,
+  },
+  {
+    responseTargetDays: 21,
+    responseSampleSize: 35,
+    responseWithinTargetBps: 7_143,
+  },
 ] as const);
 
 export const COMPANY_FIXTURES: readonly Readonly<CompanyFixture>[] =
@@ -173,9 +377,7 @@ export const COMPANY_FIXTURES: readonly Readonly<CompanyFixture>[] =
           cityId: stableSeedId("city", `${city.cantonCode}:${city.slug}`),
           locationId: stableSeedId("company-location", `${slug}:primary`),
           billingProfileId:
-            index === 1
-              ? stableSeedId("company-billing-profile", slug)
-              : null,
+            index === 1 ? stableSeedId("company-billing-profile", slug) : null,
           ...response,
         });
       },
@@ -340,7 +542,9 @@ export interface JobFixture {
   readonly scoreSnapshot: FairJobScoreSnapshotRecordV2 | null;
 }
 
-export function buildJobFixtures(anchorAt: Date): readonly Readonly<JobFixture>[] {
+export function buildJobFixtures(
+  anchorAt: Date,
+): readonly Readonly<JobFixture>[] {
   assertValidAnchor(anchorAt);
   const categoriesExceptEngineering = CATEGORY_FIXTURES.filter(
     (category) => category.slug !== "engineering-technik",
@@ -352,7 +556,9 @@ export function buildJobFixtures(anchorAt: Date): readonly Readonly<JobFixture>[
     exactRange(115).map((index) => {
       const ordinal = index + 1;
       const status: DemoJobStatus =
-        index < 100 ? "PUBLISHED" : (NON_PUBLISHED_STATUSES[index - 100] as DemoJobStatus);
+        index < 100
+          ? "PUBLISHED"
+          : (NON_PUBLISHED_STATUSES[index - 100] as DemoJobStatus);
       const companyIndex =
         index < 100
           ? (PUBLISHED_COMPANY_INDEXES[index] as number)
@@ -361,15 +567,15 @@ export function buildJobFixtures(anchorAt: Date): readonly Readonly<JobFixture>[
       if (!company) throw new Error(`Missing company for job ${ordinal}.`);
       const category =
         index < 50
-          ? CATEGORY_FIXTURES.find((entry) => entry.slug === "engineering-technik")
-          : categoriesExceptEngineering[(index - 50) % categoriesExceptEngineering.length];
+          ? CATEGORY_FIXTURES.find(
+              (entry) => entry.slug === "engineering-technik",
+            )
+          : categoriesExceptEngineering[
+              (index - 50) % categoriesExceptEngineering.length
+            ];
       if (!category) throw new Error(`Missing category for job ${ordinal}.`);
       const remoteType: DemoRemoteType =
-        index < 15
-          ? "HYBRID"
-          : index >= 50 && index < 64
-            ? "REMOTE"
-            : "ONSITE";
+        index < 15 ? "HYBRID" : index >= 50 && index < 64 ? "REMOTE" : "ONSITE";
       const city =
         remoteType === "REMOTE"
           ? null
@@ -380,7 +586,9 @@ export function buildJobFixtures(anchorAt: Date): readonly Readonly<JobFixture>[
         throw new Error(`Missing city for job ${ordinal}.`);
       }
       const contentLanguage = CONTENT_LANGUAGES[index] as DemoContentLanguage;
-      const applicationEffort = APPLICATION_EFFORTS[index] as DemoApplicationEffort;
+      const applicationEffort = APPLICATION_EFFORTS[
+        index
+      ] as DemoApplicationEffort;
       const jobType = JOB_TYPES[index] as DemoJobType;
       const slug = `${index < 50 ? "zh-engineering" : category.slug}-demo-${String(ordinal).padStart(3, "0")}`;
       const id = stableSeedId("job", slug);
@@ -404,15 +612,22 @@ export function buildJobFixtures(anchorAt: Date): readonly Readonly<JobFixture>[
       const skills = [
         categorySkills[index % categorySkills.length],
         categorySkills[(index + 1) % categorySkills.length],
-      ].filter((skill): skill is (typeof SKILL_FIXTURES)[number] => Boolean(skill));
-      if (skills.length !== 2) throw new Error(`Missing job skills for ${slug}.`);
+      ].filter((skill): skill is (typeof SKILL_FIXTURES)[number] =>
+        Boolean(skill),
+      );
+      if (skills.length !== 2)
+        throw new Error(`Missing job skills for ${slug}.`);
       const languageCodes = Object.freeze(
         contentLanguage === "DE"
           ? ["de"]
           : [contentLanguage.toLowerCase(), "de"],
       );
       const title = localizedTitle(contentLanguage, category.name, ordinal);
-      const description = localizedDescription(contentLanguage, company.name, category.name);
+      const description = localizedDescription(
+        contentLanguage,
+        company.name,
+        category.name,
+      );
       const tasks = Object.freeze([
         `Du planst nachvollziehbare Arbeitspakete im Bereich ${category.name}.`,
         "Du dokumentierst Ergebnisse verständlich und stimmst Prioritäten im Team ab.",
@@ -425,7 +640,9 @@ export function buildJobFixtures(anchorAt: Date): readonly Readonly<JobFixture>[
       ]);
       const applicationProcessSteps = Object.freeze(
         applicationEffort === "SIMPLE"
-          ? ["Kurzbewerbung einreichen und innerhalb von sieben Tagen eine Rückmeldung erhalten."]
+          ? [
+              "Kurzbewerbung einreichen und innerhalb von sieben Tagen eine Rückmeldung erhalten.",
+            ]
           : applicationEffort === "MEDIUM"
             ? [
                 "Lebenslauf einreichen und ein strukturiertes Erstgespräch führen.",
@@ -451,13 +668,15 @@ export function buildJobFixtures(anchorAt: Date): readonly Readonly<JobFixture>[
         Object.freeze({
           id: stableSeedId("job-revision-benefit", `${slug}:flexible-work`),
           benefitCode: "FLEXIBLE_WORK" as const,
-          description: "Planbare Arbeitszeiten mit gemeinsam vereinbarten Präsenzfenstern.",
+          description:
+            "Planbare Arbeitszeiten mit gemeinsam vereinbarten Präsenzfenstern.",
           sortOrder: 0,
         }),
         Object.freeze({
           id: stableSeedId("job-revision-benefit", `${slug}:paid-training`),
           benefitCode: "PAID_TRAINING" as const,
-          description: "Bezahlte Weiterbildungstage mit einem persönlichen Lernbudget.",
+          description:
+            "Bezahlte Weiterbildungstage mit einem persönlichen Lernbudget.",
           sortOrder: 1,
         }),
       ]);
@@ -492,7 +711,10 @@ export function buildJobFixtures(anchorAt: Date): readonly Readonly<JobFixture>[
         cantonId,
         citySlug: city?.slug ?? null,
         cityId,
-        locationLabel: remoteType === "REMOTE" ? "Remote innerhalb der Schweiz" : city?.name ?? "Schweiz",
+        locationLabel:
+          remoteType === "REMOTE"
+            ? "Remote innerhalb der Schweiz"
+            : (city?.name ?? "Schweiz"),
         salaryPeriod: salaryDisclosed ? ("YEARLY" as const) : null,
         salaryMin,
         salaryMax,
@@ -507,7 +729,9 @@ export function buildJobFixtures(anchorAt: Date): readonly Readonly<JobFixture>[
         inclusionStatement,
         applicationContactValue,
         benefits,
-        skillIds: Object.freeze(skills.map((skill) => stableSeedId("skill", skill.slug))),
+        skillIds: Object.freeze(
+          skills.map((skill) => stableSeedId("skill", skill.slug)),
+        ),
         skillSlugs: Object.freeze(skills.map((skill) => skill.slug)),
         languageCodes,
         occupationCode:
@@ -587,7 +811,8 @@ function buildCompaniesJobsSeedIdentities(): SeedIdentityRecord[] {
     if (company.slug === DEMO_COMPANY_SLUG) {
       register("company-membership", `${company.slug}:recruiter@demo.ch`);
     }
-    if (company.billingProfileId) register("company-billing-profile", company.slug);
+    if (company.billingProfileId)
+      register("company-billing-profile", company.slug);
     for (const suffix of ["draft-created", "onboarding-completed"]) {
       register("company-status-event", `${company.slug}:${suffix}`);
     }
@@ -598,12 +823,18 @@ function buildCompaniesJobsSeedIdentities(): SeedIdentityRecord[] {
     if (company.slug === DEMO_COMPANY_SLUG) {
       register("company-verification-request", `${company.slug}:rejected-v1`);
       for (const suffix of ["draft", "submitted", "rejected"]) {
-        register("company-verification-event", `${company.slug}:rejected-v1:${suffix}`);
+        register(
+          "company-verification-event",
+          `${company.slug}:rejected-v1:${suffix}`,
+        );
       }
     }
     register("company-verification-request", `${company.slug}:current`);
     for (const suffix of ["draft", "submitted", "verified"]) {
-      register("company-verification-event", `${company.slug}:current:${suffix}`);
+      register(
+        "company-verification-event",
+        `${company.slug}:current:${suffix}`,
+      );
     }
     if (company.slug === DEMO_COMPANY_SLUG) {
       register("company-domain-challenge", `${company.slug}:phase26`);
@@ -619,10 +850,7 @@ function buildCompaniesJobsSeedIdentities(): SeedIdentityRecord[] {
         "company-verification-check",
         `${company.slug}:phase26:register`,
       );
-      register(
-        "company-verification-check",
-        `${company.slug}:phase26:domain`,
-      );
+      register("company-verification-check", `${company.slug}:phase26:domain`);
       register("company-verification-decision", `${company.slug}:phase26`);
       register("company-trust-projection", `${company.slug}:phase26`);
     }
@@ -646,9 +874,14 @@ function buildCompaniesJobsSeedIdentities(): SeedIdentityRecord[] {
       register("job-revision-language", `${slug}:language:secondary`);
     }
     register("job-reporting-check", `${slug}:jobroom-2026`);
-    if (isApprovedStatus(jobStatusAt(index))) register("job-score-snapshot", `${slug}:v2`);
+    if (isApprovedStatus(jobStatusAt(index)))
+      register("job-score-snapshot", `${slug}:v2`);
     for (const step of lifecycleForStatus(jobStatusAt(index))) {
       register("job-status-event", `${slug}:${step.kind.toLowerCase()}`);
+    }
+    if (jobStatusAt(index) === "PUBLISHED") {
+      register("job-freshness-event", `${slug}:published`);
+      register("job-publication-fingerprint", slug);
     }
   }
   return identities;
@@ -664,9 +897,9 @@ function jobSlugAt(index: number): string {
   const category =
     index < 50
       ? "engineering-technik"
-      : CATEGORY_FIXTURES.filter((entry) => entry.slug !== "engineering-technik")[
-          (index - 50) % 17
-        ]?.slug;
+      : CATEGORY_FIXTURES.filter(
+          (entry) => entry.slug !== "engineering-technik",
+        )[(index - 50) % 17]?.slug;
   if (!category) throw new Error(`Missing category for job identity ${index}.`);
   return `${index < 50 ? "zh-engineering" : category}-demo-${String(index + 1).padStart(3, "0")}`;
 }
@@ -676,27 +909,54 @@ function lifecycleForStatus(status: DemoJobStatus): readonly Readonly<{
   fromStatus: DemoJobStatus | null;
   toStatus: DemoJobStatus;
 }>[] {
-  const steps: Array<{ kind: string; fromStatus: DemoJobStatus | null; toStatus: DemoJobStatus }> = [
-    { kind: "DRAFT_CREATED", fromStatus: null, toStatus: "DRAFT" },
-  ];
+  const steps: Array<{
+    kind: string;
+    fromStatus: DemoJobStatus | null;
+    toStatus: DemoJobStatus;
+  }> = [{ kind: "DRAFT_CREATED", fromStatus: null, toStatus: "DRAFT" }];
   if (status === "DRAFT") return steps;
   steps.push({ kind: "SUBMITTED", fromStatus: "DRAFT", toStatus: "SUBMITTED" });
   if (status === "SUBMITTED") return steps;
-  steps.push({ kind: "REVIEW_STARTED", fromStatus: "SUBMITTED", toStatus: "IN_REVIEW" });
+  steps.push({
+    kind: "REVIEW_STARTED",
+    fromStatus: "SUBMITTED",
+    toStatus: "IN_REVIEW",
+  });
   if (status === "IN_REVIEW") return steps;
   if (status === "CHANGES_REQUESTED") {
-    steps.push({ kind: "CHANGES_REQUESTED", fromStatus: "IN_REVIEW", toStatus: "CHANGES_REQUESTED" });
+    steps.push({
+      kind: "CHANGES_REQUESTED",
+      fromStatus: "IN_REVIEW",
+      toStatus: "CHANGES_REQUESTED",
+    });
     return steps;
   }
   if (status === "REJECTED") {
-    steps.push({ kind: "REJECTED", fromStatus: "IN_REVIEW", toStatus: "REJECTED" });
+    steps.push({
+      kind: "REJECTED",
+      fromStatus: "IN_REVIEW",
+      toStatus: "REJECTED",
+    });
     return steps;
   }
-  steps.push({ kind: "APPROVED", fromStatus: "IN_REVIEW", toStatus: "APPROVED" });
+  steps.push({
+    kind: "APPROVED",
+    fromStatus: "IN_REVIEW",
+    toStatus: "APPROVED",
+  });
   if (status === "APPROVED") return steps;
-  steps.push({ kind: "PUBLISHED", fromStatus: "APPROVED", toStatus: "PUBLISHED" });
+  steps.push({
+    kind: "PUBLISHED",
+    fromStatus: "APPROVED",
+    toStatus: "PUBLISHED",
+  });
   if (status === "PUBLISHED") return steps;
-  const terminalKind = status === "PAUSED" ? "PAUSED" : status === "EXPIRED" ? "EXPIRED" : "CLOSED";
+  const terminalKind =
+    status === "PAUSED"
+      ? "PAUSED"
+      : status === "EXPIRED"
+        ? "EXPIRED"
+        : "CLOSED";
   steps.push({ kind: terminalKind, fromStatus: "PUBLISHED", toStatus: status });
   return steps;
 }
@@ -734,7 +994,10 @@ function buildJobStatusEvents(
                       ? new Date(job.validThrough)
                       : addDays(publishedAt, step.kind === "PAUSED" ? 3 : 7);
       return Object.freeze({
-        id: stableSeedId("job-status-event", `${job.slug}:${step.kind.toLowerCase()}`),
+        id: stableSeedId(
+          "job-status-event",
+          `${job.slug}:${step.kind.toLowerCase()}`,
+        ),
         ...step,
         idempotencyKey: `seed:${job.slug}:${step.kind.toLowerCase()}`,
         createdAt: createdAt.toISOString(),
@@ -744,25 +1007,38 @@ function buildJobStatusEvents(
 }
 
 function isApprovedStatus(status: DemoJobStatus): boolean {
-  return ["APPROVED", "PUBLISHED", "PAUSED", "EXPIRED", "CLOSED"].includes(status);
+  return ["APPROVED", "PUBLISHED", "PAUSED", "EXPIRED", "CLOSED"].includes(
+    status,
+  );
 }
 
 function wasPublished(status: DemoJobStatus): boolean {
   return ["PUBLISHED", "PAUSED", "EXPIRED", "CLOSED"].includes(status);
 }
 
-function localizedTitle(language: DemoContentLanguage, category: string, ordinal: number): string {
+function localizedTitle(
+  language: DemoContentLanguage,
+  category: string,
+  ordinal: number,
+): string {
   if (language === "FR") return `Spécialiste démo ${category} ${ordinal}`;
   if (language === "IT") return `Specialista demo ${category} ${ordinal}`;
   if (language === "EN") return `Demo specialist ${category} ${ordinal}`;
   return `Fachperson ${category} ${ordinal}`;
 }
 
-function localizedDescription(language: DemoContentLanguage, company: string, category: string): string {
+function localizedDescription(
+  language: DemoContentLanguage,
+  company: string,
+  category: string,
+): string {
   const suffix = ` Die Stelle gehört zu einem klar gekennzeichneten, vollständig fiktiven Demo-Datensatz von SwissTalentHub.`;
-  if (language === "FR") return `${company} propose un rôle structuré dans le domaine ${category}, avec des responsabilités, un processus et des critères transparents.${suffix}`;
-  if (language === "IT") return `${company} propone un ruolo strutturato nell'ambito ${category}, con responsabilità, processo e criteri trasparenti.${suffix}`;
-  if (language === "EN") return `${company} offers a structured ${category} role with transparent responsibilities, process steps and review criteria.${suffix}`;
+  if (language === "FR")
+    return `${company} propose un rôle structuré dans le domaine ${category}, avec des responsabilités, un processus et des critères transparents.${suffix}`;
+  if (language === "IT")
+    return `${company} propone un ruolo strutturato nell'ambito ${category}, con responsabilità, processo e criteri trasparenti.${suffix}`;
+  if (language === "EN")
+    return `${company} offers a structured ${category} role with transparent responsibilities, process steps and review criteria.${suffix}`;
   return `${company} bietet eine klar strukturierte Aufgabe im Bereich ${category} mit transparenten Verantwortlichkeiten, Prozessschritten und Auswahlkriterien.${suffix}`;
 }
 
@@ -786,6 +1062,8 @@ function startOfUtcDay(date: Date): Date {
 
 function assertValidAnchor(anchorAt: Date): void {
   if (!(anchorAt instanceof Date) || !Number.isFinite(anchorAt.getTime())) {
-    throw new TypeError("The companies/jobs seed requires a valid anchorAt date.");
+    throw new TypeError(
+      "The companies/jobs seed requires a valid anchorAt date.",
+    );
   }
 }

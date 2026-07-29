@@ -9,10 +9,10 @@ import {
 } from "@/lib/analytics/metric-definitions-v1";
 import { jobHasActiveBoost } from "@/lib/billing/boosts";
 import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quota";
-import { getServerEnvironment } from "@/lib/config/env";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { isJobPubliclyEligible } from "@/lib/jobs/public-eligibility";
+import { filterPubliclyEligibleJobs } from "@/lib/jobs/public-eligibility";
+import { getPublicDataContext } from "@/lib/public/environment";
 
 const DAY = 86_400_000;
 export const EMPLOYER_DASHBOARD_QUERY_LIMITS = Object.freeze({
@@ -78,7 +78,11 @@ export async function getEmployerDashboardData(
   const membershipScope = activeMembershipScope(access);
   const jobScope = dashboardJobScope(access, now);
   const company = await database.company.findFirst({
-    where: { id: companyId, status: { in: ["DRAFT", "ACTIVE"] }, memberships: { some: membershipScope } },
+    where: {
+      id: companyId,
+      status: { in: ["DRAFT", "ACTIVE"] },
+      memberships: { some: membershipScope },
+    },
     select: {
       name: true,
       status: true,
@@ -95,173 +99,208 @@ export async function getEmployerDashboardData(
 
   const window30 = new Date(now.getTime() - 30 * DAY);
   const window90 = new Date(now.getTime() - 90 * DAY);
-  const [activeJobs, applicationsThisWeek, applications, jobs, entitlementResult, subscription, recommendationEvents, baselineJobs] =
-    await Promise.all([
-      database.job.count({
-        where: {
-          ...jobScope,
-          status: "PUBLISHED",
-          publishedAt: { lte: now },
-          expiresAt: { gt: now },
+  const [
+    applicationsThisWeek,
+    applications,
+    jobs,
+    entitlementResult,
+    subscription,
+    recommendationEvents,
+    baselineJobs,
+  ] = await Promise.all([
+    database.application.count({
+      where: { job: jobScope, submittedAt: { gte: weekStart, lt: now } },
+    }),
+    database.application.findMany({
+      where: { job: jobScope },
+      orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
+      take: EMPLOYER_DASHBOARD_QUERY_LIMITS.responseApplications,
+      select: {
+        submittedAt: true,
+        events: {
+          where: { kind: "STATUS_CHANGE", fromStatus: { not: null } },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take: 1,
+          select: { createdAt: true },
         },
-      }),
-      database.application.count({
-        where: { job: jobScope, submittedAt: { gte: weekStart, lt: now } },
-      }),
-      database.application.findMany({
-        where: { job: jobScope },
-        orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
-        take: EMPLOYER_DASHBOARD_QUERY_LIMITS.responseApplications,
-        select: {
-          submittedAt: true,
-          events: {
-            where: { kind: "STATUS_CHANGE", fromStatus: { not: null } },
-            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-            take: 1,
-            select: { createdAt: true },
-          },
-        },
-      }),
-      database.job.findMany({
-        where: { ...jobScope, status: { not: "REMOVED" } },
-        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-        take: EMPLOYER_DASHBOARD_QUERY_LIMITS.analyzedJobs,
-        select: {
-          id: true,
-          status: true,
-          publishedAt: true,
-          expiresAt: true,
-          publishedCantonId: true,
-          publishedCategoryId: true,
-          dataProvenance: true,
-          currentRevision: {
-            select: {
-              title: true,
-              applicationEffort: true,
-              applicationProcessSteps: true,
-              applicationContactValue: true,
-              salaryPeriod: true,
-              salaryMin: true,
-              salaryMax: true,
-              scoreSnapshots: {
-                orderBy: [{ calculatedAt: "desc" }, { id: "desc" }],
-                take: 1,
-                select: { scoreVersion: true, scorePoints: true, maxPoints: true },
+      },
+    }),
+    database.job.findMany({
+      where: { ...jobScope, status: { not: "REMOVED" } },
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      take: EMPLOYER_DASHBOARD_QUERY_LIMITS.analyzedJobs,
+      select: {
+        id: true,
+        status: true,
+        publishedAt: true,
+        expiresAt: true,
+        publishedCantonId: true,
+        publishedCategoryId: true,
+        dataProvenance: true,
+        currentRevision: {
+          select: {
+            title: true,
+            applicationEffort: true,
+            applicationProcessSteps: true,
+            applicationContactValue: true,
+            salaryPeriod: true,
+            salaryMin: true,
+            salaryMax: true,
+            scoreSnapshots: {
+              orderBy: [{ calculatedAt: "desc" }, { id: "desc" }],
+              take: 1,
+              select: {
+                scoreVersion: true,
+                scorePoints: true,
+                maxPoints: true,
               },
             },
           },
-          boosts: {
-            where: {
-              status: { not: "CANCELLED" },
-              startsAt: { lte: now },
-              endsAt: { gt: now },
-            },
-            select: { status: true, startsAt: true, endsAt: true },
+        },
+        boosts: {
+          where: {
+            status: { not: "CANCELLED" },
+            startsAt: { lte: now },
+            endsAt: { gt: now },
           },
-          viewAggregates: {
-            where: { windowEnd: { gt: weekStart }, windowStart: { lt: now } },
-            select: { viewCount: true },
-          },
-          _count: { select: { applications: true } },
+          select: { status: true, startsAt: true, endsAt: true },
         },
-      }),
-      getPrismaEffectiveEntitlements(companyId, now, database),
-      database.employerSubscription.findFirst({
-        where: {
-          companyId,
-          company: { status: { in: ["DRAFT", "ACTIVE"] }, memberships: { some: membershipScope } },
-          status: { in: ["ACTIVE", "CANCELLING"] },
-          currentPeriodStart: { lte: now },
-          currentPeriodEnd: { gt: now },
+        viewAggregates: {
+          where: { windowEnd: { gt: weekStart }, windowStart: { lt: now } },
+          select: { viewCount: true },
         },
-        orderBy: [{ currentPeriodStart: "desc" }, { id: "desc" }],
-        select: {
-          currentPeriodEnd: true,
-          planVersion: { select: { plan: { select: { code: true } } } },
-          currentChangeSchedules: {
-            where: { status: "PENDING" },
-            orderBy: [{ effectiveAt: "asc" }, { id: "asc" }],
-            take: 1,
-            select: { kind: true, effectiveAt: true },
-          },
+        _count: { select: { applications: true } },
+      },
+    }),
+    getPrismaEffectiveEntitlements(companyId, now, database),
+    database.employerSubscription.findFirst({
+      where: {
+        companyId,
+        company: {
+          status: { in: ["DRAFT", "ACTIVE"] },
+          memberships: { some: membershipScope },
         },
-      }),
-      database.analyticsEvent.findMany({
-        where: {
-          purpose: "PRODUCT_ANALYTICS",
-          occurredAt: { gte: window90, lt: now },
-          kind: { in: ["JOB_DETAIL_VIEWED", "APPLY_INTENT_STARTED"] },
-          jobId: { not: null },
-          companyProvenanceSnapshot: "LIVE",
-          jobProvenanceSnapshot: "LIVE",
+        status: { in: ["ACTIVE", "CANCELLING"] },
+        currentPeriodStart: { lte: now },
+        currentPeriodEnd: { gt: now },
+      },
+      orderBy: [{ currentPeriodStart: "desc" }, { id: "desc" }],
+      select: {
+        currentPeriodEnd: true,
+        planVersion: { select: { plan: { select: { code: true } } } },
+        currentChangeSchedules: {
+          where: { status: "PENDING" },
+          orderBy: [{ effectiveAt: "asc" }, { id: "asc" }],
+          take: 1,
+          select: { kind: true, effectiveAt: true },
         },
-        orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
-        take: EMPLOYER_DASHBOARD_QUERY_LIMITS.recommendationEvents,
-        select: {
-          jobId: true,
-          kind: true,
-          occurredAt: true,
-          pseudonymousSessionId: true,
-          dedupeKey: true,
-          properties: true,
-        },
-      }),
-      database.job.findMany({
-        where: {
-          dataProvenance: "LIVE",
-          company: { dataProvenance: "LIVE" },
-          publishedCantonId: { not: null },
-          publishedCategoryId: { not: null },
-        },
-        orderBy: [{ id: "asc" }],
-        take: EMPLOYER_DASHBOARD_QUERY_LIMITS.baselineJobs,
-        select: {
-          id: true,
-          dataProvenance: true,
-          publishedCantonId: true,
-          publishedCategoryId: true,
-          company: { select: { dataProvenance: true } },
-        },
-      }),
-    ]);
+      },
+    }),
+    database.analyticsEvent.findMany({
+      where: {
+        purpose: "PRODUCT_ANALYTICS",
+        occurredAt: { gte: window90, lt: now },
+        kind: { in: ["JOB_DETAIL_VIEWED", "APPLY_INTENT_STARTED"] },
+        jobId: { not: null },
+        companyProvenanceSnapshot: "LIVE",
+        jobProvenanceSnapshot: "LIVE",
+      },
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+      take: EMPLOYER_DASHBOARD_QUERY_LIMITS.recommendationEvents,
+      select: {
+        jobId: true,
+        kind: true,
+        occurredAt: true,
+        pseudonymousSessionId: true,
+        dedupeKey: true,
+        properties: true,
+      },
+    }),
+    database.job.findMany({
+      where: {
+        dataProvenance: "LIVE",
+        company: { dataProvenance: "LIVE" },
+        publishedCantonId: { not: null },
+        publishedCategoryId: { not: null },
+      },
+      orderBy: [{ id: "asc" }],
+      take: EMPLOYER_DASHBOARD_QUERY_LIMITS.baselineJobs,
+      select: {
+        id: true,
+        dataProvenance: true,
+        publishedCantonId: true,
+        publishedCategoryId: true,
+        company: { select: { dataProvenance: true } },
+      },
+    }),
+  ]);
 
+  const publicContext = getPublicDataContext();
+  const eligibleJobs = await filterPubliclyEligibleJobs(
+    jobs.map(({ id }) => id),
+    now,
+    publicContext.eligibilityEnvironment,
+    database,
+  );
+  const eligibleJobIds = new Set(eligibleJobs.map(({ id }) => id));
+  const activeJobs = eligibleJobIds.size;
   const responseDurations = applications.flatMap((application) => {
     const respondedAt = application.events[0]?.createdAt;
     return respondedAt === undefined
       ? []
-      : [(respondedAt.getTime() - application.submittedAt.getTime()) / 3_600_000];
+      : [
+          (respondedAt.getTime() - application.submittedAt.getTime()) /
+            3_600_000,
+        ];
   });
-  const averageResponseHours = responseDurations.length === 0
-    ? null
-    : Math.round(
-        responseDurations.reduce((sum, value) => sum + value, 0) /
-          responseDurations.length,
-      );
+  const averageResponseHours =
+    responseDurations.length === 0
+      ? null
+      : Math.round(
+          responseDurations.reduce((sum, value) => sum + value, 0) /
+            responseDurations.length,
+        );
   const lowScoreJobs = jobs
     .flatMap((job) => {
       const revision = job.currentRevision;
       const score = revision?.scoreSnapshots[0];
       return revision === null || revision === undefined || score === undefined
         ? []
-        : [{
-            id: job.id,
-            title: revision.title,
-            points: score.scorePoints,
-            maxPoints: score.maxPoints,
-          }];
+        : [
+            {
+              id: job.id,
+              title: revision.title,
+              points: score.scorePoints,
+              maxPoints: score.maxPoints,
+            },
+          ];
     })
     .filter((job) => job.points / job.maxPoints < 0.7)
-    .sort((left, right) => left.points / left.maxPoints - right.points / right.maxPoints || left.id.localeCompare(right.id))
+    .sort(
+      (left, right) =>
+        left.points / left.maxPoints - right.points / right.maxPoints ||
+        left.id.localeCompare(right.id),
+    )
     .slice(0, 3);
   const diagnosticJobs = jobs
+    .filter((job) => eligibleJobIds.has(job.id))
     .map((job) => ({
       id: job.id,
       title: job.currentRevision?.title ?? "Unbenanntes Inserat",
       views: job.viewAggregates.reduce((sum, row) => sum + row.viewCount, 0),
       applications: job._count.applications,
     }))
-    .filter((job) => job.views >= 20 && job.applications <= Math.max(1, Math.floor(job.views * 0.02)))
-    .sort((left, right) => right.views - left.views || left.applications - right.applications || left.id.localeCompare(right.id))
+    .filter(
+      (job) =>
+        job.views >= 20 &&
+        job.applications <= Math.max(1, Math.floor(job.views * 0.02)),
+    )
+    .sort(
+      (left, right) =>
+        right.views - left.views ||
+        left.applications - right.applications ||
+        left.id.localeCompare(right.id),
+    )
     .slice(0, 3);
   const analyticsByJob = aggregateRecommendationAnalytics(
     recommendationEvents,
@@ -275,20 +314,24 @@ export async function getEmployerDashboardData(
       job.publishedCantonId === null ||
       job.publishedCategoryId === null
       ? []
-      : [{
-          jobId: job.id,
-          cantonId: job.publishedCantonId,
-          categoryId: job.publishedCategoryId,
-          measuredFrom: window90,
-          measuredTo: now,
-          companyProvenance: job.company.dataProvenance,
-          jobProvenance: job.dataProvenance,
-          organicDetailSessions: sample.views90,
-          conversionBps: rateBps(sample.intents90, sample.views90),
-        }];
+      : [
+          {
+            jobId: job.id,
+            cantonId: job.publishedCantonId,
+            categoryId: job.publishedCategoryId,
+            measuredFrom: window90,
+            measuredTo: now,
+            companyProvenance: job.company.dataProvenance,
+            jobProvenance: job.dataProvenance,
+            organicDetailSessions: sample.views90,
+            conversionBps: rateBps(sample.intents90, sample.views90),
+          },
+        ];
   });
-  const recommendations: EmployerDashboardData["recommendations"][number][] = [];
+  const recommendations: EmployerDashboardData["recommendations"][number][] =
+    [];
   for (const job of jobs) {
+    if (!eligibleJobIds.has(job.id)) continue;
     const revision = job.currentRevision;
     const sample = analyticsByJob.get(job.id);
     if (
@@ -307,9 +350,11 @@ export async function getEmployerDashboardData(
       applyIntentRateBps: rateBps(sample.intents30, sample.views30),
       publishedAt: job.publishedAt,
       now,
-      fairScoreV2: score === undefined || !score.scoreVersion.startsWith("fair-job-score-v2")
-        ? null
-        : Math.floor((score.scorePoints / score.maxPoints) * 100),
+      fairScoreV2:
+        score === undefined ||
+        !score.scoreVersion.startsWith("fair-job-score-v2")
+          ? null
+          : Math.floor((score.scorePoints / score.maxPoints) * 100),
       salaryEvidencePresent:
         revision.salaryPeriod !== null &&
         revision.salaryMin !== null &&
@@ -319,19 +364,23 @@ export async function getEmployerDashboardData(
       applyPathBroken: revision.applicationContactValue.trim().length < 3,
     } as const;
     if (evaluateJobContentDiagnosticV1(content)) {
-      recommendations.push(Object.freeze({
-        kind: "JOB_CONTENT_DIAGNOSTIC",
-        jobId: job.id,
-        title: revision.title,
-        evidence: `${sample.views30} organische Detail-Sessions in 30 Tagen, ${content.applyIntentRateBps} bp Apply-Intent-Rate.`,
-        suggestedAction: "Zuerst Inhalt, Lohntransparenz, Prozess und Bewerbungsweg verbessern.",
-        expectedMetric: "Apply-Intent pro organischer Detail-Session",
-        followUpAt: getSignalFollowUpAtV1(now, "JOB_CONTENT_DIAGNOSTIC"),
-      }));
+      recommendations.push(
+        Object.freeze({
+          kind: "JOB_CONTENT_DIAGNOSTIC",
+          jobId: job.id,
+          title: revision.title,
+          evidence: `${sample.views30} organische Detail-Sessions in 30 Tagen, ${content.applyIntentRateBps} bp Apply-Intent-Rate.`,
+          suggestedAction:
+            "Zuerst Inhalt, Lohntransparenz, Prozess und Bewerbungsweg verbessern.",
+          expectedMetric: "Apply-Intent pro organischer Detail-Session",
+          followUpAt: getSignalFollowUpAtV1(now, "JOB_CONTENT_DIAGNOSTIC"),
+        }),
+      );
       continue;
     }
     if (
-      access.membershipRole !== "OWNER" && access.membershipRole !== "ADMIN" ||
+      (access.membershipRole !== "OWNER" &&
+        access.membershipRole !== "ADMIN") ||
       company.status !== "ACTIVE" ||
       company.verificationRequests[0]?.status !== "VERIFIED" ||
       job.publishedCantonId === null ||
@@ -344,43 +393,44 @@ export async function getEmployerDashboardData(
       categoryId: job.publishedCategoryId,
       now,
     });
-    if (!evaluateBoostTestCandidateV1({
-      content,
-      hasActiveBoost: jobHasActiveBoost(job.boosts, now),
-      baselineBps,
-    })) {
+    if (
+      !evaluateBoostTestCandidateV1({
+        content,
+        hasActiveBoost: jobHasActiveBoost(job.boosts, now),
+        baselineBps,
+      })
+    ) {
       continue;
     }
-    const appEnvironment = getServerEnvironment().APP_ENV;
-    const eligibility = await isJobPubliclyEligible(
-      job.id,
-      now,
-      appEnvironment === "production" || appEnvironment === "staging"
-        ? "production"
-        : "non-production",
-      database,
+    recommendations.push(
+      Object.freeze({
+        kind: "BOOST_TEST_CANDIDATE",
+        jobId: job.id,
+        title: revision.title,
+        evidence: `${sample.views30} organische Detail-Sessions in 30 Tagen, ${content.applyIntentRateBps} bp gegenüber ${baselineBps} bp Cluster-Baseline.`,
+        suggestedAction:
+          "Transparent beschrifteten 7-Tage-Test ab CHF 79 durchführen; Sponsored-Platzierung nur in relevanten Ergebnissen.",
+        expectedMetric:
+          "Apply-Intent pro organischer und gesponserter Detail-Session",
+        followUpAt: getSignalFollowUpAtV1(now, "BOOST_TEST_CANDIDATE"),
+      }),
     );
-    if (!eligibility.eligible) continue;
-    recommendations.push(Object.freeze({
-      kind: "BOOST_TEST_CANDIDATE",
-      jobId: job.id,
-      title: revision.title,
-      evidence: `${sample.views30} organische Detail-Sessions in 30 Tagen, ${content.applyIntentRateBps} bp gegenüber ${baselineBps} bp Cluster-Baseline.`,
-      suggestedAction: "Transparent beschrifteten 7-Tage-Test ab CHF 79 durchführen; Sponsored-Platzierung nur in relevanten Ergebnissen.",
-      expectedMetric: "Apply-Intent pro organischer und gesponserter Detail-Session",
-      followUpAt: getSignalFollowUpAtV1(now, "BOOST_TEST_CANDIDATE"),
-    }));
   }
 
   const entitlements = entitlementResult.ok ? entitlementResult.value : null;
-  const planSlug = subscription?.planVersion.plan.code ?? entitlements?.source.planSlug ?? "free-basic";
+  const planSlug =
+    subscription?.planVersion.plan.code ??
+    entitlements?.source.planSlug ??
+    "free-basic";
   const schedule = subscription?.currentChangeSchedules[0];
-  const boostCredits = entitlements === null
-    ? 0
-    : sumCredits(entitlements.fundableBySource, "JOB_BOOST");
-  const radarContacts = entitlements === null
-    ? 0
-    : sumCredits(entitlements.fundableBySource, "TALENT_CONTACT");
+  const boostCredits =
+    entitlements === null
+      ? 0
+      : sumCredits(entitlements.fundableBySource, "JOB_BOOST");
+  const radarContacts =
+    entitlements === null
+      ? 0
+      : sumCredits(entitlements.fundableBySource, "TALENT_CONTACT");
 
   return Object.freeze({
     companyName: company.name,
@@ -396,9 +446,10 @@ export async function getEmployerDashboardData(
     plan: Object.freeze({
       label: planLabel(planSlug),
       periodEnd: subscription?.currentPeriodEnd ?? null,
-      schedule: schedule === undefined
-        ? null
-        : `${schedule.kind} per ${new Intl.DateTimeFormat("de-CH").format(schedule.effectiveAt)}`,
+      schedule:
+        schedule === undefined
+          ? null
+          : `${schedule.kind} per ${new Intl.DateTimeFormat("de-CH").format(schedule.effectiveAt)}`,
     }),
     boostCredits,
     radarEnabled: entitlements?.rights.TALENT_RADAR_ACCESS ?? false,
@@ -421,20 +472,33 @@ export function aggregateRecommendationAnalytics(
   window90: Date,
   now: Date,
 ) {
-  const buckets = new Map<string, {
-    views30: Set<string>;
-    intents30: Set<string>;
-    views90: Set<string>;
-    intents90: Set<string>;
-  }>();
+  const buckets = new Map<
+    string,
+    {
+      views30: Set<string>;
+      intents30: Set<string>;
+      views90: Set<string>;
+      intents90: Set<string>;
+    }
+  >();
   for (const row of rows) {
-    if (row.jobId === null || row.occurredAt < window90 || row.occurredAt >= now) continue;
-    const properties = typeof row.properties === "object" && row.properties !== null && !Array.isArray(row.properties)
-      ? row.properties as Record<string, unknown>
-      : {};
+    if (
+      row.jobId === null ||
+      row.occurredAt < window90 ||
+      row.occurredAt >= now
+    )
+      continue;
+    const properties =
+      typeof row.properties === "object" &&
+      row.properties !== null &&
+      !Array.isArray(row.properties)
+        ? (row.properties as Record<string, unknown>)
+        : {};
     if (
       row.kind === "JOB_DETAIL_VIEWED" &&
-      ["SEARCH_SPONSORED", "HOMEPAGE_SPONSORED"].includes(String(properties.placement ?? "ORGANIC"))
+      ["SEARCH_SPONSORED", "HOMEPAGE_SPONSORED"].includes(
+        String(properties.placement ?? "ORGANIC"),
+      )
     ) {
       continue;
     }
@@ -455,12 +519,17 @@ export function aggregateRecommendationAnalytics(
     }
     buckets.set(row.jobId, bucket);
   }
-  return new Map([...buckets].map(([jobId, bucket]) => [jobId, {
-    views30: bucket.views30.size,
-    intents30: intersectionSize(bucket.intents30, bucket.views30),
-    views90: bucket.views90.size,
-    intents90: intersectionSize(bucket.intents90, bucket.views90),
-  }]));
+  return new Map(
+    [...buckets].map(([jobId, bucket]) => [
+      jobId,
+      {
+        views30: bucket.views30.size,
+        intents30: intersectionSize(bucket.intents30, bucket.views30),
+        views90: bucket.views90.size,
+        intents90: intersectionSize(bucket.intents90, bucket.views90),
+      },
+    ]),
+  );
 }
 
 export function orderEmployerDashboardRecommendations(
@@ -479,7 +548,10 @@ function recommendationPriority(
   return kind === "JOB_CONTENT_DIAGNOSTIC" ? 0 : 1;
 }
 
-function intersectionSize(left: ReadonlySet<string>, right: ReadonlySet<string>) {
+function intersectionSize(
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+) {
   let matches = 0;
   for (const value of left) {
     if (right.has(value)) matches += 1;
@@ -502,26 +574,31 @@ function activeMembershipScope(access: EmployerDashboardAccess) {
   };
 }
 
-function dashboardJobScope(access: EmployerDashboardAccess, now: Date): Prisma.JobWhereInput {
+function dashboardJobScope(
+  access: EmployerDashboardAccess,
+  now: Date,
+): Prisma.JobWhereInput {
   return {
     companyId: access.companyId,
     company: {
       status: { in: ["DRAFT", "ACTIVE"] },
       memberships: { some: activeMembershipScope(access) },
     },
-    ...(access.membershipRole !== "RECRUITER" ? {} : {
-      assignments: {
-        some: {
-          companyId: access.companyId,
-          membershipId: access.membershipId,
-          userId: access.userId,
-          status: "ACTIVE",
-          revokedAt: null,
-          validFrom: { lte: now },
-          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-        },
-      },
-    }),
+    ...(access.membershipRole !== "RECRUITER"
+      ? {}
+      : {
+          assignments: {
+            some: {
+              companyId: access.companyId,
+              membershipId: access.membershipId,
+              userId: access.userId,
+              status: "ACTIVE",
+              revokedAt: null,
+              validFrom: { lte: now },
+              OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+            },
+          },
+        }),
   };
 }
 

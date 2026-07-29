@@ -7,9 +7,12 @@ import { REQUIRED_MIGRATION_ID } from "@/lib/db/health";
 
 describe("migration readiness contract", () => {
   it("pins readiness to the latest committed migration", () => {
-    const migrations = readdirSync(resolve(process.cwd(), "prisma/migrations"), {
-      withFileTypes: true,
-    })
+    const migrations = readdirSync(
+      resolve(process.cwd(), "prisma/migrations"),
+      {
+        withFileTypes: true,
+      },
+    )
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort();

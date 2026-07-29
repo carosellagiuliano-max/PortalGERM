@@ -1,4 +1,5 @@
 import type { SearchCursorPayload } from "@/lib/search/cursor";
+import { SEARCH_POLICY_RELEASE_V2 } from "@/lib/search/concepts-v2";
 import { SPONSORED_PLACEMENT_CONFIG_V1 } from "@/lib/search/placement-config";
 import type {
   JobSearchSort,
@@ -34,8 +35,10 @@ function ascendingNullable(left: number | null, right: number | null): number {
 }
 
 function stableTail(left: RankingCandidate, right: RankingCandidate): number {
-  return descending(left.publishedAt.getTime(), right.publishedAt.getTime()) ||
-    compareAscendingString(left.id, right.id);
+  return (
+    descending(left.publishedAt.getTime(), right.publishedAt.getTime()) ||
+    compareAscendingString(left.id, right.id)
+  );
 }
 
 export function compareOrganicJobs(
@@ -46,7 +49,8 @@ export function compareOrganicJobs(
   let primary = 0;
   switch (sort) {
     case "relevance":
-      primary = descending(left.relevanceTier, right.relevanceTier) ||
+      primary =
+        descending(left.relevanceTier, right.relevanceTier) ||
         descending(left.relevanceScore, right.relevanceScore) ||
         descendingNullable(left.fairScore, right.fairScore);
       break;
@@ -56,14 +60,17 @@ export function compareOrganicJobs(
       primary = descendingNullable(left.fairScore, right.fairScore);
       break;
     case "salary":
-      primary = descendingNullable(left.salaryMin, right.salaryMin) ||
+      primary =
+        descendingNullable(left.salaryMin, right.salaryMin) ||
         descendingNullable(left.salaryMax, right.salaryMax);
       break;
     case "response":
-      primary = descending(
-        Number(left.responseEvidenceKnown),
-        Number(right.responseEvidenceKnown),
-      ) || descendingNullable(left.onTimeRateBps, right.onTimeRateBps) ||
+      primary =
+        descending(
+          Number(left.responseEvidenceKnown),
+          Number(right.responseEvidenceKnown),
+        ) ||
+        descendingNullable(left.onTimeRateBps, right.onTimeRateBps) ||
         ascendingNullable(
           left.medianFirstResponseMinutes,
           right.medianFirstResponseMinutes,
@@ -73,7 +80,10 @@ export function compareOrganicJobs(
   return primary || stableTail(left, right);
 }
 
-function compareSponsored(left: RankingCandidate, right: RankingCandidate): number {
+function compareSponsored(
+  left: RankingCandidate,
+  right: RankingCandidate,
+): number {
   return (
     descending(left.relevanceTier, right.relevanceTier) ||
     descending(left.relevanceScore, right.relevanceScore) ||
@@ -128,8 +138,10 @@ function compareTupleTail(
   left: Readonly<{ publishedAt: string; id: string }>,
   right: Readonly<{ publishedAt: string; id: string }>,
 ): number {
-  return descending(Date.parse(left.publishedAt), Date.parse(right.publishedAt)) ||
-    compareAscendingString(left.id, right.id);
+  return (
+    descending(Date.parse(left.publishedAt), Date.parse(right.publishedAt)) ||
+    compareAscendingString(left.id, right.id)
+  );
 }
 
 export function compareOrganicCursorTuples(
@@ -142,51 +154,66 @@ export function compareOrganicCursorTuples(
   switch (left.sort) {
     case "relevance": {
       const matching = right as RelevanceTuple;
-      return descending(left.relevanceTier, matching.relevanceTier) ||
+      return (
+        descending(left.relevanceTier, matching.relevanceTier) ||
         descending(left.relevanceScore, matching.relevanceScore) ||
         descendingNullable(left.fairScore, matching.fairScore) ||
-        compareTupleTail(left, matching);
+        compareTupleTail(left, matching)
+      );
     }
     case "newest":
       return compareTupleTail(left, right as NewestTuple);
     case "fair-score": {
       const matching = right as FairScoreTuple;
-      return descendingNullable(left.fairScore, matching.fairScore) ||
-        compareTupleTail(left, matching);
+      return (
+        descendingNullable(left.fairScore, matching.fairScore) ||
+        compareTupleTail(left, matching)
+      );
     }
     case "salary": {
       const matching = right as SalaryTuple;
-      return descendingNullable(left.salaryMinChf, matching.salaryMinChf) ||
+      return (
+        descendingNullable(left.salaryMinChf, matching.salaryMinChf) ||
         descendingNullable(left.salaryMaxChf, matching.salaryMaxChf) ||
-        compareTupleTail(left, matching);
+        compareTupleTail(left, matching)
+      );
     }
     case "response": {
       const matching = right as ResponseTuple;
-      return descending(
-        Number(left.responseEvidenceKnown),
-        Number(matching.responseEvidenceKnown),
-      ) || descendingNullable(left.onTimeRateBps, matching.onTimeRateBps) ||
+      return (
+        descending(
+          Number(left.responseEvidenceKnown),
+          Number(matching.responseEvidenceKnown),
+        ) ||
+        descendingNullable(left.onTimeRateBps, matching.onTimeRateBps) ||
         ascendingNullable(
           left.medianFirstResponseMinutes,
           matching.medianFirstResponseMinutes,
-        ) || compareTupleTail(left, matching);
+        ) ||
+        compareTupleTail(left, matching)
+      );
     }
   }
 }
 
-export function rankSearchJobs(input: Readonly<{
-  candidates: readonly RankingCandidate[];
-  sort: JobSearchSort;
-  hasQuery: boolean;
-  firstPage: boolean;
-  selectedSponsoredIds?: readonly string[];
-  sponsoredLimit?: number;
-}>): Readonly<{ ranked: readonly RankedJob[]; selectedSponsoredIds: readonly string[] }> {
+export function rankSearchJobs(
+  input: Readonly<{
+    candidates: readonly RankingCandidate[];
+    sort: JobSearchSort;
+    hasQuery: boolean;
+    firstPage: boolean;
+    selectedSponsoredIds?: readonly string[];
+    sponsoredLimit?: number;
+  }>,
+): Readonly<{
+  ranked: readonly RankedJob[];
+  selectedSponsoredIds: readonly string[];
+}> {
   const relevant = input.hasQuery
     ? input.candidates.filter((job) => job.relevanceScore > 0)
     : [...input.candidates];
-  const requestedSponsoredLimit = input.sponsoredLimit ??
-    SPONSORED_PLACEMENT_CONFIG_V1.SEARCH_FIRST_PAGE;
+  const requestedSponsoredLimit =
+    input.sponsoredLimit ?? SPONSORED_PLACEMENT_CONFIG_V1.SEARCH_FIRST_PAGE;
   const sponsoredLimit = Number.isFinite(requestedSponsoredLimit)
     ? Math.max(
         0,
@@ -217,7 +244,13 @@ export function rankSearchJobs(input: Readonly<{
     ? sponsoredIds.flatMap((id) => {
         const job = byId.get(id);
         return job
-          ? [Object.freeze({ job, sponsored: true, label: "Gesponsert" as const })]
+          ? [
+              Object.freeze({
+                job,
+                sponsored: true,
+                label: "Gesponsert" as const,
+              }),
+            ]
           : [];
       })
     : [];
@@ -243,31 +276,47 @@ export type SearchPage = Readonly<{
  * only currently public-eligible candidates; `rankingAsOf` additionally keeps
  * newly published jobs out of a cursor replay while removed jobs simply vanish.
  */
-export function paginateSearchJobs(input: Readonly<{
-  candidates: readonly RankingCandidate[];
-  sort: JobSearchSort;
-  hasQuery: boolean;
-  pageSize: number;
-  queryHash: string;
-  rankingAsOf: Date;
-  cursor?: SearchCursorPayload;
-}>): SearchPage {
-  if (!Number.isInteger(input.pageSize) || input.pageSize < 1 || input.pageSize > 50) {
-    throw new RangeError("Search page size must be an integer between 1 and 50.");
+export function paginateSearchJobs(
+  input: Readonly<{
+    candidates: readonly RankingCandidate[];
+    sort: JobSearchSort;
+    hasQuery: boolean;
+    pageSize: number;
+    queryHash: string;
+    rankingAsOf: Date;
+    cursor?: SearchCursorPayload;
+  }>,
+): SearchPage {
+  if (
+    !Number.isInteger(input.pageSize) ||
+    input.pageSize < 1 ||
+    input.pageSize > 50
+  ) {
+    throw new RangeError(
+      "Search page size must be an integer between 1 and 50.",
+    );
   }
   if (!/^[a-f0-9]{64}$/.test(input.queryHash)) {
-    throw new TypeError("Search query hash must be a lowercase SHA-256 hex value.");
+    throw new TypeError(
+      "Search query hash must be a lowercase SHA-256 hex value.",
+    );
   }
-  if (input.cursor?.queryHash !== undefined && input.cursor.queryHash !== input.queryHash) {
+  if (
+    input.cursor?.queryHash !== undefined &&
+    input.cursor.queryHash !== input.queryHash
+  ) {
     throw new TypeError("Search cursor does not belong to this query.");
   }
-  if (input.cursor?.organicTuple !== null &&
-      input.cursor?.organicTuple !== undefined &&
-      input.cursor.organicTuple.sort !== input.sort) {
+  if (
+    input.cursor?.organicTuple !== null &&
+    input.cursor?.organicTuple !== undefined &&
+    input.cursor.organicTuple.sort !== input.sort
+  ) {
     throw new TypeError("Search cursor does not belong to this sort.");
   }
 
-  const rankingAsOf = input.cursor?.rankingAsOf ?? input.rankingAsOf.toISOString();
+  const rankingAsOf =
+    input.cursor?.rankingAsOf ?? input.rankingAsOf.toISOString();
   const rankingAsOfMs = Date.parse(rankingAsOf);
   if (!Number.isFinite(rankingAsOfMs)) {
     throw new TypeError("Search rankingAsOf must be a valid timestamp.");
@@ -281,26 +330,37 @@ export function paginateSearchJobs(input: Readonly<{
     hasQuery: input.hasQuery,
     firstPage: input.cursor === undefined,
     selectedSponsoredIds: input.cursor?.sponsoredIds,
-    sponsoredLimit: Math.min(input.pageSize, SPONSORED_PLACEMENT_CONFIG_V1.SEARCH_FIRST_PAGE),
+    sponsoredLimit: Math.min(
+      input.pageSize,
+      SPONSORED_PLACEMENT_CONFIG_V1.SEARCH_FIRST_PAGE,
+    ),
   });
   const after = input.cursor?.organicTuple;
-  const remaining = after === undefined || after === null
-    ? ranking.ranked
-    : ranking.ranked.filter(({ job }) => compareOrganicCursorTuples(
-        createOrganicCursorTuple(input.sort, job),
-        after,
-      ) > 0);
+  const remaining =
+    after === undefined || after === null
+      ? ranking.ranked
+      : ranking.ranked.filter(
+          ({ job }) =>
+            compareOrganicCursorTuples(
+              createOrganicCursorTuple(input.sort, job),
+              after,
+            ) > 0,
+        );
   const ranked = Object.freeze(remaining.slice(0, input.pageSize));
   const hasMore = remaining.length > ranked.length;
   const lastOrganic = [...ranked].reverse().find((entry) => !entry.sponsored);
-  const organicTuple = lastOrganic === undefined
-    ? null
-    : createOrganicCursorTuple(input.sort, lastOrganic.job);
+  const organicTuple =
+    lastOrganic === undefined
+      ? null
+      : createOrganicCursorTuple(input.sort, lastOrganic.job);
   const selectedSponsoredIds = Object.freeze([...ranking.selectedSponsoredIds]);
   const nextCursorPayload = hasMore
     ? Object.freeze({
         policyVersion: "v1" as const,
         configVersion: "v1" as const,
+        searchPolicyVersion: SEARCH_POLICY_RELEASE_V2.searchPolicyVersion,
+        taxonomyVersion: SEARCH_POLICY_RELEASE_V2.taxonomyVersion,
+        rankingVersion: SEARCH_POLICY_RELEASE_V2.rankingVersion,
         queryHash: input.queryHash,
         rankingAsOf,
         sponsoredIds: selectedSponsoredIds,
@@ -324,10 +384,12 @@ export function rankHomepageSponsoredJobs(
       .filter((job) => job.activeBoost)
       .sort(compareSponsored)
       .slice(0, SPONSORED_PLACEMENT_CONFIG_V1.HOMEPAGE)
-      .map((job) => Object.freeze({
-        job,
-        sponsored: true,
-        label: "Gesponsert" as const,
-      })),
+      .map((job) =>
+        Object.freeze({
+          job,
+          sponsored: true,
+          label: "Gesponsert" as const,
+        }),
+      ),
   );
 }

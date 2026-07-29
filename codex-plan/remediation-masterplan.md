@@ -42,21 +42,21 @@ instanziieren.
 
 ### 1.1 Unveränderliche Analyse-Baseline
 
-| Feld | Baseline |
-| --- | --- |
-| Repository | `PortalGERM` |
-| frühere Analyseidentität | `eb9b45ae5caca638b558f6a98e406af9ee8be0fc` (`eb9b45a`) |
-| aktueller geprüfter Branch | `codex/phase-18-release-audit` |
-| ursprünglicher Planungscommit | `e34262e3074565840e371c336a5d2ba5cf3efbac` (`e34262e`) |
-| Remote-Stand bei Prüfungsbeginn 26. Juli | `origin/main` und `origin/codex/phase-18-release-audit` zeigten auf `e34262e` |
-| Arbeitsbaum bei Prüfungsbeginn | sauber; `brand-link.tsx` und `.claude/launch.json` sind bereits in `e34262e` committed |
-| Aktivität der ursprünglichen Planprüfung | Repository-, Plan-, Schema-, Code-, Test- und Evidence-Analyse sowie Plan-Governance; damals noch keine Produktimplementierung und keine erneute vollständige Testausführung |
-| gewählter Phase-19-Candidate | `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` (`769ee62`), beim Golden-Start/-Ende identisch mit `origin/main` |
-| Phase-19-Evidence | [`evidence/2026-07-26-phase-19.md`](./evidence/2026-07-26-phase-19.md): vollständiger Clean Clone, 43 Migrationen, Seed×2, 1.974 Unit-, 369 PostgreSQL- und 219 Browsertests, Build/HTTP/HSTS sowie Recovery bestanden |
-| Phase-20-Candidate | `59089009f54312a4c10989b7efde2d5fda9a2b8d` (`5908900`), Parent `8087c0c` |
-| Phase-20-Evidence | [`evidence/2026-07-26-phase-20.md`](./evidence/2026-07-26-phase-20.md): 45 Migrationen, Seed×2, 1.984 Unit-, 408 PostgreSQL- und 233 Browsertests, Build/HTTP/HSTS sowie Provider-/Dispatcher-Failure-Gates bestanden; LIVE bleibt deaktiviert |
-| Phase-21-Candidate/Evidence | `ca36bff59e0d759cc5243da346c6e717c650e35e`; [Evidence](./evidence/2026-07-26-phase-21.md): Document-/CV-Vault Local-/CI-Sandbox technisch geschlossen, LIVE/Retention/Worker/Bulk deaktiviert |
-| Phase-22-Candidate/Evidence | `0636a87534c0c1641979fd041e4f13682e3d9bd4`; [Evidence](./evidence/2026-07-26-phase-22.md): technische Sandbox und automatisiertes G3 grün; Counsel, alternative Identity, moderierte Forschung und Aktivierung blockiert |
+| Feld                                     | Baseline                                                                                                                                                                                                                                       |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository                               | `PortalGERM`                                                                                                                                                                                                                                   |
+| frühere Analyseidentität                 | `eb9b45ae5caca638b558f6a98e406af9ee8be0fc` (`eb9b45a`)                                                                                                                                                                                         |
+| aktueller geprüfter Branch               | `codex/phase-18-release-audit`                                                                                                                                                                                                                 |
+| ursprünglicher Planungscommit            | `e34262e3074565840e371c336a5d2ba5cf3efbac` (`e34262e`)                                                                                                                                                                                         |
+| Remote-Stand bei Prüfungsbeginn 26. Juli | `origin/main` und `origin/codex/phase-18-release-audit` zeigten auf `e34262e`                                                                                                                                                                  |
+| Arbeitsbaum bei Prüfungsbeginn           | sauber; `brand-link.tsx` und `.claude/launch.json` sind bereits in `e34262e` committed                                                                                                                                                         |
+| Aktivität der ursprünglichen Planprüfung | Repository-, Plan-, Schema-, Code-, Test- und Evidence-Analyse sowie Plan-Governance; damals noch keine Produktimplementierung und keine erneute vollständige Testausführung                                                                   |
+| gewählter Phase-19-Candidate             | `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` (`769ee62`), beim Golden-Start/-Ende identisch mit `origin/main`                                                                                                                                    |
+| Phase-19-Evidence                        | [`evidence/2026-07-26-phase-19.md`](./evidence/2026-07-26-phase-19.md): vollständiger Clean Clone, 43 Migrationen, Seed×2, 1.974 Unit-, 369 PostgreSQL- und 219 Browsertests, Build/HTTP/HSTS sowie Recovery bestanden                         |
+| Phase-20-Candidate                       | `59089009f54312a4c10989b7efde2d5fda9a2b8d` (`5908900`), Parent `8087c0c`                                                                                                                                                                       |
+| Phase-20-Evidence                        | [`evidence/2026-07-26-phase-20.md`](./evidence/2026-07-26-phase-20.md): 45 Migrationen, Seed×2, 1.984 Unit-, 408 PostgreSQL- und 233 Browsertests, Build/HTTP/HSTS sowie Provider-/Dispatcher-Failure-Gates bestanden; LIVE bleibt deaktiviert |
+| Phase-21-Candidate/Evidence              | `ca36bff59e0d759cc5243da346c6e717c650e35e`; [Evidence](./evidence/2026-07-26-phase-21.md): Document-/CV-Vault Local-/CI-Sandbox technisch geschlossen, LIVE/Retention/Worker/Bulk deaktiviert                                                  |
+| Phase-22-Candidate/Evidence              | `0636a87534c0c1641979fd041e4f13682e3d9bd4`; [Evidence](./evidence/2026-07-26-phase-22.md): technische Sandbox und automatisiertes G3 grün; Counsel, alternative Identity, moderierte Forschung und Aktivierung blockiert                       |
 
 `eb9b45a` und `e34262e` bleiben historische Analyse-/Planungsidentitäten,
 keine Releasekandidaten. Phase 19 wählte bei ihrem tatsächlichen Start den
@@ -124,14 +124,14 @@ der niedrigeren Stufen. Stufenspezifische Betriebsbeschränkungen wie
 „beaufsichtigt“ oder „kein unbeaufsichtigter Pfad“ werden dagegen durch die
 strengeren Betriebsnachweise der höheren Stufe abgelöst.
 
-| Stufe | Zulässiger Zweck | Mindestgrenze | Unzulässige Behauptung |
-| --- | --- | --- | --- |
-| **LC1 Lokaler Demo-MVP** | Entwicklung, Tests, Stakeholder-Demo mit klar markierten Fixtures | Mock-Provider, Production-Demo-Guard, keine echten Personen-/Zahlungsdaten | WTP, reale Delivery, Pilot-/Produktionsreife |
-| **LC2 Beaufsichtigter Design-Partner-Test** | kleine benannte Kohorte mit Operator je kritischem Schritt | flowspezifische AVG-/Vertrags-/Tax-/Privacy-Freigabe, Einwilligung, Incident Owner, manuelle Recovery und Kapazitätsbudget | öffentlicher oder unbeaufsichtigter Self-Service |
-| **LC3 Invite-only Pilot** | geschlossene echte Kohorte in genau freigegebenem Cluster | produktive Provider für den Scope, Trust/Fraud/Support, Search/Freshness, getestete Worker oder ausdrücklich beaufsichtigte Ausnahme | öffentlicher oder skalierter Betrieb |
-| **LC4 Öffentlicher kostenloser Launch** | öffentlicher Self-Service ohne Zahlung | alle Scope-P0, autonome Kernprozesse, Cluster-/Trust-/Freshness-/Legal-/Recovery-Gates; Kaufpfade vollständig geschlossen | Paid Conversion oder Paid-Self-Service |
-| **LC5 Bezahlter Self-Service** | öffentlicher realer Geldfluss | LC4 plus WTP-Go, Payment/Finance/Tax, Service-Recovery/Refund, Reconciliation/Dunning und Paid Support | Profitabilität oder Scale ohne Evidence |
-| **LC6 Skalierter Produktionsbetrieb** | dauerhaftes Angebot mit wachsendem Volumen | bestätigte SLO/RPO/RTO, On-call, Datenschutz-/Retention-Lifecycle, Kapazitäts-/Lastnachweis, triggerbasierte Scale-Tracks, laufende Compliance | unbegrenzte Reichweite oder ungeprüfte Produkte/Länder/Datenflüsse |
+| Stufe                                       | Zulässiger Zweck                                                  | Mindestgrenze                                                                                                                                  | Unzulässige Behauptung                                             |
+| ------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **LC1 Lokaler Demo-MVP**                    | Entwicklung, Tests, Stakeholder-Demo mit klar markierten Fixtures | Mock-Provider, Production-Demo-Guard, keine echten Personen-/Zahlungsdaten                                                                     | WTP, reale Delivery, Pilot-/Produktionsreife                       |
+| **LC2 Beaufsichtigter Design-Partner-Test** | kleine benannte Kohorte mit Operator je kritischem Schritt        | flowspezifische AVG-/Vertrags-/Tax-/Privacy-Freigabe, Einwilligung, Incident Owner, manuelle Recovery und Kapazitätsbudget                     | öffentlicher oder unbeaufsichtigter Self-Service                   |
+| **LC3 Invite-only Pilot**                   | geschlossene echte Kohorte in genau freigegebenem Cluster         | produktive Provider für den Scope, Trust/Fraud/Support, Search/Freshness, getestete Worker oder ausdrücklich beaufsichtigte Ausnahme           | öffentlicher oder skalierter Betrieb                               |
+| **LC4 Öffentlicher kostenloser Launch**     | öffentlicher Self-Service ohne Zahlung                            | alle Scope-P0, autonome Kernprozesse, Cluster-/Trust-/Freshness-/Legal-/Recovery-Gates; Kaufpfade vollständig geschlossen                      | Paid Conversion oder Paid-Self-Service                             |
+| **LC5 Bezahlter Self-Service**              | öffentlicher realer Geldfluss                                     | LC4 plus WTP-Go, Payment/Finance/Tax, Service-Recovery/Refund, Reconciliation/Dunning und Paid Support                                         | Profitabilität oder Scale ohne Evidence                            |
+| **LC6 Skalierter Produktionsbetrieb**       | dauerhaftes Angebot mit wachsendem Volumen                        | bestätigte SLO/RPO/RTO, On-call, Datenschutz-/Retention-Lifecycle, Kapazitäts-/Lastnachweis, triggerbasierte Scale-Tracks, laufende Compliance | unbegrenzte Reichweite oder ungeprüfte Produkte/Länder/Datenflüsse |
 
 Mock-Checkout bleibt bis Phase 24 eine Demo-Funktion und zählt niemals als
 bezahlte Conversion. Die Begriffe „Hypothese“, „Mock“ und „Demo“ aus
@@ -345,22 +345,22 @@ freigegeben werden, ohne einen nicht ausgelösten P3-Befund fälschlich zu
 schließen; dieser benötigt stattdessen einen datierten Deferred-Entscheid mit
 Headroom, Forecast, Alert und Owner.
 
-| Phase | Titel | Primäre Befunde | Hauptziel |
-| --- | --- | --- | --- |
-| [x] 19 | [Remediation-Baseline und Regression](./19-remediation-baseline-regression.md) | alle `STH-*` als Steuerung | Candidate `769ee62`, vollständige aktuelle Golden-Baseline, Regressionvertrag, Test-/Migrationsinventar und Gate-Backlog verifiziert |
-| [x] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md) | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | technischer Verification-/E-Mail-Change-/Outbox-/Dispatcher-/Preference-Vertrag auf Candidate `5908900`; LIVE/Worker/Step-up bleiben gegatet |
-| [x] 21 | [Document-/CV-Vault](./21-document-cv-vault.md) | `STH-003`; Storage-Anteil `STH-004` | Candidate `ca36bff`: echte CV-Bytes mit Quarantäne, Scan, immutable Application-Version, Single-use-Grant, Reconciliation und Audit im Local-/CI-Sandboxvertrag; LIVE/Retention/Worker/Bulk gegatet |
-| [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md) | `STH-006`, `STH-007`, `STH-017` | Candidate `0636a875`: technischer Local-/CI-Sandboxvertrag und automatisiertes G3 `PASS`; Counsel, alternative Identity, moderierte Forschung und jede Aktivierung `BLOCKED`, siehe [Evidence](./evidence/2026-07-26-phase-22.md) |
-| [x] 23 | [Production Operations und Worker](./23-production-operations-workers.md) | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034` | Candidate `d16a2d9`: lokaler/CI Worker-/Ledger-/Capacity-Vertrag und lokales G3 `PASS`; reale Adapter bleiben `DISABLED`, Staging/Pager/Recovery und genehmigte SLO/RPO/RTO sind Phase-32-/G4-Gates, siehe [Evidence](./evidence/2026-07-27-phase-23.md) |
-| [x] 24 | [Reales Billing und Finance](./24-real-billing-finance.md) | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031` | Candidate `f785944`: deaktivierter Local-/CI-Stripe-Testvertrag und lokales G3 `PASS` für Hosted Checkout, Webhook-Inbox, Reconciliation, Refund/Chargeback/Dunning und Service-Recovery; WTP/Tax/Legal/Finance/Phase-25/Staging/LIVE bleiben externe Gates, siehe [Evidence](./evidence/2026-07-27-phase-24.md) |
-| [x] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031` | Candidate `eb8cbcd`: 25A Admin-Least-Privilege/SoD/Break-glass, 25B Non-Admin-Step-up und 25C Fraud-/Scam-/ATO-Abwehr im deaktivierten Local-/CI-Vertrag mit lokalem G3 `PASS`; externe Security-/Trust-/Staging-/LIVE-Gates bleiben blockiert, siehe [Evidence](./evidence/2026-07-28-phase-25.md) |
-| [ ] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md) | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034` | beweisgestützter, vier-Augen-fähiger Trust-Lifecycle mit Ablauf, Re-Review und schneller Sperrung |
-| [x] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md) | `STH-012` | Candidate `291b953`: owner-aktivierter, default-off Local-/CI-Vertrag und lokales G3 `PASS` für additive Personas, expliziten Session-/Company-Kontext, Invitation, Privacy und Admintrennung; Demand-/Staging-/Launch-Go offen, siehe [Evidence](./evidence/2026-07-28-phase-27.md) |
-| [x] 28 | [Recruiting-Workflows](./28-recruiting-workflows.md) | `STH-015`, `STH-016` | owner-aktivierte, getrennte default-off Local-/CI-Technikverträge für candidate-owned externen Tracker und persistente Interviewplanung; Demand-/Privacy-/Ops-/Support-/Provider-/Staging-/LIVE-Gates bleiben offen, siehe [Evidence](./evidence/2026-07-29-phase-28.md) |
-| [ ] 29 | [Research, UX, Mobile und Accessibility](./29-ux-mobile-accessibility.md) | `STH-023`, `STH-025`, `STH-033`; UX-Regression `STH-026` | technische Responsive-/JobPass-/3-Engine-/A11y-Automationsbasis lokal `PASS`; zwei reale Research-Runden, NVDA/VoiceOver und finaler Release-Scope-Re-Test offen, siehe [Evidence](./evidence/2026-07-29-phase-29.md) |
-| [ ] 30 | [Startcluster-Suche, Freshness und Scale Operations](./30-search-scale-operations.md) | 30A: `STH-019`, `STH-036`; 30B: `STH-020/021`; 30C: `STH-027`; 30D: `STH-032` | gemeinsamer berufsfachlicher Suchvertrag samt sicherem Lernkreislauf, Job-Freshness in allen Consumern sowie triggerbasierte Scale-/Sitemap-Arbeit |
-| [ ] 31 | [Monetarisierung und Marktvalidierung](./31-monetization-market-validation.md) | `STH-018`, `STH-022`, `STH-028`, `STH-034`, `STH-035`, `STH-037` | genau ein erster Cluster, WTP vor Ausbau, real lieferbare Basis-/Serviceangebote sowie belegte Kapazität, Stückkosten, Cashflow und Service-Recovery |
-| [ ] 32 | [Finaler Production-Release-Audit](./32-production-release-audit.md) | `STH-024` und Abschluss aller `STH-001`–`STH-037` | zielklassenspezifische Freigabe eines exakten Commits/Artefakts mit vollständiger automatischer, manueller und externer Evidence |
+| Phase  | Titel                                                                                           | Primäre Befunde                                                                                | Hauptziel                                                                                                                                                                                                                                                                                                        |
+| ------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x] 19 | [Remediation-Baseline und Regression](./19-remediation-baseline-regression.md)                  | alle `STH-*` als Steuerung                                                                     | Candidate `769ee62`, vollständige aktuelle Golden-Baseline, Regressionvertrag, Test-/Migrationsinventar und Gate-Backlog verifiziert                                                                                                                                                                             |
+| [x] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md)                      | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | technischer Verification-/E-Mail-Change-/Outbox-/Dispatcher-/Preference-Vertrag auf Candidate `5908900`; LIVE/Worker/Step-up bleiben gegatet                                                                                                                                                                     |
+| [x] 21 | [Document-/CV-Vault](./21-document-cv-vault.md)                                                 | `STH-003`; Storage-Anteil `STH-004`                                                            | Candidate `ca36bff`: echte CV-Bytes mit Quarantäne, Scan, immutable Application-Version, Single-use-Grant, Reconciliation und Audit im Local-/CI-Sandboxvertrag; LIVE/Retention/Worker/Bulk gegatet                                                                                                              |
+| [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md)                                 | `STH-006`, `STH-007`, `STH-017`                                                                | Candidate `0636a875`: technischer Local-/CI-Sandboxvertrag und automatisiertes G3 `PASS`; Counsel, alternative Identity, moderierte Forschung und jede Aktivierung `BLOCKED`, siehe [Evidence](./evidence/2026-07-26-phase-22.md)                                                                                |
+| [x] 23 | [Production Operations und Worker](./23-production-operations-workers.md)                       | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034`                        | Candidate `d16a2d9`: lokaler/CI Worker-/Ledger-/Capacity-Vertrag und lokales G3 `PASS`; reale Adapter bleiben `DISABLED`, Staging/Pager/Recovery und genehmigte SLO/RPO/RTO sind Phase-32-/G4-Gates, siehe [Evidence](./evidence/2026-07-27-phase-23.md)                                                         |
+| [x] 24 | [Reales Billing und Finance](./24-real-billing-finance.md)                                      | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031`                         | Candidate `f785944`: deaktivierter Local-/CI-Stripe-Testvertrag und lokales G3 `PASS` für Hosted Checkout, Webhook-Inbox, Reconciliation, Refund/Chargeback/Dunning und Service-Recovery; WTP/Tax/Legal/Finance/Phase-25/Staging/LIVE bleiben externe Gates, siehe [Evidence](./evidence/2026-07-27-phase-24.md) |
+| [x] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031`                                                     | Candidate `eb8cbcd`: 25A Admin-Least-Privilege/SoD/Break-glass, 25B Non-Admin-Step-up und 25C Fraud-/Scam-/ATO-Abwehr im deaktivierten Local-/CI-Vertrag mit lokalem G3 `PASS`; externe Security-/Trust-/Staging-/LIVE-Gates bleiben blockiert, siehe [Evidence](./evidence/2026-07-28-phase-25.md)              |
+| [ ] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md)                            | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034`                                | beweisgestützter, vier-Augen-fähiger Trust-Lifecycle mit Ablauf, Re-Review und schneller Sperrung                                                                                                                                                                                                                |
+| [x] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md)                                        | `STH-012`                                                                                      | Candidate `291b953`: owner-aktivierter, default-off Local-/CI-Vertrag und lokales G3 `PASS` für additive Personas, expliziten Session-/Company-Kontext, Invitation, Privacy und Admintrennung; Demand-/Staging-/Launch-Go offen, siehe [Evidence](./evidence/2026-07-28-phase-27.md)                             |
+| [x] 28 | [Recruiting-Workflows](./28-recruiting-workflows.md)                                            | `STH-015`, `STH-016`                                                                           | owner-aktivierte, getrennte default-off Local-/CI-Technikverträge für candidate-owned externen Tracker und persistente Interviewplanung; Demand-/Privacy-/Ops-/Support-/Provider-/Staging-/LIVE-Gates bleiben offen, siehe [Evidence](./evidence/2026-07-29-phase-28.md)                                         |
+| [ ] 29 | [Research, UX, Mobile und Accessibility](./29-ux-mobile-accessibility.md)                       | `STH-023`, `STH-025`, `STH-033`; UX-Regression `STH-026`                                       | technische Responsive-/JobPass-/3-Engine-/A11y-Automationsbasis lokal `PASS`; zwei reale Research-Runden, NVDA/VoiceOver und finaler Release-Scope-Re-Test offen, siehe [Evidence](./evidence/2026-07-29-phase-29.md)                                                                                            |
+| [ ] 30 | [Startcluster-Suche, Freshness und Scale Operations](./30-search-scale-operations.md)           | 30A: `STH-019`, `STH-036`; 30B: `STH-020/021`; 30C: `STH-027`; 30D: `STH-032`                  | technische Concept-/Learning-/Cluster-V2- und Freshness-/Consumerbasis lokal `PASS`; Recommendation-Trigger mitigiert, Admin-Scale und Sitemap-Shards unter Trigger deferred; Pflegefachreview, Zielalerts, Moderationskapazität, Staging/LIVE offen, siehe [Evidence](./evidence/2026-07-29-phase-30.md)        |
+| [ ] 31 | [Monetarisierung und Marktvalidierung](./31-monetization-market-validation.md)                  | `STH-018`, `STH-022`, `STH-028`, `STH-034`, `STH-035`, `STH-037`                               | genau ein erster Cluster, WTP vor Ausbau, real lieferbare Basis-/Serviceangebote sowie belegte Kapazität, Stückkosten, Cashflow und Service-Recovery                                                                                                                                                             |
+| [ ] 32 | [Finaler Production-Release-Audit](./32-production-release-audit.md)                            | `STH-024` und Abschluss aller `STH-001`–`STH-037`                                              | zielklassenspezifische Freigabe eines exakten Commits/Artefakts mit vollständiger automatischer, manueller und externer Evidence                                                                                                                                                                                 |
 
 ## 7. Ausführungsplan je Phase
 
@@ -691,8 +691,7 @@ Retention geschützt, nicht öffentlich.
 
 ### [x] 27 — Multi-Persona Identity
 
-**Status/Priorität:** Der Repository-Owner hat den technischen Scope am
-28. Juli 2026 ausdrücklich aktiviert; der additive Local-/CI-Vertrag ist auf
+**Status/Priorität:** Der Repository-Owner hat den technischen Scope am 28. Juli 2026 ausdrücklich aktiviert; der additive Local-/CI-Vertrag ist auf
 Candidate `291b953` implementiert und mit lokalem G3 verifiziert. Siehe
 [Phase-27-Evidence](./evidence/2026-07-28-phase-27.md). Er bleibt default-off.
 Markt-/Kohortenaktivierung bleibt
@@ -1077,23 +1076,23 @@ technische Phase aber nicht.
 
 ## 9. Globaler Risiko- und Regressionsplan
 
-| Risikoklasse | Schutz vor Umsetzung | Automatischer Nachweis | Manueller/externer Nachweis |
-| --- | --- | --- | --- |
-| Identity/Privilege | Threat Model, Capability- und Step-up-Matrix | Token-Replay, Sessionversion, Rollen×Ressourcen, IDOR | Admin-Recovery, break-glass, Supportprozess |
-| Fraud/Trust | versionierte Risk-Signale/Entscheide, False-Positive-/Appeal- und schnelle Revocation-Matrix | Credential Stuffing/ATO, Scam-/Duplicate-Job, compromised Company, Mass Contact, Reveal/Export, Payment Fraud | Trust-&-Safety-Triage, Incident-/Appeal-Drill |
-| Privacy/Radar | Dateninventar, Zweck/Retention, Safe DTOs | Canary-Leak, Reveal-Scope, Export/Löschung, Eligibility-Kaskaden | Legal/Privacy Sign-off, Betroffenen-Drill |
-| Dokumente | Klassifizierung, Quarantäne, Key-/Bucket-Design | MIME/Magic Byte, Malware, Object-IDOR, Löschung | DPA, Storage-/Key-Recovery |
-| Async/Provider | Outbox/Inbox, Idempotenz, Retrybudget | Crash, Duplicate, Out-of-order, DLQ, Replay | Sandbox-/Staging-Ausfallübung |
-| Geld | Snapshot, Ledger, Reconciliation, Tax-Matrix | Webhook-Replay, Refund, Dispute, Double Confirm | Tax/Finance Sign-off, echter kontrollierter Test |
-| Migration | Expand/Migrate/Contract, Lock-/Backfill-Budget | Clean Migration, alter+neuer Reader, Counts/Checksums | Staging-Copy, Backup/Restore |
-| Startcluster Search P0 je LC3+ | fachlich freigegebenes Golden-/Negativkorpus und versionierte Shared-Concept-Taxonomie | Search/Alert/Recommendation/Cluster-V2-Parität, Ranking, Cursor, Recall/Precision/p95 | Berufsfachreview je Cluster/Sprache |
-| Job Freshness | Reconfirmation-/Expiry-/Report-/Duplicate-Policy und Consumerinventar | Reminder/Grace/Race, Filled/Unavailable, Exact-/Near-Duplicate, Eligibility-Parität | Arbeitgeber-/Candidate-Meldepfad und Appeal |
-| SEO Capacity P3 | Count-/Byte-/Growth-Headroom und Triggervertrag | Monitor/Forecast/Alert; >50k-/Byte-/Shard-Suite nur bei Trigger | Ops Owner, Runbook und Search Console |
-| UX/A11y | responsive State-/Action-Inventar | 320/360/Desktop, Browsermatrix, axe, Keyboard | NVDA/VoiceOver und Rollen-Walkthrough |
-| Moderierter Research | vorregistrierte Segmente, Tasks und Stop-/Erfolgsschwellen | Researchdaten-Schema/Redaction, keine PII-Analytics-Ersatzbehauptung | Task Success, Zeit, Fehler, Abbruch, Verständnis mit Zielrollen |
-| Ops/Service | Capacity-/Unit-Cost-/Backlog-/Overload- und Service-Recovery-Matrix | Last/Backpressure, exactly-once Credit/Refund/Extension/Replacement | Staffing-/Kostenfreigabe und bezahlter Failure-/Recovery-Drill |
-| Markt/Commercial | vorregistrierte Hypothese und Provenienz | DEMO/LIVE-Trennung, Funnelreconciliation | reale KMU-Zahlung, Liquidität, Cashflow |
-| Release Evidence | exakter Commit, Freeze, Manifest | Clean Clone, Full Suite, Digests | exakt gleiches Artefakt manuell, Freigaben |
+| Risikoklasse                   | Schutz vor Umsetzung                                                                         | Automatischer Nachweis                                                                                        | Manueller/externer Nachweis                                     |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Identity/Privilege             | Threat Model, Capability- und Step-up-Matrix                                                 | Token-Replay, Sessionversion, Rollen×Ressourcen, IDOR                                                         | Admin-Recovery, break-glass, Supportprozess                     |
+| Fraud/Trust                    | versionierte Risk-Signale/Entscheide, False-Positive-/Appeal- und schnelle Revocation-Matrix | Credential Stuffing/ATO, Scam-/Duplicate-Job, compromised Company, Mass Contact, Reveal/Export, Payment Fraud | Trust-&-Safety-Triage, Incident-/Appeal-Drill                   |
+| Privacy/Radar                  | Dateninventar, Zweck/Retention, Safe DTOs                                                    | Canary-Leak, Reveal-Scope, Export/Löschung, Eligibility-Kaskaden                                              | Legal/Privacy Sign-off, Betroffenen-Drill                       |
+| Dokumente                      | Klassifizierung, Quarantäne, Key-/Bucket-Design                                              | MIME/Magic Byte, Malware, Object-IDOR, Löschung                                                               | DPA, Storage-/Key-Recovery                                      |
+| Async/Provider                 | Outbox/Inbox, Idempotenz, Retrybudget                                                        | Crash, Duplicate, Out-of-order, DLQ, Replay                                                                   | Sandbox-/Staging-Ausfallübung                                   |
+| Geld                           | Snapshot, Ledger, Reconciliation, Tax-Matrix                                                 | Webhook-Replay, Refund, Dispute, Double Confirm                                                               | Tax/Finance Sign-off, echter kontrollierter Test                |
+| Migration                      | Expand/Migrate/Contract, Lock-/Backfill-Budget                                               | Clean Migration, alter+neuer Reader, Counts/Checksums                                                         | Staging-Copy, Backup/Restore                                    |
+| Startcluster Search P0 je LC3+ | fachlich freigegebenes Golden-/Negativkorpus und versionierte Shared-Concept-Taxonomie       | Search/Alert/Recommendation/Cluster-V2-Parität, Ranking, Cursor, Recall/Precision/p95                         | Berufsfachreview je Cluster/Sprache                             |
+| Job Freshness                  | Reconfirmation-/Expiry-/Report-/Duplicate-Policy und Consumerinventar                        | Reminder/Grace/Race, Filled/Unavailable, Exact-/Near-Duplicate, Eligibility-Parität                           | Arbeitgeber-/Candidate-Meldepfad und Appeal                     |
+| SEO Capacity P3                | Count-/Byte-/Growth-Headroom und Triggervertrag                                              | Monitor/Forecast/Alert; >50k-/Byte-/Shard-Suite nur bei Trigger                                               | Ops Owner, Runbook und Search Console                           |
+| UX/A11y                        | responsive State-/Action-Inventar                                                            | 320/360/Desktop, Browsermatrix, axe, Keyboard                                                                 | NVDA/VoiceOver und Rollen-Walkthrough                           |
+| Moderierter Research           | vorregistrierte Segmente, Tasks und Stop-/Erfolgsschwellen                                   | Researchdaten-Schema/Redaction, keine PII-Analytics-Ersatzbehauptung                                          | Task Success, Zeit, Fehler, Abbruch, Verständnis mit Zielrollen |
+| Ops/Service                    | Capacity-/Unit-Cost-/Backlog-/Overload- und Service-Recovery-Matrix                          | Last/Backpressure, exactly-once Credit/Refund/Extension/Replacement                                           | Staffing-/Kostenfreigabe und bezahlter Failure-/Recovery-Drill  |
+| Markt/Commercial               | vorregistrierte Hypothese und Provenienz                                                     | DEMO/LIVE-Trennung, Funnelreconciliation                                                                      | reale KMU-Zahlung, Liquidität, Cashflow                         |
+| Release Evidence               | exakter Commit, Freeze, Manifest                                                             | Clean Clone, Full Suite, Digests                                                                              | exakt gleiches Artefakt manuell, Freigaben                      |
 
 ### 9.1 Verbindliche Regressionsebenen
 
@@ -1154,33 +1153,33 @@ erfüllt und in ihrer eigenen Evidence belegt sind:
 
 - [ ] fachlicher Ist-/Soll-Vertrag und Nicht-Ziele sind eindeutig;
 - [ ] betroffene Rollen, Tenants, Datenklassen, Statusmaschinen und
-  Downstream-Flows sind vollständig erfasst;
+      Downstream-Flows sind vollständig erfasst;
 - [ ] Schemaänderungen besitzen Migration, Constraints, Indizes,
-  Backfill-/Rollback- und Restore-Nachweis;
+      Backfill-/Rollback- und Restore-Nachweis;
 - [ ] Domain, Providerport, Serverpolicy und UI bilden einen echten
-  End-to-End-Flow ohne Fake-Aktion oder reine Textkarte;
+      End-to-End-Flow ohne Fake-Aktion oder reine Textkarte;
 - [ ] Auth, Capability, Ownership, Assignment, Step-up, Consent und
-  Feature-/Release-Gates werden serverseitig geprüft;
+      Feature-/Release-Gates werden serverseitig geprüft;
 - [ ] Loading-, Empty-, Error-, Locked-, Retry-, Conflict-, Success- und
-  mobile Zustände sind vorhanden;
+      mobile Zustände sind vorhanden;
 - [ ] Audit, Redaction, Rate Limit, Idempotenz, Observability und
-  Recovery sind der Risikoklasse angemessen;
+      Recovery sind der Risikoklasse angemessen;
 - [ ] positive, negative, Cross-Tenant, Concurrency, Failure- und
-  Regressionstests sind auf dem unveränderlichen Codecommit gelaufen;
+      Regressionstests sind auf dem unveränderlichen Codecommit gelaufen;
 - [ ] Seed-/Fixture-Daten machen den Flow lokal erreichbar, bleiben aber
-  klar DEMO/TEST und sind kein LIVE-Nachweis;
+      klar DEMO/TEST und sind kein LIVE-Nachweis;
 - [ ] Dokumentation, ADRs, Runbooks, Requirements-/Traceability-Matrix und
-  Route-/Role-Inventar stimmen mit Code und Schema überein;
+      Route-/Role-Inventar stimmen mit Code und Schema überein;
 - [ ] jeder externe Gate hat Owner, Entscheidung, Datum, Scope und
-  referenzierbare Evidence oder bleibt ausdrücklich offen;
+      referenzierbare Evidence oder bleibt ausdrücklich offen;
 - [ ] keine offene P0-/Critical-Lücke wird durch Wortwahl, Feature-Flag oder
-  manuelle Bedienung als geschlossen dargestellt;
+      manuelle Bedienung als geschlossen dargestellt;
 - [ ] `git diff --check`, Plan-/Link-/Route-/Security-Audits und das
-  phasenbezogene Testset sind grün;
+      phasenbezogene Testset sind grün;
 - [ ] der Phase-Commit enthält keine fremden Dateien, Credentials,
-  generierten Laufzeitdaten oder Klartext-Backups;
+      generierten Laufzeitdaten oder Klartext-Backups;
 - [ ] die Detailphase wird zuerst, danach der Masterstatus aktualisiert;
-  beide verweisen auf denselben Evidence-Record und Codecommit.
+      beide verweisen auf denselben Evidence-Record und Codecommit.
 
 Phase 32 besitzt zusätzlich die globale Freigabegrenze: vollständige Suite,
 Clean Clone, Staging-/Failure-/Restore-Drills und manueller Walkthrough

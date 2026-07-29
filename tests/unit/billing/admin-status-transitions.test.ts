@@ -118,7 +118,10 @@ describe("Phase 16 Admin billing status-transition boundary", () => {
 
   it("routes both commands from status-gated Admin detail forms", () => {
     const root = process.cwd();
-    const actions = readFileSync(join(root, "app", "admin", "actions.ts"), "utf8");
+    const actions = readFileSync(
+      join(root, "app", "admin", "actions.ts"),
+      "utf8",
+    );
     const orderPage = readFileSync(
       join(root, "app", "admin", "orders", "[id]", "page.tsx"),
       "utf8",
@@ -128,11 +131,11 @@ describe("Phase 16 Admin billing status-transition boundary", () => {
       "utf8",
     );
 
-    expect(actions).toContain(
-      'operation === "order-cancel" ? await cancelAdminOrder',
+    expect(actions).toMatch(
+      /operation\s*===\s*"order-cancel"\s*\?\s*await cancelAdminOrder/u,
     );
-    expect(actions).toContain(
-      'operation === "invoice-void" ? await voidAdminInvoice',
+    expect(actions).toMatch(
+      /operation\s*===\s*"invoice-void"\s*\?\s*await voidAdminInvoice/u,
     );
     expect(orderPage).toContain('order.status === "PENDING"');
     expect(orderPage).toContain('operation="order-cancel"');

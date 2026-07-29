@@ -221,7 +221,8 @@ export const PHASE22_DATA_INVENTORY_V1 = Object.freeze([
   }),
   row({
     entityKey: "ABUSE_REPORT",
-    fieldScope: "reporter-provided identity and report content",
+    fieldScope:
+      "reporter-provided identity, report content and freshness-review lifecycle",
     subjectClass: "REPORTER",
     purposeCode: "TRUST_AND_SAFETY",
     exportOutcome: "INCLUDE",
@@ -361,7 +362,8 @@ export const PHASE22_DATA_INVENTORY_V1 = Object.freeze([
   }),
   row({
     entityKey: "AUDIT_LOG",
-    fieldScope: "security action, capability, result and pseudonymous network evidence",
+    fieldScope:
+      "security action, capability, result and pseudonymous network evidence",
     subjectClass: "USER",
     purposeCode: "SECURITY_AUDIT",
     processorKey: "audit-store",
@@ -417,17 +419,16 @@ export function validatePrivacyDataInventoryV1(
   for (const [index, input] of rows.entries()) {
     const result = privacyDataInventoryRowSchema.safeParse(input);
     if (!result.success) {
-      issues.push(`row:${index}:${result.error.issues[0]?.message ?? "invalid"}`);
+      issues.push(
+        `row:${index}:${result.error.issues[0]?.message ?? "invalid"}`,
+      );
       continue;
     }
     const value = Object.freeze({ ...result.data });
     const key = inventoryRowKey(value);
     if (keys.has(key)) issues.push(`duplicate:${key}`);
     keys.add(key);
-    if (
-      value.erasureOutcome === "RETAIN" &&
-      value.retentionDays === null
-    ) {
+    if (value.erasureOutcome === "RETAIN" && value.retentionDays === null) {
       issues.push(`retention-required:${key}`);
     }
     parsed.push(value);
@@ -506,7 +507,9 @@ function row(
       >
     >,
 ): PrivacyDataInventoryRowV1 {
-  return Object.freeze(privacyDataInventoryRowSchema.parse({ ...COMMON, ...input }));
+  return Object.freeze(
+    privacyDataInventoryRowSchema.parse({ ...COMMON, ...input }),
+  );
 }
 
 function inventoryRowKey(rowValue: PrivacyDataInventoryRowV1) {

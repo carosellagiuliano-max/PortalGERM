@@ -271,6 +271,19 @@ export const NOTIFICATION_PAYLOADS_V1 = Object.freeze({
     interviewId: routeId,
     status: z.literal("REMINDER"),
   }),
+  [NotificationKinds.JOB_FRESHNESS_CHANGED]: z.strictObject({
+    jobId: routeId,
+    status: z.enum([
+      "REMINDER_7D",
+      "REMINDER_24H",
+      "RECONFIRMED",
+      "REVIEW_PENDING",
+      "HOLD",
+      "STALE",
+      "FILLED",
+    ]),
+    dueAt: z.iso.datetime({ offset: true }).optional(),
+  }),
 } satisfies Record<NotificationKind, z.ZodType>);
 
 export type NotificationPayloadsV1 = {

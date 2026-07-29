@@ -52,10 +52,7 @@ describe("Phase 15 public sitemap", () => {
         "2026-07-18T08:00:00.000Z",
       ),
       row("/jobs/kanton/zuerich", "2026-07-18T07:00:00.000Z"),
-      row(
-        "/jobs/kategorie/gesundheit-pflege",
-        "2026-07-18T06:00:00.000Z",
-      ),
+      row("/jobs/kategorie/gesundheit-pflege", "2026-07-18T06:00:00.000Z"),
     ]);
 
     const sitemap = await buildPublicSitemap({
@@ -80,7 +77,11 @@ describe("Phase 15 public sitemap", () => {
       "/jobs/kategorie/gesundheit-pflege",
     ]);
     expect(paths).not.toContain("/employers/demo");
-    expect(paths.some((path) => /^\/(?:admin|employer|candidate|api)(?:\/|$)/u.test(path))).toBe(false);
+    expect(
+      paths.some((path) =>
+        /^\/(?:admin|employer|candidate|api)(?:\/|$)/u.test(path),
+      ),
+    ).toBe(false);
     expect(sitemap.at(PUBLIC_SITEMAP_STATIC_PATHS.length)).toMatchObject({
       lastModified: new Date("2026-07-21T08:00:00.000Z"),
       changeFrequency: "daily",
@@ -108,11 +109,21 @@ describe("Phase 15 public sitemap", () => {
     }
   });
 
+  it.each([
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://[::1]:3000",
+  ])("accepts the explicit local loopback origin %s", async (origin) => {
+    await expect(
+      buildPublicSitemap({ origin, now: NOW, database, sources }),
+    ).resolves.toHaveLength(PUBLIC_SITEMAP_STATIC_PATHS.length);
+  });
+
   it("fails closed instead of truncating when a source exceeds the single-sitemap bound", async () => {
     sourceMocks.listJobs.mockImplementation(
       async (_now: Date, _database: never, maximumEntries: number) =>
         Array.from({ length: maximumEntries + 1 }, (_, index) =>
-          row(`/jobs/test-company-${index}`, "2026-07-22T09:00:00.000Z")
+          row(`/jobs/test-company-${index}`, "2026-07-22T09:00:00.000Z"),
         ),
     );
 
@@ -138,10 +149,10 @@ describe("Phase 15 public sitemap", () => {
       kind === "job"
         ? "listJobs"
         : kind === "company"
-        ? "listCompanies"
-        : kind === "guide"
-        ? "listGuides"
-        : "listClusters"
+          ? "listCompanies"
+          : kind === "guide"
+            ? "listGuides"
+            : "listClusters"
     ].mockResolvedValue([row(path, "2026-07-22T09:00:00.000Z")]);
 
     await expect(

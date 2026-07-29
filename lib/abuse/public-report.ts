@@ -10,6 +10,7 @@ import type { CurrentUser } from "@/lib/auth/current-user";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { EmailProvider } from "@/lib/providers/email";
+import { recordCandidateFreshnessReport } from "@/lib/jobs/freshness";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { recordAndDecideRiskSignal } from "@/lib/security/risk/risk-service";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
@@ -30,7 +31,12 @@ export const abuseReportContentSchema = z.strictObject({
 
 export const publicReportInputSchema = z.strictObject({
   targetType: z.enum(["JOB", "COMPANY"]),
-  slug: z.string().trim().min(1).max(220).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(220)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u),
   ...abuseReportContentSchema.shape,
 });
 
@@ -51,7 +57,8 @@ export type PublicReportResult =
   | Readonly<{ ok: true; reportId: string }>
   | Readonly<{
       ok: false;
-      code: "INVALID_INPUT" | "TARGET_NOT_FOUND" | "RATE_LIMITED" | "WRITE_FAILED";
+      code:
+        "INVALID_INPUT" | "TARGET_NOT_FOUND" | "RATE_LIMITED" | "WRITE_FAILED";
     }>;
 
 export type AbuseReportDependencies = Readonly<{
@@ -69,7 +76,8 @@ export async function createPublicReport(
   dependencies: AbuseReportDependencies,
 ): Promise<PublicReportResult> {
   const parsed = publicReportInputSchema.safeParse(rawInput);
-  if (!parsed.success) return Object.freeze({ ok: false, code: "INVALID_INPUT" });
+  if (!parsed.success)
+    return Object.freeze({ ok: false, code: "INVALID_INPUT" });
   if (
     target === null ||
     target.targetType !== parsed.data.targetType ||
@@ -100,7 +108,8 @@ export async function createResolvedAbuseReport(
       companyId: z.uuid().nullable(),
     })
     .safeParse(target);
-  if (!parsed.success) return Object.freeze({ ok: false, code: "INVALID_INPUT" });
+  if (!parsed.success)
+    return Object.freeze({ ok: false, code: "INVALID_INPUT" });
   if (!parsedTarget.success) {
     return Object.freeze({ ok: false, code: "TARGET_NOT_FOUND" });
   }
@@ -110,7 +119,10 @@ export async function createResolvedAbuseReport(
     return Object.freeze({ ok: false, code: "INVALID_INPUT" });
   }
   const description = stripUnsafeHtml(parsed.data.description);
-  if (Array.from(description).length < 20 || Array.from(description).length > 1_500) {
+  if (
+    Array.from(description).length < 20 ||
+    Array.from(description).length > 1_500
+  ) {
     return Object.freeze({ ok: false, code: "INVALID_INPUT" });
   }
 
@@ -148,52 +160,71 @@ export async function createResolvedAbuseReport(
   }
 
   try {
-    const report = await dependencies.database.$transaction(async (transaction) => {
-      const created = await transaction.abuseReport.create({
-        data: {
-          targetType: resolvedTarget.targetType,
-          targetId: resolvedTarget.id,
-          reporterUserId: dependencies.currentUser?.id ?? null,
-          reasonCode: parsed.data.reasonCode,
-          description,
-          severity: severityFor(parsed.data.reasonCode),
-          status: "OPEN",
-          dueAt: new Date(now.getTime() + dueMilliseconds(parsed.data.reasonCode)),
-          events: {
-            create: {
-              kind: "CREATED",
-              actorUserId: dependencies.currentUser?.id ?? null,
-              reasonCode: "PUBLIC_INTAKE",
-              safeNote: "Öffentliche Meldung sicher entgegengenommen.",
-              correlationId: dependencies.request.correlationId,
-              createdAt: now,
+    const report = await dependencies.database.$transaction(
+      async (transaction) => {
+        const priorityFreshness =
+          parsed.data.reasonCode === "OUTDATED" &&
+          resolvedTarget.targetType === "JOB" &&
+          dependencies.currentUser?.role === "CANDIDATE";
+        const created = await transaction.abuseReport.create({
+          data: {
+            targetType: resolvedTarget.targetType,
+            targetId: resolvedTarget.id,
+            reporterUserId: dependencies.currentUser?.id ?? null,
+            reasonCode: parsed.data.reasonCode,
+            description,
+            severity: severityFor(parsed.data.reasonCode, priorityFreshness),
+            status: "OPEN",
+            dueAt: new Date(
+              now.getTime() +
+                dueMilliseconds(parsed.data.reasonCode, priorityFreshness),
+            ),
+            events: {
+              create: {
+                kind: "CREATED",
+                actorUserId: dependencies.currentUser?.id ?? null,
+                reasonCode: "PUBLIC_INTAKE",
+                safeNote: "Öffentliche Meldung sicher entgegengenommen.",
+                correlationId: dependencies.request.correlationId,
+                createdAt: now,
+              },
             },
           },
-        },
-        select: { id: true },
-      });
-      await writeRequiredAudit(
-        createPrismaTransactionAuditPort(transaction),
-        {
-          action: "ABUSE_REPORT_SUBMITTED",
-          actorKind: dependencies.currentUser === null ? "ANONYMOUS" : "USER",
-          actorUserId: dependencies.currentUser?.id ?? null,
-          capability: "PUBLIC_ABUSE_REPORT_SUBMIT",
-          companyId: resolvedTarget.companyId,
-          correlationId: dependencies.request.correlationId,
-          reasonCode: "PUBLIC_INTAKE",
-          result: "SUCCEEDED",
-          retainUntil: new Date(now.getTime() + 365 * 86_400_000),
-          targetId: created.id,
-          targetType: "ABUSE_REPORT",
-        },
-        {
-          sourceIp: dependencies.request.sourceIp,
-          keyring: dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
-        },
-      );
-      return created;
-    });
+          select: { id: true },
+        });
+        if (priorityFreshness && dependencies.currentUser !== null) {
+          await recordCandidateFreshnessReport(transaction, {
+            jobId: resolvedTarget.id,
+            abuseReportId: created.id,
+            reporterUserId: dependencies.currentUser.id,
+            correlationId: dependencies.request.correlationId,
+            now,
+          });
+        }
+        await writeRequiredAudit(
+          createPrismaTransactionAuditPort(transaction),
+          {
+            action: "ABUSE_REPORT_SUBMITTED",
+            actorKind: dependencies.currentUser === null ? "ANONYMOUS" : "USER",
+            actorUserId: dependencies.currentUser?.id ?? null,
+            capability: "PUBLIC_ABUSE_REPORT_SUBMIT",
+            companyId: resolvedTarget.companyId,
+            correlationId: dependencies.request.correlationId,
+            reasonCode: "PUBLIC_INTAKE",
+            result: "SUCCEEDED",
+            retainUntil: new Date(now.getTime() + 365 * 86_400_000),
+            targetId: created.id,
+            targetType: "ABUSE_REPORT",
+          },
+          {
+            sourceIp: dependencies.request.sourceIp,
+            keyring:
+              dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
+          },
+        );
+        return created;
+      },
+    );
     await recordTrustSignalForReport(
       report.id,
       resolvedTarget,
@@ -299,23 +330,36 @@ async function notifyAbuseReportAdmins(
 }
 
 function reasonLabel(reason: AbuseReportContentInput["reasonCode"]): string {
-  const labels: Readonly<Record<AbuseReportContentInput["reasonCode"], string>> =
-    Object.freeze({
-      MISLEADING: "Irreführende Angaben",
-      SCAM_OR_FRAUD: "Betrug oder Täuschung",
-      DISCRIMINATION: "Diskriminierung",
-      OUTDATED: "Nicht mehr aktuell",
-      OTHER: "Andere Meldung",
-    });
+  const labels: Readonly<
+    Record<AbuseReportContentInput["reasonCode"], string>
+  > = Object.freeze({
+    MISLEADING: "Irreführende Angaben",
+    SCAM_OR_FRAUD: "Betrug oder Täuschung",
+    DISCRIMINATION: "Diskriminierung",
+    OUTDATED: "Nicht mehr aktuell",
+    OTHER: "Andere Meldung",
+  });
   return labels[reason];
 }
 
-function severityFor(reason: AbuseReportContentInput["reasonCode"]) {
-  if (reason === "SCAM_OR_FRAUD" || reason === "DISCRIMINATION") return "HIGH" as const;
+function severityFor(
+  reason: AbuseReportContentInput["reasonCode"],
+  priorityFreshness: boolean,
+) {
+  if (priorityFreshness) return "HIGH" as const;
+  if (reason === "SCAM_OR_FRAUD" || reason === "DISCRIMINATION")
+    return "HIGH" as const;
   if (reason === "OUTDATED") return "LOW" as const;
   return "MEDIUM" as const;
 }
 
-function dueMilliseconds(reason: AbuseReportContentInput["reasonCode"]) {
-  return (reason === "SCAM_OR_FRAUD" || reason === "DISCRIMINATION" ? 1 : 3) * 86_400_000;
+function dueMilliseconds(
+  reason: AbuseReportContentInput["reasonCode"],
+  priorityFreshness: boolean,
+) {
+  if (priorityFreshness) return 4 * 60 * 60_000;
+  return (
+    (reason === "SCAM_OR_FRAUD" || reason === "DISCRIMINATION" ? 1 : 3) *
+    86_400_000
+  );
 }

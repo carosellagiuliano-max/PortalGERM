@@ -1532,6 +1532,7 @@ enum NotificationKind {
   EXTERNAL_APPLICATION_CHANGED
   INTERVIEW_CHANGED
   INTERVIEW_REMINDER
+  JOB_FRESHNESS_CHANGED
 }
 
 enum AuditActorKind {
@@ -1686,6 +1687,9 @@ enum AuditAction {
   JOB_EXPIRED
   JOB_CLOSED
   JOB_REPORTING_CHECKED
+  JOB_FRESHNESS_CONFIRMED
+  JOB_MARKED_FILLED
+  JOB_FRESHNESS_HELD
   APPLICATION_SUBMITTED
   APPLICATION_STATUS_CHANGED
   APPLICATION_WITHDRAWN
@@ -1936,6 +1940,90 @@ enum ClusterLaunchEventKind {
   EXPIRED
 }
 
+enum SearchConceptType {
+  OCCUPATION
+  LOCATION
+  QUALIFICATION
+  CERTIFICATE
+  SKILL
+  INDUSTRY
+}
+
+enum SearchReleaseStatus {
+  DRAFT
+  REVIEWED
+  ACTIVE
+  REVOKED
+}
+
+enum SearchAliasKind {
+  CANONICAL
+  VARIANT
+  ABBREVIATION
+  CONTROLLED_TYPO
+}
+
+enum SearchLearningStatus {
+  HIDDEN
+  ACTIONABLE
+  REVIEWED
+  PROMOTED
+  REJECTED
+  EXPIRED
+}
+
+enum SearchLearningEventKind {
+  BECAME_ACTIONABLE
+  REVIEWED
+  PROMOTED
+  REJECTED
+  EXPIRED
+}
+
+enum SearchClusterSelectionStatus {
+  DISCOVERY_ONLY
+  SELECTED
+  REVOKED
+}
+
+enum JobFreshnessState {
+  ACTIVE
+  REVIEW_PENDING
+  HOLD
+  STALE
+  FILLED
+  CLOSED
+}
+
+enum JobFreshnessEventKind {
+  PUBLISHED
+  DUPLICATE_HELD
+  REMINDER_7D
+  REMINDER_24H
+  RECONFIRMED
+  CANDIDATE_REPORTED
+  REVIEW_SLA_EXCEEDED
+  REVIEW_RESOLVED
+  REVIEW_DISMISSED
+  DUE
+  FILLED
+  CLOSED
+}
+
+enum JobFreshnessReportStatus {
+  OPEN
+  HELD
+  CONFIRMED_OUTDATED
+  DISMISSED
+}
+
+enum SitemapCapacityLevel {
+  HEALTHY
+  PLAN
+  DEPLOY
+  EXPANSION_BLOCKED
+}
+
 enum RecruiterMandateStatus {
   SCHEDULED
   ACTIVE
@@ -2008,6 +2096,7 @@ model User {
   ordersCreated                       Order[]
   abuseReportsFiled                   AbuseReport[]                 @relation("AbuseReporter")
   abuseReportsAssigned                AbuseReport[]                 @relation("AbuseAssignee")
+  jobFreshnessReportsFiled            JobFreshnessReport[]          @relation("JobFreshnessReporter")
   auditLogs                           AuditLog[]
   salesLeadsOwned                     SalesLead[]
   systemTasksOwned                    SystemTask[]
@@ -2640,6 +2729,7 @@ model Company {
   dunningCases                      DunningCase[]
   serviceDeliveryAssessments        ServiceDeliveryAssessment[]
   paymentRiskDecisions              PaymentRiskDecision[]
+  jobPublicationFingerprints        JobPublicationFingerprint[]
 
   @@index([status, dataProvenance])
   @@index([registrationEmailDomainNormalized])
@@ -3017,48 +3107,52 @@ model CompanyVerificationAppeal {
 }
 
 model Job {
-  id                    String                @id @default(uuid()) @db.Uuid
-  companyId             String                @db.Uuid
-  slug                  String                @unique @db.VarChar(220)
-  status                JobStatus             @default(DRAFT)
-  origin                JobOrigin             @default(MANUAL)
-  sourceReference       String                @default("platform-manual") @db.VarChar(255)
-  version               Int                   @default(1)
-  importSourceId        String?               @db.Uuid
-  currentRevisionId     String?               @unique @db.Uuid
-  publishedRevisionId   String?               @unique @db.Uuid
-  publishedAt           DateTime?             @db.Timestamptz(3)
-  expiresAt             DateTime?             @db.Timestamptz(3)
-  publishedCategoryId   String?               @db.Uuid
-  publishedCantonId     String?               @db.Uuid
-  publishedCityId       String?               @db.Uuid
-  publishedSalaryPeriod SalaryPeriod?
-  publishedSalaryMin    Int?
-  publishedSalaryMax    Int?
-  dataProvenance        DataProvenance        @default(LIVE)
-  createdByUserId       String                @db.Uuid
-  createdAt             DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime              @updatedAt @db.Timestamptz(3)
-  company               Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  currentRevision       JobRevision?          @relation("CurrentJobRevision", fields: [currentRevisionId, id], references: [id, jobId], onDelete: Restrict)
-  publishedRevision     JobRevision?          @relation("PublishedJobRevision", fields: [publishedRevisionId, id], references: [id, jobId], onDelete: Restrict)
-  publishedCategory     Category?             @relation("PublishedCategory", fields: [publishedCategoryId], references: [id], onDelete: Restrict)
-  publishedCanton       Canton?               @relation("PublishedCanton", fields: [publishedCantonId], references: [id], onDelete: Restrict)
-  publishedCity         City?                 @relation("PublishedCity", fields: [publishedCityId], references: [id], onDelete: Restrict)
-  revisions             JobRevision[]         @relation("JobRevisions")
-  statusEvents          JobStatusEvent[]
-  assignments           JobAssignment[]
-  applications          Application[]
-  savedBy               SavedJob[]
-  alertDigestItems      JobAlertDigestItem[]
-  viewAggregates        JobViewAggregate[]
-  boosts                JobBoost[]
-  additionalPermits     AdditionalJobPermit[]
-  orderLines            OrderLine[]
-  importDecision        ImportDecision?
-  recruiterMandateLinks RecruiterMandateJob[]
-  analyticsEvents       AnalyticsEvent[]
-  importSource          ImportSource?         @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  id                     String                     @id @default(uuid()) @db.Uuid
+  companyId              String                     @db.Uuid
+  slug                   String                     @unique @db.VarChar(220)
+  status                 JobStatus                  @default(DRAFT)
+  origin                 JobOrigin                  @default(MANUAL)
+  sourceReference        String                     @default("platform-manual") @db.VarChar(255)
+  version                Int                        @default(1)
+  importSourceId         String?                    @db.Uuid
+  currentRevisionId      String?                    @unique @db.Uuid
+  publishedRevisionId    String?                    @unique @db.Uuid
+  publishedAt            DateTime?                  @db.Timestamptz(3)
+  expiresAt              DateTime?                  @db.Timestamptz(3)
+  publishedCategoryId    String?                    @db.Uuid
+  publishedCantonId      String?                    @db.Uuid
+  publishedCityId        String?                    @db.Uuid
+  publishedSalaryPeriod  SalaryPeriod?
+  publishedSalaryMin     Int?
+  publishedSalaryMax     Int?
+  dataProvenance         DataProvenance             @default(LIVE)
+  createdByUserId        String                     @db.Uuid
+  createdAt              DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                   @updatedAt @db.Timestamptz(3)
+  company                Company                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  currentRevision        JobRevision?               @relation("CurrentJobRevision", fields: [currentRevisionId, id], references: [id, jobId], onDelete: Restrict)
+  publishedRevision      JobRevision?               @relation("PublishedJobRevision", fields: [publishedRevisionId, id], references: [id, jobId], onDelete: Restrict)
+  publishedCategory      Category?                  @relation("PublishedCategory", fields: [publishedCategoryId], references: [id], onDelete: Restrict)
+  publishedCanton        Canton?                    @relation("PublishedCanton", fields: [publishedCantonId], references: [id], onDelete: Restrict)
+  publishedCity          City?                      @relation("PublishedCity", fields: [publishedCityId], references: [id], onDelete: Restrict)
+  revisions              JobRevision[]              @relation("JobRevisions")
+  statusEvents           JobStatusEvent[]
+  assignments            JobAssignment[]
+  applications           Application[]
+  savedBy                SavedJob[]
+  alertDigestItems       JobAlertDigestItem[]
+  viewAggregates         JobViewAggregate[]
+  boosts                 JobBoost[]
+  additionalPermits      AdditionalJobPermit[]
+  orderLines             OrderLine[]
+  importDecision         ImportDecision?
+  recruiterMandateLinks  RecruiterMandateJob[]
+  analyticsEvents        AnalyticsEvent[]
+  importSource           ImportSource?              @relation(fields: [importSourceId], references: [id], onDelete: Restrict)
+  freshnessProjection    JobFreshnessProjection?
+  freshnessEvents        JobFreshnessEvent[]
+  freshnessReports       JobFreshnessReport[]
+  publicationFingerprint JobPublicationFingerprint?
 
   @@unique([currentRevisionId, id])
   @@unique([publishedRevisionId, id])
@@ -4617,6 +4711,7 @@ model AbuseReport {
   restrictions     ModerationRestriction[]
   reporter         User?                   @relation("AbuseReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
   assignee         User?                   @relation("AbuseAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
+  freshnessReport  JobFreshnessReport?
 
   @@index([status, severity, dueAt])
   @@index([assigneeUserId, status, dueAt])
@@ -4959,6 +5054,7 @@ model ClusterLaunchAssessment {
   canton                     Canton                        @relation(fields: [cantonId], references: [id], onDelete: Restrict)
   category                   Category                      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   events                     ClusterLaunchEvent[]
+  searchQualityEvidence      ClusterSearchQualityEvidence?
 
   @@unique([cantonId, categoryId, policyVersion, evaluatedAt])
   @@index([cantonId, categoryId, policyVersion, status, validUntil])
@@ -6958,4 +7054,235 @@ model TrustSafetyContainmentEffect {
 
   @@index([trustSafetyCaseId, reversedAt, effectScope, id])
   @@index([targetType, targetId, reversedAt])
+}
+
+model SearchPolicyRelease {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  code                String                  @unique @db.VarChar(64)
+  status              SearchReleaseStatus     @default(DRAFT)
+  locale              String                  @db.VarChar(16)
+  searchPolicyVersion String                  @db.VarChar(32)
+  taxonomyVersion     String                  @db.VarChar(32)
+  rankingVersion      String                  @db.VarChar(32)
+  corpusDigest        String                  @db.Char(64)
+  reviewedAt          DateTime?               @db.Timestamptz(3)
+  activatedAt         DateTime?               @db.Timestamptz(3)
+  revokedAt           DateTime?               @db.Timestamptz(3)
+  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
+  concepts            SearchConcept[]
+  aliases             SearchAlias[]
+  relations           SearchConceptRelation[]
+
+  @@index([status, locale])
+}
+
+model SearchConcept {
+  id              String                  @id @default(uuid()) @db.Uuid
+  stableKey       String                  @db.VarChar(96)
+  releaseId       String                  @db.Uuid
+  type            SearchConceptType
+  locale          String                  @db.VarChar(16)
+  canonicalLabel  String                  @db.VarChar(200)
+  normalizedLabel String                  @db.VarChar(200)
+  createdAt       DateTime                @default(now()) @db.Timestamptz(3)
+  release         SearchPolicyRelease     @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  aliases         SearchAlias[]
+  outgoing        SearchConceptRelation[] @relation("SearchConceptRelationFrom")
+  incoming        SearchConceptRelation[] @relation("SearchConceptRelationTo")
+
+  @@unique([releaseId, stableKey])
+  @@index([releaseId, type])
+}
+
+model SearchAlias {
+  id               String              @id @default(uuid()) @db.Uuid
+  releaseId        String              @db.Uuid
+  conceptId        String              @db.Uuid
+  kind             SearchAliasKind
+  locale           String              @db.VarChar(16)
+  label            String              @db.VarChar(200)
+  normalizedLabel  String              @db.VarChar(200)
+  sourceCode       String              @db.VarChar(64)
+  reviewedByUserId String?             @db.Uuid
+  reviewedAt       DateTime?           @db.Timestamptz(3)
+  validFrom        DateTime?           @db.Timestamptz(3)
+  validUntil       DateTime?           @db.Timestamptz(3)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  release          SearchPolicyRelease @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  concept          SearchConcept       @relation(fields: [conceptId], references: [id], onDelete: Restrict)
+
+  @@unique([releaseId, normalizedLabel])
+  @@index([conceptId])
+}
+
+model SearchConceptRelation {
+  id            String              @id @default(uuid()) @db.Uuid
+  releaseId     String              @db.Uuid
+  fromConceptId String              @db.Uuid
+  toConceptId   String              @db.Uuid
+  relationCode  String              @db.VarChar(32)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  release       SearchPolicyRelease @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  fromConcept   SearchConcept       @relation("SearchConceptRelationFrom", fields: [fromConceptId], references: [id], onDelete: Restrict)
+  toConcept     SearchConcept       @relation("SearchConceptRelationTo", fields: [toConceptId], references: [id], onDelete: Restrict)
+
+  @@unique([releaseId, fromConceptId, toConceptId, relationCode])
+}
+
+model SearchLearningAggregate {
+  id                  String                       @id @default(uuid()) @db.Uuid
+  windowStart         DateTime                     @db.Date
+  locale              String                       @db.VarChar(16)
+  searchPolicyVersion String                       @db.VarChar(32)
+  tokenBucket         String                       @db.Char(64)
+  filterFingerprint   String                       @db.Char(64)
+  resultBucket        String                       @db.VarChar(16)
+  conceptKeys         String[]                     @db.VarChar(96)
+  reviewLabel         String?                      @db.VarChar(160)
+  observationCount    Int                          @default(0)
+  status              SearchLearningStatus         @default(HIDDEN)
+  actionableAt        DateTime?                    @db.Timestamptz(3)
+  reviewedAt          DateTime?                    @db.Timestamptz(3)
+  reviewedByUserId    String?                      @db.Uuid
+  releaseOutcomeCode  String?                      @db.VarChar(64)
+  expiresAt           DateTime                     @db.Timestamptz(3)
+  createdAt           DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                     @updatedAt @db.Timestamptz(3)
+  events              SearchLearningEvent[]
+  contributions       SearchLearningContribution[]
+
+  @@unique([windowStart, locale, searchPolicyVersion, tokenBucket, filterFingerprint, resultBucket])
+  @@index([status, expiresAt])
+}
+
+model SearchLearningContribution {
+  id                String                  @id @default(uuid()) @db.Uuid
+  aggregateId       String                  @db.Uuid
+  contributorBucket String                  @db.Char(64)
+  createdAt         DateTime                @default(now()) @db.Timestamptz(3)
+  aggregate         SearchLearningAggregate @relation(fields: [aggregateId], references: [id], onDelete: Restrict)
+
+  @@unique([aggregateId, contributorBucket])
+  @@index([createdAt])
+}
+
+model SearchLearningEvent {
+  id             String                  @id @default(uuid()) @db.Uuid
+  aggregateId    String                  @db.Uuid
+  kind           SearchLearningEventKind
+  actorUserId    String?                 @db.Uuid
+  reasonCode     String                  @db.VarChar(64)
+  idempotencyKey String                  @unique @db.VarChar(160)
+  createdAt      DateTime                @default(now()) @db.Timestamptz(3)
+  aggregate      SearchLearningAggregate @relation(fields: [aggregateId], references: [id], onDelete: Restrict)
+
+  @@index([aggregateId, createdAt])
+}
+
+model ClusterSearchQualityEvidence {
+  id                        String                       @id @default(uuid()) @db.Uuid
+  clusterLaunchAssessmentId String                       @unique @db.Uuid
+  selectionStatus           SearchClusterSelectionStatus
+  searchPolicyVersion       String                       @db.VarChar(32)
+  taxonomyVersion           String                       @db.VarChar(32)
+  rankingVersion            String                       @db.VarChar(32)
+  querySetDigest            String                       @db.Char(64)
+  topKJudgmentDigest        String                       @db.Char(64)
+  corpusDigest              String                       @db.Char(64)
+  precisionAt10Bps          Int
+  recallAt10Bps             Int
+  coverageBps               Int
+  relevantTopKJobs          Int
+  expertReviewedAt          DateTime?                    @db.Timestamptz(3)
+  expertReviewerUserId      String?                      @db.Uuid
+  createdAt                 DateTime                     @default(now()) @db.Timestamptz(3)
+  assessment                ClusterLaunchAssessment      @relation(fields: [clusterLaunchAssessmentId], references: [id], onDelete: Restrict)
+}
+
+model JobFreshnessProjection {
+  jobId            String            @id @db.Uuid
+  policyVersion    String            @db.VarChar(32)
+  state            JobFreshnessState @default(ACTIVE)
+  publishedAt      DateTime          @db.Timestamptz(3)
+  lastConfirmedAt  DateTime          @db.Timestamptz(3)
+  dueAt            DateTime          @db.Timestamptz(3)
+  reminder7At      DateTime          @db.Timestamptz(3)
+  reminder24At     DateTime          @db.Timestamptz(3)
+  reminder7SentAt  DateTime?         @db.Timestamptz(3)
+  reminder24SentAt DateTime?         @db.Timestamptz(3)
+  reviewDueAt      DateTime?         @db.Timestamptz(3)
+  enforceAt        DateTime          @db.Timestamptz(3)
+  version          Int               @default(1)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+  job              Job               @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@index([state, dueAt])
+  @@index([state, reviewDueAt])
+}
+
+model JobFreshnessEvent {
+  id             String                @id @default(uuid()) @db.Uuid
+  jobId          String                @db.Uuid
+  kind           JobFreshnessEventKind
+  fromState      JobFreshnessState?
+  toState        JobFreshnessState
+  actorUserId    String?               @db.Uuid
+  reasonCode     String                @db.VarChar(64)
+  idempotencyKey String                @unique @db.VarChar(160)
+  correlationId  String                @db.VarChar(128)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  job            Job                   @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@index([jobId, createdAt])
+}
+
+model JobFreshnessReport {
+  id             String                   @id @default(uuid()) @db.Uuid
+  jobId          String                   @db.Uuid
+  abuseReportId  String                   @unique @db.Uuid
+  reporterUserId String                   @db.Uuid
+  status         JobFreshnessReportStatus @default(OPEN)
+  reviewDueAt    DateTime                 @db.Timestamptz(3)
+  resolvedAt     DateTime?                @db.Timestamptz(3)
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                 @updatedAt @db.Timestamptz(3)
+  job            Job                      @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  abuseReport    AbuseReport              @relation(fields: [abuseReportId], references: [id], onDelete: Restrict)
+  reporter       User                     @relation("JobFreshnessReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, reviewDueAt])
+}
+
+model JobPublicationFingerprint {
+  id               String   @id @default(uuid()) @db.Uuid
+  jobId            String   @unique @db.Uuid
+  companyId        String   @db.Uuid
+  sourceScope      String   @db.VarChar(96)
+  exactFingerprint String   @db.Char(64)
+  signatureTokens  String[] @db.VarChar(96)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+  job              Job      @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, active])
+}
+
+model SitemapCapacityObservation {
+  id               String               @id @default(uuid()) @db.Uuid
+  resourceKey      String               @db.VarChar(64)
+  observedAt       DateTime             @db.Timestamptz(3)
+  urlCount         Int
+  estimatedBytes   BigInt
+  runtimeMs        Int
+  growth7dBps      Int
+  growth30dBps     Int
+  forecast90dCount Int
+  capacityLevel    SitemapCapacityLevel
+  owner            String               @db.VarChar(96)
+  successful       Boolean
+  createdAt        DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@index([resourceKey, observedAt])
 }

@@ -28,6 +28,7 @@ const SENSITIVE_VARIABLES = [
   "DATABASE_URL",
   "TEST_DATABASE_URL",
   "SESSION_SECRET",
+  "SEARCH_LEARNING_HASH_SECRET",
   "DEV_MAILBOX_SECRET",
   ...KEYRING_VARIABLES,
   ...FUTURE_PROVIDER_VARIABLES,
@@ -122,9 +123,7 @@ const rawEnvironmentSchema = z
     PRIVILEGED_STEP_UP_MODE: z
       .enum(["disabled", "observe", "enforce"])
       .default("disabled"),
-    TRUST_RISK_MODE: z
-      .enum(["observe", "hold"])
-      .default("observe"),
+    TRUST_RISK_MODE: z.enum(["observe", "hold"]).default("observe"),
     COMPANY_TRUST_V2: z
       .enum(["disabled", "observe", "enforce"])
       .default("disabled"),
@@ -338,6 +337,7 @@ const rawEnvironmentSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    SEARCH_LEARNING_HASH_SECRET: optionalString,
     EMAIL_FROM: optionalString.refine(
       (value) =>
         value === undefined ||
@@ -369,6 +369,19 @@ const rawEnvironmentSchema = z
       seenKeyMaterial,
       context,
     );
+    if (environment.SEARCH_LEARNING_HASH_SECRET !== undefined) {
+      validateBase64Secret(
+        "SEARCH_LEARNING_HASH_SECRET",
+        environment.SEARCH_LEARNING_HASH_SECRET,
+        context,
+      );
+      registerUniqueKeyMaterial(
+        "SEARCH_LEARNING_HASH_SECRET",
+        environment.SEARCH_LEARNING_HASH_SECRET,
+        seenKeyMaterial,
+        context,
+      );
+    }
 
     for (const variable of KEYRING_VARIABLES) {
       const value = environment[variable];
@@ -478,8 +491,7 @@ const rawEnvironmentSchema = z
       environment.COMPANY_STRONG_BADGE ||
       environment.COMPANY_TRUST_PUBLIC_ELIGIBILITY;
     const companyProviderSandboxSelected =
-      environment.COMPANY_REGISTER_PROVIDER_MODE ===
-        "deterministic_sandbox" ||
+      environment.COMPANY_REGISTER_PROVIDER_MODE === "deterministic_sandbox" ||
       environment.COMPANY_DOMAIN_PROVIDER_MODE === "deterministic_sandbox";
     if (
       companyProviderSandboxSelected &&
@@ -1029,11 +1041,14 @@ const rawEnvironmentSchema = z
           "Phase-22 execution remains disabled in staging and production until Phase-25 step-up and separated grants",
       });
     }
-    if (environment.SEARCH_LEARNING_COLLECTION) {
+    if (
+      environment.SEARCH_LEARNING_COLLECTION &&
+      environment.SEARCH_LEARNING_HASH_SECRET === undefined
+    ) {
       context.addIssue({
         code: "custom",
-        path: ["SEARCH_LEARNING_COLLECTION"],
-        message: "must remain false until the Phase-30A learning gate",
+        path: ["SEARCH_LEARNING_HASH_SECRET"],
+        message: "is required when Phase-30A search learning is enabled",
       });
     }
 
@@ -1154,6 +1169,7 @@ export type ServerEnvironment = Readonly<
       database: SecretHandle<"DATABASE_URL">;
       testDatabase?: SecretHandle<"TEST_DATABASE_URL">;
       session: SecretHandle<"SESSION_SECRET">;
+      searchLearningHash?: SecretHandle<"SEARCH_LEARNING_HASH_SECRET">;
       localMailbox?: SecretHandle<"DEV_MAILBOX_SECRET">;
       emailProvider?: SecretHandle<"EMAIL_PROVIDER_API_KEY">;
       stripeSecretKey?: SecretHandle<"STRIPE_SECRET_KEY">;
@@ -1216,6 +1232,14 @@ export function parseEnvironment(
             ),
           }),
       session: createSecretHandle("SESSION_SECRET", result.data.SESSION_SECRET),
+      ...(result.data.SEARCH_LEARNING_HASH_SECRET === undefined
+        ? {}
+        : {
+            searchLearningHash: createSecretHandle(
+              "SEARCH_LEARNING_HASH_SECRET",
+              result.data.SEARCH_LEARNING_HASH_SECRET,
+            ),
+          }),
       ...(result.data.DEV_MAILBOX_SECRET === undefined
         ? {}
         : {
@@ -1274,12 +1298,10 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     companyRegisterCheck: environment.COMPANY_REGISTER_CHECK,
     companyVerificationDocument: environment.COMPANY_VERIFICATION_DOCUMENT,
     companyStrongBadge: environment.COMPANY_STRONG_BADGE,
-    companyTrustPublicEligibility:
-      environment.COMPANY_TRUST_PUBLIC_ELIGIBILITY,
+    companyTrustPublicEligibility: environment.COMPANY_TRUST_PUBLIC_ELIGIBILITY,
     companyTrustRapidRevoke: environment.COMPANY_TRUST_RAPID_REVOKE,
     legacyCompanyReverify: environment.LEGACY_COMPANY_REVERIFY,
-    companyRegisterProviderMode:
-      environment.COMPANY_REGISTER_PROVIDER_MODE,
+    companyRegisterProviderMode: environment.COMPANY_REGISTER_PROVIDER_MODE,
     companyDomainProviderMode: environment.COMPANY_DOMAIN_PROVIDER_MODE,
     companyVerificationCohort: environment.COMPANY_VERIFICATION_COHORT,
     identityPersonaV2: environment.IDENTITY_PERSONA_V2,

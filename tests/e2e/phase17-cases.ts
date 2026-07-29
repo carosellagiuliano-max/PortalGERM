@@ -1,4 +1,4 @@
-export const PHASE17_FIXTURE_VERSION = "phase17-e2e-v4" as const;
+export const PHASE17_FIXTURE_VERSION = "phase17-e2e-v5" as const;
 
 export const PHASE17_CASES = Object.freeze([
   Object.freeze({
@@ -74,7 +74,8 @@ export const PHASE17_CASES = Object.freeze([
       "REQ-SCORE-001",
       "REQ-MKT-001",
     ]),
-    summary: "Active and expired boost, score invariance and stable pagination.",
+    summary:
+      "Active and expired boost, score invariance and stable pagination.",
   }),
   Object.freeze({
     id: "E2E-21",
@@ -84,31 +85,27 @@ export const PHASE17_CASES = Object.freeze([
   }),
   Object.freeze({
     id: "E2E-22",
-    requirements: Object.freeze([
-      "REQ-PRIV-004",
-      "REQ-DATA-001",
-      "REQ-QA-003",
-    ]),
+    requirements: Object.freeze(["REQ-PRIV-004", "REQ-DATA-001", "REQ-QA-003"]),
     summary:
       "Owner-only privacy case, fail-closed V2 execution and absence of mock completion while activation gates are disabled.",
   }),
   Object.freeze({
     id: "E2E-28A",
-    requirements: Object.freeze([
-      "REQ-REC-028A-001",
-      "REQ-REC-028-002",
-    ]),
+    requirements: Object.freeze(["REQ-REC-028A-001", "REQ-REC-028-002"]),
     summary:
       "External click, explicit candidate-owned tracking, status and voluntary reminder remain distinct.",
   }),
   Object.freeze({
     id: "E2E-28B",
-    requirements: Object.freeze([
-      "REQ-REC-028B-001",
-      "REQ-REC-028-002",
-    ]),
+    requirements: Object.freeze(["REQ-REC-028B-001", "REQ-REC-028-002"]),
     summary:
       "Separate interview proposal, RSVP, reschedule, ICS, reminder and cancellation lifecycle.",
+  }),
+  Object.freeze({
+    id: "E2E-30",
+    requirements: Object.freeze(["REQ-JOB-007", "REQ-JOB-030D-001"]),
+    summary:
+      "Employer reconfirms a current publication, marks it filled and every public surface removes it immediately.",
   }),
 ] as const);
 

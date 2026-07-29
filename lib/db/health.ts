@@ -1,11 +1,10 @@
 export type DatabaseHealth = Readonly<
-  | { ready: true }
-  | { ready: false; reason: "database_unavailable" }
+  { ready: true } | { ready: false; reason: "database_unavailable" }
 >;
 
 export const DATABASE_HEALTH_TIMEOUT_MS = 3_000;
 export const REQUIRED_MIGRATION_ID =
-  "20260729073537_phase_28_recruiting_workflows";
+  "20260729190000_phase_30_search_freshness_operations";
 
 type QueryableDatabase = {
   $queryRaw: (

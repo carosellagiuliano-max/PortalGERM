@@ -26,6 +26,7 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
   "SECURITY_DENIAL_AUDIT",
   "ABUSE_INTAKE_PRECHECK",
   "ABUSE_INTAKE",
+  "SEARCH_LEARNING",
   "CONTACT_REQUEST",
   "RADAR_LIST",
   "DOCUMENT_UPLOAD_INTENT",
@@ -127,6 +128,9 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
   },
   ABUSE_INTAKE: {
     buckets: [{ scope: "ACTOR_OR_IP_TARGET", limit: 3, windowMs: DAY }],
+  },
+  SEARCH_LEARNING: {
+    buckets: [{ scope: "IP", limit: 60, windowMs: HOUR }],
   },
   CONTACT_REQUEST: {
     buckets: [
@@ -529,21 +533,29 @@ export function createPostgresRadarDistinctFilterBudget(
             where: { id: existing.id },
             data: { lastUsedAt: input.now },
           });
-          const distinctFiltersUsed = await transaction.radarSearchBudget.count({
-            where: { companyId: input.companyId, calendarDate: persistedCalendarDate },
-          });
-          return radarBudgetAllowed(
-            calendarDate,
-            false,
-            distinctFiltersUsed,
+          const distinctFiltersUsed = await transaction.radarSearchBudget.count(
+            {
+              where: {
+                companyId: input.companyId,
+                calendarDate: persistedCalendarDate,
+              },
+            },
           );
+          return radarBudgetAllowed(calendarDate, false, distinctFiltersUsed);
         }
 
         const distinctFiltersUsed = await transaction.radarSearchBudget.count({
-          where: { companyId: input.companyId, calendarDate: persistedCalendarDate },
+          where: {
+            companyId: input.companyId,
+            calendarDate: persistedCalendarDate,
+          },
         });
         if (distinctFiltersUsed >= RADAR_DISTINCT_FILTER_BUDGET_V1.limit) {
-          return radarBudgetDenied(calendarDate, distinctFiltersUsed, input.now);
+          return radarBudgetDenied(
+            calendarDate,
+            distinctFiltersUsed,
+            input.now,
+          );
         }
 
         await transaction.radarSearchBudget.create({
@@ -555,11 +567,7 @@ export function createPostgresRadarDistinctFilterBudget(
             lastUsedAt: input.now,
           },
         });
-        return radarBudgetAllowed(
-          calendarDate,
-          true,
-          distinctFiltersUsed + 1,
-        );
+        return radarBudgetAllowed(calendarDate, true, distinctFiltersUsed + 1);
       });
     },
   });
@@ -621,7 +629,9 @@ function assertRadarDistinctFilterBudgetInput(
     throw new TypeError("A valid Radar Company id is required.");
   }
   if (!SHA_256_HEX_PATTERN.test(input.filterHash)) {
-    throw new TypeError("A canonical lowercase SHA-256 Radar filter hash is required.");
+    throw new TypeError(
+      "A canonical lowercase SHA-256 Radar filter hash is required.",
+    );
   }
   assertValidRadarBudgetInstant(input.now);
 }
@@ -709,7 +719,14 @@ function getZurichDateTimeParts(instant: Date): ZurichDateTimeParts {
       .filter((part) => part.type !== "literal")
       .map((part) => [part.type, part.value]),
   );
-  const required = ["year", "month", "day", "hour", "minute", "second"] as const;
+  const required = [
+    "year",
+    "month",
+    "day",
+    "hour",
+    "minute",
+    "second",
+  ] as const;
   if (required.some((part) => typeof values[part] !== "string")) {
     throw new Error("Europe/Zurich calendar parts could not be resolved.");
   }

@@ -21,11 +21,15 @@ export function useProductAnalyticsSessionId(): string {
 function readClientSessionId(): string {
   if (cachedClientSessionId !== undefined) return cachedClientSessionId;
   const stored = globalThis.sessionStorage.getItem(SESSION_STORAGE_KEY);
-  cachedClientSessionId = stored !== null && UUID_PATTERN.test(stored)
-    ? stored
-    : globalThis.crypto.randomUUID();
+  cachedClientSessionId =
+    stored !== null && UUID_PATTERN.test(stored)
+      ? stored
+      : globalThis.crypto.randomUUID();
   if (stored !== cachedClientSessionId) {
-    globalThis.sessionStorage.setItem(SESSION_STORAGE_KEY, cachedClientSessionId);
+    globalThis.sessionStorage.setItem(
+      SESSION_STORAGE_KEY,
+      cachedClientSessionId,
+    );
   }
   return cachedClientSessionId;
 }
@@ -39,11 +43,15 @@ export function PublicSearchResultsAnalytics({
   sort,
   cantonCode,
   categorySlug,
+  searchQuery,
+  searchFilters,
 }: Readonly<{
   resultCountBucket: "0" | "1-9" | "10-24" | "25-49" | "50+";
   sort: "relevance" | "newest" | "fair-score" | "salary" | "response";
   cantonCode?: string;
   categorySlug?: string;
+  searchQuery?: string;
+  searchFilters?: Readonly<Record<string, string | number | boolean>>;
 }>) {
   const analyticsSessionId = useProductAnalyticsSessionId();
   const event = useRef<Readonly<{ key: string; id: string }> | null>(null);
@@ -54,6 +62,8 @@ export function PublicSearchResultsAnalytics({
       sort,
       cantonCode ?? null,
       categorySlug ?? null,
+      searchQuery ?? null,
+      searchFilters ?? null,
     ]);
     if (event.current?.key !== eventKey) {
       event.current = Object.freeze({
@@ -69,8 +79,18 @@ export function PublicSearchResultsAnalytics({
       sort,
       cantonCode,
       categorySlug,
+      searchQuery,
+      searchFilters,
     }).catch(() => undefined);
-  }, [analyticsSessionId, cantonCode, categorySlug, resultCountBucket, sort]);
+  }, [
+    analyticsSessionId,
+    cantonCode,
+    categorySlug,
+    resultCountBucket,
+    searchFilters,
+    searchQuery,
+    sort,
+  ]);
   return null;
 }
 

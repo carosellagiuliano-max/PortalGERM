@@ -20,6 +20,11 @@ import {
   parseStoredJobAlertQuery,
 } from "@/lib/candidate/job-alert-policy";
 import type { Prisma, PrismaClient } from "@/lib/generated/prisma/client";
+import {
+  JOB_FRESHNESS_POLICY_V1,
+  buildPublicationFingerprintV1,
+  calculateJobFreshnessScheduleV1,
+} from "@/lib/jobs/freshness-policy";
 import { renderEmailTemplate } from "@/lib/providers/email/templates";
 import {
   FAIR_JOB_FACTOR_ORDER_V2,
@@ -739,8 +744,8 @@ async function loadObservedSeedState(
     },
     orderBy: { slug: "asc" },
   });
-  const structuredDemoCompanyTrust =
-    await db.companyTrustProjection.findUnique({
+  const structuredDemoCompanyTrust = await db.companyTrustProjection.findUnique(
+    {
       where: {
         companyId_scope: {
           companyId: stableSeedId("company", DEMO_COMPANY_SLUG),
@@ -839,7 +844,8 @@ async function loadObservedSeedState(
           },
         },
       },
-    });
+    },
+  );
   const jobs = await db.job.findMany({
     where: { dataProvenance: "DEMO" },
     include: {
@@ -884,6 +890,11 @@ async function loadObservedSeedState(
           validThrough: true,
         },
       },
+      freshnessProjection: true,
+      freshnessEvents: {
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      },
+      publicationFingerprint: true,
     },
     orderBy: { slug: "asc" },
   });
@@ -1910,9 +1921,7 @@ function verifyStructuredDemoCompanyTrust(
   const registerDigest = sha256Utf8(
     `phase26:register:${fixture.uid}:${fixture.name}:${fixture.cantonCode}`,
   );
-  const domainDigest = sha256Utf8(
-    `phase26:domain:${domain}:verified`,
-  );
+  const domainDigest = sha256Utf8(`phase26:domain:${domain}:verified`);
   const evidenceDigest = sha256Utf8(
     JSON.stringify([
       {
@@ -1951,16 +1960,14 @@ function verifyStructuredDemoCompanyTrust(
               ? null
               : {
                   ...trust.decision,
-                  validFrom:
-                    trust.decision.validFrom?.toISOString() ?? null,
+                  validFrom: trust.decision.validFrom?.toISOString() ?? null,
                   validTo: trust.decision.validTo?.toISOString() ?? null,
                   decidedAt: trust.decision.decidedAt.toISOString(),
                 },
           request: {
             id: trust.verificationRequest.id,
             companyId: trust.verificationRequest.companyId,
-            requestedByUserId:
-              trust.verificationRequest.requestedByUserId,
+            requestedByUserId: trust.verificationRequest.requestedByUserId,
             assignedReviewerUserId:
               trust.verificationRequest.assignedReviewerUserId,
             status: trust.verificationRequest.status,
@@ -2016,10 +2023,7 @@ function verifyStructuredDemoCompanyTrust(
     `${fixture.slug}:phase26`,
   );
   const expected = {
-    id: stableSeedId(
-      "company-trust-projection",
-      `${fixture.slug}:phase26`,
-    ),
+    id: stableSeedId("company-trust-projection", `${fixture.slug}:phase26`),
     companyId: fixture.id,
     verificationRequestId: requestId,
     decisionId,
@@ -2702,6 +2706,73 @@ function verifyJobs(
   );
   check(
     context,
+    "published Jobs have deterministic Phase-30 freshness evidence",
+    publishedJobs.every((job) => {
+      const revision = requireValue(
+        job.currentRevision,
+        "Published Job current revision",
+      );
+      const publishedAt = requireValue(job.publishedAt, "Job publishedAt");
+      const expiresAt = requireValue(job.expiresAt, "Job expiresAt");
+      const schedule = calculateJobFreshnessScheduleV1(publishedAt, expiresAt);
+      const fingerprint = buildPublicationFingerprintV1({
+        title: revision.title,
+        description: revision.description,
+        tasks: revision.tasks,
+        requirements: revision.requirements,
+        offer: revision.offer,
+        categoryId: revision.categoryId,
+        cantonId: revision.cantonId,
+        cityId: revision.cityId,
+        workloadMin: revision.workloadMin,
+        workloadMax: revision.workloadMax,
+        jobType: revision.jobType,
+        remoteType: revision.remoteType,
+      });
+      const projection = job.freshnessProjection;
+      const publicationEvent = job.freshnessEvents[0];
+      const storedFingerprint = job.publicationFingerprint;
+      return (
+        projection?.policyVersion === JOB_FRESHNESS_POLICY_V1.version &&
+        projection.state === "ACTIVE" &&
+        projection.publishedAt.getTime() === publishedAt.getTime() &&
+        projection.lastConfirmedAt.getTime() === publishedAt.getTime() &&
+        projection.dueAt.getTime() === schedule.dueAt.getTime() &&
+        projection.reminder7At.getTime() === schedule.reminder7At.getTime() &&
+        projection.reminder24At.getTime() === schedule.reminder24At.getTime() &&
+        // A clean seed is enforced immediately. An upgraded database keeps
+        // the additive migration's announced cohort cutover instead; both
+        // states are safe and the latter must not be rewritten by seeding.
+        projection.enforceAt.getTime() >= publishedAt.getTime() &&
+        projection.version === 1 &&
+        job.freshnessEvents.length === 1 &&
+        publicationEvent?.kind === "PUBLISHED" &&
+        publicationEvent.toState === "ACTIVE" &&
+        publicationEvent.actorUserId === job.createdByUserId &&
+        storedFingerprint?.sourceScope === "manual" &&
+        storedFingerprint.exactFingerprint === fingerprint.exactFingerprint &&
+        JSON.stringify(storedFingerprint.signatureTokens) ===
+          JSON.stringify(fingerprint.signatureTokens) &&
+        storedFingerprint.active
+      );
+    }),
+    true,
+  );
+  check(
+    context,
+    "non-published demo Jobs have no active freshness projection or fingerprint",
+    observed.jobs
+      .filter((job) => job.status !== "PUBLISHED")
+      .every(
+        (job) =>
+          job.freshnessProjection === null &&
+          job.freshnessEvents.length === 0 &&
+          job.publicationFingerprint === null,
+      ),
+    true,
+  );
+  check(
+    context,
     "ZH Engineering Jobs",
     observed.jobs.filter((job) => {
       const revision = requireValue(
@@ -2846,7 +2917,8 @@ function verifyCandidateWorkflows(
       canonicalWindow: phase14Mappings.every(
         (mapping) =>
           mapping.epoch.getTime() === canonicalRadarEpoch.epoch.getTime() &&
-          mapping.validFrom.getTime() >= canonicalRadarEpoch.validFrom.getTime() &&
+          mapping.validFrom.getTime() >=
+            canonicalRadarEpoch.validFrom.getTime() &&
           mapping.validFrom.getTime() <= anchorAt.getTime() &&
           mapping.validTo.getTime() === canonicalRadarEpoch.validTo.getTime() &&
           mapping.revokedAt === null,
@@ -2854,8 +2926,7 @@ function verifyCandidateWorkflows(
     },
     {
       count:
-        RADAR_COMPANY_SLOTS.length *
-        PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
+        RADAR_COMPANY_SLOTS.length * PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
       canonicalWindow: true,
     },
   );
@@ -2903,11 +2974,10 @@ function verifyCandidateWorkflows(
         session !== undefined &&
         session.policyVersion === RADAR_PRIVACY_POLICY_V1.version &&
         session.resultCount === PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT &&
-        session.candidates.length ===
-          PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT &&
+        session.candidates.length === PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT &&
         new Set(
-          session.candidates.map(({ candidateProfileId }) =>
-            candidateProfileId,
+          session.candidates.map(
+            ({ candidateProfileId }) => candidateProfileId,
           ),
         ).size === PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT &&
         canonicalJson(
@@ -3623,8 +3693,7 @@ function verifyCandidateWorkflows(
         (fixture.status === "PENDING"
           ? request.terminalAt === null && terminalEvent === undefined
           : request.terminalAt !== null &&
-            terminalEvent?.createdAt.getTime() ===
-              request.terminalAt.getTime())
+            terminalEvent?.createdAt.getTime() === request.terminalAt.getTime())
       );
     }),
     true,
@@ -3688,9 +3757,7 @@ function verifyCandidateWorkflows(
         grant.confirmations.every(
           (confirmation) =>
             confirmation.confirmationKeyVersion.length > 0 &&
-            /^[a-f0-9]{64}$/u.test(
-              confirmation.confirmationTokenDigest,
-            ) &&
+            /^[a-f0-9]{64}$/u.test(confirmation.confirmationTokenDigest) &&
             confirmation.contactRequestId === grant.contactRequestId &&
             confirmation.grantId === grant.id,
         ),
@@ -3738,14 +3805,12 @@ function verifyCandidateWorkflows(
         return (
           owner !== undefined &&
           request.requesterUserId === stableSeedId("user", owner.email) &&
-          request.noticeVersion ===
-            PRIVACY_REQUEST_POLICY_V1.noticeVersion &&
+          request.noticeVersion === PRIVACY_REQUEST_POLICY_V1.noticeVersion &&
           request.domainEventRefs.length === 0 &&
           request.events.length === 1 &&
           request.events[0]?.kind === "CREATED" &&
           request.events[0]?.toStatus === "PENDING" &&
-          request.correctionFields.length ===
-            fixture.correctionFields.length &&
+          request.correctionFields.length === fixture.correctionFields.length &&
           request.events.every(
             (event) =>
               event.safeNote === null &&
@@ -3859,8 +3924,7 @@ function verifyBilling(
         billingIntervalSnapshot: subscription.billingInterval,
         companyId: subscription.companyId,
         currencySnapshot: subscription.currency,
-        monthlyEquivalentRappenSnapshot:
-          subscription.monthlyEquivalentRappen,
+        monthlyEquivalentRappenSnapshot: subscription.monthlyEquivalentRappen,
         planVersionId: stableSeedId(
           "plan-version",
           subscription.planVersionNaturalKey,
@@ -4839,6 +4903,35 @@ function buildObservedDigest(
     })),
     jobs: observed.jobs.map((job) => ({
       contentChecksum: job.currentRevision?.contentChecksum ?? null,
+      freshness:
+        job.freshnessProjection === null
+          ? null
+          : {
+              dueAt: job.freshnessProjection.dueAt.toISOString(),
+              // enforceAt is operational cohort state, not immutable demo
+              // identity. Excluding it keeps clean-seed and upgrade-seed
+              // manifests identical without weakening the checks above.
+              policyVersion: job.freshnessProjection.policyVersion,
+              state: job.freshnessProjection.state,
+              version: job.freshnessProjection.version,
+            },
+      freshnessEvents: job.freshnessEvents.map((event) => ({
+        actorUserId: event.actorUserId,
+        createdAt: event.createdAt.toISOString(),
+        id: event.id,
+        kind: event.kind,
+        reasonCode: event.reasonCode,
+        toState: event.toState,
+      })),
+      publicationFingerprint:
+        job.publicationFingerprint === null
+          ? null
+          : {
+              active: job.publicationFingerprint.active,
+              exactFingerprint: job.publicationFingerprint.exactFingerprint,
+              id: job.publicationFingerprint.id,
+              sourceScope: job.publicationFingerprint.sourceScope,
+            },
       id: job.id,
       scoreSnapshots:
         job.currentRevision?.scoreSnapshots.map((snapshot) => ({

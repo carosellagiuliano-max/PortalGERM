@@ -7,9 +7,18 @@ import {
 } from "@/lib/auth/password";
 import { normalizeCompanyNameSignal } from "@/lib/auth/employer-registration-signals";
 import type { Prisma, PrismaClient } from "@/lib/generated/prisma/client";
+import {
+  JOB_FRESHNESS_POLICY_V1,
+  buildJobPublicationSourceScopeV1,
+  buildPublicationFingerprintV1,
+  calculateJobFreshnessScheduleV1,
+} from "@/lib/jobs/freshness-policy";
 import { companyMediaOptions } from "@/lib/security/company-media-manifest";
 import type { CanonicalJsonValue } from "@/prisma/seed/canonical-json";
-import { createOrVerifySeedRecord, SeedDataDriftError } from "@/prisma/seed/create-or-verify";
+import {
+  createOrVerifySeedRecord,
+  SeedDataDriftError,
+} from "@/prisma/seed/create-or-verify";
 import { createSeedBlockDigest } from "@/prisma/seed/manifest";
 import { stableSeedId } from "@/prisma/seed/ids";
 import {
@@ -91,8 +100,7 @@ export async function seedDemoAccountsCompaniesAndJobs(
   const occupationContract = await loadOccupationContract(database);
   for (const job of jobs) {
     await database.$transaction(
-      (transaction) =>
-        seedJob(transaction, job, anchorAt, occupationContract),
+      (transaction) => seedJob(transaction, job, anchorAt, occupationContract),
       { maxWait: 5_000, timeout: 15_000 },
     );
   }
@@ -135,7 +143,11 @@ export async function seedDemoAccountsCompaniesAndJobs(
     jobs: jobHandles,
     identities: COMPANIES_JOBS_SEED_IDENTITIES,
     blockDigest: createSeedBlockDigest("companies-jobs", 144, {
-      accounts: demoAccounts.map(({ id, email, role }) => ({ id, email, role })),
+      accounts: demoAccounts.map(({ id, email, role }) => ({
+        id,
+        email,
+        role,
+      })),
       companies: companies.map(({ id, slug, uid, planCode }) => ({
         id,
         slug,
@@ -159,7 +171,13 @@ async function seedUsersAndCredentials(
   for (const account of DEMO_ACCOUNT_FIXTURES) {
     await ensureUser(database, account, anchorAt);
     if (account.role === "EMPLOYER" || account.role === "RECRUITER") {
-      await ensureEmployerProfile(database, account.email, account.id, account.name, anchorAt);
+      await ensureEmployerProfile(
+        database,
+        account.email,
+        account.id,
+        account.name,
+        anchorAt,
+      );
     }
     await ensureCredential(database, account, anchorAt);
   }
@@ -246,7 +264,8 @@ async function ensureCredential(
   const id = stableSeedId("credential", account.email);
   const passwordChangedAt = addDays(anchorAt, -180);
   const existing = await database.credential.findUnique({ where: { id } });
-  const passwordHash = existing?.passwordHash ?? (await hashPassword(DEMO_LOGIN_PASSWORD));
+  const passwordHash =
+    existing?.passwordHash ?? (await hashPassword(DEMO_LOGIN_PASSWORD));
   const result = await createOrVerifySeedRecord({
     entity: "Credential",
     naturalKey: account.email,
@@ -278,7 +297,9 @@ async function ensureCredential(
       passwordChangedAt: passwordChangedAt.toISOString(),
     },
   });
-  if (!(await verifyPassword(DEMO_LOGIN_PASSWORD, result.record.passwordHash))) {
+  if (
+    !(await verifyPassword(DEMO_LOGIN_PASSWORD, result.record.passwordHash))
+  ) {
     throw new SeedDataDriftError("Credential", account.email);
   }
 }
@@ -299,7 +320,11 @@ async function ensureEmployerProfile(
       database.employerProfile.create({
         data: { id, userId, displayName, createdAt: addDays(anchorAt, -179) },
       }),
-    project: (row) => ({ id: row.id, userId: row.userId, displayName: row.displayName }),
+    project: (row) => ({
+      id: row.id,
+      userId: row.userId,
+      displayName: row.displayName,
+    }),
     expected: { id, userId, displayName },
   });
 }
@@ -339,7 +364,9 @@ async function assertReferenceContract(database: PrismaClient): Promise<void> {
     cities.length !== CITY_FIXTURES.length ||
     skills.length !== SKILL_FIXTURES.length
   ) {
-    throw new Error("Reference fixtures must be seeded before companies and jobs.");
+    throw new Error(
+      "Reference fixtures must be seeded before companies and jobs.",
+    );
   }
 }
 
@@ -368,8 +395,16 @@ async function seedCompany(
     logoStorageKey: logoAsset.path,
     coverStorageKey: coverAsset.path,
     about: `${fixture.name} ist ein vollständig fiktives Schweizer Demo-Unternehmen. Das Team verbindet ${fixture.industry} mit nachvollziehbaren Arbeitsweisen, fairer Kommunikation und konkreten Lernmöglichkeiten.`,
-    values: ["Verlässliche Zusammenarbeit", "Lernen im Alltag", "Faire Entscheidungen"],
-    benefits: ["Planbare Arbeitszeiten", "Bezahlte Weiterbildung", "Transparente Lohnbänder"],
+    values: [
+      "Verlässliche Zusammenarbeit",
+      "Lernen im Alltag",
+      "Faire Entscheidungen",
+    ],
+    benefits: [
+      "Planbare Arbeitszeiten",
+      "Bezahlte Weiterbildung",
+      "Transparente Lohnbänder",
+    ],
     responseTargetDays: fixture.responseTargetDays,
     responseSampleSize: fixture.responseSampleSize,
     responseWithinTargetBps: fixture.responseWithinTargetBps,
@@ -395,7 +430,8 @@ async function seedCompany(
   await createOrVerifySeedRecord({
     entity: "Company",
     naturalKey: fixture.slug,
-    findExisting: () => transaction.company.findUnique({ where: { id: fixture.id } }),
+    findExisting: () =>
+      transaction.company.findUnique({ where: { id: fixture.id } }),
     create: () =>
       transaction.company.create({
         data: { ...companyCore, status: "DRAFT", createdAt },
@@ -405,8 +441,7 @@ async function seedCompany(
       name: row.name,
       slug: row.slug,
       uid: row.uid,
-      registrationEmailDomainNormalized:
-        row.registrationEmailDomainNormalized,
+      registrationEmailDomainNormalized: row.registrationEmailDomainNormalized,
       registrationNameNormalized: row.registrationNameNormalized,
       registrationCantonId: row.registrationCantonId,
       industry: row.industry,
@@ -428,7 +463,10 @@ async function seedCompany(
   await createOrVerifySeedRecord({
     entity: "CompanyLocation",
     naturalKey: `${fixture.slug}:primary`,
-    findExisting: () => transaction.companyLocation.findUnique({ where: { id: fixture.locationId } }),
+    findExisting: () =>
+      transaction.companyLocation.findUnique({
+        where: { id: fixture.locationId },
+      }),
     create: () =>
       transaction.companyLocation.create({
         data: {
@@ -437,7 +475,10 @@ async function seedCompany(
           cantonId: fixture.cantonId,
           cityId: fixture.cityId,
           address: `Demostrasse ${COMPANY_FIXTURES.indexOf(fixture) + 1}`,
-          postalCode: String(8000 + COMPANY_FIXTURES.indexOf(fixture)).padStart(4, "0"),
+          postalCode: String(8000 + COMPANY_FIXTURES.indexOf(fixture)).padStart(
+            4,
+            "0",
+          ),
           isPrimary: true,
           createdAt: addDays(anchorAt, -179),
         },
@@ -457,7 +498,10 @@ async function seedCompany(
       cantonId: fixture.cantonId,
       cityId: fixture.cityId,
       address: `Demostrasse ${COMPANY_FIXTURES.indexOf(fixture) + 1}`,
-      postalCode: String(8000 + COMPANY_FIXTURES.indexOf(fixture)).padStart(4, "0"),
+      postalCode: String(8000 + COMPANY_FIXTURES.indexOf(fixture)).padStart(
+        4,
+        "0",
+      ),
       isPrimary: true,
     },
   });
@@ -472,7 +516,9 @@ async function seedCompany(
     anchorAt,
   );
   if (fixture.slug === DEMO_COMPANY_SLUG) {
-    const recruiter = DEMO_ACCOUNT_FIXTURES.find((account) => account.email === "recruiter@demo.ch");
+    const recruiter = DEMO_ACCOUNT_FIXTURES.find(
+      (account) => account.email === "recruiter@demo.ch",
+    );
     if (!recruiter) throw new Error("Recruiter demo account is missing.");
     await ensureMembership(
       transaction,
@@ -485,9 +531,14 @@ async function seedCompany(
     );
   }
 
-  const state = await transaction.company.findUniqueOrThrow({ where: { id: fixture.id } });
+  const state = await transaction.company.findUniqueOrThrow({
+    where: { id: fixture.id },
+  });
   if (state.status === "DRAFT") {
-    await transaction.company.update({ where: { id: fixture.id }, data: { status: "ACTIVE" } });
+    await transaction.company.update({
+      where: { id: fixture.id },
+      data: { status: "ACTIVE" },
+    });
   } else if (state.status !== "ACTIVE") {
     throw new SeedDataDriftError("Company", fixture.slug);
   }
@@ -512,10 +563,19 @@ async function ensureMembership(
   await createOrVerifySeedRecord({
     entity: "CompanyMembership",
     naturalKey: `${company.slug}:${naturalUserKey}`,
-    findExisting: () => transaction.companyMembership.findUnique({ where: { id } }),
+    findExisting: () =>
+      transaction.companyMembership.findUnique({ where: { id } }),
     create: () =>
       transaction.companyMembership.create({
-        data: { id, companyId: company.id, userId, role, status: "ACTIVE", joinedAt, createdAt: joinedAt },
+        data: {
+          id,
+          companyId: company.id,
+          userId,
+          role,
+          status: "ACTIVE",
+          joinedAt,
+          createdAt: joinedAt,
+        },
       }),
     project: (row) => ({
       id: row.id,
@@ -526,7 +586,15 @@ async function ensureMembership(
       joinedAt: row.joinedAt.toISOString(),
       removedAt: iso(row.removedAt),
     }),
-    expected: { id, companyId: company.id, userId, role, status: "ACTIVE", joinedAt: joinedAt.toISOString(), removedAt: null },
+    expected: {
+      id,
+      companyId: company.id,
+      userId,
+      role,
+      status: "ACTIVE",
+      joinedAt: joinedAt.toISOString(),
+      removedAt: null,
+    },
   });
 }
 
@@ -538,26 +606,55 @@ async function seedCompanyStatusEvents(
   const index = COMPANY_FIXTURES.indexOf(fixture);
   const events: Array<{
     suffix: string;
-    kind: "DRAFT_CREATED" | "ONBOARDING_COMPLETED" | "SUSPENDED" | "REACTIVATED";
+    kind:
+      "DRAFT_CREATED" | "ONBOARDING_COMPLETED" | "SUSPENDED" | "REACTIVATED";
     fromStatus: "DRAFT" | "ACTIVE" | "SUSPENDED" | null;
     toStatus: "DRAFT" | "ACTIVE" | "SUSPENDED";
     at: Date;
   }> = [
-    { suffix: "draft-created", kind: "DRAFT_CREATED", fromStatus: null, toStatus: "DRAFT", at: addDays(anchorAt, -180) },
-    { suffix: "onboarding-completed", kind: "ONBOARDING_COMPLETED", fromStatus: "DRAFT", toStatus: "ACTIVE", at: addDays(anchorAt, -175) },
+    {
+      suffix: "draft-created",
+      kind: "DRAFT_CREATED",
+      fromStatus: null,
+      toStatus: "DRAFT",
+      at: addDays(anchorAt, -180),
+    },
+    {
+      suffix: "onboarding-completed",
+      kind: "ONBOARDING_COMPLETED",
+      fromStatus: "DRAFT",
+      toStatus: "ACTIVE",
+      at: addDays(anchorAt, -175),
+    },
   ];
   if (index % 8 === 0) {
     events.push(
-      { suffix: "suspended-history", kind: "SUSPENDED", fromStatus: "ACTIVE", toStatus: "SUSPENDED", at: addDays(anchorAt, -90) },
-      { suffix: "reactivated-history", kind: "REACTIVATED", fromStatus: "SUSPENDED", toStatus: "ACTIVE", at: addDays(anchorAt, -85) },
+      {
+        suffix: "suspended-history",
+        kind: "SUSPENDED",
+        fromStatus: "ACTIVE",
+        toStatus: "SUSPENDED",
+        at: addDays(anchorAt, -90),
+      },
+      {
+        suffix: "reactivated-history",
+        kind: "REACTIVATED",
+        fromStatus: "SUSPENDED",
+        toStatus: "ACTIVE",
+        at: addDays(anchorAt, -85),
+      },
     );
   }
   for (const event of events) {
-    const id = stableSeedId("company-status-event", `${fixture.slug}:${event.suffix}`);
+    const id = stableSeedId(
+      "company-status-event",
+      `${fixture.slug}:${event.suffix}`,
+    );
     await createOrVerifySeedRecord({
       entity: "CompanyStatusEvent",
       naturalKey: `${fixture.slug}:${event.suffix}`,
-      findExisting: () => transaction.companyStatusEvent.findUnique({ where: { id } }),
+      findExisting: () =>
+        transaction.companyStatusEvent.findUnique({ where: { id } }),
       create: () =>
         transaction.companyStatusEvent.create({
           data: {
@@ -572,8 +669,28 @@ async function seedCompanyStatusEvents(
             createdAt: event.at,
           },
         }),
-      project: (row) => ({ id: row.id, companyId: row.companyId, kind: row.kind, fromStatus: row.fromStatus, toStatus: row.toStatus, actorUserId: row.actorUserId, reasonCode: row.reasonCode, correlationId: row.correlationId, createdAt: row.createdAt.toISOString() }),
-      expected: { id, companyId: fixture.id, kind: event.kind, fromStatus: event.fromStatus, toStatus: event.toStatus, actorUserId: fixture.ownerUserId, reasonCode: `DEMO_${event.kind}`, correlationId: `seed-company-${fixture.slug}`, createdAt: event.at.toISOString() },
+      project: (row) => ({
+        id: row.id,
+        companyId: row.companyId,
+        kind: row.kind,
+        fromStatus: row.fromStatus,
+        toStatus: row.toStatus,
+        actorUserId: row.actorUserId,
+        reasonCode: row.reasonCode,
+        correlationId: row.correlationId,
+        createdAt: row.createdAt.toISOString(),
+      }),
+      expected: {
+        id,
+        companyId: fixture.id,
+        kind: event.kind,
+        fromStatus: event.fromStatus,
+        toStatus: event.toStatus,
+        actorUserId: fixture.ownerUserId,
+        reasonCode: `DEMO_${event.kind}`,
+        correlationId: `seed-company-${fixture.slug}`,
+        createdAt: event.at.toISOString(),
+      },
     });
   }
 }
@@ -585,7 +702,10 @@ async function seedCompanyVerification(
 ): Promise<void> {
   let supersedesRequestId: string | null = null;
   if (fixture.slug === DEMO_COMPANY_SLUG) {
-    supersedesRequestId = stableSeedId("company-verification-request", `${fixture.slug}:rejected-v1`);
+    supersedesRequestId = stableSeedId(
+      "company-verification-request",
+      `${fixture.slug}:rejected-v1`,
+    );
     await ensureVerificationRequest(transaction, {
       id: supersedesRequestId,
       naturalKey: `${fixture.slug}:rejected-v1`,
@@ -593,12 +713,26 @@ async function seedCompanyVerification(
       status: "REJECTED",
       supersedesRequestId: null,
       createdAt: addDays(anchorAt, -170),
-      evidenceMetadata: { provenance: "DEMO", cycle: 1, outcome: "domain-evidence-mismatch" },
+      evidenceMetadata: {
+        provenance: "DEMO",
+        cycle: 1,
+        outcome: "domain-evidence-mismatch",
+      },
     });
-    await ensureVerificationEvents(transaction, fixture, "rejected-v1", supersedesRequestId, ["DRAFT_CREATED", "SUBMITTED", "REJECTED"], addDays(anchorAt, -170));
+    await ensureVerificationEvents(
+      transaction,
+      fixture,
+      "rejected-v1",
+      supersedesRequestId,
+      ["DRAFT_CREATED", "SUBMITTED", "REJECTED"],
+      addDays(anchorAt, -170),
+    );
   }
 
-  const currentId = stableSeedId("company-verification-request", `${fixture.slug}:current`);
+  const currentId = stableSeedId(
+    "company-verification-request",
+    `${fixture.slug}:current`,
+  );
   const currentEvidenceMetadata: CanonicalJsonValue =
     fixture.slug === DEMO_COMPANY_SLUG
       ? {
@@ -637,7 +771,14 @@ async function seedCompanyVerification(
     createdAt: addDays(anchorAt, -160),
     evidenceMetadata: currentEvidenceMetadata,
   });
-  await ensureVerificationEvents(transaction, fixture, "current", currentId, ["DRAFT_CREATED", "SUBMITTED", "VERIFIED"], addDays(anchorAt, -160));
+  await ensureVerificationEvents(
+    transaction,
+    fixture,
+    "current",
+    currentId,
+    ["DRAFT_CREATED", "SUBMITTED", "VERIFIED"],
+    addDays(anchorAt, -160),
+  );
   if (fixture.slug === DEMO_COMPANY_SLUG) {
     await seedStructuredCompanyTrust(transaction, fixture, currentId, anchorAt);
   } else {
@@ -876,10 +1017,7 @@ async function seedStructuredCompanyTrust(
       changedAt: checkedAt,
     },
     create: {
-      id: stableSeedId(
-        "company-trust-projection",
-        `${fixture.slug}:phase26`,
-      ),
+      id: stableSeedId("company-trust-projection", `${fixture.slug}:phase26`),
       companyId: fixture.id,
       verificationRequestId: requestId,
       decisionId,
@@ -914,10 +1052,7 @@ async function seedLegacyCompanyTrustProjection(
     },
     update: {},
     create: {
-      id: stableSeedId(
-        "company-trust-projection",
-        `${fixture.slug}:legacy`,
-      ),
+      id: stableSeedId("company-trust-projection", `${fixture.slug}:legacy`),
       companyId: fixture.id,
       verificationRequestId: requestId,
       scope: "LEGACY_PROFILE",
@@ -953,18 +1088,38 @@ async function ensureVerificationRequest(
   await createOrVerifySeedRecord({
     entity: "CompanyVerificationRequest",
     naturalKey: input.naturalKey,
-    findExisting: () => transaction.companyVerificationRequest.findUnique({ where: { id: input.id } }),
-    create: () => transaction.companyVerificationRequest.create({ data: {
+    findExisting: () =>
+      transaction.companyVerificationRequest.findUnique({
+        where: { id: input.id },
+      }),
+    create: () =>
+      transaction.companyVerificationRequest.create({
+        data: {
+          id: input.id,
+          companyId: input.fixture.id,
+          requestedByUserId: input.fixture.ownerUserId,
+          supersedesRequestId: input.supersedesRequestId,
+          status: input.status,
+          evidenceMetadata: input.evidenceMetadata as Prisma.InputJsonValue,
+          createdAt: input.createdAt,
+        },
+      }),
+    project: (row) => ({
+      id: row.id,
+      companyId: row.companyId,
+      requestedByUserId: row.requestedByUserId,
+      supersedesRequestId: row.supersedesRequestId,
+      status: row.status,
+      evidenceMetadata: row.evidenceMetadata as CanonicalJsonValue,
+    }),
+    expected: {
       id: input.id,
       companyId: input.fixture.id,
       requestedByUserId: input.fixture.ownerUserId,
       supersedesRequestId: input.supersedesRequestId,
       status: input.status,
-      evidenceMetadata: input.evidenceMetadata as Prisma.InputJsonValue,
-      createdAt: input.createdAt,
-    } }),
-    project: (row) => ({ id: row.id, companyId: row.companyId, requestedByUserId: row.requestedByUserId, supersedesRequestId: row.supersedesRequestId, status: row.status, evidenceMetadata: row.evidenceMetadata as CanonicalJsonValue }),
-    expected: { id: input.id, companyId: input.fixture.id, requestedByUserId: input.fixture.ownerUserId, supersedesRequestId: input.supersedesRequestId, status: input.status, evidenceMetadata: input.evidenceMetadata },
+      evidenceMetadata: input.evidenceMetadata,
+    },
   });
 }
 
@@ -976,23 +1131,57 @@ async function ensureVerificationEvents(
   kinds: readonly ("DRAFT_CREATED" | "SUBMITTED" | "REJECTED" | "VERIFIED")[],
   startAt: Date,
 ): Promise<void> {
-  const statusForKind = { DRAFT_CREATED: "DRAFT", SUBMITTED: "PENDING", REJECTED: "REJECTED", VERIFIED: "VERIFIED" } as const;
+  const statusForKind = {
+    DRAFT_CREATED: "DRAFT",
+    SUBMITTED: "PENDING",
+    REJECTED: "REJECTED",
+    VERIFIED: "VERIFIED",
+  } as const;
   let previous: "DRAFT" | "PENDING" | null = null;
   for (const [index, kind] of kinds.entries()) {
     const naturalKey = `${fixture.slug}:${cycle}:${kind.toLowerCase().replace("_created", "")}`;
     const id = stableSeedId("company-verification-event", naturalKey);
     const toStatus = statusForKind[kind];
     const createdAt = addDays(startAt, index * 2);
-    const expected = { id, verificationRequestId: requestId, kind, fromStatus: previous, toStatus, actorUserId: fixture.ownerUserId, reasonCode: `DEMO_${kind}`, evidenceRef: `mock-storage/demo/verification/${fixture.slug}/${cycle}.json`, idempotencyKey: `seed:${naturalKey}`, correlationId: `seed-verification-${fixture.slug}`, createdAt: createdAt.toISOString() };
+    const expected = {
+      id,
+      verificationRequestId: requestId,
+      kind,
+      fromStatus: previous,
+      toStatus,
+      actorUserId: fixture.ownerUserId,
+      reasonCode: `DEMO_${kind}`,
+      evidenceRef: `mock-storage/demo/verification/${fixture.slug}/${cycle}.json`,
+      idempotencyKey: `seed:${naturalKey}`,
+      correlationId: `seed-verification-${fixture.slug}`,
+      createdAt: createdAt.toISOString(),
+    };
     await createOrVerifySeedRecord({
       entity: "CompanyVerificationEvent",
       naturalKey,
-      findExisting: () => transaction.companyVerificationEvent.findUnique({ where: { id } }),
-      create: () => transaction.companyVerificationEvent.create({ data: { ...expected, createdAt } }),
-      project: (row) => ({ id: row.id, verificationRequestId: row.verificationRequestId, kind: row.kind, fromStatus: row.fromStatus, toStatus: row.toStatus, actorUserId: row.actorUserId, reasonCode: row.reasonCode, evidenceRef: row.evidenceRef, idempotencyKey: row.idempotencyKey, correlationId: row.correlationId, createdAt: row.createdAt.toISOString() }),
+      findExisting: () =>
+        transaction.companyVerificationEvent.findUnique({ where: { id } }),
+      create: () =>
+        transaction.companyVerificationEvent.create({
+          data: { ...expected, createdAt },
+        }),
+      project: (row) => ({
+        id: row.id,
+        verificationRequestId: row.verificationRequestId,
+        kind: row.kind,
+        fromStatus: row.fromStatus,
+        toStatus: row.toStatus,
+        actorUserId: row.actorUserId,
+        reasonCode: row.reasonCode,
+        evidenceRef: row.evidenceRef,
+        idempotencyKey: row.idempotencyKey,
+        correlationId: row.correlationId,
+        createdAt: row.createdAt.toISOString(),
+      }),
       expected,
     });
-    previous = toStatus === "PENDING" || toStatus === "DRAFT" ? toStatus : previous;
+    previous =
+      toStatus === "PENDING" || toStatus === "DRAFT" ? toStatus : previous;
   }
 }
 
@@ -1019,9 +1208,25 @@ async function seedBillingProfile(
   await createOrVerifySeedRecord({
     entity: "CompanyBillingProfile",
     naturalKey: fixture.slug,
-    findExisting: () => transaction.companyBillingProfile.findUnique({ where: { id } }),
-    create: () => transaction.companyBillingProfile.create({ data: { ...expected, createdAt: addDays(anchorAt, -150) } }),
-    project: (row) => ({ id: row.id, companyId: row.companyId, legalName: row.legalName, billingContactEmail: row.billingContactEmail, street: row.street, postalCode: row.postalCode, city: row.city, countryCode: row.countryCode, uid: row.uid, vatNumber: row.vatNumber, version: row.version }),
+    findExisting: () =>
+      transaction.companyBillingProfile.findUnique({ where: { id } }),
+    create: () =>
+      transaction.companyBillingProfile.create({
+        data: { ...expected, createdAt: addDays(anchorAt, -150) },
+      }),
+    project: (row) => ({
+      id: row.id,
+      companyId: row.companyId,
+      legalName: row.legalName,
+      billingContactEmail: row.billingContactEmail,
+      street: row.street,
+      postalCode: row.postalCode,
+      city: row.city,
+      countryCode: row.countryCode,
+      uid: row.uid,
+      vatNumber: row.vatNumber,
+      version: row.version,
+    }),
     expected,
   });
 }
@@ -1030,18 +1235,27 @@ async function seedCompanyClaims(
   transaction: SeedTransaction,
   anchorAt: Date,
 ): Promise<void> {
-  const requester = DEMO_ACCOUNT_FIXTURES.find((account) => account.email === "employer@demo.ch");
-  const admin = DEMO_ACCOUNT_FIXTURES.find((account) => account.role === "ADMIN");
+  const requester = DEMO_ACCOUNT_FIXTURES.find(
+    (account) => account.email === "employer@demo.ch",
+  );
+  const admin = DEMO_ACCOUNT_FIXTURES.find(
+    (account) => account.role === "ADMIN",
+  );
   const pendingTarget = COMPANY_FIXTURES[0];
   const rejectedTarget = COMPANY_FIXTURES[1];
-  if (!requester || !admin || !pendingTarget || !rejectedTarget) throw new Error("Claim fixtures are incomplete.");
+  if (!requester || !admin || !pendingTarget || !rejectedTarget)
+    throw new Error("Claim fixtures are incomplete.");
   await ensureClaim(transaction, {
     key: "pending-duplicate-demo",
     requesterId: requester.id,
     companyId: pendingTarget.id,
     status: "PENDING",
     reviewedAt: null,
-    matchSignals: { provenance: "DEMO", scenario: "duplicate-company-name", confidence: "insufficient" },
+    matchSignals: {
+      provenance: "DEMO",
+      scenario: "duplicate-company-name",
+      confidence: "insufficient",
+    },
     events: ["CREATED"],
     actorId: requester.id,
     anchorAt: addDays(anchorAt, -20),
@@ -1052,7 +1266,11 @@ async function seedCompanyClaims(
     companyId: rejectedTarget.id,
     status: "REJECTED",
     reviewedAt: addDays(anchorAt, -12),
-    matchSignals: { provenance: "DEMO", scenario: "domain-mismatch", confidence: "reviewed" },
+    matchSignals: {
+      provenance: "DEMO",
+      scenario: "domain-mismatch",
+      confidence: "reviewed",
+    },
     events: ["CREATED", "REJECTED"],
     actorId: admin.id,
     anchorAt: addDays(anchorAt, -15),
@@ -1077,22 +1295,83 @@ async function ensureClaim(
   await createOrVerifySeedRecord({
     entity: "CompanyClaimRequest",
     naturalKey: input.key,
-    findExisting: () => transaction.companyClaimRequest.findUnique({ where: { id } }),
-    create: () => transaction.companyClaimRequest.create({ data: { id, requesterEmployerUserId: input.requesterId, candidateCompanyId: input.companyId, requestedRole: "OWNER", matchSignals: input.matchSignals as Prisma.InputJsonValue, evidenceSummary: "Fiktive Signale für einen klar gekennzeichneten Demo-Prüffall.", status: input.status, idempotencyKey: `seed:${input.key}`, reviewedAt: input.reviewedAt, createdAt: input.anchorAt } }),
-    project: (row) => ({ id: row.id, requesterEmployerUserId: row.requesterEmployerUserId, candidateCompanyId: row.candidateCompanyId, requestedRole: row.requestedRole, approvedRole: row.approvedRole, matchSignals: row.matchSignals as CanonicalJsonValue, evidenceSummary: row.evidenceSummary, status: row.status, idempotencyKey: row.idempotencyKey, reviewedAt: iso(row.reviewedAt) }),
-    expected: { id, requesterEmployerUserId: input.requesterId, candidateCompanyId: input.companyId, requestedRole: "OWNER", approvedRole: null, matchSignals: input.matchSignals, evidenceSummary: "Fiktive Signale für einen klar gekennzeichneten Demo-Prüffall.", status: input.status, idempotencyKey: `seed:${input.key}`, reviewedAt: iso(input.reviewedAt) },
+    findExisting: () =>
+      transaction.companyClaimRequest.findUnique({ where: { id } }),
+    create: () =>
+      transaction.companyClaimRequest.create({
+        data: {
+          id,
+          requesterEmployerUserId: input.requesterId,
+          candidateCompanyId: input.companyId,
+          requestedRole: "OWNER",
+          matchSignals: input.matchSignals as Prisma.InputJsonValue,
+          evidenceSummary:
+            "Fiktive Signale für einen klar gekennzeichneten Demo-Prüffall.",
+          status: input.status,
+          idempotencyKey: `seed:${input.key}`,
+          reviewedAt: input.reviewedAt,
+          createdAt: input.anchorAt,
+        },
+      }),
+    project: (row) => ({
+      id: row.id,
+      requesterEmployerUserId: row.requesterEmployerUserId,
+      candidateCompanyId: row.candidateCompanyId,
+      requestedRole: row.requestedRole,
+      approvedRole: row.approvedRole,
+      matchSignals: row.matchSignals as CanonicalJsonValue,
+      evidenceSummary: row.evidenceSummary,
+      status: row.status,
+      idempotencyKey: row.idempotencyKey,
+      reviewedAt: iso(row.reviewedAt),
+    }),
+    expected: {
+      id,
+      requesterEmployerUserId: input.requesterId,
+      candidateCompanyId: input.companyId,
+      requestedRole: "OWNER",
+      approvedRole: null,
+      matchSignals: input.matchSignals,
+      evidenceSummary:
+        "Fiktive Signale für einen klar gekennzeichneten Demo-Prüffall.",
+      status: input.status,
+      idempotencyKey: `seed:${input.key}`,
+      reviewedAt: iso(input.reviewedAt),
+    },
   });
   for (const [index, kind] of input.events.entries()) {
     const naturalKey = `${input.key}:${kind.toLowerCase()}`;
     const eventId = stableSeedId("company-claim-event", naturalKey);
     const createdAt = addDays(input.anchorAt, index * 2);
-    const expected = { id: eventId, claimRequestId: id, kind, actorUserId: input.actorId, reasonCode: `DEMO_${kind}`, evidenceRef: null, correlationId: `seed-claim-${input.key}`, createdAt: createdAt.toISOString() };
+    const expected = {
+      id: eventId,
+      claimRequestId: id,
+      kind,
+      actorUserId: input.actorId,
+      reasonCode: `DEMO_${kind}`,
+      evidenceRef: null,
+      correlationId: `seed-claim-${input.key}`,
+      createdAt: createdAt.toISOString(),
+    };
     await createOrVerifySeedRecord({
       entity: "CompanyClaimEvent",
       naturalKey,
-      findExisting: () => transaction.companyClaimEvent.findUnique({ where: { id: eventId } }),
-      create: () => transaction.companyClaimEvent.create({ data: { ...expected, createdAt } }),
-      project: (row) => ({ id: row.id, claimRequestId: row.claimRequestId, kind: row.kind, actorUserId: row.actorUserId, reasonCode: row.reasonCode, evidenceRef: row.evidenceRef, correlationId: row.correlationId, createdAt: row.createdAt.toISOString() }),
+      findExisting: () =>
+        transaction.companyClaimEvent.findUnique({ where: { id: eventId } }),
+      create: () =>
+        transaction.companyClaimEvent.create({
+          data: { ...expected, createdAt },
+        }),
+      project: (row) => ({
+        id: row.id,
+        claimRequestId: row.claimRequestId,
+        kind: row.kind,
+        actorUserId: row.actorUserId,
+        reasonCode: row.reasonCode,
+        evidenceRef: row.evidenceRef,
+        correlationId: row.correlationId,
+        createdAt: row.createdAt.toISOString(),
+      }),
       expected,
     });
   }
@@ -1105,16 +1384,35 @@ type OccupationContract = Readonly<{
   referenceUrlSnapshot: string | null;
   sourceSnapshot: string;
   disclaimer: string;
-  codes: ReadonlyMap<string, Readonly<{ id: string; code: string; label: string; result: "REQUIRES_REPORTING" | "NOT_REQUIRED" | "UNKNOWN" }>>;
+  codes: ReadonlyMap<
+    string,
+    Readonly<{
+      id: string;
+      code: string;
+      label: string;
+      result: "REQUIRES_REPORTING" | "NOT_REQUIRED" | "UNKNOWN";
+    }>
+  >;
 }>;
 
-async function loadOccupationContract(database: PrismaClient): Promise<OccupationContract> {
+async function loadOccupationContract(
+  database: PrismaClient,
+): Promise<OccupationContract> {
   const version = await database.occupationCodeVersion.findFirst({
-    where: { datasetKey: OCCUPATION_CODES_2026_FIXTURE.datasetKey, version: OCCUPATION_CODES_2026_FIXTURE.datasetVersion },
+    where: {
+      datasetKey: OCCUPATION_CODES_2026_FIXTURE.datasetKey,
+      version: OCCUPATION_CODES_2026_FIXTURE.datasetVersion,
+    },
     include: { codes: true },
   });
-  if (!version || version.codes.length !== 40 || version.disclaimer !== OCCUPATION_CODES_2026_FIXTURE.disclaimer) {
-    throw new Error("The reviewed 40-code Jobroom reference fixture must be seeded first.");
+  if (
+    !version ||
+    version.codes.length !== 40 ||
+    version.disclaimer !== OCCUPATION_CODES_2026_FIXTURE.disclaimer
+  ) {
+    throw new Error(
+      "The reviewed 40-code Jobroom reference fixture must be seeded first.",
+    );
   }
   return Object.freeze({
     versionId: version.id,
@@ -1123,7 +1421,17 @@ async function loadOccupationContract(database: PrismaClient): Promise<Occupatio
     referenceUrlSnapshot: version.referenceUrl,
     sourceSnapshot: `${version.source} | ${version.referenceUrl ?? "no-reference-url"}`,
     disclaimer: version.disclaimer,
-    codes: new Map(version.codes.map((code) => [code.code, Object.freeze({ id: code.id, code: code.code, label: code.label, result: code.result })])),
+    codes: new Map(
+      version.codes.map((code) => [
+        code.code,
+        Object.freeze({
+          id: code.id,
+          code: code.code,
+          label: code.label,
+          result: code.result,
+        }),
+      ]),
+    ),
   });
 }
 
@@ -1133,16 +1441,41 @@ async function seedJob(
   anchorAt: Date,
   occupation: OccupationContract,
 ): Promise<void> {
-  const company = COMPANY_FIXTURES.find((entry) => entry.id === fixture.companyId);
-  const admin = DEMO_ACCOUNT_FIXTURES.find((account) => account.role === "ADMIN");
-  if (!company || !admin) throw new Error(`Job dependencies are missing for ${fixture.slug}.`);
-  const jobCore = { id: fixture.id, companyId: fixture.companyId, slug: fixture.slug, origin: "MANUAL" as const, sourceReference: `seed:phase-05:${fixture.slug}`, dataProvenance: "DEMO" as const, createdByUserId: company.ownerUserId, createdAt: new Date(fixture.createdAt) };
+  const company = COMPANY_FIXTURES.find(
+    (entry) => entry.id === fixture.companyId,
+  );
+  const admin = DEMO_ACCOUNT_FIXTURES.find(
+    (account) => account.role === "ADMIN",
+  );
+  if (!company || !admin)
+    throw new Error(`Job dependencies are missing for ${fixture.slug}.`);
+  const jobCore = {
+    id: fixture.id,
+    companyId: fixture.companyId,
+    slug: fixture.slug,
+    origin: "MANUAL" as const,
+    sourceReference: `seed:phase-05:${fixture.slug}`,
+    dataProvenance: "DEMO" as const,
+    createdByUserId: company.ownerUserId,
+    createdAt: new Date(fixture.createdAt),
+  };
   await createOrVerifySeedRecord({
     entity: "Job",
     naturalKey: fixture.slug,
-    findExisting: () => transaction.job.findUnique({ where: { id: fixture.id } }),
-    create: () => transaction.job.create({ data: { ...jobCore, status: "DRAFT" } }),
-    project: (row) => ({ id: row.id, companyId: row.companyId, slug: row.slug, origin: row.origin, sourceReference: row.sourceReference, dataProvenance: row.dataProvenance, createdByUserId: row.createdByUserId, createdAt: row.createdAt.toISOString() }),
+    findExisting: () =>
+      transaction.job.findUnique({ where: { id: fixture.id } }),
+    create: () =>
+      transaction.job.create({ data: { ...jobCore, status: "DRAFT" } }),
+    project: (row) => ({
+      id: row.id,
+      companyId: row.companyId,
+      slug: row.slug,
+      origin: row.origin,
+      sourceReference: row.sourceReference,
+      dataProvenance: row.dataProvenance,
+      createdByUserId: row.createdByUserId,
+      createdAt: row.createdAt.toISOString(),
+    }),
     expected: { ...jobCore, createdAt: jobCore.createdAt.toISOString() },
   });
 
@@ -1150,9 +1483,219 @@ async function seedJob(
   await ensureRevisionChildren(transaction, fixture);
   await ensureJobRevisionLifecycle(transaction, fixture);
   await ensureJobScore(transaction, fixture);
-  await ensureJobReporting(transaction, fixture, admin.id, anchorAt, occupation);
+  await ensureJobReporting(
+    transaction,
+    fixture,
+    admin.id,
+    anchorAt,
+    occupation,
+  );
   await ensureJobEvents(transaction, fixture, company.ownerUserId, admin.id);
   await ensureJobFinalState(transaction, fixture);
+  await ensureJobFreshness(transaction, fixture, company.ownerUserId);
+}
+
+async function ensureJobFreshness(
+  transaction: SeedTransaction,
+  fixture: JobFixture,
+  ownerUserId: string,
+): Promise<void> {
+  if (fixture.status !== "PUBLISHED" || fixture.publishedAt === null) return;
+  const publishedAt = new Date(fixture.publishedAt);
+  const expiresAt = new Date(fixture.validThrough);
+  const schedule = calculateJobFreshnessScheduleV1(publishedAt, expiresAt);
+  const projectionExpected = {
+    jobId: fixture.id,
+    policyVersion: JOB_FRESHNESS_POLICY_V1.version,
+    state: "ACTIVE",
+    publishedAt: publishedAt.toISOString(),
+    lastConfirmedAt: publishedAt.toISOString(),
+    dueAt: schedule.dueAt.toISOString(),
+    reminder7At: schedule.reminder7At.toISOString(),
+    reminder24At: schedule.reminder24At.toISOString(),
+    reminder7SentAt: null,
+    reminder24SentAt: null,
+    reviewDueAt: null,
+    enforceAt: publishedAt.toISOString(),
+    version: 1,
+  } as const;
+  const existingProjection =
+    await transaction.jobFreshnessProjection.findUnique({
+      where: { jobId: fixture.id },
+    });
+  if (existingProjection === null) {
+    await createOrVerifySeedRecord({
+      entity: "JobFreshnessProjection",
+      naturalKey: fixture.slug,
+      findExisting: () =>
+        transaction.jobFreshnessProjection.findUnique({
+          where: { jobId: fixture.id },
+        }),
+      create: () =>
+        transaction.jobFreshnessProjection.create({
+          data: {
+            ...projectionExpected,
+            publishedAt,
+            lastConfirmedAt: publishedAt,
+            dueAt: schedule.dueAt,
+            reminder7At: schedule.reminder7At,
+            reminder24At: schedule.reminder24At,
+            enforceAt: publishedAt,
+            updatedAt: publishedAt,
+          },
+        }),
+      project: projectSeedJobFreshnessProjection,
+      expected: projectionExpected,
+    });
+  } else {
+    const actual = projectSeedJobFreshnessProjection(existingProjection);
+    const migrationCohortIsSafe =
+      actual.enforceAt >= projectionExpected.publishedAt;
+    if (
+      JSON.stringify({
+        ...actual,
+        enforceAt: projectionExpected.enforceAt,
+      }) !== JSON.stringify(projectionExpected) ||
+      !migrationCohortIsSafe
+    ) {
+      throw new SeedDataDriftError("JobFreshnessProjection", fixture.slug);
+    }
+  }
+
+  const eventId = stableSeedId(
+    "job-freshness-event",
+    `${fixture.slug}:published`,
+  );
+  const eventExpected = {
+    id: eventId,
+    jobId: fixture.id,
+    kind: "PUBLISHED",
+    fromState: null,
+    toState: "ACTIVE",
+    actorUserId: ownerUserId,
+    reasonCode: "DEMO_PUBLICATION_CONFIRMED",
+    idempotencyKey: `seed:freshness:published:${fixture.id}`,
+    correlationId: `seed-job-freshness-${fixture.slug}`,
+    createdAt: publishedAt.toISOString(),
+  } as const;
+  await createOrVerifySeedRecord({
+    entity: "JobFreshnessEvent",
+    naturalKey: `${fixture.slug}:published`,
+    findExisting: () =>
+      transaction.jobFreshnessEvent.findUnique({ where: { id: eventId } }),
+    create: () =>
+      transaction.jobFreshnessEvent.create({
+        data: { ...eventExpected, createdAt: publishedAt },
+      }),
+    project: (row) => ({
+      id: row.id,
+      jobId: row.jobId,
+      kind: row.kind,
+      fromState: row.fromState,
+      toState: row.toState,
+      actorUserId: row.actorUserId,
+      reasonCode: row.reasonCode,
+      idempotencyKey: row.idempotencyKey,
+      correlationId: row.correlationId,
+      createdAt: row.createdAt.toISOString(),
+    }),
+    expected: eventExpected,
+  });
+
+  const fingerprint = buildPublicationFingerprintV1({
+    title: fixture.title,
+    description: fixture.description,
+    tasks: fixture.tasks,
+    requirements: fixture.requirements,
+    offer: null,
+    categoryId: fixture.categoryId,
+    cantonId: fixture.cantonId,
+    cityId: fixture.cityId,
+    workloadMin: fixture.workloadMin,
+    workloadMax: fixture.workloadMax,
+    jobType: fixture.jobType,
+    remoteType: fixture.remoteType,
+  });
+  const fingerprintId = stableSeedId(
+    "job-publication-fingerprint",
+    fixture.slug,
+  );
+  const sourceScope = buildJobPublicationSourceScopeV1({
+    origin: "MANUAL",
+    importSourceId: null,
+  });
+  const fingerprintExpected = {
+    id: fingerprintId,
+    jobId: fixture.id,
+    companyId: fixture.companyId,
+    sourceScope,
+    exactFingerprint: fingerprint.exactFingerprint,
+    signatureTokens: [...fingerprint.signatureTokens],
+    active: true,
+    createdAt: publishedAt.toISOString(),
+  } as const;
+  await createOrVerifySeedRecord({
+    entity: "JobPublicationFingerprint",
+    naturalKey: fixture.slug,
+    findExisting: () =>
+      transaction.jobPublicationFingerprint.findUnique({
+        where: { id: fingerprintId },
+      }),
+    create: () =>
+      transaction.jobPublicationFingerprint.create({
+        data: {
+          ...fingerprintExpected,
+          signatureTokens: [...fingerprintExpected.signatureTokens],
+          createdAt: publishedAt,
+          updatedAt: publishedAt,
+        },
+      }),
+    project: (row) => ({
+      id: row.id,
+      jobId: row.jobId,
+      companyId: row.companyId,
+      sourceScope: row.sourceScope,
+      exactFingerprint: row.exactFingerprint,
+      signatureTokens: row.signatureTokens,
+      active: row.active,
+      createdAt: row.createdAt.toISOString(),
+    }),
+    expected: fingerprintExpected,
+  });
+}
+
+function projectSeedJobFreshnessProjection(
+  row: Readonly<{
+    jobId: string;
+    policyVersion: string;
+    state: string;
+    publishedAt: Date;
+    lastConfirmedAt: Date;
+    dueAt: Date;
+    reminder7At: Date;
+    reminder24At: Date;
+    reminder7SentAt: Date | null;
+    reminder24SentAt: Date | null;
+    reviewDueAt: Date | null;
+    enforceAt: Date;
+    version: number;
+  }>,
+) {
+  return {
+    jobId: row.jobId,
+    policyVersion: row.policyVersion,
+    state: row.state,
+    publishedAt: row.publishedAt.toISOString(),
+    lastConfirmedAt: row.lastConfirmedAt.toISOString(),
+    dueAt: row.dueAt.toISOString(),
+    reminder7At: row.reminder7At.toISOString(),
+    reminder24At: row.reminder24At.toISOString(),
+    reminder7SentAt: iso(row.reminder7SentAt),
+    reminder24SentAt: iso(row.reminder24SentAt),
+    reviewDueAt: iso(row.reviewDueAt),
+    enforceAt: row.enforceAt.toISOString(),
+    version: row.version,
+  };
 }
 
 async function ensureJobRevision(
@@ -1198,26 +1741,68 @@ async function ensureJobRevision(
   const result = await createOrVerifySeedRecord({
     entity: "JobRevision",
     naturalKey: `${fixture.slug}:1`,
-    findExisting: () => transaction.jobRevision.findUnique({ where: { id: fixture.revisionId } }),
-    create: () => transaction.jobRevision.create({ data: {
-      ...contentExpected,
-      tasks: [...fixture.tasks],
-      requirements: [...fixture.requirements],
-      applicationProcessSteps: [...fixture.applicationProcessSteps],
-      requiredDocumentKinds: [...fixture.requiredDocumentKinds],
-      startDate: new Date(contentExpected.startDate),
-      validThrough: new Date(contentExpected.validThrough),
-      submittedAt: null,
-      approvedAt: null,
-      rejectedAt: null,
-      createdAt: new Date(contentExpected.createdAt),
-    } }),
-    project: (row) => ({ id: row.id, jobId: row.jobId, revisionNumber: row.revisionNumber, contentLanguage: row.contentLanguage, title: row.title, description: row.description, tasks: row.tasks, requirements: row.requirements, applicationProcessSteps: row.applicationProcessSteps, requiredDocumentKinds: row.requiredDocumentKinds, jobType: row.jobType, remoteType: row.remoteType, remoteCountryCode: row.remoteCountryCode, categoryId: row.categoryId, cantonId: row.cantonId, cityId: row.cityId, locationLabel: row.locationLabel, workloadMin: row.workloadMin, workloadMax: row.workloadMax, salaryPeriod: row.salaryPeriod, salaryMin: row.salaryMin, salaryMax: row.salaryMax, startDate: iso(row.startDate), startByArrangement: row.startByArrangement, validThrough: iso(row.validThrough), responseTargetDays: row.responseTargetDays, applicationEffort: row.applicationEffort, inclusionStatement: row.inclusionStatement, applicationContactKind: row.applicationContactKind, applicationContactValue: row.applicationContactValue, authoredByUserId: row.authoredByUserId, contentChecksum: row.contentChecksum, createdAt: row.createdAt.toISOString() }),
+    findExisting: () =>
+      transaction.jobRevision.findUnique({ where: { id: fixture.revisionId } }),
+    create: () =>
+      transaction.jobRevision.create({
+        data: {
+          ...contentExpected,
+          tasks: [...fixture.tasks],
+          requirements: [...fixture.requirements],
+          applicationProcessSteps: [...fixture.applicationProcessSteps],
+          requiredDocumentKinds: [...fixture.requiredDocumentKinds],
+          startDate: new Date(contentExpected.startDate),
+          validThrough: new Date(contentExpected.validThrough),
+          submittedAt: null,
+          approvedAt: null,
+          rejectedAt: null,
+          createdAt: new Date(contentExpected.createdAt),
+        },
+      }),
+    project: (row) => ({
+      id: row.id,
+      jobId: row.jobId,
+      revisionNumber: row.revisionNumber,
+      contentLanguage: row.contentLanguage,
+      title: row.title,
+      description: row.description,
+      tasks: row.tasks,
+      requirements: row.requirements,
+      applicationProcessSteps: row.applicationProcessSteps,
+      requiredDocumentKinds: row.requiredDocumentKinds,
+      jobType: row.jobType,
+      remoteType: row.remoteType,
+      remoteCountryCode: row.remoteCountryCode,
+      categoryId: row.categoryId,
+      cantonId: row.cantonId,
+      cityId: row.cityId,
+      locationLabel: row.locationLabel,
+      workloadMin: row.workloadMin,
+      workloadMax: row.workloadMax,
+      salaryPeriod: row.salaryPeriod,
+      salaryMin: row.salaryMin,
+      salaryMax: row.salaryMax,
+      startDate: iso(row.startDate),
+      startByArrangement: row.startByArrangement,
+      validThrough: iso(row.validThrough),
+      responseTargetDays: row.responseTargetDays,
+      applicationEffort: row.applicationEffort,
+      inclusionStatement: row.inclusionStatement,
+      applicationContactKind: row.applicationContactKind,
+      applicationContactValue: row.applicationContactValue,
+      authoredByUserId: row.authoredByUserId,
+      contentChecksum: row.contentChecksum,
+      createdAt: row.createdAt.toISOString(),
+    }),
     expected: contentExpected,
   });
   const lifecycle = projectRevisionLifecycle(result.record);
   const expectedLifecycle = expectedRevisionLifecycle(fixture);
-  const draftLifecycle = { submittedAt: null, approvedAt: null, rejectedAt: null };
+  const draftLifecycle = {
+    submittedAt: null,
+    approvedAt: null,
+    rejectedAt: null,
+  };
   if (
     JSON.stringify(lifecycle) !== JSON.stringify(draftLifecycle) &&
     JSON.stringify(lifecycle) !== JSON.stringify(expectedLifecycle)
@@ -1234,9 +1819,15 @@ async function ensureJobRevisionLifecycle(
     where: { id: fixture.revisionId },
   });
   const expected = expectedRevisionLifecycle(fixture);
-  if (JSON.stringify(projectRevisionLifecycle(revision)) !== JSON.stringify(expected)) {
+  if (
+    JSON.stringify(projectRevisionLifecycle(revision)) !==
+    JSON.stringify(expected)
+  ) {
     const draft = { submittedAt: null, approvedAt: null, rejectedAt: null };
-    if (JSON.stringify(projectRevisionLifecycle(revision)) !== JSON.stringify(draft)) {
+    if (
+      JSON.stringify(projectRevisionLifecycle(revision)) !==
+      JSON.stringify(draft)
+    ) {
       throw new SeedDataDriftError("JobRevision", `${fixture.slug}:1`);
     }
     const submittedAt = dateOrNull(fixture.submittedAt);
@@ -1256,16 +1847,21 @@ async function ensureJobRevisionLifecycle(
       });
     }
   }
-  if (JSON.stringify(projectRevisionLifecycle(revision)) !== JSON.stringify(expected)) {
+  if (
+    JSON.stringify(projectRevisionLifecycle(revision)) !==
+    JSON.stringify(expected)
+  ) {
     throw new SeedDataDriftError("JobRevision", `${fixture.slug}:1`);
   }
 }
 
-function projectRevisionLifecycle(row: Readonly<{
-  submittedAt: Date | null;
-  approvedAt: Date | null;
-  rejectedAt: Date | null;
-}>) {
+function projectRevisionLifecycle(
+  row: Readonly<{
+    submittedAt: Date | null;
+    approvedAt: Date | null;
+    rejectedAt: Date | null;
+  }>,
+) {
   return {
     submittedAt: iso(row.submittedAt),
     approvedAt: iso(row.approvedAt),
@@ -1281,31 +1877,140 @@ function expectedRevisionLifecycle(fixture: JobFixture) {
   };
 }
 
-async function ensureRevisionChildren(transaction: SeedTransaction, fixture: JobFixture): Promise<void> {
+async function ensureRevisionChildren(
+  transaction: SeedTransaction,
+  fixture: JobFixture,
+): Promise<void> {
   for (const benefit of fixture.benefits) {
-    const expected = { id: benefit.id, jobRevisionId: fixture.revisionId, benefitCode: benefit.benefitCode, description: benefit.description, sortOrder: benefit.sortOrder };
-    await createOrVerifySeedRecord({ entity: "JobRevisionBenefit", naturalKey: `${fixture.slug}:${benefit.benefitCode}`, findExisting: () => transaction.jobRevisionBenefit.findUnique({ where: { id: benefit.id } }), create: () => transaction.jobRevisionBenefit.create({ data: expected }), project: (row) => ({ id: row.id, jobRevisionId: row.jobRevisionId, benefitCode: row.benefitCode, description: row.description, sortOrder: row.sortOrder }), expected });
+    const expected = {
+      id: benefit.id,
+      jobRevisionId: fixture.revisionId,
+      benefitCode: benefit.benefitCode,
+      description: benefit.description,
+      sortOrder: benefit.sortOrder,
+    };
+    await createOrVerifySeedRecord({
+      entity: "JobRevisionBenefit",
+      naturalKey: `${fixture.slug}:${benefit.benefitCode}`,
+      findExisting: () =>
+        transaction.jobRevisionBenefit.findUnique({
+          where: { id: benefit.id },
+        }),
+      create: () => transaction.jobRevisionBenefit.create({ data: expected }),
+      project: (row) => ({
+        id: row.id,
+        jobRevisionId: row.jobRevisionId,
+        benefitCode: row.benefitCode,
+        description: row.description,
+        sortOrder: row.sortOrder,
+      }),
+      expected,
+    });
   }
   for (const [index, skillId] of fixture.skillIds.entries()) {
     const slot = index + 1;
-    const id = stableSeedId("job-revision-skill", `${fixture.slug}:skill:${slot}`);
-    const expected = { id, jobRevisionId: fixture.revisionId, skillId, required: index === 0 };
-    await createOrVerifySeedRecord({ entity: "JobRevisionSkill", naturalKey: `${fixture.slug}:skill:${slot}`, findExisting: () => transaction.jobRevisionSkill.findUnique({ where: { id } }), create: () => transaction.jobRevisionSkill.create({ data: expected }), project: (row) => ({ id: row.id, jobRevisionId: row.jobRevisionId, skillId: row.skillId, required: row.required }), expected });
+    const id = stableSeedId(
+      "job-revision-skill",
+      `${fixture.slug}:skill:${slot}`,
+    );
+    const expected = {
+      id,
+      jobRevisionId: fixture.revisionId,
+      skillId,
+      required: index === 0,
+    };
+    await createOrVerifySeedRecord({
+      entity: "JobRevisionSkill",
+      naturalKey: `${fixture.slug}:skill:${slot}`,
+      findExisting: () =>
+        transaction.jobRevisionSkill.findUnique({ where: { id } }),
+      create: () => transaction.jobRevisionSkill.create({ data: expected }),
+      project: (row) => ({
+        id: row.id,
+        jobRevisionId: row.jobRevisionId,
+        skillId: row.skillId,
+        required: row.required,
+      }),
+      expected,
+    });
   }
   for (const [index, code] of fixture.languageCodes.entries()) {
     const slot = index === 0 ? "primary" : "secondary";
-    const id = stableSeedId("job-revision-language", `${fixture.slug}:language:${slot}`);
-    const expected = { id, jobRevisionId: fixture.revisionId, code, minLevel: index === 0 ? ("B2" as const) : ("B1" as const) };
-    await createOrVerifySeedRecord({ entity: "JobRevisionLanguage", naturalKey: `${fixture.slug}:language:${slot}`, findExisting: () => transaction.jobRevisionLanguage.findUnique({ where: { id } }), create: () => transaction.jobRevisionLanguage.create({ data: expected }), project: (row) => ({ id: row.id, jobRevisionId: row.jobRevisionId, code: row.code, minLevel: row.minLevel }), expected });
+    const id = stableSeedId(
+      "job-revision-language",
+      `${fixture.slug}:language:${slot}`,
+    );
+    const expected = {
+      id,
+      jobRevisionId: fixture.revisionId,
+      code,
+      minLevel: index === 0 ? ("B2" as const) : ("B1" as const),
+    };
+    await createOrVerifySeedRecord({
+      entity: "JobRevisionLanguage",
+      naturalKey: `${fixture.slug}:language:${slot}`,
+      findExisting: () =>
+        transaction.jobRevisionLanguage.findUnique({ where: { id } }),
+      create: () => transaction.jobRevisionLanguage.create({ data: expected }),
+      project: (row) => ({
+        id: row.id,
+        jobRevisionId: row.jobRevisionId,
+        code: row.code,
+        minLevel: row.minLevel,
+      }),
+      expected,
+    });
   }
 }
 
-async function ensureJobScore(transaction: SeedTransaction, fixture: JobFixture): Promise<void> {
+async function ensureJobScore(
+  transaction: SeedTransaction,
+  fixture: JobFixture,
+): Promise<void> {
   const snapshot = fixture.scoreSnapshot;
   if (!snapshot) return;
   const id = stableSeedId("job-score-snapshot", `${fixture.slug}:v2`);
-  const expected = { id, jobRevisionId: fixture.revisionId, scoreVersion: snapshot.scoreVersion, scorePoints: snapshot.scorePoints, maxPoints: snapshot.maxPoints, inputSnapshot: snapshot.inputSnapshot as unknown as CanonicalJsonValue, evidence: snapshot.evidence as unknown as CanonicalJsonValue, factorBreakdown: snapshot.factorBreakdown as unknown as CanonicalJsonValue, evidenceHash: snapshot.evidenceHash, calculatedAt: snapshot.calculatedAt.toISOString() };
-  await createOrVerifySeedRecord({ entity: "JobScoreSnapshot", naturalKey: `${fixture.slug}:v2`, findExisting: () => transaction.jobScoreSnapshot.findUnique({ where: { id } }), create: () => transaction.jobScoreSnapshot.create({ data: { ...expected, inputSnapshot: expected.inputSnapshot as Prisma.InputJsonValue, evidence: expected.evidence as Prisma.InputJsonValue, factorBreakdown: expected.factorBreakdown as Prisma.InputJsonValue, calculatedAt: snapshot.calculatedAt } }), project: (row) => ({ id: row.id, jobRevisionId: row.jobRevisionId, scoreVersion: row.scoreVersion, scorePoints: row.scorePoints, maxPoints: row.maxPoints, inputSnapshot: row.inputSnapshot as CanonicalJsonValue, evidence: row.evidence as CanonicalJsonValue, factorBreakdown: row.factorBreakdown as CanonicalJsonValue, evidenceHash: row.evidenceHash, calculatedAt: row.calculatedAt.toISOString() }), expected });
+  const expected = {
+    id,
+    jobRevisionId: fixture.revisionId,
+    scoreVersion: snapshot.scoreVersion,
+    scorePoints: snapshot.scorePoints,
+    maxPoints: snapshot.maxPoints,
+    inputSnapshot: snapshot.inputSnapshot as unknown as CanonicalJsonValue,
+    evidence: snapshot.evidence as unknown as CanonicalJsonValue,
+    factorBreakdown: snapshot.factorBreakdown as unknown as CanonicalJsonValue,
+    evidenceHash: snapshot.evidenceHash,
+    calculatedAt: snapshot.calculatedAt.toISOString(),
+  };
+  await createOrVerifySeedRecord({
+    entity: "JobScoreSnapshot",
+    naturalKey: `${fixture.slug}:v2`,
+    findExisting: () =>
+      transaction.jobScoreSnapshot.findUnique({ where: { id } }),
+    create: () =>
+      transaction.jobScoreSnapshot.create({
+        data: {
+          ...expected,
+          inputSnapshot: expected.inputSnapshot as Prisma.InputJsonValue,
+          evidence: expected.evidence as Prisma.InputJsonValue,
+          factorBreakdown: expected.factorBreakdown as Prisma.InputJsonValue,
+          calculatedAt: snapshot.calculatedAt,
+        },
+      }),
+    project: (row) => ({
+      id: row.id,
+      jobRevisionId: row.jobRevisionId,
+      scoreVersion: row.scoreVersion,
+      scorePoints: row.scorePoints,
+      maxPoints: row.maxPoints,
+      inputSnapshot: row.inputSnapshot as CanonicalJsonValue,
+      evidence: row.evidence as CanonicalJsonValue,
+      factorBreakdown: row.factorBreakdown as CanonicalJsonValue,
+      evidenceHash: row.evidenceHash,
+      calculatedAt: row.calculatedAt.toISOString(),
+    }),
+    expected,
+  });
 }
 
 async function ensureJobReporting(
@@ -1316,12 +2021,64 @@ async function ensureJobReporting(
   contract: OccupationContract,
 ): Promise<void> {
   const code = contract.codes.get(fixture.occupationCode);
-  if (!code) throw new Error(`Occupation code ${fixture.occupationCode} is missing.`);
-  const id = stableSeedId("job-reporting-check", `${fixture.slug}:jobroom-2026`);
+  if (!code)
+    throw new Error(`Occupation code ${fixture.occupationCode} is missing.`);
+  const id = stableSeedId(
+    "job-reporting-check",
+    `${fixture.slug}:jobroom-2026`,
+  );
   const checkedAt = addDays(anchorAt, -5);
-  const reasonSnapshot = code.result === "REQUIRES_REPORTING" ? "Die fiktive Mock-Klassifikation markiert diese Berufsart als meldepflichtig." : code.result === "NOT_REQUIRED" ? "Die fiktive Mock-Klassifikation markiert diese Berufsart als nicht meldepflichtig." : "Die fiktive Mock-Klassifikation liefert bewusst kein eindeutiges Ergebnis; eine offizielle Prüfung bleibt nötig.";
-  const expected = { id, jobRevisionId: fixture.revisionId, occupationCodeVersionId: contract.versionId, occupationCodeId: code.id, occupationCodeSnapshot: code.code, occupationLabelSnapshot: code.label, result: code.result, reasonSnapshot, disclaimerSnapshot: contract.disclaimer, sourceSnapshot: contract.sourceSnapshot, datasetVersionSnapshot: contract.datasetVersionSnapshot, dataYearSnapshot: contract.dataYearSnapshot, referenceUrlSnapshot: contract.referenceUrlSnapshot, checkedByUserId: adminUserId, checkedAt: checkedAt.toISOString() };
-  await createOrVerifySeedRecord({ entity: "JobReportingCheck", naturalKey: `${fixture.slug}:jobroom-2026`, findExisting: () => transaction.jobReportingCheck.findUnique({ where: { id } }), create: () => transaction.jobReportingCheck.create({ data: { ...expected, checkedAt } }), project: (row) => ({ id: row.id, jobRevisionId: row.jobRevisionId, occupationCodeVersionId: row.occupationCodeVersionId, occupationCodeId: row.occupationCodeId, occupationCodeSnapshot: row.occupationCodeSnapshot, occupationLabelSnapshot: row.occupationLabelSnapshot, result: row.result, reasonSnapshot: row.reasonSnapshot, disclaimerSnapshot: row.disclaimerSnapshot, sourceSnapshot: row.sourceSnapshot, datasetVersionSnapshot: row.datasetVersionSnapshot, dataYearSnapshot: row.dataYearSnapshot, referenceUrlSnapshot: row.referenceUrlSnapshot, checkedByUserId: row.checkedByUserId, checkedAt: row.checkedAt.toISOString() }), expected });
+  const reasonSnapshot =
+    code.result === "REQUIRES_REPORTING"
+      ? "Die fiktive Mock-Klassifikation markiert diese Berufsart als meldepflichtig."
+      : code.result === "NOT_REQUIRED"
+        ? "Die fiktive Mock-Klassifikation markiert diese Berufsart als nicht meldepflichtig."
+        : "Die fiktive Mock-Klassifikation liefert bewusst kein eindeutiges Ergebnis; eine offizielle Prüfung bleibt nötig.";
+  const expected = {
+    id,
+    jobRevisionId: fixture.revisionId,
+    occupationCodeVersionId: contract.versionId,
+    occupationCodeId: code.id,
+    occupationCodeSnapshot: code.code,
+    occupationLabelSnapshot: code.label,
+    result: code.result,
+    reasonSnapshot,
+    disclaimerSnapshot: contract.disclaimer,
+    sourceSnapshot: contract.sourceSnapshot,
+    datasetVersionSnapshot: contract.datasetVersionSnapshot,
+    dataYearSnapshot: contract.dataYearSnapshot,
+    referenceUrlSnapshot: contract.referenceUrlSnapshot,
+    checkedByUserId: adminUserId,
+    checkedAt: checkedAt.toISOString(),
+  };
+  await createOrVerifySeedRecord({
+    entity: "JobReportingCheck",
+    naturalKey: `${fixture.slug}:jobroom-2026`,
+    findExisting: () =>
+      transaction.jobReportingCheck.findUnique({ where: { id } }),
+    create: () =>
+      transaction.jobReportingCheck.create({
+        data: { ...expected, checkedAt },
+      }),
+    project: (row) => ({
+      id: row.id,
+      jobRevisionId: row.jobRevisionId,
+      occupationCodeVersionId: row.occupationCodeVersionId,
+      occupationCodeId: row.occupationCodeId,
+      occupationCodeSnapshot: row.occupationCodeSnapshot,
+      occupationLabelSnapshot: row.occupationLabelSnapshot,
+      result: row.result,
+      reasonSnapshot: row.reasonSnapshot,
+      disclaimerSnapshot: row.disclaimerSnapshot,
+      sourceSnapshot: row.sourceSnapshot,
+      datasetVersionSnapshot: row.datasetVersionSnapshot,
+      dataYearSnapshot: row.dataYearSnapshot,
+      referenceUrlSnapshot: row.referenceUrlSnapshot,
+      checkedByUserId: row.checkedByUserId,
+      checkedAt: row.checkedAt.toISOString(),
+    }),
+    expected,
+  });
 }
 
 async function ensureJobEvents(
@@ -1331,13 +2088,62 @@ async function ensureJobEvents(
   adminUserId: string,
 ): Promise<void> {
   for (const event of fixture.statusEvents) {
-    const actorUserId = ["REVIEW_STARTED", "CHANGES_REQUESTED", "APPROVED", "REJECTED"].includes(event.kind) ? adminUserId : ownerUserId;
-    const expected = { id: event.id, jobId: fixture.id, jobRevisionId: fixture.revisionId, kind: event.kind, fromStatus: event.fromStatus, toStatus: event.toStatus, actorUserId, reasonCode: `DEMO_${event.kind}`, idempotencyKey: event.idempotencyKey, correlationId: `seed-job-${fixture.slug}`, createdAt: event.createdAt };
-    await createOrVerifySeedRecord({ entity: "JobStatusEvent", naturalKey: `${fixture.slug}:${event.kind.toLowerCase()}`, findExisting: () => transaction.jobStatusEvent.findUnique({ where: { id: event.id } }), create: () => transaction.jobStatusEvent.create({ data: { ...expected, kind: event.kind as Prisma.JobStatusEventCreateInput["kind"], createdAt: new Date(event.createdAt) } }), project: (row) => ({ id: row.id, jobId: row.jobId, jobRevisionId: row.jobRevisionId, kind: row.kind, fromStatus: row.fromStatus, toStatus: row.toStatus, actorUserId: row.actorUserId, reasonCode: row.reasonCode, idempotencyKey: row.idempotencyKey, correlationId: row.correlationId, createdAt: row.createdAt.toISOString() }), expected });
+    const actorUserId = [
+      "REVIEW_STARTED",
+      "CHANGES_REQUESTED",
+      "APPROVED",
+      "REJECTED",
+    ].includes(event.kind)
+      ? adminUserId
+      : ownerUserId;
+    const expected = {
+      id: event.id,
+      jobId: fixture.id,
+      jobRevisionId: fixture.revisionId,
+      kind: event.kind,
+      fromStatus: event.fromStatus,
+      toStatus: event.toStatus,
+      actorUserId,
+      reasonCode: `DEMO_${event.kind}`,
+      idempotencyKey: event.idempotencyKey,
+      correlationId: `seed-job-${fixture.slug}`,
+      createdAt: event.createdAt,
+    };
+    await createOrVerifySeedRecord({
+      entity: "JobStatusEvent",
+      naturalKey: `${fixture.slug}:${event.kind.toLowerCase()}`,
+      findExisting: () =>
+        transaction.jobStatusEvent.findUnique({ where: { id: event.id } }),
+      create: () =>
+        transaction.jobStatusEvent.create({
+          data: {
+            ...expected,
+            kind: event.kind as Prisma.JobStatusEventCreateInput["kind"],
+            createdAt: new Date(event.createdAt),
+          },
+        }),
+      project: (row) => ({
+        id: row.id,
+        jobId: row.jobId,
+        jobRevisionId: row.jobRevisionId,
+        kind: row.kind,
+        fromStatus: row.fromStatus,
+        toStatus: row.toStatus,
+        actorUserId: row.actorUserId,
+        reasonCode: row.reasonCode,
+        idempotencyKey: row.idempotencyKey,
+        correlationId: row.correlationId,
+        createdAt: row.createdAt.toISOString(),
+      }),
+      expected,
+    });
   }
 }
 
-async function ensureJobFinalState(transaction: SeedTransaction, fixture: JobFixture): Promise<void> {
+async function ensureJobFinalState(
+  transaction: SeedTransaction,
+  fixture: JobFixture,
+): Promise<void> {
   const released = wasPublished(fixture.status);
   const expected = {
     status: fixture.status,
@@ -1352,33 +2158,68 @@ async function ensureJobFinalState(transaction: SeedTransaction, fixture: JobFix
     publishedSalaryMin: released ? fixture.salaryMin : null,
     publishedSalaryMax: released ? fixture.salaryMax : null,
   } as const;
-  let job = await transaction.job.findUniqueOrThrow({ where: { id: fixture.id } });
+  let job = await transaction.job.findUniqueOrThrow({
+    where: { id: fixture.id },
+  });
   const actual = projectJobState(job);
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    if (job.status !== "DRAFT" || job.currentRevisionId !== null || job.publishedRevisionId !== null) {
+    if (
+      job.status !== "DRAFT" ||
+      job.currentRevisionId !== null ||
+      job.publishedRevisionId !== null
+    ) {
       throw new SeedDataDriftError("Job", fixture.slug);
     }
-    job = await transaction.job.update({ where: { id: fixture.id }, data: {
-      status: fixture.status,
-      currentRevisionId: fixture.revisionId,
-      publishedRevisionId: released ? fixture.revisionId : null,
-      publishedAt: released ? dateOrNull(fixture.publishedAt) : null,
-      expiresAt: released ? new Date(fixture.validThrough) : null,
-      publishedCategoryId: released ? fixture.categoryId : null,
-      publishedCantonId: released ? fixture.cantonId : null,
-      publishedCityId: released ? fixture.cityId : null,
-      publishedSalaryPeriod: released ? fixture.salaryPeriod : null,
-      publishedSalaryMin: released ? fixture.salaryMin : null,
-      publishedSalaryMax: released ? fixture.salaryMax : null,
-    } });
+    job = await transaction.job.update({
+      where: { id: fixture.id },
+      data: {
+        status: fixture.status,
+        currentRevisionId: fixture.revisionId,
+        publishedRevisionId: released ? fixture.revisionId : null,
+        publishedAt: released ? dateOrNull(fixture.publishedAt) : null,
+        expiresAt: released ? new Date(fixture.validThrough) : null,
+        publishedCategoryId: released ? fixture.categoryId : null,
+        publishedCantonId: released ? fixture.cantonId : null,
+        publishedCityId: released ? fixture.cityId : null,
+        publishedSalaryPeriod: released ? fixture.salaryPeriod : null,
+        publishedSalaryMin: released ? fixture.salaryMin : null,
+        publishedSalaryMax: released ? fixture.salaryMax : null,
+      },
+    });
   }
   if (JSON.stringify(projectJobState(job)) !== JSON.stringify(expected)) {
     throw new SeedDataDriftError("Job", fixture.slug);
   }
 }
 
-function projectJobState(row: Readonly<{ status: string; currentRevisionId: string | null; publishedRevisionId: string | null; publishedAt: Date | null; expiresAt: Date | null; publishedCategoryId: string | null; publishedCantonId: string | null; publishedCityId: string | null; publishedSalaryPeriod: string | null; publishedSalaryMin: number | null; publishedSalaryMax: number | null }>) {
-  return { status: row.status, currentRevisionId: row.currentRevisionId, publishedRevisionId: row.publishedRevisionId, publishedAt: iso(row.publishedAt), expiresAt: iso(row.expiresAt), publishedCategoryId: row.publishedCategoryId, publishedCantonId: row.publishedCantonId, publishedCityId: row.publishedCityId, publishedSalaryPeriod: row.publishedSalaryPeriod, publishedSalaryMin: row.publishedSalaryMin, publishedSalaryMax: row.publishedSalaryMax };
+function projectJobState(
+  row: Readonly<{
+    status: string;
+    currentRevisionId: string | null;
+    publishedRevisionId: string | null;
+    publishedAt: Date | null;
+    expiresAt: Date | null;
+    publishedCategoryId: string | null;
+    publishedCantonId: string | null;
+    publishedCityId: string | null;
+    publishedSalaryPeriod: string | null;
+    publishedSalaryMin: number | null;
+    publishedSalaryMax: number | null;
+  }>,
+) {
+  return {
+    status: row.status,
+    currentRevisionId: row.currentRevisionId,
+    publishedRevisionId: row.publishedRevisionId,
+    publishedAt: iso(row.publishedAt),
+    expiresAt: iso(row.expiresAt),
+    publishedCategoryId: row.publishedCategoryId,
+    publishedCantonId: row.publishedCantonId,
+    publishedCityId: row.publishedCityId,
+    publishedSalaryPeriod: row.publishedSalaryPeriod,
+    publishedSalaryMin: row.publishedSalaryMin,
+    publishedSalaryMax: row.publishedSalaryMax,
+  };
 }
 
 function wasPublished(status: DemoJobStatus): boolean {

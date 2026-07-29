@@ -19,9 +19,11 @@ import { reconcileDocumentObjects } from "@/lib/documents/reconciliation";
 import { scanDocumentVersion } from "@/lib/documents/vault-service";
 import { expireDueCompanyInvitations } from "@/lib/employer/team";
 import { syncJobStatusProjection } from "@/lib/jobs/effective-status";
+import { projectJobFreshness } from "@/lib/jobs/freshness";
 import { dispatchNotificationBatch } from "@/lib/notifications/dispatcher";
 import { resolvePersistedProviderActivation } from "@/lib/ops/operations-ledger";
 import { projectExpiredSecurityState } from "@/lib/security/security-expiry";
+import { measureAndPersistSitemapCapacity } from "@/lib/seo/sitemap-capacity-monitor";
 import {
   completeWorkItem,
   failWorkItem,
@@ -39,6 +41,7 @@ import {
 import { expireDueContactRequests } from "@/lib/talentradar/contact-requests";
 import { projectExpiredTrustCases } from "@/lib/trust-safety/case-service";
 import { processRecruitingReminderExpiry } from "@/lib/recruiting/reminder-worker";
+import { expireSearchLearningWorkingState } from "@/lib/search/learning";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const uuidSchema = z.uuid();
@@ -196,6 +199,26 @@ async function invokeHandler(
           correlationId,
           now,
         }),
+      );
+    case "jobs.freshness":
+      return digestSummary(
+        await projectJobFreshness({
+          database: dependencies.database,
+          correlationId,
+          now,
+        }),
+      );
+    case "seo.sitemap-capacity":
+      return digestSummary(
+        await measureAndPersistSitemapCapacity({
+          database: dependencies.database,
+          origin: dependencies.environment.APP_URL,
+          now,
+        }),
+      );
+    case "search.learning-expiry":
+      return digestSummary(
+        await expireSearchLearningWorkingState(dependencies.database, now),
       );
     case "employer.invitation-expiry":
       return digestSummary(

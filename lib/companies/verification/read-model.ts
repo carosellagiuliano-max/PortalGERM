@@ -49,52 +49,62 @@ export async function evaluateCompanyTrustForCompanies(
   const uniqueCompanyIds = [...new Set(companyIds)];
   if (uniqueCompanyIds.length === 0) return new Map();
   if (uniqueCompanyIds.length > 500) {
-    throw new RangeError("A company-trust read batch exceeded its safety bound.");
+    throw new RangeError(
+      "A company-trust read batch exceeded its safety bound.",
+    );
   }
   const now = options.now ?? new Date();
   const environment = options.environment ?? getServerEnvironment().APP_ENV;
   const activation =
     options.activation ?? companyTrustActivationFromEnvironment();
-  const [companies, containments] = await Promise.all([
-    database.company.findMany({
-      where: { id: { in: uniqueCompanyIds } },
-      select: COMPANY_TRUST_READ_SELECT,
-    }),
-    database.trustSafetyContainmentEffect.findMany({
-      where: {
-        targetType: "COMPANY",
-        targetId: { in: uniqueCompanyIds },
-        reversedAt: null,
-      },
-      select: { targetId: true },
-    }),
-  ]);
+  // This reader is frequently called inside an interactive RepeatableRead
+  // transaction. Prisma's PostgreSQL adapter owns one connection there and
+  // must not receive concurrent client.query calls. Two bounded sequential
+  // reads keep the snapshot stable and avoid driver-level fan-out.
+  const companies = await database.company.findMany({
+    where: { id: { in: uniqueCompanyIds } },
+    select: COMPANY_TRUST_READ_SELECT,
+  });
+  const containments = await database.trustSafetyContainmentEffect.findMany({
+    where: {
+      targetType: "COMPANY",
+      targetId: { in: uniqueCompanyIds },
+      reversedAt: null,
+    },
+    select: { targetId: true },
+  });
   const containedCompanyIds = new Set(
     containments.map((containment) => containment.targetId),
   );
   const results = new Map<string, CompanyTrustEvaluation>();
   for (const company of companies) {
-    results.set(company.id, evaluateCompanyTrust({
-      activation,
-      companyStatus: company.status,
-      environment,
-      hasActiveContainment: containedCompanyIds.has(company.id),
-      legacyVerifiedCycleCount: company.verificationRequests.length,
-      now,
-      projection: toProjectionSnapshot(company.trustProjections[0] ?? null),
-    }));
+    results.set(
+      company.id,
+      evaluateCompanyTrust({
+        activation,
+        companyStatus: company.status,
+        environment,
+        hasActiveContainment: containedCompanyIds.has(company.id),
+        legacyVerifiedCycleCount: company.verificationRequests.length,
+        now,
+        projection: toProjectionSnapshot(company.trustProjections[0] ?? null),
+      }),
+    );
   }
   for (const companyId of uniqueCompanyIds) {
     if (!results.has(companyId)) {
-      results.set(companyId, evaluateCompanyTrust({
-        activation,
-        companyStatus: "MISSING",
-        environment,
-        hasActiveContainment: true,
-        legacyVerifiedCycleCount: 0,
-        now,
-        projection: null,
-      }));
+      results.set(
+        companyId,
+        evaluateCompanyTrust({
+          activation,
+          companyStatus: "MISSING",
+          environment,
+          hasActiveContainment: true,
+          legacyVerifiedCycleCount: 0,
+          now,
+          projection: null,
+        }),
+      );
     }
   }
   return results;
@@ -106,8 +116,7 @@ function missingCompanyEvaluation(
   const now = options.now ?? new Date();
   const environment = options.environment ?? getServerEnvironment().APP_ENV;
   return evaluateCompanyTrust({
-    activation:
-      options.activation ?? companyTrustActivationFromEnvironment(),
+    activation: options.activation ?? companyTrustActivationFromEnvironment(),
     companyStatus: "MISSING",
     environment,
     hasActiveContainment: true,
@@ -222,12 +231,7 @@ function toProjectionSnapshot(
   projection: Readonly<{
     level: "NONE" | "LEGACY" | "STRONG";
     status:
-      | "PENDING"
-      | "ACTIVE"
-      | "EXPIRING"
-      | "EXPIRED"
-      | "ON_HOLD"
-      | "REVOKED";
+      "PENDING" | "ACTIVE" | "EXPIRING" | "EXPIRED" | "ON_HOLD" | "REVOKED";
     riskState: "CLEAR" | "REVIEW" | "HOLD" | "REVOKED";
     scope:
       | "LEGACY_PROFILE"
@@ -240,11 +244,7 @@ function toProjectionSnapshot(
     evidenceDigest: string;
     decision: null | Readonly<{
       kind:
-        | "APPROVED"
-        | "CHANGES_REQUESTED"
-        | "REJECTED"
-        | "REVOKED"
-        | "RESTORED";
+        "APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "REVOKED" | "RESTORED";
       scope:
         | "LEGACY_PROFILE"
         | "COMPANY_IDENTITY"
@@ -281,12 +281,7 @@ function toProjectionSnapshot(
           | "DOMAIN_CONTROL"
           | "REPRESENTATION";
         status:
-          | "PENDING"
-          | "VALID"
-          | "MISMATCH"
-          | "FAILED"
-          | "EXPIRED"
-          | "REVOKED";
+          "PENDING" | "VALID" | "MISMATCH" | "FAILED" | "EXPIRED" | "REVOKED";
         source: string;
         checkedAt: Date | null;
         validFrom: Date | null;
@@ -305,9 +300,7 @@ function toProjectionSnapshot(
     scope: projection.scope,
     policyVersion: projection.policyVersion,
     verifiedAt:
-      projection.verifiedAt === null
-        ? null
-        : new Date(projection.verifiedAt),
+      projection.verifiedAt === null ? null : new Date(projection.verifiedAt),
     expiresAt:
       projection.expiresAt === null ? null : new Date(projection.expiresAt),
     evidenceDigest: projection.evidenceDigest,
@@ -317,19 +310,13 @@ function toProjectionSnapshot(
         Object.freeze({
           ...evidence,
           checkedAt:
-            evidence.checkedAt === null
-              ? null
-              : new Date(evidence.checkedAt),
+            evidence.checkedAt === null ? null : new Date(evidence.checkedAt),
           validFrom:
-            evidence.validFrom === null
-              ? null
-              : new Date(evidence.validFrom),
+            evidence.validFrom === null ? null : new Date(evidence.validFrom),
           validTo:
             evidence.validTo === null ? null : new Date(evidence.validTo),
           revokedAt:
-            evidence.revokedAt === null
-              ? null
-              : new Date(evidence.revokedAt),
+            evidence.revokedAt === null ? null : new Date(evidence.revokedAt),
         }),
       ),
     ),

@@ -133,18 +133,26 @@ describe("Phase-23 scheduled domain handler registry", () => {
       now: afterFallback,
     });
     expect(before.created).toBe(autonomousFixtureHandlers().length);
-    expect(after.created).toBe(autonomousFixtureHandlers().length);
+    expect(after.created).toBe(
+      autonomousFixtureHandlers().filter(
+        ({ schedule }) => schedule !== "day-boundary",
+      ).length,
+    );
+    await expect(
+      db().workItem.count({
+        where: {
+          handlerKey: "seo.sitemap-capacity",
+          availableAt: new Date("2026-10-25T00:00:00.000Z"),
+        },
+      }),
+    ).resolves.toBe(1);
     const keys = await db().workItem.findMany({
       where: {
         handlerKey: "jobs.expiry-projection",
         availableAt: {
           in: [
-            new Date(
-              Math.floor(beforeFallback.getTime() / 60_000) * 60_000,
-            ),
-            new Date(
-              Math.floor(afterFallback.getTime() / 60_000) * 60_000,
-            ),
+            new Date(Math.floor(beforeFallback.getTime() / 60_000) * 60_000),
+            new Date(Math.floor(afterFallback.getTime() / 60_000) * 60_000),
           ],
         },
       },

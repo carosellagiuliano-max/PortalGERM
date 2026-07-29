@@ -48,6 +48,7 @@ export type AdminCommandCode =
   | "RESTRICTED"
   | "VERIFICATION_REQUIRED"
   | "QUOTA_EXCEEDED"
+  | "DUPLICATE"
   | "INCOMPLETE"
   | "WRITE_FAILED";
 
@@ -60,14 +61,22 @@ export function adminSuccess<T>(
   value: T,
   replay = false,
 ): AdminCommandResult<T> {
-  return Object.freeze({ ok: true, value: Object.freeze(value), ...(replay ? { replay: true } : {}) });
+  return Object.freeze({
+    ok: true,
+    value: Object.freeze(value),
+    ...(replay ? { replay: true } : {}),
+  });
 }
 
 export function adminFailure(
   code: AdminCommandCode,
   issues?: readonly string[],
 ): AdminCommandResult<never> {
-  return Object.freeze({ ok: false, code, ...(issues === undefined ? {} : { issues: Object.freeze([...issues]) }) });
+  return Object.freeze({
+    ok: false,
+    code,
+    ...(issues === undefined ? {} : { issues: Object.freeze([...issues]) }),
+  });
 }
 
 export async function requireCapability(
@@ -85,7 +94,8 @@ export async function requireCapability(
 
 export function adminNow(value: Date | undefined): Date {
   const now = value ?? new Date();
-  if (!Number.isFinite(now.getTime())) throw new TypeError("Admin commands require a valid clock.");
+  if (!Number.isFinite(now.getTime()))
+    throw new TypeError("Admin commands require a valid clock.");
   return new Date(now);
 }
 
@@ -98,7 +108,10 @@ export function boundedPlainText(
   return clean.length >= minimum && clean.length <= maximum ? clean : null;
 }
 
-export function operationKey(operation: string, idempotencyKey: string): string {
+export function operationKey(
+  operation: string,
+  idempotencyKey: string,
+): string {
   return `${operation}:${idempotencyKey}`;
 }
 

@@ -138,6 +138,39 @@ describe("Phase-22 privacy export V2", () => {
         dataProvenance: "TEST",
       },
     });
+    const freshnessJob = await client.job.create({
+      data: {
+        companyId: company.id,
+        slug: `phase30-export-freshness-${users.requester.id}`,
+        status: "DRAFT",
+        origin: "MANUAL",
+        sourceReference: `phase30-privacy-export:${users.requester.id}`,
+        createdByUserId: users.assignedAdmin.id,
+        dataProvenance: "TEST",
+      },
+    });
+    const ownReport = await client.abuseReport.create({
+      data: {
+        targetType: "JOB",
+        targetId: freshnessJob.id,
+        reporterUserId: users.requester.id,
+        reasonCode: "OWN_REPORT_CANARY",
+        description: "Own reporter evidence",
+        dueAt: new Date(PHASE22_NOW.getTime() + 86_400_000),
+      },
+    });
+    const freshnessReviewDueAt = new Date("2030-12-31T12:34:56.000Z");
+    await client.jobFreshnessReport.create({
+      data: {
+        jobId: freshnessJob.id,
+        abuseReportId: ownReport.id,
+        reporterUserId: users.requester.id,
+        status: "OPEN",
+        reviewDueAt: freshnessReviewDueAt,
+        createdAt: PHASE22_NOW,
+        updatedAt: PHASE22_NOW,
+      },
+    });
     await Promise.all([
       client.companyInvitation.create({
         data: {
@@ -188,16 +221,6 @@ describe("Phase-22 privacy export V2", () => {
       client.abuseReport.create({
         data: {
           targetType: "USER",
-          targetId: foreign.id,
-          reporterUserId: users.requester.id,
-          reasonCode: "OWN_REPORT_CANARY",
-          description: "Own reporter evidence",
-          dueAt: new Date(PHASE22_NOW.getTime() + 86_400_000),
-        },
-      }),
-      client.abuseReport.create({
-        data: {
-          targetType: "USER",
           targetId: users.requester.id,
           reporterUserId: foreign.id,
           reasonCode: "FOREIGN_REPORT_CANARY",
@@ -219,8 +242,7 @@ describe("Phase-22 privacy export V2", () => {
         payloadSchemaVersion: "1",
         payload: { index },
         dedupeKey: `phase22-export-notification-${users.requester.id}-${index}`,
-        providerDedupeKey:
-          `phase22-export-provider-${users.requester.id}-${index}`,
+        providerDedupeKey: `phase22-export-provider-${users.requester.id}-${index}`,
         status: "PENDING" as const,
         availableAt: PHASE22_NOW,
         createdAt: PHASE22_NOW,
@@ -335,6 +357,7 @@ describe("Phase-22 privacy export V2", () => {
     expect(packageText).toContain(documentHash);
     expect(packageText).toContain("OWN_LEAD_CANARY");
     expect(packageText).toContain("OWN_REPORT_CANARY");
+    expect(packageText).toContain(freshnessReviewDueAt.toISOString());
     expect(packageText).toContain('phase22-export-\\"unicode-ü');
     expect(packageText).not.toContain(foreign.email);
     expect(packageText).not.toContain("FOREIGN_EXPORT_NAME_CANARY");
@@ -364,11 +387,9 @@ describe("Phase-22 privacy export V2", () => {
 
     const expiringRequest = await seedPrivacyRequest(client, users, "EXPORT");
     const expiringCommand = privacyExecutionCommand(expiringRequest.id, users);
-    const expiring = await createPrivacyExportV2(
-      expiringCommand,
-      dependencies,
-    );
-    if (!expiring.ok) throw new Error("Expiring privacy export was not created.");
+    const expiring = await createPrivacyExportV2(expiringCommand, dependencies);
+    if (!expiring.ok)
+      throw new Error("Expiring privacy export was not created.");
     await expect(
       consumePrivacyExportV2(
         {
@@ -407,11 +428,10 @@ describe("Phase-22 privacy export V2", () => {
     await expect(
       createPrivacyExportV2(retryCommand, retryDependencies),
     ).resolves.toEqual({ ok: false, code: "STORAGE_FAILED" });
-    const failedArtifact =
-      await client.privacyExportArtifact.findFirstOrThrow({
-        where: { privacyRequestId: retryRequest.id },
-        include: { privacyExecution: true },
-      });
+    const failedArtifact = await client.privacyExportArtifact.findFirstOrThrow({
+      where: { privacyRequestId: retryRequest.id },
+      include: { privacyExecution: true },
+    });
     expect(failedArtifact).toMatchObject({
       status: "FAILED",
       privacyExecution: {

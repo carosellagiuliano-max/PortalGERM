@@ -45,6 +45,9 @@ gelten nicht als Nachweis.
 - [`2026-07-28-phase-25.md`](./2026-07-28-phase-25.md) — Least-Privilege-Adminrollen, MFA/Recovery, Step-up sowie Trust-&-Safety-Containment und Appeal; Production-RP-ID, Duty-Owner, Risk/DSFA, Pager und LIVE bleiben blockiert.
 - [`2026-07-28-phase-26.md`](./2026-07-28-phase-26.md) — strukturierte Company-Trust-Evidence, Providerports, Vault, unabhängige Decisions, Re-review und gemeinsame Badge-/Job-/Radar-Revocation; reale Provider, Legal/Capacity, Staging und Public-Go bleiben blockiert.
 - [`2026-07-28-phase-27.md`](./2026-07-28-phase-27.md) — default-off Multi-Persona-/Sessionkontext-Vertrag mit sicherem Portalwechsel, bestehender-Identity-Invitation, identity-weiter Privacy und strikt getrennten Tenant-/Adminrechten; Demand, Staging und LIVE bleiben offen.
+- [`2026-07-29-phase-28.md`](./2026-07-29-phase-28.md) — getrennte, default-off Local-/CI-Verträge für candidate-owned externe Bewerbungszustände und persistente Interviewplanung; Demand-, Provider-, Staging- und LIVE-Gates bleiben offen.
+- [`2026-07-29-phase-29.md`](./2026-07-29-phase-29.md) — responsive, Cross-Browser- und automatisierte Accessibility-Technikbasis; moderierte Runden und reale NVDA-/VoiceOver-Smokes bleiben offen.
+- [`2026-07-29-phase-30.md`](./2026-07-29-phase-30.md) — versionierte de-CH-Search-/Learning-/Cluster-V2-Technik, triggergebundene Scale-/Sitemap-Operations und canonical Job-Freshness; Fachreview, Zielalerts, Moderationskapazität, Staging und LIVE bleiben offen.
 
 ## Pflichtfelder eines Records
 

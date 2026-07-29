@@ -82,6 +82,8 @@ const PARTIAL_UNIQUE_INDEXES = [
   "conversation_participant_company_unique",
   "conversation_participant_user_unique",
   "job_active_assignment_unique",
+  "job_freshness_report_active_reporter_unique",
+  "job_publication_active_exact_unique",
   "plan_single_default_free_unique",
   "privacy_active_challenge_unique",
   "subscription_pending_change_unique",
@@ -397,7 +399,9 @@ async function insertOrderWithLines(
   lines: Array<Array<unknown>>,
 ) {
   if (lines.length === 0) {
-    throw new Error("A schema-contract Order fixture requires at least one line");
+    throw new Error(
+      "A schema-contract Order fixture requires at least one line",
+    );
   }
 
   const client = await target.connect();
@@ -611,6 +615,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260728145000_phase_26_verification_document_read_audience",
       "20260728160000_phase_27_multi_persona_identity",
       "20260729073537_phase_28_recruiting_workflows",
+      "20260729190000_phase_30_search_freshness_operations",
     ]);
     expect(
       migrations.rows.every(
@@ -640,8 +645,10 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "privacy_challenge_request_user_scope_fkey",
       "privacy_correction_text_length_check",
       "privacy_request_type_outcome_check",
+      "search_learning_review_label_check",
       "user_email_normalized_check",
       "tax_rate_version_id_basis_points_unique",
+      "JobFreshnessReport_reporterUserId_fkey",
     ];
     const constraints = await target.query<{
       constraint_name: string;
@@ -733,7 +740,8 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         "    ('JobReportingCheck', 'occupationCodeId'),",
         "    ('JobReportingCheck', 'occupationCodeSnapshot'),",
         "    ('JobReportingCheck', 'occupationLabelSnapshot'),",
-        "    ('ApplicationSubmissionSnapshot', 'coverLetterSnapshot')",
+        "    ('ApplicationSubmissionSnapshot', 'coverLetterSnapshot'),",
+        "    ('SearchLearningAggregate', 'reviewLabel')",
         "  )",
       ].join("\n"),
     );
@@ -748,6 +756,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "JobReportingCheck.occupationCodeId",
       "JobReportingCheck.occupationCodeSnapshot",
       "JobReportingCheck.occupationLabelSnapshot",
+      "SearchLearningAggregate.reviewLabel",
     ]);
 
     const requiredTriggers = [
@@ -771,6 +780,15 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "phase12_invoice_order_snapshot_trigger",
       "phase12_subscription_change_retained_owner_trigger",
       "phase12_subscription_order_retained_owner_trigger",
+      "phase30_cluster_search_quality_evidence_append_only",
+      "phase30_cluster_v2_activation_evidence",
+      "phase30_job_freshness_event_append_only",
+      "phase30_search_alias_append_only",
+      "phase30_search_concept_append_only",
+      "phase30_search_learning_event_append_only",
+      "phase30_search_relation_append_only",
+      "phase30_search_release_lifecycle",
+      "phase30_sitemap_capacity_observation_append_only",
     ];
     const triggers = await target.query<{ trigger_name: string }>(
       [
@@ -2157,7 +2175,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         ") VALUES (",
         "  $1, $2, 'CORRECT', 'PENDING', $3::timestamptz,",
         "  'privacy-correction-contract', 'privacy-request-v1', ARRAY[]::text[],",
-        "  ARRAY[]::\"PrivacyDeletionDependencyCode\"[], $4::timestamptz",
+        '  ARRAY[]::"PrivacyDeletionDependencyCode"[], $4::timestamptz',
         ")",
       ].join("\n"),
       [

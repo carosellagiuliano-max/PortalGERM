@@ -13,8 +13,7 @@ export const PHASE17_JOURNEY_PROJECT = "chromium-journeys" as const;
 export const PHASE17_MOBILE_PROJECT = "chromium-mobile-360" as const;
 export const PHASE29_FIREFOX_PROJECT = "firefox-journeys" as const;
 export const PHASE29_WEBKIT_PROJECT = "webkit-journeys" as const;
-export const PHASE17_QUALITY_FILE =
-  "quality/critical-routes.spec.ts" as const;
+export const PHASE17_QUALITY_FILE = "quality/critical-routes.spec.ts" as const;
 export const PHASE18_ALL_ROUTES_QUALITY_FILE =
   "quality/all-routes.spec.ts" as const;
 export const PHASE20_IDENTITY_FLOW_FILE =
@@ -334,10 +333,7 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
   }),
 ] as const);
 
-export type Phase17ResultId =
-  | Phase17CaseId
-  | "QUALITY"
-  | "UNCLASSIFIED";
+export type Phase17ResultId = Phase17CaseId | "QUALITY" | "UNCLASSIFIED";
 
 export type Phase17RecordedResult = Readonly<{
   id: Phase17ResultId;
@@ -436,7 +432,7 @@ export function classifyPhase17Result(
   title: string,
   normalizedRelativeFile: string,
 ): Phase17ResultId {
-  const match = /\[(E2E-(?:0[1-7]|21|22|28A|28B))\]/u.exec(title);
+  const match = /\[(E2E-(?:0[1-7]|21|22|28A|28B|30))\]/u.exec(title);
   if (match?.[1] !== undefined) {
     return match[1] as Phase17CaseId;
   }
@@ -455,7 +451,9 @@ export function configuredRetryPolicy(
   projects: readonly Readonly<{ retries: number }>[],
 ): number {
   if (projects.length === 0) {
-    throw new Error("Phase 17 requires at least one configured Playwright project.");
+    throw new Error(
+      "Phase 17 requires at least one configured Playwright project.",
+    );
   }
   const retries = projects.map(({ retries: value }) => {
     if (!Number.isSafeInteger(value) || value < 0) {
@@ -737,8 +735,7 @@ function recordedResults(manifest: ParsedManifest) {
 
 function sameStringSet(left: readonly string[], right: readonly string[]) {
   return (
-    left.length === right.length &&
-    left.every((value) => right.includes(value))
+    left.length === right.length && left.every((value) => right.includes(value))
   );
 }
 

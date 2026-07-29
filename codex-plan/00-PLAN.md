@@ -92,16 +92,15 @@ Der Phase-17-Code-Commit `fb7bc56b76b33d7ca5ad3725984cbf72d20f0696` ergänzt dar
 
 ## 5. Priorisierung
 
-| Stufe     | Bedeutung                                  | Beispiele                                                                                                                                              |
-| --------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| P0        | kontrolliertes MVP funktioniert end-to-end | Auth/Tenant, öffentliche Suche, JobPass, Bewerbung, Company/Job/Moderation, Billing Mock, Boost, Radar Contact/Reveal, Adminqueues, Security-/DB-Tests |
+| Stufe     | Bedeutung                                  | Beispiele                                                                                                                                                                                                                        |
+| --------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0        | kontrolliertes MVP funktioniert end-to-end | Auth/Tenant, öffentliche Suche, JobPass, Bewerbung, Company/Job/Moderation, Billing Mock, Boost, Radar Contact/Reveal, Adminqueues, Security-/DB-Tests                                                                           |
 | P1        | überzeugender Pilot/Marktstart             | AVG-/Tax-/Vertragsgate, echte bezahlte Design-Partner-Validierung, Cashflow/Runway, LIVE-Lohndaten, Jahrespläne, Agenturmandate, erweiterte Analytics/Cockpit, Growth-Gates, Worker/Delivery-Queue, Deployment/Backup/Monitoring |
-| P2        | nach erstem Marktfeedback                  | zusätzliche Sponsored-Produkte, breitere Mehrsprachigkeit, fortgeschrittene Suche, Visual Regression, Refund-Automation                                |
-| später    | explizites Folgeprojekt                    | skalierte reale Provider nach separaten ADRs, ATS/API/SSO, Enterprise Billing, employerseitige Match-Sortierung nach Prüfung, Success Fee nach AVG-/Legal Review |
-| verworfen | nicht bauen                                | Scraping, globale Reveals, bezahlte Fairness, Fake-Aktivität, automatische Ablehnung, dünne SEO-Massenpages                                            |
+| P2        | nach erstem Marktfeedback                  | zusätzliche Sponsored-Produkte, breitere Mehrsprachigkeit, fortgeschrittene Suche, Visual Regression, Refund-Automation                                                                                                          |
+| später    | explizites Folgeprojekt                    | skalierte reale Provider nach separaten ADRs, ATS/API/SSO, Enterprise Billing, employerseitige Match-Sortierung nach Prüfung, Success Fee nach AVG-/Legal Review                                                                 |
+| verworfen | nicht bauen                                | Scraping, globale Reveals, bezahlte Fairness, Fake-Aktivität, automatische Ablehnung, dünne SEO-Massenpages                                                                                                                      |
 
-Diese Tabelle beschreibt die historische Produktpriorisierung der Phasen 01 bis
-18. Für einen realen Pilot oder Produktionsbetrieb gelten zusätzlich die neu
+Diese Tabelle beschreibt die historische Produktpriorisierung der Phasen 01 bis 18. Für einen realen Pilot oder Produktionsbetrieb gelten zusätzlich die neu
 bewerteten Prioritäten und Launchklassen aus
 [`remediation-traceability.md`](./remediation-traceability.md) und
 [`remediation-masterplan.md`](./remediation-masterplan.md). Insbesondere sind
@@ -298,11 +297,15 @@ Re-Test bleiben offen. Siehe
 
 ### [ ] 30 — Startcluster-Suche und Scale Operations
 
-[`30-search-scale-operations.md`](./30-search-scale-operations.md) · früher
-P1-Track 30A für kontrollierte Startcluster-Berufstaxonomie samt
-Search-/Alert-/Recommendation-/Cluster-Gate-Parität; später skalierbare
-Admin-/Dashboard-Reads sowie Sitemap-Kapazitätsmonitoring und
-triggerbasiertes Sharding statt unnötigem Sofortumbau.
+[`30-search-scale-operations.md`](./30-search-scale-operations.md) · Die
+technische de-CH-Concept-/Search-Learning-/Cluster-V2-Basis und der
+Job-Freshness-/Duplicate-/Consumervertrag sind lokal grün. Der ausgelöste
+Recommendation-Fan-out ist auf eine bounded Zwei-Query-Projektion reduziert;
+Admin-Pagination/Bulk und Sitemap-Shards bleiben unter ihrem gemessenen
+Trigger deferred. Pflegefachreview, Zielumgebungs-Shadow/Alertreceipt,
+vierstündige Moderationskapazität, Staging und LIVE bleiben offen; deshalb
+bleibt die Gesamtphase `[ ]`. Siehe
+[Phase-30-Evidence](./evidence/2026-07-29-phase-30.md).
 
 ### [ ] 31 — Monetarisierung und Marktvalidierung
 

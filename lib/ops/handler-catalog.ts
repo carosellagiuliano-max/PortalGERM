@@ -154,13 +154,25 @@ export const WORKER_HANDLER_CATALOG = Object.freeze([
     handlerKey: "recruiting.reminder-expiry",
     owner: "Recruiting / Privacy / Platform",
     schedule: "minute-boundary",
-    sloRef: "codex-plan/28-recruiting-workflows.md#22-performance--und-skalierungsgrenzen",
+    sloRef:
+      "codex-plan/28-recruiting-workflows.md#22-performance--und-skalierungsgrenzen",
   }),
   handler({
-    execution: "CATALOG_ONLY_REQUIRES_OWNING_PHASE",
     handlerKey: "jobs.freshness",
     owner: "Jobs Domain / Trust",
-    schedule: "disabled-until-phase-30d",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/30-search-scale-operations.md",
+  }),
+  handler({
+    handlerKey: "seo.sitemap-capacity",
+    owner: "SEO / Platform Operations",
+    schedule: "day-boundary",
+    sloRef: "codex-plan/30-search-scale-operations.md",
+  }),
+  handler({
+    handlerKey: "search.learning-expiry",
+    owner: "Search / Privacy",
+    schedule: "day-boundary",
     sloRef: "codex-plan/30-search-scale-operations.md",
   }),
 ] as const satisfies readonly WorkerHandlerCatalogEntry[]);

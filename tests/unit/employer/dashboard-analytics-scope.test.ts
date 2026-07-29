@@ -5,9 +5,18 @@ vi.mock("server-only", () => ({}));
 const billing = vi.hoisted(() => ({
   getPrismaEffectiveEntitlements: vi.fn(),
 }));
+const publicEligibility = vi.hoisted(() => ({
+  filterPubliclyEligibleJobs: vi.fn(),
+}));
 
 vi.mock("@/lib/billing/prisma-publish-quota", () => ({
   getPrismaEffectiveEntitlements: billing.getPrismaEffectiveEntitlements,
+}));
+vi.mock("@/lib/jobs/public-eligibility", () => ({
+  filterPubliclyEligibleJobs: publicEligibility.filterPubliclyEligibleJobs,
+}));
+vi.mock("@/lib/public/environment", () => ({
+  getPublicDataContext: () => ({ eligibilityEnvironment: "demo" }),
 }));
 
 import {
@@ -35,6 +44,7 @@ beforeEach(() => {
     ok: false,
     error: { code: "MISSING_DEFAULT_FREE" },
   });
+  publicEligibility.filterPubliclyEligibleJobs.mockResolvedValue([]);
 });
 
 describe("employer dashboard and analytics query scopes", () => {
@@ -42,8 +52,12 @@ describe("employer dashboard and analytics query scopes", () => {
     const dashboard = databaseMock(null);
     const analytics = databaseMock(null);
 
-    await expect(getEmployerDashboardData(ACCESS, dashboard.client, NOW)).resolves.toBeNull();
-    await expect(getEmployerAnalyticsData(ACCESS, analytics.client, NOW)).resolves.toBeNull();
+    await expect(
+      getEmployerDashboardData(ACCESS, dashboard.client, NOW),
+    ).resolves.toBeNull();
+    await expect(
+      getEmployerAnalyticsData(ACCESS, analytics.client, NOW),
+    ).resolves.toBeNull();
 
     for (const fixture of [dashboard, analytics]) {
       expect(fixture.spies.companyFindFirst).toHaveBeenCalledWith({
@@ -67,42 +81,73 @@ describe("employer dashboard and analytics query scopes", () => {
     const dashboard = databaseMock({ id: ACCESS.companyId, name: "Scope AG" });
     const analytics = databaseMock({ id: ACCESS.companyId, name: "Scope AG" });
 
-    await expect(getEmployerDashboardData(ACCESS, dashboard.client, NOW)).resolves.not.toBeNull();
-    await expect(getEmployerAnalyticsData(ACCESS, analytics.client, NOW)).resolves.not.toBeNull();
+    await expect(
+      getEmployerDashboardData(ACCESS, dashboard.client, NOW),
+    ).resolves.not.toBeNull();
+    await expect(
+      getEmployerAnalyticsData(ACCESS, analytics.client, NOW),
+    ).resolves.not.toBeNull();
 
     const expectedJobScope = {
       companyId: ACCESS.companyId,
-      company: expect.objectContaining({ memberships: { some: activeMembership() } }),
+      company: expect.objectContaining({
+        memberships: { some: activeMembership() },
+      }),
       assignments: { some: activeAssignment() },
     };
-    expect(dashboard.spies.jobCount).toHaveBeenCalledWith({ where: expect.objectContaining(expectedJobScope) });
-    expect(dashboard.spies.applicationCount).toHaveBeenCalledWith({ where: expect.objectContaining({ job: expect.objectContaining(expectedJobScope) }) });
-    expect(dashboard.spies.applicationFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { job: expect.objectContaining(expectedJobScope) },
-      orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
-      take: EMPLOYER_DASHBOARD_QUERY_LIMITS.responseApplications,
-    }));
-    expect(dashboard.spies.jobFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining(expectedJobScope),
-      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-      take: EMPLOYER_DASHBOARD_QUERY_LIMITS.analyzedJobs,
-    }));
+    expect(dashboard.spies.jobCount).not.toHaveBeenCalled();
+    expect(publicEligibility.filterPubliclyEligibleJobs).toHaveBeenCalledWith(
+      [],
+      NOW,
+      "demo",
+      dashboard.client,
+    );
+    expect(dashboard.spies.applicationCount).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        job: expect.objectContaining(expectedJobScope),
+      }),
+    });
+    expect(dashboard.spies.applicationFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { job: expect.objectContaining(expectedJobScope) },
+        orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
+        take: EMPLOYER_DASHBOARD_QUERY_LIMITS.responseApplications,
+      }),
+    );
+    expect(dashboard.spies.jobFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining(expectedJobScope),
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        take: EMPLOYER_DASHBOARD_QUERY_LIMITS.analyzedJobs,
+      }),
+    );
 
-    expect(analytics.spies.analyticsFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ companyId: ACCESS.companyId, job: expect.objectContaining(expectedJobScope) }),
-      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
-      take: EMPLOYER_ANALYTICS_QUERY_LIMITS.events,
-    }));
-    expect(analytics.spies.applicationFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ job: expect.objectContaining(expectedJobScope) }),
-      orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
-      take: EMPLOYER_ANALYTICS_QUERY_LIMITS.applications,
-    }));
-    expect(analytics.spies.jobFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining(expectedJobScope),
-      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-      take: EMPLOYER_ANALYTICS_QUERY_LIMITS.jobs,
-    }));
+    expect(analytics.spies.analyticsFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          companyId: ACCESS.companyId,
+          job: expect.objectContaining(expectedJobScope),
+        }),
+        orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+        take: EMPLOYER_ANALYTICS_QUERY_LIMITS.events,
+      }),
+    );
+    expect(analytics.spies.applicationFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          job: expect.objectContaining(expectedJobScope),
+        }),
+        orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
+        take: EMPLOYER_ANALYTICS_QUERY_LIMITS.applications,
+      }),
+    );
+    expect(analytics.spies.jobFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining(expectedJobScope),
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        take: EMPLOYER_ANALYTICS_QUERY_LIMITS.jobs,
+      }),
+    );
   });
 });
 
@@ -142,7 +187,10 @@ function databaseMock(company: Readonly<{ id: string; name: string }> | null) {
   const client = {
     company: { findFirst: spies.companyFindFirst },
     job: { count: spies.jobCount, findMany: spies.jobFindMany },
-    application: { count: spies.applicationCount, findMany: spies.applicationFindMany },
+    application: {
+      count: spies.applicationCount,
+      findMany: spies.applicationFindMany,
+    },
     analyticsEvent: { findMany: spies.analyticsFindMany },
     employerSubscription: { findFirst: spies.subscriptionFindFirst },
   } as never;

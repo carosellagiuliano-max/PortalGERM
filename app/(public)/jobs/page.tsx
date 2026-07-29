@@ -24,12 +24,18 @@ import { searchJobs } from "@/lib/search/query";
 
 const JOBS_METADATA = Object.freeze({
   title: "Jobs suchen",
-  description: "Faire und transparente Stellenangebote in der Schweiz durchsuchen.",
+  description:
+    "Faire und transparente Stellenangebote in der Schweiz durchsuchen.",
 });
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function generateMetadata({
   searchParams,
-}: Readonly<{ searchParams: Promise<RawPublicSearchParams> }>): Promise<Metadata> {
+}: Readonly<{
+  searchParams: Promise<RawPublicSearchParams>;
+}>): Promise<Metadata> {
   const raw = await searchParams;
   return {
     ...JOBS_METADATA,
@@ -50,20 +56,28 @@ export default async function JobsPage({
     const landing = await loadPublicClusterLanding(exactCluster);
     if (landing?.indexable) redirect(landing.canonicalPath);
   }
-  const [result, catalog] = await Promise.all([searchJobs(input), getPublicCatalog()]);
+  const [result, catalog] = await Promise.all([
+    searchJobs(input),
+    getPublicCatalog(),
+  ]);
   const formInput = Object.freeze({
     ...input,
     cantonSlugs: normalizeCatalogReferences(input.cantonSlugs, catalog.cantons),
     citySlugs: normalizeCatalogReferences(input.citySlugs, catalog.cities),
-    categorySlugs: normalizeCatalogReferences(input.categorySlugs, catalog.categories),
+    categorySlugs: normalizeCatalogReferences(
+      input.categorySlugs,
+      catalog.categories,
+    ),
   });
   const cantonCode = catalog.cantons.find(
     (canton) =>
-      canton.slug === input.cantonSlugs[0] || canton.id === input.cantonSlugs[0],
+      canton.slug === input.cantonSlugs[0] ||
+      canton.id === input.cantonSlugs[0],
   )?.code;
   const categorySlug = catalog.categories.some(
     (category) =>
-      category.slug === input.categorySlugs[0] || category.id === input.categorySlugs[0],
+      category.slug === input.categorySlugs[0] ||
+      category.id === input.categorySlugs[0],
   )
     ? formInput.categorySlugs[0]
     : undefined;
@@ -75,13 +89,27 @@ export default async function JobsPage({
         sort={input.sort}
         cantonCode={cantonCode}
         categorySlug={categorySlug}
+        searchQuery={input.keyword}
+        searchFilters={searchLearningFilters(input)}
       />
       <p className="eyebrow">Stellensuche</p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">Finde deinen nächsten fairen Job.</h1>
-      <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">Filtere nach überprüfbaren Merkmalen. Personenbezogene Profildaten werden für die öffentliche Suche nicht geladen.</p>
-      <div className="mt-8"><JobSearchForm input={formInput} catalog={catalog} /></div>
+      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+        Finde deinen nächsten fairen Job.
+      </h1>
+      <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">
+        Filtere nach überprüfbaren Merkmalen. Personenbezogene Profildaten
+        werden für die öffentliche Suche nicht geladen.
+      </p>
+      <div className="mt-8">
+        <JobSearchForm input={formInput} catalog={catalog} />
+      </div>
       {result.invalidCursor ? (
-        <Alert className="mt-6"><AlertTitle>Der Seitenlink war nicht mehr gültig.</AlertTitle><AlertDescription>Wir zeigen dir sicherheitshalber wieder die erste Ergebnisseite.</AlertDescription></Alert>
+        <Alert className="mt-6">
+          <AlertTitle>Der Seitenlink war nicht mehr gültig.</AlertTitle>
+          <AlertDescription>
+            Wir zeigen dir sicherheitshalber wieder die erste Ergebnisseite.
+          </AlertDescription>
+        </Alert>
       ) : null}
       <div className="mt-10 flex items-end justify-between gap-4">
         <div>
@@ -93,10 +121,17 @@ export default async function JobsPage({
           </h2>
         </div>
       </div>
-      <div className="mt-6"><JobGrid jobs={result.jobs} /></div>
+      <div className="mt-6">
+        <JobGrid jobs={result.jobs} />
+      </div>
       {result.nextCursor === null ? null : (
         <div className="mt-8 flex justify-center">
-          <Link href={`/jobs${publicJobSearchQuery(input, { after: result.nextCursor })}`} className={buttonVariants({ variant: "outline", size: "lg" })}>Nächste Ergebnisse <ChevronRightIcon data-icon="inline-end" /></Link>
+          <Link
+            href={`/jobs${publicJobSearchQuery(input, { after: result.nextCursor })}`}
+            className={buttonVariants({ variant: "outline", size: "lg" })}
+          >
+            Nächste Ergebnisse <ChevronRightIcon data-icon="inline-end" />
+          </Link>
         </div>
       )}
     </div>
@@ -113,11 +148,57 @@ function resultCountBucket(
   return "50+";
 }
 
+function searchLearningFilters(
+  input: ReturnType<typeof parsePublicJobSearchParams>,
+): Readonly<Record<string, string | number | boolean>> {
+  return Object.freeze({
+    ...(input.cantonSlugs.length === 0
+      ? {}
+      : { canton: input.cantonSlugs.join(",") }),
+    ...(input.citySlugs.length === 0
+      ? {}
+      : { city: input.citySlugs.join(",") }),
+    ...(input.radiusKm === undefined ? {} : { radius: input.radiusKm }),
+    ...(input.categorySlugs.length === 0
+      ? {}
+      : { category: input.categorySlugs.join(",") }),
+    ...(input.workloadMin === undefined
+      ? {}
+      : { workloadMin: input.workloadMin }),
+    ...(input.workloadMax === undefined
+      ? {}
+      : { workloadMax: input.workloadMax }),
+    ...(input.jobTypes.length === 0
+      ? {}
+      : { jobType: input.jobTypes.join(",") }),
+    ...(input.remoteTypes.length === 0
+      ? {}
+      : { remoteType: input.remoteTypes.join(",") }),
+    ...(input.languages.length === 0
+      ? {}
+      : { language: input.languages.join(",") }),
+    ...(input.efforts.length === 0
+      ? {}
+      : { applicationEffort: input.efforts.join(",") }),
+    ...(input.salaryPeriod === undefined
+      ? {}
+      : { salaryPeriod: input.salaryPeriod }),
+    ...(input.salaryDisclosedOnly ? { salaryDisclosed: true } : {}),
+    ...(input.responseEvidenceOnly ? { evidence: "response" } : {}),
+    ...(input.companyVerifiedOnly ? { companyVerified: true } : {}),
+    sort: input.sort,
+  });
+}
+
 function normalizeCatalogReferences(
   references: readonly string[],
   entries: readonly Readonly<{ id: string; slug: string }>[],
 ): readonly string[] {
-  return Object.freeze(references.map((reference) =>
-    entries.find(({ id, slug }) => id === reference || slug === reference)?.slug ?? reference
-  ));
+  return Object.freeze(
+    references.map(
+      (reference) =>
+        entries.find(({ id, slug }) => id === reference || slug === reference)
+          ?.slug ?? reference,
+    ),
+  );
 }

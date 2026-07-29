@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { JobPreview } from "@/components/employer/job-wizard/job-wizard";
-import type { EmployerJobCatalog, EmployerJobFullDetail } from "@/lib/employer/jobs";
+import type {
+  EmployerJobCatalog,
+  EmployerJobFullDetail,
+} from "@/lib/employer/jobs";
 
 const catalog: EmployerJobCatalog = {
   categories: [{ id: "category-1", name: "Engineering" }],
@@ -28,7 +31,14 @@ const job: EmployerJobFullDetail = {
   views: 0,
   saves: 0,
   boostStatus: null,
-  capabilities: { assignmentRole: null, readSummary: true, readFullRevision: true, mutateDraft: true, manageLifecycle: true },
+  freshness: null,
+  capabilities: {
+    assignmentRole: null,
+    readSummary: true,
+    readFullRevision: true,
+    mutateDraft: true,
+    manageLifecycle: true,
+  },
   score: null,
   latestScoreSnapshot: null,
   statusEvents: [],
@@ -72,7 +82,13 @@ const job: EmployerJobFullDetail = {
     rejectedAt: null,
     languages: [{ code: "de", minLevel: "B2" }],
     skills: [{ id: "skill-1", name: "TypeScript", required: true }],
-    benefits: [{ benefitCode: "HOME_OFFICE", description: "Homeoffice an drei Tagen", sortOrder: 0 }],
+    benefits: [
+      {
+        benefitCode: "HOME_OFFICE",
+        description: "Homeoffice an drei Tagen",
+        sortOrder: 0,
+      },
+    ],
     reportingCheck: null,
   },
 };
@@ -93,7 +109,9 @@ describe("employer job step-five preview", () => {
       "Zusammenarbeit & Inklusion",
       "Bewerbungsprozess",
     ]) {
-      expect(screen.getByRole("heading", { name: heading, level: 3 })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: heading, level: 3 }),
+      ).toBeInTheDocument();
     }
 
     for (const text of [

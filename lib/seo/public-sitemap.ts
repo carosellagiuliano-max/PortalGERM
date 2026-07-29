@@ -84,7 +84,9 @@ const DEFAULT_SITEMAP_SOURCES: PublicSitemapSources = Object.freeze({
 
 export class PublicSitemapCapacityError extends RangeError {
   constructor(maximumUrls: number) {
-    super(`The public sitemap exceeds its ${maximumUrls}-URL single-file bound.`);
+    super(
+      `The public sitemap exceeds its ${maximumUrls}-URL single-file bound.`,
+    );
     this.name = "PublicSitemapCapacityError";
   }
 }
@@ -265,10 +267,10 @@ export async function listEligibleCompanySitemapRows(
           if (
             !evaluatePublicCompanyEligibility(source, "production") ||
             projectPublicCompanyCard(source, {
-                environment: "production",
-                enhancedProfile: false,
-                openJobCount: 0,
-              }) === null
+              environment: "production",
+              enhancedProfile: false,
+              openJobCount: 0,
+            }) === null
           ) {
             continue;
           }
@@ -381,10 +383,12 @@ export async function listEligibleClusterSitemapRows(
   if (rows.length > maximumEntries) {
     throw new PublicSitemapCapacityError(MAXIMUM_SINGLE_SITEMAP_URLS);
   }
-  return rows.map((row) => Object.freeze({
-    path: row.path,
-    lastModified: new Date(row.lastModified),
-  }));
+  return rows.map((row) =>
+    Object.freeze({
+      path: row.path,
+      lastModified: new Date(row.lastModified),
+    }),
+  );
 }
 
 type PublicGuideSitemapRow = Prisma.ContentPageGetPayload<{
@@ -412,7 +416,9 @@ type PublicGuideSitemapRow = Prisma.ContentPageGetPayload<{
   };
 }>;
 
-function toPublicGuideSnapshot(row: PublicGuideSitemapRow): PublicGuideSnapshot {
+function toPublicGuideSnapshot(
+  row: PublicGuideSitemapRow,
+): PublicGuideSnapshot {
   return {
     id: row.id,
     slug: row.slug,
@@ -433,14 +439,22 @@ function appendWithinBound(
   if (rows.length >= maximumEntries) {
     throw new PublicSitemapCapacityError(MAXIMUM_SINGLE_SITEMAP_URLS);
   }
-  rows.push(Object.freeze({
-    path: row.path,
-    lastModified: new Date(row.lastModified),
-  }));
+  rows.push(
+    Object.freeze({
+      path: row.path,
+      lastModified: new Date(row.lastModified),
+    }),
+  );
 }
 
-function nextScanId(previousId: string | undefined, nextId: string | undefined) {
-  if (nextId === undefined || (previousId !== undefined && nextId <= previousId)) {
+function nextScanId(
+  previousId: string | undefined,
+  nextId: string | undefined,
+) {
+  if (
+    nextId === undefined ||
+    (previousId !== undefined && nextId <= previousId)
+  ) {
     throw new Error("Public sitemap keyset scan did not advance.");
   }
   return nextId;
@@ -459,13 +473,14 @@ function staticEntry(path: string, origin: URL): MetadataRoute.Sitemap[number] {
   return {
     url: new URL(path, origin).toString(),
     changeFrequency: path === "/" || path === "/jobs" ? "daily" : "weekly",
-    priority: path === "/"
-      ? 1
-      : path === "/jobs"
-      ? 0.9
-      : path === "/pricing"
-      ? 0.8
-      : 0.7,
+    priority:
+      path === "/"
+        ? 1
+        : path === "/jobs"
+          ? 0.9
+          : path === "/pricing"
+            ? 0.8
+            : 0.7,
   };
 }
 
@@ -477,7 +492,8 @@ function dynamicEntry(
   return {
     url: new URL(row.path, origin).toString(),
     lastModified: new Date(row.lastModified),
-    changeFrequency: kind === "guide" ? "monthly" : kind === "company" ? "weekly" : "daily",
+    changeFrequency:
+      kind === "guide" ? "monthly" : kind === "company" ? "weekly" : "daily",
     priority: kind === "job" ? 0.8 : 0.7,
   };
 }
@@ -485,21 +501,28 @@ function dynamicEntry(
 function validOrigin(value: string): URL {
   const origin = new URL(value);
   if (
-    (origin.protocol !== "https:" && origin.hostname !== "localhost") ||
+    (origin.protocol !== "https:" && !isLoopbackHostname(origin.hostname)) ||
     origin.username !== "" ||
     origin.password !== "" ||
     origin.pathname !== "/" ||
     origin.search !== "" ||
     origin.hash !== ""
   ) {
-    throw new TypeError("The public sitemap requires a canonical HTTP(S) origin.");
+    throw new TypeError(
+      "The public sitemap requires a canonical HTTP(S) origin.",
+    );
   }
   return origin;
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  return ["localhost", "127.0.0.1", "[::1]"].includes(hostname);
+}
+
 function validNow(value: Date | undefined): Date {
   const now = value ?? new Date();
-  if (!isValidDate(now)) throw new TypeError("A valid sitemap clock is required.");
+  if (!isValidDate(now))
+    throw new TypeError("A valid sitemap clock is required.");
   return new Date(now);
 }
 

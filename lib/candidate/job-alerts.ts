@@ -41,6 +41,7 @@ import {
   filterPubliclyEligibleJobsInTransaction,
   type PublicEligibilityEnvironment,
 } from "@/lib/jobs/public-eligibility";
+import { calculateRelevanceProxy } from "@/lib/search/relevance";
 import { scanJobAlertDigestMatches } from "@/lib/candidate/job-alert-digest-scan";
 import {
   captureLocalMockEmail,
@@ -163,7 +164,11 @@ export async function getCandidateJobAlertPageData(
     }),
     database.city.findMany({
       where: { isActive: true, canton: { isActive: true } },
-      orderBy: [{ canton: { code: "asc" } }, { sortOrder: "asc" }, { name: "asc" }],
+      orderBy: [
+        { canton: { code: "asc" } },
+        { sortOrder: "asc" },
+        { name: "asc" },
+      ],
       select: {
         id: true,
         cantonId: true,
@@ -1244,7 +1249,12 @@ async function assertQueryReferences(
     query.cityId === null
       ? null
       : transaction.city.findFirst({
-          where: { id: query.cityId, cantonId: query.cantonId ?? undefined, isActive: true, canton: { isActive: true } },
+          where: {
+            id: query.cityId,
+            cantonId: query.cantonId ?? undefined,
+            isActive: true,
+            canton: { isActive: true },
+          },
           select: { id: true },
         }),
   ]);
@@ -1431,9 +1441,19 @@ async function findDigestJobs(
         transaction,
       );
       return Object.freeze(
-        eligibleJobs.map((job) =>
-          Object.freeze({ id: job.id, publishedAt: job.publishedAt }),
-        ),
+        eligibleJobs
+          .filter(
+            (job) =>
+              query.keyword === "" ||
+              calculateRelevanceProxy(query.keyword, {
+                title: job.title,
+                companyName: job.companyName,
+                body: job.description,
+              }).score > 0,
+          )
+          .map((job) =>
+            Object.freeze({ id: job.id, publishedAt: job.publishedAt }),
+          ),
       );
     },
   });
@@ -1451,14 +1471,6 @@ function buildDigestCandidateWhere(
     ...(query.remotePreference === "ANY"
       ? {}
       : { remoteType: query.remotePreference as RemoteType }),
-    ...(query.keyword === ""
-      ? {}
-      : {
-          OR: [
-            { title: { contains: query.keyword, mode: "insensitive" } },
-            { description: { contains: query.keyword, mode: "insensitive" } },
-          ],
-        }),
   };
   return {
     publishedAt: { gt: window.start, lte: window.end },

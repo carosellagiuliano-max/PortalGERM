@@ -3,12 +3,18 @@ import type { Metadata } from "next";
 import { JobClusterPage } from "@/components/public/job-cluster-page";
 import { buildClusterMetadata } from "@/lib/seo/cluster-metadata";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type PairPageProps = Readonly<{
   params: Promise<{ slug: string; category: string }>;
   searchParams: Promise<ClusterSearchParams>;
 }>;
 
-export async function generateMetadata({ params, searchParams }: PairPageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: PairPageProps): Promise<Metadata> {
   const [{ slug, category }, query] = await Promise.all([params, searchParams]);
   return buildClusterMetadata(
     { kind: "pair", cantonSlug: slug, categorySlug: category },
@@ -16,7 +22,10 @@ export async function generateMetadata({ params, searchParams }: PairPageProps):
   );
 }
 
-export default async function CantonCategoryJobsPage({ params, searchParams }: PairPageProps) {
+export default async function CantonCategoryJobsPage({
+  params,
+  searchParams,
+}: PairPageProps) {
   const [{ slug, category }, query] = await Promise.all([params, searchParams]);
   return (
     <JobClusterPage
@@ -28,7 +37,9 @@ export default async function CantonCategoryJobsPage({ params, searchParams }: P
   );
 }
 
-type ClusterSearchParams = Readonly<Record<string, string | readonly string[] | undefined>>;
+type ClusterSearchParams = Readonly<
+  Record<string, string | readonly string[] | undefined>
+>;
 
 function boundedCursor(value: string | readonly string[] | undefined) {
   return typeof value === "string" && value.length <= 4_096 ? value : undefined;

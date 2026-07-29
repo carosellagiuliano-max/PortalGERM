@@ -51,10 +51,14 @@ const createInputSchema = z
     idempotencyKey: z.string().uuid(),
     approvalEvidenceRef: z
       .string()
-      .regex(/^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u),
+      .regex(
+        /^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u,
+      ),
     stepUpEvidenceRef: z
       .string()
-      .regex(/^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u),
+      .regex(
+        /^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u,
+      ),
   })
   .strict();
 
@@ -65,7 +69,9 @@ const consumeInputSchema = z
     token: z.string().min(43).max(128),
     stepUpEvidenceRef: z
       .string()
-      .regex(/^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u),
+      .regex(
+        /^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u,
+      ),
   })
   .strict();
 
@@ -326,8 +332,7 @@ export async function consumePrivacyExportV2(
     expectedToken === null ||
     !constantTimeTextEqual(expectedToken, input.data.token) ||
     sha256(input.data.token) !== artifact.downloadTokenHash ||
-    artifact.privacyExecution.stepUpEvidenceRef !==
-      input.data.stepUpEvidenceRef
+    artifact.privacyExecution.stepUpEvidenceRef !== input.data.stepUpEvidenceRef
   ) {
     return downloadFailure("TOKEN_INVALID");
   }
@@ -619,8 +624,7 @@ async function setupExportExecution(
     const artifactId = randomUUID();
     const objectVersion = randomUUID();
     const expiresAt = new Date(
-      now.getTime() +
-        PRIVACY_EXPORT_STORAGE_POLICY_V1.artifactTtlMilliseconds,
+      now.getTime() + PRIVACY_EXPORT_STORAGE_POLICY_V1.artifactTtlMilliseconds,
     );
     const encryptionKeyVersion = dependencies.exportKeyring[0]!.version;
     const token = derivePrivacyExportDownloadToken(
@@ -826,6 +830,15 @@ async function prepareOwnedPackage(
         description: true,
         status: true,
         createdAt: true,
+        freshnessReport: {
+          select: {
+            status: true,
+            reviewDueAt: true,
+            resolvedAt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     }),
     database.personaAssignment.findMany({
@@ -1407,7 +1420,10 @@ async function* packageBody(
 }
 
 async function finalizeExportExecution(
-  setup: Extract<Awaited<ReturnType<typeof setupExportExecution>>, { ok: true }>,
+  setup: Extract<
+    Awaited<ReturnType<typeof setupExportExecution>>,
+    { ok: true }
+  >,
   prepared: PreparedPackage,
   packageSha256: string,
   sizeBytes: number,
@@ -1554,7 +1570,10 @@ async function finalizeExportExecution(
 }
 
 async function markExportFailure(
-  setup: Extract<Awaited<ReturnType<typeof setupExportExecution>>, { ok: true }>,
+  setup: Extract<
+    Awaited<ReturnType<typeof setupExportExecution>>,
+    { ok: true }
+  >,
   database: DatabaseClient,
   now: Date,
 ) {
@@ -1630,7 +1649,10 @@ export function derivePrivacyExportDownloadToken(
 }
 
 function successResult(
-  setup: Extract<Awaited<ReturnType<typeof setupExportExecution>>, { ok: true }>,
+  setup: Extract<
+    Awaited<ReturnType<typeof setupExportExecution>>,
+    { ok: true }
+  >,
   token: string,
   replay: boolean,
 ): PrivacyExportV2Result {
@@ -1657,9 +1679,7 @@ function section(
   });
 }
 
-function prepareExportSection(
-  item: ExportSection,
-): PreparedExportSection {
+function prepareExportSection(item: ExportSection): PreparedExportSection {
   const digest = createHash("sha256");
   const lines = item.records.map((record) =>
     encodeLine({
@@ -1879,7 +1899,9 @@ async function* notificationOutboxChunks(
           )
         `;
     const rows: readonly NotificationOutboxChunkRow[] =
-      await database.$queryRaw<readonly NotificationOutboxChunkRow[]>(Prisma.sql`
+      await database.$queryRaw<
+        readonly NotificationOutboxChunkRow[]
+      >(Prisma.sql`
       WITH page AS (
         SELECT
           outbox."createdAt",
@@ -2080,9 +2102,7 @@ function prismaAuditPort(transaction: Prisma.TransactionClient) {
 }
 
 function auditRetainUntil(now: Date) {
-  return new Date(
-    now.getTime() + AUDIT_RETENTION_DAYS * DAY_MILLISECONDS,
-  );
+  return new Date(now.getTime() + AUDIT_RETENTION_DAYS * DAY_MILLISECONDS);
 }
 
 function transactionOptions() {

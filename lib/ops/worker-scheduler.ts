@@ -120,7 +120,12 @@ async function enqueueScheduleTick(
     now: Date;
   }>,
 ) {
-  const divisor = handler.schedule === "hour-boundary" ? 60 * 60_000 : 60_000;
+  const divisor =
+    handler.schedule === "day-boundary"
+      ? 24 * 60 * 60_000
+      : handler.schedule === "hour-boundary"
+        ? 60 * 60_000
+        : 60_000;
   const bucket = Math.floor(dependencies.now.getTime() / divisor);
   const dedupeKey = `${handler.handlerKey}:${handler.handlerVersion}:${bucket}`;
   const outcome = await enqueueWorkItem(dependencies.database, {

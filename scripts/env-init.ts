@@ -160,6 +160,7 @@ const values: Record<string, string> = {
   OPTIONAL_ANALYTICS_NAVIGATION: "false",
   OPTIONAL_ANALYTICS_CONVERSION: "false",
   SEARCH_LEARNING_COLLECTION: "false",
+  SEARCH_LEARNING_HASH_SECRET: secret(),
   JOBROOM_API_URL: "",
   MAPS_API_KEY: "",
 };

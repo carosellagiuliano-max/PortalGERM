@@ -3,17 +3,47 @@ import type { Metadata } from "next";
 import { JobClusterPage } from "@/components/public/job-cluster-page";
 import { buildClusterMetadata } from "@/lib/seo/cluster-metadata";
 
-export async function generateMetadata({ params, searchParams }: Readonly<{ params: Promise<{ slug: string }>; searchParams: Promise<ClusterSearchParams> }>): Promise<Metadata> {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: Readonly<{
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<ClusterSearchParams>;
+}>): Promise<Metadata> {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  return buildClusterMetadata({ kind: "category", categorySlug: slug }, { hasPagination: hasQueryState(query) });
+  return buildClusterMetadata(
+    { kind: "category", categorySlug: slug },
+    { hasPagination: hasQueryState(query) },
+  );
 }
 
-export default async function CategoryJobsPage({ params, searchParams }: Readonly<{ params: Promise<{ slug: string }>; searchParams: Promise<ClusterSearchParams> }>) {
+export default async function CategoryJobsPage({
+  params,
+  searchParams,
+}: Readonly<{
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<ClusterSearchParams>;
+}>) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  return <JobClusterPage kind="category" categorySlug={slug} after={boundedCursor(query.after)} />;
+  return (
+    <JobClusterPage
+      kind="category"
+      categorySlug={slug}
+      after={boundedCursor(query.after)}
+    />
+  );
 }
 
-type ClusterSearchParams = Readonly<Record<string, string | readonly string[] | undefined>>;
+type ClusterSearchParams = Readonly<
+  Record<string, string | readonly string[] | undefined>
+>;
 
-function boundedCursor(value: string | readonly string[] | undefined) { return typeof value === "string" && value.length <= 4_096 ? value : undefined; }
-function hasQueryState(value: ClusterSearchParams) { return Object.values(value).some((entry) => entry !== undefined); }
+function boundedCursor(value: string | readonly string[] | undefined) {
+  return typeof value === "string" && value.length <= 4_096 ? value : undefined;
+}
+function hasQueryState(value: ClusterSearchParams) {
+  return Object.values(value).some((entry) => entry !== undefined);
+}

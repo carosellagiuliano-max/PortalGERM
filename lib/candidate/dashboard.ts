@@ -10,19 +10,15 @@ import type {
   SalaryPeriod,
   WorkPermitType,
 } from "@/lib/generated/prisma/enums";
-import {
-  emptyPublicJobSearchInput,
-  getPublicJobsBySlugs,
-  listPublicJobs,
-} from "@/lib/jobs/public-read-model";
 import { parseNotificationPayloadV1 } from "@/lib/notifications/payloads-v1";
-import type { PublicJobCardModel } from "@/lib/public/types";
 import { calculateCandidateMatchV1 } from "@/lib/scoring/match-score";
+import { haveSearchConceptOverlapV2 } from "@/lib/search/concepts-v2";
 
 import {
   calculateCandidateProfileProgress,
   TALENT_RADAR_VISIBILITY_NOTICE_V1,
 } from "./profile";
+import { listCandidateRecommendationProjections } from "./recommendation-read-model";
 
 const UUID = z.string().uuid();
 const DASHBOARD_NOTIFICATION_KINDS = [
@@ -51,7 +47,8 @@ export async function getCandidateDashboard(
   userId: string,
   now = new Date(),
 ) {
-  if (!UUID.safeParse(userId).success || !Number.isFinite(now.getTime())) return null;
+  if (!UUID.safeParse(userId).success || !Number.isFinite(now.getTime()))
+    return null;
   const profile = await database.candidateProfile.findUnique({
     where: { userId },
     select: {
@@ -83,7 +80,11 @@ export async function getCandidateDashboard(
           categories: { select: { category: { select: { slug: true } } } },
         },
       },
-      documents: { where: { status: "ACTIVE", purpose: "CV" }, take: 1, select: { id: true } },
+      documents: {
+        where: { status: "ACTIVE", purpose: "CV" },
+        take: 1,
+        select: { id: true },
+      },
       radarConsents: {
         where: { effectiveAt: { lte: now } },
         orderBy: [{ effectiveAt: "desc" }, { createdAt: "desc" }],
@@ -95,7 +96,14 @@ export async function getCandidateDashboard(
   });
   if (profile === null) return null;
 
-  const [savedJobs, applicationGroups, recentApplications, alerts, unreadMessages, rawNotifications] = await Promise.all([
+  const [
+    savedJobs,
+    applicationGroups,
+    recentApplications,
+    alerts,
+    unreadMessages,
+    rawNotifications,
+  ] = await Promise.all([
     database.savedJob.findMany({
       where: { candidateProfileId: profile.id },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -133,7 +141,13 @@ export async function getCandidateDashboard(
         events: {
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           take: 3,
-          select: { id: true, kind: true, fromStatus: true, toStatus: true, createdAt: true },
+          select: {
+            id: true,
+            kind: true,
+            fromStatus: true,
+            toStatus: true,
+            createdAt: true,
+          },
         },
       },
     }),
@@ -145,28 +159,45 @@ export async function getCandidateDashboard(
     }),
     countCandidateUnreadMessages(database, userId, profile.id),
     database.notification.findMany({
-      where: { recipientUserId: userId, kind: { in: [...DASHBOARD_NOTIFICATION_KINDS] } },
+      where: {
+        recipientUserId: userId,
+        kind: { in: [...DASHBOARD_NOTIFICATION_KINDS] },
+      },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 12,
-      select: { id: true, kind: true, payload: true, readAt: true, createdAt: true },
+      select: {
+        id: true,
+        kind: true,
+        payload: true,
+        readAt: true,
+        createdAt: true,
+      },
     }),
   ]);
 
-  const recommendations = await loadRecommendations(profile, now);
+  const recommendations = await loadRecommendations(database, profile, now);
   const notifications = [];
   for (const notification of rawNotifications) {
     if (!isDashboardNotificationKind(notification.kind)) continue;
-    const link = await authorizeNotificationLink(database, userId, notification.kind, notification.payload);
-    if (link !== null) notifications.push(Object.freeze({ ...notification, link }));
+    const link = await authorizeNotificationLink(
+      database,
+      userId,
+      notification.kind,
+      notification.payload,
+    );
+    if (link !== null)
+      notifications.push(Object.freeze({ ...notification, link }));
   }
 
-  const radarVisible = profile.onboardingStatus === "COMPLETE" &&
+  const radarVisible =
+    profile.onboardingStatus === "COMPLETE" &&
     profile.radarConsents[0]?.granted === true &&
     profile.radarConsents[0]?.noticeVersion ===
       TALENT_RADAR_VISIBILITY_NOTICE_V1.noticeVersion &&
     profile.radarConsents[0]?.noticeHash ===
       TALENT_RADAR_VISIBILITY_NOTICE_V1.hash &&
-    profile.radarProfile?.publishedAt !== null && profile.radarProfile?.withdrawnAt === null;
+    profile.radarProfile?.publishedAt !== null &&
+    profile.radarProfile?.withdrawnAt === null;
   return Object.freeze({
     profileId: profile.id,
     profileStatus: profile.onboardingStatus,
@@ -180,7 +211,8 @@ export async function getCandidateDashboard(
       summary: profile.summary,
       desiredTitles: profile.preference?.desiredTitles ?? [],
       preferredCategoryIds:
-        profile.preference?.categories.map(({ category }) => category.slug) ?? [],
+        profile.preference?.categories.map(({ category }) => category.slug) ??
+        [],
       skillIds: profile.skills.map(({ skillId }) => skillId),
       languages: profile.languages,
       salaryMin: profile.preference?.salaryMinChf,
@@ -197,12 +229,15 @@ export async function getCandidateDashboard(
     }).percentage,
     recommendations,
     savedJobs: Object.freeze(savedJobs),
-    applicationCounts: Object.freeze(Object.fromEntries(
-      DASHBOARD_APPLICATION_STATUSES.map((status) => [
-        status,
-        applicationGroups.find((group) => group.status === status)?._count._all ?? 0,
-      ]),
-    )),
+    applicationCounts: Object.freeze(
+      Object.fromEntries(
+        DASHBOARD_APPLICATION_STATUSES.map((status) => [
+          status,
+          applicationGroups.find((group) => group.status === status)?._count
+            ._all ?? 0,
+        ]),
+      ),
+    ),
     recentApplications: Object.freeze(recentApplications),
     alerts: Object.freeze(alerts),
     unreadMessages,
@@ -216,8 +251,14 @@ export async function countCandidateUnreadMessages(
   userId: string,
   candidateProfileId: string,
 ) {
-  if (!UUID.safeParse(userId).success || !UUID.safeParse(candidateProfileId).success) return 0;
-  const rows = await database.$queryRaw<readonly Readonly<{ unreadMessages: bigint }>[]>`
+  if (
+    !UUID.safeParse(userId).success ||
+    !UUID.safeParse(candidateProfileId).success
+  )
+    return 0;
+  const rows = await database.$queryRaw<
+    readonly Readonly<{ unreadMessages: bigint }>[]
+  >`
     SELECT COUNT(message."id")::bigint AS "unreadMessages"
     FROM "ConversationParticipant" AS participant
     INNER JOIN "Conversation" AS conversation
@@ -266,7 +307,11 @@ export async function markCandidateNotificationRead(
   notificationId: string,
   now = new Date(),
 ) {
-  if (!UUID.safeParse(userId).success || !UUID.safeParse(notificationId).success) return false;
+  if (
+    !UUID.safeParse(userId).success ||
+    !UUID.safeParse(notificationId).success
+  )
+    return false;
   const result = await database.notification.updateMany({
     where: { id: notificationId, recipientUserId: userId, readAt: null },
     data: { readAt: now },
@@ -302,64 +347,95 @@ type RecommendationProfile = Readonly<{
   }> | null;
 }>;
 
-async function loadRecommendations(profile: RecommendationProfile, now: Date) {
+async function loadRecommendations(
+  database: DatabaseClient,
+  profile: RecommendationProfile,
+  now: Date,
+) {
   const preference = profile.preference;
-  const categorySlugs = preference?.categories.map((entry) => entry.category.slug) ?? [];
-  const remoteTypes = preference?.remotePreference && preference.remotePreference !== "ANY"
-    ? [preference.remotePreference]
-    : [];
-  const preferredInput = Object.freeze({
-    ...emptyPublicJobSearchInput(),
-    cantonSlugs: profile.canton?.slug ? Object.freeze([profile.canton.slug]) : Object.freeze([]),
-    categorySlugs: Object.freeze(categorySlugs),
-    jobTypes: Object.freeze(preference?.desiredJobTypes ?? []),
-    remoteTypes: Object.freeze(remoteTypes),
-  });
-  const preferredPage = await listPublicJobs(preferredInput, { pageSize: 24, now });
-  const jobs = [...preferredPage.jobs];
-  if (jobs.length < 6) {
-    const fallbackPage = await listPublicJobs(
-      emptyPublicJobSearchInput(),
-      { pageSize: 24, now },
-    );
-    const seen = new Set(jobs.map(({ id }) => id));
-    jobs.push(...fallbackPage.jobs.filter(({ id }) => !seen.has(id)));
-  }
-  const details = await getPublicJobsBySlugs(
-    jobs.map((job) => job.slug),
-    { now },
+  const categorySlugs =
+    preference?.categories.map((entry) => entry.category.slug) ?? [];
+  const remoteTypes =
+    preference?.remotePreference && preference.remotePreference !== "ANY"
+      ? [preference.remotePreference]
+      : [];
+  const candidates = await listCandidateRecommendationProjections(
+    database,
+    {
+      ...(profile.canton?.slug === undefined
+        ? {}
+        : { cantonSlug: profile.canton.slug }),
+      categorySlugs: Object.freeze(categorySlugs),
+      jobTypes: Object.freeze(preference?.desiredJobTypes ?? []),
+      remoteTypes: Object.freeze(remoteTypes),
+    },
+    now,
   );
-  const ranked = details.map((job) => Object.freeze({
-    job: job as PublicJobCardModel,
-    match: calculateCandidateMatchV1({
-      candidate: {
-        skills: profile.skills.map((entry) => entry.skillId),
-        ...(profile.cantonId ? { acceptableCantonIds: [profile.cantonId] } : {}),
-        ...(preference?.workloadMin == null ? {} : { workloadMin: preference.workloadMin }),
-        ...(preference?.workloadMax == null ? {} : { workloadMax: preference.workloadMax }),
-        ...(preference?.salaryMinChf == null ? {} : { desiredSalaryMin: preference.salaryMinChf }),
-        ...(preference?.salaryMaxChf == null ? {} : { desiredSalaryMax: preference.salaryMaxChf }),
-        ...(preference?.salaryPeriod == null ? {} : { desiredSalaryPeriod: preference.salaryPeriod }),
-        ...(preference?.remotePreference == null ? {} : { remotePreference: preference.remotePreference }),
-        languages: profile.languages,
-        ...(preference?.desiredJobTypes.length ? { jobTypes: preference.desiredJobTypes } : {}),
-        ...(preference?.availableFrom == null ? {} : { availabilityDate: preference.availableFrom }),
-      },
-      job: {
-        requiredSkills: job.skills.filter((skill) => skill.required).map((skill) => skill.id),
-        ...(job.canton === null ? {} : { cantonId: job.canton.id }),
-        workloadMin: job.workloadMin,
-        workloadMax: job.workloadMax,
-        ...(job.salaryMin === null ? {} : { salaryMin: job.salaryMin }),
-        ...(job.salaryMax === null ? {} : { salaryMax: job.salaryMax }),
-        ...(job.salaryPeriod === null ? {} : { salaryPeriod: job.salaryPeriod }),
-        remoteType: job.remoteType,
-        requiredLanguages: job.languages,
-        jobType: job.jobType,
-        ...(job.startDate === null ? {} : { startDate: job.startDate }),
-      },
-    }),
-  })).sort((left, right) => (right.match.score ?? -1) - (left.match.score ?? -1)).slice(0, 6);
+  const ranked = candidates
+    .map(({ job, requiredSkillIds, requiredLanguages, startDate }) =>
+      Object.freeze({
+        job,
+        conceptMatch: haveSearchConceptOverlapV2(
+          preference?.desiredTitles ?? [],
+          job.title,
+        ),
+        match: calculateCandidateMatchV1({
+          candidate: {
+            skills: profile.skills.map((entry) => entry.skillId),
+            ...(profile.cantonId
+              ? { acceptableCantonIds: [profile.cantonId] }
+              : {}),
+            ...(preference?.workloadMin == null
+              ? {}
+              : { workloadMin: preference.workloadMin }),
+            ...(preference?.workloadMax == null
+              ? {}
+              : { workloadMax: preference.workloadMax }),
+            ...(preference?.salaryMinChf == null
+              ? {}
+              : { desiredSalaryMin: preference.salaryMinChf }),
+            ...(preference?.salaryMaxChf == null
+              ? {}
+              : { desiredSalaryMax: preference.salaryMaxChf }),
+            ...(preference?.salaryPeriod == null
+              ? {}
+              : { desiredSalaryPeriod: preference.salaryPeriod }),
+            ...(preference?.remotePreference == null
+              ? {}
+              : { remotePreference: preference.remotePreference }),
+            languages: profile.languages,
+            ...(preference?.desiredJobTypes.length
+              ? { jobTypes: preference.desiredJobTypes }
+              : {}),
+            ...(preference?.availableFrom == null
+              ? {}
+              : { availabilityDate: preference.availableFrom }),
+          },
+          job: {
+            requiredSkills: requiredSkillIds,
+            ...(job.canton === null ? {} : { cantonId: job.canton.id }),
+            workloadMin: job.workloadMin,
+            workloadMax: job.workloadMax,
+            ...(job.salaryMin === null ? {} : { salaryMin: job.salaryMin }),
+            ...(job.salaryMax === null ? {} : { salaryMax: job.salaryMax }),
+            ...(job.salaryPeriod === null
+              ? {}
+              : { salaryPeriod: job.salaryPeriod }),
+            remoteType: job.remoteType,
+            requiredLanguages,
+            jobType: job.jobType,
+            ...(startDate === null ? {} : { startDate }),
+          },
+        }),
+      }),
+    )
+    .sort(
+      (left, right) =>
+        Number(right.conceptMatch) - Number(left.conceptMatch) ||
+        (right.match.score ?? -1) - (left.match.score ?? -1),
+    )
+    .slice(0, 6)
+    .map(({ job, match }) => Object.freeze({ job, match }));
   return Object.freeze(ranked);
 }
 
@@ -370,21 +446,42 @@ async function authorizeNotificationLink(
   payload: unknown,
 ): Promise<string | null> {
   try {
-    const parsed = parseNotificationPayloadV1(kind, payload) as Record<string, unknown>;
+    const parsed = parseNotificationPayloadV1(kind, payload) as Record<
+      string,
+      unknown
+    >;
     if ("applicationId" in parsed && typeof parsed.applicationId === "string") {
-      const owned = await database.application.findFirst({ where: { id: parsed.applicationId, candidateProfile: { userId } }, select: { id: true } });
+      const owned = await database.application.findFirst({
+        where: { id: parsed.applicationId, candidateProfile: { userId } },
+        select: { id: true },
+      });
       return owned === null ? null : `/candidate/applications/${owned.id}`;
     }
-    if ("conversationId" in parsed && typeof parsed.conversationId === "string") {
-      const owned = await database.conversation.findFirst({ where: { id: parsed.conversationId, participants: { some: { kind: "USER", userId, leftAt: null } } }, select: { id: true } });
+    if (
+      "conversationId" in parsed &&
+      typeof parsed.conversationId === "string"
+    ) {
+      const owned = await database.conversation.findFirst({
+        where: {
+          id: parsed.conversationId,
+          participants: { some: { kind: "USER", userId, leftAt: null } },
+        },
+        select: { id: true },
+      });
       return owned === null ? null : `/candidate/messages/${owned.id}`;
     }
     if ("requestId" in parsed && typeof parsed.requestId === "string") {
       if (kind === "PRIVACY_REQUEST_CHANGED") {
-        const owned = await database.privacyRequest.findFirst({ where: { id: parsed.requestId, requesterUserId: userId }, select: { id: true } });
+        const owned = await database.privacyRequest.findFirst({
+          where: { id: parsed.requestId, requesterUserId: userId },
+          select: { id: true },
+        });
         return owned === null ? null : "/candidate/privacy";
       }
-      const owned = await database.employerContactRequest.findFirst({ where: { id: parsed.requestId, candidateProfile: { userId } }, select: { id: true } });
+      const owned = await database.employerContactRequest.findFirst({
+        where: { id: parsed.requestId, candidateProfile: { userId } },
+        select: { id: true },
+      });
       return owned === null ? null : "/candidate/privacy";
     }
   } catch {

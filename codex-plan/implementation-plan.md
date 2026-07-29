@@ -602,9 +602,12 @@ Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert u
 
 > Dieser Abschnitt ist das ausdrücklich freigegebene Folgepaket auf
 > Planungsebene. Phasen 19 bis 28 sind technisch implementiert und ihre
-> jeweiligen lokalen/CI-Gates grün. Aktivierung, Realprovider, Staging und
-> externe Fach-/Operationsfreigaben bleiben je Phase getrennt
-> `DISABLED`/`BLOCKED`; Phasen 29–32 bleiben offen.
+> jeweiligen lokalen/CI-Gates grün. Phase 30 besitzt eine grüne technische
+> Concept-/Freshness-/Monitoring-Basis, bleibt wegen Fachreview-,
+> Zielumgebungs- und Operationsgates insgesamt offen. Aktivierung,
+> Realprovider, Staging und externe Fach-/Operationsfreigaben bleiben je
+> Phase getrennt `DISABLED`/`BLOCKED`; Phasen 29–32 sind nicht pauschal
+> abgeschlossen.
 > Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
 > Folgephasengate-Vertrag aus
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md).
@@ -659,9 +662,12 @@ flowchart TD
 4. **Frühe parallele Discovery**: 31A (ICP, genau ein erstes
    Region×Beruf-Paar, WTP, Cashflow, Operationskosten) und 29A (moderierte
    aktuelle Kernreisen).
-5. **Track 30A**: fachliches Pflege-Korpus und, nur bei Aktivierung,
-   Engineering-Korpus; gemeinsame Berufs-/Ort-/Qualifikations-/Skill-/
-   Branchenkonzepte und privacy-safe Learning.
+5. **Track 30A technisch vorbereitet; Fachgate offen**: gemeinsame
+   Berufs-/Ort-/Qualifikations-/Zertifikats-/Skill-/Branchenkonzepte,
+   privacy-safe Learning und Cluster V2 sind lokal grün. Das Pflege-Korpus
+   bleibt ohne signiertes Fachreview unaktiviert; Engineering bleibt
+   `DISCOVERY_ONLY`. Siehe
+   [Phase-30-Evidence](./evidence/2026-07-29-phase-30.md).
 6. **Phasen 22→23 — technisch abgeschlossen**: Datenschutz/Legal/Analytics
    sowie Lease-/Retry-/DLQ-/Replay-Operations bauen auf dem
    Phase-21-Sandboxvertrag auf; externe Counsel-/Provider-/Pager-Gates bleiben.
@@ -672,9 +678,11 @@ flowchart TD
    Strukturierte Company-Evidence, Providerports, Re-review, unabhängige
    Decisions und gleiche Badge-/Job-/Radar-Revocation bestehen auf Candidate
    `96933aa` das lokale G3; siehe
-   [Phase-26-Evidence](./evidence/2026-07-28-phase-26.md). Job Freshness ist
-   der nächste Fachvertrag. Alle Phase-25-/26-Aktivierungsflags bleiben bis
-   Owner-/RP-ID-/Risk-/Provider-/Legal-/Capacity-/Pager-Gates geschlossen.
+   [Phase-26-Evidence](./evidence/2026-07-28-phase-26.md). Der technische
+   Phase-30D-Freshness-/Duplicate-/Consumervertrag ist ebenfalls lokal grün;
+   reale vierstündige Moderationskapazität, Pager, Staging und Public-Go
+   bleiben offen. Alle Phase-25-/26-Aktivierungsflags bleiben bis Owner-/
+   RP-ID-/Risk-/Provider-/Legal-/Capacity-/Pager-Gates geschlossen.
 8. **Phase 27 technisch owner-aktiviert und abgeschlossen; Demand-Go offen**:
    additive PersonaAssignments, versionierter Session-/Company-Kontext,
    Existing-Identity-Invitation, Candidate-Self-Service, identity-weite
@@ -682,7 +690,7 @@ flowchart TD
    Vertrag verifiziert; siehe
    [Phase-27-Evidence](./evidence/2026-07-28-phase-27.md). Alle Flags,
    Kohorten und Marktclaims bleiben bis moderierter Demand-Evidence, vier
-    Owner-Sign-offs, Canary/Staging und G4 geschlossen.
+   Owner-Sign-offs, Canary/Staging und G4 geschlossen.
 9. **Phase 28 technisch owner-aktiviert und abgeschlossen; getrennte
    Demand-Gates offen**: Candidate-owned externer Tracker und persistenter
    Interview-Scheduler sind als zwei unabhängige default-off Local-/CI-
@@ -692,19 +700,19 @@ flowchart TD
    ungleich Submitted, der Termin bleibt getrennt vom Pipeline-Status und
    weder ATS-/Calendar-Provider noch Markt-/LIVE-Reife werden behauptet.
 10. **Phase 24 technisch abgeschlossen, Aktivierung nur bei LC5-Go**:
-   Candidate `f785944` besitzt den grünen fail-closed Local-/CI-Zahlungs- und
-   Service-Recovery-Vertrag; kein Staging-/Paid-/LIVE-Start vor WTP-,
-   Phase-25-, Provider-, Tax-/Legal-, Finance- und Operations-Go. Siehe
-   [Phase-24-Evidence](./evidence/2026-07-27-phase-24.md).
+    Candidate `f785944` besitzt den grünen fail-closed Local-/CI-Zahlungs- und
+    Service-Recovery-Vertrag; kein Staging-/Paid-/LIVE-Start vor WTP-,
+    Phase-25-, Provider-, Tax-/Legal-, Finance- und Operations-Go. Siehe
+    [Phase-24-Evidence](./evidence/2026-07-27-phase-24.md).
 11. **29B → 31B**: Die technische Responsive-/JobPass-/3-Engine-/A11y-
-   Automationsbasis ist lokal grün; siehe
-   [Phase-29-Evidence](./evidence/2026-07-29-phase-29.md). Stabile
-   Fachverträge und noch deaktivierte Angebotscopy müssen nach 30A/30D auf dem
-   finalen Scope mit moderierten Runden und realen NVDA-/VoiceOver-Smokes
-   geprüft werden; erst danach genau das lieferbare Angebot/den Cluster
-   aktivieren.
+    Automationsbasis ist lokal grün; siehe
+    [Phase-29-Evidence](./evidence/2026-07-29-phase-29.md). Stabile
+    Fachverträge und noch deaktivierte Angebotscopy müssen nach 30A/30D auf dem
+    finalen Scope mit moderierten Runden und realen NVDA-/VoiceOver-Smokes
+    geprüft werden; erst danach genau das lieferbare Angebot/den Cluster
+    aktivieren.
 12. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
-   Artefakt prüfen.
+    Artefakt prüfen.
 
 ### Parallel zulässig
 

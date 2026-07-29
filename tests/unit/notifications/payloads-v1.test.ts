@@ -97,6 +97,11 @@ const VALID_PAYLOADS = {
     interviewId: id(27),
     status: "REMINDER",
   },
+  JOB_FRESHNESS_CHANGED: {
+    jobId: id(28),
+    status: "REMINDER_7D",
+    dueAt: "2026-08-28T12:00:00.000Z",
+  },
 } as const satisfies NotificationPayloadsV1;
 
 const ROUTE_ID_KEYS = {
@@ -124,6 +129,7 @@ const ROUTE_ID_KEYS = {
   EXTERNAL_APPLICATION_CHANGED: "trackerId",
   INTERVIEW_CHANGED: "interviewId",
   INTERVIEW_REMINDER: "interviewId",
+  JOB_FRESHNESS_CHANGED: "jobId",
 } as const satisfies Record<NotificationKind, string>;
 
 describe("NOTIFICATION_PAYLOADS_V1", () => {
@@ -131,7 +137,7 @@ describe("NOTIFICATION_PAYLOADS_V1", () => {
     expect(Object.keys(NOTIFICATION_PAYLOADS_V1)).toEqual(
       Object.values(NotificationKinds),
     );
-    expect(Object.keys(NOTIFICATION_PAYLOADS_V1)).toHaveLength(24);
+    expect(Object.keys(NOTIFICATION_PAYLOADS_V1)).toHaveLength(25);
   });
 
   it("accepts one strict recipient-scoped payload for every kind", () => {
@@ -143,9 +149,9 @@ describe("NOTIFICATION_PAYLOADS_V1", () => {
   });
 
   it("freezes the four explicitly required payload shapes", () => {
-    expect(Object.keys(VALID_PAYLOADS.CONTACT_REQUEST_CANCELLED).sort()).toEqual(
-      ["reasonCode", "requestId", "status"],
-    );
+    expect(
+      Object.keys(VALID_PAYLOADS.CONTACT_REQUEST_CANCELLED).sort(),
+    ).toEqual(["reasonCode", "requestId", "status"]);
     expect(Object.keys(VALID_PAYLOADS.IDENTITY_REVEAL_REVOKED).sort()).toEqual([
       "contactRequestId",
       "grantId",
