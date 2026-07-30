@@ -38,12 +38,12 @@ const safeguards = [
   {
     icon: FileSearchIcon,
     title: "Preview vor Übernahme",
-    text: "Felder, Zuordnung und mögliche Konflikte werden vor einem späteren Draft-Commit geprüft.",
+    text: "Die Reihenfolge ist fest: Quellenrecht → Mapping → Preview → explizite Bestätigung → Draft-only Commit.",
   },
   {
     icon: CheckCircle2Icon,
     title: "Keine Auto-Publikation",
-    text: "Ein Import ersetzt weder Transparenzprüfung noch Moderation und publiziert Stellen nicht automatisch.",
+    text: "Ein Import ersetzt weder Transparenzprüfung noch Moderation. Wiederkehrender Sync und automatische Publikation bleiben deaktiviert.",
   },
 ] as const;
 

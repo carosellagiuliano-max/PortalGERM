@@ -237,4 +237,13 @@ verwendete `REQ-*`-Kennung auch in der autoritativen Matrix auffindbar.
 | `REQ-REL-032-002` | `REQ-REL-001` | 32 | Die Policy bewertet LC1–LC6 getrennt und liefert genau die höchste vollständig belegte Klasse; Misch- oder Sprungfreigaben sind unzulässig. |
 | `REQ-REL-032-003` | `REQ-REL-001`, `REQ-QA-003` | 32 | Commit, Tree, Lockfile, Migration, gebautes Artefakt, Deployment, Runtime-Version und manueller Walkthrough besitzen identische Digests. |
 | `REQ-REL-032-004` | `REQ-REL-001`, `REQ-QA-003` | 32 | Fail, unerklärter Skip, Retry, Dirty Tree oder Evidence eines anderen Commits/Artefakts blockiert G4. |
+
+**Phase-31-Stand 30. Juli 2026:** `REQ-COM-031-001` bis `005` besitzen eine
+grüne fail-closed Local-/CI-Technikbasis und direkte
+[Phase-31-Evidence](./evidence/2026-07-30-phase-31.md). Das bedeutet keine
+fachliche Erfüllung von 31A: genau ein real gewählter Cluster, zwei
+Berufsfachreviews, unabhängiger reconciliierter Net-WTP plus Delivery, reale
+Capacity-/COGS-/Cashflow-Werte sowie Legal-/Tax-/AVG-/Finance-/Ops-
+Freigaben bleiben offen. Entsprechend sind Production Offers, Managed
+Import, Boost, Paid Radar und Salary standardmässig deaktiviert.
 | `REQ-REL-032-005` | `REQ-REL-001`, `REQ-OPS-001` | 32 | G4 benötigt vollständiges Manifest und unabhängige Approvals sowie einen auf dem Kandidaten geprobten sicheren Rollback/Roll-forward-Pfad. |

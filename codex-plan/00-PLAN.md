@@ -309,7 +309,14 @@ bleibt die Gesamtphase `[ ]`. Siehe
 
 ### [ ] 31 — Monetarisierung und Marktvalidierung
 
-[`31-monetization-market-validation.md`](./31-monetization-market-validation.md) · früh startender ICP-/WTP-/Cashflow-Discovery-Track, reale Liquidität und spätere Freigabe nur tatsächlich lieferbarer Pakete.
+[`31-monetization-market-validation.md`](./31-monetization-market-validation.md) ·
+Die fail-closed Local-/CI-Technikbasis für Net-WTP-Klassifikation, genau einen
+ersten Cluster, Offer-Sequenz, Capacity/Cashflow, Service-Recovery,
+ehrliche Research-Copy und Draft-only-Import ist grün. Reale KMU-Zahlungen
+plus Delivery, Berufsfachreviews, Clusterentscheid, Legal/Tax/AVG/Finance,
+gemessene Kapazität, Zielumgebung und jede öffentliche/Paid-Aktivierung sind
+offen; daher bleibt die Gesamtphase `[ ]`. Siehe
+[Phase-31-Evidence](./evidence/2026-07-30-phase-31.md).
 
 ### [ ] 32 — Finaler Production-Release-Audit
 

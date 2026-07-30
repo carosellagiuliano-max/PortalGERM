@@ -848,3 +848,73 @@ Referenced by: Phase 20/22/23/25/26/29/30/31/32;
 `REQ-SRCH-030A-001/002`, `REQ-OPS-030B-001`,
 `REQ-SEO-030C-001`, `REQ-JOB-030D-001`,
 `STH-019/020/021/027/032/036`.
+
+---
+
+## ADR-042 — Kommerzielle Freigabe folgt Net-WTP, Lieferfähigkeit und genau einem Startcluster
+
+**Status:** accepted für die technisch verifizierte, standardmässig
+deaktivierte Phase-31-Local-/CI-Basis. Reale Buyer-, Legal-, Tax-, AVG-,
+Privacy-, Accounting-, Capacity- und Cashflow-Evidence sowie jede öffentliche
+Aktivierung bleiben offen.
+
+**Decision:** Eine Anfrage, ein Lead, LOI, kostenloser Pilot, Seed, Mock- oder
+Testmode-Zahlung ist kein Zahlungsbereitschaftsnachweis. `NET_PAID_WTP` zählt
+nur für einen unabhängigen Buyer, wenn ein LIVE-Provider-Geldfluss oder eine
+kontrolliert reconciliierte manuelle Zahlung nach Refund und Reversal positiv
+bleibt und die versprochene Leistung mindestens begonnen hat. Diese Evidence
+referenziert die Phase-24-Finanzwahrheit beziehungsweise eine explizite
+Reconciliation-Referenz und bildet keinen zweiten Ledger.
+
+Jede Offerfrage wird mit Buyer- und Net-WTP-Schwelle sowie Messfenster
+vorregistriert. Hypothese, Evidence, Clusterentscheid, Capacity-/Cashflow-/
+Service-Policy-Release und Offerrelease sind append-only und digestgebunden;
+eine Korrektur erzeugt eine neue Version. Datenbank-Constraints erlauben
+höchstens einen ersten `SELECTED`/`PUBLIC_ACTIVE` Region×Profession-Cluster
+und während Phase 31 höchstens ein erstes öffentliches Offer. Der
+Clusterentscheid bindet exakt das `SELECTED` Phase-30-V2-Korpus, aktuelle
+80-%-Search-Qualität, Fachreview und getrennte Product-/Ops-Approver.
+
+Kernangebote — Basisworkflow, Hiring Sprint, Retainer/Credits, Concierge und
+betreuter Import — kommen vor Add-ons. Boost braucht zusätzlich organisches
+Inventar, eine gemessene Reichweitenbaseline und unveränderte Fairness/
+Eligibility. Paid Radar braucht eine freigegebene Kernleistung, aktive
+Candidate-Opt-ins, Contact→Accept→Reveal-Evidence sowie Privacy-, Trust- und
+Eligibility-Loss-Schutz. Zahlung umgeht niemals Candidate Opt-in, Accept,
+Reveal oder Grant-Widerruf. Salary und Success Fee besitzen separate Gates;
+ohne reale freigegebene Datenquelle beziehungsweise AVG-/Legal-/Tax-Entscheid
+bleiben sie deaktiviert.
+
+Capacity modelliert Company Verification, Jobmoderation, Import, Privacy,
+Support/Fraud und Billing-Ausnahmen mit Arrival Rate, Backlog, p50/p95, SLA,
+Staffing, On-call, höchstens 80 % Auslastung und Concierge-COGS-Cap. Cashflow
+rechnet jeden Rappen über vollständige 18-/24-Monatsfenster mit Cash-in,
+Provider-, Personal-/Service-, Refund- und CAC-Timing. Vor Verkauf ist eine
+kundensichtbare, versionierte Recovery-Policy mit Extension, Credit, Refund,
+SLA, Owner, idempotenter Ausführung und Phase-24-Reconciliation Pflicht.
+
+Der betreute Import erweitert den vorhandenen sicheren Importer statt einen
+zweiten Pfad zu schaffen: Source Rights → Mapping → gebundene Preview →
+explizite Bestätigung → Draft-only Commit. Digestabweichung, falscher Tenant,
+abgelaufenes Recht oder deaktivierter Schalter stoppen vor dem Write;
+wiederkehrender Sync und Auto-Publish bleiben aus.
+
+Die Schalter `COMMERCIAL_PRODUCTION_OFFERS`,
+`COMMERCIAL_MANAGED_IMPORT`, `COMMERCIAL_BOOST`,
+`COMMERCIAL_PAID_RADAR` und `COMMERCIAL_SALARY` sind standardmässig `false`.
+Bis externe Evidence freigegeben ist, akzeptiert der Environment-Vertrag
+technische Aktivierungen nur in Local/CI. Public Pricing bleibt
+`RESEARCH_ONLY`, zeigt keinen echten Kaufclaim und wertet eine Demo-Anfrage
+nicht als Umsatz.
+
+**Why:** Ein technisch funktionierender Checkout beweist weder, dass ein KMU
+zahlt, noch dass die Leistung profitabel, rechtlich freigegeben und mit
+vertretbarer Servicequalität lieferbar ist. Eine gemeinsame, unveränderliche
+Freigabekette verhindert Add-on-first-Scheinvalidierung, parallele
+Clusterzersplitterung, überverkaufte Concierge-Kapazität und widersprüchliche
+Finanzwahrheiten.
+
+Referenced by: Phase 24/25/29/30/31/32;
+`REQ-COM-031-001/002/003/004/005`, `REQ-BIL-001/002/003/004`,
+`REQ-MKT-001/002`, `REQ-INT-001/002`, `REQ-OPS-001/002`,
+`STH-018/019/022/028/034/035/037`.

@@ -802,6 +802,65 @@ enum ProductType {
   SUCCESS_FEE
 }
 
+enum CommercialOfferKind {
+  CORE_WORKFLOW
+  HIRING_SPRINT
+  RETAINER_CREDITS
+  CONCIERGE
+  MANAGED_IMPORT
+  BOOST
+  PAID_RADAR
+  SALARY
+  SUCCESS_FEE
+}
+
+enum CommercialReleaseStatus {
+  DRAFT
+  APPROVED
+  PUBLIC_ACTIVE
+  REVOKED
+}
+
+enum CommercialClusterStatus {
+  RESEARCH
+  SELECTED
+  PUBLIC_ACTIVE
+  REVOKED
+}
+
+enum CommercialEvidenceKind {
+  NET_PAID_WTP
+  DELIVERY
+  LEGAL_REVIEW
+  TAX_REVIEW
+  AVG_REVIEW
+  PRIVACY_REVIEW
+  ACCOUNTING_REVIEW
+  ORGANIC_REACH
+  RADAR_FUNNEL
+}
+
+enum CommercialEvidenceEnvironment {
+  LIVE_RESEARCH
+  LIVE_PROVIDER
+  MANUAL_RECONCILED
+  SANDBOX
+  TEST
+  DEMO
+  FREE
+  LOI
+  LEAD
+}
+
+enum CommercialDeliveryStatus {
+  NOT_STARTED
+  STARTED
+  PARTIAL
+  DELIVERED
+  FAILED
+  RECOVERED
+}
+
 enum FulfillmentContextType {
   NONE
   SUBSCRIPTION
@@ -2134,6 +2193,14 @@ model User {
   stepUpChallenges                    StepUpChallenge[]             @relation("StepUpChallengeOwner")
   personaAssignments                  PersonaAssignment[]
   interviewParticipations             InterviewParticipant[]        @relation("InterviewParticipantUser")
+  commercialHypothesesOwned           CommercialHypothesis[]        @relation("CommercialHypothesisOwner")
+  commercialEvidenceRecorded          CommercialEvidence[]          @relation("CommercialEvidenceRecorder")
+  commercialClusterProductApprovals   CommercialClusterDecision[]   @relation("CommercialClusterProductApprover")
+  commercialClusterOpsApprovals       CommercialClusterDecision[]   @relation("CommercialClusterOpsApprover")
+  capacityModelReleasesApproved       CapacityModelRelease[]        @relation("CapacityModelApprover")
+  cashflowModelReleasesApproved       CashflowModelRelease[]        @relation("CashflowModelApprover")
+  servicePolicyReleasesApproved       ServicePolicyRelease[]        @relation("ServicePolicyApprover")
+  commercialOfferReleasesApproved     CommercialOfferRelease[]      @relation("CommercialOfferApprover")
 
   @@index([status, role])
   @@index([dataProvenance, status])
@@ -2730,6 +2797,7 @@ model Company {
   serviceDeliveryAssessments        ServiceDeliveryAssessment[]
   paymentRiskDecisions              PaymentRiskDecision[]
   jobPublicationFingerprints        JobPublicationFingerprint[]
+  commercialEvidence                CommercialEvidence[]
 
   @@index([status, dataProvenance])
   @@index([registrationEmailDomainNormalized])
@@ -5055,6 +5123,7 @@ model ClusterLaunchAssessment {
   category                   Category                      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   events                     ClusterLaunchEvent[]
   searchQualityEvidence      ClusterSearchQualityEvidence?
+  commercialDecision         CommercialClusterDecision?
 
   @@unique([cantonId, categoryId, policyVersion, evaluatedAt])
   @@index([cantonId, categoryId, policyVersion, status, validUntil])
@@ -5228,6 +5297,7 @@ model ProductVersion {
   product             Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
   releaseDecision     ProductReleaseDecision? @relation(fields: [releaseDecisionId], references: [id], onDelete: Restrict)
   orderLines          OrderLine[]
+  commercialReleases  CommercialOfferRelease[]
 
   @@unique([productId, version])
   @@index([productId, status, validFrom, validTo])
@@ -5351,6 +5421,7 @@ model OrderLine {
   creditLedgerEntries         CreditLedgerEntry[]
   subscriptionSnapshot        SubscriptionOrderSnapshot?
   serviceDeliveryAssessments  ServiceDeliveryAssessment[]
+  commercialEvidence          CommercialEvidence[]
 
   @@index([orderId])
   @@index([planVersionId])
@@ -7285,4 +7356,186 @@ model SitemapCapacityObservation {
   createdAt        DateTime             @default(now()) @db.Timestamptz(3)
 
   @@index([resourceKey, observedAt])
+}
+
+/// Pre-registered commercial question. A new version is a new row; production
+/// release never rewrites the hypothesis or its thresholds.
+model CommercialHypothesis {
+  id                           String                  @id @default(uuid()) @db.Uuid
+  code                         String                  @db.VarChar(64)
+  version                      Int
+  offerKind                    CommercialOfferKind
+  clusterCode                  String                  @db.VarChar(96)
+  status                       CommercialReleaseStatus @default(DRAFT)
+  minimumIndependentBuyers     Int
+  minimumNetPaidRappen         Int
+  measurementWindowStart       DateTime                @db.Timestamptz(3)
+  measurementWindowEnd         DateTime                @db.Timestamptz(3)
+  offerDigest                  String                  @db.Char(64)
+  ownerUserId                  String                  @db.Uuid
+  preRegisteredAt              DateTime                @db.Timestamptz(3)
+  createdAt                    DateTime                @default(now()) @db.Timestamptz(3)
+  evidence                     CommercialEvidence[]
+  releases                     CommercialOfferRelease[]
+  owner                        User                     @relation("CommercialHypothesisOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  @@unique([code, version])
+  @@index([clusterCode, offerKind, status])
+}
+
+/// Evidence references the Phase-24 ledger instead of becoming another money
+/// ledger. Manual reconciliation is permitted only as an explicit reference.
+model CommercialEvidence {
+  id                            String                        @id @default(uuid()) @db.Uuid
+  hypothesisId                  String                        @db.Uuid
+  companyId                     String?                       @db.Uuid
+  orderLineId                   String?                       @db.Uuid
+  manualReconciliationReference String?                       @db.VarChar(255)
+  kind                          CommercialEvidenceKind
+  environment                   CommercialEvidenceEnvironment
+  independentBuyer              Boolean                       @default(false)
+  sellerControlledBuyer         Boolean                       @default(false)
+  grossPaidRappen               Int                           @default(0)
+  refundRappen                  Int                           @default(0)
+  reversalRappen                Int                           @default(0)
+  netPaidRappen                 Int                           @default(0)
+  currency                      String                        @default("CHF") @db.Char(3)
+  deliveryStatus                CommercialDeliveryStatus      @default(NOT_STARTED)
+  evidenceDigest                String                        @unique @db.Char(64)
+  occurredAt                    DateTime                      @db.Timestamptz(3)
+  recordedByUserId              String                        @db.Uuid
+  createdAt                     DateTime                      @default(now()) @db.Timestamptz(3)
+  hypothesis                    CommercialHypothesis          @relation(fields: [hypothesisId], references: [id], onDelete: Restrict)
+  company                       Company?                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  orderLine                     OrderLine?                    @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+  recordedBy                    User                          @relation("CommercialEvidenceRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([hypothesisId, kind, environment, occurredAt])
+  @@index([companyId, occurredAt])
+  @@index([orderLineId])
+}
+
+/// Commercial selection/publication decision layered on top of the Phase-30
+/// V2 search assessment. A partial unique index in SQL permits only one first
+/// selected/public cluster at a time.
+model CommercialClusterDecision {
+  id                         String                   @id @default(uuid()) @db.Uuid
+  assessmentId               String                   @unique @db.Uuid
+  clusterCode                String                   @db.VarChar(96)
+  status                     CommercialClusterStatus  @default(RESEARCH)
+  policyVersion              String                   @db.VarChar(32)
+  selectedCorpusDigest       String                   @db.Char(64)
+  evidenceDigest             String                   @db.Char(64)
+  productApprovedByUserId    String?                  @db.Uuid
+  opsApprovedByUserId        String?                  @db.Uuid
+  decidedAt                  DateTime                 @db.Timestamptz(3)
+  activatedAt                DateTime?                @db.Timestamptz(3)
+  createdAt                  DateTime                 @default(now()) @db.Timestamptz(3)
+  assessment                 ClusterLaunchAssessment  @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  offerReleases              CommercialOfferRelease[]
+  productApprovedBy          User?                    @relation("CommercialClusterProductApprover", fields: [productApprovedByUserId], references: [id], onDelete: Restrict)
+  opsApprovedBy              User?                    @relation("CommercialClusterOpsApprover", fields: [opsApprovedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, decidedAt])
+  @@index([clusterCode, status])
+}
+
+/// Immutable operational release. `modelPayload` contains versioned aggregates,
+/// never customer-level notes.
+model CapacityModelRelease {
+  id                                      String                   @id @default(uuid()) @db.Uuid
+  versionCode                             String                   @unique @db.VarChar(64)
+  status                                  CommercialReleaseStatus  @default(DRAFT)
+  modelDigest                             String                   @unique @db.Char(64)
+  modelPayload                            Json
+  maximumUtilizationBps                   Int
+  measuredUtilizationBps                  Int
+  maximumConciergeCogsRappenPerCustomer   Int
+  measuredConciergeCogsRappenPerCustomer  Int
+  approvedByUserId                        String?                  @db.Uuid
+  approvedAt                              DateTime?                @db.Timestamptz(3)
+  createdAt                               DateTime                 @default(now()) @db.Timestamptz(3)
+  offerReleases                           CommercialOfferRelease[]
+  approvedBy                              User?                    @relation("CapacityModelApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, approvedAt])
+}
+
+model CashflowModelRelease {
+  id                       String                   @id @default(uuid()) @db.Uuid
+  versionCode              String                   @db.VarChar(64)
+  scenarioCode             String                   @db.VarChar(64)
+  horizonMonths            Int
+  status                   CommercialReleaseStatus  @default(DRAFT)
+  modelDigest              String                   @unique @db.Char(64)
+  modelPayload             Json
+  openingCashRappen        Int
+  closingCashRappen        Int
+  peakFundingNeedRappen    Int
+  breakEvenMonth           Int?
+  approvedByUserId         String?                  @db.Uuid
+  approvedAt               DateTime?                @db.Timestamptz(3)
+  createdAt                DateTime                 @default(now()) @db.Timestamptz(3)
+  offerReleases            CommercialOfferRelease[]
+  approvedBy               User?                    @relation("CashflowModelApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([versionCode, scenarioCode, horizonMonths])
+  @@index([status, horizonMonths, approvedAt])
+}
+
+model ServicePolicyRelease {
+  id                       String                   @id @default(uuid()) @db.Uuid
+  versionCode              String                   @unique @db.VarChar(64)
+  status                   CommercialReleaseStatus  @default(DRAFT)
+  policyDigest             String                   @unique @db.Char(64)
+  customerCopyDigest       String                   @db.Char(64)
+  supportedOfferKinds      CommercialOfferKind[]
+  responseSlaMinutes       Int
+  remedyCodes              String[]                 @db.VarChar(32)
+  escalationOwner          String                   @db.VarChar(160)
+  approvedByUserId         String?                  @db.Uuid
+  approvedAt               DateTime?                @db.Timestamptz(3)
+  createdAt                DateTime                 @default(now()) @db.Timestamptz(3)
+  offerReleases            CommercialOfferRelease[]
+  approvedBy               User?                    @relation("ServicePolicyApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, approvedAt])
+}
+
+/// Technical release record. PUBLIC_ACTIVE is impossible without all owning
+/// evidence references; flags still default closed at runtime.
+model CommercialOfferRelease {
+  id                        String                   @id @default(uuid()) @db.Uuid
+  hypothesisId              String                   @unique @db.Uuid
+  productVersionId          String?                  @db.Uuid
+  clusterDecisionId         String                   @db.Uuid
+  capacityModelReleaseId    String                   @db.Uuid
+  cashflowModelReleaseId    String                   @db.Uuid
+  servicePolicyReleaseId    String                   @db.Uuid
+  offerKind                 CommercialOfferKind
+  status                    CommercialReleaseStatus @default(DRAFT)
+  serverPriceRappen         Int
+  currency                  String                   @default("CHF") @db.Char(3)
+  allowsPublic              Boolean                  @default(false)
+  allowsSelfService         Boolean                  @default(false)
+  legalApprovalReference    String?                  @db.VarChar(255)
+  taxApprovalReference      String?                  @db.VarChar(255)
+  avgApprovalReference      String?                  @db.VarChar(255)
+  privacyApprovalReference  String?                  @db.VarChar(255)
+  accountingApprovalReference String?                @db.VarChar(255)
+  releaseDigest             String                   @unique @db.Char(64)
+  approvedByUserId          String?                  @db.Uuid
+  approvedAt                DateTime?                @db.Timestamptz(3)
+  activatedAt               DateTime?                @db.Timestamptz(3)
+  createdAt                 DateTime                 @default(now()) @db.Timestamptz(3)
+  hypothesis                CommercialHypothesis     @relation(fields: [hypothesisId], references: [id], onDelete: Restrict)
+  productVersion            ProductVersion?         @relation(fields: [productVersionId], references: [id], onDelete: Restrict)
+  clusterDecision           CommercialClusterDecision @relation(fields: [clusterDecisionId], references: [id], onDelete: Restrict)
+  capacityModelRelease      CapacityModelRelease     @relation(fields: [capacityModelReleaseId], references: [id], onDelete: Restrict)
+  cashflowModelRelease      CashflowModelRelease     @relation(fields: [cashflowModelReleaseId], references: [id], onDelete: Restrict)
+  servicePolicyRelease      ServicePolicyRelease     @relation(fields: [servicePolicyReleaseId], references: [id], onDelete: Restrict)
+  approvedBy                User?                    @relation("CommercialOfferApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, offerKind, activatedAt])
+  @@index([clusterDecisionId, status])
 }

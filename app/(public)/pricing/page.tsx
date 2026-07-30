@@ -11,6 +11,7 @@ import { canStartEmployerPlanChange } from "@/lib/billing/employer-read-model";
 import { getPublicPricingCatalog } from "@/lib/billing/public-catalog";
 import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quota";
 import { getEmployerContext } from "@/lib/auth/employer-context";
+import { PHASE31_RESEARCH_COPY } from "@/lib/commercial/production-offer";
 import { getDatabase } from "@/lib/db/client";
 
 export const metadata: Metadata = {
@@ -90,6 +91,13 @@ export default async function PricingPage() {
           <ShieldCheckIcon className="size-4 text-primary" aria-hidden="true" />
           Lokaler Mock-Checkout · keine echte Belastung oder automatische Verlängerung
         </div>
+        <div
+          className="mx-auto mt-6 max-w-3xl rounded-xl border border-amber-300 bg-amber-50 p-4 text-left text-amber-950"
+          role="status"
+        >
+          <p className="font-semibold">{PHASE31_RESEARCH_COPY.badge}</p>
+          <p className="mt-1 text-sm leading-6">{PHASE31_RESEARCH_COPY.body}</p>
+        </div>
       </section>
 
       <section className="page-shell pb-16" aria-label="Arbeitgeberpläne">
@@ -109,8 +117,9 @@ export default async function PricingPage() {
           </h2>
           <p className="mt-4 max-w-3xl leading-7 text-muted-foreground">
             Die Katalogwerte stammen aus aktuell wirksamen ProductVersion-Snapshots.
-            Contact Packs sind bei bestehendem Talent-Radar-Zugang im lokalen Mock kaufbar.
-            Job-Boosts bleiben bis Phase 13 ausschliesslich an einer geeigneten eigenen Stelle auswählbar.
+            Contact Packs sind nur im lokalen Mock sichtbar. Boost und bezahlter
+            Talent Radar bleiben bis zu eigenen Reichweiten-, Datenschutz- und
+            Nutzennachweisen ohne öffentliches Kaufangebot.
           </p>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {catalog.value.products.map((product) => (

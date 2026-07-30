@@ -62,6 +62,10 @@ export const PHASE29_CRITICAL_JOURNEYS_FILE =
   "quality/phase29-critical-journeys.spec.ts" as const;
 export const PHASE29_ACCESSIBILITY_FILE =
   "quality/phase29-accessibility.spec.ts" as const;
+export const PHASE31_MANAGED_IMPORT_FLOW_FILE =
+  "flows/phase31-managed-import.spec.ts" as const;
+export const PHASE31_PRODUCTION_OFFER_FLOW_FILE =
+  "flows/phase31-production-offer.spec.ts" as const;
 export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE17_QUALITY_FILE,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
@@ -88,6 +92,8 @@ export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE29_RESPONSIVE_QUALITY_FILE,
   PHASE29_CRITICAL_JOURNEYS_FILE,
   PHASE29_ACCESSIBILITY_FILE,
+  PHASE31_MANAGED_IMPORT_FLOW_FILE,
+  PHASE31_PRODUCTION_OFFER_FLOW_FILE,
 ] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
@@ -330,6 +336,18 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     tag: "@quality-desktop",
     file: PHASE29_ACCESSIBILITY_FILE,
     expectedCount: 3,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE31_MANAGED_IMPORT_FLOW_FILE,
+    expectedCount: 1,
+  }),
+  Object.freeze({
+    project: PHASE17_JOURNEY_PROJECT,
+    tag: "@journey",
+    file: PHASE31_PRODUCTION_OFFER_FLOW_FILE,
+    expectedCount: 1,
   }),
 ] as const);
 

@@ -742,7 +742,18 @@ async function seedRadarMappingsAndSearchEvidence(
   companies: readonly CandidateWorkflowCompanyHandle[],
   crypto: CandidateWorkflowSeedCryptoConfig,
 ): Promise<void> {
-  const currentEpochStart = utcDateOnly(anchorAt);
+  const anchorCalendarDay = utcDateOnly(anchorAt);
+  const canonicalPhase14Epoch = getRadarOpaqueEpoch(anchorAt).epoch;
+  // The legacy compatibility fixture historically used the anchor's UTC day
+  // as its pseudo-epoch. Every 30 days that day is also the canonical
+  // Phase-14 Zurich epoch and would collide on
+  // (candidateProfileId, companyId, epoch). Keep the sealed legacy fixture on
+  // the immediately preceding day at that boundary; Phase-14 remains the sole
+  // owner of the canonical epoch.
+  const currentEpochStart =
+    anchorCalendarDay.getTime() === canonicalPhase14Epoch.getTime()
+      ? dateAt(anchorCalendarDay, -DAY_MS)
+      : anchorCalendarDay;
   const epochStarts = [
     dateAt(currentEpochStart, -30 * DAY_MS),
     currentEpochStart,

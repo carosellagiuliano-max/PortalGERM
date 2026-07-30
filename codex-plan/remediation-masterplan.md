@@ -359,7 +359,7 @@ Headroom, Forecast, Alert und Owner.
 | [x] 28 | [Recruiting-Workflows](./28-recruiting-workflows.md)                                            | `STH-015`, `STH-016`                                                                           | owner-aktivierte, getrennte default-off Local-/CI-Technikverträge für candidate-owned externen Tracker und persistente Interviewplanung; Demand-/Privacy-/Ops-/Support-/Provider-/Staging-/LIVE-Gates bleiben offen, siehe [Evidence](./evidence/2026-07-29-phase-28.md)                                         |
 | [ ] 29 | [Research, UX, Mobile und Accessibility](./29-ux-mobile-accessibility.md)                       | `STH-023`, `STH-025`, `STH-033`; UX-Regression `STH-026`                                       | technische Responsive-/JobPass-/3-Engine-/A11y-Automationsbasis lokal `PASS`; zwei reale Research-Runden, NVDA/VoiceOver und finaler Release-Scope-Re-Test offen, siehe [Evidence](./evidence/2026-07-29-phase-29.md)                                                                                            |
 | [ ] 30 | [Startcluster-Suche, Freshness und Scale Operations](./30-search-scale-operations.md)           | 30A: `STH-019`, `STH-036`; 30B: `STH-020/021`; 30C: `STH-027`; 30D: `STH-032`                  | technische Concept-/Learning-/Cluster-V2- und Freshness-/Consumerbasis lokal `PASS`; Recommendation-Trigger mitigiert, Admin-Scale und Sitemap-Shards unter Trigger deferred; Pflegefachreview, Zielalerts, Moderationskapazität, Staging/LIVE offen, siehe [Evidence](./evidence/2026-07-29-phase-30.md)        |
-| [ ] 31 | [Monetarisierung und Marktvalidierung](./31-monetization-market-validation.md)                  | `STH-018`, `STH-022`, `STH-028`, `STH-034`, `STH-035`, `STH-037`                               | genau ein erster Cluster, WTP vor Ausbau, real lieferbare Basis-/Serviceangebote sowie belegte Kapazität, Stückkosten, Cashflow und Service-Recovery                                                                                                                                                             |
+| [ ] 31 | [Monetarisierung und Marktvalidierung](./31-monetization-market-validation.md)                  | `STH-018`, `STH-022`, `STH-028`, `STH-034`, `STH-035`, `STH-037`                               | technische fail-closed Commercial-/Cluster-/Offer-/Capacity-/Cashflow-/Recovery-/Importbasis lokal `PASS`; reale 31A-WTP/Delivery, Fachreviews, Cluster-/Legal-/Tax-/AVG-/Finance-/Ops-Entscheide, Zielumgebung und Aktivierung offen, siehe [Evidence](./evidence/2026-07-30-phase-31.md)                            |
 | [ ] 32 | [Finaler Production-Release-Audit](./32-production-release-audit.md)                            | `STH-024` und Abschluss aller `STH-001`–`STH-037`                                              | zielklassenspezifische Freigabe eines exakten Commits/Artefakts mit vollständiger automatischer, manueller und externer Evidence                                                                                                                                                                                 |
 
 ## 7. Ausführungsplan je Phase
@@ -939,6 +939,15 @@ aus LIVE-KPIs ausgeschlossen. Jedes Angebot wird vom Marketingtext über
 Entitlement, operativen Prozess, Provider und Support-Evidence geprüft.
 Nicht erfüllte Gates entfernen CTA/Indexierung fail-closed; sie werden nicht
 durch manuelle DB-Edits umgangen.
+
+**Stand 30. Juli 2026:** Die additive Local-/CI-Technikbasis ist mit
+immutable Commercial-/Cluster-/Offer-/Capacity-/Cashflow-/Service-Policy-
+Releases, strukturell ausgeschlossener Add-on-first-Freigabe, default-off
+Schaltern, ehrlicher Public Copy und rechtegebundenem Draft-only-Import
+implementiert. Vollregression und G1/G2 sind grün. 31A wurde nicht
+durchgeführt; ohne reale unabhängige Net-WTP-Zahlung plus Delivery,
+Berufsfachreviews, Clusterentscheid, fachliche Messwerte und externe
+Freigaben bleibt G3 `PARTIAL / OPEN` und jede Aktivierung `DISABLED`.
 
 ### [ ] 32 — Finaler Production-Release-Audit
 

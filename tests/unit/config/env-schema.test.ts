@@ -484,6 +484,48 @@ describe("parseEnvironment", () => {
     expect(String(sandbox.secrets.stripeWebhookSecret)).toBe("[secret-handle]");
   });
 
+  it("keeps every Phase-31 commercial switch default-closed and Local/CI-only", () => {
+    const disabled = parseEnvironment(createValidEnvironment());
+    expect(disabled.COMMERCIAL_PRODUCTION_OFFERS).toBe(false);
+    expect(disabled.COMMERCIAL_MANAGED_IMPORT).toBe(false);
+    expect(disabled.COMMERCIAL_BOOST).toBe(false);
+    expect(disabled.COMMERCIAL_PAID_RADAR).toBe(false);
+    expect(disabled.COMMERCIAL_SALARY).toBe(false);
+
+    expectValidationFailure(
+      {
+        APP_ENV: "production",
+        NODE_ENV: "production",
+        APP_URL: "https://swisstalenthub.test",
+        TRUSTED_PROXY_HOPS: "2",
+        TEST_DATABASE_URL: undefined,
+        COMMERCIAL_PRODUCTION_OFFERS: "true",
+      },
+      "COMMERCIAL_PRODUCTION_OFFERS",
+    );
+    expectValidationFailure(
+      { COMMERCIAL_BOOST: "true" },
+      "COMMERCIAL_PRODUCTION_OFFERS",
+    );
+
+    const technical = parseEnvironment(
+      createValidEnvironment({
+        COMMERCIAL_PRODUCTION_OFFERS: "true",
+        COMMERCIAL_MANAGED_IMPORT: "true",
+        COMMERCIAL_BOOST: "true",
+        COMMERCIAL_PAID_RADAR: "true",
+        COMMERCIAL_SALARY: "true",
+      }),
+    );
+    expect(getSafeEnvironmentSummary(technical)).toMatchObject({
+      commercialProductionOffersEnabled: true,
+      commercialManagedImportEnabled: true,
+      commercialBoostEnabled: true,
+      commercialPaidRadarEnabled: true,
+      commercialSalaryEnabled: true,
+    });
+  });
+
   it("requires an isolated, explicitly labelled test database in CI", () => {
     expectValidationFailure(
       {

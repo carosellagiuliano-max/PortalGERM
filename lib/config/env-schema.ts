@@ -238,6 +238,26 @@ const rawEnvironmentSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    COMMERCIAL_PRODUCTION_OFFERS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMMERCIAL_MANAGED_IMPORT: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMMERCIAL_BOOST: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMMERCIAL_PAID_RADAR: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    COMMERCIAL_SALARY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     DOCUMENT_VAULT_WRITES: z
       .enum(["true", "false"])
       .default("false")
@@ -871,6 +891,35 @@ const rawEnvironmentSchema = z
       });
     }
 
+    const phase31CommercialCapabilityEnabled =
+      environment.COMMERCIAL_PRODUCTION_OFFERS ||
+      environment.COMMERCIAL_MANAGED_IMPORT ||
+      environment.COMMERCIAL_BOOST ||
+      environment.COMMERCIAL_PAID_RADAR ||
+      environment.COMMERCIAL_SALARY;
+    if (
+      phase31CommercialCapabilityEnabled &&
+      environment.APP_ENV !== "local" &&
+      environment.APP_ENV !== "ci"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["COMMERCIAL_PRODUCTION_OFFERS"],
+        message:
+          "Phase-31 commercial switches are technical Local/CI gates only until real market, legal, tax, AVG, privacy and capacity evidence is approved",
+      });
+    }
+    if (
+      (environment.COMMERCIAL_BOOST || environment.COMMERCIAL_PAID_RADAR) &&
+      !environment.COMMERCIAL_PRODUCTION_OFFERS
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["COMMERCIAL_PRODUCTION_OFFERS"],
+        message: "paid add-ons require the core production-offer gate",
+      });
+    }
+
     if (environment.OPTIONAL_EMAIL && productionLike) {
       context.addIssue({
         code: "custom",
@@ -1327,6 +1376,12 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     paidSelfServiceEnabled: environment.PAID_SELF_SERVICE,
     financeRepairActionsEnabled: environment.FINANCE_REPAIR_ACTIONS,
     paidServiceRecoveryEnabled: environment.PAID_SERVICE_RECOVERY,
+    commercialProductionOffersEnabled:
+      environment.COMMERCIAL_PRODUCTION_OFFERS,
+    commercialManagedImportEnabled: environment.COMMERCIAL_MANAGED_IMPORT,
+    commercialBoostEnabled: environment.COMMERCIAL_BOOST,
+    commercialPaidRadarEnabled: environment.COMMERCIAL_PAID_RADAR,
+    commercialSalaryEnabled: environment.COMMERCIAL_SALARY,
     documentVaultWrites: environment.DOCUMENT_VAULT_WRITES,
     documentStorageMode: environment.DOCUMENT_STORAGE_MODE,
     documentScannerMode: environment.DOCUMENT_SCANNER_MODE,

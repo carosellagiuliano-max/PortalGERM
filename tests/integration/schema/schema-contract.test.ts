@@ -87,6 +87,8 @@ const PARTIAL_UNIQUE_INDEXES = [
   "plan_single_default_free_unique",
   "privacy_active_challenge_unique",
   "subscription_pending_change_unique",
+  "CommercialClusterDecision_single_first_cluster_key",
+  "CommercialOfferRelease_single_first_public_offer_key",
 ] as const;
 
 const PLAN_VERSION_INSERT = [
@@ -616,6 +618,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260728160000_phase_27_multi_persona_identity",
       "20260729073537_phase_28_recruiting_workflows",
       "20260729190000_phase_30_search_freshness_operations",
+      "20260730120000_phase_31_commercial_validation",
     ]);
     expect(
       migrations.rows.every(
@@ -649,6 +652,11 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "user_email_normalized_check",
       "tax_rate_version_id_basis_points_unique",
       "JobFreshnessReport_reporterUserId_fkey",
+      "commercial_evidence_wtp_shape_check",
+      "commercial_offer_release_external_approval_check",
+      "capacity_model_limits_check",
+      "cashflow_model_horizon_check",
+      "service_policy_content_check",
     ];
     const constraints = await target.query<{
       constraint_name: string;

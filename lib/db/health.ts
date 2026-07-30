@@ -4,7 +4,7 @@ export type DatabaseHealth = Readonly<
 
 export const DATABASE_HEALTH_TIMEOUT_MS = 3_000;
 export const REQUIRED_MIGRATION_ID =
-  "20260729190000_phase_30_search_freshness_operations";
+  "20260730120000_phase_31_commercial_validation";
 
 type QueryableDatabase = {
   $queryRaw: (
