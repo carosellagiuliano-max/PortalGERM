@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "phase32-approval-root-trust-anchor-provisioning-v1",
+  "status": "UNPROVISIONED",
+  "requiredOwner": "INDEPENDENT_RELEASE_GOVERNANCE",
+  "requiredControl": "PROTECTED_EXTERNAL_KEY_CEREMONY",
+  "reason": "No independently controlled Phase 32 approval root key has been provisioned. LC1 approval must remain NO_GO until a separately authorized governance process replaces this marker with a phase32-approval-root-trust-anchor-v1 record."
+}

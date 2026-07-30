@@ -20,9 +20,7 @@ import type { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { parseEnvironment } from "@/lib/config/env-schema";
-import {
-  candidateWorkflowSeedCryptoFromEnvironment,
-} from "@/prisma/seed/blocks/candidate-workflows";
+import { candidateWorkflowSeedCryptoFromEnvironment } from "@/prisma/seed/blocks/candidate-workflows";
 import { runDemoSeed } from "@/prisma/seed/orchestrator";
 import { loadLocalEnvironment } from "@/scripts/load-local-environment";
 import { PHASE17_FIXTURE_VERSION } from "@/tests/e2e/phase17-cases";
@@ -30,14 +28,21 @@ import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 import {
   PHASE17_NETWORK_POLICY,
   validatePhase17RunManifest,
+  type Phase17ManifestValidationMode,
   type Phase17RunIdentity,
 } from "@/tests/e2e/manifest-contract";
 
 const HOST = "127.0.0.1";
 const SERVER_TIMEOUT_MILLISECONDS = 90_000;
 const MAXIMUM_DIAGNOSTIC_CHARACTERS = 24_000;
+const PHASE17_BUILD_ID = process.env.APP_BUILD_ID ?? "phase17-browser-gate";
+const PHASE17_SOURCE_ROOT = process.cwd();
+const PHASE17_RUNTIME_ROOT =
+  process.env.APP_ARTIFACT_ROOT === undefined
+    ? PHASE17_SOURCE_ROOT
+    : resolve(process.env.APP_ARTIFACT_ROOT);
 const manifestPath = resolve(
-  process.cwd(),
+  PHASE17_SOURCE_ROOT,
   "test-results",
   "phase17",
   "run-manifest.json",
@@ -49,6 +54,7 @@ const clockPath = resolve(
   "logical-clock.json",
 );
 const playwrightArguments = Object.freeze(process.argv.slice(2));
+const phase32Lc1Mode = process.env.PHASE32_LC1_BROWSER_MODE === "true";
 const phase25SecurityMode = playwrightArguments.some((argument) =>
   argument.includes("phase25-"),
 )
@@ -89,9 +95,9 @@ type RuntimeChild = ChildProcessByStdio<null, Readable, Readable>;
 await main();
 
 async function main() {
-  if (!existsSync(resolve(process.cwd(), ".next", "BUILD_ID"))) {
+  if (!existsSync(resolve(PHASE17_RUNTIME_ROOT, ".next", "BUILD_ID"))) {
     throw new Error(
-      "Phase 17 browser E2E requires a production build. Run `npm run build` first.",
+      "Phase 17 browser E2E requires a selected production runtime artifact. Run `npm run build` first.",
     );
   }
 
@@ -109,10 +115,8 @@ async function main() {
     resolve(tmpdir(), "sth-phase21-browser-"),
   );
   try {
-    const notificationDeliveryKeys =
-      `phase20-browser-v1:${randomBytes(32).toString("base64")}`;
-    const documentStorageKeys =
-      `document-v1:${randomBytes(32).toString("base64")}`;
+    const notificationDeliveryKeys = `phase20-browser-v1:${randomBytes(32).toString("base64")}`;
+    const documentStorageKeys = `document-v1:${randomBytes(32).toString("base64")}`;
     const runIdentity = createRunIdentity(database.databaseName);
     const port = await allocatePort();
     const baseUrl = `http://${HOST}:${port}`;
@@ -121,40 +125,47 @@ async function main() {
       APP_ENV: "local",
       NODE_ENV: "production",
       APP_URL: baseUrl,
-      APP_BUILD_ID: "phase17-browser-gate",
+      APP_BUILD_ID: PHASE17_BUILD_ID,
       DATABASE_URL: database.connectionString,
       TEST_DATABASE_URL: undefined,
-      IDENTITY_VERIFICATION_ENFORCEMENT: "true",
-      LOGIN_EMAIL_CHANGE: "true",
-      PRIVILEGED_STEP_UP_MODE: phase25SecurityMode,
-      NOTIFICATION_OUTBOX_PRODUCERS: "true",
-      EMAIL_PROVIDER_MODE: "disabled",
-      NOTIFICATION_DISPATCH: "paused",
-      OPTIONAL_EMAIL: "false",
-      DELIVERY_REPLAY: "false",
       NOTIFICATION_DELIVERY_KEYS: notificationDeliveryKeys,
       DOCUMENT_STORAGE_KEYS: documentStorageKeys,
-      DOCUMENT_VAULT_WRITES: "true",
-      DOCUMENT_STORAGE_MODE: "filesystem_sandbox",
-      DOCUMENT_SCANNER_MODE: "sandbox",
-      DOCUMENT_CLEAN_READS: "true",
-      DOCUMENT_RECONCILIATION: "command",
-      DOCUMENT_BULK_ACCESS: "false",
-      DOCUMENT_VAULT_COHORT: "test",
       DOCUMENT_STORAGE_ROOT: documentStorageRoot,
       DOCUMENT_STORAGE_REGION: "local-test",
-      ...companyTrustTestEnvironment,
-      ...phase27TestEnvironment,
-      ...phase28TestEnvironment,
+      ...(phase32Lc1Mode
+        ? {}
+        : {
+            IDENTITY_VERIFICATION_ENFORCEMENT: "true",
+            LOGIN_EMAIL_CHANGE: "true",
+            PRIVILEGED_STEP_UP_MODE: phase25SecurityMode,
+            NOTIFICATION_OUTBOX_PRODUCERS: "true",
+            EMAIL_PROVIDER_MODE: "disabled",
+            NOTIFICATION_DISPATCH: "paused",
+            OPTIONAL_EMAIL: "false",
+            DELIVERY_REPLAY: "false",
+            DOCUMENT_VAULT_WRITES: "true",
+            DOCUMENT_STORAGE_MODE: "filesystem_sandbox",
+            DOCUMENT_SCANNER_MODE: "sandbox",
+            DOCUMENT_CLEAN_READS: "true",
+            DOCUMENT_RECONCILIATION: "command",
+            DOCUMENT_BULK_ACCESS: "false",
+            DOCUMENT_VAULT_COHORT: "test",
+            ...companyTrustTestEnvironment,
+            ...phase27TestEnvironment,
+            ...phase28TestEnvironment,
+          }),
     });
-    await runDemoSeed({
-      APP_ENV: "local",
-      DATABASE_URL: database.connectionString,
-      ENABLE_DEMO_SEED: "true",
-    }, {
-      candidateWorkflowCrypto:
-        candidateWorkflowSeedCryptoFromEnvironment(runtimeEnvironment),
-    });
+    await runDemoSeed(
+      {
+        APP_ENV: "local",
+        DATABASE_URL: database.connectionString,
+        ENABLE_DEMO_SEED: "true",
+      },
+      {
+        candidateWorkflowCrypto:
+          candidateWorkflowSeedCryptoFromEnvironment(runtimeEnvironment),
+      },
+    );
     const runtime = await startServer(
       database.connectionString,
       baseUrl,
@@ -182,7 +193,11 @@ async function main() {
       );
     }
     validateRunManifest(
-      playwrightArguments.length === 0 ? "full" : "targeted",
+      phase32Lc1Mode
+        ? "phase32-lc1-targeted"
+        : playwrightArguments.length === 0
+          ? "full"
+          : "targeted",
       runIdentity,
     );
     console.info(
@@ -206,70 +221,86 @@ async function startServer(
   privilegedStepUpMode: "enforce" | "observe",
 ) {
   const nextBinary = resolve(
-    process.cwd(),
+    PHASE17_SOURCE_ROOT,
     "node_modules",
     "next",
     "dist",
     "bin",
     "next",
   );
-  const runtimeGuard = resolve(
-    process.cwd(),
-    "scripts",
-    "e2e",
-    "runtime-guard.cjs",
-  );
-  if (!existsSync(nextBinary) || !existsSync(runtimeGuard)) {
-    throw new Error("The local Next.js binary or Phase 17 runtime guard is missing.");
+  const standaloneEntrypoint = resolve(PHASE17_RUNTIME_ROOT, "server.js");
+  const standaloneRuntime = PHASE17_RUNTIME_ROOT !== PHASE17_SOURCE_ROOT;
+  const runtimeGuard = standaloneRuntime
+    ? resolve(PHASE17_RUNTIME_ROOT, ".phase32", "runtime-guard.cjs")
+    : resolve(PHASE17_SOURCE_ROOT, "scripts", "e2e", "runtime-guard.cjs");
+  if (
+    (!standaloneRuntime && !existsSync(nextBinary)) ||
+    !existsSync(runtimeGuard)
+  ) {
+    throw new Error(
+      "The local Next.js binary or Phase 17 runtime guard is missing.",
+    );
+  }
+  if (standaloneRuntime && !existsSync(standaloneEntrypoint)) {
+    throw new Error(
+      "The selected runtime artifact has no standalone server.js entrypoint.",
+    );
   }
   const child = spawn(
     process.execPath,
-    [
-      "--require",
-      runtimeGuard,
-      nextBinary,
-      "start",
-      "--hostname",
-      HOST,
-      "--port",
-      String(port),
-    ],
+    standaloneRuntime
+      ? ["--require", runtimeGuard, standaloneEntrypoint]
+      : [
+          "--require",
+          runtimeGuard,
+          nextBinary,
+          "start",
+          "--hostname",
+          HOST,
+          "--port",
+          String(port),
+        ],
     {
-      cwd: process.cwd(),
+      cwd: PHASE17_RUNTIME_ROOT,
       env: {
         ...process.env,
         APP_ENV: "local",
         NODE_ENV: "production",
         APP_URL: baseUrl,
-        APP_BUILD_ID: "phase17-browser-gate",
+        APP_BUILD_ID: PHASE17_BUILD_ID,
+        ...(standaloneRuntime ? { HOSTNAME: HOST, PORT: String(port) } : {}),
         DATABASE_URL: databaseUrl,
         TEST_DATABASE_URL: "",
         RATE_LIMIT_BACKEND: "postgres",
         TRUSTED_PROXY_HOPS: "0",
         ENABLE_LOCAL_MOCK_MAILBOX: "false",
         DEV_MAILBOX_SECRET: "",
-        IDENTITY_VERIFICATION_ENFORCEMENT: "true",
-        LOGIN_EMAIL_CHANGE: "true",
-        PRIVILEGED_STEP_UP_MODE: privilegedStepUpMode,
-        NOTIFICATION_OUTBOX_PRODUCERS: "true",
-        EMAIL_PROVIDER_MODE: "disabled",
-        NOTIFICATION_DISPATCH: "paused",
-        OPTIONAL_EMAIL: "false",
-        DELIVERY_REPLAY: "false",
         NOTIFICATION_DELIVERY_KEYS: notificationDeliveryKeys,
         DOCUMENT_STORAGE_KEYS: documentStorageKeys,
-        DOCUMENT_VAULT_WRITES: "true",
-        DOCUMENT_STORAGE_MODE: "filesystem_sandbox",
-        DOCUMENT_SCANNER_MODE: "sandbox",
-        DOCUMENT_CLEAN_READS: "true",
-        DOCUMENT_RECONCILIATION: "command",
-        DOCUMENT_BULK_ACCESS: "false",
-        DOCUMENT_VAULT_COHORT: "test",
         DOCUMENT_STORAGE_ROOT: documentStorageRoot,
         DOCUMENT_STORAGE_REGION: "local-test",
-        ...companyTrustTestEnvironment,
-        ...phase27TestEnvironment,
-        ...phase28TestEnvironment,
+        ...(phase32Lc1Mode
+          ? {}
+          : {
+              IDENTITY_VERIFICATION_ENFORCEMENT: "true",
+              LOGIN_EMAIL_CHANGE: "true",
+              PRIVILEGED_STEP_UP_MODE: privilegedStepUpMode,
+              NOTIFICATION_OUTBOX_PRODUCERS: "true",
+              EMAIL_PROVIDER_MODE: "disabled",
+              NOTIFICATION_DISPATCH: "paused",
+              OPTIONAL_EMAIL: "false",
+              DELIVERY_REPLAY: "false",
+              DOCUMENT_VAULT_WRITES: "true",
+              DOCUMENT_STORAGE_MODE: "filesystem_sandbox",
+              DOCUMENT_SCANNER_MODE: "sandbox",
+              DOCUMENT_CLEAN_READS: "true",
+              DOCUMENT_RECONCILIATION: "command",
+              DOCUMENT_BULK_ACCESS: "false",
+              DOCUMENT_VAULT_COHORT: "test",
+              ...companyTrustTestEnvironment,
+              ...phase27TestEnvironment,
+              ...phase28TestEnvironment,
+            }),
         STRIPE_SECRET_KEY: "",
         EMAIL_PROVIDER_API_KEY: "",
         OPENAI_API_KEY: "",
@@ -302,10 +333,7 @@ async function waitUntilReady(
 ) {
   const deadline = Date.now() + SERVER_TIMEOUT_MILLISECONDS;
   while (Date.now() < deadline) {
-    if (
-      runtime.child.exitCode !== null ||
-      runtime.child.signalCode !== null
-    ) {
+    if (runtime.child.exitCode !== null || runtime.child.signalCode !== null) {
       const state = await runtime.exit;
       throw new Error(
         `Phase 17 server exited early (code ${String(state.code)}, signal ${String(state.signal)}):\n${redact(runtime.diagnostics())}`,
@@ -327,20 +355,24 @@ async function waitUntilReady(
   );
 }
 
-async function runPlaywright(input: Readonly<{
-  baseUrl: string;
-  databaseUrl: string;
-  runIdentity: Phase17RunIdentity;
-}>) {
+async function runPlaywright(
+  input: Readonly<{
+    baseUrl: string;
+    databaseUrl: string;
+    runIdentity: Phase17RunIdentity;
+  }>,
+) {
   const playwrightCli = resolve(
-    process.cwd(),
+    PHASE17_SOURCE_ROOT,
     "node_modules",
     "@playwright",
     "test",
     "cli.js",
   );
   if (!existsSync(playwrightCli)) {
-    throw new Error("The pinned Playwright CLI is missing. Run `npm ci` first.");
+    throw new Error(
+      "The pinned Playwright CLI is missing. Run `npm ci` first.",
+    );
   }
   const child = spawn(
     process.execPath,
@@ -359,15 +391,12 @@ async function runPlaywright(input: Readonly<{
         PHASE17_CLOCK_FILE: clockPath,
         PHASE17_MANIFEST_PATH: manifestPath,
         PHASE17_COMMIT_SHA: input.runIdentity.commit,
-        PHASE17_DATABASE_RUN_ID:
-          input.runIdentity.database.anonymousRunId,
+        PHASE17_DATABASE_RUN_ID: input.runIdentity.database.anonymousRunId,
         PHASE17_MIGRATION_COUNT: String(
           input.runIdentity.database.migrationCount,
         ),
-        PHASE17_MIGRATION_HASH:
-          input.runIdentity.database.migrationHash,
-        PHASE17_PLAYWRIGHT_VERSION:
-          input.runIdentity.runtime.playwright,
+        PHASE17_MIGRATION_HASH: input.runIdentity.database.migrationHash,
+        PHASE17_PLAYWRIGHT_VERSION: input.runIdentity.runtime.playwright,
         PHASE17_NPM_VERSION: input.runIdentity.runtime.npm,
         PHASE25_SECURITY_MODE: phase25SecurityMode,
         ...companyTrustTestEnvironment,
@@ -388,13 +417,13 @@ async function runPlaywright(input: Readonly<{
 }
 
 function validateRunManifest(
-  mode: "full" | "targeted",
+  mode: Phase17ManifestValidationMode,
   expectedIdentity: Phase17RunIdentity,
 ) {
-  validatePhase17RunManifest(
-    JSON.parse(readFileSync(manifestPath, "utf8")),
-    { mode, expectedIdentity },
-  );
+  validatePhase17RunManifest(JSON.parse(readFileSync(manifestPath, "utf8")), {
+    mode,
+    expectedIdentity,
+  });
 }
 
 function createRunIdentity(databaseName: string): Phase17RunIdentity {

@@ -1,0 +1,723 @@
+{
+  "schemaVersion": "PHASE32_LC1_FINDINGS_LEDGER_V1",
+  "targetLaunchClass": "LC1",
+  "auditDate": "2026-07-30",
+  "records": [
+    {
+      "id": "STH-001",
+      "ownerRole": "IDENTITY_COMMUNICATIONS",
+      "priority": "P2",
+      "scope": "Synthetic LC1 verification, reverification and login-email-change flows only.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-26-phase-20.md",
+        "lib/auth/email-verification-service.ts",
+        "lib/auth/email-change-service.ts"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": [
+        "phase32.candidate.sth-001.identity-verification"
+      ]
+    },
+    {
+      "id": "STH-002",
+      "ownerRole": "PRIVACY_IDENTITY",
+      "priority": "P2",
+      "scope": "Account-bound privacy identity challenge with synthetic LC1 identities.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-26-phase-20.md",
+        "codex-plan/evidence/2026-07-26-phase-22.md",
+        "codex-plan/evidence/2026-07-28-phase-25.md"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": ["phase32.candidate.sth-002.privacy-identity"]
+    },
+    {
+      "id": "STH-003",
+      "ownerRole": "DOCUMENT_PRIVACY",
+      "priority": "P2",
+      "scope": "Synthetic document bytes in the isolated filesystem and scanner sandbox only.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-26-phase-21.md",
+        "codex-plan/evidence/2026-07-26-phase-22.md",
+        "lib/documents/vault-service.ts"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": ["phase32.candidate.sth-003.document-vault"]
+    },
+    {
+      "id": "STH-004",
+      "ownerRole": "PROVIDER_SRE_SECURITY",
+      "priority": "P3",
+      "scope": "Live providers are outside LC1; only explicit fakes and isolated sandboxes are permitted.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-26-phase-20.md",
+        "codex-plan/evidence/2026-07-26-phase-21.md",
+        "codex-plan/evidence/2026-07-27-phase-23.md",
+        "codex-plan/evidence/2026-07-27-phase-24.md",
+        "codex-plan/runbooks/provider-activation.md"
+      ],
+      "status": "EXTERNAL",
+      "externalGate": {
+        "ownerRole": "PROVIDER_SRE_SECURITY",
+        "scope": "Blocks every LC2-LC6 flow that uses an email, storage, scanner, company, payment or other live provider.",
+        "reviewAt": "2026-08-30",
+        "sourceDocument": "codex-plan/runbooks/provider-activation.md",
+        "safeDeactivationEvidenceAlias": "phase32.deactivation.sth-004.providers"
+      }
+    },
+    {
+      "id": "STH-005",
+      "ownerRole": "FINANCE_BILLING",
+      "priority": "P4",
+      "scope": "No real payment, paid self-service, payment projection or purchase CTA in LC1.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-27-phase-24.md",
+        "codex-plan/evidence/2026-07-30-phase-31.md"
+      ],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "PAYMENT_PROVIDER_MODE",
+            "expectedValue": "disabled"
+          },
+          {
+            "key": "PAYMENT_SANDBOX_COHORT",
+            "expectedValue": "none"
+          },
+          {
+            "key": "PAID_SELF_SERVICE",
+            "expectedValue": "false"
+          },
+          {
+            "key": "REAL_PAYMENT_INGESTION",
+            "expectedValue": "false"
+          },
+          {
+            "key": "REAL_PAYMENT_PROJECTION",
+            "expectedValue": "false"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-005.payment-off"
+      }
+    },
+    {
+      "id": "STH-006",
+      "ownerRole": "PRIVACY_DPO",
+      "priority": "P3",
+      "scope": "Privacy export, correction, erasure and restore protection use synthetic LC1 data only.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-26-phase-22.md",
+        "lib/privacy/export-v2.ts",
+        "lib/privacy/execution-v2.ts",
+        "lib/privacy/restore-reconciliation.ts"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": [
+        "phase32.candidate.sth-006.privacy-lifecycle"
+      ]
+    },
+    {
+      "id": "STH-007",
+      "ownerRole": "LEGAL_AVG_DPO",
+      "priority": "P3",
+      "scope": "Legal publication machinery exists, but no canonical Swiss legal text is approved for real users.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-26-phase-22.md",
+        "codex-plan/runbooks/deployment.md"
+      ],
+      "status": "EXTERNAL",
+      "externalGate": {
+        "ownerRole": "LEGAL_AVG_DPO",
+        "scope": "Blocks LC2-LC6 until each used flow has signed DSG, AVG, AGB, imprint, consent and processor decisions.",
+        "reviewAt": "2026-08-30",
+        "sourceDocument": "codex-plan/evidence/2026-07-26-phase-22.md",
+        "safeDeactivationEvidenceAlias": "phase32.deactivation.sth-007.legal-publication"
+      }
+    },
+    {
+      "id": "STH-008",
+      "ownerRole": "RELEASE_SRE_INCIDENT",
+      "priority": "P3",
+      "scope": "LC1 runs locally and is not connected to preview, staging or production infrastructure.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-27-phase-23.md",
+        "codex-plan/runbooks/deployment.md",
+        "codex-plan/runbooks/backup-restore.md",
+        "codex-plan/runbooks/incident-response.md"
+      ],
+      "status": "EXTERNAL",
+      "externalGate": {
+        "ownerRole": "RELEASE_SRE_INCIDENT",
+        "scope": "Blocks LC2-LC6 until target infrastructure, incident ownership, pager, backup and approved SLO, RPO and RTO evidence exist.",
+        "reviewAt": "2026-08-30",
+        "sourceDocument": "codex-plan/runbooks/deployment.md",
+        "safeDeactivationEvidenceAlias": "phase32.deactivation.sth-008.production-operations"
+      }
+    },
+    {
+      "id": "STH-009",
+      "ownerRole": "WORKER_OPS_SRE",
+      "priority": "P3",
+      "scope": "No autonomous or unattended worker execution in the controlled LC1 demo.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-27-phase-23.md",
+        "codex-plan/runbooks/worker-operations.md"
+      ],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "WORKER_RUNTIME",
+            "expectedValue": "paused"
+          },
+          {
+            "key": "WORKER_SANDBOX_REPLAY",
+            "expectedValue": "false"
+          },
+          {
+            "key": "NOTIFICATION_DISPATCH",
+            "expectedValue": "paused"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-009.worker-paused"
+      }
+    },
+    {
+      "id": "STH-010",
+      "ownerRole": "SECURITY_ADMIN_GOVERNANCE",
+      "priority": "P3",
+      "scope": "Least-privilege administrative capabilities with synthetic LC1 role identities.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-28-phase-25.md",
+        "lib/admin/role-policy.ts",
+        "lib/admin/capabilities.ts"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": ["phase32.candidate.sth-010.admin-rbac"]
+    },
+    {
+      "id": "STH-011",
+      "ownerRole": "SECURITY_IDENTITY",
+      "priority": "P3",
+      "scope": "Production admin MFA and privileged step-up enforcement are outside LC1.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-28-phase-25.md"],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "ADMIN_MFA_REQUIRED",
+            "expectedValue": "false"
+          },
+          {
+            "key": "PRIVILEGED_STEP_UP_MODE",
+            "expectedValue": "disabled"
+          },
+          {
+            "key": "BREAK_GLASS_ENABLED",
+            "expectedValue": "false"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-011.admin-mfa-off"
+      }
+    },
+    {
+      "id": "STH-012",
+      "ownerRole": "PRODUCT_IDENTITY_PRIVACY",
+      "priority": "P4",
+      "scope": "Multi-persona assignment and portal switching are not promised or activated in LC1.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-28-phase-27.md"],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "IDENTITY_PERSONA_V2",
+            "expectedValue": "disabled"
+          },
+          {
+            "key": "PERSONA_PORTAL_SWITCH",
+            "expectedValue": "false"
+          },
+          {
+            "key": "EXISTING_IDENTITY_INVITATION",
+            "expectedValue": "false"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-012.multi-persona-off"
+      }
+    },
+    {
+      "id": "STH-013",
+      "ownerRole": "COMMUNICATIONS_OPS",
+      "priority": "P3",
+      "scope": "Durable outbox code remains available for tests, while real producers and dispatch remain off.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-26-phase-20.md",
+        "codex-plan/evidence/2026-07-27-phase-23.md"
+      ],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "NOTIFICATION_OUTBOX_PRODUCERS",
+            "expectedValue": "false"
+          },
+          {
+            "key": "EMAIL_PROVIDER_MODE",
+            "expectedValue": "disabled"
+          },
+          {
+            "key": "NOTIFICATION_DISPATCH",
+            "expectedValue": "paused"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-013.delivery-off"
+      }
+    },
+    {
+      "id": "STH-014",
+      "ownerRole": "COMPANY_TRUST_OPS",
+      "priority": "P3",
+      "scope": "Strong company verification, badge and public eligibility are not activated in LC1.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-28-phase-26.md"],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "COMPANY_TRUST_V2",
+            "expectedValue": "disabled"
+          },
+          {
+            "key": "COMPANY_REGISTER_PROVIDER_MODE",
+            "expectedValue": "disabled"
+          },
+          {
+            "key": "COMPANY_DOMAIN_PROVIDER_MODE",
+            "expectedValue": "disabled"
+          },
+          {
+            "key": "COMPANY_STRONG_BADGE",
+            "expectedValue": "false"
+          },
+          {
+            "key": "COMPANY_TRUST_PUBLIC_ELIGIBILITY",
+            "expectedValue": "false"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-014.company-trust-off"
+      }
+    },
+    {
+      "id": "STH-015",
+      "ownerRole": "RECRUITING_PRODUCT_PRIVACY",
+      "priority": "P4",
+      "scope": "The optional external application tracker is not promised or activated in LC1.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-29-phase-28.md"],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "EXTERNAL_APPLICATION_TRACKER",
+            "expectedValue": "disabled"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-015.external-tracker-off"
+      }
+    },
+    {
+      "id": "STH-016",
+      "ownerRole": "RECRUITING_PRODUCT_OPS",
+      "priority": "P4",
+      "scope": "The optional persistent interview scheduler is not promised or activated in LC1.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-29-phase-28.md"],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "INTERVIEW_SCHEDULER",
+            "expectedValue": "disabled"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-016.scheduler-off"
+      }
+    },
+    {
+      "id": "STH-017",
+      "ownerRole": "PRIVACY_DATA",
+      "priority": "P3",
+      "scope": "Production analytics collection and optional event families remain off in LC1.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-26-phase-22.md"],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "OPTIONAL_ANALYTICS_NAVIGATION",
+            "expectedValue": "false"
+          },
+          {
+            "key": "OPTIONAL_ANALYTICS_CONVERSION",
+            "expectedValue": "false"
+          },
+          {
+            "key": "SEARCH_LEARNING_COLLECTION",
+            "expectedValue": "false"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-017.analytics-off"
+      }
+    },
+    {
+      "id": "STH-018",
+      "ownerRole": "PRODUCT_MARKETPLACE_OPS",
+      "priority": "P4",
+      "scope": "LC1 makes no liquidity claim and activates no public market cluster.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-30-phase-31.md",
+        "codex-plan/runbooks/phase31-commercial-validation.md"
+      ],
+      "status": "EXTERNAL",
+      "externalGate": {
+        "ownerRole": "PRODUCT_MARKETPLACE_OPS",
+        "scope": "Blocks LC3-LC6 visible clusters until real employer, candidate, job and response evidence plus independent approvals exist.",
+        "reviewAt": "2026-08-30",
+        "sourceDocument": "codex-plan/runbooks/phase31-commercial-validation.md",
+        "safeDeactivationEvidenceAlias": "phase32.deactivation.sth-018.cluster-off"
+      }
+    },
+    {
+      "id": "STH-019",
+      "ownerRole": "SEARCH_PRODUCT_REVIEW",
+      "priority": "P2",
+      "scope": "LC1 uses the technical discovery corpus without a professional or public-cluster claim.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-29-phase-30.md"],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": ["phase32.candidate.sth-019.search-corpus"]
+    },
+    {
+      "id": "STH-020",
+      "ownerRole": "ADMIN_OPS_DATABASE",
+      "priority": "P4",
+      "scope": "Admin pagination and bulk expansion remain monitored below the documented scale trigger.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-29-phase-30.md",
+        "codex-plan/runbooks/phase30-search-freshness-operations.md"
+      ],
+      "status": "DEFERRED_MONITORED",
+      "monitoring": {
+        "currentMetrics": [
+          {
+            "name": "maximumQueueUtilizationBps",
+            "value": 5750,
+            "unit": "basis_points",
+            "measuredAt": "2026-07-29"
+          },
+          {
+            "name": "forecast90DaysReachesCap",
+            "value": false,
+            "unit": "boolean",
+            "measuredAt": "2026-07-29"
+          }
+        ],
+        "trigger": "Escalate the affected queue at utilization greater than or equal to 7000 basis points, p95 above 400 ms, a 90-day cap forecast, or reached capacity.",
+        "alertOwnerRole": "ADMIN_OPS_DATABASE",
+        "reviewAt": "2026-08-30",
+        "monitoringEvidenceAlias": "phase32.monitor.sth-020.admin-scale"
+      }
+    },
+    {
+      "id": "STH-021",
+      "ownerRole": "CANDIDATE_SEARCH_DATABASE",
+      "priority": "P4",
+      "scope": "Bounded two-query candidate recommendation projection with canonical eligibility.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-29-phase-30.md",
+        "lib/candidate/recommendation-read-model.ts"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": [
+        "phase32.candidate.sth-021.recommendation-query-budget"
+      ]
+    },
+    {
+      "id": "STH-022",
+      "ownerRole": "COMMERCIAL_INTEGRATION",
+      "priority": "P4",
+      "scope": "Managed import, recurring sync, auto-publish, ATS, API, SSO and enterprise promises are outside LC1.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-30-phase-31.md"],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "COMMERCIAL_MANAGED_IMPORT",
+            "expectedValue": "false"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-022.enterprise-import-off"
+      }
+    },
+    {
+      "id": "STH-023",
+      "ownerRole": "ACCESSIBILITY_QA",
+      "priority": "P2",
+      "scope": "Automated browser and accessibility coverage exists; real NVDA and VoiceOver acceptance remains external.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-29-phase-29.md",
+        "codex-plan/research/phase29-moderated-protocol-v1.md"
+      ],
+      "status": "EXTERNAL",
+      "externalGate": {
+        "ownerRole": "ACCESSIBILITY_QA",
+        "scope": "Blocks LC3-LC6 until the agreed journeys pass real NVDA on Windows and VoiceOver on iOS on the candidate artifact.",
+        "reviewAt": "2026-08-30",
+        "sourceDocument": "codex-plan/research/phase29-moderated-protocol-v1.md",
+        "safeDeactivationEvidenceAlias": "phase32.deactivation.sth-023.real-at-scope"
+      }
+    },
+    {
+      "id": "STH-024",
+      "ownerRole": "RELEASE_QA_OPS",
+      "priority": "P1",
+      "scope": "Manual LC1 role walkthrough on exactly the candidate commit and stored artifact.",
+      "sourceEvidence": [
+        "codex-plan/32-production-release-audit.md",
+        "codex-plan/evidence/2026-07-24-commercial-launch-follow-up.md"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": [
+        "phase32.candidate.sth-024.exact-artifact-walkthrough"
+      ]
+    },
+    {
+      "id": "STH-025",
+      "ownerRole": "UX_ACCESSIBILITY_QA",
+      "priority": "P3",
+      "scope": "Responsive table-to-card parity for the LC1 route inventory.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-29-phase-29.md"],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": [
+        "phase32.candidate.sth-025.responsive-parity"
+      ]
+    },
+    {
+      "id": "STH-026",
+      "ownerRole": "COMMUNICATIONS_LEGAL_DPO",
+      "priority": "P3",
+      "scope": "Candidate and employer notification preferences with synthetic LC1 identities and no real delivery.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-26-phase-20.md",
+        "codex-plan/evidence/2026-07-29-phase-29.md"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": [
+        "phase32.candidate.sth-026.notification-preferences"
+      ]
+    },
+    {
+      "id": "STH-027",
+      "ownerRole": "SEO_PLATFORM_OPS",
+      "priority": "P4",
+      "scope": "Single-sitemap mode remains monitored below the shard-planning trigger and must never truncate.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-29-phase-30.md",
+        "codex-plan/runbooks/phase30-search-freshness-operations.md"
+      ],
+      "status": "DEFERRED_MONITORED",
+      "monitoring": {
+        "currentMetrics": [
+          {
+            "name": "sitemapUrlCount",
+            "value": 10,
+            "unit": "urls",
+            "measuredAt": "2026-07-29"
+          },
+          {
+            "name": "sitemapCapacityUtilizationBps",
+            "value": 2,
+            "unit": "basis_points",
+            "measuredAt": "2026-07-29"
+          },
+          {
+            "name": "sitemapBytes",
+            "value": 1367,
+            "unit": "bytes",
+            "measuredAt": "2026-07-29"
+          },
+          {
+            "name": "sitemapRuntimeMilliseconds",
+            "value": 206,
+            "unit": "milliseconds",
+            "measuredAt": "2026-07-29"
+          }
+        ],
+        "trigger": "Plan shards at or above 7000 basis points, deploy before 8000, and block expansion at or above 9000, a cap forecast, or a failed no-truncation run.",
+        "alertOwnerRole": "SEO_PLATFORM_OPS",
+        "reviewAt": "2026-08-30",
+        "monitoringEvidenceAlias": "phase32.monitor.sth-027.sitemap-capacity"
+      }
+    },
+    {
+      "id": "STH-028",
+      "ownerRole": "PRODUCT_COMMERCIAL_LEGAL",
+      "priority": "P0",
+      "scope": "Research-only demo copy with visible mocks, no purchase CTA and no production or WTP claim.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-30-phase-31.md"],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": ["phase32.candidate.sth-028.honest-demo-copy"]
+    },
+    {
+      "id": "STH-029",
+      "ownerRole": "PRODUCT_ENGINEERING_QA",
+      "priority": "P0",
+      "scope": "Current authoritative plans, requirements, routes and release inventories remain synchronized.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-26-phase-19.md",
+        "codex-plan/remediation-traceability.md",
+        "codex-plan/requirements-matrix.md"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": [
+        "phase32.candidate.sth-029.governance-audits"
+      ]
+    },
+    {
+      "id": "STH-030",
+      "ownerRole": "SECURITY_IDENTITY",
+      "priority": "P2",
+      "scope": "Production non-admin and privileged action step-up enforcement is outside LC1.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-28-phase-25.md"],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "PRIVILEGED_STEP_UP_MODE",
+            "expectedValue": "disabled"
+          },
+          {
+            "key": "IDENTITY_VERIFICATION_ENFORCEMENT",
+            "expectedValue": "false"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-030.step-up-off"
+      }
+    },
+    {
+      "id": "STH-031",
+      "ownerRole": "TRUST_SECURITY",
+      "priority": "P2",
+      "scope": "Fraud, scam and account-takeover policy is exercised only against synthetic LC1 actors.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-28-phase-25.md",
+        "codex-plan/evidence/2026-07-28-phase-26.md"
+      ],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": [
+        "phase32.candidate.sth-031.trust-risk-contract"
+      ]
+    },
+    {
+      "id": "STH-032",
+      "ownerRole": "JOBS_OPS_TRUST",
+      "priority": "P3",
+      "scope": "Freshness, filled, hold and duplicate eligibility contract on synthetic LC1 jobs.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-29-phase-30.md"],
+      "status": "CLOSED",
+      "candidateEvidenceAliases": ["phase32.candidate.sth-032.job-freshness"]
+    },
+    {
+      "id": "STH-033",
+      "ownerRole": "RESEARCH_UX_DPO",
+      "priority": "P3",
+      "scope": "No moderated participant or comprehension claim is made for LC1.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-29-phase-29.md",
+        "codex-plan/research/phase29-moderated-protocol-v1.md",
+        "codex-plan/research/phase29-aggregated-results-template.md"
+      ],
+      "status": "EXTERNAL",
+      "externalGate": {
+        "ownerRole": "RESEARCH_UX_DPO",
+        "scope": "Blocks LC2-LC6 until both moderated rounds meet the predefined sample, task-success, comprehension and consent contract.",
+        "reviewAt": "2026-08-30",
+        "sourceDocument": "codex-plan/research/phase29-moderated-protocol-v1.md",
+        "safeDeactivationEvidenceAlias": "phase32.deactivation.sth-033.research-scope"
+      }
+    },
+    {
+      "id": "STH-034",
+      "ownerRole": "OPS_FINANCE_COMMERCIAL",
+      "priority": "P3",
+      "scope": "LC1 uses no real operational capacity, staffing, service-level, unit-cost or cashflow claim.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-30-phase-31.md",
+        "codex-plan/runbooks/phase31-commercial-validation.md"
+      ],
+      "status": "EXTERNAL",
+      "externalGate": {
+        "ownerRole": "OPS_FINANCE_COMMERCIAL",
+        "scope": "Blocks LC2-LC6 until real arrival, handling, backlog, staffing, coverage, SLA, COGS and cashflow inputs are independently approved.",
+        "reviewAt": "2026-08-30",
+        "sourceDocument": "codex-plan/runbooks/phase31-commercial-validation.md",
+        "safeDeactivationEvidenceAlias": "phase32.deactivation.sth-034.capacity-scope"
+      }
+    },
+    {
+      "id": "STH-035",
+      "ownerRole": "FINANCE_SUPPORT_LEGAL",
+      "priority": "P2",
+      "scope": "Paid service recovery is outside LC1 because no paid service is available.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-27-phase-24.md",
+        "codex-plan/evidence/2026-07-30-phase-31.md"
+      ],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "PAID_SERVICE_RECOVERY",
+            "expectedValue": "false"
+          },
+          {
+            "key": "PAID_SELF_SERVICE",
+            "expectedValue": "false"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-035.paid-recovery-off"
+      }
+    },
+    {
+      "id": "STH-036",
+      "ownerRole": "SEARCH_DATA_DPO",
+      "priority": "P2",
+      "scope": "Search-learning collection and promotion remain off in LC1.",
+      "sourceEvidence": ["codex-plan/evidence/2026-07-29-phase-30.md"],
+      "status": "DISABLED",
+      "disablement": {
+        "serverGates": [
+          {
+            "key": "SEARCH_LEARNING_COLLECTION",
+            "expectedValue": "false"
+          }
+        ],
+        "negativeEvidenceAlias": "phase32.negative.sth-036.search-learning-off"
+      }
+    },
+    {
+      "id": "STH-037",
+      "ownerRole": "PRODUCT_COMMERCIAL_FINANCE_AVG",
+      "priority": "P3",
+      "scope": "LC1 makes no willingness-to-pay, delivery, first-cluster or commercial activation claim.",
+      "sourceEvidence": [
+        "codex-plan/evidence/2026-07-30-phase-31.md",
+        "codex-plan/runbooks/phase31-commercial-validation.md"
+      ],
+      "status": "EXTERNAL",
+      "externalGate": {
+        "ownerRole": "PRODUCT_COMMERCIAL_FINANCE_AVG",
+        "scope": "Blocks LC2-LC6 commercial scope until independent buyers, reconciled net money, delivery, legal, AVG, tax, finance and operations evidence exists.",
+        "reviewAt": "2026-08-30",
+        "sourceDocument": "codex-plan/runbooks/phase31-commercial-validation.md",
+        "safeDeactivationEvidenceAlias": "phase32.deactivation.sth-037.commercial-scope"
+      }
+    }
+  ]
+}

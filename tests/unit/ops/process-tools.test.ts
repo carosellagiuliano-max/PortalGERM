@@ -70,6 +70,31 @@ describe("Phase-18 recovery process tools", () => {
     expect(environment.GITHUB_TOKEN).toBeUndefined();
   });
 
+  it("canonicalizes a Windows Path alias and rejects conflicting aliases", () => {
+    const environment = safeToolEnvironment({
+      NODE_ENV: "test",
+      Path: "C:\\safe-bin",
+    }, "win32");
+
+    expect(environment.PATH).toBe("C:\\safe-bin");
+    expect(environment.Path).toBeUndefined();
+    expect(() =>
+      safeToolEnvironment({
+        NODE_ENV: "test",
+        PATH: "C:\\first-bin",
+        Path: "C:\\second-bin",
+      }, "win32"),
+    ).toThrow("Conflicting PATH and Path values");
+
+    const posixEnvironment = safeToolEnvironment({
+      NODE_ENV: "test",
+      PATH: "/usr/bin",
+      Path: "/must-not-be-used",
+    }, "linux");
+    expect(posixEnvironment.PATH).toBe("/usr/bin");
+    expect(posixEnvironment.Path).toBeUndefined();
+  });
+
   it(
     "times out a hung child and waits for bounded termination",
     async () => {

@@ -14,6 +14,7 @@ import {
   PHASE17_QUALITY_CONTRACT,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
   PHASE26_COMPANY_TRUST_QUALITY_FILE,
+  PHASE32_LC1_BROWSER_PROJECTS,
   type Phase17RunIdentity,
   validatePhase17RunManifest,
 } from "@/tests/e2e/manifest-contract";
@@ -61,6 +62,72 @@ describe("Phase 17 manifest contract", () => {
         expectedIdentity,
       }),
     ).toThrow(/journey E2E-02 has 0 result/u);
+  });
+
+  it("accepts exactly one Chromium, Firefox and WebKit project for the Phase 32 LC1 target", () => {
+    const manifest = phase32Lc1TargetManifest();
+
+    expect(() =>
+      validatePhase17RunManifest(manifest, {
+        mode: "phase32-lc1-targeted",
+        expectedIdentity: identityFromManifest(manifest),
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects Chromium-only Phase 32 LC1 evidence", () => {
+    const manifest = retainProjects(phase32Lc1TargetManifest(), [
+      PHASE17_JOURNEY_PROJECT,
+    ]);
+
+    expect(() =>
+      validatePhase17RunManifest(manifest, {
+        mode: "phase32-lc1-targeted",
+        expectedIdentity: identityFromManifest(manifest),
+      }),
+    ).toThrow(
+      /Phase 32 LC1 browser projects are chromium-journeys, expected exactly chromium-journeys, firefox-journeys, webkit-journeys/u,
+    );
+  });
+
+  it.each(PHASE32_LC1_BROWSER_PROJECTS)(
+    "rejects Phase 32 LC1 evidence missing %s",
+    (missingProject) => {
+      const manifest = retainProjects(
+        phase32Lc1TargetManifest(),
+        PHASE32_LC1_BROWSER_PROJECTS.filter(
+          (project) => project !== missingProject,
+        ),
+      );
+
+      expect(() =>
+        validatePhase17RunManifest(manifest, {
+          mode: "phase32-lc1-targeted",
+          expectedIdentity: identityFromManifest(manifest),
+        }),
+      ).toThrow(/Phase 32 LC1 browser projects are .*expected exactly/u);
+    },
+  );
+
+  it("rejects an additional Chromium project and duplicate project declarations", () => {
+    const additionalChromium = validFullManifest();
+    expect(() =>
+      validatePhase17RunManifest(additionalChromium, {
+        mode: "phase32-lc1-targeted",
+        expectedIdentity: identityFromManifest(additionalChromium),
+      }),
+    ).toThrow(
+      /Phase 32 LC1 browser projects are .*chromium-mobile-360.*expected exactly/u,
+    );
+
+    const duplicate = phase32Lc1TargetManifest();
+    duplicate.runtime.projects.push(PHASE17_JOURNEY_PROJECT);
+    expect(() =>
+      validatePhase17RunManifest(duplicate, {
+        mode: "phase32-lc1-targeted",
+        expectedIdentity: identityFromManifest(duplicate),
+      }),
+    ).toThrow(/Phase 32 LC1 browser projects are .*expected exactly/u);
   });
 
   it("rejects a missing mobile quality case even when Playwright says passed", () => {
@@ -314,12 +381,8 @@ describe("Phase 17 reporter evidence helpers", () => {
   });
 
   it("derives retry policy from Playwright projects instead of hardcoding it", () => {
-    expect(
-      configuredRetryPolicy([{ retries: 0 }, { retries: 0 }]),
-    ).toBe(0);
-    expect(
-      configuredRetryPolicy([{ retries: 0 }, { retries: 2 }]),
-    ).toBe(2);
+    expect(configuredRetryPolicy([{ retries: 0 }, { retries: 0 }])).toBe(0);
+    expect(configuredRetryPolicy([{ retries: 0 }, { retries: 2 }])).toBe(2);
     expect(() => configuredRetryPolicy([])).toThrow(
       /requires at least one configured Playwright project/u,
     );
@@ -381,6 +444,40 @@ function validFullManifest() {
   };
 }
 
+function phase32Lc1TargetManifest() {
+  return retainProjects(validFullManifest(), PHASE32_LC1_BROWSER_PROJECTS);
+}
+
+function retainProjects(
+  manifest: ReturnType<typeof validFullManifest>,
+  projects: readonly string[],
+) {
+  const allowed = new Set(projects);
+  const cases = manifest.cases.map((entry) => ({
+    ...entry,
+    results: entry.results.filter(({ project }) => allowed.has(project)),
+  }));
+  const quality = manifest.quality.filter(({ project }) =>
+    allowed.has(project),
+  );
+  const unclassified: typeof manifest.unclassified = [];
+  const passed =
+    cases.reduce((total, entry) => total + entry.results.length, 0) +
+    quality.length +
+    unclassified.length;
+  return {
+    ...manifest,
+    runtime: {
+      ...manifest.runtime,
+      projects: [...projects],
+    },
+    counts: resultCounts({ passed }),
+    cases,
+    quality,
+    unclassified,
+  };
+}
+
 function identityFromManifest(
   manifest: ReturnType<typeof validFullManifest>,
 ): Phase17RunIdentity {
@@ -397,21 +494,21 @@ function identityFromManifest(
   };
 }
 
-function validationOptions(
-  manifest: ReturnType<typeof validFullManifest>,
-) {
+function validationOptions(manifest: ReturnType<typeof validFullManifest>) {
   return {
     mode: "full",
     expectedIdentity: identityFromManifest(manifest),
   } as const;
 }
 
-function recordedResult(input: Readonly<{
-  id: string;
-  project: string;
-  title: string;
-  file: string;
-}>) {
+function recordedResult(
+  input: Readonly<{
+    id: string;
+    project: string;
+    title: string;
+    file: string;
+  }>,
+) {
   return {
     ...input,
     status: "passed",

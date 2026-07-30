@@ -48,6 +48,8 @@ gelten nicht als Nachweis.
 - [`2026-07-29-phase-28.md`](./2026-07-29-phase-28.md) — getrennte, default-off Local-/CI-Verträge für candidate-owned externe Bewerbungszustände und persistente Interviewplanung; Demand-, Provider-, Staging- und LIVE-Gates bleiben offen.
 - [`2026-07-29-phase-29.md`](./2026-07-29-phase-29.md) — responsive, Cross-Browser- und automatisierte Accessibility-Technikbasis; moderierte Runden und reale NVDA-/VoiceOver-Smokes bleiben offen.
 - [`2026-07-29-phase-30.md`](./2026-07-29-phase-30.md) — versionierte de-CH-Search-/Learning-/Cluster-V2-Technik, triggergebundene Scale-/Sitemap-Operations und canonical Job-Freshness; Fachreview, Zielalerts, Moderationskapazität, Staging und LIVE bleiben offen.
+- [`2026-07-30-phase-31.md`](./2026-07-30-phase-31.md) — fail-closed Commercial-/WTP-/Delivery-, Capacity-/Cashflow-/Recovery- und Draft-only-Import-Technik; reale Fach-, Markt-, Legal-, Finance- und Operations-Evidence bleibt offen.
+- [`2026-07-30-phase-32.md`](./2026-07-30-phase-32.md) — candidate-gebundener LC1-G4-Orchestrator, sechs Launchklassen, 37-Findingsledger und striktes Release-Manifest; Walkthrough, Rollback und unabhängige Approvals fehlen, daher Release `NO_GO` und LC2–LC6 `NOT APPROVED`.
 
 ## Pflichtfelder eines Records
 

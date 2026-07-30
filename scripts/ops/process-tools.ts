@@ -273,10 +273,25 @@ export function redact(
 
 export function safeToolEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
 ): NodeJS.ProcessEnv {
+  const uppercasePath = environment.PATH;
+  const titleCasePath = environment.Path;
+  if (
+    platform === "win32" &&
+    uppercasePath !== undefined &&
+    titleCasePath !== undefined &&
+    uppercasePath !== titleCasePath
+  ) {
+    throw new Error(
+      "Conflicting PATH and Path values cannot be forwarded safely.",
+    );
+  }
+  const path =
+    platform === "win32"
+      ? (uppercasePath ?? titleCasePath)
+      : uppercasePath;
   const allowed = [
-    "PATH",
-    "Path",
     "PATHEXT",
     "SystemRoot",
     "WINDIR",
@@ -313,6 +328,7 @@ export function safeToolEnvironment(
   ] as const;
   return {
     NODE_ENV: environment.NODE_ENV ?? "development",
+    ...(path === undefined ? {} : { PATH: path }),
     ...Object.fromEntries(
       allowed.flatMap((name) => {
         const value = environment[name];

@@ -4,6 +4,11 @@ import { resolve } from "node:path";
 
 import { config } from "dotenv";
 
+import {
+  scanPhase32ArtifactSecrets,
+  type Phase32SecretCandidate,
+} from "@/lib/release/phase32-artifact-secret-scan";
+
 const repository = process.cwd();
 const tracked = execFileSync("git", ["ls-files", "-z"], {
   cwd: repository,
@@ -22,7 +27,7 @@ const trackedText = new Map<string, string | undefined>(
 const failures: string[] = [];
 const forbiddenFiles = tracked.filter(
   (path) =>
-    /(?:^|\/)\.env(?:\.|$)/u.test(path) && path !== ".env.example" ||
+    (/(?:^|\/)\.env(?:\.|$)/u.test(path) && path !== ".env.example") ||
     /\.(?:dump|dump\.age|pem|key|p12|pfx)$/iu.test(path) ||
     /\.sha256$/iu.test(path),
 );
@@ -66,8 +71,11 @@ const secretVariables = [
   "DEV_MAILBOX_SECRET",
   "BACKUP_AGE_IDENTITY_FILE",
   "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
   "EMAIL_PROVIDER_API_KEY",
   "OPENAI_API_KEY",
+  "SEARCH_LEARNING_HASH_SECRET",
+  "MAPS_API_KEY",
 ] as const;
 for (const variable of secretVariables) {
   const value = process.env[variable]?.trim();
@@ -83,12 +91,43 @@ for (const variable of secretVariables) {
   }
 }
 
+let artifactScannedFileCount = 0;
+let artifactBinaryFileCount = 0;
+const artifactRoot = process.env.PHASE32_ARTIFACT_SCAN_ROOT?.trim();
+if (artifactRoot !== undefined && artifactRoot !== "") {
+  const artifactCandidates: Phase32SecretCandidate[] = [
+    ...secretVariables,
+    "DATABASE_URL",
+    "TEST_DATABASE_URL",
+    "STRIPE_SECRET_VERSION",
+  ].flatMap((variable) => {
+    const value = process.env[variable]?.trim();
+    if (value === undefined || value.length < 12) return [];
+    return [...secretCandidates(variable, value)].map((candidate) => ({
+      name: variable,
+      value: candidate,
+    }));
+  });
+  const artifactResult = await scanPhase32ArtifactSecrets(
+    artifactRoot,
+    artifactCandidates,
+  );
+  artifactScannedFileCount = artifactResult.scannedFileCount;
+  artifactBinaryFileCount = artifactResult.binaryFileCount;
+  failures.push(...artifactResult.failures);
+}
+
 if (failures.length > 0) {
   console.error(`Release secret scan failed:\n${failures.join("\n")}`);
   process.exitCode = 1;
 } else {
   console.info(
-    `Release secret scan passed across ${tracked.length} tracked files; no private key, backup artifact, provider token or exact configured secret was found.`,
+    `Release secret scan passed across ${tracked.length} tracked files` +
+      (artifactRoot === undefined || artifactRoot === ""
+        ? ""
+        : ` and ${artifactScannedFileCount} deployable artifact files` +
+          ` (${artifactBinaryFileCount} binary files byte-scanned)`) +
+      "; no private key, backup artifact, provider token or exact configured secret was found.",
   );
 }
 

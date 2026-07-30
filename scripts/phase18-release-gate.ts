@@ -442,37 +442,43 @@ async function main() {
 }
 
 async function collectToolVersions() {
-  const [git, docker, compose, pgDump, pgRestore, age] = await Promise.all([
-    version("git", ["--version"]),
-    version("docker", ["--version"]),
-    version("docker", ["compose", "version"]),
-    version("docker", [
+  const git = await version("Git CLI", "git", ["--version"]);
+  const docker = await version("Docker CLI", "docker", ["--version"]);
+  const compose = await version("Docker Compose plugin", "docker", [
+    "compose",
+    "version",
+  ]);
+  const pgDump = await version(
+    "PostgreSQL pg_dump in the Compose service",
+    "docker",
+    [
       "compose",
       "exec",
       "-T",
       "postgres",
       "pg_dump",
       "--version",
-    ]),
-    version("docker", [
+    ],
+  );
+  const pgRestore = await version(
+    "PostgreSQL pg_restore in the Compose service",
+    "docker",
+    [
       "compose",
       "exec",
       "-T",
       "postgres",
       "pg_restore",
       "--version",
-    ]),
-    version(resolveAgeTools().age, ["--version"]),
+    ],
+  );
+  const age = await version("Age encryption CLI", resolveAgeTools().age, [
+    "--version",
   ]);
-  const npm = (
-    await runRaw(
-      process.execPath,
-      [npmCli, "--version"],
-      repository,
-      safeToolEnvironment(),
-      30_000,
-    )
-  ).output.trim();
+  const npm = await version("npm CLI", process.execPath, [
+    npmCli,
+    "--version",
+  ]);
   return Object.freeze({
     node: process.version,
     npm,
@@ -711,7 +717,11 @@ function runRaw(
   );
 }
 
-async function version(command: string, args: readonly string[]) {
+async function version(
+  label: string,
+  command: string,
+  args: readonly string[],
+) {
   const result = await runRaw(
     command,
     args,
@@ -720,7 +730,11 @@ async function version(command: string, args: readonly string[]) {
     30_000,
   );
   if (result.exitCode !== 0) {
-    throw new Error(`Required tool is unavailable: ${basename(command)}.`);
+    throw new Error(
+      `${label} is unavailable or unhealthy (command ${basename(
+        command,
+      )}, exit ${String(result.exitCode)}): ${redact(result.output)}`,
+    );
   }
   return result.output.trim().split(/\r?\n/u)[0] ?? "unknown";
 }

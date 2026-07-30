@@ -24,11 +24,15 @@ const DEFAULT_START_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 8_000;
 const MAX_DIAGNOSTIC_CHARACTERS = 24_000;
 const NOINDEX_POLICY = "noindex, nofollow, noarchive, nosnippet";
-const PRODUCTION_HSTS_VALUE =
-  "max-age=63072000; includeSubDomains; preload";
+const PRODUCTION_HSTS_VALUE = "max-age=63072000; includeSubDomains; preload";
 const EXPECT_STATIC_PUBLIC_INDEXING =
   process.env.HTTP_SMOKE_STATIC_PUBLIC_INDEXING === "true";
-const HTTP_SMOKE_BUILD_ID = "phase16-http-smoke";
+const HTTP_SMOKE_BUILD_ID = process.env.APP_BUILD_ID ?? "phase16-http-smoke";
+const HTTP_SMOKE_SOURCE_ROOT = process.cwd();
+const HTTP_SMOKE_RUNTIME_ROOT =
+  process.env.APP_ARTIFACT_ROOT === undefined
+    ? HTTP_SMOKE_SOURCE_ROOT
+    : resolve(process.env.APP_ARTIFACT_ROOT);
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -59,10 +63,10 @@ async function main(mode: SmokeMode) {
 }
 
 async function runSmoke(mode: SmokeMode) {
-  const buildIdPath = resolve(process.cwd(), ".next", "BUILD_ID");
+  const buildIdPath = resolve(HTTP_SMOKE_RUNTIME_ROOT, ".next", "BUILD_ID");
   if (mode === "local-full" && !existsSync(buildIdPath)) {
     throw new Error(
-      "No production build found at .next/BUILD_ID. Run `npm run build` before the HTTP smoke.",
+      "No production build found in the selected runtime artifact. Run `npm run build` before the HTTP smoke.",
     );
   }
 
@@ -99,15 +103,22 @@ async function runHttpSmoke(databaseUrl: string, mode: SmokeMode) {
       : undefined;
 
   const nextBinary = resolve(
-    process.cwd(),
+    HTTP_SMOKE_SOURCE_ROOT,
     "node_modules",
     "next",
     "dist",
     "bin",
     "next",
   );
-  if (!existsSync(nextBinary)) {
+  const standaloneEntrypoint = resolve(HTTP_SMOKE_RUNTIME_ROOT, "server.js");
+  const standaloneRuntime = HTTP_SMOKE_RUNTIME_ROOT !== HTTP_SMOKE_SOURCE_ROOT;
+  if (!standaloneRuntime && !existsSync(nextBinary)) {
     throw new Error("The local Next.js CLI was not found. Run `npm ci` first.");
+  }
+  if (standaloneRuntime && !existsSync(standaloneEntrypoint)) {
+    throw new Error(
+      "The selected runtime artifact has no standalone server.js entrypoint.",
+    );
   }
 
   const childEnvironment: NodeJS.ProcessEnv =
@@ -130,10 +141,15 @@ async function runHttpSmoke(databaseUrl: string, mode: SmokeMode) {
         };
   const child = spawn(
     process.execPath,
-    [nextBinary, "start", "--hostname", HOST, "--port", String(port)],
+    standaloneRuntime
+      ? [standaloneEntrypoint]
+      : [nextBinary, "start", "--hostname", HOST, "--port", String(port)],
     {
-      cwd: process.cwd(),
-      env: childEnvironment,
+      cwd: HTTP_SMOKE_RUNTIME_ROOT,
+      env: {
+        ...childEnvironment,
+        ...(standaloneRuntime ? { HOSTNAME: HOST, PORT: String(port) } : {}),
+      },
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -205,7 +221,7 @@ async function buildProductionHstsArtifact(databaseUrl: string) {
   }
 
   const child = spawn(process.execPath, [npmCli, "run", "build"], {
-    cwd: process.cwd(),
+    cwd: HTTP_SMOKE_SOURCE_ROOT,
     env: productionHstsEnvironment(databaseUrl),
     shell: false,
     stdio: ["ignore", "pipe", "pipe"],
@@ -265,10 +281,7 @@ function productionHstsEnvironment(
   };
 }
 
-async function verifyProductionHsts(
-  baseUrl: string,
-  secretCanary: string,
-) {
+async function verifyProductionHsts(baseUrl: string, secretCanary: string) {
   const live = await request(baseUrl, "/health/live", secretCanary, {
     // The production-like runtime requires one trusted ingress hop. This
     // synthetic value represents a header replaced by that ingress.
@@ -708,7 +721,10 @@ async function request(
   ) {
     throw new Error(`${path} returned no valid x-correlation-id header.`);
   }
-  if (requireCorrelationId && response.headers.get("content-type")?.includes("text/html")) {
+  if (
+    requireCorrelationId &&
+    response.headers.get("content-type")?.includes("text/html")
+  ) {
     assertHtmlScriptNonces(path, response.headers, body);
   }
 
@@ -808,9 +824,7 @@ function expectHealthJson(
   }
 }
 
-function responseNonce(
-  result: Pick<SmokeResponse, "path" | "response">,
-) {
+function responseNonce(result: Pick<SmokeResponse, "path" | "response">) {
   const policy = result.response.headers.get("content-security-policy");
   const match = policy?.match(/(?:^|;\s*)script-src\s+[^;]*'nonce-([^']+)'/u);
   const nonce = match?.[1];
@@ -826,18 +840,16 @@ function responseNonce(
   return nonce;
 }
 
-function assertHtmlScriptNonces(
-  path: string,
-  headers: Headers,
-  body: string,
-) {
+function assertHtmlScriptNonces(path: string, headers: Headers, body: string) {
   const nonce = responseNonce({
     path,
     response: { headers } as Response,
   });
   const openingScriptTags = body.match(/<script\b[^>]*>/giu) ?? [];
   if (openingScriptTags.length === 0) {
-    throw new Error(`${path} returned HTML without framework bootstrap scripts.`);
+    throw new Error(
+      `${path} returned HTML without framework bootstrap scripts.`,
+    );
   }
   for (const tag of openingScriptTags) {
     if (htmlAttribute(tag, "nonce") !== nonce) {

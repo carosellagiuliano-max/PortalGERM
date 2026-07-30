@@ -1,0 +1,142 @@
+name: Phase 32 G4 · LC1 Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase32-g4-lc1-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lc1-audit:
+    name: LC1 audit only · no deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      CI: "true"
+      APP_ENV: ci
+      NODE_ENV: test
+      DATABASE_URL: postgresql://swisstalenthub:local-development-only@127.0.0.1:5434/swisstalenthub?schema=public
+      TEST_DATABASE_URL: postgresql://swisstalenthub:local-development-only@127.0.0.1:5434/swisstalenthub_test?schema=public
+      APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_APP_NAME: SwissTalentHub Phase 32 LC1
+      APP_BUILD_ID: ${{ github.sha }}
+      RATE_LIMIT_BACKEND: postgres
+      ENABLE_LOCAL_MOCK_MAILBOX: "false"
+      LOG_LEVEL: warn
+
+    steps:
+      - name: Repository vollständig auschecken
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Node.js 24.18.0 einrichten
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: npm 11.16.0 einrichten
+        run: npm install --global npm@11.16.0
+
+      - name: Recovery-Werkzeuge installieren
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes age postgresql-client
+
+      - name: Runtime-Pins verifizieren
+        shell: bash
+        run: |
+          test "$(node --version)" = "v24.18.0"
+          test "$(npm --version)" = "11.16.0"
+
+      - name: Flüchtige LC1-CI-Schlüssel erzeugen
+        shell: bash
+        run: |
+          new_key() {
+            openssl rand -base64 32 | tr -d '\n'
+          }
+
+          session_secret=$(new_key)
+          audit_key=$(new_key)
+          radar_lookup_key=$(new_key)
+          radar_encryption_key=$(new_key)
+          reveal_confirmation_key=$(new_key)
+          pii_reveal_key=$(new_key)
+
+          for secret_value in \
+            "$session_secret" \
+            "$audit_key" \
+            "$radar_lookup_key" \
+            "$radar_encryption_key" \
+            "$reveal_confirmation_key" \
+            "$pii_reveal_key"; do
+            echo "::add-mask::$secret_value"
+          done
+
+          {
+            echo "SESSION_SECRET=$session_secret"
+            echo "AUDIT_IP_HASH_KEYS=v1:$audit_key"
+            echo "RADAR_OPAQUE_LOOKUP_KEYS=v1:$radar_lookup_key"
+            echo "RADAR_OPAQUE_ENCRYPTION_KEYS=v1:$radar_encryption_key"
+            echo "REVEAL_CONFIRMATION_KEYS=v1:$reveal_confirmation_key"
+            echo "PII_REVEAL_KEYS=v1:$pii_reveal_key"
+          } >> "$GITHUB_ENV"
+
+      - name: Abhängigkeiten reproduzierbar installieren
+        run: npm ci
+
+      - name: Gepinnte PostgreSQL-16.13-Umgebung starten
+        shell: bash
+        run: |
+          docker compose up --detach postgres
+          for attempt in $(seq 1 40); do
+            if docker compose exec -T postgres pg_isready -U swisstalenthub -d swisstalenthub; then
+              break
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              exit 1
+            fi
+            sleep 2
+          done
+          docker compose exec -T postgres createdb -U swisstalenthub swisstalenthub_test
+
+      - name: Alle Playwright-Engines mit Systemabhängigkeiten installieren
+        run: >-
+          node node_modules/@playwright/test/cli.js install --with-deps
+          chromium firefox webkit
+
+      - name: Phase-32-G4-Audit ausschließlich für LC1
+        run: npm run release:audit -- --requested-class=LC1
+
+      - name: Fehlende externe Evidence muss LC1 gesperrt lassen
+        shell: bash
+        run: |
+          set +e
+          npm run release:verify
+          verify_status=$?
+          set -e
+
+          if [ "$verify_status" -ne 2 ]; then
+            echo "Expected the technical-only LC1 manifest to remain NO_GO (exit 2), got $verify_status."
+            exit 1
+          fi
+
+      - name: Lokale Datenbankumgebung entfernen
+        if: ${{ always() }}
+        run: docker compose down --volumes
+
+      - name: Phase-32-Audit-Artefakte immer hochladen
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: phase32-g4-lc1-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/phase32/
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 30

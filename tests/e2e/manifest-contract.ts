@@ -13,6 +13,11 @@ export const PHASE17_JOURNEY_PROJECT = "chromium-journeys" as const;
 export const PHASE17_MOBILE_PROJECT = "chromium-mobile-360" as const;
 export const PHASE29_FIREFOX_PROJECT = "firefox-journeys" as const;
 export const PHASE29_WEBKIT_PROJECT = "webkit-journeys" as const;
+export const PHASE32_LC1_BROWSER_PROJECTS = Object.freeze([
+  PHASE17_JOURNEY_PROJECT,
+  PHASE29_FIREFOX_PROJECT,
+  PHASE29_WEBKIT_PROJECT,
+] as const);
 export const PHASE17_QUALITY_FILE = "quality/critical-routes.spec.ts" as const;
 export const PHASE18_ALL_ROUTES_QUALITY_FILE =
   "quality/all-routes.spec.ts" as const;
@@ -380,8 +385,11 @@ export type Phase17RunIdentity = Readonly<{
   networkPolicy: typeof PHASE17_NETWORK_POLICY;
 }>;
 
+export type Phase17ManifestValidationMode =
+  "full" | "targeted" | "phase32-lc1-targeted";
+
 export type Phase17ManifestValidationOptions = Readonly<{
-  mode: "full" | "targeted";
+  mode: Phase17ManifestValidationMode;
   expectedIdentity: Phase17RunIdentity;
 }>;
 
@@ -512,6 +520,9 @@ export function validatePhase17RunManifest(
     contractFailure("no test result was recorded");
   }
   assertResultCounts(manifest.counts, results);
+  if (options.mode === "phase32-lc1-targeted") {
+    assertExactPhase32Lc1BrowserProjects(manifest.runtime.projects);
+  }
   assertObservedProjects(manifest.runtime.projects, results);
   assertRetryFreePasses(results);
 
@@ -520,7 +531,7 @@ export function validatePhase17RunManifest(
       `${manifest.unclassified.length} unclassified test result(s) were recorded`,
     );
   }
-  if (options.mode === "targeted") return manifest;
+  if (options.mode !== "full") return manifest;
 
   assertCompleteJourneyResults(manifest.cases);
   assertCompleteQualityResults(manifest.quality);
@@ -739,6 +750,17 @@ function assertObservedProjects(
   ) {
     contractFailure(
       `runtime projects are ${projects.join(", ") || "<empty>"}, observed ${observed.join(", ") || "<empty>"}`,
+    );
+  }
+}
+
+function assertExactPhase32Lc1BrowserProjects(projects: readonly string[]) {
+  if (
+    new Set(projects).size !== projects.length ||
+    !sameStringSet(projects, PHASE32_LC1_BROWSER_PROJECTS)
+  ) {
+    contractFailure(
+      `Phase 32 LC1 browser projects are ${projects.join(", ") || "<empty>"}, expected exactly ${PHASE32_LC1_BROWSER_PROJECTS.join(", ")} (one Chromium, one Firefox and one WebKit engine)`,
     );
   }
 }

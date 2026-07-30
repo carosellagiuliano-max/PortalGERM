@@ -1,11 +1,15 @@
 # Phase 32 — Finaler Produktions-, Launchklassen- und Release-Audit
 
-> **Planstatus: GEPLANT. Technikstatus: NICHT IMPLEMENTIERT. Quality-Gate G4:
-> NICHT GELAUFEN. Release/Aktivierung: DISABLED.** Diese Phase entwickelt
-> keine neuen Runtime-Funktionen. Sie friert genau einen Kandidaten ein,
-> re-auditiert `STH-001` bis `STH-037`, prüft die für **eine** von sechs
-> Launchklassen erforderliche Evidence und belegt, dass Commit, gebautes
-> Artefakt, Deployment und manueller Walkthrough identisch sind.
+> **Planstatus: PARTIELL / OPEN. Technikstatus: LC1-G4-ORCHESTRATOR,
+> FINDINGSLEDGER UND RELEASEPOLICY IMPLEMENTIERT. Quality-Gate G4:
+> CANDIDATE-GEBUNDEN; OHNE WALKTHROUGH, ROLLBACK UND UNABHÄNGIGE APPROVALS
+> `NO_GO`. Release/Aktivierung: DISABLED.** Diese Phase entwickelt keine neuen
+> Runtime-Funktionen. Sie friert genau einen Kandidaten ein, re-auditiert
+> `STH-001` bis `STH-037`, prüft die für **eine** von sechs Launchklassen
+> erforderliche Evidence und belegt, dass Commit, gebautes Artefakt,
+> Deployment und manueller Walkthrough identisch sind. Die technische
+> Local-/CI-Basis ist implementiert; ein strukturell gültiges `NO_GO` ist
+> keine Produktionsfreigabe und schliesst die Phase nicht.
 
 Es gilt
 [`remediation-execution-contract.md`](./remediation-execution-contract.md)
@@ -15,12 +19,12 @@ vollständig.
 
 ### 1. Status
 
-| Dimension | Status |
-|---|---|
-| Plan | `PLANNED` |
-| Technik | Phase-32-Gate/Manifest noch nicht implementiert |
-| Quality-Gate | G4 nicht gelaufen; historische Phase-18-Runs zählen nicht |
-| Aktivierung | kein Phase-32-Release freigegeben |
+| Dimension    | Status                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plan         | `PARTIAL / OPEN`                                                                                                                                                    |
+| Technik      | LC1-Scope, 37-Findingsledger, LC1–LC6-Policy, Standalone-Artefakt, Evidence-/Konfigurationsdigests, G4-Manifestvalidator und Clean-Clone-Orchestrator implementiert |
+| Quality-Gate | candidate-gebundenes G4; ohne externe Bundle-Evidence korrekt `NO_GO`; historische Phase-18-Runs zählen nicht                                                       |
+| Aktivierung  | kein Phase-32-Release freigegeben                                                                                                                                   |
 
 Jede Zielklasse besitzt einen eigenen Status. Ein grünes LC1-Urteil ist kein
 LC2–LC6-Urteil; ein technischer Testabschluss ist keine externe Freigabe.
@@ -42,11 +46,14 @@ LC2–LC6-Urteil; ein technischer Testabschluss ist keine externe Freigabe.
 - `STH-024`: der historische Vier-Rollen-Walkthrough und die damalige
   Automation liefen nicht auf einem nach Remediation eingefrorenen,
   identischen Releaseartefakt.
-- Phasen 19–31 sind Plan; deren geplante Tests/Evidence wurden durch das
-  Erstellen dieses Plans nicht ausgeführt.
-- Der aktuelle `npm run test:release`/Phase-18-Vertrag bildet die erweiterten
-  Findings, sechs Launchklassen und G4-Manifestbindung noch nicht vollständig
-  ab.
+- Phasen 19–31 wurden inzwischen gemäß ihren eigenen Evidence-Records
+  umgesetzt und technisch beziehungsweise lokal/CI geprüft. Ihre getrennten
+  Plan-, Technik-, Quality- und Aktivierungsstatus bleiben maßgeblich:
+  insbesondere externe Fach-, Staging-, Provider-, Markt- und
+  Aktivierungsgates dürfen nicht als durch Phase 32 geerbt gelten.
+- `npm run test:release:recovery` bewahrt den Phase-18-Recovery-Vertrag;
+  `npm run test:release`/`release:audit` ergänzt Clean Clone, 37 Findings,
+  sechs Launchklassen, SBOM-/Artefaktdigests und G4-Manifestbindung.
 - Externe Provider-, Legal-, Privacy-, Tax-, AVG-, Market-, Staffing- und
   Operations-Evidence kann nicht aus Code oder Seed abgeleitet werden.
 - Der Sequenzentscheid vom 27. Juli 2026 richtet Staging erst am Ende ein.
@@ -55,8 +62,8 @@ LC2–LC6-Urteil; ein technischer Testabschluss ist keine externe Freigabe.
   Stagingdeploy/-rollback, Pager/On-call, automatischer Backup-Lifecycle,
   genehmigte SLO/RPO/RTO und Bindung an den deployten Artefaktdigest. Ein
   lokaler Phase-23-Pass darf keines dieser G4-Gates ersetzen.
-- Deshalb lautet der aktuelle Phase-32-Status ehrlich `UNVERIFIED /
-  DISABLED`.
+- Deshalb lautet der aktuelle Phase-32-Status ehrlich
+  `UNVERIFIED / DISABLED`.
 
 ### 4. Findings und Requirements
 
@@ -146,11 +153,13 @@ Routen, Jobs, Queues, Provider oder Kill Switches blockieren G4.
 
 ### 9. Datenmodell, Constraints, Indizes und Klassifikation
 
-Phase 32 fügt **kein fachliches Schema** hinzu. Geplant ist ein
+Phase 32 fügt **kein fachliches Schema** hinzu. Implementiert ist ein
 maschinenlesbares Release-/Evidence-Manifest als Build-/CI-Artefakt mit:
 Commit SHA, Tree SHA, Lockfiledigest, Migrationstand, Schemafingerprint,
-Artefakt-/Containerdigest, SBOMdigest, Envklasse, Provider-/Flag-/Launchklasse,
-Testreportdigests, Findingsstatus, Approver und Zeitfenster.
+Standalone-Artefaktdigest, SBOMdigest, Digest der nicht geheimen
+LC1-Laufzeitkonfiguration, Envklasse, Provider-/Flag-/Launchklasse,
+candidate-gebundenen Report-Evidence-Deskriptoren, Findingsstatus, signierten
+Approvals und Zeitfenstern.
 PII/Secrets/Backups/Paymentdaten dürfen darin nicht enthalten sein.
 Constraints, Indizes, Klassifikation und Retention werden aus den Owning-
 Phasen geprüft; ein fehlender Backstop wird dort behoben.
@@ -172,10 +181,42 @@ Phasen geprüft; ein fehlender Backstop wird dort behoben.
 
 ### 11. Serverlogik, Queue, Provider und G4-Orchestrierung
 
-- Ein geplanter `scripts/phase32-release-gate.ts` erweitert
+- `scripts/phase32-release-gate.ts` erweitert
   `npm run test:release`, erzeugt den Kandidatendigest, startet Pflichtsuiten,
   lehnt Skip/Retry/fehlende Reports ab und vergleicht Commit/Digest vor und
   nach jedem Schritt.
+- Der Build wird einmal als selbstständig startbares Next-Standalone-Paket
+  assembliert. HTTP- und Browser-Gates starten dieses gespeicherte Paket aus
+  einem temporären Verzeichnis außerhalb von Clean Clone und Repository;
+  ein späterer Rebuild oder Runtime-Fallback in den Quellclone ist
+  unzulässig.
+- Die Assemblierung verwendet eine einzige enthaltene Kopieroperation:
+  Source-Root, Parent- und verschachtelte Junctions müssen rekursiv innerhalb
+  des Clean Clones bleiben; stabile Datei-Handles und nachgelagerte
+  Identitätsprüfungen schließen eine getrennte Check-/Copy-Race-Lücke.
+- Die nicht geheime LC1-Laufzeitkonfiguration wird als eigener Record
+  kanonisch gespeichert und per SHA-256 an Candidate, Runtime, Deployment und
+  Reports gebunden. Der Verifier hasht und prüft sie erneut.
+- Primärlogs sowie persistierte Browser-/Recovery-Rohartefakte werden über
+  strikte Report-Evidence-Deskriptoren mit Pfad, Digest, Dateianzahl und
+  Bytegröße an Commit und Standalone-Artefakt gebunden. Ein Logname allein
+  genügt nicht als Evidence.
+- Ein separater fail-closed Secret-Scan läuft nach der Assemblierung gegen das
+  exakte deploybare Standalone-Artefakt. Sein gehashter Rohbeleg gehört zum
+  `SECRET_SCAN`-Deskriptor; ein ausschließlicher Quellbaum-Scan genügt nicht.
+  Exakte konfigurierte Geheimnisse werden auch in Binärdateien byteweise
+  geprüft.
+- Externe LC1-Freigaben sind keine frei editierbaren Metadaten: RELEASE,
+  SECURITY, PRODUCT und OPERATIONS müssen jeweils von verschiedenen
+  vertrauenswürdigen Ed25519-Schlüsseln signiert sowie an einen kanonischen
+  Pre-Approval-Evidence-Root gebunden sein. Dieser Root umfasst Candidate,
+  Konfiguration, SBOM, Runtime, Deployment, alle Reports/Rohbelege, Findings,
+  Walkthrough und Rollback. Das Schlüsselregister muss von einem
+  candidate-pinned, unabhängig provisionierten Root-Trust-Anchor signiert
+  sein, dessen kanonischer Ed25519-SPKI-Fingerprint zusätzlich aus einer
+  unabhängig geschützten CI-/Governance-Konfiguration gepinnt wird;
+  `UNPROVISIONED`, abgelaufene, widerrufene, doppelte, unbekannte oder vom
+  externen Pin abweichende Schlüssel sind fail-closed.
 - Provider-Contracttests nutzen explizite Fake/Sandbox/Live-Klassen. Live ist
   nur in der Zielklasse und mit schriftlicher Freigabe erlaubt.
 - Worker-/Queue-Evidence umfasst enqueue→claim→lease→retry→DLQ→Replay,
@@ -184,6 +225,11 @@ Phasen geprüft; ein fehlender Backstop wird dort behoben.
   serverseitige Flags gegen genau eine beantragte Launchklasse aus.
 - Deploy referenziert nur das gespeicherte Digestartefakt; kein Rebuild in
   Staging/Production. Smoke und Walkthrough lesen SHA/Digest aus der Runtime.
+- Jeder externe Auditprozess einschließlich SBOM besitzt eine feste Lauf- und
+  Terminierungsfrist. Windows-`taskkill` wird abgewartet und bei
+  Fehler/Nonzero/ausbleibendem Close direkt eskaliert; POSIX nutzt
+  Prozessgruppen-`SIGTERM`→`SIGKILL`. Ein nie schließender Child kann den Gate
+  nicht unbegrenzt blockieren und endet fail-closed mit Exit `124`.
 
 ### 12. Vollständige UX-Zustandsmatrix
 
@@ -250,14 +296,14 @@ Notification und Incident Owner müssen zusammen funktionieren.
 
 ### 18. Harte Abhängigkeiten und sechs Launchklassen
 
-| Klasse | Zulässiger Scope | Zwingende Gates |
-|---|---|---|
-| **LC1 — Lokale kontrollierte Demo** | nur lokal/isoliert, sichtbare Mocks/Seeds, keine realen PII, Provider oder Geldversprechen | Phase 19 Baseline/Governance, sichere Demo-Klassifikation, keine öffentliche Indexierung/Acquisition; Runtime-Mocks sichtbar |
-| **LC2 — Beaufsichtigter Design-Partner** | einzelne vorab benannte Teilnehmer, Operator begleitet jeden Flow, keine öffentliche Verfügbarkeit | LC1 plus flowspezifische Legal/Privacy/AVG/Tax-Freigabe, Consent/DPA, Incident Owner, Support/Operator, Löschung; nur die tatsächlich genutzten Provider/Phasen |
-| **LC3 — Invite-only Pilot** | geschlossene Kohorte mit realen Providern und ggf. realen Applications, kein öffentlicher Self-serve-Vertrieb | LC2 plus Phasen 20–23 und 25 für genutzte Flows, Trust/Fraud/Support/Operations; Phase 26 zwingend sobald reale Firmenvertrauenssignale/Jobs/Radar genutzt werden; 29B sowie 30A/30D für jeden sichtbaren Cluster |
-| **LC4 — Öffentlicher kostenloser Betrieb** | öffentliche Suche/Jobs/Firmen/Kandidatenflows, alle Kauf-CTAs geschlossen | LC3 plus Phasen 20–23, 25 und **26 zwingend** für Public Trust, reale Jobs/Firmen/Radar; Phase 29 vollständig, 30A/30D je sichtbarem Cluster, Retention/Support; Phase 27 nur bei Multi-Persona-Versprechen, Phase 28 nur bei Tracker-/Scheduler-Versprechen |
-| **LC5 — Bezahlter Betrieb** | LC4 plus freigegebene bezahlte Offers | LC4 plus Phase 24 sowie 31A/31B: reale WTP, Tax/Invoice/Ledger/Reconciliation/Dunning, Capacity/Unit Cost/Cashflow und Paid-Service-Recovery; jedes Boost-/Radar-/Salary-Offer nur mit eigenem Gate |
-| **LC6 — Breiter Production Launch** | breitere Akquisition/Skalierung im belegten Cluster; weitere Cluster weiterhin separat | LC5 plus SLO/SLI, RPO/RTO, Backup/Restore, On-call, Incident- und Capacitydrills; 30B/30C vollständig nur wenn ihre Trigger ausgelöst sind, sonst datiert `DEFERRED / MONITORED`; jeder neue Cluster braucht 30A/30D/31A neu |
+| Klasse                                     | Zulässiger Scope                                                                                              | Zwingende Gates                                                                                                                                                                                                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **LC1 — Lokale kontrollierte Demo**        | nur lokal/isoliert, sichtbare Mocks/Seeds, keine realen PII, Provider oder Geldversprechen                    | Phase 19 Baseline/Governance, sichere Demo-Klassifikation, keine öffentliche Indexierung/Acquisition; Runtime-Mocks sichtbar                                                                                                                                 |
+| **LC2 — Beaufsichtigter Design-Partner**   | einzelne vorab benannte Teilnehmer, Operator begleitet jeden Flow, keine öffentliche Verfügbarkeit            | LC1 plus flowspezifische Legal/Privacy/AVG/Tax-Freigabe, Consent/DPA, Incident Owner, Support/Operator, Löschung; nur die tatsächlich genutzten Provider/Phasen                                                                                              |
+| **LC3 — Invite-only Pilot**                | geschlossene Kohorte mit realen Providern und ggf. realen Applications, kein öffentlicher Self-serve-Vertrieb | LC2 plus Phasen 20–23 und 25 für genutzte Flows, Trust/Fraud/Support/Operations; Phase 26 zwingend sobald reale Firmenvertrauenssignale/Jobs/Radar genutzt werden; 29B sowie 30A/30D für jeden sichtbaren Cluster                                            |
+| **LC4 — Öffentlicher kostenloser Betrieb** | öffentliche Suche/Jobs/Firmen/Kandidatenflows, alle Kauf-CTAs geschlossen                                     | LC3 plus Phasen 20–23, 25 und **26 zwingend** für Public Trust, reale Jobs/Firmen/Radar; Phase 29 vollständig, 30A/30D je sichtbarem Cluster, Retention/Support; Phase 27 nur bei Multi-Persona-Versprechen, Phase 28 nur bei Tracker-/Scheduler-Versprechen |
+| **LC5 — Bezahlter Betrieb**                | LC4 plus freigegebene bezahlte Offers                                                                         | LC4 plus Phase 24 sowie 31A/31B: reale WTP, Tax/Invoice/Ledger/Reconciliation/Dunning, Capacity/Unit Cost/Cashflow und Paid-Service-Recovery; jedes Boost-/Radar-/Salary-Offer nur mit eigenem Gate                                                          |
+| **LC6 — Breiter Production Launch**        | breitere Akquisition/Skalierung im belegten Cluster; weitere Cluster weiterhin separat                        | LC5 plus SLO/SLI, RPO/RTO, Backup/Restore, On-call, Incident- und Capacitydrills; 30B/30C vollständig nur wenn ihre Trigger ausgelöst sind, sonst datiert `DEFERRED / MONITORED`; jeder neue Cluster braucht 30A/30D/31A neu                                 |
 
 Kein Klassenurteil impliziert die nächste Klasse. Phase 28 ist nicht pauschal
 für interne Bewerbungen nötig; sie wird nur bei explizitem externem Tracker-/
@@ -271,7 +317,9 @@ Scheduler-Versprechen zwingend.
    Flaginventar aus dem Kandidatencommit erzeugen.
 3. Für jedes Finding Owning-Phase, Priorität, Zielklassenrelevanz, zulässigen
    Status und direkte Evidence prüfen; Blocker zurückweisen.
-4. Alle externen Freigaben auf Scope, Datum, Owner und Gültigkeit prüfen.
+4. Alle externen Freigaben auf Scope, Datum, Owner, Gültigkeit,
+   Pre-Approval-Evidence-Root, Ed25519-Signatur und die
+   Root-Anchor→Register→Approval-Vertrauenskette prüfen.
 5. Feature Freeze; Commit/Tree/Lockfile/Migration/SBOM/Artefaktdigests
    erzeugen und signieren.
 6. Clean Clone, deterministische Installation, Env-/Secret-/Dependency-/
@@ -286,7 +334,9 @@ Scheduler-Versprechen zwingend.
     Smoke und Rollback/Redeploy.
 11. Chromium/Firefox/WebKit, Mobile/A11y und vollständige Rollenjourneys.
 12. Manueller Walkthrough mit Console/Network/Audit auf demselben Deployment.
-13. Evidence digests ins G4-Manifest binden; unabhängige Approver signieren.
+13. Laufzeitkonfiguration, Rohartefakte und Evidence-Deskriptoren ins
+    G4-Manifest binden; kanonischen Pre-Approval-Evidence-Root berechnen;
+    unabhängige Approver signieren genau diesen Root mit Ed25519.
 14. G4 erteilt genau eine Launchklasse oder `NO-GO`. Jede Änderung danach
     startet ab Schritt 2 mit neuem Commit.
 
@@ -316,22 +366,31 @@ gesetzliche, finanzielle und Supportpflichten.
 - `AC-32-11`: drei Browser, Mobile, A11y und Rollenjourneys sind grün.
 - `AC-32-12`: Commit, Artefakt, Deployment, Walkthrough und Evidence stimmen.
 
-| Criterion / Requirement | Risiko | Testart | Testfall | Positivfall | Negativ-/Abuse-Fall | Rolle | Portal/System | Testdaten | Umgebung | Exakter Befehl/manueller Ablauf | Messbare Erwartung | Evidence | Owner | Status |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| AC-32-01 / STH-001–037, REQ-REL-032-001 | P0 | Unit/Contract + manuell | Ledger mit 37 eindeutigen IDs | jede ID hat Owner/Status/Evidence/Scope | fehlend, doppelt, `DONE` ohne Evidence, expired external, P3 ohne Trigger | Release/Audit Owner | Plan/Evidence | alle 37 Findingrecords | Clean Clone/CI | `npx vitest run --config vitest.config.ts tests/unit/release/phase32-findings-ledger.test.ts`; danach jede Evidence-URI öffnen, Digest/Commit/Datum/Owner gegen Manifest prüfen | IDs exakt 37; zulässiger Status 37/37; targetklassige offene P0/P1 = 0; dangling Evidence = 0 | Findingsledger + Validatorreport | Release Owner + Finding Owner | PLANNED |
-| AC-32-02 / REQ-REL-032-002 | P0 | Unit/Policy | LC1–LC6 und requested scope | genau eine höchste zulässige Klasse | Überspringen einer Klasse, Mischklasse, unbekannter Scope/Flag | Release Owner | Release Policy | sechs positive + boundary fixtures | CI | `npx vitest run --config vitest.config.ts tests/unit/release/phase32-launch-class-policy.test.ts` | 6/6 positive; jede fehlende Pflichtdependency senkt/stoppt deterministisch; exakt ein Urteil | JUnit + decision JSON | Release Engineering | PLANNED |
-| AC-32-03 / LC1 | P0 | Security/HTTP/E2E | lokale Demo mit Seeds/Mocks | sichtbare DEMO, keine externen Calls | echte E-Mail/Storage/Payment, reale PII, Indexierung, Productionclaim | Demo Operator | alle Portale | synthetische Seedidentitäten | isoliert/lokal | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-lc1-isolation-postgres.test.ts && npm run test:e2e:http` | externe Provider calls = 0; reale PII canaries = 0; robots/indexing off; DEMO label auf allen Claims | Network/DB/HTTP report | Security + Product | PLANNED |
-| AC-32-04 / LC2 | P0 | Contract + manueller Drill | ein beaufsichtigter Design-Partner-Flow | alle scopespezifischen Approvals/Operator/Deletion vorhanden | unbegleiteter Zugriff, fehlende AVG/Tax/DPA/Consent, nicht gelöschte Testdaten | Design Partner/Operator | gewählter Flow | allowlisted Identitäten | kontrolliertes Staging | `npx vitest run --config vitest.config.ts tests/unit/release/phase32-external-gates.test.ts`; manuell: Identität allowlisten→Consent/Approval-Digests prüfen→Operator startet Flow→Incidentkontakt testen→Flow beenden→Export/Löschung→Storage/DB/Audit verifizieren | unvollständiges Gate: 0 Sessions; vollständiger Flow: 1; Testpersonen nach Frist in DB/Storage 0 ausser zulässiger Tombstone/Audit | Approvalbundle + Drill-/Deletionreport | Research + DPO/Legal | PLANNED |
-| AC-32-05 / LC3 | P0 | PostgreSQL + Provider/Failure + E2E | invite-only reale Provider/Applications | Trust/Fraud/Support/30A/30D passend grün | unverified company, scam/stale job, provider timeout, no incident owner, fremder Invite | Candidate/Employer/Support | Pilotportale/Provider | invite cohort, fraud/failure fixtures | Staging/Sandbox | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-lc3-pilot-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase32-lc3-pilot.spec.ts --project=chromium-journeys` | public self-serve = 0; foreign invite = 0; bei Firmenvertrauen Phase-26-Gate 100 %; sichtbare Jobs/Search haben 30A/30D | DB/provider/audit + Playwright | Pilot + Trust/Ops | PLANNED |
-| AC-32-06 / LC4 | P0 | Policy + HTTP + 3-Browser E2E | öffentlicher kostenloser Betrieb | Phase 20–23/25/26/29/30A/30D grün | Kauf-CTA, ungeprüfte Firma, stale job, öffentlicher ungegateter Cluster, Phase28-Claim ohne Gate | Public/Candidate/Employer | Public/Free flows | public cluster, six personas | release-like | `npx vitest run --config vitest.config.ts tests/unit/release/phase32-lc4-public-free.test.ts && npm run test:e2e:http && npm run test:e2e:browser` | Kauf-/Checkout-CTA und Paid API = 0; Phase 26 zwingend; 30A/30D je visible cluster; Phase27/28 nur bei Promise sonst off | Policy/HTTP/Browser reports | Product + Trust + Release | PLANNED |
-| AC-32-07 / LC5, STH-035/037 | P0 | PostgreSQL + Provider + E2E | reales freigegebenes Offer→Pay→Deliver→Recover/Reconcile | Phase24/31 und Tax/Recovery vollständig | Testmode als WTP, duplicate webhook, delivery failure ohne Remedy, dunning/refund drift | Employer/Finance/Support | Billing/Offer Delivery | paid sandbox/live-authorized fixtures | Staging + freigegebener Provider | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-lc5-paid-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase32-lc5-paid.spec.ts --project=chromium-journeys` | Ledger/Provider/Invoice/Reconcile diff = 0; duplicate effect = 0; jeder Failurecode genau eine Policyremedy; echte 31A WTP-Evidence vorhanden | Provider receipts + Ledger/Recovery/E2E | Finance + Support + Release | PLANNED |
-| AC-32-08 / LC6, STH-020/021/027/034 | P0/P3 Trigger | Load/Soak + Ops Drill | breiter belegter Cluster, Queue/Search/Sitemap-Headroom | SLO/Capacity/RPO/RTO/On-call und ausgelöste Tracks grün | 30B/30C unter Trigger fälschlich Pflicht oder über Trigger nur deferred; Pager/restore fail | SRE/Ops | App/DB/Queue/SEO | peak+2×, >250, optional >50k | production-like isoliert | `npx vitest run --config vitest.performance.config.ts tests/performance/phase32-lc6-capacity.test.ts`; manuell 24h-Soak→Provider/Worker/DB-Ausfall→Pager→Restore→Rollback; 30B/30C-Istwert/Trigger/Forecast prüfen | SLO-Burn innerhalb Budget; Utilization ≤80 %; RPO/RTO ≤ freigegebenes Ziel; ausgelöster Track 100 % umgesetzt, sonst aktuelles Monitored-Record | Load/Soak/Pager/Restore/Capacity bundle | SRE + DB/SEO/Ops | PLANNED |
-| AC-32-09 / REQ-DATA-001 | P0 | Migration/Restore | fresh + supported baseline upgrade | deterministisches Schema/Daten/Checksums | partial backfill, orphan, lock over budget, rollback reanimiert gelöschte Daten | System/DBA | PostgreSQL/Storage | empty + anonymized baseline | PostgreSQL 16 isoliert | `npm run db:validate && npm run db:migrate && npm run db:migrate:status && npm run db:smoke && npm run seed:verify && npm run ops:backup && npm run ops:restore`; zusätzlich `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-upgrade-restore-postgres.test.ts` | Exit 0; Schema-/Row-/Checksumdiff 0; Orphans/foreign canaries 0; RPO/RTO gemessen; deleted data nicht restored-public | Migration/DB/backup/restore report | DB/SRE + Privacy | PLANNED |
-| AC-32-10 / STH-030/031, REQ-SEC-001/002 | P0 | Security/PostgreSQL | Rollen×Tenant×Owner×Step-up×ATO/Fraud-Matrix | erlaubte Capability genau | missing/wrong role, foreign tenant/owner, stale MFA, break-glass abuse, webhook replay | alle Rollen/System | alle Mutations/Reads | canary tenants, ATO/fraud corpus | CI/PostgreSQL | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-security-matrix-postgres.test.ts && npm run security:release-scan` | Denialmatrix 100 %; denied writes/leaks 0; Step-up required 100 %; Secrets/PII findings 0 | Matrix/JUnit/Audit/scan | Security | PLANNED |
-| AC-32-10 / REQ-INT-002, REQ-NOT-001, REQ-DOC-002, REQ-OPS-005, REQ-PAY-001 | P0 LC3+ | Contract/Failure | Identity/Email/Storage/Payment/Worker Failure | Retry/DLQ/Replay/Alert/Compensation | timeout, 4xx/5xx, duplicate/out-of-order, poison, lost lease, provider drift | System/Ops | Provider/Queue/Worker | contract + chaos fixtures | sandbox/staging | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-provider-worker-failure-postgres.test.ts` | keine Doppelwirkung; terminaler Fehler in DLQ/Support; Pager innerhalb SLO; Replay genau einmal | Contract/queue/audit/pager report | Provider + Ops | PLANNED |
-| AC-32-10 / REQ-PRIV-004, REQ-DOC-002, REQ-NOT-001 | P0 Real data | PostgreSQL + E2E | Export→Correct/Delete→Restore | vollständige Notification/Evidence/Erasure | oversize, foreign tenant, legal hold bypass, deleted object returns after restore | Candidate/Employer/DPO | Privacy/Storage/Notifications | PII canaries/docs/holds | isolated staging | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-privacy-lifecycle-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase32-privacy.spec.ts --project=chromium-journeys` | Export vollständig/owner-only; oversize fail-safe; delete DB+Storage gemäss Policy; restore reactivation 0; Notification 1 | Export manifest + DB/storage diff + Audit | Privacy/DPO | PLANNED |
-| AC-32-11 / STH-033, REQ-QA-001/002 | P0 LC3+ | Browser/A11y + moderiert | Kernreisen in 3 Engines/360 px/Keyboard/SR | alle vereinbarten Tasks verständlich/bedienbar | focus trap, clipped CTA, silent error, falsches Trust-/Paid-Verständnis, Abbruch | Public/Candidate/Employer/Admin/Support | alle Zielportale | Phase29 Taskscript/Personas | deployed candidate | `npm run test:e2e:list && npm run test:e2e:browser`; manuell exakt Phase-29-Script auf Runtime-Digest mit NVDA/Windows und VoiceOver/iOS ausführen | Chromium/Firefox/WebKit Fail/Skip/Retry 0; serious/critical A11y 0; Task-Success ≥80 %, kritisches Verständnis 100 %, Zeiten/Errors/Abandon dokumentiert | Playwright/Axe + moderated/SR evidence | QA + Accessibility/UX | PLANNED |
-| AC-32-12 / STH-024, REQ-REL-032-003/004/005 | P0 G4 | Release/Attestation + manuell | freeze→build→digest→deploy→walkthrough | überall gleiche SHA/Digests | rebuild, dirty tree, test/walkthrough anderer Commit, Fix nach Run, missing report | Release Owner + unabhängige Approver | CI/Artifact/Deployment | immutable release candidate | clean CI + target environment | `npm ci && npm run plan:audit && npm run route:audit && npm run lint && npm run typecheck && npm test && npm run test:integration && npm run build && npm run test:e2e:http && npm run test:e2e:hsts && npm run test:e2e:browser && npm run license:audit && npm run security:release-scan && npm run test:release`; danach Runtime `/version`/Manifest-SHA+DIGEST gegen gespeichertes Artefakt vergleichen und 10 Kernreisen manuell protokollieren | alle Exit 0; Fail/Skip/Retry 0; dirty diff 0; Commit/Tree/Lock/Migration/Artifact/Runtime/Evidence-Digest exakt gleich; Approvals vollständig | signiertes G4-Manifest + Reports + Walkthrough | Release Owner + Security/Product/Ops | PLANNED |
+Der technische Vertrag hinter `AC-32-01` bis `AC-32-03` und die
+fail-closed LC1–LC6-Policy sind implementiert und gezielt geprüft. Der
+vollständige Candidate-Lauf für `AC-32-01`, `AC-32-03`, `AC-32-09` bis
+`AC-32-12` steht noch aus. `AC-32-04` bis `AC-32-08` sind ausschließlich
+Policyverträge und **nicht** als LC2–LC6-Freigabe zu lesen; ihre realen
+Provider-, Fach-, Markt- und Operationsbelege fehlen. Die Spalte
+`G4-Evidence` beschreibt daher den noch offenen Candidate-/External-Nachweis,
+nicht den technischen Implementierungsstand.
+
+| Criterion / Requirement                                                    | Risiko        | Testart                             | Testfall                                                 | Positivfall                                                  | Negativ-/Abuse-Fall                                                                              | Rolle                                   | Portal/System                 | Testdaten                             | Umgebung                         | Exakter Befehl/manueller Ablauf                                                                                                                                                                                                                                                                                                                                                                                                                      | Messbare Erwartung                                                                                                                                       | Evidence                                       | Owner                                | G4-Evidence |
+| -------------------------------------------------------------------------- | ------------- | ----------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------- | ----------------------------- | ------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------ | ----------- |
+| AC-32-01 / STH-001–037, REQ-REL-032-001                                    | P0            | Unit/Contract + manuell             | Ledger mit 37 eindeutigen IDs                            | jede ID hat Owner/Status/Evidence/Scope                      | fehlend, doppelt, `DONE` ohne Evidence, expired external, P3 ohne Trigger                        | Release/Audit Owner                     | Plan/Evidence                 | alle 37 Findingrecords                | Clean Clone/CI                   | `npx vitest run --config vitest.config.ts tests/unit/release/phase32-findings-ledger.test.ts`; danach jede Evidence-URI öffnen, Digest/Commit/Datum/Owner gegen Manifest prüfen                                                                                                                                                                                                                                                                      | IDs exakt 37; zulässiger Status 37/37; targetklassige offene P0/P1 = 0; dangling Evidence = 0                                                            | Findingsledger + Validatorreport               | Release Owner + Finding Owner        | PLANNED     |
+| AC-32-02 / REQ-REL-032-002                                                 | P0            | Unit/Policy                         | LC1–LC6 und requested scope                              | genau eine höchste zulässige Klasse                          | Überspringen einer Klasse, Mischklasse, unbekannter Scope/Flag                                   | Release Owner                           | Release Policy                | sechs positive + boundary fixtures    | CI                               | `npx vitest run --config vitest.config.ts tests/unit/release/phase32-launch-class-policy.test.ts`                                                                                                                                                                                                                                                                                                                                                    | 6/6 positive; jede fehlende Pflichtdependency senkt/stoppt deterministisch; exakt ein Urteil                                                             | JUnit + decision JSON                          | Release Engineering                  | PLANNED     |
+| AC-32-03 / LC1                                                             | P0            | Security/HTTP/E2E                   | lokale Demo mit Seeds/Mocks                              | sichtbare DEMO, keine externen Calls                         | echte E-Mail/Storage/Payment, reale PII, Indexierung, Productionclaim                            | Demo Operator                           | alle Portale                  | synthetische Seedidentitäten          | isoliert/lokal                   | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-lc1-isolation-postgres.test.ts && npm run test:e2e:http`                                                                                                                                                                                                                                                                                                     | externe Provider calls = 0; reale PII canaries = 0; robots/indexing off; DEMO label auf allen Claims                                                     | Network/DB/HTTP report                         | Security + Product                   | PLANNED     |
+| AC-32-04 / LC2                                                             | P0            | Contract + manueller Drill          | ein beaufsichtigter Design-Partner-Flow                  | alle scopespezifischen Approvals/Operator/Deletion vorhanden | unbegleiteter Zugriff, fehlende AVG/Tax/DPA/Consent, nicht gelöschte Testdaten                   | Design Partner/Operator                 | gewählter Flow                | allowlisted Identitäten               | kontrolliertes Staging           | `npx vitest run --config vitest.config.ts tests/unit/release/phase32-external-gates.test.ts`; manuell: Identität allowlisten→Consent/Approval-Digests prüfen→Operator startet Flow→Incidentkontakt testen→Flow beenden→Export/Löschung→Storage/DB/Audit verifizieren                                                                                                                                                                                 | unvollständiges Gate: 0 Sessions; vollständiger Flow: 1; Testpersonen nach Frist in DB/Storage 0 ausser zulässiger Tombstone/Audit                       | Approvalbundle + Drill-/Deletionreport         | Research + DPO/Legal                 | PLANNED     |
+| AC-32-05 / LC3                                                             | P0            | PostgreSQL + Provider/Failure + E2E | invite-only reale Provider/Applications                  | Trust/Fraud/Support/30A/30D passend grün                     | unverified company, scam/stale job, provider timeout, no incident owner, fremder Invite          | Candidate/Employer/Support              | Pilotportale/Provider         | invite cohort, fraud/failure fixtures | Staging/Sandbox                  | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-lc3-pilot-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase32-lc3-pilot.spec.ts --project=chromium-journeys`                                                                                                                                                                                                       | public self-serve = 0; foreign invite = 0; bei Firmenvertrauen Phase-26-Gate 100 %; sichtbare Jobs/Search haben 30A/30D                                  | DB/provider/audit + Playwright                 | Pilot + Trust/Ops                    | PLANNED     |
+| AC-32-06 / LC4                                                             | P0            | Policy + HTTP + 3-Browser E2E       | öffentlicher kostenloser Betrieb                         | Phase 20–23/25/26/29/30A/30D grün                            | Kauf-CTA, ungeprüfte Firma, stale job, öffentlicher ungegateter Cluster, Phase28-Claim ohne Gate | Public/Candidate/Employer               | Public/Free flows             | public cluster, six personas          | release-like                     | `npx vitest run --config vitest.config.ts tests/unit/release/phase32-lc4-public-free.test.ts && npm run test:e2e:http && npm run test:e2e:browser`                                                                                                                                                                                                                                                                                                   | Kauf-/Checkout-CTA und Paid API = 0; Phase 26 zwingend; 30A/30D je visible cluster; Phase27/28 nur bei Promise sonst off                                 | Policy/HTTP/Browser reports                    | Product + Trust + Release            | PLANNED     |
+| AC-32-07 / LC5, STH-035/037                                                | P0            | PostgreSQL + Provider + E2E         | reales freigegebenes Offer→Pay→Deliver→Recover/Reconcile | Phase24/31 und Tax/Recovery vollständig                      | Testmode als WTP, duplicate webhook, delivery failure ohne Remedy, dunning/refund drift          | Employer/Finance/Support                | Billing/Offer Delivery        | paid sandbox/live-authorized fixtures | Staging + freigegebener Provider | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-lc5-paid-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase32-lc5-paid.spec.ts --project=chromium-journeys`                                                                                                                                                                                                         | Ledger/Provider/Invoice/Reconcile diff = 0; duplicate effect = 0; jeder Failurecode genau eine Policyremedy; echte 31A WTP-Evidence vorhanden            | Provider receipts + Ledger/Recovery/E2E        | Finance + Support + Release          | PLANNED     |
+| AC-32-08 / LC6, STH-020/021/027/034                                        | P0/P3 Trigger | Load/Soak + Ops Drill               | breiter belegter Cluster, Queue/Search/Sitemap-Headroom  | SLO/Capacity/RPO/RTO/On-call und ausgelöste Tracks grün      | 30B/30C unter Trigger fälschlich Pflicht oder über Trigger nur deferred; Pager/restore fail      | SRE/Ops                                 | App/DB/Queue/SEO              | peak+2×, >250, optional >50k          | production-like isoliert         | `npx vitest run --config vitest.performance.config.ts tests/performance/phase32-lc6-capacity.test.ts`; manuell 24h-Soak→Provider/Worker/DB-Ausfall→Pager→Restore→Rollback; 30B/30C-Istwert/Trigger/Forecast prüfen                                                                                                                                                                                                                                   | SLO-Burn innerhalb Budget; Utilization ≤80 %; RPO/RTO ≤ freigegebenes Ziel; ausgelöster Track 100 % umgesetzt, sonst aktuelles Monitored-Record          | Load/Soak/Pager/Restore/Capacity bundle        | SRE + DB/SEO/Ops                     | PLANNED     |
+| AC-32-09 / REQ-DATA-001                                                    | P0            | Migration/Restore                   | fresh + supported baseline upgrade                       | deterministisches Schema/Daten/Checksums                     | partial backfill, orphan, lock over budget, rollback reanimiert gelöschte Daten                  | System/DBA                              | PostgreSQL/Storage            | empty + anonymized baseline           | PostgreSQL 16 isoliert           | `npm run db:validate && npm run db:migrate && npm run db:migrate:status && npm run db:smoke && npm run seed:verify && npm run ops:backup && npm run ops:restore`; zusätzlich `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-upgrade-restore-postgres.test.ts`                                                                                                                                               | Exit 0; Schema-/Row-/Checksumdiff 0; Orphans/foreign canaries 0; RPO/RTO gemessen; deleted data nicht restored-public                                    | Migration/DB/backup/restore report             | DB/SRE + Privacy                     | PLANNED     |
+| AC-32-10 / STH-030/031, REQ-SEC-001/002                                    | P0            | Security/PostgreSQL                 | Rollen×Tenant×Owner×Step-up×ATO/Fraud-Matrix             | erlaubte Capability genau                                    | missing/wrong role, foreign tenant/owner, stale MFA, break-glass abuse, webhook replay           | alle Rollen/System                      | alle Mutations/Reads          | canary tenants, ATO/fraud corpus      | CI/PostgreSQL                    | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-security-matrix-postgres.test.ts && npm run security:release-scan`                                                                                                                                                                                                                                                                                           | Denialmatrix 100 %; denied writes/leaks 0; Step-up required 100 %; Secrets/PII findings 0                                                                | Matrix/JUnit/Audit/scan                        | Security                             | PLANNED     |
+| AC-32-10 / REQ-INT-002, REQ-NOT-001, REQ-DOC-002, REQ-OPS-005, REQ-PAY-001 | P0 LC3+       | Contract/Failure                    | Identity/Email/Storage/Payment/Worker Failure            | Retry/DLQ/Replay/Alert/Compensation                          | timeout, 4xx/5xx, duplicate/out-of-order, poison, lost lease, provider drift                     | System/Ops                              | Provider/Queue/Worker         | contract + chaos fixtures             | sandbox/staging                  | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-provider-worker-failure-postgres.test.ts`                                                                                                                                                                                                                                                                                                                    | keine Doppelwirkung; terminaler Fehler in DLQ/Support; Pager innerhalb SLO; Replay genau einmal                                                          | Contract/queue/audit/pager report              | Provider + Ops                       | PLANNED     |
+| AC-32-10 / REQ-PRIV-004, REQ-DOC-002, REQ-NOT-001                          | P0 Real data  | PostgreSQL + E2E                    | Export→Correct/Delete→Restore                            | vollständige Notification/Evidence/Erasure                   | oversize, foreign tenant, legal hold bypass, deleted object returns after restore                | Candidate/Employer/DPO                  | Privacy/Storage/Notifications | PII canaries/docs/holds               | isolated staging                 | `npx vitest run --config vitest.integration.config.ts tests/integration/release/phase32-privacy-lifecycle-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase32-privacy.spec.ts --project=chromium-journeys`                                                                                                                                                                                                 | Export vollständig/owner-only; oversize fail-safe; delete DB+Storage gemäss Policy; restore reactivation 0; Notification 1                               | Export manifest + DB/storage diff + Audit      | Privacy/DPO                          | PLANNED     |
+| AC-32-11 / STH-033, REQ-QA-001/002                                         | P0 LC3+       | Browser/A11y + moderiert            | Kernreisen in 3 Engines/360 px/Keyboard/SR               | alle vereinbarten Tasks verständlich/bedienbar               | focus trap, clipped CTA, silent error, falsches Trust-/Paid-Verständnis, Abbruch                 | Public/Candidate/Employer/Admin/Support | alle Zielportale              | Phase29 Taskscript/Personas           | deployed candidate               | `npm run test:e2e:list && npm run test:e2e:browser`; manuell exakt Phase-29-Script auf Runtime-Digest mit NVDA/Windows und VoiceOver/iOS ausführen                                                                                                                                                                                                                                                                                                   | Chromium/Firefox/WebKit Fail/Skip/Retry 0; serious/critical A11y 0; Task-Success ≥80 %, kritisches Verständnis 100 %, Zeiten/Errors/Abandon dokumentiert | Playwright/Axe + moderated/SR evidence         | QA + Accessibility/UX                | PLANNED     |
+| AC-32-12 / STH-024, REQ-REL-032-003/004/005                                | P0 G4         | Release/Attestation + manuell       | freeze→build→digest→deploy→walkthrough                   | überall gleiche SHA/Digests                                  | rebuild, dirty tree, test/walkthrough anderer Commit, Fix nach Run, missing report               | Release Owner + unabhängige Approver    | CI/Artifact/Deployment        | immutable release candidate           | clean CI + target environment    | `npm ci && npm run plan:audit && npm run route:audit && npm run lint && npm run typecheck && npm test && npm run test:integration && npm run build && npm run test:e2e:http && npm run test:e2e:hsts && npm run test:e2e:browser && npm run license:audit && npm run security:release-scan && npm run test:release`; danach Runtime `/version`/Manifest-SHA+DIGEST gegen gespeichertes Artefakt vergleichen und 10 Kernreisen manuell protokollieren | alle Exit 0; Fail/Skip/Retry 0; dirty diff 0; Commit/Tree/Lock/Migration/Artifact/Runtime/Evidence-Digest exakt gleich; Approvals vollständig            | signiertes G4-Manifest + Reports + Walkthrough | Release Owner + Security/Product/Ops | PLANNED     |
 
 ### 22. Performance-, Skalierungs-, SLO-, RPO- und RTO-Grenzen
 
@@ -366,13 +425,15 @@ behoben. Neuer Commit bedeutet vollständiger neuer G4-Lauf.
 
 ### 25. Evidence
 
-Signiertes G4-Manifest mit Commit/Tree/Lockfile/Migration/Schema/Artifact/
-Runtime/SBOM-Digests; 37-Findingsledger; Requirements-/Route-/Role-/Provider-/
-Worker-/Flaginventar; externe Approvalbundles; Clean-clone-/Migration-/
-Restore-/Security-/License-/Test-/Coverage-/Performance-/Browser-/A11y-/
-Provider-/Queue-/Pager-/Incidentreports; Runtime-Screenshots/Console/Network/
-Audit des manuellen Walkthroughs; Rollback-/Redeploy-Nachweis und finale
-Launchklassenentscheidung.
+G4-Manifest mit Commit/Tree/Lockfile/Migration/Schema/Artifact/Runtime/SBOM-/
+Laufzeitkonfigurations-Digests; 37-Findingsledger; Requirements-/Route-/Role-/
+Provider-/Worker-/Flaginventar; candidate-gebundene Report-Evidence-
+Deskriptoren plus persistierte Rohartefakte; externe Bundle- und
+Vertrauensregister-Digests; vier unabhängige Ed25519-Attestierungen;
+Clean-clone-/Migration-/Restore-/Security-/License-/Test-/Coverage-/
+Performance-/Browser-/A11y-/Provider-/Queue-/Pager-/Incidentreports;
+Runtime-Screenshots/Console/Network/Audit des manuellen Walkthroughs;
+Rollback-/Redeploy-Nachweis und finale Launchklassenentscheidung.
 
 ### 26. Definition of Done
 

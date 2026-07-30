@@ -59,7 +59,12 @@
     "route:audit:update": "tsx scripts/route-inventory-audit.ts --write",
     "security:release-scan": "tsx scripts/release-secret-scan.ts",
     "license:audit": "tsx scripts/license-audit.ts",
-    "test:release": "tsx scripts/phase18-release-gate.ts",
+    "test:phase32": "vitest run --config vitest.config.ts tests/unit/release",
+    "test:release:recovery": "tsx scripts/phase18-release-gate.ts",
+    "release:audit": "tsx scripts/phase32-release-gate.ts",
+    "release:finalize": "tsx scripts/phase32-release-gate.ts --finalize-only",
+    "release:verify": "tsx scripts/phase32-release-gate.ts --verify-only",
+    "test:release": "npm run release:audit -- --requested-class=LC1",
     "db:studio": "tsx scripts/require-local-database.ts && prisma studio",
     "postinstall": "prisma generate"
   },
