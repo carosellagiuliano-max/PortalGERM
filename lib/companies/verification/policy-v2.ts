@@ -80,7 +80,12 @@ export type CompanyTrustActivation = Readonly<{
   strongBadge: boolean;
   publicEligibility: boolean;
   rapidRevoke: boolean;
-  /** Only a local/CI compatibility seam; it can never produce a strong badge. */
+  /**
+   * Only a demo-environment compatibility seam (local/CI/preview — exactly the
+   * runtimes where `getPublicDataContext` keeps `liveOnly` off and shows the
+   * demo banner). It can never produce a strong badge and never applies to
+   * staging or production.
+   */
   legacyDemoCompatibility: boolean;
 }>;
 
@@ -142,7 +147,9 @@ export function evaluateCompanyTrust(input: Readonly<{
   if (strong.ok) {
     const localCompatibility =
       input.activation.legacyDemoCompatibility &&
-      (input.environment === "local" || input.environment === "ci") &&
+      (input.environment === "local" ||
+        input.environment === "ci" ||
+        input.environment === "preview") &&
       input.legacyVerifiedCycleCount === 1 &&
       (input.activation.policyMode !== "enforce" ||
         (!input.activation.strongBadge &&
@@ -176,7 +183,9 @@ export function evaluateCompanyTrust(input: Readonly<{
 
   const localCompatibility =
     input.activation.legacyDemoCompatibility &&
-    (input.environment === "local" || input.environment === "ci") &&
+    (input.environment === "local" ||
+      input.environment === "ci" ||
+      input.environment === "preview") &&
     input.legacyVerifiedCycleCount === 1 &&
     (input.projection === null ||
       (input.projection.level === "LEGACY" &&

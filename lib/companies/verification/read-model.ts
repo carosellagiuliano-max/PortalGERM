@@ -223,7 +223,9 @@ export function companyTrustActivationFromEnvironment(): CompanyTrustActivation 
     publicEligibility: environment.COMPANY_TRUST_PUBLIC_ELIGIBILITY,
     rapidRevoke: environment.COMPANY_TRUST_RAPID_REVOKE,
     legacyDemoCompatibility:
-      environment.APP_ENV === "local" || environment.APP_ENV === "ci",
+      environment.APP_ENV === "local" ||
+      environment.APP_ENV === "ci" ||
+      environment.APP_ENV === "preview",
   });
 }
 
