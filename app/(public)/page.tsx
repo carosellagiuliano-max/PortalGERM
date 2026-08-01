@@ -216,7 +216,12 @@ export default async function HomePage() {
               {guides.map((guide) => (
                 <Card key={guide.id}>
                   <CardHeader><CardTitle as="h3">{guide.title}</CardTitle><CardDescription className="leading-6">{guide.excerpt}</CardDescription></CardHeader>
-                  <CardContent className="mt-auto"><Link href={`/guide/${guide.slug}`} className={buttonVariants({ variant: "outline", className: "w-full" })}>Artikel lesen: {guide.title}</Link></CardContent>
+                  {/* The title stays in the accessible name so the three
+                      links remain distinguishable, but it must not sit in the
+                      visible label: buttonVariants sets whitespace-nowrap, so
+                      a long title overflowed the card and ran across its
+                      neighbours. */}
+                  <CardContent className="mt-auto"><Link href={`/guide/${guide.slug}`} className={buttonVariants({ variant: "outline", className: "w-full" })}>Artikel lesen<span className="sr-only">: {guide.title}</span> <ArrowRightIcon data-icon="inline-end" aria-hidden="true" /></Link></CardContent>
                 </Card>
               ))}
             </div>
