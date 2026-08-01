@@ -50,6 +50,7 @@ gelten nicht als Nachweis.
 - [`2026-07-29-phase-30.md`](./2026-07-29-phase-30.md) — versionierte de-CH-Search-/Learning-/Cluster-V2-Technik, triggergebundene Scale-/Sitemap-Operations und canonical Job-Freshness; Fachreview, Zielalerts, Moderationskapazität, Staging und LIVE bleiben offen.
 - [`2026-07-30-phase-31.md`](./2026-07-30-phase-31.md) — fail-closed Commercial-/WTP-/Delivery-, Capacity-/Cashflow-/Recovery- und Draft-only-Import-Technik; reale Fach-, Markt-, Legal-, Finance- und Operations-Evidence bleibt offen.
 - [`2026-07-30-phase-32.md`](./2026-07-30-phase-32.md) — candidate-gebundener LC1-G4-Orchestrator, sechs Launchklassen, 37-Findingsledger und striktes Release-Manifest; Walkthrough, Rollback und unabhängige Approvals fehlen, daher Release `NO_GO` und LC2–LC6 `NOT APPROVED`.
+- [`2026-08-01-runtime-findings-follow-up.md`](./2026-08-01-runtime-findings-follow-up.md) — unabhängig klassifizierte Runtime-/Nutzerweg-/Security-/Betriebsbefunde; bestätigte Codefehler geschlossen, bewusste Fail-closed-Verträge abgegrenzt und externe Legal-/Provider-/Scale-Gates weiterhin offen.
 
 ## Pflichtfelder eines Records
 
