@@ -4,7 +4,7 @@ import Link from "@/components/shared/app-link";
 import { useState } from "react";
 import { LogInIcon, MenuIcon, XIcon } from "lucide-react";
 
-import { PublicNavLink } from "@/components/layout/public-nav-link";
+import { ActiveNavLinks } from "@/components/layout/active-nav-links";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
@@ -62,14 +62,12 @@ export function MobilePublicNav({
           </SheetDescription>
         </SheetHeader>
         <nav aria-label="Mobile Navigation" className="grid gap-1 px-4 pb-5">
-          {navigation.map((item) => (
-            <PublicNavLink
-              key={item.href}
-              item={item}
-              orientation="vertical"
-              onNavigate={() => setOpen(false)}
-            />
-          ))}
+          <ActiveNavLinks
+            items={navigation}
+            orientation="vertical"
+            itemClassName="h-11 justify-start px-3"
+            onNavigate={() => setOpen(false)}
+          />
           <Link
             href="/login"
             onClick={() => setOpen(false)}

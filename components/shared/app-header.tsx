@@ -3,7 +3,7 @@ import { LogInIcon } from "lucide-react";
 
 import { BrandLink } from "@/components/layout/brand-link";
 import { MobilePublicNav } from "@/components/layout/mobile-public-nav";
-import { PublicNavLink } from "@/components/layout/public-nav-link";
+import { ActiveNavLinks } from "@/components/layout/active-nav-links";
 import { buttonVariants } from "@/components/ui/button";
 import { getPublicDataContext } from "@/lib/public/environment";
 
@@ -27,9 +27,10 @@ export function AppHeader() {
         <BrandLink />
 
         <nav aria-label="Hauptnavigation" className="hidden items-center gap-0.5 xl:flex">
-          {visibleNavigation.map((item) => (
-            <PublicNavLink key={item.href} item={item} />
-          ))}
+          <ActiveNavLinks
+            items={visibleNavigation}
+            itemClassName="h-11 px-2.5"
+          />
           <Link
             href="/login"
             className={buttonVariants({

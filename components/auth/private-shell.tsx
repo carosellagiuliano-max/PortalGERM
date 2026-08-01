@@ -1,10 +1,10 @@
-import Link from "@/components/shared/app-link";
 import { LogOutIcon } from "lucide-react";
 
 import { SessionRefresh } from "@/components/auth/session-refresh";
+import { ActiveNavLinks } from "@/components/layout/active-nav-links";
 import { SkipLink } from "@/components/layout/skip-link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type PrivateNavigationItem = Readonly<{ href: string; label: string }>;
@@ -68,7 +68,11 @@ export function PrivateShell({
               data-e2e-horizontal-scroll="true"
               className="flex gap-2 overflow-x-auto pb-2 lg:sticky lg:top-6 lg:grid lg:overflow-visible lg:rounded-xl lg:border lg:bg-card lg:p-3"
             >
-              <NavigationLinks navigation={navigation} vertical />
+              <ActiveNavLinks
+                items={navigation}
+                orientation="vertical"
+                itemClassName="h-9 whitespace-nowrap lg:w-full lg:justify-start"
+              />
               <div className="hidden border-t pt-3 lg:block">
                 <LogoutButton className="w-full" />
               </div>
@@ -85,7 +89,10 @@ export function PrivateShell({
               data-e2e-horizontal-scroll="true"
               className="mb-8 flex gap-2 overflow-x-auto pb-2"
             >
-              <NavigationLinks navigation={navigation} />
+              <ActiveNavLinks
+                items={navigation}
+                itemClassName="h-9 whitespace-nowrap"
+              />
             </nav>
             {children}
           </>
@@ -93,28 +100,6 @@ export function PrivateShell({
       </main>
     </>
   );
-}
-
-function NavigationLinks({
-  navigation,
-  vertical = false,
-}: Readonly<{
-  navigation: readonly PrivateNavigationItem[];
-  vertical?: boolean;
-}>) {
-  return navigation.map((item) => (
-    <Link
-      key={item.href}
-      href={item.href}
-      className={cn(
-        buttonVariants({ variant: "ghost" }),
-        "h-9 whitespace-nowrap",
-        vertical && "lg:w-full lg:justify-start",
-      )}
-    >
-      {item.label}
-    </Link>
-  ));
 }
 
 function LogoutButton({ className }: Readonly<{ className?: string }>) {
