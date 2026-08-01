@@ -101,11 +101,19 @@ export function ApplyIntentConfirmation({
   const requiresCoverLetter =
     projection.job.requiredDocumentKinds.includes("COVER_LETTER");
   const canSubmit = identityComplete && (!requiresCv || documents.length > 0);
+  const retainedCoverLetter =
+    typeof state.values?.coverLetter === "string"
+      ? state.values.coverLetter
+      : "";
 
   return (
     <form action={action} className="grid gap-5" noValidate>
       <input type="hidden" name="signedIntent" value={signedIntent} />
-      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      <input
+        type="hidden"
+        name="idempotencyKey"
+        value={state.nextIdempotencyKey ?? idempotencyKey}
+      />
       <input
         type="hidden"
         name="confirmationVersion"
@@ -175,12 +183,14 @@ export function ApplyIntentConfirmation({
       <label className="grid gap-2 text-sm font-medium">
         Motivationsschreiben {requiresCoverLetter ? "(erforderlich)" : "(optional)"}
         <Textarea
+          key={state.nextIdempotencyKey ?? "initial-cover-letter"}
           name="coverLetter"
           minLength={requiresCoverLetter ? 1 : undefined}
           maxLength={4_000}
           required={requiresCoverLetter}
           rows={7}
           placeholder="Warum passt diese Stelle zu dir?"
+          defaultValue={retainedCoverLetter}
         />
       </label>
       <label className="flex items-start gap-3 rounded-lg border p-3 text-sm leading-6">

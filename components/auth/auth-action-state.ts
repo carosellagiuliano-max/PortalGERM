@@ -1,5 +1,5 @@
 export type AuthActionState = Readonly<{
-  status: "idle" | "error" | "success" | "rate_limited";
+  status: "idle" | "error" | "success" | "unavailable" | "rate_limited";
   message?: string;
   fieldErrors?: Readonly<Record<string, readonly string[]>>;
   values?: Readonly<Record<string, string | boolean>>;

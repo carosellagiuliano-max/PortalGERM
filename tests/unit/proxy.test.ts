@@ -110,11 +110,15 @@ describe("proxy", () => {
   });
 
   it("keeps a CSP-free defensive fallback if a router prefetch reaches the proxy", () => {
+    vi.stubEnv("TRUSTED_PROXY_HOPS", "1");
     const response = proxy(
       new NextRequest("https://swisstalenthub.test/candidate/jobpass", {
         headers: {
           cookie: `session=${"A".repeat(43)}`,
           "next-router-prefetch": "1",
+          "x-forwarded-for": "198.51.100.23",
+          [TRUSTED_PATHNAME_HEADER]: "/admin",
+          [TRUSTED_SOURCE_IP_HEADER]: "192.0.2.250",
           [CONTENT_SECURITY_POLICY_NONCE_HEADER]: "attacker-nonce",
           [CONTENT_SECURITY_POLICY_HEADER]: "script-src *",
         },
@@ -138,7 +142,7 @@ describe("proxy", () => {
     ).toBe("/candidate/jobpass");
     expect(
       response.headers.get(`x-middleware-request-${TRUSTED_SOURCE_IP_HEADER}`),
-    ).toBe("127.0.0.1");
+    ).toBe("198.51.100.23");
   });
 
   it("redirects anonymous private requests and preserves the intended local path", () => {
@@ -243,8 +247,8 @@ describe("proxy", () => {
   });
 
   it.each([
-    [{ "next-router-prefetch": "1" }, false],
-    [{ purpose: "prefetch" }, false],
+    [{ "next-router-prefetch": "1" }, true],
+    [{ purpose: "prefetch" }, true],
     [{ purpose: "navigate" }, true],
   ] as const)("matches request headers %o: %s", (headers, expected) => {
     expect(

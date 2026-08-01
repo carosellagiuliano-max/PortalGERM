@@ -12,6 +12,7 @@ import {
   INVITE_RESUME_PATH,
   readInviteResumeToken,
 } from "@/lib/auth/invite-resume";
+import { resolveRegistrationLegalGate } from "@/lib/auth/registration-legal-gate";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { inspectCompanyInvitation } from "@/lib/employer/team";
@@ -27,6 +28,7 @@ export const runtime = "nodejs";
 export default async function InviteResumePage() {
   const [cookieStore, user] = await Promise.all([cookies(), getCurrentUser()]);
   const environment = getServerEnvironment();
+  const database = getDatabase();
   const token = readInviteResumeToken(
     cookieStore.get(INVITE_RESUME_COOKIE_POLICY_V1.cookieName)?.value,
     new Date(),
@@ -37,7 +39,7 @@ export default async function InviteResumePage() {
       ? Object.freeze({ state: "INVALID" as const })
       : await inspectCompanyInvitation(
           token,
-          getDatabase(),
+          database,
           user,
           new Date(),
           environment.EXISTING_IDENTITY_INVITATION,
@@ -71,6 +73,10 @@ export default async function InviteResumePage() {
     );
   }
   if (invitation.state === "AUTH_REQUIRED") {
+    const legalGate = await resolveRegistrationLegalGate(
+      environment,
+      database,
+    );
     return (
       <AuthCard
         eyebrow="Teameinladung"
@@ -84,7 +90,18 @@ export default async function InviteResumePage() {
           </AuthTextLink>
         }
       >
-        <InvitationAcceptance authenticated={false} />
+        {legalGate.allowed ? (
+          <InvitationAcceptance authenticated={false} />
+        ) : (
+          <Alert>
+            <AlertTitle>Kontoerstellung noch nicht freigegeben</AlertTitle>
+            <AlertDescription>
+              Die Einladung bleibt gültig. Bitte melde dich mit einem
+              bestehenden Konto an oder warte, bis Nutzungsbedingungen und
+              Datenschutzhinweis vollständig veröffentlicht sind.
+            </AlertDescription>
+          </Alert>
+        )}
       </AuthCard>
     );
   }

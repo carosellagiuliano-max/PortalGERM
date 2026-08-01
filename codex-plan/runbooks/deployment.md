@@ -32,7 +32,7 @@ Staging- oder Production-Ziele.
 | --- | --- | --- | --- |
 | Local | lokale, ignorierte `.env.local`; Loopback-PostgreSQL | erlaubt und sichtbar als DEMO markiert | unterstützt |
 | CI | vorab bereitgestellte flüchtige Variablen; separate CI-/Test-DB | erlaubt | GitHub Actions für Linux/PostgreSQL und Windows |
-| Preview | eigene DB und Secrets zwingend | nur nach explizitem Preview-Vertrag | **offen; nicht verbunden** |
+| Preview | eigene DB und Secrets, HTTPS, exakte Proxy-Hop-Zahl | nur nach explizitem Preview-Vertrag | **offen; nicht verbunden** |
 | Staging | eigene DB und Secrets, HTTPS, exakte Proxy-Hop-Zahl | verboten | **offen; keine Staging-URL/Evidence** |
 | Production | eigene DB und Secrets, HTTPS, exakte Proxy-Hop-Zahl | verboten | **offen; keine Go-live-Freigabe** |
 
@@ -48,8 +48,18 @@ Commit. `RATE_LIMIT_BACKEND=postgres` ist ausserhalb Local verpflichtend.
 - alle erforderlichen Variablen aus `.env.example` über einen Secret Store,
   nicht über committed Env-Dateien;
 - `APP_URL=https://…`, sichere Cookies und korrekt konfigurierte
-  `TRUSTED_PROXY_HOPS` für Staging/Production;
+  `TRUSTED_PROXY_HOPS` für Preview/Staging/Production (bei direktem
+  Vercel-Ingress `1`; bei vorgeschaltetem Proxy neu ermitteln);
+- der Adminbereich bleibt in Preview/Staging/Production vollständig gesperrt,
+  solange `ADMIN_MFA_REQUIRED=false` ist. Erst nach RP-ID-/Origin-,
+  Recovery-Owner- und Enrollment-Freigabe auf `true` schalten; danach erzwingt
+  jede Adminseite aktuelle AAL2-Assurance;
 - ein vorab dokumentierter Migrations-/Rollback-Entscheid;
+- bei Supabase/Supavisor: Runtime über den zum Hosting passenden Poolermodus,
+  Migration über eine geeignete direkte/Session-Verbindung und wirksame
+  Rollen-/Datenbankwerte von höchstens fünf Sekunden für `statement_timeout`
+  und `idle_in_transaction_session_timeout`; Transaction-Pooling darf nicht
+  auf Session-`SET` als Schutzgrenze vertrauen;
 - erfolgreicher technischer Release-Record;
 - für einen echten Pilot zusätzlich separate Legal-/Privacy-/Tax-,
   Retention-/RPO-/RTO-, Incident-Owner- und Provider-Freigaben.
@@ -100,7 +110,8 @@ der gleiche Versuch in Production vor dem ersten DEMO-Write scheitert.
    [worker-operations.md](./worker-operations.md) und
    [provider-activation.md](./provider-activation.md).
 9. `GET /health/live` und `GET /health/ready` prüfen. `ready` muss `200`
-   liefern; ein `503` blockiert den Rollout.
+   liefern und bestätigt dabei auch die effektiven PostgreSQL-Timeoutwerte;
+   ein `503` blockiert den Rollout.
 10. Öffentliche Kernrouten und die erlaubten Rollen mit nicht-demonstrativen
    Staging-Konten prüfen. In Production dürfen keine Demo-Konten existieren.
 11. Security-Header, `no-store`/`noindex`, CSP, HSTS am echten HTTPS-Rand und

@@ -192,4 +192,40 @@ describe("Phase 06 auth service guards", () => {
     expect(result).toEqual({ ok: false, code: "REGISTRATION_FAILED" });
     expect(password.hashPassword).not.toHaveBeenCalled();
   });
+
+  it("rejects public registration before hashing or persistence when legal publications are unavailable", async () => {
+    const findMany = vi.fn();
+    const transaction = vi.fn();
+    const result = await registerCandidate(
+      {
+        email: "candidate@example.test",
+        name: "Example Candidate",
+        password: "StrongPassword1!",
+        passwordConfirmation: "StrongPassword1!",
+        acceptedTerms: true,
+        marketingConsent: false,
+      } as never,
+      {
+        database: {
+          legalPublication: { findMany },
+          $transaction: transaction,
+        } as never,
+        environment: {
+          APP_ENV: "preview",
+          LEGAL_PUBLICATION_TERMS: false,
+          LEGAL_PUBLICATION_PRIVACY: false,
+        } as never,
+        request,
+      },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      code: "REGISTRATION_UNAVAILABLE",
+    });
+    expect(findMany).not.toHaveBeenCalled();
+    expect(rateLimit.consumeAuthRateLimit).not.toHaveBeenCalled();
+    expect(password.hashPassword).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
+  });
 });

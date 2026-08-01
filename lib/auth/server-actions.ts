@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import type { ZodError } from "zod";
 
 import type { AuthActionState, AuthActionValue } from "@/lib/auth/action-state";
+import {
+  getPasswordResetDeliveryFeedback,
+  getTransactionalEmailDeliveryState,
+} from "@/lib/notifications/delivery-state";
 import { getCurrentAuthContext } from "@/lib/auth/current-user";
 import {
   loginWithPassword,
@@ -262,11 +266,14 @@ export async function forgotPasswordAction(
     environment,
     request,
   });
+  const deliveryFeedback = getPasswordResetDeliveryFeedback(
+    getTransactionalEmailDeliveryState(environment),
+  );
   return Object.freeze({
-    status: result.rateLimited ? "rate_limited" : "success",
+    status: result.rateLimited ? "rate_limited" : deliveryFeedback.status,
     message: result.rateLimited
       ? RATE_LIMIT_ERROR
-      : "Falls ein passendes Konto existiert, wurde eine Nachricht zum Zurücksetzen vorbereitet.",
+      : deliveryFeedback.message,
     values,
   });
 }
@@ -429,14 +436,24 @@ function validationState(
 }
 
 function registrationFailure(
-  code: "REGISTRATION_FAILED" | "RATE_LIMITED",
+  code:
+    | "REGISTRATION_FAILED"
+    | "REGISTRATION_UNAVAILABLE"
+    | "RATE_LIMITED",
   values: Readonly<Record<string, AuthActionValue>>,
 ): AuthActionState {
   return Object.freeze({
-    status: code === "RATE_LIMITED" ? "rate_limited" : "error",
+    status:
+      code === "RATE_LIMITED"
+        ? "rate_limited"
+        : code === "REGISTRATION_UNAVAILABLE"
+          ? "unavailable"
+          : "error",
     message:
       code === "RATE_LIMITED"
         ? RATE_LIMIT_ERROR
+        : code === "REGISTRATION_UNAVAILABLE"
+          ? "Die Registrierung ist noch nicht freigegeben, weil Nutzungsbedingungen oder Datenschutzhinweis nicht vollständig veröffentlicht sind. Es wurden keine Kontodaten gespeichert."
         : "Die Registrierung konnte nicht abgeschlossen werden. Bitte prüfen Sie Ihre Angaben oder melden Sie sich an.",
     values,
   });

@@ -7,6 +7,19 @@ const actions = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/server-actions", () => actions);
+vi.mock("@/lib/auth/registration-legal-gate", () => ({
+  resolveRegistrationLegalGate: vi.fn(async () => ({
+    allowed: true as const,
+    mode: "LOCAL_SYNTHETIC" as const,
+    binding: null,
+  })),
+}));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: vi.fn(() => ({ APP_ENV: "local" })),
+}));
+vi.mock("@/lib/db/client", () => ({
+  getDatabase: vi.fn(() => ({})),
+}));
 
 import EmployerRegistrationPage from "@/app/(auth)/register/employer/page";
 

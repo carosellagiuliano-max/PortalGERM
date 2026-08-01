@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 
 import { USER_CONSENT_NOTICES_V1 } from "@/lib/privacy/user-consent";
+import type { RegistrationLegalBindingV1 } from "@/lib/auth/registration-legal-gate";
 
 const TERMS_NOTICE_TEXT_V1 =
   "Mit meiner Registrierung akzeptiere ich die Nutzungsbedingungen von SwissTalentHub in der Fassung vom 20. Juli 2026.";
+const PUBLISHED_REGISTRATION_NOTICE_TEXT_V1 =
+  "Mit meiner Registrierung akzeptiere ich die zum Zeitpunkt der Registrierung veröffentlichten Nutzungsbedingungen von SwissTalentHub und bestätige, den dazugehörigen Datenschutzhinweis gelesen zu haben.";
 const MARKETING_NOTICE_TEXT_V1 =
   "Ich möchte freiwillig Produktneuigkeiten und Hinweise von SwissTalentHub per E-Mail erhalten. Diese Einwilligung kann ich jederzeit widerrufen.";
 
@@ -42,9 +45,33 @@ export type RegistrationConsentEvent = Readonly<{
 }>;
 
 export function createRegistrationTermsConsent(
-  input: Readonly<{ userId: string; effectiveAt: Date }>,
+  input: Readonly<{
+    userId: string;
+    effectiveAt: Date;
+    legalBinding?: RegistrationLegalBindingV1 | null;
+  }>,
 ): RegistrationConsentEvent {
-  return createRegistrationConsentEvent(input, "TERMS", true);
+  if (input.legalBinding === undefined || input.legalBinding === null) {
+    return createRegistrationConsentEvent(input, "TERMS", true);
+  }
+  const noticeContract = REGISTRATION_CONSENT_NOTICES_V1.TERMS;
+  return Object.freeze({
+    userId: input.userId,
+    actorUserId: input.userId,
+    kind: "TERMS",
+    granted: true,
+    purpose: noticeContract.purpose,
+    noticeVersion: input.legalBinding.policyVersion,
+    noticeHash: canonicalNoticeHash(
+      JSON.stringify({
+        noticeText: PUBLISHED_REGISTRATION_NOTICE_TEXT_V1,
+        policyVersion: input.legalBinding.policyVersion,
+        privacy: input.legalBinding.privacy,
+        terms: input.legalBinding.terms,
+      }),
+    ),
+    effectiveAt: new Date(input.effectiveAt),
+  });
 }
 
 export function createRegistrationMarketingConsent(

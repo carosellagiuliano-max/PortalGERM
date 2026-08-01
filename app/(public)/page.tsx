@@ -31,13 +31,20 @@ export const runtime = "nodejs";
 export default async function HomePage() {
   const now = new Date();
   const salaryRadarAvailable = !getPublicDataContext().liveOnly;
-  const [jobs, discoveredClusters, indexableLandings, guides, companies, catalog] = await Promise.all([
-    listHomepageJobs({ limit: 6, now }),
-    listPublicClusterLinks({ limit: 8, now }),
+  // Keep the pool below its ten-connection ceiling during cold starts. The
+  // catalog itself performs three bounded reads, so it shares only this first
+  // wave with the cheap cluster-activation lookup.
+  const [catalog, indexableLandings] = await Promise.all([
+    getPublicCatalog(),
     listIndexableClusterLandings(now),
+  ]);
+  const [jobs, guides, companies, discoveredClusters] = await Promise.all([
+    listHomepageJobs({ limit: 6, now }),
     listPublicGuides({ limit: 3 }),
     listPublicCompanies({ limit: 8, verifiedOnly: true }, loadPublicOpenJobCounts),
-    getPublicCatalog(),
+    indexableLandings.length === 0
+      ? Promise.resolve([])
+      : listPublicClusterLinks({ limit: 8, now }),
   ]);
   const acquisitionPaths = new Set(indexableLandings.map(({ path }) => path));
   const clusters = discoveredClusters.filter((cluster) =>

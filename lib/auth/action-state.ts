@@ -2,6 +2,7 @@ export type AuthActionStatus =
   | "idle"
   | "error"
   | "success"
+  | "unavailable"
   | "rate_limited";
 
 export type AuthActionValue = string | boolean;

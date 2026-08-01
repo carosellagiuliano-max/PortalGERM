@@ -13,6 +13,7 @@ import {
   NativeCheckboxField,
   SubmitButton,
 } from "@/components/auth/form-parts";
+import Link from "@/components/shared/app-link";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { registerCandidateAction } from "@/lib/auth/server-actions";
@@ -53,11 +54,18 @@ export function CandidateRegistrationForm({ next }: Readonly<{ next?: string }>)
         required
         label={
           <>
-            Ich akzeptiere die aktuellen Nutzungsbedingungen und den dazugehörigen
-            Datenschutzhinweis.
+            Ich akzeptiere die{" "}
+            <Link className="underline" href="/legal/terms">
+              Nutzungsbedingungen
+            </Link>{" "}
+            und habe den{" "}
+            <Link className="underline" href="/legal/privacy">
+              Datenschutzhinweis
+            </Link>{" "}
+            gelesen.
           </>
         }
-        description="Die Zustimmung wird mit der serverseitig aktuellen Version und ihrem unveränderbaren Nachweis protokolliert."
+        description="In öffentlich freigegebenen Umgebungen wird die Zustimmung an beide veröffentlichten Versionen und Hashes gebunden; lokal gilt nur der synthetische Demo-Vertrag."
       />
       <NativeCheckboxField
         id="candidate-marketing"

@@ -7,6 +7,7 @@ import {
   getCurrentAuthContext,
   type CurrentUser,
 } from "@/lib/auth/current-user";
+import { decideAdminRuntimeAccess } from "@/lib/auth/admin-runtime-policy";
 import { INTERNAL_REQUEST_PATH_HEADER } from "@/lib/auth/request-context";
 import type { AdminCapability } from "@/lib/admin/capabilities";
 import {
@@ -40,6 +41,7 @@ export function requireEmployerPage(): Promise<AuthenticatedPageUser> {
 export async function requireAdminPage(): Promise<AdminPageUser> {
   const user = await requirePageRole(["ADMIN"]);
   const environment = getServerEnvironment();
+  if (!decideAdminRuntimeAccess(environment).allowed) forbidden();
   if (
     environment.ADMIN_MFA_REQUIRED &&
     !(await hasCurrentAal2(getDatabase(), {

@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const actions = vi.hoisted(() => ({
   apply: vi.fn(),
@@ -24,6 +25,12 @@ import {
 import { APPLICATION_CONFIRMATION_NOTICE_V1 } from "@/lib/applications/contracts";
 
 describe("explicit resumed job intent UI", () => {
+  beforeEach(() => {
+    actions.apply.mockReset();
+    actions.save.mockReset();
+    actions.start.mockReset();
+  });
+
   it("renders without executing Save and requires a deliberate submit", () => {
     render(<SaveIntentConfirmation signedIntent="payload.signature" />);
     expect(actions.save).not.toHaveBeenCalled();
@@ -76,5 +83,62 @@ describe("explicit resumed job intent UI", () => {
     expect(screen.getByRole("checkbox")).toHaveAttribute("name", "confirmed");
     expect(screen.getByRole("checkbox")).toHaveAttribute("value", "true");
     expect(screen.getByRole("button", { name: /schnellbewerbung senden/iu })).toHaveAttribute("type", "submit");
+  });
+
+  it("restores the cover letter after a rejected application submit", async () => {
+    const user = userEvent.setup();
+    actions.apply.mockResolvedValue({
+      status: "error",
+      message: "Die Stelle ist nicht mehr verfügbar.",
+      nextIdempotencyKey: "application:test:retry",
+      values: { coverLetter: "Mein sorgfältig verfasstes Motivationsschreiben." },
+    });
+    render(
+      <ApplyIntentConfirmation
+        signedIntent="payload.signature"
+        idempotencyKey="application:test:initial"
+        identityComplete
+        documents={[]}
+        projection={{
+          confirmationVersion: "application-confirmation-v1",
+          confirmationNotice: APPLICATION_CONFIRMATION_NOTICE_V1,
+          confirmationNoticeHash: "a".repeat(64),
+          confirmationSnapshotHash: "b".repeat(64),
+          candidate: {
+            firstName: "Mara",
+            lastName: "Muster",
+            email: "mara@example.test",
+          },
+          recipient: {
+            companyName: "Muster AG",
+            contactKind: "EMAIL",
+            contactValue: "jobs@muster.example",
+          },
+          job: {
+            revisionId: "10000000-0000-4000-8000-000000000002",
+            slug: "pflege-zuerich",
+            title: "Pflegefachperson",
+            responseTargetDays: 5,
+            applicationEffort: "SIMPLE",
+            requiredDocumentKinds: ["COVER_LETTER"],
+          },
+        }}
+      />,
+    );
+
+    const coverLetter = screen.getByRole("textbox", {
+      name: /Motivationsschreiben/,
+    });
+    await user.type(coverLetter, "Mein sorgfältig verfasstes Motivationsschreiben.");
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Schnellbewerbung senden" }));
+
+    expect(await screen.findByText("Die Stelle ist nicht mehr verfügbar.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Motivationsschreiben/ })).toHaveValue(
+      "Mein sorgfältig verfasstes Motivationsschreiben.",
+    );
+    expect(document.querySelector('input[name="idempotencyKey"]')).toHaveValue(
+      "application:test:retry",
+    );
   });
 });

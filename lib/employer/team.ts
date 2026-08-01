@@ -30,6 +30,7 @@ import {
   createRegistrationMarketingConsent,
   createRegistrationTermsConsent,
 } from "@/lib/auth/registration-consent";
+import { resolveRegistrationLegalGate } from "@/lib/auth/registration-legal-gate";
 import { trimmedString } from "@/lib/validation/common";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
@@ -795,6 +796,14 @@ export async function registerAndAcceptCompanyInvitation(
   const parsed = invitationRegistrationSchema.safeParse(rawInput);
   if (!parsed.success || !isPlausibleToken(rawToken)) return { ok: false, code: "INVALID_INPUT" };
   const now = dependencies.now ?? new Date();
+  const legalGate = await resolveRegistrationLegalGate(
+    dependencies.environment,
+    dependencies.database,
+    now,
+  );
+  if (!legalGate.allowed) {
+    return { ok: false, code: "REGISTRATION_UNAVAILABLE" };
+  }
   const tokenHash = hashInvitationToken(rawToken);
   try {
     const scope = await resolveInvitationCompanyScope(dependencies.database, tokenHash);
@@ -856,7 +865,11 @@ export async function registerAndAcceptCompanyInvitation(
       if (!persona.ok) {
         throw new InvitationAcceptanceRollback(persona.code);
       }
-      const terms = createRegistrationTermsConsent({ userId: user.id, effectiveAt: now });
+      const terms = createRegistrationTermsConsent({
+        userId: user.id,
+        effectiveAt: now,
+        legalBinding: legalGate.binding,
+      });
       const marketing = createRegistrationMarketingConsent({ userId: user.id, effectiveAt: now, granted: parsed.data.marketingConsent });
       await tx.userConsentEvent.createMany({ data: [terms, marketing] });
       await writeTeamAudit(tx, "USER_REGISTERED", user.id, null, user.id, "USER", "AUTH_REGISTER_INVITATION", dependencies.request, now, undefined, { role: globalRole });

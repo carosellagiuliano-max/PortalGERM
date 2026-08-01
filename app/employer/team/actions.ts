@@ -12,6 +12,10 @@ import { getDatabase } from "@/lib/db/client";
 import { buildCatalogUpgradePrompt } from "@/lib/billing/upgrade-prompt";
 import type { EmployerActionState } from "@/lib/employer/action-state";
 import {
+  getInvitationDeliveryFeedback,
+  getTransactionalEmailDeliveryState,
+} from "@/lib/notifications/delivery-state";
+import {
   changeCompanyMemberRole,
   removeCompanyMember,
   resendCompanyInvitation,
@@ -30,7 +34,11 @@ export async function sendInvitationAction(_state: EmployerActionState, formData
   }, deps);
   if (!result.ok) return teamError(result.code, deps, result.suggestedPlanSlug);
   revalidate();
-  return success(result.emailRecorded ? "Einladung sicher gespeichert und in der lokalen Mailbox erfasst." : "Einladung gespeichert; die E-Mail kann erneut gesendet werden.");
+  return success(getInvitationDeliveryFeedback({
+    deliveryState: getTransactionalEmailDeliveryState(deps.environment),
+    emailRecorded: result.emailRecorded,
+    operation: "created",
+  }));
 }
 
 export async function resendInvitationAction(_state: EmployerActionState, formData: FormData): Promise<EmployerActionState> {
@@ -39,7 +47,11 @@ export async function resendInvitationAction(_state: EmployerActionState, formDa
   const result = await resendCompanyInvitation(deps.companyId, deps.actor, String(formData.get("invitationId") ?? ""), deps);
   if (!result.ok) return error(teamMessage(result.code));
   revalidate();
-  return success("Ein neuer Link wurde ausgestellt; der alte Link ist ungültig.");
+  return success(getInvitationDeliveryFeedback({
+    deliveryState: getTransactionalEmailDeliveryState(deps.environment),
+    emailRecorded: result.emailRecorded,
+    operation: "resent",
+  }));
 }
 
 export async function revokeInvitationAction(_state: EmployerActionState, formData: FormData): Promise<EmployerActionState> {

@@ -13,7 +13,7 @@ export default function ForgotPasswordPage() {
     <AuthCard
       eyebrow="Kontozugang"
       title="Passwort zurücksetzen"
-      description="Gib deine E-Mail-Adresse ein. Falls ein berechtigtes Konto existiert, senden wir dir einen zeitlich begrenzten Link. Die Antwort ist aus Sicherheitsgründen immer gleich."
+      description="Gib deine E-Mail-Adresse ein. Die Anfrage wird für alle Adressen gleich verarbeitet; anschliessend siehst du transparent, ob der E-Mail-Versand in dieser Umgebung aktiv ist."
       footer={<AuthTextLink href="/login">Zurück zur Anmeldung</AuthTextLink>}
     >
       <ForgotPasswordForm />

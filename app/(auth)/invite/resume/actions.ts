@@ -140,6 +140,9 @@ function invitationMessage(code: string) {
   if (code === "INVALID_INPUT") {
     return "Bitte prüfe Name, E-Mail, Passwort und Zustimmung.";
   }
+  if (code === "REGISTRATION_UNAVAILABLE") {
+    return "Die Kontoerstellung ist noch nicht freigegeben, weil Nutzungsbedingungen oder Datenschutzhinweis nicht vollständig veröffentlicht sind. Es wurden keine Kontodaten gespeichert.";
+  }
   return undefined;
 }
 

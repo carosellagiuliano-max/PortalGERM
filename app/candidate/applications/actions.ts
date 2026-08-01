@@ -40,11 +40,12 @@ export async function applyToJobAction(
   _previousState: ApplicationActionState,
   formData: FormData,
 ): Promise<ApplicationActionState> {
+  const values = applicationFormValues(formData);
   const [currentUser, request] = await Promise.all([
     getCurrentUser(),
     getAuthRequestContext(),
   ]);
-  if (!isValidAuthMutationOrigin(request)) return errorState(GENERIC_ERROR);
+  if (!isValidAuthMutationOrigin(request)) return errorState(GENERIC_ERROR, values);
   const environment = getServerEnvironment();
   const result = await applyToJob(
     {
@@ -74,7 +75,7 @@ export async function applyToJobAction(
   if (result.code === "ALREADY_APPLIED" && result.applicationId !== undefined) {
     redirect(`/candidate/applications/${result.applicationId}?duplicate=1`);
   }
-  return errorState(applicationErrorMessage(result.code));
+  return errorState(applicationErrorMessage(result.code), values);
 }
 
 export async function updateCandidateApplicationNoteAction(
@@ -310,8 +311,16 @@ function applicationErrorMessage(code: string): string {
   return messages[code] ?? GENERIC_ERROR;
 }
 
-function errorState(message: string): ApplicationActionState {
-  return Object.freeze({ status: "error", message });
+function errorState(
+  message: string,
+  values?: Readonly<Record<string, string | boolean>>,
+): ApplicationActionState {
+  return Object.freeze({
+    status: "error",
+    message,
+    nextIdempotencyKey: randomUUID(),
+    ...(values === undefined ? {} : { values }),
+  });
 }
 
 function successState(message: string): ApplicationActionState {
@@ -319,5 +328,15 @@ function successState(message: string): ApplicationActionState {
     status: "success",
     message,
     nextIdempotencyKey: randomUUID(),
+  });
+}
+
+function applicationFormValues(
+  formData: FormData,
+): Readonly<Record<string, string | boolean>> {
+  const coverLetter = formData.get("coverLetter");
+  return Object.freeze({
+    coverLetter:
+      typeof coverLetter === "string" ? coverLetter.slice(0, 4_000) : "",
   });
 }

@@ -404,8 +404,10 @@ Phase 27 ist keine Abhängigkeit und wird nicht mit internem RBAC vermischt.
 
 - persistierte Admin-Grants sind deny-by-default; es gibt keinen globalen
   All-Admin-Schalter;
-- `ADMIN_MFA_REQUIRED=false`: Enrollment/Assurance bleibt vor externem Cutover
-  nicht global erzwungen;
+- `ADMIN_MFA_REQUIRED=false`: Enrollment/Assurance bleibt in Local/CI vor
+  externem Cutover nicht global erzwungen; in Preview/Staging/Production ist
+  damit der gesamte Adminbereich gesperrt und kein Passwort-only-Fallback
+  erreichbar;
 - `PRIVILEGED_STEP_UP_MODE=disabled`: optional `observe`, danach actionweise
   `enforce`;
 - `TRUST_RISK_MODE=observe`: optional `hold` erst nach Policy-/False-Positive-

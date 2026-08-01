@@ -43,6 +43,8 @@ export function FormFeedback({ state }: Readonly<{ state: AuthActionState }>) {
       <AlertTitle>
         {state.status === "success"
           ? "Erledigt"
+          : state.status === "unavailable"
+            ? "Derzeit nicht verfügbar"
           : state.status === "rate_limited"
             ? "Bitte kurz warten"
             : "Eingabe prüfen"}

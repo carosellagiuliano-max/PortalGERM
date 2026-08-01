@@ -36,6 +36,7 @@ export const onRequestError: Instrumentation.onRequestError = (
       routePath: context.routePath,
       routeType: context.routeType,
       routerKind: context.routerKind,
+      ...(error instanceof Error ? { error } : {}),
       ...(errorReference === undefined ? {} : { errorReference }),
     },
     correlationId,

@@ -117,6 +117,7 @@ describe("public discovery entry UI", () => {
       { limit: 8, verifiedOnly: true },
       homePageData.loadPublicOpenJobCounts,
     );
+    expect(homePageData.listPublicClusterLinks).not.toHaveBeenCalled();
   });
 
   it("does not promote the fictional Salary Radar in LIVE environments", async () => {

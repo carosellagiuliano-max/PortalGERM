@@ -27,6 +27,10 @@ import {
   createRegistrationMarketingConsent,
   createRegistrationTermsConsent,
 } from "@/lib/auth/registration-consent";
+import {
+  resolveRegistrationLegalGate,
+  type RegistrationLegalBindingV1,
+} from "@/lib/auth/registration-legal-gate";
 import { createInitialEmailVerification } from "@/lib/auth/email-verification-service";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { resolveSafeNext, type AuthRoleV1 } from "@/lib/auth/safe-next";
@@ -91,7 +95,10 @@ export type RegistrationResult =
     }>
   | Readonly<{
       ok: false;
-      code: "REGISTRATION_FAILED" | "RATE_LIMITED";
+      code:
+        | "REGISTRATION_FAILED"
+        | "REGISTRATION_UNAVAILABLE"
+        | "RATE_LIMITED";
       retryAfterSeconds?: number;
     }>;
 
@@ -288,6 +295,14 @@ export async function registerCandidate(
     return Object.freeze({ ok: false, code: "REGISTRATION_FAILED" });
   }
   const now = dependencies.now ?? new Date();
+  const legalGate = await resolveRegistrationLegalGate(
+    dependencies.environment,
+    dependencies.database,
+    now,
+  );
+  if (!legalGate.allowed) {
+    return Object.freeze({ ok: false, code: "REGISTRATION_UNAVAILABLE" });
+  }
   const limited = await registrationRateLimit(dependencies, now);
   if (limited !== null) return limited;
 
@@ -341,6 +356,7 @@ export async function registerCandidate(
           user.id,
           input.marketingConsent,
           now,
+          legalGate.binding,
         );
         if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
           await createInitialEmailVerification(transaction, {
@@ -425,6 +441,14 @@ export async function registerEmployer(
     return Object.freeze({ ok: false, code: "REGISTRATION_FAILED" });
   }
   const now = dependencies.now ?? new Date();
+  const legalGate = await resolveRegistrationLegalGate(
+    dependencies.environment,
+    dependencies.database,
+    now,
+  );
+  if (!legalGate.allowed) {
+    return Object.freeze({ ok: false, code: "REGISTRATION_UNAVAILABLE" });
+  }
   const limited = await registrationRateLimit(dependencies, now);
   if (limited !== null) return limited;
 
@@ -523,6 +547,7 @@ export async function registerEmployer(
           user.id,
           input.marketingConsent,
           now,
+          legalGate.binding,
         );
         if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
           await createInitialEmailVerification(transaction, {
@@ -986,8 +1011,13 @@ async function persistRegistrationConsents(
   userId: string,
   marketingConsent: boolean,
   now: Date,
+  legalBinding: RegistrationLegalBindingV1 | null,
 ) {
-  const terms = createRegistrationTermsConsent({ userId, effectiveAt: now });
+  const terms = createRegistrationTermsConsent({
+    userId,
+    effectiveAt: now,
+    legalBinding,
+  });
   const marketing = createRegistrationMarketingConsent({
     userId,
     effectiveAt: now,

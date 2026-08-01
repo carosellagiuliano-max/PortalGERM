@@ -10,6 +10,19 @@ import {
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const NOW = new Date("2026-07-20T12:00:00.000Z");
+const PUBLICATION_BINDING = Object.freeze({
+  policyVersion: "registration-publication-v1" as const,
+  terms: Object.freeze({
+    publicationId: "22222222-2222-4222-8222-222222222222",
+    publicationHash: "a".repeat(64),
+    versionLabel: "terms-2026-08",
+  }),
+  privacy: Object.freeze({
+    publicationId: "33333333-3333-4333-8333-333333333333",
+    publicationHash: "b".repeat(64),
+    versionLabel: "privacy-2026-08",
+  }),
+});
 
 describe("server-owned registration consent", () => {
   it("pins canonical Terms and Marketing notice hashes", () => {
@@ -48,5 +61,33 @@ describe("server-owned registration consent", () => {
         granted: false,
       }),
     ).toMatchObject({ kind: "MARKETING", granted: false });
+  });
+
+  it("binds public acceptance evidence to both exact legal publications", () => {
+    const event = createRegistrationTermsConsent({
+      userId: USER_ID,
+      effectiveAt: NOW,
+      legalBinding: PUBLICATION_BINDING,
+    });
+    const changed = createRegistrationTermsConsent({
+      userId: USER_ID,
+      effectiveAt: NOW,
+      legalBinding: {
+        ...PUBLICATION_BINDING,
+        privacy: {
+          ...PUBLICATION_BINDING.privacy,
+          publicationHash: "c".repeat(64),
+        },
+      },
+    });
+
+    expect(event).toMatchObject({
+      kind: "TERMS",
+      granted: true,
+      noticeVersion: "registration-publication-v1",
+      noticeHash:
+        "431978ac17f062d79733c4243f65fffa841a391a02e9a60f0adba9d9ec621cc9",
+    });
+    expect(changed.noticeHash).not.toBe(event.noticeHash);
   });
 });

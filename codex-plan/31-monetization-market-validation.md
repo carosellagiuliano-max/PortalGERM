@@ -1,13 +1,17 @@
 # Phase 31 — WTP-first Monetarisierung, Cluster- und Lieferfähigkeitsvalidierung
 
 > **Planstatus: PARTIELL / OPEN. Technikstatus: 31B-LOCAL-/CI-BASIS
-> IMPLEMENTIERT. Quality-Gate: LOCAL/CI PASS. Aktivierung: DISABLED.** Track
+> TEILIMPLEMENTIERT. Quality-Gate: VERTRAGS- UND NEGATIVPFAD PASS; POSITIVER
+> RUNTIME-CUTOVER OFFEN. Aktivierung: DISABLED.** Track
 > 31A ist nicht durch Code ersetzbar und weiterhin extern offen: Es gibt noch
 > keinen fachlich freigegebenen ersten Cluster, keinen realen Net-WTP-
 > Nachweis, keine echte Deliverykohorte und keine Legal-/Tax-/AVG-/
 > Operationsfreigabe. Track 31B stellt dafür nun fail-closed Persistenz,
-> Release-Gates, Capacity-/Cashflow-/Recovery-Verträge, ehrliche Copy und
-> einen Draft-only-Import bereit. Mock-/Testmode-Zahlungen, kostenlose
+> Release-Gate-Funktionen, Capacity-/Cashflow-/Recovery-Verträge, ehrliche
+> fest verdrahtete Research-Copy und einen Draft-only-Import bereit. Die
+> positiven Production-/Salary-Gatefunktionen sind noch nicht an die
+> Produkt-Runtime und einen freigegebenen Release-Read-Model angeschlossen.
+> Mock-/Testmode-Zahlungen, kostenlose
 > Design-Partner und unverbindliche Leads zählen weiterhin null
 > Zahlungsbereitschaft.
 
@@ -22,10 +26,10 @@ vollständig.
 | Track | Planstatus | Technikstatus | Quality-Gate | Aktivierung |
 |---|---|---|---|---|
 | 31A WTP-/Delivery-Discovery | nach bestandener Phase 19 zulässig, noch nicht durchgeführt | externe/manuell kontrollierte Validierung nicht begonnen | technische Evidence-Klassifikation `PASS`; reale Fach-/Marktprüfung offen | keine öffentliche Produktaktivierung |
-| 31B Product Release | technische Vorarbeit vorhanden; öffentliche Freigabe erst nach grüner 31A-Evidence und Owning-Phasen | additive Persistenz, immutable Releases und fail-closed Policies implementiert | Unit/PostgreSQL/HTTP/Browser und Vollregression `PASS` | `DISABLED` |
+| 31B Product Release | technische Vorarbeit vorhanden; öffentliche Freigabe erst nach grüner 31A-Evidence und Owning-Phasen | additive Persistenz, immutable Releases und fail-closed Policyfunktionen implementiert; positiver Runtime-Cutover fehlt | Vertrags-/DB-/Negativpfade `PASS`; routegebundener Positivpfad `NOT RUN / NOT IMPLEMENTED` | `DISABLED` |
 | Boost | Hypothese | Release-Gate implementiert; ohne Kernoffer plus organische LIVE-Reichweitenevidence nicht freigebbar | technische Positiv-/Negativmatrix `PASS`; reale Reichweite offen | `DISABLED` |
 | Talent Radar | Hypothese | Release-Gate implementiert; Candidate Opt-in/Accept/Reveal bleibt zwingend | technische Privacy-/Funnelmatrix `PASS`; reale Dichte/Nutzung offen | Paid-Entitlement `DISABLED` |
-| Salary-Angebot | extern bedingt | Default-off/noindex-Gate implementiert; kein freigegebener Realdatenvertrag | technische Negativmatrix und HTTP `PASS`; BFS/LSE-/Legal-Gate offen | Public/SEO/Paid `DISABLED` |
+| Salary-Angebot | extern bedingt | Default-off/noindex-Runtime und Policyfunktion implementiert, aber noch nicht miteinander verbunden; kein freigegebener Realdatenvertrag | technische Negativmatrix und HTTP `PASS`; positiver Runtimepfad sowie BFS/LSE-/Legal-Gate offen | Public/SEO/Paid `DISABLED` |
 
 ### 2. Ziel und messbarer Nutzer-/Businesswert
 
@@ -52,9 +56,12 @@ vollständig.
 - `STH-022`: Der betreute Import besitzt nun Source-Rights→Mapping→Preview→
   expliziten Draft-only-Commit und bleibt default-off; produktive ATS-/Feed-/
   API-/SSO-Leistungen sind weiterhin weder belegt noch verkaufbar.
-- `STH-028`: Research-/Production-Copy wird aus demselben fail-closed
-  Releasevertrag abgeleitet; echte Angebote sind mangels 31A-Evidence nicht
-  freigegeben.
+- `STH-028`: Die aktuelle Runtime zeigt fail-closed fest verdrahtete
+  Research-Copy und keine Kauf-CTA. `evaluateProductionOffer` und
+  `evaluateSalaryRelease` besitzen geprüfte Vertragslogik, werden aber noch
+  von keiner Produkt-Route bzw. -Action mit einem freigegebenen Release-
+  Read-Model aufgerufen. Der Negativpfad ist damit sicher; ein positiver
+  Production-Cutover ist technisch noch nicht belegt und bleibt gesperrt.
 - `STH-034`: Versionierte Capacity-/Unit-Cost-Releaseverträge für
   Verification, Moderation, Import, Privacy, Fraud/Support und Billing-
   Ausnahmen sind technisch vorhanden; reale Messwerte, Staffing und Owner-
@@ -347,9 +354,9 @@ zurückerstattet; Kill Switch darf die Servicepflicht nicht löschen.
 | AC-31-06 / STH-034, REQ-COM-031-003 | P0 Paid | Unit + Ops Simulation | Arrival Rate versus Staffing/Servicezeiten | Verkauf bleibt innerhalb Capacity/COGS | Spike, Krankheit, Import-/Fraudbacklog, Concierge über COGS-Cap | Ops/Finance | Capacity Guard/Queues | sechs Worktypes, base/high/stress | Modell + staging-like queue | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-capacity-model.test.ts`; Ops trägt gemessene Minuten/Case, Arrivals, Backlog, Servicezeit und verfügbare Stunden in den versionierten Input ein | je Worktype Utilization ≤80 %, Backlog innerhalb SLA, Concierge-COGS/Kunde ≤ vorregistriertem Cap; sonst Neukauf geschlossen | Modelldigest + Messquellen + Capacity decision | Ops + Finance | MODEL CONTRACT PASS / REAL MEASUREMENTS OPEN |
 | AC-31-07 / REQ-COM-031-003 | P0 Paid | Unit + Finance Review | 18/24 Monate base/downside/upside | Cash-in/out und Runway stimmen | CAC doppelt, Invoice=Cash, jährlicher Betrag sofort, Pause/Reactivation ignoriert | Finance/Product | Cashflow Model | real timing + sensitivities | versioniertes Modell | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-cashflow.test.ts`; Finance gleicht Monat 0–24 mit Bank/Ledger, Payroll, Provider, Refund und CAC-Quellen ab | Monatssummen/Opening/Closing Cash auf Rappen; CAC einmal; 18/24-Monats-Runway, Break-even, Burn und Downside ausgewiesen | Modelldigest + Reconciliation + Approval | Finance | MODEL CONTRACT PASS / FINANCE APPROVAL OPEN |
 | AC-31-08 / STH-035, REQ-COM-031-004 | P0 Paid | Unit + PostgreSQL + E2E | Provider-/Platform-/Deliveryfehler nach Kauf | Retry/Extension/Replacement/Credit/Refund gemäss Policy | Doppelerstattung, Entitlementverlust ohne Recovery, Trustverlust, abgelaufener Radarcontact, Boost outage | Employer/Support/Finance | Billing/Support/Delivery | paid offers, failure matrix | PostgreSQL + Chromium | `npx vitest run --config vitest.config.ts tests/unit/billing/paid-service-recovery-policy.test.ts && npx vitest run --config vitest.integration.config.ts tests/integration/billing/phase31-service-recovery-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase31-production-offer.spec.ts --project=chromium-journeys` | jeder Failurecode genau eine kundensichtbare Remedy/SLA; Ledger/Reversal idempotent; ungelöste Fälle eskalieren | Policyrelease + JUnit + Ledger/Audit + Screenshot | Support + Finance | TECHNICAL PASS / POLICY APPROVAL AND LIVE INCIDENT OPEN |
-| AC-31-09 / STH-028 | P0 Public/Paid | Unit + E2E | Demo/Research/Production release | nur freigegebenes Offer zeigt korrekten Preis/CTA | Clientpreis, unknown release, expired capacity, Copy ohne Delivery/Taxfreigabe | Public/Employer/Admin | Marketing/Pricing/Billing | releases/gates/capacity | CI + Chromium | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-production-copy.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase31-production-offer.spec.ts --project=chromium-journeys` | unbekannt/disabled/gate missing: Kauf-CTA 0; Serverpreis=Invoicepreis; Productionclaim nur freigegebener Release | DOM/API snapshot + Release/Audit | Product + Engineering | PASS / PRODUCTION DISABLED |
+| AC-31-09 / STH-028 | P0 Public/Paid | Unit + E2E | Demo/Research/Production release | nur freigegebenes Offer zeigt korrekten Preis/CTA | Clientpreis, unknown release, expired capacity, Copy ohne Delivery/Taxfreigabe | Public/Employer/Admin | Marketing/Pricing/Billing | releases/gates/capacity | CI + Chromium | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-production-copy.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase31-production-offer.spec.ts --project=chromium-journeys` | unbekannt/disabled/gate missing: Kauf-CTA 0; Serverpreis=Invoicepreis; Productionclaim nur freigegebener Release | DOM/API snapshot + Release/Audit | Product + Engineering | PARTIAL — NEGATIVPFAD PASS; POSITIVER RUNTIME-CUTOVER NICHT IMPLEMENTIERT; PRODUCTION DISABLED |
 | AC-31-10 / STH-022 | P0 Import | PostgreSQL + Security/E2E | source rights→mapping→preview→commit | nur eigene validierte Rows als Draft | fremde Rechte/Tenant, formula/zip bomb, invalid rows, replay, Auto-Publish | Employer Owner/Ops | Managed Import | XML/JSON/CSV positive/abuse | PostgreSQL + worker sandbox | `npx vitest run --config vitest.integration.config.ts tests/integration/imports/phase31-managed-import-postgres.test.ts && npx playwright test --config=playwright.config.ts tests/e2e/flows/phase31-managed-import.spec.ts --project=chromium-journeys` | 0 Auto-Publish; per-row error; checksum-idempotent; foreign writes 0; Preview=committed Draft set | Import/Audit/DB diff | Import + Security | PASS / DISABLED |
-| AC-31-11 / REQ-MKT-002 | P1 iff Salary | Contract + HTTP | fehlende/reale BFS/LSE-Freigabe | realer freigegebener Release mit Disclosure | Seed/mock/alte Quelle, falsche Region/Occupation, indexierbare Placeholderseite | Public/Ops | Salary/Public/SEO | disabled + approved source fixtures | CI + target env | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-salary-gate.test.ts && npm run test:e2e:http`; manuell Quellenlizenz, Stand, Methodik, Brutto-/Perzentil-/Region-/CH-ISCO-Disclosure prüfen | ohne alle Freigaben: Route/CTA disabled und noindex; mit Freigabe: 100 % Werte mit Sourceversion/As-of/Disclosure | Contract/HTTP report + Source approval | Product + Legal/Data | PASS FAIL-CLOSED / REAL DATA APPROVAL OPEN |
+| AC-31-11 / REQ-MKT-002 | P1 iff Salary | Contract + HTTP | fehlende/reale BFS/LSE-Freigabe | realer freigegebener Release mit Disclosure | Seed/mock/alte Quelle, falsche Region/Occupation, indexierbare Placeholderseite | Public/Ops | Salary/Public/SEO | disabled + approved source fixtures | CI + target env | `npx vitest run --config vitest.config.ts tests/unit/commercial/phase31-salary-gate.test.ts && npm run test:e2e:http`; manuell Quellenlizenz, Stand, Methodik, Brutto-/Perzentil-/Region-/CH-ISCO-Disclosure prüfen | ohne alle Freigaben: Route/CTA disabled und noindex; mit Freigabe: 100 % Werte mit Sourceversion/As-of/Disclosure | Contract/HTTP report + Source approval | Product + Legal/Data | PARTIAL — NEGATIVPFAD PASS; POSITIVER RUNTIMEPFAD UND REAL DATA APPROVAL OPEN |
 | AC-31-01–11 / G3 | Release Gate | Full Regression | unveränderlicher 31B-Kandidat | alle owning/global Gates grün | Skip/Retry/anderer Commit oder externe Evidence fehlt | alle | Repository + Provider | isolierte DB/provider fixtures | CI/Staging | `npm run lint && npm run typecheck && npm test && npm run test:integration && npm run build && npm run test:e2e:http && npm run test:e2e:browser` | Exit 0; Fail/Skip/Retry 0; technische Gates ersetzen keine WTP-/Legal-/Ops-Evidence | G3 Bundle + Commit SHA | Release Owner | LOCAL/CI PASS / EXTERNAL 31A AND TARGET OPEN |
 
 ### 22. Performance-, Kapazitäts- und Wirtschaftsgrenzen

@@ -15,6 +15,7 @@ import {
   SubmitButton,
   formControlClassName,
 } from "@/components/auth/form-parts";
+import Link from "@/components/shared/app-link";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { registerEmployerAction } from "@/lib/auth/server-actions";
@@ -137,8 +138,20 @@ export function EmployerRegistrationForm({
         name="acceptedTerms"
         state={state}
         required
-        label="Ich akzeptiere die aktuellen Nutzungsbedingungen und den dazugehörigen Datenschutzhinweis."
-        description="Die Zustimmung wird mit der serverseitig aktuellen Version und ihrem unveränderbaren Nachweis protokolliert."
+        label={
+          <>
+            Ich akzeptiere die{" "}
+            <Link className="underline" href="/legal/terms">
+              Nutzungsbedingungen
+            </Link>{" "}
+            und habe den{" "}
+            <Link className="underline" href="/legal/privacy">
+              Datenschutzhinweis
+            </Link>{" "}
+            gelesen.
+          </>
+        }
+        description="In öffentlich freigegebenen Umgebungen wird die Zustimmung an beide veröffentlichten Versionen und Hashes gebunden; lokal gilt nur der synthetische Demo-Vertrag."
       />
       <NativeCheckboxField
         id="employer-marketing"

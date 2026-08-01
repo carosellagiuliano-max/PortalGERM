@@ -38,6 +38,18 @@ export async function checkDatabaseHealth(
               AND finished_at IS NOT NULL
               AND rolled_back_at IS NULL
           )
+          AND EXISTS (
+            SELECT 1
+            FROM pg_settings
+            WHERE name = 'statement_timeout'
+              AND setting::bigint BETWEEN 1 AND 5000
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM pg_settings
+            WHERE name = 'idle_in_transaction_session_timeout'
+              AND setting::bigint BETWEEN 1 AND 5000
+          )
         ) AS ready
       `,
       new Promise<never>((_resolve, reject) => {

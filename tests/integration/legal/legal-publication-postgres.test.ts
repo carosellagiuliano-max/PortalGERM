@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { AdminDependencies } from "@/lib/admin/common";
+import { resolveRegistrationLegalGate } from "@/lib/auth/registration-legal-gate";
 import {
   createLegalDraft,
   getCurrentLegalPublication,
@@ -147,7 +148,121 @@ describe("Phase-22 legal publication workflow", () => {
       getCurrentLegalPublication("privacy", client, PHASE22_NOW),
     ).resolves.toBeNull();
   });
+
+  it("keeps public registration closed until both exact legal publications are current", async () => {
+    const { client, users } = requireFixture();
+    const environment = {
+      APP_ENV: "preview",
+      LEGAL_PUBLICATION_TERMS: true,
+      LEGAL_PUBLICATION_PRIVACY: true,
+    } as never;
+
+    await expect(
+      resolveRegistrationLegalGate(environment, client, PHASE22_NOW),
+    ).resolves.toMatchObject({
+      allowed: false,
+      code: "PUBLICATION_UNAVAILABLE",
+    });
+
+    const termsId = await publishDocument(client, users, {
+      type: "TERMS",
+      slug: "terms",
+      title: "Nutzungsbedingungen Phase 22",
+      versionLabel: "2026.08-terms",
+    });
+    const privacyId = await publishDocument(client, users, {
+      type: "PRIVACY",
+      slug: "privacy",
+      title: "Datenschutz Phase 22",
+      versionLabel: "2026.08-privacy",
+    });
+
+    const decision = await resolveRegistrationLegalGate(
+      environment,
+      client,
+      PHASE22_NOW,
+    );
+    expect(decision).toMatchObject({
+      allowed: true,
+      mode: "PUBLISHED_LEGAL",
+      binding: {
+        policyVersion: "registration-publication-v1",
+        terms: {
+          publicationId: termsId,
+          versionLabel: "2026.08-terms",
+        },
+        privacy: {
+          publicationId: privacyId,
+          versionLabel: "2026.08-privacy",
+        },
+      },
+    });
+
+    await expect(
+      revokeLegalPublication(
+        {
+          publicationId: termsId,
+          reasonCode: "REGISTRATION_GATE_TEST",
+        },
+        dependencies(client, users.legalPublisher),
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      resolveRegistrationLegalGate(environment, client, PHASE22_NOW),
+    ).resolves.toMatchObject({
+      allowed: false,
+      code: "PUBLICATION_UNAVAILABLE",
+    });
+  });
 });
+
+async function publishDocument(
+  client: DatabaseClient,
+  users: Phase22Actors,
+  input: Readonly<{
+    type: "TERMS" | "PRIVACY";
+    slug: "terms" | "privacy";
+    title: string;
+    versionLabel: string;
+  }>,
+) {
+  const draft = await createLegalDraft(
+    {
+      ...input,
+      locale: "de-CH",
+      contentMarkdown:
+        "# " +
+        input.title +
+        "\n\nDiese fachlich getrennt geprüfte Testfassung bindet die öffentliche Registrierung an eine konkrete Version und ihren unveränderbaren Inhaltshash.",
+      changeSummary: "Registration publication gate integration test",
+      requiresReconsent: true,
+    },
+    dependencies(client, users.legalAuthor),
+  );
+  if (!draft.ok) throw new Error("Could not create " + input.type + " draft.");
+  const reviewed = await reviewLegalRevision(
+    {
+      revisionId: draft.value.revisionId,
+      approve: true,
+      reasonCode: "INDEPENDENT_REGISTRATION_REVIEW",
+    },
+    dependencies(client, users.legalReviewer),
+  );
+  if (!reviewed.ok) throw new Error("Could not review " + input.type + " draft.");
+  const published = await publishLegalRevision(
+    {
+      revisionId: draft.value.revisionId,
+      effectiveAt: new Date(PHASE22_NOW.getTime() - 1),
+      expiresAt: null,
+      reasonCode: "REGISTRATION_GATE_PUBLICATION",
+    },
+    dependencies(client, users.legalPublisher),
+  );
+  if (!published.ok) {
+    throw new Error("Could not publish " + input.type + " draft.");
+  }
+  return published.value.publicationId;
+}
 
 function dependencies(
   database: DatabaseClient,

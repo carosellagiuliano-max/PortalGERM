@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 
 import Link from "@/components/shared/app-link";
 import { AlertTriangleIcon, CheckCircle2Icon, SparklesIcon } from "lucide-react";
@@ -34,6 +34,7 @@ import {
   type EmployerJobFullDetail,
 } from "@/lib/employer/job-contracts";
 import { getFairJobEmployerHintDe } from "@/lib/scoring/fair-job-employer-hints";
+import { useUnsavedChanges } from "@/components/employer/job-wizard/use-unsaved-changes";
 
 type JobFormAction = (state: EmployerJobFormState, formData: FormData) => Promise<EmployerJobFormState>;
 
@@ -49,6 +50,10 @@ export function NewJobWizard({
   defaultValidThrough: string;
 }>) {
   const [state, formAction, pending] = useActionState(action, INITIAL_EMPLOYER_JOB_FORM_STATE);
+  const { clearDirty, dirty, markDirty } = useUnsavedChanges();
+  useEffect(() => {
+    if (state.status === "success") clearDirty();
+  }, [clearDirty, state.status]);
   return (
     <Card>
       <CardHeader>
@@ -57,10 +62,11 @@ export function NewJobWizard({
         <CardDescription>Beim Speichern entsteht sofort ein Firmenentwurf. Ein Recruiter erhält dabei atomar die EDITOR-Zuweisung.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={formAction} className="grid gap-5">
+        <form action={formAction} className="grid gap-5" onChangeCapture={markDirty}>
           <input type="hidden" name="idempotencyKey" value={state.nextIdempotencyKey ?? idempotencyKey} />
           <StepOneFields catalog={catalog} defaultValidThrough={defaultValidThrough} />
           <ActionFeedback state={state} />
+          <UnsavedChangesStatus dirty={dirty} />
           <div className="flex justify-end"><Button type="submit" disabled={pending}>{pending ? "Entwurf wird angelegt …" : "Entwurf anlegen und weiter"}</Button></div>
         </form>
       </CardContent>
@@ -121,6 +127,12 @@ export function EmployerJobWizard({
   const [cloneRejectedState, cloneRejectedAction, cloneRejectedPending] = useActionState(actions.cloneRejected, INITIAL_EMPLOYER_JOB_FORM_STATE);
   const [reactivateState, reactivateAction, reactivatePending] = useActionState(actions.reactivate, INITIAL_EMPLOYER_JOB_FORM_STATE);
   const [closeState, closeAction, closePending] = useActionState(actions.close, INITIAL_EMPLOYER_JOB_FORM_STATE);
+  const { clearDirty, dirty, markDirty } = useUnsavedChanges();
+  useEffect(() => {
+    if (saveState.status === "success" || reportState.status === "success") {
+      clearDirty();
+    }
+  }, [clearDirty, reportState.status, saveState.status]);
   if (revision === null) {
     return <Alert variant="destructive"><AlertTriangleIcon /><AlertTitle>Revision fehlt</AlertTitle><AlertDescription>Dieser Job hat keine aktuelle Revision und kann nicht im Wizard bearbeitet werden.</AlertDescription></Alert>;
   }
@@ -130,12 +142,13 @@ export function EmployerJobWizard({
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="grid gap-5">
         <WizardNavigation jobId={job.id} activeStep={step} enabled={editable} />
+        <UnsavedChangesStatus dirty={dirty} />
         {!editable && step < 5 ? (
           <Alert><AlertTriangleIcon /><AlertTitle>Revision ist schreibgeschützt</AlertTitle><AlertDescription>Für diesen Status bzw. diese Zuweisungsrolle ist nur die nachvollziehbare Vorschau verfügbar.</AlertDescription></Alert>
         ) : null}
         {step === 1 ? (
           <WizardCard title="Grundlagen" description="Pensum, Ort, Laufzeit, Start und strukturierte Sprachprofile.">
-            <form action={saveAction} className="grid gap-5">
+            <form action={saveAction} className="grid gap-5" onChangeCapture={markDirty}>
               <CommandFields job={job} idempotencyKey={saveState.nextIdempotencyKey ?? idempotencyKeys.step1} />
               <input type="hidden" name="step" value="1" />
               <StepOneFields catalog={catalog} revision={revision} defaultValidThrough={toDateInput(revision.validThrough)} disabled={!editable} />
@@ -146,7 +159,7 @@ export function EmployerJobWizard({
         ) : null}
         {step === 2 ? (
           <WizardCard title="Beschreibung" description="Geordnete, konkrete Aufgaben und Anforderungen bleiben als strukturierte Daten erhalten.">
-            <form action={saveAction} className="grid gap-5">
+            <form action={saveAction} className="grid gap-5" onChangeCapture={markDirty}>
               <CommandFields job={job} idempotencyKey={saveState.nextIdempotencyKey ?? idempotencyKeys.step2} />
               <input type="hidden" name="step" value="2" />
               <StepTwoFields catalog={catalog} revision={revision} disabled={!editable} />
@@ -157,7 +170,7 @@ export function EmployerJobWizard({
         ) : null}
         {step === 3 ? (
           <WizardCard title="Lohn & Fairness" description="Diese persistierten Felder speisen den serverseitigen Fair-Job-Score; Client-Evidenz wird nicht übernommen.">
-            <form action={saveAction} className="grid gap-5">
+            <form action={saveAction} className="grid gap-5" onChangeCapture={markDirty}>
               <CommandFields job={job} idempotencyKey={saveState.nextIdempotencyKey ?? idempotencyKeys.step3} />
               <input type="hidden" name="step" value="3" />
               <StepThreeFields revision={revision} disabled={!editable} />
@@ -170,7 +183,7 @@ export function EmployerJobWizard({
           <WizardCard title="Schweiz-Compliance" description="Die Mock-Prüfung wird mit vollständigem Datensatz-, Quellen- und Disclaimer-Snapshot gespeichert.">
             {revision.reportingCheck === null ? null : <ReportingEvidence check={revision.reportingCheck} />}
             {editable ? (
-              <form action={reportAction} className="mt-5 grid gap-4">
+              <form action={reportAction} className="mt-5 grid gap-4" onChangeCapture={markDirty}>
                 <CommandFields job={job} idempotencyKey={reportState.nextIdempotencyKey ?? idempotencyKeys.reporting} />
                 <Field label="Berufsart" htmlFor="occupationCodeId">
                   <select id="occupationCodeId" name="occupationCodeId" required className={selectClass} defaultValue="">
@@ -435,6 +448,13 @@ function ActionFeedback({ state }: Readonly<{ state: EmployerJobFormState }>) {
     {state.message === undefined ? null : <p role={state.status === "error" || state.status === "conflict" ? "alert" : "status"} className={state.status === "success" ? "text-sm text-emerald-700" : "text-sm text-destructive"}>{state.message}</p>}
     {state.upgradePrompt === undefined ? null : <UpgradeDialog key={state.nextIdempotencyKey ?? state.upgradePrompt.reason} prompt={state.upgradePrompt} defaultOpen />}
   </>;
+}
+function UnsavedChangesStatus({ dirty }: Readonly<{ dirty: boolean }>) {
+  return dirty ? (
+    <p role="status" className="text-sm text-amber-700">
+      Änderungen noch nicht gespeichert. Speichere den Schritt, bevor du weitergehst.
+    </p>
+  ) : null;
 }
 function Metric({ value, label }: Readonly<{ value: number; label: string }>) { return <div className="rounded-lg bg-muted/50 p-2"><p className="font-semibold">{value}</p><p className="text-[0.65rem] text-muted-foreground">{label}</p></div>; }
 function toDateInput(value: Date | null | undefined) { return value === null || value === undefined ? "" : value.toISOString().slice(0, 10); }

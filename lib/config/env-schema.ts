@@ -420,6 +420,7 @@ const rawEnvironmentSchema = z
 
     const productionLike =
       environment.APP_ENV === "production" || environment.APP_ENV === "staging";
+    const publicIngress = productionLike || environment.APP_ENV === "preview";
     const productionRuntime =
       productionLike || environment.NODE_ENV === "production";
 
@@ -436,11 +437,11 @@ const rawEnvironmentSchema = z
       });
     }
 
-    if (productionLike && environment.TRUSTED_PROXY_HOPS < 1) {
+    if (publicIngress && environment.TRUSTED_PROXY_HOPS < 1) {
       context.addIssue({
         code: "custom",
         path: ["TRUSTED_PROXY_HOPS"],
-        message: "must be at least 1 in staging and production",
+        message: "must be at least 1 in preview, staging and production",
       });
     }
 

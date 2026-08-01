@@ -188,9 +188,9 @@ describe("parseEnvironment", () => {
     },
   );
 
-  it.each(["production", "staging"] as const)(
+  it.each(["preview", "production", "staging"] as const)(
     "requires an explicit trusted proxy topology in %s",
-    (appEnvironment: "production" | "staging") => {
+    (appEnvironment: "preview" | "production" | "staging") => {
       expectValidationFailure(
         {
           APP_ENV: appEnvironment,

@@ -38,6 +38,7 @@ describe("request error instrumentation", () => {
     expect(serializedLog).toContain(`"correlationId":"${correlationId}"`);
     expect(serializedLog).toContain("next-error-digest-123");
     expect(serializedLog).toContain("/reset-password");
+    expect(serializedLog).toContain('"error":{"name":"Error","message":"Internal error"}');
     expect(serializedLog).not.toContain(secretCanary);
   });
 

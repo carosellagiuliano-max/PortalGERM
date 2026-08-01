@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 
 import { AuthCard, AuthTextLink } from "@/components/auth/auth-card";
 import { EmployerRegistrationForm } from "@/components/auth/employer-registration-form";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { resolveRegistrationLegalGate } from "@/lib/auth/registration-legal-gate";
 import { getEmployerRegistrationClaimDefaults } from "@/lib/auth/server-actions";
+import { getServerEnvironment } from "@/lib/config/env";
+import { getDatabase } from "@/lib/db/client";
 
 export const metadata: Metadata = {
   title: "Arbeitgeberkonto erstellen",
@@ -19,6 +22,28 @@ type EmployerRegistrationSearchParams = Promise<{
 export default async function EmployerRegistrationPage({
   searchParams,
 }: Readonly<{ searchParams: EmployerRegistrationSearchParams }>) {
+  const legalGate = await resolveRegistrationLegalGate(
+    getServerEnvironment(),
+    getDatabase(),
+  );
+  if (!legalGate.allowed) {
+    return (
+      <AuthCard
+        eyebrow="Für Arbeitgeber"
+        title="Registrierung noch nicht freigegeben"
+        description="Neue Arbeitgeberkonten werden erst nach Veröffentlichung der verbindlichen Rechtsinformationen angenommen."
+        footer={<AuthTextLink href="/login">Mit bestehendem Konto anmelden</AuthTextLink>}
+      >
+        <Alert>
+          <AlertTitle>Es werden keine Kontodaten gespeichert</AlertTitle>
+          <AlertDescription>
+            Nutzungsbedingungen und Datenschutzhinweis müssen zuerst fachlich
+            geprüft und vollständig veröffentlicht werden.
+          </AlertDescription>
+        </Alert>
+      </AuthCard>
+    );
+  }
   const query = await searchParams;
   const hasClaimParameters = query.claim !== undefined || query.intent !== undefined;
   const hasStrictClaimPair =

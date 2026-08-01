@@ -41,7 +41,9 @@ unabhängigem Restore. Die technischen Pfade bleiben mit
 `ADMIN_MFA_REQUIRED=false`, `PRIVILEGED_STEP_UP_MODE=disabled`,
 `TRUST_RISK_MODE=observe` und `BREAK_GLASS_ENABLED=false` geschlossen
 beziehungsweise beobachtend, bis benannte Owner, Policies, Staging-RP-ID,
-Pager und Drills freigegeben sind. Das Betriebsverfahren steht im
+Pager und Drills freigegeben sind. Ausserhalb Local/CI sperrt der MFA-Default
+zusätzlich den gesamten Adminbereich statt Passwortzugriff als Fallback
+zuzulassen. Das Betriebsverfahren steht im
 [`Security-&-Trust-Operations-Runbook`](./codex-plan/runbooks/security-trust-operations.md).
 
 Dieses Verzeichnis ist ein eigenes verschachteltes Git-Repository. Die
@@ -213,7 +215,7 @@ Logs.
 | `NEXT_PUBLIC_APP_NAME` | immer | Öffentlicher Produktname, standardmäßig `SwissTalentHub` |
 | `APP_BUILD_ID` | Staging/Production | Nicht sensitiver, commit-eindeutiger Build-Identifier; lokal `local-development` |
 | `LOG_LEVEL` | immer | `debug`, `info`, `warn` oder `error` |
-| `TRUSTED_PROXY_HOPS` | immer | Lokal `0`; in Staging/Production exakt `1` bis `8` gemäß kontrollierter Ingress-Topologie |
+| `TRUSTED_PROXY_HOPS` | immer | Lokal `0`; in Preview/Staging/Production exakt `1` bis `8` gemäß kontrollierter Ingress-Topologie; auf direktem Vercel-Ingress `1` |
 
 Eine vollständig explizite Prozesskonfiguration muss mindestens `APP_ENV`,
 `DATABASE_URL` und `APP_URL` gemeinsam bereitstellen; sie wird nicht still mit
@@ -288,7 +290,7 @@ standardmässig fail-closed:
 
 | Variable | Sicherer Default | Beschreibung |
 |---|---|---|
-| `ADMIN_MFA_REQUIRED` | `false` | Erzwingt Admin-AAL2 erst nach Enrollment-, Recovery- und Lockout-Gate |
+| `ADMIN_MFA_REQUIRED` | `false` | Local/CI-Vertrag ohne globalen Cutover; in Preview/Staging/Production sperrt `false` den gesamten Adminbereich, `true` erzwingt den bestehenden AAL2-/Enrollment-Pfad |
 | `PRIVILEGED_STEP_UP_MODE` | `disabled` | `observe` protokolliert; `enforce` verlangt action-/actor-/session-/tenant-/resource-gebundene Single-use Grants |
 | `TRUST_RISK_MODE` | `observe` | Erlaubt erst nach Policyfreigabe den Modus `hold`; Observe allein widerruft keine Fachobjekte |
 | `BREAK_GLASS_ENABLED` | `false` | Öffnet nur zeitgebundene, incidentgebundene und auditierte Grants; nie einen globalen Admin-Fallback |
@@ -721,6 +723,16 @@ und freigegeben wurden.
    freigegebenen Schweizer/EU-Region mit TLS, Backups, Restore-Möglichkeit,
    DPA, Monitoring und Zugriffskontrolle auswählen. Im Repository ist bewusst
    kein konkreter Cloudanbieter freigegeben.
+   Bei Supabase/Supavisor ist für eine serverlose Laufzeit der Transaction-
+   Pooler vorgesehen; Session-Einstellungen werden dort nicht verlässlich
+   beibehalten. `statement_timeout` und
+   `idle_in_transaction_session_timeout` müssen deshalb als wirksame Rollen-
+   oder Datenbankpolicy auf höchstens fünf Sekunden gesetzt werden. Die App
+   prüft beide Werte in `/health/ready`; ein abweichender Wert blockiert den
+   Rollout. Migrationen verwenden eine dafür geeignete direkte oder Session-
+   Verbindung. Siehe die offiziellen
+   [Supabase-Verbindungsmodi](https://supabase.com/docs/guides/database/connecting-to-postgres)
+   und [Timeout-Hinweise](https://supabase.com/docs/guides/database/postgres/timeouts).
 2. Secrets aus einem Secret Manager injizieren, nicht aus einer committed
    Env-Datei. Production benötigt insbesondere `APP_ENV=production`,
    `NODE_ENV=production`, `DATABASE_URL`, eine HTTPS-`APP_URL`,
@@ -749,7 +761,8 @@ und freigegeben wurden.
 
 6. Demo-Seeding ist in Staging/Production verboten. Readiness erst nach
    erfolgreicher Migration aktivieren und `/health/live` sowie
-   `/health/ready` überwachen.
+   `/health/ready` überwachen. `ready` bestätigt neben Schema und Migration
+   auch die effektiven serverseitigen Statement-/Idle-Transaction-Timeouts.
 7. Ein autonomer Worker/Outbox muss vor unbeaufsichtigtem öffentlichem
    Self-Service Alerts, Renewal und fällige Projektionen mit Lease,
    Idempotenz, Retry/Backoff, Dead-Letter und Monitoring betreiben. Ein

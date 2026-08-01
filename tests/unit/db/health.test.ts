@@ -23,7 +23,19 @@ describe("checkDatabaseHealth", () => {
     expect(statement).toContain("finished_at IS NULL");
     expect(statement).toContain("rolled_back_at IS NULL");
     expect(statement).toContain("migration_name = ?");
+    expect(statement).toContain("name = 'statement_timeout'");
+    expect(statement).toContain("name = 'idle_in_transaction_session_timeout'");
+    expect(statement).toContain("setting::bigint BETWEEN 1 AND 5000");
     expect(requiredMigrationId).toBe(REQUIRED_MIGRATION_ID);
+  });
+
+  it("fails closed when the pooler does not preserve the required timeout settings", async () => {
+    const query = vi.fn().mockResolvedValue([{ ready: false }]);
+
+    await expect(checkDatabaseHealth({ $queryRaw: query })).resolves.toEqual({
+      ready: false,
+      reason: "database_unavailable",
+    });
   });
 
   it("fails readiness when the database is reachable but migrations are incomplete", async () => {
