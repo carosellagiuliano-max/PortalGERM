@@ -31,29 +31,47 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.35);
   --radius-2xl: calc(var(--radius) * 1.75);
+  --shadow-xs: var(--elevation-1);
+  --shadow-sm: var(--elevation-1);
+  --shadow-md: var(--elevation-2);
+  --shadow-lg: var(--elevation-3);
 }
 
 :root {
   color-scheme: light;
-  --background: oklch(0.988 0.004 164);
-  --foreground: oklch(0.205 0.026 229);
+  /* Page sits a touch cooler than the cards so surfaces layer visibly. */
+  --background: oklch(0.976 0.005 210);
+  --foreground: oklch(0.195 0.027 229);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0.026 229);
+  --card-foreground: oklch(0.195 0.027 229);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.205 0.026 229);
+  --popover-foreground: oklch(0.195 0.027 229);
   --primary: oklch(0.39 0.085 203);
   --primary-foreground: oklch(0.985 0.004 164);
-  --secondary: oklch(0.956 0.014 166);
+  --secondary: oklch(0.952 0.016 190);
   --secondary-foreground: oklch(0.28 0.048 204);
-  --muted: oklch(0.958 0.008 218);
-  --muted-foreground: oklch(0.49 0.035 226);
+  --muted: oklch(0.953 0.009 218);
+  /* Darkened from 0.49 so secondary text clears WCAG AA on both surfaces. */
+  --muted-foreground: oklch(0.452 0.035 226);
   --accent: oklch(0.935 0.032 161);
   --accent-foreground: oklch(0.27 0.058 188);
   --destructive: oklch(0.48 0.19 27.325);
-  --border: oklch(0.89 0.013 214);
-  --input: oklch(0.89 0.013 214);
+  --border: oklch(0.905 0.011 214);
+  --input: oklch(0.885 0.013 214);
   --ring: oklch(0.55 0.09 203);
-  --radius: 0.625rem;
+  --radius: 0.75rem;
+
+  /* Brand-tinted elevation. Neutral greys read muddy against the petrol hue. */
+  --shadow-color: 214 40% 22%;
+  --elevation-1:
+    0 1px 2px -1px oklch(0.3 0.03 214 / 0.1),
+    0 1px 3px oklch(0.3 0.03 214 / 0.06);
+  --elevation-2:
+    0 2px 4px -2px oklch(0.3 0.03 214 / 0.1),
+    0 6px 16px -6px oklch(0.3 0.03 214 / 0.12);
+  --elevation-3:
+    0 4px 8px -4px oklch(0.3 0.03 214 / 0.12),
+    0 16px 32px -12px oklch(0.3 0.03 214 / 0.16);
 }
 
 @layer base {
@@ -70,6 +88,23 @@
     @apply bg-background font-sans text-foreground antialiased;
     min-height: 100vh;
     overflow-x: hidden;
+  }
+
+  /* Inter needs negative tracking at display sizes; without it large headings
+     read loose and amateurish. Small headings keep default spacing. */
+  h1,
+  h2 {
+    letter-spacing: -0.021em;
+  }
+
+  h3,
+  h4 {
+    letter-spacing: -0.012em;
+  }
+
+  /* Tabular figures keep salaries, counts and dates from jittering in tables. */
+  table :is(td, th) {
+    font-variant-numeric: tabular-nums;
   }
 
   :focus-visible {
@@ -96,12 +131,63 @@
     text-wrap: balance;
   }
 
+  /* 2.0 line-height was too airy for multi-line German copy; 1.75 keeps
+     paragraphs cohesive while staying comfortable on mobile. */
   .prose-safe {
-    @apply text-base leading-8 text-foreground;
+    @apply text-base leading-7 text-foreground;
   }
 
   .prose-safe p + p {
-    @apply mt-6;
+    @apply mt-5;
+  }
+
+  /* Consistent vertical rhythm between page sections. Individual pages used
+     ad-hoc py-* values, which made the scroll feel uneven. */
+  .section-y {
+    padding-block: 3rem;
+  }
+
+  @media (min-width: 640px) {
+    .section-y {
+      padding-block: 4.5rem;
+    }
+  }
+
+  /* Raised surface for cards, panels and list rows. */
+  .surface {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--elevation-1);
+  }
+
+  /* Interactive cards (job results, company tiles) get a restrained lift so
+     hover reads as affordance rather than decoration. */
+  .surface-interactive {
+    transition:
+      box-shadow 150ms ease,
+      border-color 150ms ease,
+      transform 150ms ease;
+  }
+
+  .surface-interactive:hover {
+    border-color: color-mix(in oklch, var(--primary) 32%, var(--border));
+    box-shadow: var(--elevation-2);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .surface-interactive:hover {
+      transform: translateY(-1px);
+    }
+  }
+
+  /* Quiet section header used above card grids and tables. */
+  .section-heading {
+    @apply text-xl font-semibold text-foreground sm:text-2xl;
+  }
+
+  .section-subheading {
+    @apply mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base;
   }
 }
 
