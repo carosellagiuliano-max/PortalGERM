@@ -12,7 +12,6 @@ import {
 
 import { CompanyCard } from "@/components/public/company-card";
 import { JobCard } from "@/components/public/job-card";
-import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { listPublicGuides } from "@/lib/content/public-guides";
@@ -49,49 +48,98 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="page-shell grid gap-10 py-16 sm:py-24 lg:grid-cols-[minmax(0,1.2fr)_minmax(19rem,0.8fr)] lg:items-center">
-        <div className="max-w-3xl">
-          <Badge variant="secondary" className="mb-5">Faire Jobs · klare Fakten</Badge>
-          <p className="eyebrow mb-4">SwissTalentHub</p>
-          <h1 className="text-balance text-4xl leading-[1.06] font-semibold tracking-[-0.04em] sm:text-5xl lg:text-6xl">
+      <section className="border-b bg-secondary/30">
+        <div className="page-shell grid gap-10 py-10 sm:py-14 lg:grid-cols-[minmax(0,1.15fr)_minmax(17rem,0.85fr)] lg:items-start">
+        <div>
+          <p className="eyebrow">Stellenmarkt Schweiz · de-CH</p>
+          <h1 className="mt-3 text-balance text-3xl leading-[1.1] font-semibold sm:text-4xl lg:text-[2.6rem]">
             Finde nicht irgendeinen Job. Finde den Job, der wirklich passt.
           </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
-            Vergleiche Lohn, Pensum, Arbeitsmodell und Bewerbungsaufwand in den aktuell bedienten de-CH-Clustern. Öffentliche Stellen stammen ausschliesslich aus geprüften Publikationsständen.
+          <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">
+            Lohn, Pensum, Arbeitsmodell und Bewerbungsaufwand stehen im Inserat — nicht erst im Vorstellungsgespräch.
           </p>
-          <form action="/jobs" method="get" className="mt-8 grid max-w-3xl gap-3 rounded-xl border bg-card p-3 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
-            <label className="sm:col-span-2 lg:col-span-3"><span className="sr-only">Stichwort suchen</span><input id="home-job-search" name="keyword" maxLength={120} placeholder="Beruf, Fähigkeit oder Firma" className="h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50" /></label>
-            <label><span className="sr-only">Kanton</span><select name="canton" defaultValue="" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"><option value="">Kanton wählen</option>{catalog.cantons.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label>
-            <label><span className="sr-only">Kategorie</span><select name="category" defaultValue="" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"><option value="">Kategorie wählen</option>{catalog.categories.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label>
-            <label><span className="sr-only">Pensum</span><select name="workload" defaultValue="" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"><option value="">Pensum wählen</option><option value="40-60">40–60%</option><option value="60-80">60–80%</option><option value="80-100">80–100%</option><option value="100">100%</option></select></label>
-            <label><span className="sr-only">Arbeitsmodell</span><select name="remote" defaultValue="" className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm"><option value="">Arbeitsmodell</option><option value="ONSITE">Vor Ort</option><option value="HYBRID">Hybrid</option><option value="REMOTE">Remote</option></select></label>
-            <button type="submit" className={buttonVariants({ size: "lg", className: "h-11 px-5 sm:col-span-2" })}>
-              <SearchIcon aria-hidden="true" /> Jobs suchen
+          <form action="/jobs" method="get" className="mt-6 grid gap-2 rounded-xl border bg-card p-2.5 shadow-xs sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <label className="sm:col-span-2 lg:col-span-1"><span className="sr-only">Stichwort suchen</span><input id="home-job-search" name="keyword" maxLength={120} placeholder="Beruf, Fähigkeit oder Firma" className="h-11 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" /></label>
+            <label><span className="sr-only">Kanton</span><select name="canton" defaultValue="" className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm"><option value="">Kanton wählen</option>{catalog.cantons.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label>
+            <label><span className="sr-only">Kategorie</span><select name="category" defaultValue="" className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm"><option value="">Kategorie wählen</option>{catalog.categories.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label>
+            <button type="submit" className={buttonVariants({ size: "lg", className: "h-11 px-6 sm:col-span-2 lg:col-span-1" })}>
+              <SearchIcon aria-hidden="true" /> Suchen
             </button>
           </form>
-          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5"><BadgeCheckIcon className="size-4 text-primary" aria-hidden="true" /> Verifizierte Firmen</span>
-            <span className="inline-flex items-center gap-1.5"><ShieldCheckIcon className="size-4 text-primary" aria-hidden="true" /> Transparenz-Score</span>
-          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Pensum, Arbeitsmodell, Lohnband und Umkreis findest du in der{" "}
+            <Link href="/jobs" className="underline underline-offset-4 hover:text-foreground">
+              erweiterten Suche
+            </Link>
+            .
+          </p>
+          {catalog.categories.length > 0 ? (
+            <div className="mt-6">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Häufig gesucht
+              </p>
+              {/* Deliberately links into the search, not the cluster landing
+                  pages: those stay behind the acquisition/indexability gate,
+                  while a filtered search is ordinary product use. */}
+              <ul className="mt-2.5 flex flex-wrap gap-2">
+                {catalog.categories.slice(0, 8).map((category) => (
+                  <li key={category.id}>
+                    <Link
+                      href={`/jobs?category=${encodeURIComponent(category.slug)}`}
+                      className="inline-flex items-center rounded-lg border bg-card px-3 py-1.5 text-sm transition-colors hover:border-primary/40"
+                    >
+                      {category.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
 
-        <Card className="border-primary/15 bg-secondary/45 shadow-sm">
+        <Card className="bg-card">
           <CardHeader>
-            <p className="eyebrow">Vor dem Bewerben wissen</p>
-            <CardTitle as="h2" className="mt-2 text-2xl">Weniger Rätsel, bessere Entscheidungen.</CardTitle>
-            <CardDescription className="leading-6">Der Fair-Job-Score macht vollständige und konkrete Inserate sichtbar.</CardDescription>
+            <CardTitle as="h2" className="text-base">
+              Was im Inserat steht, bevor du dich bewirbst
+            </CardTitle>
+            <CardDescription>
+              Der Fair-Job-Score bewertet, wie vollständig ein Inserat ist.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <ul className="grid gap-3 text-sm leading-6">
-              <li>✓ Lohnspanne und Pensum auf einen Blick</li>
-              <li>✓ Arbeitsort, Remote-Modell und Start klar benannt</li>
-              <li>✓ Bewerbungsprozess und Antwortsignal verständlich erklärt</li>
+            <ul className="grid gap-3.5 text-sm">
+              <li className="flex gap-2.5">
+                <BarChart3Icon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                <span>Lohnspanne und Pensum, nicht &bdquo;nach Vereinbarung&ldquo;</span>
+              </li>
+              <li className="flex gap-2.5">
+                <BadgeCheckIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                <span>Arbeitsort, Remote-Modell und Startdatum klar benannt</span>
+              </li>
+              <li className="flex gap-2.5">
+                <ShieldCheckIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                <span>Verifizierte Firma und nachvollziehbarer Bewerbungsweg</span>
+              </li>
             </ul>
-            <Link href="/jobs" className={buttonVariants({ variant: "outline", className: "mt-6 w-full bg-background" })}>
+            <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-4 text-sm">
+              <div>
+                <p className="text-xl font-semibold tabular-nums">{catalog.categories.length}</p>
+                <p className="text-muted-foreground">Berufsfelder</p>
+              </div>
+              <div>
+                <p className="text-xl font-semibold tabular-nums">{catalog.cantons.length}</p>
+                <p className="text-muted-foreground">Kantone</p>
+              </div>
+            </div>
+            <Link
+              href="/jobs"
+              className={buttonVariants({ variant: "outline", className: "mt-5 w-full" })}
+            >
               Alle Stellen ansehen <ArrowRightIcon data-icon="inline-end" />
             </Link>
           </CardContent>
         </Card>
+        </div>
       </section>
 
       <section className="border-y bg-secondary/25 py-10" aria-label="Transparenzmerkmale">
