@@ -49,21 +49,24 @@ export default async function HomePage() {
   return (
     <>
       <section className="border-b bg-secondary/30">
-        <div className="page-shell grid gap-10 py-10 sm:py-14 lg:grid-cols-[minmax(0,1.15fr)_minmax(17rem,0.85fr)] lg:items-start">
+        <div className="page-shell grid gap-10 py-10 sm:py-14 lg:grid-cols-[minmax(0,1.25fr)_minmax(16rem,0.75fr)] lg:items-start">
         <div>
           <p className="eyebrow">Stellenmarkt Schweiz · de-CH</p>
           <h1 className="mt-3 text-balance text-3xl leading-[1.1] font-semibold sm:text-4xl lg:text-[2.6rem]">
             Finde nicht irgendeinen Job. Finde den Job, der wirklich passt.
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">
-            Lohn, Pensum, Arbeitsmodell und Bewerbungsaufwand stehen im Inserat — nicht erst im Vorstellungsgespräch.
+            Lohn, Pensum, Arbeitsmodell und Bewerbungsaufwand stehen im Inserat — nicht erst im Vorstellungsgespräch. Öffentliche Stellen stammen ausschliesslich aus geprüften Publikationsständen.
           </p>
-          <form action="/jobs" method="get" className="mt-6 grid gap-2 rounded-xl border bg-card p-2.5 shadow-xs sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
-            <label className="sm:col-span-2 lg:col-span-1"><span className="sr-only">Stichwort suchen</span><input id="home-job-search" name="keyword" maxLength={120} placeholder="Beruf, Fähigkeit oder Firma" className="h-11 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" /></label>
-            <label><span className="sr-only">Kanton</span><select name="canton" defaultValue="" className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm"><option value="">Kanton wählen</option>{catalog.cantons.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label>
-            <label><span className="sr-only">Kategorie</span><select name="category" defaultValue="" className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm"><option value="">Kategorie wählen</option>{catalog.categories.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label>
-            <button type="submit" className={buttonVariants({ size: "lg", className: "h-11 px-6 sm:col-span-2 lg:col-span-1" })}>
-              <SearchIcon aria-hidden="true" /> Suchen
+          {/* Two rows on purpose: the keyword field needs its full width for
+              the placeholder, and the native select arrow eats ~2rem, so
+              squeezing four controls onto one row clipped their labels. */}
+          <form action="/jobs" method="get" className="mt-6 grid gap-2 rounded-xl border bg-card p-2.5 shadow-xs sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <label className="sm:col-span-3"><span className="sr-only">Stichwort suchen</span><input id="home-job-search" name="keyword" maxLength={120} placeholder="Beruf, Fähigkeit oder Firma" className="h-11 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" /></label>
+            <label className="min-w-0"><span className="sr-only">Kanton</span><select name="canton" defaultValue="" className="h-11 w-full min-w-0 truncate rounded-lg border border-input bg-card pr-9 pl-3 text-sm"><option value="">Alle Kantone</option>{catalog.cantons.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label>
+            <label className="min-w-0"><span className="sr-only">Kategorie</span><select name="category" defaultValue="" className="h-11 w-full min-w-0 truncate rounded-lg border border-input bg-card pr-9 pl-3 text-sm"><option value="">Alle Kategorien</option>{catalog.categories.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</select></label>
+            <button type="submit" className={buttonVariants({ size: "lg", className: "h-11 px-6" })}>
+              <SearchIcon aria-hidden="true" /> Jobs suchen
             </button>
           </form>
           <p className="mt-2 text-xs text-muted-foreground">
