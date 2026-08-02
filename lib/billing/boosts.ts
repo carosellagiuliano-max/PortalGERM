@@ -415,6 +415,7 @@ export async function activateBoostWithCredit(
         jobTitle: eligibility.jobTitle,
       },
       dedupeKey: `boost:${boost.id}:activated`,
+      createdAt: now,
       availableAt: now,
     });
     return boostSuccess({

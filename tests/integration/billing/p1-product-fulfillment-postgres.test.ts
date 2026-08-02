@@ -20,10 +20,9 @@ import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
 const ADDITIONAL_NOW = new Date("2026-07-21T10:00:00.000Z");
-// 23:30 Zurich on leap-day. Twelve calendar months must clamp to 28 Feb 2029
-// while preserving the Zurich wall time rather than adding a fixed day count.
+// The checkout begins late on leap day; its persisted expiry deliberately
+// controls when a retry may create the subsequent access grant.
 const IMPORT_NOW = new Date("2028-02-29T22:30:00.000Z");
-const IMPORT_RETRY_NOW = new Date("2028-02-29T23:01:00.000Z");
 const CATALOG_FROM = new Date("2026-01-01T00:00:00.000Z");
 const RELEASE_EXPIRY = new Date("2035-01-01T00:00:00.000Z");
 
@@ -320,6 +319,14 @@ describe.sequential("Phase 12 P1 product release and fulfillment", () => {
       where: { orderId: expiringCheckout.value.orderId },
       select: { id: true },
     });
+    const expiringOrder = await db().order.findUniqueOrThrow({
+      where: { id: expiringCheckout.value.orderId },
+      select: { expiresAt: true },
+    });
+    if (expiringOrder.expiresAt === null) {
+      throw new Error("Import Setup checkout expiry is unavailable.");
+    }
+    const importRetryNow = new Date(expiringOrder.expiresAt.getTime() + 1_000);
     await expect(
       db().importSetupApproval.findUniqueOrThrow({
         where: { id: data().businessApprovalId },
@@ -350,7 +357,7 @@ describe.sequential("Phase 12 P1 product release and fulfillment", () => {
         importSetupApprovalId: data().businessApprovalId,
         idempotencyKey: "p1-import-business-retry-checkout",
       },
-      billingDependencies(data().businessActor, IMPORT_RETRY_NOW),
+      billingDependencies(data().businessActor, importRetryNow),
     );
     expect(checkout.ok).toBe(true);
     if (!checkout.ok) throw new Error("Business Import Setup retry failed.");
@@ -389,7 +396,7 @@ describe.sequential("Phase 12 P1 product release and fulfillment", () => {
         orderId: checkout.value.orderId,
         idempotencyKey: "p1-import-business-confirm",
       },
-      billingDependencies(data().businessActor, IMPORT_RETRY_NOW),
+      billingDependencies(data().businessActor, importRetryNow),
     );
     expect(confirmed).toEqual(
       expect.objectContaining({
@@ -407,16 +414,17 @@ describe.sequential("Phase 12 P1 product release and fulfillment", () => {
           orderId: checkout.value.orderId,
           idempotencyKey: "p1-import-business-confirm",
         },
-        billingDependencies(data().businessActor, IMPORT_RETRY_NOW),
+        billingDependencies(data().businessActor, importRetryNow),
       ),
     ).resolves.toEqual(expect.objectContaining({ ok: true, replay: true }));
 
     const expectedEnd = addZurichCalendarMonthsClampedV1(
-      IMPORT_RETRY_NOW,
+      importRetryNow,
       12,
     );
     if (!expectedEnd.ok) throw new Error("Zurich calendar fixture failed.");
-    expect(expectedEnd.value).toEqual(new Date("2029-02-28T23:01:00.000Z"));
+    expect(importRetryNow).toEqual(new Date("2028-02-29T23:05:01.000Z"));
+    expect(expectedEnd.value).toEqual(new Date("2029-02-28T23:05:01.000Z"));
     const approval = await db().importSetupApproval.findUniqueOrThrow({
       where: { id: data().businessApprovalId },
       include: { accessGrant: true },
@@ -429,7 +437,7 @@ describe.sequential("Phase 12 P1 product release and fulfillment", () => {
           companyId: data().businessActor.companyId,
           importSourceId: data().importSourceId,
           status: "ACTIVE",
-          validFrom: IMPORT_RETRY_NOW,
+          validFrom: importRetryNow,
           validTo: expectedEnd.value,
         }),
       }),

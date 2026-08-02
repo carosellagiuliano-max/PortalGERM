@@ -41,6 +41,7 @@ export type EnqueueNotificationInput = Readonly<{
   payloadSchemaVersion: string;
   payload: Readonly<Record<string, unknown>>;
   dedupeKey: string;
+  createdAt: Date;
   availableAt: Date;
   maxAttempts?: number;
 }>;
@@ -107,6 +108,8 @@ export async function enqueueNotification(
     dedupeKey: normalized.dedupeKey,
     providerDedupeKey,
     status: "PENDING" as const,
+    createdAt: normalized.createdAt,
+    updatedAt: normalized.createdAt,
     availableAt: normalized.availableAt,
     maxAttempts: normalized.maxAttempts,
   };
@@ -331,6 +334,12 @@ function normalizeInput(input: EnqueueNotificationInput) {
     throw new NotificationOutboxInputError("PAYLOAD_SCHEMA_INVALID");
   }
   if (
+    !(input.createdAt instanceof Date) ||
+    !Number.isFinite(input.createdAt.getTime())
+  ) {
+    throw new NotificationOutboxInputError("CREATED_AT_INVALID");
+  }
+  if (
     !(input.availableAt instanceof Date) ||
     !Number.isFinite(input.availableAt.getTime())
   ) {
@@ -350,7 +359,7 @@ function normalizeInput(input: EnqueueNotificationInput) {
   const recipient =
     "userId" in input.recipient
       ? normalizeUserRecipient(input.recipient)
-      : normalizeAddressRecipient(input.recipient, input.availableAt);
+      : normalizeAddressRecipient(input.recipient, input.createdAt);
   return Object.freeze({
     ...input,
     recipient,
@@ -377,7 +386,7 @@ function normalizeAddressRecipient(
     hashKeyring: readonly KeyringEntry<"NOTIFICATION_RECIPIENT_HASH_KEYS">[];
     retentionUntil: Date;
   }>,
-  availableAt: Date,
+  createdAt: Date,
 ) {
   const address = normalizedEmailSchema.safeParse(recipient.address);
   if (!address.success) {
@@ -392,9 +401,9 @@ function normalizeAddressRecipient(
   if (
     !(recipient.retentionUntil instanceof Date) ||
     !Number.isFinite(recipient.retentionUntil.getTime()) ||
-    (recipient.retentionUntil.getTime() >= availableAt.getTime() &&
-      recipient.retentionUntil.getTime() - availableAt.getTime() >
-        MAXIMUM_EXPLICIT_RECIPIENT_RETENTION_MILLISECONDS)
+    recipient.retentionUntil.getTime() <= createdAt.getTime() ||
+    recipient.retentionUntil.getTime() - createdAt.getTime() >
+      MAXIMUM_EXPLICIT_RECIPIENT_RETENTION_MILLISECONDS
   ) {
     throw new NotificationOutboxInputError("RECIPIENT_RETENTION_INVALID");
   }

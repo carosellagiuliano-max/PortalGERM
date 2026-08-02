@@ -2062,6 +2062,7 @@ async function enqueueInvitationNotification(
       invitationVersion: input.version,
     },
     dedupeKey: `company-invitation:${input.invitationId}:${input.version}`,
+    createdAt: input.now,
     availableAt: input.now,
   });
 }

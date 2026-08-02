@@ -1813,6 +1813,7 @@ async function finalizeExportExecution(
         statusLabel: "Abgeschlossen",
       },
       dedupeKey: `privacy-export-v2:${setup.requestId}:ready-email`,
+      createdAt: now,
       availableAt: now,
     });
     for (const audit of [
@@ -1910,6 +1911,7 @@ async function markExportFailure(
         statusLabel: "Weitere Bearbeitung erforderlich",
       },
       dedupeKey: `privacy-export-v2:${setup.requestId}:retry-required-email`,
+      createdAt: now,
       availableAt: now,
     });
   }, transactionOptions());

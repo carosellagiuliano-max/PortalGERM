@@ -256,6 +256,7 @@ export async function submitPublicEmployerLead(
           payloadSchemaVersion: "sales-lead-v1",
           payload: { salesActivityId: activity.id },
           dedupeKey: `sales-lead:${activity.id}`,
+          createdAt: activity.createdAt,
           availableAt: activity.createdAt,
         });
 

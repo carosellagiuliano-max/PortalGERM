@@ -18,7 +18,7 @@ const HASH_MIGRATIONS = [
   "20260720230700_phase_09_demo_application_notice_reconciliation",
   "20260720230800_phase_09_legacy_demo_application_reconciliation",
 ] as const;
-const DATABASE_NAME_PATTERN = /^swisstalenthub_test_hash_migration_[a-f0-9]+$/u;
+const DATABASE_NAME_PATTERN = /^sth_test_hashmig_[a-f0-9]{32}$/u;
 
 const IDS = Object.freeze({
   user: "91000000-0000-4000-8000-000000000001",
@@ -287,7 +287,7 @@ async function createPreHashMigrationDatabase() {
   const maintenanceUrl = new URL(baseUrl);
   maintenanceUrl.pathname = "/postgres";
   maintenanceUrl.searchParams.delete("schema");
-  const databaseName = `swisstalenthub_test_hash_migration_${randomUUID().replaceAll("-", "")}`;
+  const databaseName = `sth_test_hashmig_${randomUUID().replaceAll("-", "")}`;
   if (!DATABASE_NAME_PATTERN.test(databaseName)) {
     throw new Error("Generated hash-migration database name is unsafe.");
   }

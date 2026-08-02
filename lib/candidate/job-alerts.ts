@@ -954,6 +954,7 @@ async function processDueAlertToOutbox(
         unsubscribeTokenId: tokenId,
       },
       dedupeKey,
+      createdAt: options.now,
       availableAt: existingOutbox?.availableAt ?? options.now,
     });
     if (outbox.created) {

@@ -429,6 +429,7 @@ export async function consumeEmailVerification(
             payloadSchemaVersion: "identity-v1",
             payload: { emailChangeId: pending.id },
             dedupeKey: `login-email-changed:${pending.id}`,
+            createdAt: now,
             availableAt: now,
           });
           await writeAuthSecurityEvent(transaction, {
@@ -690,6 +691,7 @@ export async function createChallenge(
       expiresInMinutes: EMAIL_VERIFICATION_POLICY_V1.ttlMilliseconds / 60_000,
     },
     dedupeKey: `email-verification:${challenge.id}`,
+    createdAt: input.now,
     availableAt: input.now,
   });
   await writeAuthSecurityEvent(transaction, {

@@ -462,6 +462,7 @@ async function enqueueCommercialSignalEmail(
       dueDate: formatZurichDate(candidate.dueAt),
     },
     dedupeKey,
+    createdAt: availableAt,
     availableAt,
   });
   return Object.freeze({

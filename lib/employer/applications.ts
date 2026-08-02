@@ -199,6 +199,7 @@ export async function transitionEmployerApplication(access: EmployerApplicationA
           statusLabel: statusLabel(decision.value.nextStatus),
         },
         dedupeKey: `email:${eventKey("status", parsed.data.idempotencyKey)}`,
+        createdAt: now,
         availableAt: now,
       });
       if (isQualifyingEmployerResponseStatus(decision.value.nextStatus)) {
@@ -317,6 +318,7 @@ export async function sendEmployerApplicationMessage(access: EmployerApplication
           jobTitle: application.jobTitle,
         },
         dedupeKey: `employer-message:${message.id}`,
+        createdAt: now,
         availableAt: now,
       });
       await writeRequiredAudit(createPrismaTransactionAuditPort(tx), { action: "MESSAGE_SENT", actorKind: "USER", actorUserId: access.userId, capability: "COMPANY_APPLICATION_MESSAGE", companyId: access.companyId, correlationId: dependencies.request.correlationId, result: "SUCCEEDED", retainUntil: new Date(now.getTime() + AUDIT_TTL), targetId: message.id, targetType: "MESSAGE" });

@@ -818,6 +818,7 @@ async function notifyJobManagers(
           ...(email.reason === undefined ? {} : { reason: email.reason }),
         },
         dedupeKey: `${dedupeKey}:email:${manager.userId}`,
+        createdAt: email.availableAt,
         availableAt: email.availableAt,
       });
     }

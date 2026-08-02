@@ -116,6 +116,7 @@ type Setup = Readonly<{
   subjectClass: "USER" | "CANDIDATE" | "EMPLOYER_MEMBER";
   subjectReferenceHash: string;
   requiredProcessors: readonly string[];
+  startedAt: Date;
   recipientRetentionUntil: Date;
   replay: boolean;
 }>;
@@ -328,6 +329,7 @@ async function setupExecution(
           subjectClass: existing.subjectClass as Setup["subjectClass"],
           subjectReferenceHash: existing.subjectReferenceHash,
           requiredProcessors: Object.freeze(existing.requiredProcessors),
+          startedAt: existing.startedAt ?? existing.createdAt,
           recipientRetentionUntil: erasureNotificationRetentionUntil(
             request.dueAt,
             existing.startedAt ?? existing.createdAt,
@@ -468,6 +470,7 @@ async function setupExecution(
         subjectClass,
         subjectReferenceHash,
         requiredProcessors: Object.freeze(requiredProcessors),
+        startedAt: now,
         recipientRetentionUntil: erasureNotificationRetentionUntil(
           request.dueAt,
           now,
@@ -948,6 +951,7 @@ async function stageErasureStatusEmails(
     payloadSchemaVersion: "privacy-request-v1",
     payload: { requestId: setup.requestId, statusLabel: "Abgeschlossen" },
     dedupeKey: successDedupeKey,
+    createdAt: setup.startedAt,
     availableAt: DEFERRED_ERASURE_NOTIFICATION_AT,
   });
   await enqueueNotification(transaction, {
@@ -964,6 +968,7 @@ async function stageErasureStatusEmails(
       statusLabel: "Weitere Bearbeitung erforderlich",
     },
     dedupeKey: failureDedupeKey,
+    createdAt: setup.startedAt,
     availableAt: DEFERRED_ERASURE_NOTIFICATION_AT,
   });
 }
@@ -1315,6 +1320,7 @@ async function storeProcessorFailure(
             : "Weitere Bearbeitung erforderlich",
         },
         dedupeKey: `privacy-execution:${setup.executionId}:${processorKey}:${terminal ? "terminal" : "retry"}:email`,
+        createdAt: now,
         availableAt: now,
       });
     }
@@ -1482,6 +1488,7 @@ async function completeExecution(
         payloadSchemaVersion: "privacy-request-v1",
         payload: { requestId: setup.requestId, statusLabel: "Abgeschlossen" },
         dedupeKey: `privacy-execution:${setup.executionId}:completed-email`,
+        createdAt: now,
         availableAt: now,
       });
     }

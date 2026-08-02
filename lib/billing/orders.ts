@@ -60,6 +60,10 @@ import {
 import { createPrismaEntitlementRepository } from "@/lib/billing/prisma-publish-quota";
 import { computeVat } from "@/lib/billing/vat";
 import { Prisma } from "@/lib/generated/prisma/client";
+import {
+  isRetryableTransactionError,
+  runRetryableDatabaseOperation,
+} from "@/lib/db/transaction-retry";
 import { enqueueNotification } from "@/lib/notifications/outbox";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
@@ -817,7 +821,8 @@ async function revalidateHostedCheckoutAuthority(
     });
   }
 
-  return dependencies.database.$transaction(
+  return runHostedCheckoutSerializableTransaction(
+    dependencies.database,
     async (transaction) => {
       await transaction.$queryRaw`
         SELECT "id"
@@ -1040,7 +1045,6 @@ async function revalidateHostedCheckoutAuthority(
         }),
       });
     },
-    { isolationLevel: "Serializable" },
   );
 }
 
@@ -3271,6 +3275,7 @@ async function enqueueBillingEmailOutbox(
       payloadSchemaVersion: "v1",
       payload: message.data,
       dedupeKey: `${message.data.idempotencyKey}:email`,
+      createdAt: now,
       availableAt: now,
       maxAttempts: 8,
     });
@@ -4461,7 +4466,8 @@ async function recordHostedCheckoutSession(
   }
   const paymentAttemptId = prepared.paymentAttemptId;
   try {
-    return await dependencies.database.$transaction(
+    return await runHostedCheckoutSerializableTransaction(
+      dependencies.database,
       async (transaction) => {
         await transaction.$queryRaw`
         SELECT "id"
@@ -4671,6 +4677,13 @@ async function recordHostedCheckoutSession(
             reasonCode: staleReason,
           });
         }
+        if (
+          (attempt!.status === "CHECKOUT_CREATED" ||
+            attempt!.status === "SUCCEEDED") &&
+          attempt!.providerSessionReference === providerSessionReference
+        ) {
+          return Object.freeze({ status: "RECORDED" as const });
+        }
         if (attempt!.status === "SUCCEEDED") {
           await transaction.paymentAttempt.updateMany({
             where: {
@@ -4704,7 +4717,6 @@ async function recordHostedCheckoutSession(
           ? Object.freeze({ status: "RECORDED" as const })
           : Object.freeze({ status: "FAILED" as const });
       },
-      { isolationLevel: "Serializable" },
     );
   } catch {
     return Object.freeze({ status: "FAILED" as const });
@@ -4898,31 +4910,23 @@ async function runSerializableRetry<TResult>(
   return billingFailure("WRITE_FAILED");
 }
 
-function isRetryableTransactionError(error: unknown) {
-  if (typeof error !== "object" || error === null) return false;
-  const code = "code" in error ? String(error.code) : "";
-  if (code === "P2034" || code === "40001" || code === "40P01") {
-    return true;
-  }
-  const metadata =
-    "meta" in error && typeof error.meta === "object" && error.meta !== null
-      ? error.meta
-      : null;
-  if (code === "P2010" && metadata !== null && "code" in metadata) {
-    const databaseCode = String(metadata.code);
-    if (databaseCode === "40001" || databaseCode === "40P01") return true;
-  }
-  const messages = [
-    "message" in error && typeof error.message === "string"
-      ? error.message
-      : "",
-    metadata !== null &&
-    "message" in metadata &&
-    typeof metadata.message === "string"
-      ? metadata.message
-      : "",
-  ].join("\n");
-  return /could not serialize access|deadlock detected|write conflict/iu.test(
-    messages,
+const HOSTED_CHECKOUT_TRANSACTION_RETRY_LIMIT = 24;
+
+/**
+ * Retries only a database transaction after PostgreSQL reports a transient
+ * serialization/deadlock conflict. Callers must keep every external provider
+ * effect outside the supplied operation so a retry can never repeat network
+ * I/O. The bounded budget covers the checkout contract's 20-way same-key
+ * contention while still failing deterministically if the database cannot
+ * make progress.
+ */
+function runHostedCheckoutSerializableTransaction<TResult>(
+  database: BillingDependencies["database"],
+  operation: (transaction: Prisma.TransactionClient) => Promise<TResult>,
+): Promise<TResult> {
+  return runRetryableDatabaseOperation(
+    () =>
+      database.$transaction(operation, { isolationLevel: "Serializable" }),
+    { maxAttempts: HOSTED_CHECKOUT_TRANSACTION_RETRY_LIMIT },
   );
 }

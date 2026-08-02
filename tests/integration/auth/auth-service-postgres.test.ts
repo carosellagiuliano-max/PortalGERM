@@ -107,6 +107,7 @@ beforeAll(async () => {
     createValidEnvironment({
       APP_URL,
       DATABASE_URL: migrated.connectionString,
+      EMAIL_PROVIDER_MODE: "local_mock",
       RATE_LIMIT_BACKEND: "postgres",
     }),
   );

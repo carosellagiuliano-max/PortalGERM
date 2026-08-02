@@ -445,6 +445,7 @@ async function createAmbiguousPause(
   const outbox = await context.fixture.database.$transaction((transaction) =>
     enqueueNotification(transaction, {
       availableAt: NOW,
+      createdAt: NOW,
       dedupeKey: `phase33-reconciliation:${suffix}:${randomUUID()}`,
       maxAttempts: 1,
       payload: { emailChangeId: randomUUID() },

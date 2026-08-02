@@ -228,6 +228,7 @@ describe.sequential("Phase 20 notification preferences and outbox", () => {
         payloadSchemaVersion: "job-alert-v1",
         payload: { alertName: "Phase 20", jobCount: 3 },
         dedupeKey: "phase20-preference-optional",
+        createdAt: PHASE20_NOW,
         availableAt: PHASE20_NOW,
       });
       await enqueueNotification(transaction, {
@@ -238,6 +239,7 @@ describe.sequential("Phase 20 notification preferences and outbox", () => {
           emailChangeId: "20000000-0000-4000-8000-000000000020",
         },
         dedupeKey: "phase20-preference-mandatory",
+        createdAt: PHASE20_NOW,
         availableAt: PHASE20_NOW,
       });
     });
@@ -303,23 +305,26 @@ describe.sequential("Phase 20 notification preferences and outbox", () => {
       email: "preference-tamper@example.test",
       verified: true,
     });
-    const row = await db().$transaction((transaction) =>
-      enqueueNotification(transaction, {
-        recipient: { userId: user.id },
-        templateKey: "login_email_changed_notice",
+    const row = await db().notificationOutbox.create({
+      data: {
+        recipientUserId: user.id,
+        purpose: "LOGIN_EMAIL_CHANGED_NOTICE",
+        purposeClass: "MANDATORY",
+        channel: "EMAIL",
+        templateKey: "unreviewed_template",
         payloadSchemaVersion: "identity-v1",
         payload: {
           emailChangeId: "20000000-0000-4000-8000-000000000021",
         },
         dedupeKey: "phase20-template-tamper",
+        providerDedupeKey: "phase20-template-tamper-provider",
+        status: "PENDING",
+        createdAt: PHASE20_NOW,
+        updatedAt: PHASE20_NOW,
         availableAt: PHASE20_NOW,
-      }),
-    );
-    await db().$executeRaw`
-      UPDATE "NotificationOutbox"
-         SET "templateKey" = 'unreviewed_template'
-       WHERE "id" = ${row.id}::uuid
-    `;
+      },
+      select: { id: true },
+    });
     const provider = new CapturingProvider();
     const result = await dispatchNotificationBatch({
       database: db(),

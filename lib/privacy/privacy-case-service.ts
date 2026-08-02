@@ -1330,6 +1330,7 @@ async function notifyRequester(
               : "Abgelehnt",
     },
     dedupeKey: `privacy-case:${idempotencyKey}:email`,
+    createdAt: now,
     availableAt: now,
   });
 }

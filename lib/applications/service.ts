@@ -469,6 +469,7 @@ async function createApplicationTransaction(
       companyName: context.projection.recipient.companyName,
     },
     dedupeKey: `application-submitted:${application.id}`,
+    createdAt: now,
     availableAt: now,
   });
 

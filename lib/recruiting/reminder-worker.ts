@@ -127,6 +127,7 @@ async function processExternalReminders(
           companyName: row.snapshot.companyName,
         },
         dedupeKey: `email:${dedupeKey}`.slice(0, 160),
+        createdAt: now,
         availableAt: now,
       });
     }
@@ -207,6 +208,7 @@ async function processInterviewReminders(
           ),
         },
         dedupeKey: `email:${row.dedupeKey}`.slice(0, 160),
+        createdAt: now,
         availableAt: now,
       });
       outboxId = outbox.id;

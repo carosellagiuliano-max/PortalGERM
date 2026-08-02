@@ -373,7 +373,7 @@ describe("Phase-33 privacy erasure notification durability", () => {
       },
     });
     const seededRequest = await seedPrivacyRequest(client, users, "DELETE");
-    const dueAt = new Date(Date.now() + 60 * 60_000);
+    const dueAt = new Date(PHASE22_NOW.getTime() + 60 * 60_000);
     const request = await client.privacyRequest.update({
       where: { id: seededRequest.id },
       data: { dueAt },

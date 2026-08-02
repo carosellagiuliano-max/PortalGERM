@@ -39,6 +39,14 @@ describe("Phase 24 concurrent checkout idempotency", () => {
     expect(results.filter((result) => result.ok && result.replay)).toHaveLength(
       19,
     );
+    expect(fixture.provider.checkoutInputs).toHaveLength(20);
+    expect(
+      new Set(
+        fixture.provider.checkoutInputs.map(({ idempotencyKey }) =>
+          idempotencyKey,
+        ),
+      ).size,
+    ).toBe(1);
     expect(await fixture.database.order.count({ where: { id: orderId } })).toBe(
       1,
     );

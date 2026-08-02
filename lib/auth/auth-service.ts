@@ -797,6 +797,7 @@ export async function requestPasswordReset(
               expiresInMinutes: 15,
             },
             dedupeKey: `password-reset:${created.id}`,
+            createdAt: now,
             availableAt: now,
           });
         }

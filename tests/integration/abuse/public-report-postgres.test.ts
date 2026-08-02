@@ -287,6 +287,7 @@ function buildEnvironment(connectionString: string): ServerEnvironment {
     REVEAL_CONFIRMATION_KEYS: `v1:${secret(15)}`,
     PII_REVEAL_KEYS: `v1:${secret(16)}`,
     NOTIFICATION_DELIVERY_KEYS: `v1:${secret(17)}`,
+    NOTIFICATION_RECIPIENT_HASH_KEYS: `recipient-hash-v1:${secret(18)}`,
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",

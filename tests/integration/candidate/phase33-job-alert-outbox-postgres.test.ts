@@ -199,6 +199,7 @@ describe.sequential("Phase 33 durable job-alert delivery", () => {
         payloadSchemaVersion: "legacy-job-alert-v1",
         payload: { alertName: "Legacy", jobCount: 1 },
         dedupeKey: `phase33-forbidden-job-alert-mock:${alert.id}`,
+        createdAt: forbiddenMockAt,
         availableAt: forbiddenMockAt,
       }),
     );
@@ -256,6 +257,7 @@ describe.sequential("Phase 33 durable job-alert delivery", () => {
           payloadSchemaVersion: "job-alert-v1",
           payload: { alertName: `Widerruf ${index}`, jobCount: index },
           dedupeKey: `phase33-job-alert-revocation:${index}`,
+          createdAt: now,
           availableAt: now,
         });
       }

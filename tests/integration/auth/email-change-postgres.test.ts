@@ -320,20 +320,22 @@ describe.sequential("Phase 20 login e-mail change", () => {
       foreignUser.id,
       phase20Request(31),
     );
-    await requestLoginEmailChange(
-      {
-        userId: user.id,
-        sessionToken: ownerSession.token,
-        targetEmail: "email-change-cancel-target@example.test",
-        password: PHASE20_PASSWORD,
-      },
-      {
-        database: db(),
-        environment: env(),
-        request: phase20Request(32),
-        now: PHASE20_NOW,
-      },
-    );
+    await expect(
+      requestLoginEmailChange(
+        {
+          userId: user.id,
+          sessionToken: ownerSession.token,
+          targetEmail: "email-change-cancel-target@example.test",
+          password: PHASE20_PASSWORD,
+        },
+        {
+          database: db(),
+          environment: env(),
+          request: phase20Request(32),
+          now: PHASE20_NOW,
+        },
+      ),
+    ).resolves.toMatchObject({ ok: true, status: "PENDING" });
     await expect(
       cancelLoginEmailChange(
         { userId: user.id, sessionToken: foreignSession.token },

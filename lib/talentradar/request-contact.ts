@@ -897,6 +897,7 @@ export async function sendContactRequest(
         companyName: employer.companyName,
       },
       dedupeKey: `contact:${request.id}:email`,
+      createdAt: now,
       availableAt: now,
     });
     await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {

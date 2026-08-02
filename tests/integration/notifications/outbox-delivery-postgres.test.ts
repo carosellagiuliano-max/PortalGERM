@@ -78,6 +78,7 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
             emailChangeId: `20000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
           },
           dedupeKey: `phase20-batch:${index}`,
+          createdAt: PHASE20_NOW,
           availableAt: PHASE20_NOW,
         });
       }
@@ -144,8 +145,25 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
       recipient: { userId: recipient.id },
       templateKey: "login_email_changed_notice" as const,
       payloadSchemaVersion: "identity-v1",
+      createdAt: PHASE20_NOW,
       availableAt: PHASE20_NOW,
     };
+    await expect(
+      db().$transaction((transaction) =>
+        enqueueNotification(transaction, {
+          ...base,
+          createdAt: new Date(Number.NaN),
+          dedupeKey: "phase33-validation:created-at",
+          payload: {
+            emailChangeId: "20000000-0000-4000-8000-000000000046",
+          },
+        }),
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<NotificationOutboxInputError>>({
+        code: "CREATED_AT_INVALID",
+      }),
+    );
     await expect(
       db().$transaction((transaction) =>
         enqueueNotification(transaction, {
@@ -196,7 +214,9 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
   it("deduplicates an explicit recipient only when its keyed identity matches", async () => {
     const keyring = env().secrets.keyrings.NOTIFICATION_DELIVERY_KEYS;
     const hashKeyring = env().secrets.keyrings.NOTIFICATION_RECIPIENT_HASH_KEYS;
-    const recipientExpiresAt = new Date(Date.now() + 23 * 60 * 60_000);
+    const recipientExpiresAt = new Date(
+      PHASE20_NOW.getTime() + 23 * 60 * 60_000,
+    );
     const input = {
       recipient: {
         address: "outbox-dedupe-address-a@example.test",
@@ -211,6 +231,7 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
         statusLabel: "Abgeschlossen",
       },
       dedupeKey: "phase33-address-dedupe",
+      createdAt: PHASE20_NOW,
       availableAt: PHASE20_NOW,
     };
     await expect(
@@ -232,6 +253,12 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
     const first = await db().$transaction((transaction) =>
       enqueueNotification(transaction, input),
     );
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: first.id },
+        select: { createdAt: true },
+      }),
+    ).resolves.toEqual({ createdAt: PHASE20_NOW });
     await expect(
       db().$transaction((transaction) =>
         enqueueNotification(transaction, input),
@@ -284,6 +311,7 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
           statusLabel: "Abgeschlossen",
         },
         dedupeKey: "phase33-address-retention-lease",
+        createdAt: insertedAt,
         availableAt: insertedAt,
       }),
     );
@@ -1287,6 +1315,7 @@ async function enqueue(
       payloadSchemaVersion: "identity-v1",
       payload: { emailChangeId: "20000000-0000-4000-8000-000000000001" },
       dedupeKey,
+      createdAt: PHASE20_NOW,
       availableAt: PHASE20_NOW,
       maxAttempts,
     }),

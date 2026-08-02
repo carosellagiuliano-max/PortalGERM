@@ -1479,6 +1479,7 @@ async function notifyInterviewParticipants(
           timeLabel: input.timeLabel,
         },
         dedupeKey: `email:${input.dedupeKey}:${recipientUserId}`.slice(0, 160),
+        createdAt: now,
         availableAt: now,
       });
     }

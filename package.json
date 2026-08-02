@@ -17,7 +17,7 @@
     "typecheck": "npm run typegen && tsc --noEmit",
     "test": "tsx scripts/vitest-unit-suite.ts",
     "test:watch": "vitest --config vitest.config.ts",
-    "test:integration": "npm run env:validate && vitest run --config vitest.integration.config.ts",
+    "test:integration": "npm run env:validate && tsx scripts/vitest-integration-suite.ts",
     "test:e2e": "npm run test:e2e:http && npm run test:e2e:browser",
     "test:e2e:http": "tsx scripts/http-smoke.ts",
     "test:e2e:browser": "tsx scripts/phase17-browser-gate.ts",

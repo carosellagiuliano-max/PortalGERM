@@ -17,7 +17,10 @@ import { recordCandidateFreshnessReport } from "@/lib/jobs/freshness";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { recordAndDecideRiskSignal } from "@/lib/security/risk/risk-service";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import { createLogger } from "@/lib/utils/logger";
 import { trimmedString } from "@/lib/validation/common";
+
+const logger = createLogger();
 
 export const PUBLIC_REPORT_REASONS = [
   "MISLEADING",
@@ -242,9 +245,51 @@ export async function createResolvedAbuseReport(
       dependencies,
     ).catch(() => undefined);
     return Object.freeze({ ok: true, reportId: report.id });
-  } catch {
+  } catch (error) {
+    logger.error(
+      "public_abuse_report.write_failed",
+      {
+        error,
+        errorCode: safeDatabaseErrorReference(error),
+      },
+      dependencies.request.correlationId,
+    );
     return Object.freeze({ ok: false, code: "WRITE_FAILED" });
   }
+}
+
+function safeDatabaseErrorReference(error: unknown): string | undefined {
+  const references: string[] = [];
+  const seen = new Set<unknown>();
+  const visit = (current: unknown, depth: number) => {
+    if (
+      depth > 5 ||
+      !current ||
+      typeof current !== "object" ||
+      seen.has(current)
+    ) {
+      return;
+    }
+    seen.add(current);
+    for (const [key, value] of Object.entries(current)) {
+      if (
+        /(?:code|state|constraint)$/iu.test(key) &&
+        typeof value === "string" &&
+        /^[A-Z0-9_]{2,32}$/iu.test(value) &&
+        !references.includes(value)
+      ) {
+        references.push(value);
+      } else if (
+        key === "cause" ||
+        key === "meta" ||
+        key === "driverAdapterError"
+      ) {
+        visit(value, depth + 1);
+      }
+    }
+  };
+  visit(error, 0);
+  return references.length > 0 ? references.slice(0, 4).join(":") : undefined;
 }
 
 async function recordTrustSignalForReport(
@@ -325,6 +370,7 @@ async function enqueueAbuseReportAdminNotifications(
           categoryLabel: reasonLabel(input.reasonCode),
         },
         dedupeKey: `abuse-report:${input.reportId}:configured:${index}`,
+        createdAt: input.availableAt,
         availableAt: input.availableAt,
       });
     }
@@ -347,6 +393,7 @@ async function enqueueAbuseReportAdminNotifications(
         categoryLabel: reasonLabel(input.reasonCode),
       },
       dedupeKey: `abuse-report:${input.reportId}:admin:${admin.id}`,
+      createdAt: input.availableAt,
       availableAt: input.availableAt,
     });
   }
