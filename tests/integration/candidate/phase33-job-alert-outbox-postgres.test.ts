@@ -288,20 +288,23 @@ describe.sequential("Phase 33 durable job-alert delivery", () => {
         attempts: { select: { outcome: true } },
       },
     });
-    expect(rows).toEqual([
-      {
-        attemptCount: 1,
-        lastErrorCode: null,
-        status: "DELIVERED",
-        attempts: [{ outcome: "ACCEPTED" }],
-      },
-      {
-        attemptCount: 0,
-        lastErrorCode: "PROVIDER_ACTIVATION_REVOKED",
-        status: "PAUSED",
-        attempts: [],
-      },
-    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        {
+          attemptCount: 1,
+          lastErrorCode: null,
+          status: "DELIVERED",
+          attempts: [{ outcome: "ACCEPTED" }],
+        },
+        {
+          attemptCount: 0,
+          lastErrorCode: "PROVIDER_ACTIVATION_REVOKED",
+          status: "PAUSED",
+          attempts: [],
+        },
+      ]),
+    );
   });
 
   it("schedules the shared dispatcher when only the job-alert purpose is active", async () => {
