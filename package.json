@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "typegen": "next typegen",
     "typecheck": "npm run typegen && tsc --noEmit",
-    "test": "vitest run --config vitest.config.ts",
+    "test": "tsx scripts/vitest-unit-suite.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:integration": "npm run env:validate && vitest run --config vitest.integration.config.ts",
     "test:e2e": "npm run test:e2e:http && npm run test:e2e:browser",

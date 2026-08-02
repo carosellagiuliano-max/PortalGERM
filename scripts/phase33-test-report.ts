@@ -36,6 +36,7 @@ import {
   phase33TestReportSchema,
   type Phase33TestReport,
 } from "@/lib/release/phase33-test-report-contract";
+import { assertPhase33TestCommandOutput } from "@/lib/release/phase33-test-output-policy";
 import {
   PHASE33_RELEASE_POLICY_VERSION,
   PHASE33_TECHNICAL_GATE_IDS,
@@ -804,11 +805,8 @@ async function runRecordedCommand(
     throw new Error(`PHASE33_GATE_COMMAND_FAILED:${input.id}:EXIT_${exitCode}`);
   }
   const output = await readFile(input.logPath);
-  if (
-    TEST_COMMAND_IDS.has(input.id) &&
-    /\b(?:[1-9]\d*)\s+(?:skipped|pending)\b/iu.test(output.toString())
-  ) {
-    throw new Error(`PHASE33_UNEXPLAINED_SKIP:${input.id}`);
+  if (TEST_COMMAND_IDS.has(input.id)) {
+    assertPhase33TestCommandOutput(input.id, output.toString("utf8"));
   }
   return Object.freeze({
     id: input.id,

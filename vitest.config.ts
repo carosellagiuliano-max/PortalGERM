@@ -13,10 +13,10 @@ export default defineConfig({
     setupFiles: ["./tests/vitest.setup.ts"],
     clearMocks: true,
     restoreMocks: true,
-    // The 310-file suite keeps fork isolation, so Vitest starts a fresh Node
-    // process per file. One worker prevents concurrent clean-clone/jsdom
-    // startup pressure from losing a file before collection on Windows while
-    // preserving every test, assertion and per-test timeout.
+    // Keep process isolation and one worker. The package-level unit runner
+    // closes and recreates the Vitest pool in sixteen deterministic shards so
+    // the growing Windows/jsdom suite cannot silently lose a late file to process
+    // startup pressure. Targeted invocations still run exactly once.
     maxWorkers: 1,
     coverage: {
       reporter: ["text", "json-summary"],
