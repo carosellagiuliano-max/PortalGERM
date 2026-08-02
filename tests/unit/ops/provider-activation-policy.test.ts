@@ -96,4 +96,31 @@ describe("Phase-23 provider activation policy", () => {
       reason: "ENVIRONMENT_MODE_FORBIDDEN",
     });
   });
+
+  it.each([
+    [
+      { expectedMode: "LIVE" as const },
+      "ACTIVATION_MODE_MISMATCH",
+    ],
+    [
+      { expectedConfigurationDigest: "c".repeat(64) },
+      "CONFIGURATION_MISMATCH",
+    ],
+    [
+      { expectedSecretVersionRef: "kms:email:v2" },
+      "SECRET_VERSION_MISMATCH",
+    ],
+  ])("binds runtime authority to the expected provider evidence", (expected, reason) => {
+    expect(
+      resolveProviderActivation({
+        activation: completeActivation,
+        adapterKey: "resend_sandbox",
+        adapterVersion: "v1",
+        environment: "staging",
+        useCase: "email.transactional",
+        now: NOW,
+        ...expected,
+      }),
+    ).toEqual({ active: false, reason });
+  });
 });

@@ -18,8 +18,8 @@ import {
   isJobPubliclyEligibleInTransaction,
   type PublicEligibilityEnvironment,
 } from "@/lib/jobs/public-eligibility";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import type { EmailProvider } from "@/lib/providers/email";
-import { renderEmailTemplate } from "@/lib/providers/email/templates";
 
 export const BOOST_POLICY_V1 = Object.freeze({
   creditDurationDays: 7,
@@ -405,6 +405,18 @@ export async function activateBoostWithCredit(
       now,
       productSlug: undefined,
     });
+    await enqueueNotification(transaction, {
+      recipient: { userId: dependencies.actor.userId },
+      templateKey: "job_boost_activated",
+      payloadSchemaVersion: "job-boost-v1",
+      payload: {
+        boostId: boost.id,
+        jobId: parsed.data.jobId,
+        jobTitle: eligibility.jobTitle,
+      },
+      dedupeKey: `boost:${boost.id}:activated`,
+      availableAt: now,
+    });
     return boostSuccess({
       boostId: boost.id,
       jobId: parsed.data.jobId,
@@ -415,12 +427,6 @@ export async function activateBoostWithCredit(
       sourceValidTo: grant.validTo,
     });
   });
-  if (result.ok && result.replay !== true) {
-    await sendBoostActivatedEmail(dependencies.emailProvider, dependencies.actor.email, {
-      jobTitle: result.value.jobTitle,
-      idempotencyKey: `boost:${result.value.boostId}:activated`,
-    });
-  }
   return result;
 }
 
@@ -714,25 +720,6 @@ export async function writeBoostActivatedEvidence(
     },
     createPrismaTransactionAnalyticsWriter(transaction),
   );
-}
-
-export async function sendBoostActivatedEmail(
-  provider: EmailProvider,
-  to: string,
-  data: Readonly<{ jobTitle: string; idempotencyKey: string }>,
-): Promise<boolean> {
-  try {
-    const rendered = renderEmailTemplate("job_boost_activated", data);
-    await provider.send({
-      to,
-      templateKey: "job_boost_activated",
-      data: { ...data },
-      subject: rendered.subject,
-    });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function loadBoostProducts(

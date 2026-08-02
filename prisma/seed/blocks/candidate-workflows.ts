@@ -46,7 +46,7 @@ import {
   defaultJobAlertQuery,
   firstJobAlertDueAt,
   jobAlertConsentNoticeHash,
-  JOB_ALERT_DELIVERY_NOTICE_V1,
+  JOB_ALERT_DELIVERY_NOTICE_V2,
   JOB_ALERT_POLICY_V1,
   nextJobAlertDueAt,
 } from "@/lib/candidate/job-alert-policy";
@@ -942,10 +942,10 @@ async function seedPhase14RadarEvidence(
     PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT,
   );
 
-  if (
-    eligibleCandidates.length !== PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT
-  ) {
-    throw new Error("Phase-14 Radar evidence requires ten eligible candidates.");
+  if (eligibleCandidates.length !== PHASE_14_ELIGIBLE_RADAR_CANDIDATE_COUNT) {
+    throw new Error(
+      "Phase-14 Radar evidence requires ten eligible candidates.",
+    );
   }
 
   for (const company of companies) {
@@ -974,8 +974,7 @@ async function seedPhase14RadarEvidence(
         entity: "RadarOpaqueMapping",
         naturalKey,
         expected,
-        findExisting: () =>
-          db.radarOpaqueMapping.findUnique({ where: { id } }),
+        findExisting: () => db.radarOpaqueMapping.findUnique({ where: { id } }),
         create: () => {
           const { envelope } = encryptRadarOpaqueToken(
             crypto.radarLookupKeys,
@@ -1064,8 +1063,7 @@ async function seedPhase14RadarEvidence(
       expected: sessionExpected,
       findExisting: () =>
         db.radarSearchSession.findUnique({ where: { id: sessionId } }),
-      create: () =>
-        db.radarSearchSession.create({ data: sessionExpected }),
+      create: () => db.radarSearchSession.create({ data: sessionExpected }),
     });
 
     for (const [position, candidate] of eligibleCandidates.entries()) {
@@ -1086,8 +1084,7 @@ async function seedPhase14RadarEvidence(
         expected,
         findExisting: () =>
           db.radarSearchSessionCandidate.findUnique({ where: { id } }),
-        create: () =>
-          db.radarSearchSessionCandidate.create({ data: expected }),
+        create: () => db.radarSearchSessionCandidate.create({ data: expected }),
       });
     }
   }
@@ -1679,8 +1676,8 @@ async function seedJobAlerts(
         userId: candidate.userId,
         kind: UserConsentKind.JOB_ALERT_DELIVERY,
         granted: true,
-        purpose: JOB_ALERT_DELIVERY_NOTICE_V1.purpose,
-        noticeVersion: JOB_ALERT_DELIVERY_NOTICE_V1.version,
+        purpose: JOB_ALERT_DELIVERY_NOTICE_V2.purpose,
+        noticeVersion: JOB_ALERT_DELIVERY_NOTICE_V2.version,
         noticeHash: jobAlertConsentNoticeHash(),
         actorUserId: candidate.userId,
         effectiveAt: consentAt,
@@ -2064,8 +2061,7 @@ async function seedContactCreditFunding(
 
   const phase14Company = companies[0] as CandidateWorkflowCompanyHandle;
   const phase14AccountId = accountIds.get(0) as string;
-  const phase14GrantNaturalKey =
-    `candidate-workflows:${phase14Company.slug}:phase14-grant`;
+  const phase14GrantNaturalKey = `candidate-workflows:${phase14Company.slug}:phase14-grant`;
   const phase14GrantId = stableSeedId(
     "credit-ledger-entry",
     phase14GrantNaturalKey,
@@ -2094,8 +2090,7 @@ async function seedContactCreditFunding(
     expected: phase14GrantExpected,
     findExisting: () =>
       db.creditLedgerEntry.findUnique({ where: { id: phase14GrantId } }),
-    create: () =>
-      db.creditLedgerEntry.create({ data: phase14GrantExpected }),
+    create: () => db.creditLedgerEntry.create({ data: phase14GrantExpected }),
   });
 
   for (const request of CONTACT_REQUEST_FIXTURES) {
@@ -2259,9 +2254,7 @@ async function seedContactRequestsAndConversations(
       messagePreview:
         "Fiktive Kontaktanfrage: Wir würden gerne über eine passende Demo-Rolle sprechen.",
       idempotencyKey: `seed:${request.key}`,
-      commandFingerprint: sha256Utf8(
-        `phase14-legacy-contact-command:${id}`,
-      ),
+      commandFingerprint: sha256Utf8(`phase14-legacy-contact-command:${id}`),
       status,
       fundingSource: CreditFundingSource.ADMIN_GRANT,
       clusterPolicyVersion: "radar-cluster-v1",
@@ -2277,13 +2270,14 @@ async function seedContactRequestsAndConversations(
       expected,
       findExisting: () =>
         db.employerContactRequest.findUnique({ where: { id } }),
-      create: () => db.employerContactRequest.create({
-        data: {
-          ...expected,
-          radarSearchSessionId: contactSessionId,
-          subject: "Talent Radar Kontaktanfrage",
-        },
-      }),
+      create: () =>
+        db.employerContactRequest.create({
+          data: {
+            ...expected,
+            radarSearchSessionId: contactSessionId,
+            subject: "Talent Radar Kontaktanfrage",
+          },
+        }),
     });
     requests.push(Object.freeze({ id, status: request.status }));
 
@@ -2700,8 +2694,7 @@ async function seedIdentityRevealGrant(
               data: {
                 ...expected,
                 previewHmac: preview.evidence.previewHmac,
-                confirmationKeyVersion:
-                  preview.evidence.confirmationKeyVersion,
+                confirmationKeyVersion: preview.evidence.confirmationKeyVersion,
                 confirmationTokenDigest: sha256Utf8(
                   `seed:reveal-token:${naturalKey}`,
                 ),
@@ -2906,13 +2899,7 @@ export async function seedCandidateWorkflows(
     companies,
     crypto,
   );
-  await seedPhase14RadarEvidence(
-    db,
-    anchorAt,
-    candidates,
-    companies,
-    crypto,
-  );
+  await seedPhase14RadarEvidence(db, anchorAt, candidates, companies, crypto);
 
   const applications: Array<
     Readonly<{

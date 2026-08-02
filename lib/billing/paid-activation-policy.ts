@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 
 import type { OperationsActivationMode } from "@/lib/generated/prisma/client";
 import type { ProviderActivationDecision } from "@/lib/ops/provider-activation-policy";
+import type {
+  PaymentRuntimeMode,
+  StripePaymentAdapterKey,
+} from "@/lib/providers/payments";
 
 export const PAID_CHECKOUT_POLICY_V1 = Object.freeze({
   scopeCode: "LC5_PAID_SELF_SERVICE",
@@ -9,7 +13,13 @@ export const PAID_CHECKOUT_POLICY_V1 = Object.freeze({
   stepUpPurpose: "PAID_CHECKOUT",
   stepUpMaximumAgeMilliseconds: 10 * 60_000,
   checkoutTtlMilliseconds: 30 * 60_000,
-  supportedEnvironments: Object.freeze(["local", "ci", "staging"] as const),
+  supportedEnvironments: Object.freeze([
+    "local",
+    "ci",
+    "preview",
+    "staging",
+    "production",
+  ] as const),
 });
 
 export type PaidScopeDecisionRecord = Readonly<{
@@ -26,7 +36,7 @@ export type PaidScopeDecisionRecord = Readonly<{
 export type PaidCheckoutActivationDecision =
   | Readonly<{
       active: true;
-      mode: "SANDBOX";
+      mode: PaymentRuntimeMode;
       paidScopeDecisionId: string;
     }>
   | Readonly<{
@@ -42,7 +52,7 @@ export type PaidCheckoutActivationDecision =
         | "WTP_EXPIRED"
         | "WTP_MODE_FORBIDDEN"
         | "PROVIDER_INACTIVE"
-        | "PROVIDER_NOT_SANDBOX";
+        | "PROVIDER_MODE_MISMATCH";
     }>;
 
 export function resolvePaidCheckoutActivation(
@@ -51,6 +61,7 @@ export function resolvePaidCheckoutActivation(
     now: Date;
     packageCode: string;
     paidSelfServiceEnabled: boolean;
+    providerMode: PaymentRuntimeMode;
     provider: ProviderActivationDecision;
     sandboxCohort: string;
     scopeDecision: PaidScopeDecisionRecord | null;
@@ -59,16 +70,20 @@ export function resolvePaidCheckoutActivation(
   if (!input.paidSelfServiceEnabled) {
     return inactive("PAID_SELF_SERVICE_DISABLED");
   }
-  if (input.sandboxCohort !== "test") {
+  if (
+    (input.providerMode === "LIVE" && input.sandboxCohort !== "none") ||
+    (input.providerMode !== "LIVE" && input.sandboxCohort !== "test")
+  ) {
     return inactive("SANDBOX_COHORT_REQUIRED");
   }
   if (
     !PAID_CHECKOUT_POLICY_V1.supportedEnvironments.some(
       (environment) => environment === input.environment,
     ) ||
-    input.environment === "staging"
+    (input.providerMode === "SANDBOX" &&
+      !["local", "ci", "staging"].includes(input.environment)) ||
+    (input.providerMode === "LIVE" && input.environment !== "production")
   ) {
-    // Phase 24 has no user-facing staging cohort until external gates exist.
     return inactive("ENVIRONMENT_FORBIDDEN");
   }
   const decision = input.scopeDecision;
@@ -86,16 +101,19 @@ export function resolvePaidCheckoutActivation(
   if (input.now.getTime() >= decision.expiresAt.getTime()) {
     return inactive("WTP_EXPIRED");
   }
-  if (decision.maximumMode !== "SANDBOX") {
+  if (
+    activationModeRank(decision.maximumMode) <
+    activationModeRank(expectedActivationMode(input.providerMode))
+  ) {
     return inactive("WTP_MODE_FORBIDDEN");
   }
   if (!input.provider.active) return inactive("PROVIDER_INACTIVE");
-  if (input.provider.mode !== "SANDBOX") {
-    return inactive("PROVIDER_NOT_SANDBOX");
+  if (input.provider.mode !== expectedActivationMode(input.providerMode)) {
+    return inactive("PROVIDER_MODE_MISMATCH");
   }
   return Object.freeze({
     active: true,
-    mode: "SANDBOX" as const,
+    mode: input.providerMode,
     paidScopeDecisionId: decision.id,
   });
 }
@@ -107,6 +125,13 @@ export function realPaymentQuoteDigest(
     currency: "CHF";
     description: string;
     orderId: string;
+    adapterKey: StripePaymentAdapterKey;
+    checkoutKind: "SUBSCRIPTION";
+    paymentPriceBindingId: string;
+    planVersionId: string;
+    providerAccountReference: string;
+    providerMode: PaymentRuntimeMode;
+    providerPriceReference: string;
   }>,
 ): string {
   if (
@@ -124,11 +149,36 @@ export function realPaymentQuoteDigest(
         currency: input.currency,
         description: input.description,
         orderId: input.orderId,
-        policyVersion: "phase24-v1",
+        adapterKey: input.adapterKey,
+        checkoutKind: input.checkoutKind,
+        paymentPriceBindingId: input.paymentPriceBindingId,
+        planVersionId: input.planVersionId,
+        providerAccountReference: input.providerAccountReference,
+        providerMode: input.providerMode,
+        providerPriceReference: input.providerPriceReference,
+        policyVersion: "phase33-v1",
       }),
       "utf8",
     )
     .digest("hex");
+}
+
+function expectedActivationMode(mode: PaymentRuntimeMode) {
+  return mode === "CONTRACT"
+    ? ("ALLOWLIST" as const)
+    : mode === "SANDBOX"
+      ? ("SANDBOX" as const)
+      : ("LIVE" as const);
+}
+
+function activationModeRank(mode: OperationsActivationMode) {
+  return mode === "DISABLED"
+    ? 0
+    : mode === "SANDBOX"
+      ? 1
+      : mode === "ALLOWLIST"
+        ? 2
+        : 3;
 }
 
 export function checkoutStepUpAction(quoteDigest: string): string {

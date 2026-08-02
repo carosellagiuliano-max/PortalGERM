@@ -28,6 +28,7 @@ import type {
   Role,
 } from "@/lib/generated/prisma/client";
 import { enqueueNotification } from "@/lib/notifications/outbox";
+import { notificationRecipientMaterialExpiresAt } from "@/lib/notifications/retention";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 import {
@@ -64,10 +65,7 @@ export async function createInitialEmailVerification(
   input: Readonly<{
     userId: string;
     emailNormalized: string;
-    purpose?: Extract<
-      EmailVerificationPurpose,
-      "REGISTRATION" | "INVITATION"
-    >;
+    purpose?: Extract<EmailVerificationPurpose, "REGISTRATION" | "INVITATION">;
     addressEpoch?: number;
     now: Date;
     correlationId: string;
@@ -422,6 +420,10 @@ export async function consumeEmailVerification(
               keyring:
                 dependencies.environment.secrets.keyrings
                   .NOTIFICATION_DELIVERY_KEYS,
+              hashKeyring:
+                dependencies.environment.secrets.keyrings
+                  .NOTIFICATION_RECIPIENT_HASH_KEYS,
+              retentionUntil: notificationRecipientMaterialExpiresAt(now),
             },
             templateKey: "login_email_changed_notice",
             payloadSchemaVersion: "identity-v1",
@@ -670,14 +672,22 @@ export async function createChallenge(
       ? "login_email_change_verification"
       : "identity_verification";
   const outbox = await enqueueNotification(transaction, {
-    recipient: input.recipient,
+    recipient:
+      "address" in input.recipient
+        ? {
+            ...input.recipient,
+            hashKeyring:
+              input.environment.secrets.keyrings
+                .NOTIFICATION_RECIPIENT_HASH_KEYS,
+            retentionUntil: expiresAt,
+          }
+        : input.recipient,
     templateKey,
     payloadSchemaVersion: "identity-v1",
     payload: {
       challengeId: challenge.id,
       purpose: input.purpose,
-      expiresInMinutes:
-        EMAIL_VERIFICATION_POLICY_V1.ttlMilliseconds / 60_000,
+      expiresInMinutes: EMAIL_VERIFICATION_POLICY_V1.ttlMilliseconds / 60_000,
     },
     dedupeKey: `email-verification:${challenge.id}`,
     availableAt: input.now,
@@ -694,26 +704,23 @@ export async function createChallenge(
     occurredAt: input.now,
   });
   if (input.auditRequested !== false) {
-    await writeRequiredAudit(
-      createPrismaTransactionAuditPort(transaction),
-      {
-        action:
-          input.purpose === "LOGIN_EMAIL_CHANGE"
-            ? "LOGIN_EMAIL_CHANGE_REQUESTED"
-            : "EMAIL_VERIFICATION_REQUESTED",
-        actorKind: "USER",
-        actorUserId: input.userId,
-        capability:
-          input.purpose === "LOGIN_EMAIL_CHANGE"
-            ? "AUTH_LOGIN_EMAIL_CHANGE"
-            : "AUTH_EMAIL_VERIFICATION_RESEND",
-        correlationId: input.correlationId,
-        result: "SUCCEEDED",
-        retainUntil: auditRetainUntil(input.now),
-        targetId: challenge.id,
-        targetType: "VERIFICATION_REQUEST",
-      },
-    );
+    await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
+      action:
+        input.purpose === "LOGIN_EMAIL_CHANGE"
+          ? "LOGIN_EMAIL_CHANGE_REQUESTED"
+          : "EMAIL_VERIFICATION_REQUESTED",
+      actorKind: "USER",
+      actorUserId: input.userId,
+      capability:
+        input.purpose === "LOGIN_EMAIL_CHANGE"
+          ? "AUTH_LOGIN_EMAIL_CHANGE"
+          : "AUTH_EMAIL_VERIFICATION_RESEND",
+      correlationId: input.correlationId,
+      result: "SUCCEEDED",
+      retainUntil: auditRetainUntil(input.now),
+      targetId: challenge.id,
+      targetType: "VERIFICATION_REQUEST",
+    });
   }
   return Object.freeze({
     challengeId: challenge.id,

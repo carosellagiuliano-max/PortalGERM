@@ -160,6 +160,15 @@ export async function runJobAlertDigestMockAction(
   const security = await secureCandidateMutation();
   if (!security.ok) return security.state;
   if (!isEmptyForm(formData)) return invalidFormState();
+  const environment = getServerEnvironment();
+  if (
+    environment.EMAIL_PROVIDER_MODE !== "local_mock" ||
+    (environment.APP_ENV !== "local" && environment.APP_ENV !== "ci")
+  ) {
+    return errorState(
+      "Der manuelle Mock-Digest ist nur in der lokalen Testumgebung verfügbar.",
+    );
+  }
   try {
     const result = await runJobAlertDigestMock({
       now: new Date(),

@@ -41,6 +41,9 @@ describe("Phase 24 real hosted checkout", () => {
       totalRappen: PHASE24_STARTER_TOTAL_RAPPEN,
     });
     expect(order.lines).toHaveLength(1);
+    expect(order.expiresAt).toEqual(
+      new Date(fixture.now.getTime() + 35 * 60_000),
+    );
     expect(attempt).toMatchObject({
       amountRappen: PHASE24_STARTER_TOTAL_RAPPEN,
       currency: "CHF",
@@ -48,12 +51,14 @@ describe("Phase 24 real hosted checkout", () => {
       paidScopeDecisionId: fixture.scopeDecisionId,
       providerActivationId: fixture.providerActivationId,
       status: "CHECKOUT_CREATED",
+      expiresAt: order.expiresAt,
     });
     expect(fixture.provider.checkoutInputs).toHaveLength(1);
     expect(fixture.provider.checkoutInputs[0]?.authoritative).toMatchObject({
       amountRappen: PHASE24_STARTER_TOTAL_RAPPEN,
       currency: "CHF",
       paymentAttemptId: checkout.paymentAttemptId,
+      expiresAt: order.expiresAt,
     });
   });
 });

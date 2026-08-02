@@ -15,6 +15,9 @@ import {
   PHASE18_ALL_ROUTES_QUALITY_FILE,
   PHASE26_COMPANY_TRUST_QUALITY_FILE,
   PHASE32_LC1_BROWSER_PROJECTS,
+  PHASE33_EMPLOYER_RECRUITER_FLOW_FILE,
+  PHASE33_PRIVILEGED_OPERATIONS_FLOW_FILE,
+  PHASE33_PUBLIC_CANDIDATE_FLOW_FILE,
   type Phase17RunIdentity,
   validatePhase17RunManifest,
 } from "@/tests/e2e/manifest-contract";
@@ -73,6 +76,25 @@ describe("Phase 17 manifest contract", () => {
         expectedIdentity: identityFromManifest(manifest),
       }),
     ).not.toThrow();
+  });
+
+  it("accepts exactly the nine Phase-33 journey/browser combinations", () => {
+    const manifest = phase33TargetManifest();
+    expect(() =>
+      validatePhase17RunManifest(manifest, {
+        mode: "phase33-targeted",
+        expectedIdentity: identityFromManifest(manifest),
+      }),
+    ).not.toThrow();
+
+    manifest.quality.pop();
+    manifest.counts = resultCounts({ passed: 8 });
+    expect(() =>
+      validatePhase17RunManifest(manifest, {
+        mode: "phase33-targeted",
+        expectedIdentity: identityFromManifest(manifest),
+      }),
+    ).toThrow(/Phase 33 .* has 0 result\(s\), expected exactly one/u);
   });
 
   it("rejects Chromium-only Phase 32 LC1 evidence", () => {
@@ -446,6 +468,37 @@ function validFullManifest() {
 
 function phase32Lc1TargetManifest() {
   return retainProjects(validFullManifest(), PHASE32_LC1_BROWSER_PROJECTS);
+}
+
+function phase33TargetManifest() {
+  const manifest = validFullManifest();
+  const phase33Files = new Set([
+    PHASE33_PUBLIC_CANDIDATE_FLOW_FILE,
+    PHASE33_EMPLOYER_RECRUITER_FLOW_FILE,
+    PHASE33_PRIVILEGED_OPERATIONS_FLOW_FILE,
+  ]);
+  const quality = manifest.quality.filter(
+    ({ file, project }) =>
+      phase33Files.has(
+        file as
+          | typeof PHASE33_PUBLIC_CANDIDATE_FLOW_FILE
+          | typeof PHASE33_EMPLOYER_RECRUITER_FLOW_FILE
+          | typeof PHASE33_PRIVILEGED_OPERATIONS_FLOW_FILE,
+      ) &&
+      PHASE32_LC1_BROWSER_PROJECTS.includes(
+        project as (typeof PHASE32_LC1_BROWSER_PROJECTS)[number],
+      ),
+  );
+  return {
+    ...manifest,
+    runtime: {
+      ...manifest.runtime,
+      projects: [...PHASE32_LC1_BROWSER_PROJECTS],
+    },
+    counts: resultCounts({ passed: quality.length }),
+    cases: manifest.cases.map((entry) => ({ ...entry, results: [] })),
+    quality,
+  };
 }
 
 function retainProjects(

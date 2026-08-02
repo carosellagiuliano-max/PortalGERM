@@ -7,6 +7,11 @@ import {
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { resolveProviderActivation } from "@/lib/ops/provider-activation-policy";
+import {
+  getHostedPaymentRuntime,
+  getStripeContractEndpoint,
+} from "@/lib/providers/payments/payment-composition";
+import { stripePaymentConfigurationDigest } from "@/lib/providers/payments";
 
 export type PaidCheckoutAvailability = Readonly<{
   activation: PaidCheckoutActivationDecision;
@@ -24,6 +29,14 @@ export async function getPaidCheckoutAvailability(
   packageCode: "STARTER" | "PRO",
   now: Date,
 ): Promise<PaidCheckoutAvailability> {
+  const runtime = getHostedPaymentRuntime(environment);
+  const contractEndpoint = getStripeContractEndpoint(environment);
+  const providerConfigurationReady =
+    runtime !== null &&
+    environment.STRIPE_ACCOUNT_ID !== undefined &&
+    environment.STRIPE_SECRET_VERSION !== undefined &&
+    (runtime.adapterKey !== "stripe_contract" ||
+      contractEndpoint !== undefined);
   const [scopeDecision, providerActivation] = await Promise.all([
     database.paidScopeDecision.findFirst({
       where: {
@@ -42,9 +55,21 @@ export async function getPaidCheckoutAvailability(
   ]);
   const provider = resolveProviderActivation({
     activation: providerActivation,
-    adapterKey: "stripe_sandbox",
-    adapterVersion: "v1",
+    adapterKey: runtime?.adapterKey ?? "payment_disabled",
+    adapterVersion: runtime?.adapterVersion ?? "v1",
     environment: environment.APP_ENV,
+    expectedConfigurationDigest: providerConfigurationReady
+      ? stripePaymentConfigurationDigest({
+          ...(runtime!.adapterKey === "stripe_contract"
+            ? { contractEndpoint }
+            : {}),
+          providerAccountReference: environment.STRIPE_ACCOUNT_ID!,
+          runtime: runtime!,
+        })
+      : "PAYMENT_CONFIGURATION_MISSING",
+    ...(runtime === null ? {} : { expectedMode: runtime.activationMode }),
+    expectedSecretVersionRef:
+      environment.STRIPE_SECRET_VERSION ?? "PAYMENT_SECRET_VERSION_MISSING",
     now,
     useCase: "payments.hosted-checkout",
   });
@@ -54,13 +79,14 @@ export async function getPaidCheckoutAvailability(
     packageCode,
     paidSelfServiceEnabled: environment.PAID_SELF_SERVICE,
     provider,
+    providerMode: runtime?.providerMode ?? "SANDBOX",
     sandboxCohort: environment.PAYMENT_SANDBOX_COHORT,
     scopeDecision,
   });
   return Object.freeze({
     activation,
     packageCode,
-    providerConfigured: environment.PAYMENT_PROVIDER_MODE === "stripe_sandbox",
+    providerConfigured: providerConfigurationReady,
     providerLedgerPresent: providerActivation !== null,
     selfServiceFlag: environment.PAID_SELF_SERVICE,
     stepUpReady: false as const,

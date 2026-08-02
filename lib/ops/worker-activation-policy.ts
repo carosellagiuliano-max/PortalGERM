@@ -9,6 +9,8 @@ export type WorkerRuntimeMode =
   | "autonomous";
 
 export type WorkerHandlerActivationRecord = Readonly<{
+  id: string;
+  generation: number;
   batchSize: number;
   configurationDigest: string;
   deploymentDigest: string;
@@ -37,6 +39,8 @@ export type WorkerHandlerActivationDecision =
       active: true;
       mode: Exclude<OperationsActivationMode, "DISABLED">;
       policy: Readonly<{
+        activationId: string;
+        activationGeneration: number;
         batchSize: number;
         heartbeatMilliseconds: number;
         leaseMilliseconds: number;
@@ -103,6 +107,11 @@ export function resolveWorkerHandlerActivation(input: Readonly<{
     return inactive("DEPLOYMENT_MISMATCH");
   }
   if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+      activation.id,
+    ) ||
+    !Number.isSafeInteger(activation.generation) ||
+    activation.generation < 1 ||
     !DIGEST_PATTERN.test(activation.configurationDigest) ||
     !DIGEST_PATTERN.test(activation.evidenceDigest) ||
     activation.owner.trim().length < 2 ||
@@ -124,6 +133,8 @@ export function resolveWorkerHandlerActivation(input: Readonly<{
     active: true,
     mode: activation.mode,
     policy: Object.freeze({
+      activationId: activation.id,
+      activationGeneration: activation.generation,
       batchSize: activation.batchSize,
       heartbeatMilliseconds: activation.heartbeatMilliseconds,
       leaseMilliseconds: activation.leaseMilliseconds,

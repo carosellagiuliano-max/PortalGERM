@@ -831,7 +831,10 @@ export async function requestPasswordReset(
         );
         return created;
       });
-      if (!dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+      if (
+        !dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS &&
+        dependencies.environment.EMAIL_PROVIDER_MODE === "local_mock"
+      ) {
         const resetUrl = new URL(
           "/reset-password",
           dependencies.environment.APP_URL,

@@ -28,6 +28,7 @@ import {
   phase20Environment,
   phase20Request,
 } from "@/tests/fixtures/phase20-identity";
+import { activatePhase33SandboxEmailUseCases } from "@/tests/fixtures/phase33-provider-activation";
 
 type Migrated = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 let migrated: Migrated | undefined;
@@ -43,6 +44,12 @@ beforeAll(async () => {
     NOTIFICATION_DISPATCH: "command",
     OPTIONAL_EMAIL: "true",
   });
+  await activatePhase33SandboxEmailUseCases(
+    database,
+    environment,
+    ["email.transactional", "email.job-alert"],
+    PHASE20_NOW,
+  );
 });
 
 afterAll(async () => {

@@ -135,6 +135,19 @@ describe("parseEnvironment", () => {
     );
   });
 
+  it("bounds retained notification keys so a 50-recipient webhook fits the inbox contract", () => {
+    expectValidationFailure(
+      {
+        NOTIFICATION_RECIPIENT_HASH_KEYS: Array.from(
+          { length: 6 },
+          (_, index) =>
+            `recipient-hash-v${index + 1}:${keyMaterial(index + 20)}`,
+        ).join(","),
+      },
+      "must contain at most 5 retained keys",
+    );
+  });
+
   it("rejects reused key material across every secret and keyring", () => {
     expectValidationFailure(
       { RADAR_OPAQUE_LOOKUP_KEYS: `lookup-v1:${keyMaterial(2)}` },
@@ -339,6 +352,49 @@ describe("parseEnvironment", () => {
       }),
     );
     expect(environment.APP_URL).toBe("http://127.0.0.1:3000");
+  });
+
+  it("permits only the exact loopback-bound Phase-33 local/mock production-build contract", () => {
+    const exact = parseEnvironment(
+      createValidEnvironment({
+        APP_ENV: "local",
+        NODE_ENV: "production",
+        APP_URL: "http://127.0.0.1:3300",
+        APP_BUILD_ID: "a".repeat(40),
+        ENABLE_LOCAL_MOCK_MAILBOX: "true",
+        PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT: "true",
+        DEV_MAILBOX_SECRET: Buffer.alloc(40, 33).toString("base64"),
+        EMAIL_PROVIDER_MODE: "local_mock",
+        NOTIFICATION_OUTBOX_PRODUCERS: "true",
+        NOTIFICATION_DISPATCH: "command",
+        NOTIFICATION_DELIVERY_KEYS: `notification-v1:${keyMaterial(33)}`,
+      }),
+    );
+    expect(exact.PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT).toBe(true);
+
+    for (const override of [
+      { APP_URL: "http://192.0.2.10:3300" },
+      { APP_BUILD_ID: "not-a-full-candidate" },
+      { PAYMENT_PROVIDER_MODE: "stripe_sandbox" },
+    ]) {
+      expectValidationFailure(
+        {
+          APP_ENV: "local",
+          NODE_ENV: "production",
+          APP_URL: "http://127.0.0.1:3300",
+          APP_BUILD_ID: "a".repeat(40),
+          ENABLE_LOCAL_MOCK_MAILBOX: "true",
+          PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT: "true",
+          DEV_MAILBOX_SECRET: Buffer.alloc(40, 33).toString("base64"),
+          EMAIL_PROVIDER_MODE: "local_mock",
+          NOTIFICATION_OUTBOX_PRODUCERS: "true",
+          NOTIFICATION_DISPATCH: "command",
+          NOTIFICATION_DELIVERY_KEYS: `notification-v1:${keyMaterial(33)}`,
+          ...override,
+        },
+        "requires the exact loopback-only Phase-33 Local production-build contract",
+      );
+    }
   });
 
   it("keeps the Phase-23 worker and replay gates paused by default", () => {

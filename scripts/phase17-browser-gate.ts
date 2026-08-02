@@ -27,6 +27,9 @@ import { PHASE17_FIXTURE_VERSION } from "@/tests/e2e/phase17-cases";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 import {
   PHASE17_NETWORK_POLICY,
+  PHASE33_EMPLOYER_RECRUITER_FLOW_FILE,
+  PHASE33_PRIVILEGED_OPERATIONS_FLOW_FILE,
+  PHASE33_PUBLIC_CANDIDATE_FLOW_FILE,
   validatePhase17RunManifest,
   type Phase17ManifestValidationMode,
   type Phase17RunIdentity,
@@ -54,6 +57,14 @@ const clockPath = resolve(
   "logical-clock.json",
 );
 const playwrightArguments = Object.freeze(process.argv.slice(2));
+const phase33TargetFiles = Object.freeze([
+  `tests/e2e/${PHASE33_PUBLIC_CANDIDATE_FLOW_FILE}`,
+  `tests/e2e/${PHASE33_EMPLOYER_RECRUITER_FLOW_FILE}`,
+  `tests/e2e/${PHASE33_PRIVILEGED_OPERATIONS_FLOW_FILE}`,
+]);
+const phase33TargetedMode =
+  playwrightArguments.length === phase33TargetFiles.length &&
+  phase33TargetFiles.every((file) => playwrightArguments.includes(file));
 const phase32Lc1Mode = process.env.PHASE32_LC1_BROWSER_MODE === "true";
 const phase25SecurityMode = playwrightArguments.some((argument) =>
   argument.includes("phase25-"),
@@ -116,6 +127,7 @@ async function main() {
   );
   try {
     const notificationDeliveryKeys = `phase20-browser-v1:${randomBytes(32).toString("base64")}`;
+    const notificationRecipientHashKeys = `phase20-recipient-hash-v1:${randomBytes(32).toString("base64")}`;
     const documentStorageKeys = `document-v1:${randomBytes(32).toString("base64")}`;
     const runIdentity = createRunIdentity(database.databaseName);
     const port = await allocatePort();
@@ -129,6 +141,7 @@ async function main() {
       DATABASE_URL: database.connectionString,
       TEST_DATABASE_URL: undefined,
       NOTIFICATION_DELIVERY_KEYS: notificationDeliveryKeys,
+      NOTIFICATION_RECIPIENT_HASH_KEYS: notificationRecipientHashKeys,
       DOCUMENT_STORAGE_KEYS: documentStorageKeys,
       DOCUMENT_STORAGE_ROOT: documentStorageRoot,
       DOCUMENT_STORAGE_REGION: "local-test",
@@ -171,6 +184,7 @@ async function main() {
       baseUrl,
       port,
       notificationDeliveryKeys,
+      notificationRecipientHashKeys,
       documentStorageKeys,
       documentStorageRoot,
       phase25SecurityMode,
@@ -195,9 +209,11 @@ async function main() {
     validateRunManifest(
       phase32Lc1Mode
         ? "phase32-lc1-targeted"
-        : playwrightArguments.length === 0
-          ? "full"
-          : "targeted",
+        : phase33TargetedMode
+          ? "phase33-targeted"
+          : playwrightArguments.length === 0
+            ? "full"
+            : "targeted",
       runIdentity,
     );
     console.info(
@@ -216,6 +232,7 @@ async function startServer(
   baseUrl: string,
   port: number,
   notificationDeliveryKeys: string,
+  notificationRecipientHashKeys: string,
   documentStorageKeys: string,
   documentStorageRoot: string,
   privilegedStepUpMode: "enforce" | "observe",
@@ -276,6 +293,7 @@ async function startServer(
         ENABLE_LOCAL_MOCK_MAILBOX: "false",
         DEV_MAILBOX_SECRET: "",
         NOTIFICATION_DELIVERY_KEYS: notificationDeliveryKeys,
+        NOTIFICATION_RECIPIENT_HASH_KEYS: notificationRecipientHashKeys,
         DOCUMENT_STORAGE_KEYS: documentStorageKeys,
         DOCUMENT_STORAGE_ROOT: documentStorageRoot,
         DOCUMENT_STORAGE_REGION: "local-test",

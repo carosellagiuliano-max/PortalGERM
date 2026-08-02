@@ -8,21 +8,37 @@ import { syncBoostStatusProjection } from "@/lib/billing/boosts";
 import { projectCreditExpiries } from "@/lib/billing/credits";
 import { projectSubscriptionBoundaries } from "@/lib/billing/subscriptions";
 import { projectPaymentInboxEvent } from "@/lib/billing/payment-inbox";
-import { reconcilePersistedPayments } from "@/lib/billing/finance-reconciliation";
+import {
+  reconcilePersistedPayments,
+  reconcilePersistedSubscriptionProviderInvoices,
+} from "@/lib/billing/finance-reconciliation";
 import { projectDueDunningCases } from "@/lib/billing/dunning";
 import { projectApprovedServiceRecoveries } from "@/lib/billing/service-delivery-policy";
-import { runJobAlertDigestMock } from "@/lib/candidate/job-alerts";
+import {
+  runJobAlertDigestDelivery,
+  runJobAlertDigestMock,
+} from "@/lib/candidate/job-alerts";
 import { projectCompanyTrustLifecycle } from "@/lib/companies/verification/lifecycle";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
+import {
+  documentObjectStoreActivationBinding,
+  documentScannerActivationBinding,
+} from "@/lib/documents/provider-activation-binding";
 import { reconcileDocumentObjects } from "@/lib/documents/reconciliation";
 import { scanDocumentVersion } from "@/lib/documents/vault-service";
 import { expireDueCompanyInvitations } from "@/lib/employer/team";
 import { syncJobStatusProjection } from "@/lib/jobs/effective-status";
 import { projectJobFreshness } from "@/lib/jobs/freshness";
 import { dispatchNotificationBatch } from "@/lib/notifications/dispatcher";
+import { maintainNotificationPrivacyRetention } from "@/lib/notifications/retention";
 import { resolvePersistedProviderActivation } from "@/lib/ops/operations-ledger";
+import {
+  startHeartbeatLoop,
+  type HeartbeatLoop,
+} from "@/lib/ops/heartbeat-loop";
 import { projectExpiredSecurityState } from "@/lib/security/security-expiry";
+import { executeApprovedPrivacyWorkItem } from "@/lib/privacy/execution-approval";
 import { measureAndPersistSitemapCapacity } from "@/lib/seo/sitemap-capacity-monitor";
 import {
   completeWorkItem,
@@ -34,6 +50,9 @@ import {
 } from "@/lib/ops/worker-runtime";
 import { createEmailDeliveryProvider } from "@/lib/providers/email/delivery-composition";
 import { emailProvider } from "@/lib/providers/email";
+import { emailProviderActivationBinding } from "@/lib/providers/email/provider-activation-binding";
+import { paymentProviderActivationBinding } from "@/lib/providers/payments/provider-activation-binding";
+import { createHostedPaymentProvider } from "@/lib/providers/payments/payment-composition";
 import {
   createDocumentMalwareScanner,
   createDocumentObjectStore,
@@ -58,10 +77,12 @@ export async function executeRegisteredHandler(
     database: DatabaseClient;
     environment: ServerEnvironment;
     identity: WorkLeaseIdentity;
+    heartbeatMilliseconds?: number;
     leaseMilliseconds: number;
     now: () => Date;
   }>,
 ): Promise<RegisteredHandlerExecutionResult> {
+  let heartbeatLoop: HeartbeatLoop | null = null;
   try {
     const heartbeat = await heartbeatWorkLease(
       dependencies.database,
@@ -74,6 +95,22 @@ export async function executeRegisteredHandler(
     if (!heartbeat.extended) {
       return result(claimed, "LEASE_LOST");
     }
+    heartbeatLoop = startHeartbeatLoop({
+      heartbeat: async () =>
+        (
+          await heartbeatWorkLease(
+            dependencies.database,
+            dependencies.identity,
+            {
+              leaseMilliseconds: dependencies.leaseMilliseconds,
+              now: dependencies.now(),
+            },
+          )
+        ).extended,
+      intervalMilliseconds:
+        dependencies.heartbeatMilliseconds ??
+        Math.min(20_000, Math.floor(dependencies.leaseMilliseconds / 3)),
+    });
 
     const existingReceipt =
       await dependencies.database.workEffectReceipt.findUnique({
@@ -81,6 +118,8 @@ export async function executeRegisteredHandler(
         select: { effectDigest: true },
       });
     if (existingReceipt !== null) {
+      await heartbeatLoop.stop();
+      heartbeatLoop = null;
       const completion = await completeWorkItem(
         dependencies.database,
         dependencies.identity,
@@ -93,6 +132,15 @@ export async function executeRegisteredHandler(
     }
 
     const effectDigest = await invokeHandler(claimed, dependencies);
+    await heartbeatLoop.stop();
+    heartbeatLoop = null;
+    // A failed heartbeat can mean that the activation was revoked while the
+    // handler was in flight. The external/database effect has already
+    // returned at this point, so skipping its append-only receipt would make a
+    // later takeover repeat an effect whose outcome is actually known. The
+    // receipt writer preserves the original activation generation and accepts
+    // only the still-owned fencing token; completion separately records
+    // whether that generation remained current.
     const receipt = await recordFencedEffectReceipt(
       dependencies.database,
       dependencies.identity,
@@ -119,6 +167,22 @@ export async function executeRegisteredHandler(
     );
     return result(claimed, completion.status);
   } catch (error) {
+    const heartbeatState = await heartbeatLoop?.stop();
+    heartbeatLoop = null;
+    if (heartbeatState !== undefined && !heartbeatState.healthy) {
+      const drained = await failWorkItem(
+        dependencies.database,
+        dependencies.identity,
+        {
+          failure: {
+            errorCode: "WORKER_LEASE_HEARTBEAT_LOST",
+            explicitClass: "CONFIGURATION",
+          },
+          now: dependencies.now(),
+        },
+      );
+      return result(claimed, drained.status);
+    }
     const failure = handlerFailureDescriptor(error);
     const failed = await failWorkItem(
       dependencies.database,
@@ -126,6 +190,8 @@ export async function executeRegisteredHandler(
       { failure, now: dependencies.now() },
     );
     return result(claimed, failed.status);
+  } finally {
+    await heartbeatLoop?.stop();
   }
 }
 
@@ -148,11 +214,6 @@ async function invokeHandler(
       return payload.effectDigest;
     }
     case "notifications.dispatch": {
-      await requireProvider(dependencies, {
-        adapterKey: dependencies.environment.EMAIL_PROVIDER_MODE,
-        useCase: "email.transactional",
-        now,
-      });
       const provider = createEmailDeliveryProvider(dependencies.environment);
       const summary = await dispatchNotificationBatch({
         database: dependencies.database,
@@ -170,27 +231,63 @@ async function invokeHandler(
       }
       return digestSummary(summary);
     }
+    case "notifications.retention":
+      return digestSummary(
+        await maintainNotificationPrivacyRetention(dependencies.database, now),
+      );
     case "candidate.job-alert-digest": {
+      const providerBinding = emailProviderActivationBinding(
+        dependencies.environment,
+        "email.job-alert",
+      );
+      if (providerBinding === null) {
+        throw new HandlerFailure("CONFIGURATION", "PROVIDER_DISABLED");
+      }
       await requireProvider(dependencies, {
-        adapterKey: dependencies.environment.EMAIL_PROVIDER_MODE,
-        useCase: "email.job-alert",
+        ...providerBinding,
         now,
       });
-      if (
-        dependencies.environment.APP_ENV !== "local" &&
-        dependencies.environment.APP_ENV !== "ci"
-      ) {
-        throw new HandlerFailure(
-          "CONFIGURATION",
-          "JOB_ALERT_PROVIDER_ADAPTER_NOT_READY",
+      if (dependencies.environment.EMAIL_PROVIDER_MODE === "local_mock") {
+        if (
+          dependencies.environment.APP_ENV !== "local" &&
+          dependencies.environment.APP_ENV !== "ci"
+        ) {
+          throw new HandlerFailure(
+            "CONFIGURATION",
+            "JOB_ALERT_LOCAL_MOCK_ENVIRONMENT_FORBIDDEN",
+          );
+        }
+        return digestSummary(
+          await runJobAlertDigestMock({
+            database: dependencies.database,
+            now,
+          }),
         );
       }
       return digestSummary(
-        await runJobAlertDigestMock({
+        await runJobAlertDigestDelivery({
           database: dependencies.database,
+          environment: dependencies.environment,
           now,
         }),
       );
+    }
+    case "privacy.export":
+    case "privacy.correction":
+    case "privacy.erasure": {
+      const payload = z
+        .strictObject({ approvalId: z.uuid() })
+        .parse(claimed.payloadReference);
+      const outcome = await executeApprovedPrivacyWorkItem(payload, {
+        database: dependencies.database,
+        environment: dependencies.environment,
+        handlerKey: claimed.handlerKey,
+        now,
+      });
+      if (!outcome.ok) {
+        throw new HandlerFailure(outcome.failureClass, outcome.code);
+      }
+      return outcome.effectDigest;
     }
     case "jobs.expiry-projection":
       return digestSummary(
@@ -253,9 +350,14 @@ async function invokeHandler(
         }),
       );
     case "payments.inbox-project": {
+      const providerBinding = paymentProviderActivationBinding(
+        dependencies.environment,
+      );
+      if (providerBinding === null) {
+        throw new HandlerFailure("CONFIGURATION", "PROVIDER_DISABLED");
+      }
       await requireProvider(dependencies, {
-        adapterKey: dependencies.environment.PAYMENT_PROVIDER_MODE,
-        useCase: "payments.hosted-checkout",
+        ...providerBinding,
         now,
       });
       if (!dependencies.environment.REAL_PAYMENT_PROJECTION) {
@@ -277,14 +379,22 @@ async function invokeHandler(
           {
             database: dependencies.database,
             emailProvider,
+            paymentProvider: createHostedPaymentProvider(
+              dependencies.environment,
+            ),
           },
         ),
       );
     }
     case "payments.reconcile": {
+      const providerBinding = paymentProviderActivationBinding(
+        dependencies.environment,
+      );
+      if (providerBinding === null) {
+        throw new HandlerFailure("CONFIGURATION", "PROVIDER_DISABLED");
+      }
       await requireProvider(dependencies, {
-        adapterKey: dependencies.environment.PAYMENT_PROVIDER_MODE,
-        useCase: "payments.hosted-checkout",
+        ...providerBinding,
         now,
       });
       if (!dependencies.environment.REAL_PAYMENT_INGESTION) {
@@ -293,18 +403,65 @@ async function invokeHandler(
           "REAL_PAYMENT_INGESTION_DISABLED",
         );
       }
-      return digestSummary(
-        await reconcilePersistedPayments(
+      let cursor: string | null = null;
+      let matched = 0;
+      let mismatched = 0;
+      let processed = 0;
+      let pages = 0;
+      do {
+        const page = await reconcilePersistedPayments(
           {
             batchSize: 100,
             correlationId,
-            environment: dependencies.environment.APP_ENV as
-              "local" | "ci" | "staging",
+            cursor,
+            environment: dependencies.environment.APP_ENV,
             now,
           },
           dependencies.database,
-        ),
-      );
+        );
+        matched += page.matched;
+        mismatched += page.mismatched;
+        processed += page.processed;
+        pages += 1;
+        if (
+          pages > 1_000 ||
+          (page.nextCursor !== null && page.nextCursor === cursor)
+        ) {
+          throw new HandlerFailure(
+            "PERMANENT_VALIDATION",
+            "PAYMENT_RECONCILIATION_CURSOR_STALLED",
+          );
+        }
+        cursor = page.nextCursor;
+      } while (cursor !== null);
+      cursor = null;
+      do {
+        const page = await reconcilePersistedSubscriptionProviderInvoices(
+          {
+            batchSize: 100,
+            correlationId,
+            cursor,
+            environment: dependencies.environment.APP_ENV,
+            now,
+          },
+          dependencies.database,
+        );
+        matched += page.matched;
+        mismatched += page.mismatched;
+        processed += page.processed;
+        pages += 1;
+        if (
+          pages > 1_000 ||
+          (page.nextCursor !== null && page.nextCursor === cursor)
+        ) {
+          throw new HandlerFailure(
+            "PERMANENT_VALIDATION",
+            "PAYMENT_RECONCILIATION_CURSOR_STALLED",
+          );
+        }
+        cursor = page.nextCursor;
+      } while (cursor !== null);
+      return digestSummary({ matched, mismatched, pages, processed });
     }
     case "payments.dunning": {
       return digestSummary(
@@ -362,13 +519,41 @@ async function invokeHandler(
         }),
       );
     case "documents.scan": {
+      const objectStoreBinding = documentObjectStoreActivationBinding(
+        dependencies.environment,
+      );
+      if (objectStoreBinding === null) {
+        throw new HandlerFailure("CONFIGURATION", "PROVIDER_DISABLED");
+      }
       await requireProvider(dependencies, {
-        adapterKey: dependencies.environment.DOCUMENT_STORAGE_MODE,
+        adapterKey: objectStoreBinding.adapterKey,
+        expectedConfigurationDigest:
+          objectStoreBinding.expectedConfigurationDigest,
+        expectedMode: objectStoreBinding.expectedMode,
+        ...(objectStoreBinding.expectedSecretVersionRef === undefined
+          ? {}
+          : {
+              expectedSecretVersionRef:
+                objectStoreBinding.expectedSecretVersionRef,
+            }),
         useCase: "documents.object-store",
         now,
       });
+      const scannerBinding = documentScannerActivationBinding(
+        dependencies.environment,
+      );
+      if (scannerBinding === null) {
+        throw new HandlerFailure("CONFIGURATION", "PROVIDER_DISABLED");
+      }
       await requireProvider(dependencies, {
-        adapterKey: "deterministic_sandbox",
+        adapterKey: scannerBinding.adapterKey,
+        expectedConfigurationDigest: scannerBinding.expectedConfigurationDigest,
+        expectedMode: scannerBinding.expectedMode,
+        ...(scannerBinding.expectedSecretVersionRef === undefined
+          ? {}
+          : {
+              expectedSecretVersionRef: scannerBinding.expectedSecretVersionRef,
+            }),
         useCase: "documents.malware-scan",
         now,
       });
@@ -440,8 +625,23 @@ async function invokeHandler(
       return digestSummary(summary);
     }
     case "documents.reconcile": {
+      const objectStoreBinding = documentObjectStoreActivationBinding(
+        dependencies.environment,
+      );
+      if (objectStoreBinding === null) {
+        throw new HandlerFailure("CONFIGURATION", "PROVIDER_DISABLED");
+      }
       await requireProvider(dependencies, {
-        adapterKey: dependencies.environment.DOCUMENT_STORAGE_MODE,
+        adapterKey: objectStoreBinding.adapterKey,
+        expectedConfigurationDigest:
+          objectStoreBinding.expectedConfigurationDigest,
+        expectedMode: objectStoreBinding.expectedMode,
+        ...(objectStoreBinding.expectedSecretVersionRef === undefined
+          ? {}
+          : {
+              expectedSecretVersionRef:
+                objectStoreBinding.expectedSecretVersionRef,
+            }),
         useCase: "documents.object-store",
         now,
       });
@@ -476,6 +676,9 @@ async function requireProvider(
   }>,
   input: Readonly<{
     adapterKey: string;
+    expectedConfigurationDigest?: string;
+    expectedMode?: "SANDBOX" | "ALLOWLIST" | "LIVE";
+    expectedSecretVersionRef?: string;
     now: Date;
     useCase: string;
   }>,
@@ -489,6 +692,17 @@ async function requireProvider(
       adapterKey: input.adapterKey,
       adapterVersion: "v1",
       environment: dependencies.environment.APP_ENV,
+      ...(input.expectedConfigurationDigest === undefined
+        ? {}
+        : {
+            expectedConfigurationDigest: input.expectedConfigurationDigest,
+          }),
+      ...(input.expectedMode === undefined
+        ? {}
+        : { expectedMode: input.expectedMode }),
+      ...(input.expectedSecretVersionRef === undefined
+        ? {}
+        : { expectedSecretVersionRef: input.expectedSecretVersionRef }),
       now: input.now,
       useCase: input.useCase,
     },

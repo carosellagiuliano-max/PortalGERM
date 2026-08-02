@@ -2,7 +2,11 @@ import { z } from "zod";
 
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { EmailProvider } from "@/lib/providers/email";
-import type { PaymentProvider } from "@/lib/providers/payments";
+import type {
+  PaymentProvider,
+  PaymentRuntimeMode,
+  StripePaymentAdapterKey,
+} from "@/lib/providers/payments";
 
 export const billingIdempotencyKeySchema = z
   .string()
@@ -112,11 +116,18 @@ export type BillingDependencies = Readonly<{
   }>;
   trustRiskMode?: "observe" | "hold";
   realPayment?: Readonly<{
+    activationMode: "ALLOWLIST" | "SANDBOX" | "LIVE";
+    adapterKey: StripePaymentAdapterKey;
+    adapterVersion: "v1";
     appUrl: string;
-    environment: "local" | "ci" | "staging";
+    configurationDigest: string;
+    environment: "local" | "ci" | "preview" | "staging" | "production";
+    expectedLiveMode: boolean;
     paidSelfServiceEnabled: boolean;
     providerAccountReference: string;
+    providerMode: PaymentRuntimeMode;
     sandboxCohort: "none" | "test";
+    secretVersionRef: string;
   }>;
   now?: Date;
 }>;

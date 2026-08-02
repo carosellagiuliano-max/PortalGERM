@@ -27,6 +27,7 @@ import {
   createValidEnvironment,
   keyMaterial,
 } from "@/tests/fixtures/environment";
+import { activateSandboxDocumentProviders } from "@/tests/fixtures/document-vault";
 import {
   createPhase26CompanyTrustFixture,
   type Phase26CompanyTrustFixture,
@@ -53,7 +54,13 @@ beforeAll(async () => {
       DOCUMENT_STORAGE_ROOT: root,
       DOCUMENT_STORAGE_REGION: "local-test",
       COMPANY_VERIFICATION_DOCUMENT: "true",
+      WORKER_RUNTIME: "sandbox_command",
     }),
+  );
+  await activateSandboxDocumentProviders(
+    fixture.database,
+    environment,
+    fixture.now,
   );
   vault = Object.freeze({
     database: fixture.database,
@@ -127,7 +134,9 @@ describe.sequential("Phase 26 verification document vault", () => {
       dependencies,
     );
     if (!uploaded.ok) {
-      throw new Error(`Company document upload failed: ${uploaded.code}:${uploaded.detailCode ?? "none"}`);
+      throw new Error(
+        `Company document upload failed: ${uploaded.code}:${uploaded.detailCode ?? "none"}`,
+      );
     }
     expect(uploaded).toMatchObject({ ok: true, status: "QUARANTINED" });
     expect(

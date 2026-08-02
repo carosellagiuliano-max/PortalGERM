@@ -288,6 +288,13 @@
   },
   {
     "kind": "page",
+    "path": "/admin/system/notification-reconciliation",
+    "roles": [
+      "ADMIN"
+    ]
+  },
+  {
+    "kind": "page",
     "path": "/admin/taxonomy",
     "roles": [
       "ADMIN"
@@ -332,7 +339,8 @@
     "kind": "handler",
     "path": "/api/company-verification/documents/upload-intents",
     "roles": [
-      "PUBLIC"
+      "EMPLOYER",
+      "RECRUITER"
     ]
   },
   {
@@ -411,14 +419,23 @@
     "kind": "handler",
     "path": "/api/recruiting/interviews/[id]/calendar",
     "roles": [
-      "PUBLIC"
+      "CANDIDATE",
+      "EMPLOYER",
+      "RECRUITER"
+    ]
+  },
+  {
+    "kind": "handler",
+    "path": "/api/webhooks/email/resend",
+    "roles": [
+      "EMAIL_PROVIDER_SIGNATURE"
     ]
   },
   {
     "kind": "handler",
     "path": "/api/webhooks/payments/[provider]",
     "roles": [
-      "PUBLIC"
+      "PAYMENT_PROVIDER_SIGNATURE"
     ]
   },
   {
@@ -908,7 +925,7 @@
     "kind": "handler",
     "path": "/invite/[token]",
     "roles": [
-      "PUBLIC"
+      "PUBLIC_TOKEN"
     ]
   },
   {
@@ -1031,6 +1048,13 @@
     ]
   },
   {
+    "kind": "metadata",
+    "path": "/robots.txt",
+    "roles": [
+      "PUBLIC"
+    ]
+  },
+  {
     "kind": "page",
     "path": "/salary-radar",
     "roles": [
@@ -1049,6 +1073,13 @@
     "path": "/session/refresh",
     "roles": [
       "AUTHENTICATED"
+    ]
+  },
+  {
+    "kind": "metadata",
+    "path": "/sitemap.xml",
+    "roles": [
+      "PUBLIC"
     ]
   },
   {

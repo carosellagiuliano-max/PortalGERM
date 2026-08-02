@@ -71,6 +71,12 @@ export const PHASE31_MANAGED_IMPORT_FLOW_FILE =
   "flows/phase31-managed-import.spec.ts" as const;
 export const PHASE31_PRODUCTION_OFFER_FLOW_FILE =
   "flows/phase31-production-offer.spec.ts" as const;
+export const PHASE33_PUBLIC_CANDIDATE_FLOW_FILE =
+  "flows/phase33-public-candidate.spec.ts" as const;
+export const PHASE33_EMPLOYER_RECRUITER_FLOW_FILE =
+  "flows/phase33-employer-recruiter.spec.ts" as const;
+export const PHASE33_PRIVILEGED_OPERATIONS_FLOW_FILE =
+  "flows/phase33-privileged-operations.spec.ts" as const;
 export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE17_QUALITY_FILE,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
@@ -99,6 +105,9 @@ export const PHASE17_QUALITY_FILES = Object.freeze([
   PHASE29_ACCESSIBILITY_FILE,
   PHASE31_MANAGED_IMPORT_FLOW_FILE,
   PHASE31_PRODUCTION_OFFER_FLOW_FILE,
+  PHASE33_PUBLIC_CANDIDATE_FLOW_FILE,
+  PHASE33_EMPLOYER_RECRUITER_FLOW_FILE,
+  PHASE33_PRIVILEGED_OPERATIONS_FLOW_FILE,
 ] as const);
 
 export const PHASE17_QUALITY_CONTRACT = Object.freeze([
@@ -354,6 +363,24 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     file: PHASE31_PRODUCTION_OFFER_FLOW_FILE,
     expectedCount: 1,
   }),
+  ...[
+    PHASE17_JOURNEY_PROJECT,
+    PHASE29_FIREFOX_PROJECT,
+    PHASE29_WEBKIT_PROJECT,
+  ].flatMap((project) =>
+    [
+      PHASE33_PUBLIC_CANDIDATE_FLOW_FILE,
+      PHASE33_EMPLOYER_RECRUITER_FLOW_FILE,
+      PHASE33_PRIVILEGED_OPERATIONS_FLOW_FILE,
+    ].map((file) =>
+      Object.freeze({
+        project,
+        tag: "@journey" as const,
+        file,
+        expectedCount: 1,
+      }),
+    ),
+  ),
 ] as const);
 
 export type Phase17ResultId = Phase17CaseId | "QUALITY" | "UNCLASSIFIED";
@@ -386,7 +413,7 @@ export type Phase17RunIdentity = Readonly<{
 }>;
 
 export type Phase17ManifestValidationMode =
-  "full" | "targeted" | "phase32-lc1-targeted";
+  "full" | "targeted" | "phase32-lc1-targeted" | "phase33-targeted";
 
 export type Phase17ManifestValidationOptions = Readonly<{
   mode: Phase17ManifestValidationMode;
@@ -530,6 +557,10 @@ export function validatePhase17RunManifest(
     contractFailure(
       `${manifest.unclassified.length} unclassified test result(s) were recorded`,
     );
+  }
+  if (options.mode === "phase33-targeted") {
+    assertExactPhase33Results(manifest.runtime.projects, results);
+    return manifest;
   }
   if (options.mode !== "full") return manifest;
 
@@ -761,6 +792,47 @@ function assertExactPhase32Lc1BrowserProjects(projects: readonly string[]) {
   ) {
     contractFailure(
       `Phase 32 LC1 browser projects are ${projects.join(", ") || "<empty>"}, expected exactly ${PHASE32_LC1_BROWSER_PROJECTS.join(", ")} (one Chromium, one Firefox and one WebKit engine)`,
+    );
+  }
+}
+
+function assertExactPhase33Results(
+  projects: readonly string[],
+  results: readonly ParsedRecordedResult[],
+) {
+  const expectedProjects = PHASE32_LC1_BROWSER_PROJECTS;
+  const expectedFiles = [
+    PHASE33_PUBLIC_CANDIDATE_FLOW_FILE,
+    PHASE33_EMPLOYER_RECRUITER_FLOW_FILE,
+    PHASE33_PRIVILEGED_OPERATIONS_FLOW_FILE,
+  ] as const;
+  if (
+    new Set(projects).size !== projects.length ||
+    !sameStringSet(projects, expectedProjects)
+  ) {
+    contractFailure(
+      `Phase 33 browser projects are ${projects.join(", ") || "<empty>"}, expected exactly ${expectedProjects.join(", ")}`,
+    );
+  }
+  for (const project of expectedProjects) {
+    for (const file of expectedFiles) {
+      const matches = results.filter(
+        (result) => result.project === project && result.file === file,
+      );
+      if (
+        matches.length !== 1 ||
+        matches[0]?.id !== "QUALITY" ||
+        !matches[0].title.includes("@journey")
+      ) {
+        contractFailure(
+          `Phase 33 ${project} / ${file} has ${matches.length} result(s), expected exactly one @journey QUALITY result`,
+        );
+      }
+    }
+  }
+  if (results.length !== expectedProjects.length * expectedFiles.length) {
+    contractFailure(
+      `Phase 33 recorded ${results.length} result(s), expected exactly 9`,
     );
   }
 }

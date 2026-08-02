@@ -1,0 +1,1459 @@
+[
+  {
+    "consumers": [
+      "lib/auth/admin-runtime-policy.ts",
+      "lib/auth/assurance/security-page.ts",
+      "lib/auth/route-guards.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "adminMfaRequired",
+    "key": "ADMIN_MFA_REQUIRED",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/(auth)/invite/[token]/route.ts",
+      "app/(auth)/invite/resume/actions.ts",
+      "app/(auth)/session/refresh/route.ts",
+      "app/(public)/jobs/[slug]/page.tsx",
+      "app/(public)/jobs/actions.ts",
+      "app/admin/analytics/page.tsx",
+      "app/api/webhooks/email/resend/route.ts",
+      "app/api/webhooks/payments/[provider]/route.ts",
+      "app/candidate/alerts/actions.ts",
+      "app/candidate/alerts/page.tsx",
+      "app/employer/billing/subscription/actions.ts",
+      "app/employer/talent-radar/actions.ts",
+      "app/employer/talent-radar/page.tsx",
+      "lib/admin/operations-read.ts",
+      "lib/analytics/runtime-policy.ts",
+      "lib/applications/service.ts",
+      "lib/auth/admin-runtime-policy.ts",
+      "lib/auth/employer-context.ts",
+      "lib/auth/registration-legal-gate.ts",
+      "lib/auth/request-context.ts",
+      "lib/billing/boosts.ts",
+      "lib/billing/employer-read-model.ts",
+      "lib/billing/finance-reconciliation.ts",
+      "lib/billing/paid-checkout-read-model.ts",
+      "lib/candidate/job-alerts.ts",
+      "lib/candidate/recommendation-read-model.ts",
+      "lib/candidate/saved-jobs.ts",
+      "lib/companies/public-read-model.ts",
+      "lib/companies/verification/composition.ts",
+      "lib/companies/verification/read-model.ts",
+      "lib/documents/provider-activation-guard.ts",
+      "lib/documents/runtime-policy.ts",
+      "lib/notifications/dispatcher.ts",
+      "lib/notifications/outcome-reconciliation.ts",
+      "lib/notifications/replay.ts",
+      "lib/ops/operations-ledger.ts",
+      "lib/ops/phase33-contract-activation.ts",
+      "lib/ops/phase33-contract-probes.ts",
+      "lib/ops/provider-health-monitor.ts",
+      "lib/ops/recovery-contract.ts",
+      "lib/ops/registered-handler-runtime.ts",
+      "lib/ops/work-replay.ts",
+      "lib/ops/worker-scheduler.ts",
+      "lib/privacy/execution-approval.ts",
+      "lib/providers/email/local-mock-mailbox.ts",
+      "lib/providers/storage/provider-authority-bound-object-store.ts",
+      "lib/public/environment.ts",
+      "lib/release/phase32-isolated-harness.ts",
+      "lib/release/phase33-runtime-contract.ts",
+      "lib/sales/public-lead.ts",
+      "lib/utils/logger.ts",
+      "scripts/db-smoke.ts",
+      "scripts/env-init.ts",
+      "scripts/load-local-environment.ts",
+      "scripts/phase20-notification-dispatch.ts",
+      "scripts/phase23-backup-restore-drill.ts",
+      "scripts/phase23-incident-drill.ts",
+      "scripts/phase23-provider-activation-smoke.ts",
+      "scripts/phase23-sandbox-control.ts",
+      "scripts/phase23-staging-deploy-smoke.ts",
+      "scripts/phase23-worker.ts",
+      "scripts/phase33-contract-smoke-internal.ts",
+      "scripts/phase33-local-bootstrap.ts",
+      "scripts/phase33-local-smoke-internal.ts",
+      "scripts/phase33-runtime-preflight.ts",
+      "scripts/phase33-runtime.ts",
+      "scripts/require-local-database.ts",
+      "scripts/seed-verify.ts",
+      "scripts/validate-env.ts"
+    ],
+    "defaultValue": "REQUIRED",
+    "effectiveProperty": "appEnvironment",
+    "key": "APP_ENV",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform Engineering",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/security/break-glass/page.tsx",
+      "lib/admin/security-governance.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "breakGlassEnabled",
+    "key": "BREAK_GLASS_ENABLED",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [],
+    "defaultValue": "false",
+    "effectiveProperty": "commercialBoostEnabled",
+    "key": "COMMERCIAL_BOOST",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "DECLARED_FAIL_CLOSED"
+  },
+  {
+    "consumers": [
+      "lib/commercial/managed-import-service.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "commercialManagedImportEnabled",
+    "key": "COMMERCIAL_MANAGED_IMPORT",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [],
+    "defaultValue": "false",
+    "effectiveProperty": "commercialPaidRadarEnabled",
+    "key": "COMMERCIAL_PAID_RADAR",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "DECLARED_FAIL_CLOSED"
+  },
+  {
+    "consumers": [],
+    "defaultValue": "false",
+    "effectiveProperty": "commercialProductionOffersEnabled",
+    "key": "COMMERCIAL_PRODUCTION_OFFERS",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "DECLARED_FAIL_CLOSED"
+  },
+  {
+    "consumers": [],
+    "defaultValue": "false",
+    "effectiveProperty": "commercialSalaryEnabled",
+    "key": "COMMERCIAL_SALARY",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "DECLARED_FAIL_CLOSED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/composition.ts",
+      "lib/companies/verification/owner-service.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "companyDomainChallenge",
+    "key": "COMPANY_DOMAIN_CHALLENGE",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/composition.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "companyDomainProviderMode",
+    "key": "COMPANY_DOMAIN_PROVIDER_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/composition.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "companyRegisterCheck",
+    "key": "COMPANY_REGISTER_CHECK",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/composition.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "companyRegisterProviderMode",
+    "key": "COMPANY_REGISTER_PROVIDER_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/read-model.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "companyStrongBadge",
+    "key": "COMPANY_STRONG_BADGE",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/read-model.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "companyTrustPublicEligibility",
+    "key": "COMPANY_TRUST_PUBLIC_ELIGIBILITY",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/composition.ts",
+      "lib/companies/verification/read-model.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "companyTrustRapidRevoke",
+    "key": "COMPANY_TRUST_RAPID_REVOKE",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/composition.ts",
+      "lib/companies/verification/read-model.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "companyTrustV2",
+    "key": "COMPANY_TRUST_V2",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/composition.ts"
+    ],
+    "defaultValue": "none",
+    "effectiveProperty": "companyVerificationCohort",
+    "key": "COMPANY_VERIFICATION_COHORT",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/composition.ts",
+      "lib/documents/vault-service.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "companyVerificationDocument",
+    "key": "COMPANY_VERIFICATION_DOCUMENT",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/notifications/replay.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "deliveryReplayEnabled",
+    "key": "DELIVERY_REPLAY",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/documents/runtime-policy.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "documentBulkAccess",
+    "key": "DOCUMENT_BULK_ACCESS",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/system/page.tsx",
+      "lib/documents/runtime-policy.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "documentCleanReads",
+    "key": "DOCUMENT_CLEAN_READS",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/documents/runtime-policy.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "documentReconciliation",
+    "key": "DOCUMENT_RECONCILIATION",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/system/page.tsx",
+      "lib/documents/provider-activation-binding.ts",
+      "lib/documents/runtime-policy.ts",
+      "lib/ops/phase33-contract-probes.ts",
+      "lib/providers/storage/document-storage-composition.ts",
+      "scripts/phase33-local-bootstrap.ts",
+      "scripts/phase33-local-smoke-internal.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "documentScannerMode",
+    "key": "DOCUMENT_SCANNER_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/documents/provider-activation-binding.ts",
+      "lib/documents/runtime-policy.ts",
+      "lib/ops/phase33-contract-probes.ts",
+      "lib/providers/storage/document-storage-composition.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": null,
+    "key": "DOCUMENT_SCANNER_TLS",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/documents/provider-activation-binding.ts",
+      "lib/privacy/provider-activation-binding.ts",
+      "lib/providers/storage/document-storage-composition.ts",
+      "lib/providers/storage/privacy-export-storage.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": null,
+    "key": "DOCUMENT_STORAGE_FORCE_PATH_STYLE",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/system/page.tsx",
+      "lib/documents/provider-activation-binding.ts",
+      "lib/documents/runtime-policy.ts",
+      "lib/ops/phase33-contract-probes.ts",
+      "lib/privacy/execution-approval.ts",
+      "lib/providers/storage/document-storage-composition.ts",
+      "scripts/phase33-local-bootstrap.ts",
+      "scripts/phase33-local-smoke-internal.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "documentStorageMode",
+    "key": "DOCUMENT_STORAGE_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/documents/provider-activation-binding.ts",
+      "lib/privacy/provider-activation-binding.ts",
+      "lib/providers/storage/document-storage-composition.ts",
+      "lib/providers/storage/privacy-export-storage.ts"
+    ],
+    "defaultValue": "aes256",
+    "effectiveProperty": null,
+    "key": "DOCUMENT_STORAGE_SSE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/documents/runtime-policy.ts"
+    ],
+    "defaultValue": "none",
+    "effectiveProperty": "documentVaultCohort",
+    "key": "DOCUMENT_VAULT_COHORT",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/applications/service.ts",
+      "lib/documents/runtime-policy.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "documentVaultWrites",
+    "key": "DOCUMENT_VAULT_WRITES",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Documents",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/system/page.tsx",
+      "app/candidate/alerts/actions.ts",
+      "app/candidate/alerts/page.tsx",
+      "lib/auth/auth-service.ts",
+      "lib/employer/team.ts",
+      "lib/notifications/delivery-state.ts",
+      "lib/notifications/replay.ts",
+      "lib/ops/phase33-contract-probes.ts",
+      "lib/ops/provider-health-monitor.ts",
+      "lib/ops/registered-handler-runtime.ts",
+      "lib/providers/email/delivery-composition.ts",
+      "lib/providers/email/index.ts",
+      "lib/providers/email/legacy-local-mock-provider.ts",
+      "lib/providers/email/provider-activation-binding.ts",
+      "scripts/phase33-local-bootstrap.ts",
+      "scripts/phase33-local-smoke-internal.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "emailProviderMode",
+    "key": "EMAIL_PROVIDER_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/notifications/delivery-state.ts",
+      "lib/providers/email/local-mock-mailbox.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "mailboxEnabled",
+    "key": "ENABLE_LOCAL_MOCK_MAILBOX",
+    "kind": "boolean",
+    "launchClasses": [
+      "LOCAL_CI"
+    ],
+    "owner": "Platform Engineering",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/(auth)/invite/resume/page.tsx",
+      "lib/auth/auth-service.ts",
+      "lib/employer/team.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "existingIdentityInvitation",
+    "key": "EXISTING_IDENTITY_INVITATION",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/candidate/layout.tsx",
+      "lib/privacy/recruiting-lifecycle.ts",
+      "lib/recruiting/external-tracker.ts",
+      "lib/recruiting/feature-gates.ts",
+      "lib/recruiting/reminder-worker.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "externalApplicationTracker",
+    "key": "EXTERNAL_APPLICATION_TRACKER",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/finance/reconciliation/actions.ts",
+      "app/admin/finance/reconciliation/page.tsx",
+      "lib/billing/finance-operations.ts",
+      "lib/billing/payment-inbox.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "financeRepairActionsEnabled",
+    "key": "FINANCE_REPAIR_ACTIONS",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/auth/current-user.ts",
+      "lib/auth/employer-context.ts",
+      "lib/auth/persona-context.ts",
+      "lib/auth/persona-page.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "identityPersonaV2",
+    "key": "IDENTITY_PERSONA_V2",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/candidate/applications/actions.ts",
+      "app/candidate/layout.tsx",
+      "app/candidate/saved-jobs/actions.ts",
+      "app/candidate/talent-radar/requests/actions.ts",
+      "app/employer/layout.tsx",
+      "components/notifications/notification-settings-page.tsx",
+      "lib/applications/service.ts",
+      "lib/auth/auth-service.ts",
+      "lib/auth/email-change-service.ts",
+      "lib/auth/employer-context.ts",
+      "lib/auth/route-guards.ts",
+      "lib/notifications/server-actions.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "identityVerificationEnforced",
+    "key": "IDENTITY_VERIFICATION_ENFORCEMENT",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/recruiting/feature-gates.ts",
+      "lib/release/phase32-launch-class-policy.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "interviewScheduler",
+    "key": "INTERVIEW_SCHEDULER",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/companies/verification/composition.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "legacyCompanyReverify",
+    "key": "LEGACY_COMPANY_REVERIFY",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "components/legal/published-legal-page.tsx"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "imprint",
+    "key": "LEGAL_PUBLICATION_IMPRINT",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/privacy-requests/[id]/page.tsx",
+      "app/candidate/privacy/actions.ts",
+      "app/candidate/privacy/requests/[id]/page.tsx",
+      "app/candidate/privacy/requests/[id]/verify/page.tsx",
+      "components/legal/published-legal-page.tsx",
+      "lib/auth/registration-consent.ts",
+      "lib/auth/registration-legal-gate.ts",
+      "lib/candidate/dashboard.ts",
+      "lib/candidate/privacy-dashboard.ts",
+      "lib/commercial/addon-gates.ts",
+      "lib/commercial/production-offer.ts",
+      "lib/legal/admin-read.ts",
+      "lib/ops/provider-health-monitor.ts",
+      "lib/privacy/execution-approval.ts",
+      "lib/privacy/execution-v2.ts",
+      "lib/privacy/export-v2.ts",
+      "lib/privacy/postgres-adapters.ts",
+      "lib/privacy/postgres-export-adapter.ts",
+      "lib/privacy/privacy-case-service.ts",
+      "lib/privacy/restore-reconciliation.ts",
+      "lib/release/phase32-g4-manifest.ts",
+      "lib/security/risk/risk-service.ts",
+      "lib/trust-safety/containment.ts",
+      "scripts/phase22-erasure-restore-drill.ts",
+      "scripts/phase22-privacy-failure-drill.ts",
+      "scripts/phase22-privacy-load.ts",
+      "scripts/phase33-contract-bootstrap.ts",
+      "scripts/phase33-local-bootstrap.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "privacy",
+    "key": "LEGAL_PUBLICATION_PRIVACY",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "components/legal/published-legal-page.tsx",
+      "lib/auth/registration-consent.ts",
+      "lib/auth/registration-legal-gate.ts",
+      "lib/jobs/public-read-model.ts",
+      "lib/search/relevance.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "terms",
+    "key": "LEGAL_PUBLICATION_TERMS",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [],
+    "defaultValue": "info",
+    "effectiveProperty": "logLevel",
+    "key": "LOG_LEVEL",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform Engineering",
+    "source": "lib/config/env-schema.ts",
+    "status": "CONFIGURATION_CONTRACT_ONLY"
+  },
+  {
+    "consumers": [
+      "components/notifications/notification-settings-page.tsx",
+      "lib/auth/email-change-service.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "loginEmailChangeEnabled",
+    "key": "LOGIN_EMAIL_CHANGE",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/analytics/commercial-signals.ts",
+      "lib/auth/rate-limit-runtime.ts",
+      "lib/documents/runtime-policy.ts",
+      "lib/ops/phase33-contract-activation.ts",
+      "lib/ops/phase33-contract-probes.ts",
+      "lib/ops/recovery-contract.ts",
+      "lib/privacy/execution-approval.ts",
+      "lib/providers/email/local-mock-mailbox.ts",
+      "lib/release/phase32-candidate-evidence.ts",
+      "lib/release/phase32-isolated-harness.ts",
+      "lib/release/phase33-runtime-contract.ts",
+      "lib/utils/logger.ts",
+      "scripts/env-init.ts",
+      "scripts/ops/process-tools.ts",
+      "scripts/phase32-release-environment.ts"
+    ],
+    "defaultValue": "development",
+    "effectiveProperty": "nodeEnvironment",
+    "key": "NODE_ENV",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform Engineering",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/system/page.tsx",
+      "lib/notifications/delivery-state.ts",
+      "lib/notifications/dispatcher.ts"
+    ],
+    "defaultValue": "paused",
+    "effectiveProperty": "notificationDispatch",
+    "key": "NOTIFICATION_DISPATCH",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/auth/auth-service.ts",
+      "lib/auth/email-verification-service.ts",
+      "lib/employer/team.ts",
+      "lib/notifications/delivery-state.ts",
+      "lib/privacy/execution-approval.ts",
+      "lib/recruiting/interviews.ts",
+      "lib/recruiting/reminder-worker.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "notificationOutboxProducersEnabled",
+    "key": "NOTIFICATION_OUTBOX_PRODUCERS",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/candidate/privacy/actions.ts",
+      "app/candidate/privacy/page.tsx"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "optionalAnalyticsConversion",
+    "key": "OPTIONAL_ANALYTICS_CONVERSION",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Analytics / Privacy",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/candidate/privacy/actions.ts",
+      "app/candidate/privacy/page.tsx"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "optionalAnalyticsNavigation",
+    "key": "OPTIONAL_ANALYTICS_NAVIGATION",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Analytics / Privacy",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "components/notifications/notification-settings-page.tsx",
+      "lib/notifications/dispatcher.ts",
+      "lib/notifications/purpose-policy.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "optionalEmailEnabled",
+    "key": "OPTIONAL_EMAIL",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/employer/billing/subscription/actions.ts",
+      "lib/billing/orders.ts",
+      "lib/billing/paid-activation-policy.ts",
+      "lib/billing/paid-checkout-read-model.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "paidSelfServiceEnabled",
+    "key": "PAID_SELF_SERVICE",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/finance/service-recovery/page.tsx",
+      "lib/ops/registered-handler-runtime.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "paidServiceRecoveryEnabled",
+    "key": "PAID_SERVICE_RECOVERY",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/billing/page.tsx",
+      "lib/ops/phase33-contract-probes.ts",
+      "lib/ops/provider-health-monitor.ts",
+      "lib/providers/payments/payment-composition.ts",
+      "scripts/phase33-local-bootstrap.ts",
+      "scripts/phase33-local-smoke-internal.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "paymentProviderMode",
+    "key": "PAYMENT_PROVIDER_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/employer/billing/subscription/actions.ts",
+      "lib/billing/paid-checkout-read-model.ts"
+    ],
+    "defaultValue": "none",
+    "effectiveProperty": "paymentSandboxCohort",
+    "key": "PAYMENT_SANDBOX_COHORT",
+    "kind": "mode",
+    "launchClasses": [
+      "LOCAL_CI"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [],
+    "defaultValue": "false",
+    "effectiveProperty": "personaLegacyContract",
+    "key": "PERSONA_LEGACY_CONTRACT",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "source": "lib/config/env-schema.ts",
+    "status": "DECLARED_FAIL_CLOSED"
+  },
+  {
+    "consumers": [
+      "lib/auth/auth-service.ts",
+      "lib/auth/employer-context.ts",
+      "lib/auth/persona-context.ts",
+      "lib/auth/persona-page.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "personaPortalSwitch",
+    "key": "PERSONA_PORTAL_SWITCH",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [],
+    "defaultValue": "false",
+    "effectiveProperty": "personaPrivacyV2",
+    "key": "PERSONA_PRIVACY_V2",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "DECLARED_FAIL_CLOSED"
+  },
+  {
+    "consumers": [],
+    "defaultValue": "false",
+    "effectiveProperty": null,
+    "key": "PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT",
+    "kind": "boolean",
+    "launchClasses": [
+      "LOCAL_CI"
+    ],
+    "owner": "Platform Engineering",
+    "source": "lib/config/env-schema.ts",
+    "status": "DECLARED_FAIL_CLOSED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "privacyCorrectionExecution",
+    "key": "PRIVACY_CORRECTION_EXECUTION",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "privacyErasureExecution",
+    "key": "PRIVACY_ERASURE_EXECUTION",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts",
+      "lib/privacy/provider-activation-binding.ts",
+      "lib/providers/storage/privacy-export-storage.ts",
+      "scripts/phase33-local-smoke-internal.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "privacyExportStorageMode",
+    "key": "PRIVACY_EXPORT_STORAGE_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "privacyExportV2",
+    "key": "PRIVACY_EXPORT_V2",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "none",
+    "effectiveProperty": "privacyProcessingCohort",
+    "key": "PRIVACY_PROCESSING_COHORT",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/api/privacy/exports/[id]/route.ts",
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "privacyProcessingMode",
+    "key": "PRIVACY_PROCESSING_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": null,
+    "key": "PRIVACY_PROVIDER_ANALYTICS",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": null,
+    "key": "PRIVACY_PROVIDER_BACKUP",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": null,
+    "key": "PRIVACY_PROVIDER_DOCUMENTS",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": null,
+    "key": "PRIVACY_PROVIDER_EMAIL",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": null,
+    "key": "PRIVACY_PROVIDER_PAYMENT",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/privacy/execution-approval.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": null,
+    "key": "PRIVACY_PROVIDER_POSTGRES",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/company-verification/[id]/page.tsx",
+      "app/admin/company-verification/actions.ts",
+      "app/admin/company-verification/page.tsx",
+      "app/candidate/jobpass/actions.ts",
+      "app/candidate/privacy/actions.ts",
+      "app/candidate/privacy/page.tsx",
+      "app/candidate/talent-radar/page.tsx",
+      "app/candidate/talent-radar/requests/[id]/page.tsx",
+      "app/candidate/talent-radar/requests/actions.ts",
+      "app/employer/billing/checkout/page.tsx",
+      "app/employer/billing/page.tsx",
+      "app/employer/billing/profile/page.tsx",
+      "app/employer/team/page.tsx",
+      "components/notifications/notification-settings-page.tsx",
+      "lib/auth/email-change-service.ts",
+      "lib/billing/employer-action-dependencies.ts",
+      "lib/companies/verification/composition.ts",
+      "lib/employer/team.ts"
+    ],
+    "defaultValue": "disabled",
+    "effectiveProperty": "privilegedStepUpMode",
+    "key": "PRIVILEGED_STEP_UP_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/auth/rate-limit-runtime.ts"
+    ],
+    "defaultValue": "postgres",
+    "effectiveProperty": "rateLimitBackend",
+    "key": "RATE_LIMIT_BACKEND",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Trust & Safety",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/api/webhooks/payments/[provider]/route.ts",
+      "lib/ops/registered-handler-runtime.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "realPaymentIngestionEnabled",
+    "key": "REAL_PAYMENT_INGESTION",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/api/webhooks/payments/[provider]/route.ts",
+      "lib/ops/registered-handler-runtime.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "realPaymentProjectionEnabled",
+    "key": "REAL_PAYMENT_PROJECTION",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/(public)/jobs/actions.ts",
+      "lib/analytics/live-consent-policy.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "searchLearningCollection",
+    "key": "SEARCH_LEARNING_COLLECTION",
+    "kind": "boolean",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Search / Privacy",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/abuse/public-report.ts",
+      "lib/billing/employer-action-dependencies.ts",
+      "lib/billing/orders.ts",
+      "lib/security/rate-limit-audit.ts"
+    ],
+    "defaultValue": "observe",
+    "effectiveProperty": "trustRiskMode",
+    "key": "TRUST_RISK_MODE",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Trust & Safety",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "app/admin/system/page.tsx",
+      "lib/ops/operations-ledger.ts",
+      "lib/ops/phase33-contract-activation.ts",
+      "lib/ops/work-replay.ts",
+      "scripts/phase23-sandbox-control.ts",
+      "scripts/phase23-worker.ts",
+      "scripts/phase33-contract-bootstrap.ts",
+      "scripts/phase33-local-bootstrap.ts",
+      "scripts/phase33-runtime.ts"
+    ],
+    "defaultValue": "paused",
+    "effectiveProperty": "workerRuntime",
+    "key": "WORKER_RUNTIME",
+    "kind": "mode",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform / Operations",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  },
+  {
+    "consumers": [
+      "lib/ops/work-replay.ts"
+    ],
+    "defaultValue": "false",
+    "effectiveProperty": "workerSandboxReplayEnabled",
+    "key": "WORKER_SANDBOX_REPLAY",
+    "kind": "boolean",
+    "launchClasses": [
+      "LOCAL_CI"
+    ],
+    "owner": "Platform / Operations",
+    "source": "lib/config/env-schema.ts",
+    "status": "RUNTIME_CONSUMED"
+  }
+]

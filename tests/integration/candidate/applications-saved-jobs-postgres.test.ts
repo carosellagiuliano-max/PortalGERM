@@ -358,7 +358,7 @@ describe.sequential(
       }
     });
 
-    it("keeps the committed application retryable when the post-commit Mock email fails", async () => {
+    it("commits one durable mail intent with the application and never calls the legacy provider", async () => {
       const confirmation = await getApplicationConfirmationView(
         {
           candidateUserId: IDS.otherCandidateUser,
@@ -385,18 +385,11 @@ describe.sequential(
         confirmed: true as const,
         idempotencyKey: "application:email-retry:one",
       };
-      const durableProvider = new MockEmailProvider(
-        new PrismaEmailLogRepository(client()),
-      );
-      let failFirstSend = true;
+      const legacySend = vi.fn(async () => {
+        throw new Error("legacy provider must not be called");
+      });
       const retryingProvider: EmailProvider = {
-        async send(email) {
-          if (failFirstSend) {
-            failFirstSend = false;
-            throw new Error("Injected post-commit Mock email failure");
-          }
-          return durableProvider.send(email);
-        },
+        send: legacySend,
       };
 
       const unconfirmed = await applyToJob(
@@ -431,9 +424,10 @@ describe.sequential(
       expect(first).toMatchObject({
         ok: true,
         duplicate: false,
-        emailRecorded: false,
+        emailRecorded: true,
       });
       if (!first.ok) throw new Error("Expected committed application.");
+      expect(legacySend).not.toHaveBeenCalled();
 
       const replayAt = new Date(NOW.getTime() + 31 * 60 * 1_000);
       await client().job.update({
@@ -467,13 +461,13 @@ describe.sequential(
         code: "IDEMPOTENCY_CONFLICT",
       });
       await expect(
-        client().emailLog.count({
+        client().notificationOutbox.count({
           where: {
             templateKey: "application_submitted",
-            recipient: "phase09-application-other@example.test",
+            recipientUserId: IDS.otherCandidateUser,
           },
         }),
-      ).resolves.toBe(0);
+      ).resolves.toBe(1);
 
       let retry: Awaited<ReturnType<typeof applyToJob>>;
       try {
@@ -531,10 +525,10 @@ describe.sequential(
             payload: { path: ["applicationId"], equals: applicationId },
           },
         }),
-        client().emailLog.count({
+        client().notificationOutbox.count({
           where: {
             templateKey: "application_submitted",
-            recipient: "phase09-application-other@example.test",
+            recipientUserId: IDS.otherCandidateUser,
           },
         }),
       ]);
@@ -654,10 +648,10 @@ describe.sequential(
             jobProvenanceSnapshot: true,
           },
         }),
-        client().emailLog.count({
+        client().notificationOutbox.count({
           where: {
             templateKey: "application_submitted",
-            recipient: "phase09-application-candidate@example.test",
+            recipientUserId: IDS.candidateUser,
           },
         }),
       ]);

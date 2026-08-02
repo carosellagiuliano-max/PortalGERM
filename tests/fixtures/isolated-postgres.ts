@@ -1,5 +1,15 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 
 import { Client, Pool } from "pg";
@@ -18,6 +28,7 @@ const databaseNamePattern = /^swisstalenthub_test_[a-z0-9_]+$/;
 
 export async function createMigratedTestDatabase(
   purpose: string,
+  options: Readonly<{ throughMigration?: string }> = {},
 ): Promise<MigratedTestDatabase> {
   const configuration = getIsolatedTestDatabaseConfiguration();
   const normalizedPurpose = purpose.toLowerCase().replaceAll(/[^a-z0-9]+/g, "_");
@@ -82,7 +93,14 @@ export async function createMigratedTestDatabase(
   };
 
   try {
-    await migrate();
+    if (options.throughMigration === undefined) {
+      await migrate();
+    } else {
+      await runPrismaMigrateDeployThrough(
+        connectionString,
+        options.throughMigration,
+      );
+    }
   } catch (error) {
     await dispose();
     throw error;
@@ -114,6 +132,87 @@ async function runPrismaMigrateDeploy(connectionString: string) {
     throw new Error(
       `Prisma migrate deploy failed with exit ${result.exitCode}: ${redactProcessOutput(result.output)}`,
     );
+  }
+}
+
+async function runPrismaMigrateDeployThrough(
+  connectionString: string,
+  throughMigration: string,
+) {
+  if (!/^\d{14}_[a-z0-9_]+$/u.test(throughMigration)) {
+    throw new Error("Migration cutoff is outside the safe allowlist.");
+  }
+  const sourcePrisma = resolve(process.cwd(), "prisma");
+  const sourceMigrations = resolve(sourcePrisma, "migrations");
+  const migrationNames = readdirSync(sourceMigrations, {
+    withFileTypes: true,
+  })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  if (!migrationNames.includes(throughMigration)) {
+    throw new Error("Migration cutoff does not exist.");
+  }
+
+  const temporaryRoot = mkdtempSync(
+    resolve(process.cwd(), ".phase33-migration-fixture-"),
+  );
+  try {
+    const temporaryPrisma = resolve(temporaryRoot, "prisma");
+    const temporaryMigrations = resolve(temporaryPrisma, "migrations");
+    mkdirSync(temporaryMigrations, { recursive: true });
+    copyFileSync(
+      resolve(sourcePrisma, "schema.prisma"),
+      resolve(temporaryPrisma, "schema.prisma"),
+    );
+    const migrationLock = resolve(sourceMigrations, "migration_lock.toml");
+    if (existsSync(migrationLock)) {
+      copyFileSync(
+        migrationLock,
+        resolve(temporaryMigrations, "migration_lock.toml"),
+      );
+    }
+    for (const migrationName of migrationNames) {
+      if (migrationName > throughMigration) break;
+      cpSync(
+        resolve(sourceMigrations, migrationName),
+        resolve(temporaryMigrations, migrationName),
+        { recursive: true },
+      );
+    }
+    const temporaryConfig = resolve(temporaryRoot, "prisma.config.ts");
+    writeFileSync(
+      temporaryConfig,
+      [
+        'import { defineConfig } from "prisma/config";',
+        "export default defineConfig({",
+        `  schema: ${JSON.stringify(resolve(temporaryPrisma, "schema.prisma"))},`,
+        `  migrations: { path: ${JSON.stringify(temporaryMigrations)} },`,
+        "  datasource: { url: process.env.DATABASE_URL! },",
+        "});",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const prismaCli = resolve(
+      process.cwd(),
+      "node_modules",
+      "prisma",
+      "build",
+      "index.js",
+    );
+    const result = await runProcess(
+      process.execPath,
+      [prismaCli, "migrate", "deploy", "--config", temporaryConfig],
+      { ...process.env, DATABASE_URL: connectionString },
+    );
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `Prisma cutoff migrate deploy failed with exit ${result.exitCode}: ${redactProcessOutput(result.output)}`,
+      );
+    }
+  } finally {
+    rmSync(temporaryRoot, { force: true, recursive: true });
   }
 }
 

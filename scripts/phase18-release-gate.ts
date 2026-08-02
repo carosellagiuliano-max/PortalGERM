@@ -1,24 +1,9 @@
 import { spawn } from "node:child_process";
-import {
-  randomBytes,
-} from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import {
-  mkdtemp,
-  readFile,
-  rm,
-} from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import {
-  basename,
-  join,
-  resolve,
-} from "node:path";
+import { basename, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { Client } from "pg";
@@ -28,6 +13,7 @@ import { assertFreshMigrationBaseline } from "@/lib/ops/release-database-baselin
 import { loadLocalEnvironment } from "@/scripts/load-local-environment";
 import {
   redact,
+  resolvePostgresToolInvocation,
   safeToolEnvironment,
   terminateRecoveryChild,
   type RecoveryChild,
@@ -37,6 +23,7 @@ type CommandRecord = Readonly<{
   command: string;
   durationMs: number;
   exitCode: number;
+  expectedOutcome: "SUCCESS" | "EXPECTED_REFUSAL";
 }>;
 
 type RunResult = Readonly<{
@@ -97,11 +84,9 @@ async function main() {
     maintenanceTargetValidated = true;
     commit = await gitOutput(["rev-parse", "HEAD"], repository);
     branch = await gitOutput(["branch", "--show-current"], repository);
-    tools = await collectToolVersions();
+    tools = await collectToolVersions(baseDatabaseUrl);
 
-    temporaryRoot = await mkdtemp(
-      join(tmpdir(), "swisstalenthub-phase18-"),
-    );
+    temporaryRoot = await mkdtemp(join(tmpdir(), "swisstalenthub-phase18-"));
     const clone = join(temporaryRoot, "clean-clone");
     const identity = join(temporaryRoot, "phase18-age-identity.txt");
     const backup = join(temporaryRoot, "phase18-release.dump.age");
@@ -189,12 +174,10 @@ async function main() {
       environment,
     );
 
-    await runNpm(
-      "guard DB migration",
-      ["run", "db:migrate"],
-      clone,
-      { ...environment, DATABASE_URL: guardUrl },
-    );
+    await runNpm("guard DB migration", ["run", "db:migrate"], clone, {
+      ...environment,
+      DATABASE_URL: guardUrl,
+    });
     const beforeGuard = await domainRowCounts(guardUrl);
     assertFreshMigrationBaseline(beforeGuard);
     const guard = await runNpmExpectFailure(
@@ -221,9 +204,7 @@ async function main() {
       throw new Error("Production seed failed for an unexpected reason.");
     }
     const afterGuard = await domainRowCounts(guardUrl);
-    if (
-      JSON.stringify(afterGuard) !== JSON.stringify(beforeGuard)
-    ) {
+    if (JSON.stringify(afterGuard) !== JSON.stringify(beforeGuard)) {
       throw new Error("Production demo-seed guard allowed a DEMO write.");
     }
 
@@ -237,21 +218,12 @@ async function main() {
 
     await runNpm(
       "encrypted release backup",
-      [
-        "run",
-        "ops:backup",
-        "--",
-        "--source",
-        "release-test",
-        "--out",
-        backup,
-      ],
+      ["run", "ops:backup", "--", "--source", "release-test", "--out", backup],
       clone,
       {
         ...environment,
         AGE_BINARY: ageTools.age,
-        OPS_POSTGRES_TOOL_MODE: "docker-compose",
-        OPS_POSTGRES_DOCKER_SERVICE: "postgres",
+        ...recoveryPostgresToolEnvironment(),
       },
       10 * 60_000,
     );
@@ -268,21 +240,12 @@ async function main() {
     restoreStartedAt = new Date();
     await runNpm(
       "isolated encrypted restore",
-      [
-        "run",
-        "ops:restore",
-        "--",
-        "--in",
-        backup,
-        "--target",
-        "restore-test",
-      ],
+      ["run", "ops:restore", "--", "--in", backup, "--target", "restore-test"],
       clone,
       {
         ...environment,
         AGE_BINARY: ageTools.age,
-        OPS_POSTGRES_TOOL_MODE: "docker-compose",
-        OPS_POSTGRES_DOCKER_SERVICE: "postgres",
+        ...recoveryPostgresToolEnvironment(),
       },
       10 * 60_000,
     );
@@ -364,30 +327,28 @@ async function main() {
     }
 
     const completedAt = new Date();
-    const rpoSeconds =
+    const snapshotToBackupLatencySeconds =
       sourceSnapshotAt === undefined || backupCompletedAt === undefined
         ? null
         : Math.max(
             0,
             Math.round(
-              (backupCompletedAt.getTime() -
-                sourceSnapshotAt.getTime()) /
+              (backupCompletedAt.getTime() - sourceSnapshotAt.getTime()) /
                 1_000,
             ),
           );
-    const rtoSeconds =
+    const localRestoreDurationSeconds =
       restoreStartedAt === undefined || restoreCompletedAt === undefined
         ? null
         : Math.max(
             0,
             Math.round(
-              (restoreCompletedAt.getTime() -
-                restoreStartedAt.getTime()) /
+              (restoreCompletedAt.getTime() - restoreStartedAt.getTime()) /
                 1_000,
             ),
           );
     const manifest = Object.freeze({
-      schemaVersion: "phase18-release-gate-v1",
+      schemaVersion: "phase18-release-gate-v2",
       status,
       runId,
       release: Object.freeze({
@@ -408,17 +369,18 @@ async function main() {
         encryptedBytes: backupBytes || null,
         location: "external ephemeral drill directory (removed after evidence)",
         retentionClass: "ephemeral restore-drill artifact",
-        retentionTarget: "30 daily + 12 monthly encrypted objects (not configured/approved)",
-        measuredRpoSeconds: rpoSeconds,
-        measuredRtoSeconds: rtoSeconds,
-        rpoHypothesisSeconds: 86_400,
-        rtoHypothesisSeconds: 28_800,
+        retentionTarget:
+          "30 daily + 12 monthly encrypted objects (not configured/approved)",
+        localSnapshotToBackupLatencySeconds: snapshotToBackupLatencySeconds,
+        localRestoreDurationSeconds,
+        unapprovedRpoHypothesisSeconds: 86_400,
+        unapprovedRtoHypothesisSeconds: 28_800,
       }),
       commands,
       cleanup,
       knownLimitations: Object.freeze([
         "No real Staging deployment was available; staging smoke remains open.",
-        "Retention lifecycle and RPO/RTO require Ops/Owner approval.",
+        "Local backup/restore latency is not an RPO/RTO measurement; retention, incident timeline and RPO/RTO require Ops/Owner approval.",
         "License scan is technical evidence, not legal approval.",
       ]),
       ...(failure === "" ? {} : { failure }),
@@ -433,7 +395,7 @@ async function main() {
     );
     if (status === "passed") {
       console.info(
-        `Phase 18 E2E-08 passed for ${commit}; seed ${manifestSha256}; backup ${checksum}; RPO ${String(rpoSeconds)} s; RTO ${String(rtoSeconds)} s; cleanup complete.`,
+        `Phase 18 E2E-08 passed for ${commit}; seed ${manifestSha256}; backup ${checksum}; local snapshot-to-backup latency ${String(snapshotToBackupLatencySeconds)} s; local restore duration ${String(localRestoreDurationSeconds)} s; cleanup complete.`,
       );
     } else {
       process.exitCode = 1;
@@ -441,44 +403,45 @@ async function main() {
   }
 }
 
-async function collectToolVersions() {
+async function collectToolVersions(databaseUrl: string) {
   const git = await version("Git CLI", "git", ["--version"]);
   const docker = await version("Docker CLI", "docker", ["--version"]);
   const compose = await version("Docker Compose plugin", "docker", [
     "compose",
     "version",
   ]);
+  const postgresToolEnvironment = {
+    ...process.env,
+    ...recoveryPostgresToolEnvironment(),
+  } satisfies NodeJS.ProcessEnv;
+  const pgDumpInvocation = resolvePostgresToolInvocation(
+    "pg_dump",
+    ["--version"],
+    databaseUrl,
+    postgresToolEnvironment,
+  );
+  const pgRestoreInvocation = resolvePostgresToolInvocation(
+    "pg_restore",
+    ["--version"],
+    databaseUrl,
+    postgresToolEnvironment,
+  );
   const pgDump = await version(
-    "PostgreSQL pg_dump in the Compose service",
-    "docker",
-    [
-      "compose",
-      "exec",
-      "-T",
-      "postgres",
-      "pg_dump",
-      "--version",
-    ],
+    "PostgreSQL pg_dump in the isolated recovery runtime",
+    pgDumpInvocation.command,
+    pgDumpInvocation.args,
+    pgDumpInvocation.environment,
   );
   const pgRestore = await version(
-    "PostgreSQL pg_restore in the Compose service",
-    "docker",
-    [
-      "compose",
-      "exec",
-      "-T",
-      "postgres",
-      "pg_restore",
-      "--version",
-    ],
+    "PostgreSQL pg_restore in the isolated recovery runtime",
+    pgRestoreInvocation.command,
+    pgRestoreInvocation.args,
+    pgRestoreInvocation.environment,
   );
   const age = await version("Age encryption CLI", resolveAgeTools().age, [
     "--version",
   ]);
-  const npm = await version("npm CLI", process.execPath, [
-    npmCli,
-    "--version",
-  ]);
+  const npm = await version("npm CLI", process.execPath, [npmCli, "--version"]);
   return Object.freeze({
     node: process.version,
     npm,
@@ -522,13 +485,15 @@ async function createAgeIdentity(binary: string, path: string) {
   return recipient;
 }
 
-function releaseEnvironment(input: Readonly<{
-  sourceUrl: string;
-  restoreUrl: string;
-  recipient: string;
-  identity: string;
-  commit: string;
-}>): NodeJS.ProcessEnv {
+function releaseEnvironment(
+  input: Readonly<{
+    sourceUrl: string;
+    restoreUrl: string;
+    recipient: string;
+    identity: string;
+    commit: string;
+  }>,
+): NodeJS.ProcessEnv {
   const secret = () => randomBytes(32).toString("base64");
   return {
     ...safeToolEnvironment(),
@@ -563,6 +528,30 @@ function releaseEnvironment(input: Readonly<{
   };
 }
 
+function recoveryPostgresToolEnvironment(): Partial<NodeJS.ProcessEnv> {
+  const mode = process.env.OPS_POSTGRES_TOOL_MODE?.trim();
+  if (mode === undefined || mode === "" || mode === "docker-compose") {
+    return {
+      OPS_POSTGRES_TOOL_MODE: "docker-compose",
+      OPS_POSTGRES_DOCKER_SERVICE:
+        process.env.OPS_POSTGRES_DOCKER_SERVICE?.trim() || "postgres",
+    };
+  }
+  if (mode === "docker-container") {
+    const container = process.env.OPS_POSTGRES_DOCKER_CONTAINER?.trim();
+    if (container === undefined || container === "") {
+      throw new Error("OPS_POSTGRES_DOCKER_CONTAINER is required.");
+    }
+    return {
+      OPS_POSTGRES_TOOL_MODE: mode,
+      OPS_POSTGRES_DOCKER_CONTAINER: container,
+    };
+  }
+  throw new Error(
+    "Phase-18 recovery supports docker-compose or docker-container tools only.",
+  );
+}
+
 async function runNpm(
   label: string,
   args: readonly string[],
@@ -593,7 +582,12 @@ async function runNpmExpectFailure(
     5 * 60_000,
   );
   const durationMs = Math.round(performance.now() - started);
-  commands.push({ command: label, durationMs, exitCode: result.exitCode });
+  commands.push({
+    command: label,
+    durationMs,
+    exitCode: result.exitCode,
+    expectedOutcome: "EXPECTED_REFUSAL",
+  });
   if (result.exitCode === 0) {
     throw new Error(`${label} unexpectedly succeeded.`);
   }
@@ -625,6 +619,7 @@ async function run(
     command: label,
     durationMs,
     exitCode: result.exitCode,
+    expectedOutcome: "SUCCESS",
   });
   if (result.exitCode !== 0) {
     throw new Error(
@@ -721,14 +716,9 @@ async function version(
   label: string,
   command: string,
   args: readonly string[],
+  environment: NodeJS.ProcessEnv = safeToolEnvironment(),
 ) {
-  const result = await runRaw(
-    command,
-    args,
-    repository,
-    safeToolEnvironment(),
-    30_000,
-  );
+  const result = await runRaw(command, args, repository, environment, 30_000);
   if (result.exitCode !== 0) {
     throw new Error(
       `${label} is unavailable or unhealthy (command ${basename(
@@ -859,7 +849,9 @@ function assertSafeMaintenanceTarget(value: string) {
 
 function assertGeneratedDatabaseName(name: string) {
   if (!databaseNamePattern.test(name)) {
-    throw new Error("Generated database name is outside the cleanup allowlist.");
+    throw new Error(
+      "Generated database name is outside the cleanup allowlist.",
+    );
   }
 }
 
@@ -873,13 +865,7 @@ function quoteIdentifier(name: string) {
 }
 
 async function gitOutput(args: readonly string[], cwd: string) {
-  const result = await runRaw(
-    "git",
-    args,
-    cwd,
-    safeToolEnvironment(),
-    30_000,
-  );
+  const result = await runRaw("git", args, cwd, safeToolEnvironment(), 30_000);
   if (result.exitCode !== 0) {
     throw new Error(`git ${args[0] ?? "command"} failed.`);
   }
@@ -890,12 +876,7 @@ function resolveAgeTools() {
   const links =
     process.env.LOCALAPPDATA === undefined
       ? undefined
-      : resolve(
-          process.env.LOCALAPPDATA,
-          "Microsoft",
-          "WinGet",
-          "Links",
-        );
+      : resolve(process.env.LOCALAPPDATA, "Microsoft", "WinGet", "Links");
   const age =
     process.env.AGE_BINARY ??
     (links === undefined ? "age" : resolve(links, "age.exe"));

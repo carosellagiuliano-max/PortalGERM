@@ -140,39 +140,42 @@ describe("MockEmailProvider", () => {
     expect(mailbox.mailbox.consume(authorization)).toEqual({ status: "empty" });
   });
 
-  it("captures a job-alert unsubscribe URL while persisting neither URL nor token", async () => {
-    const rawToken = Buffer.alloc(32, 0x42).toString("base64url");
-    const unsubscribeUrl = `http://127.0.0.1:3000/alerts/unsubscribe/${rawToken}`;
-    const { repository, rows } = createMemoryRepository();
-    const mailbox = createMailbox();
-    const provider = new MockEmailProvider(repository, {
-      mailbox: { validate: mailbox.validate, capture: mailbox.capture },
-    });
+  it.each(["job_alert_digest_mock", "job_alert_digest"] as const)(
+    "captures a %s unsubscribe URL while persisting neither URL nor token",
+    async (templateKey) => {
+      const rawToken = Buffer.alloc(32, 0x42).toString("base64url");
+      const unsubscribeUrl = `http://127.0.0.1:3000/alerts/unsubscribe/${rawToken}`;
+      const { repository, rows } = createMemoryRepository();
+      const mailbox = createMailbox();
+      const provider = new MockEmailProvider(repository, {
+        mailbox: { validate: mailbox.validate, capture: mailbox.capture },
+      });
 
-    await provider.send({
-      to: "candidate@example.test",
-      templateKey: "job_alert_digest_mock",
-      data: {
-        alertName: "Pflege Zürich",
-        jobCount: 3,
-        idempotencyKey: "digest-00000000-0000-4000-8000-000000000001",
-        unsubscribeUrl,
-      },
-      subject: "Neue Stellen aus deinem Jobabo",
-    });
+      await provider.send({
+        to: "candidate@example.test",
+        templateKey,
+        data: {
+          alertName: "Pflege Zürich",
+          jobCount: 3,
+          idempotencyKey: "digest-00000000-0000-4000-8000-000000000001",
+          unsubscribeUrl,
+        },
+        subject: "Neue Stellen aus deinem Jobabo",
+      });
 
-    const persisted = JSON.stringify([...rows.values()]);
-    expect(persisted).not.toContain(rawToken);
-    expect(persisted).not.toContain(unsubscribeUrl);
-    expect(persisted).not.toMatch(/https?:\/\//iu);
-    expect(mailbox.mailbox.consume(authorization)).toMatchObject({
-      status: "delivered",
-      envelope: {
-        actionUrl: unsubscribeUrl,
-        templateKey: "job_alert_digest_mock",
-      },
-    });
-  });
+      const persisted = JSON.stringify([...rows.values()]);
+      expect(persisted).not.toContain(rawToken);
+      expect(persisted).not.toContain(unsubscribeUrl);
+      expect(persisted).not.toMatch(/https?:\/\//iu);
+      expect(mailbox.mailbox.consume(authorization)).toMatchObject({
+        status: "delivered",
+        envelope: {
+          actionUrl: unsubscribeUrl,
+          templateKey,
+        },
+      });
+    },
+  );
 
   it("allows a failed job-alert capture to rotate only its redacted action token", async () => {
     const { repository, rows } = createMemoryRepository();

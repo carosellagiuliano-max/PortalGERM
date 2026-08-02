@@ -27,8 +27,8 @@ For every feature, document or implement all items below:
 - [ ] **Feature gate:** plan/product/credit limit enforced server-side where monetized.
 - [ ] **Audit:** sensitive action writes `AuditLog` with actor, entity, metadata, and hashed IP where useful.
 - [ ] **Notifications:** LC1 records truthful Mock delivery; every activated
-  real flow commits a durable classified Outbox entry atomically and uses
-  only the explicitly approved environment/provider.
+      real flow commits a durable classified Outbox entry atomically and uses
+      only the explicitly approved environment/provider.
 - [ ] **UX states:** default, loading, empty, success, validation error, permission error, rate-limit error, and offline/server error.
 - [ ] **Mobile:** usable at 360 px width; forms, tables, filters, modals, and dashboards do not overflow.
 - [ ] **Accessibility:** semantic HTML, labels, focus states, keyboard-operable dialogs/menus, sufficient contrast.
@@ -44,17 +44,17 @@ No feature is complete if it only satisfies the UI row.
 
 Every route must deliberately handle these states.
 
-| State | Requirement |
-|---|---|
-| Loading | Skeleton or compact loading region; no layout jump. |
-| Empty | Helpful German copy, next action, and no dead dashboard tables. |
-| Error | Friendly German message; no stack traces or raw exception text. |
-| Forbidden | 403 page or inline locked state; explain the missing permission/plan. |
-| Not found | 404 that does not reveal whether another tenant's record exists. |
-| Success | Clear confirmation, next step, and persisted DB state. |
-| Validation | Field-level German errors and preserved user input. |
-| Rate limited | Friendly message and audit `RATE_LIMITED`; no retry spam loop. |
-| Mobile | Filters become sheet/drawer; tables become cards; buttons remain tappable. |
+| State        | Requirement                                                                |
+| ------------ | -------------------------------------------------------------------------- |
+| Loading      | Skeleton or compact loading region; no layout jump.                        |
+| Empty        | Helpful German copy, next action, and no dead dashboard tables.            |
+| Error        | Friendly German message; no stack traces or raw exception text.            |
+| Forbidden    | 403 page or inline locked state; explain the missing permission/plan.      |
+| Not found    | 404 that does not reveal whether another tenant's record exists.           |
+| Success      | Clear confirmation, next step, and persisted DB state.                     |
+| Validation   | Field-level German errors and preserved user input.                        |
+| Rate limited | Friendly message and audit `RATE_LIMITED`; no retry spam loop.             |
+| Mobile       | Filters become sheet/drawer; tables become cards; buttons remain tappable. |
 
 ---
 
@@ -64,8 +64,8 @@ Every route must deliberately handle these states.
 
 - [ ] Register/login/logout works and preserves intended `next` redirect safely.
 - [ ] SwissJobPass edit writes profile, skills, languages and consent. LC1
-  keeps truthful CV metadata-only behavior; a real-CV scope uses only the
-  Phase-21 quarantined Vault lifecycle.
+      keeps truthful CV metadata-only behavior; a real-CV scope uses only the
+      Phase-21 quarantined Vault lifecycle.
 - [ ] Search/save/apply flow dedupes applications and records an application event.
 - [ ] Jobabo create/edit/delete has email preview and mock email log.
 - [ ] Application cockpit supports list + Kanban, notes, withdraw, messages, abuse report.
@@ -83,9 +83,11 @@ Every route must deliberately handle these states.
 - [ ] Talent Radar locked preview does not query anonymous candidate data.
 - [ ] Radar requires ACTIVE+VERIFIED Company; Contact consumes source-separated plan→purchased→admin credit atomically, enforces 14-day expiry/pending duplicate/30-day recontact and performs no automatic refund.
 - [ ] Billing checkout requires authorized complete BillingProfile, fresh
-  risk-based step-up, line PlanVersion/ProductVersion XOR and typed target.
-  LC1 uses the labelled Mock provider; LC5/LC6 use only the Phase-24
-  WTP-/Finance-/Provider-gated real flow.
+      risk-based step-up, line PlanVersion/ProductVersion XOR and typed target.
+      LC1 uses the labelled Mock provider; LC4 exposes no purchase path; LC5/LC6
+      use only the Phase-24 domain contract through Phase-33 authority-bound
+      Contract/Sandbox/Live adapter code after WTP-/Finance-/Provider-/Tax-/Legal-
+      and target-environment approval. Contract stubs are never payment evidence.
 - [ ] Analytics only shows levels allowed by the plan.
 
 ### Platform Admin / Operations Flows
@@ -126,9 +128,9 @@ Handle or document these before billing implementation:
 - [ ] Message bodies, cover letters, job text, guide content, and abuse descriptions render as sanitized text.
 - [ ] No private route is indexable; sitemap excludes dashboards and API routes.
 - [ ] Der historische Demo-MVP speichert nur validierte Metadaten. Ein
-  aktivierter realer Upload speichert Bytes ausschliesslich im
-  Phase-21-Quarantäne-Vault mit Streaming-Limits, Magic-Byte-/Polyglot- und
-  Malware-Prüfung, autorisiertem Download, Retention und Löschung.
+      aktivierter realer Upload speichert Bytes ausschliesslich im
+      Phase-21-Quarantäne-Vault mit Streaming-Limits, Magic-Byte-/Polyglot- und
+      Malware-Prüfung, autorisiertem Download, Retention und Löschung.
 - [ ] The exact `RATE_LIMIT_PRESETS_V1` covers login, register, reset, apply, privacy intake/challenge, Radar list, contact request, lead form and abuse report; Production/Staging use the shared PostgreSQL bucket store and fail closed on a memory backend.
 - [ ] Logs never include passwords, tokens, raw CV content, full message bodies, or payment secrets.
 
@@ -206,30 +208,59 @@ Phase 26 is mandatory before any public verified-company badge, public
 company job or Radar trust claim. Phase 28 is not a universal launch
 dependency.
 
+### Technical readiness is not activation
+
+Phase 33 may return `TECHNICALLY_READY_FOR_LC4` or
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION` only when its full repository,
+migration, provider, worker, Production-Contract, role/journey/browser and
+artifact matrix is green on one immutable candidate. These verdicts mean that
+later secrets, accounts and approved configuration need no further code
+change; they do not mean that any provider, cohort, paid offer or public
+environment is active.
+
+`GO_LIVE_APPROVED` additionally requires the exact target deployment plus all
+scope-relevant Provider, Legal, Privacy, AVG, Tax, Finance, Operations,
+Rollback, Monitoring, Research/WTP/Capacity and independent Approval evidence.
+If any is missing, the only valid activation result is
+`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. The historical Phase-32-`NO_GO`
+remains unchanged.
+
+For Phase 33 the complete action evidence chain is:
+
+```text
+User action → UI/state → Zod → Session/AAL → Role/Capability
+→ Tenant/Ownership/Assignment → Entitlement/Feature/Provider gate
+→ transaction/idempotency → DB/Provider/Worker
+→ Audit/Outbox → safe response → persisted UI feedback
+```
+
+A page load, route smoke, queued status, sandbox receipt or green build alone
+does not satisfy this chain.
+
 ## Route Evidence Record
 
 Use one record for every important page before checking its route deliverable:
 
-| Field | Required evidence |
-|---|---|
-| Purpose / roles | User goal, allowed roles and entry CTA |
-| Primary / secondary actions | Exactly what persists or navigates |
-| Data | Read model, pagination/filter and freshness |
-| Server policy | Session, capability, tenant, ownership, assignment, entitlement |
-| States | Default, loading, empty, validation, conflict, error, forbidden/not-found, locked, success, onboarding/offline where relevant |
-| Trust/privacy | Score/source/date/sponsoring/consent/PII behavior |
-| Desktop/mobile | Screenshot or named manual check at desktop and 360 px |
-| Accessibility | Keyboard path, focus/error announcement, automated result |
-| Seed | Named fixture/account/state |
-| Tests | Requirement/Test IDs and pass result |
-| Evidence | Target commit, date, environment and command/manual check |
+| Field                       | Required evidence                                                                                                             |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Purpose / roles             | User goal, allowed roles and entry CTA                                                                                        |
+| Primary / secondary actions | Exactly what persists or navigates                                                                                            |
+| Data                        | Read model, pagination/filter and freshness                                                                                   |
+| Server policy               | Session, capability, tenant, ownership, assignment, entitlement                                                               |
+| States                      | Default, loading, empty, validation, conflict, error, forbidden/not-found, locked, success, onboarding/offline where relevant |
+| Trust/privacy               | Score/source/date/sponsoring/consent/PII behavior                                                                             |
+| Desktop/mobile              | Screenshot or named manual check at desktop and 360 px                                                                        |
+| Accessibility               | Keyboard path, focus/error announcement, automated result                                                                     |
+| Seed                        | Named fixture/account/state                                                                                                   |
+| Tests                       | Requirement/Test IDs and pass result                                                                                          |
+| Evidence                    | Target commit, date, environment and command/manual check                                                                     |
 
 ## Marketplace and Commercial Gates
 
 - [ ] Production-like data has documented provenance and permission; no scraping or hidden demo data.
 - [ ] Exactly one first Region×Occupation cluster is selected through a
-  pre-registered Go/No-go; Pflege and Engineering use independent corpora and
-  cannot prove each other.
+      pre-registered Go/No-go; Pflege and Engineering use independent corpora and
+      cannot prove each other.
 - [ ] A promoted/indexed cluster passes its documented liquidity/content gate.
 - [ ] Free-to-paid restrictions correspond to additional economic value, not an intentionally broken basic flow.
 - [ ] Pricing, period, VAT, renewal, cancellation and downgrade effects are visible before confirmation.
@@ -238,11 +269,11 @@ Use one record for every important page before checking its route deliverable:
 - [ ] Mock checkout completion is labelled as product-mechanics evidence, never paid conversion, collected revenue or willingness-to-pay.
 - [ ] Pricing/packaging approval uses a pre-registered real-money KMU offer test; monthly, hiring-sprint and retainer/credit options are compared on normalized value.
 - [ ] Base workflow, Hiring Sprint, Retainer, Concierge and approved Import
-  are tested before Boost/Radar upsells; Boost proves only reach value and
-  Radar requires density.
+      are tested before Boost/Radar upsells; Boost proves only reach value and
+      Radar requires density.
 - [ ] Each paid service has scope, deadline, customer duties, capacity,
-  unit cost and platform-failure remedy; refund, credit restoration and
-  invoice correction cannot drift.
+      unit cost and platform-failure remedy; refund, credit restoration and
+      invoice correction cannot drift.
 - [ ] Episodic pause/reactivation is measured separately from durable logo churn.
 - [ ] A monthly cashflow/runway model covers hiring, CAC timing, support, infrastructure, churn/reactivation, cumulative burn and peak funding without double-counting Sales/CAC.
 - [ ] Any indexed salary orientation uses a versioned, lawful, reviewed LIVE source with honest occupation/region granularity, uncertainty, attribution and refresh owner; otherwise it is unavailable, `noindex` and absent from the sitemap.
@@ -254,35 +285,35 @@ Use one record for every important page before checking its route deliverable:
 ## Identity, Trust, Fraud and Freshness Gates
 
 - [ ] Registration, invite, reset and email change use verified,
-  purpose-bound, expiring single-use identities; email change re-verifies and
-  invalidates risky sessions as defined.
+      purpose-bound, expiring single-use identities; email change re-verifies and
+      invalidates risky sessions as defined.
 - [ ] Non-admin high-risk actions (checkout, bulk export/download, identity
-  reveal administration, account/security changes) use risk-based step-up,
-  not merely an admin-only MFA assumption.
+      reveal administration, account/security changes) use risk-based step-up,
+      not merely an admin-only MFA assumption.
 - [ ] Admin capabilities are least-privilege; sensitive actions have SoD or
-  dual control, audited break-glass and recovery.
+      dual control, audited break-glass and recovery.
 - [ ] Credential stuffing, ATO, compromised company, scam job, mass
-  messaging/contact, reveal/export anomaly and payment fraud have detection,
-  containment, appeal/recovery and evidence.
+      messaging/contact, reveal/export anomaly and payment fraud have detection,
+      containment, appeal/recovery and evidence.
 - [ ] Company verification has evidence provenance, reviewer separation,
-  expiry/re-review and rapid revocation. Public trust surfaces disappear
-  consistently on loss.
+      expiry/re-review and rapid revocation. Public trust surfaces disappear
+      consistently on loss.
 - [ ] Job reconfirmation, expiry, duplicate/copied-job detection and
-  “filled/unavailable” reporting feed one canonical freshness state.
-  Ineligible jobs disappear from Search, Alerts, Recommendations, Radar/
-  Matching, Feeds, Exports and Sitemap within the defined SLO.
+      “filled/unavailable” reporting feed one canonical freshness state.
+      Ineligible jobs disappear from Search, Alerts, Recommendations, Radar/
+      Matching, Feeds, Exports and Sitemap within the defined SLO.
 - [ ] Unknown/zero-result search feedback stores no raw sensitive query or
-  stable user fingerprint; only thresholded, retention-limited aggregates
-  enter a reviewed taxonomy backlog.
+      stable user fingerprint; only thresholded, retention-limited aggregates
+      enter a reviewed taxonomy backlog.
 
 ## Research, Support Capacity and Service-Recovery Gates
 
 - [ ] Moderated candidate, employer and operator studies measure task
-  success, time, errors, abandonment and comprehension on named flows.
+      success, time, errors, abandonment and comprehension on named flows.
 - [ ] Pilot capacity names concurrent customers/cases, minutes per flow,
-  fully loaded cost, backlog SLO, escalation budget and overload behavior.
+      fully loaded cost, backlog SLO, escalation budget and overload behavior.
 - [ ] A successful automated test does not replace legal, privacy, finance,
-  provider or target-user evidence.
+      provider or target-user evidence.
 
 ## Data and Concurrency Gates
 
@@ -306,9 +337,11 @@ Use one record for every important page before checking its route deliverable:
 - [ ] Accept, decline, exact 14-day expiry, pending duplicate, 30-day recontact, Company trust revocation and no-auto-refund/Admin exact-reversal policies are explicit and clock/DB tested.
 - [ ] Reveal identifies recipient Company, accepted request/conversation, one grant per accepted request, closed append-only `RevealField` rows and immutable notice/confirmation evidence. Each field stores its exact confirmed value as an AES-256-GCM encrypted, versioned, typed snapshot under a dedicated PII keyring; Radar reads decrypt that snapshot only after the current trust/grant guard and never reread live profile identity or generic JSON. Employer cannot trigger it.
 - [ ] Candidate revocation is idempotent and blocks the next identity read; opt-out/suspension cancels pending requests under the canonical transaction, cancelled requests are read-only/reportable, and already accepted history is retained.
-- [ ] EXPORT/DELETE/CORRECT intake is bounded and owner-scoped; Admin privacy routes use named read/verify/process capabilities and the closed status/command matrix. Export/delete remain truthful local Mocks and audits/notifications contain no case text or identity evidence.
+- [ ] EXPORT/DELETE/CORRECT intake is bounded and owner-scoped; Admin privacy routes use named read/verify/process capabilities, two independent action-/resource-bound approvals and the closed status/command matrix. Local/mock remains visibly synthetic; Phase 33 additionally exercises the real encrypted Approval→WorkItem→Worker→Artifact/Outbox contract against isolated production-contract storage without claiming external processing.
 - [ ] Candidate UI explains that already delivered identity cannot technically be taken back.
-- [ ] Export/delete/retention behavior is honestly marked mock or legally reviewed.
+- [ ] Export/delete/retention behavior is honestly classified as local mock,
+      `CONTRACT_ONLY` or externally reviewed/activated; no contract stub is labelled
+      a real subject-rights fulfilment.
 
 ## Release and Operations Gate
 
@@ -321,6 +354,33 @@ Use one record for every important page before checking its route deliverable:
 - [ ] Backup retention and business-approved RPO/RTO exist; an isolated restore was actually tested.
 - [ ] Dependency, license and secret scans have no unresolved critical finding.
 - [ ] Legal/privacy/tax/provider Go-live blockers are named and signed off separately from technical tests.
+- [ ] Production accepts no Mock/Sandbox/Demo/`.invalid`, local-filesystem or
+      secret-only provider activation and has no Live→Mock fallback.
+- [ ] Phase-33 E-Mail-Evidence trennt Delivery-AES-/Recipient-HMAC-Keyring und
+      Resend-API-/Webhook-Secret-Version samt vollständigem Key-Version-
+      Inventar; belegt normalen 23-h-Wipe, AES-v2 maximal 31 d und exakt
+      `400 × 24 h` bis zur one-way Attempt-PII/Receipt/Digest-Kompaktion bei
+      erhaltener nicht-PII Auditkette; minutenbasierte Retention läuft trotz
+      Provider-Revoke. Unknown Outcomes enden nach bounded Same-Key-Retry
+      `PAUSED`/manuell reconciliert, nie Blind-Resend/Dead Letter; Webhook-
+      Activation ist im TX gelockt und Inbox/Suppression sind monoton.
+- [ ] A pinned, isolated `local/mock` profile preserves labelled demo behavior
+      without external effects.
+- [ ] A pinned, isolated `production-contract` profile runs the built
+      Standalone/OCI app, separate worker, scheduler, PostgreSQL 16, TLS proxy,
+      S3-compatible storage, scanner and provider HTTP stubs with healthchecks,
+      network boundaries and failure injection. Stubreceipts are marked
+      `CONTRACT_ONLY`, never Live evidence.
+- [ ] Historical migration SQL SHA-256 values are identical before/after;
+      Fresh/Upgrade/Legacy/Partial/Restart/Concurrency states are tested with
+      `migrate deploy`, never `db push` as evidence.
+- [ ] Final candidate binds Tree, Lockfile, migration, runtime/feature/provider/
+      worker inventories, configuration, Standalone/OCI artifact and Evidence
+      digests; any post-freeze fix restarts the complete gate.
+- [ ] Chromium, Firefox and WebKit cover launch-critical journeys on Desktop,
+      360 px and critical 320 px with Keyboard, focus, Zoom/Reflow, Reduced
+      Motion and Axe; Fail, unexplained Skip, Retry, Console/Network error,
+      cross-tenant leak and Secret/PII finding are all zero.
 
 ## Evidence Status Vocabulary
 
@@ -329,4 +389,12 @@ Use one record for every important page before checking its route deliverable:
 - **Needs verification:** test/check could not be run; checkbox remains open with reason.
 - **Verified in target:** dated target-repository evidence exists; eligible for `[x]`.
 - **Mock provider:** local persisted behavior only; never phrased as real delivery/payment/storage.
+- **Production contract:** the real adapter/build/runtime code passed against
+  isolated synthetic contract services; always `CONTRACT_ONLY`, never external
+  delivery, payment, Staging or Live evidence.
+- **Technically ready:** every repository-internal gate for the named launch
+  class/configuration passed on one immutable candidate; Activation remains a
+  separate decision.
+- **Blocked by external gates:** technical path is complete but named real
+  Provider/Legal/Privacy/AVG/Tax/Finance/Ops/Staging/Approval evidence is absent.
 - **Deferred / rejected:** recorded in the audit/ADR with impact and replacement, never silently removed.

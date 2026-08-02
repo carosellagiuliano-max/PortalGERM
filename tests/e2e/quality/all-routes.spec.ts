@@ -6,9 +6,7 @@ import type {
   TestInfo,
 } from "@playwright/test";
 
-import routeInventoryJson from "@/codex-plan/route-inventory.json" with {
-  type: "json",
-};
+import routeInventoryJson from "@/codex-plan/route-inventory.json" with { type: "json" };
 import {
   assertCriticalAccessibility,
   assertKeyboardFocusVisible,
@@ -24,7 +22,8 @@ import {
 } from "@/tests/e2e/fixtures/phase17-test";
 
 const EXPECTED_PAGE_COUNT = 129;
-const EXPECTED_HANDLER_COUNT = 20;
+const EXPECTED_HANDLER_COUNT = 21;
+const EXPECTED_METADATA_COUNT = 2;
 const ROUTE_TEST_TIMEOUT_MILLISECONDS = 90_000;
 const QUALITY_TAGS = "@quality-desktop @quality-mobile";
 const MISSING_UUID = "00000000-0000-4000-8000-000000000018";
@@ -40,7 +39,7 @@ const RAW_ERROR_PATTERNS = Object.freeze([
   /\bECONN(?:REFUSED|RESET)\b/iu,
 ]);
 
-type RouteKind = "page" | "handler";
+type RouteKind = "page" | "handler" | "metadata";
 type RouteRole =
   | "PUBLIC"
   | "PUBLIC_OPERATIONS"
@@ -58,9 +57,7 @@ type InventoryRoute = Readonly<{
 type PageRoute = InventoryRoute & Readonly<{ kind: "page" }>;
 type RouteActor = "public" | "candidate" | "employer" | "admin";
 type AuthenticatedActor = Exclude<RouteActor, "public">;
-type ActorCookies = Readonly<
-  Record<AuthenticatedActor, readonly Cookie[]>
->;
+type ActorCookies = Readonly<Record<AuthenticatedActor, readonly Cookie[]>>;
 type RouteCase = Readonly<{
   actor: RouteActor;
   inventoryPath: string;
@@ -69,12 +66,13 @@ type RouteCase = Readonly<{
 
 const ROUTE_INVENTORY = parseRouteInventory(routeInventoryJson);
 const PAGE_ROUTES = Object.freeze(
-  ROUTE_INVENTORY.filter(
-    (route): route is PageRoute => route.kind === "page",
-  ),
+  ROUTE_INVENTORY.filter((route): route is PageRoute => route.kind === "page"),
 );
 const HANDLER_ROUTES = Object.freeze(
   ROUTE_INVENTORY.filter((route) => route.kind === "handler"),
+);
+const METADATA_ROUTES = Object.freeze(
+  ROUTE_INVENTORY.filter((route) => route.kind === "metadata"),
 );
 const ROUTE_CASES = Object.freeze(PAGE_ROUTES.map(toRouteCase));
 
@@ -95,11 +93,7 @@ test.describe("Phase 18 exhaustive route quality", () => {
         baseURL,
         DEMO_ACCOUNTS.employer,
       ),
-      admin: await authenticateActor(
-        browser,
-        baseURL,
-        DEMO_ACCOUNTS.admin,
-      ),
+      admin: await authenticateActor(browser, baseURL, DEMO_ACCOUNTS.admin),
     });
   });
 
@@ -107,25 +101,24 @@ test.describe("Phase 18 exhaustive route quality", () => {
     await clearIsolatedLoginRateLimitBuckets();
   });
 
-  test(
-    `${QUALITY_TAGS} route inventory is exactly ${EXPECTED_PAGE_COUNT} pages, tracks ${EXPECTED_HANDLER_COUNT} handlers and excludes handlers from page visits`,
-    async ({ page }, testInfo) => {
-      testInfo.setTimeout(ROUTE_TEST_TIMEOUT_MILLISECONDS);
-      assertProjectViewport(page, testInfo);
-      assertExhaustiveInventoryContract();
-    },
-  );
+  test(`${QUALITY_TAGS} route inventory is exactly ${EXPECTED_PAGE_COUNT} pages, tracks ${EXPECTED_HANDLER_COUNT} handlers and ${EXPECTED_METADATA_COUNT} metadata endpoints, and excludes non-pages from page visits`, async ({
+    page,
+  }, testInfo) => {
+    testInfo.setTimeout(ROUTE_TEST_TIMEOUT_MILLISECONDS);
+    assertProjectViewport(page, testInfo);
+    assertExhaustiveInventoryContract();
+  });
 
   for (const route of ROUTE_CASES) {
-    test(
-      `${QUALITY_TAGS} page ${route.inventoryPath}`,
-      async ({ page, pageObservation }, testInfo) => {
-        testInfo.setTimeout(ROUTE_TEST_TIMEOUT_MILLISECONDS);
-        assertProjectViewport(page, testInfo);
-        await applyActorSession(page, route.actor);
-        await auditRoute(page, pageObservation, route, testInfo);
-      },
-    );
+    test(`${QUALITY_TAGS} page ${route.inventoryPath}`, async ({
+      page,
+      pageObservation,
+    }, testInfo) => {
+      testInfo.setTimeout(ROUTE_TEST_TIMEOUT_MILLISECONDS);
+      assertProjectViewport(page, testInfo);
+      await applyActorSession(page, route.actor);
+      await auditRoute(page, pageObservation, route, testInfo);
+    });
   }
 });
 
@@ -139,10 +132,7 @@ async function auditRoute(
   const sameOriginServerFailures: string[] = [];
   const origin = requiredLoopbackBaseUrl(testInfo).origin;
   const responseListener = (response: Response) => {
-    if (
-      new URL(response.url()).origin === origin &&
-      response.status() >= 500
-    ) {
+    if (new URL(response.url()).origin === origin && response.status() >= 500) {
       sameOriginServerFailures.push(
         `${response.status()} ${new URL(response.url()).pathname}`,
       );
@@ -183,15 +173,20 @@ async function auditRoute(
 function assertExhaustiveInventoryContract() {
   const pagePaths = PAGE_ROUTES.map(({ path }) => path);
   const handlerPaths = HANDLER_ROUTES.map(({ path }) => path);
+  const metadataPaths = METADATA_ROUTES.map(({ path }) => path);
   const exercisedPaths = ROUTE_CASES.map(({ inventoryPath }) => inventoryPath);
 
   expect(PAGE_ROUTES).toHaveLength(EXPECTED_PAGE_COUNT);
   expect(HANDLER_ROUTES).toHaveLength(EXPECTED_HANDLER_COUNT);
+  expect(METADATA_ROUTES).toHaveLength(EXPECTED_METADATA_COUNT);
   expect(new Set(pagePaths).size).toBe(EXPECTED_PAGE_COUNT);
   expect(new Set(handlerPaths).size).toBe(EXPECTED_HANDLER_COUNT);
+  expect(new Set(metadataPaths).size).toBe(EXPECTED_METADATA_COUNT);
   expect(exercisedPaths).toEqual(pagePaths);
   expect(
-    exercisedPaths.filter((path) => handlerPaths.includes(path)),
+    exercisedPaths.filter(
+      (path) => handlerPaths.includes(path) || metadataPaths.includes(path),
+    ),
   ).toEqual([]);
 }
 
@@ -358,7 +353,9 @@ function parseRouteInventory(value: unknown): readonly InventoryRoute[] {
         !("kind" in entry) ||
         !("path" in entry) ||
         !("roles" in entry) ||
-        (entry.kind !== "page" && entry.kind !== "handler") ||
+        (entry.kind !== "page" &&
+          entry.kind !== "handler" &&
+          entry.kind !== "metadata") ||
         typeof entry.path !== "string" ||
         !entry.path.startsWith("/") ||
         !Array.isArray(entry.roles) ||

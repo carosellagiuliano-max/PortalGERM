@@ -10,6 +10,7 @@ import {
   AUDIT_ACTIONS_V1,
   type AuditActionV1,
 } from "@/lib/domains/audit/audit-actions";
+import { notificationOutcomeReconciliationAuditMetadataSchema } from "@/lib/notifications/outcome-reconciliation-policy";
 import { hashIpWithFirstKey } from "@/lib/utils/hash";
 
 export const AUDIT_ACTOR_KINDS_V1 = ["USER", "SYSTEM", "ANONYMOUS"] as const;
@@ -173,6 +174,10 @@ auditMetadataSchemas.PERSONA_ASSIGNMENT_CHANGED =
   PERSONA_ASSIGNMENT_CHANGED_AUDIT_METADATA_SCHEMA;
 auditMetadataSchemas.PERSONA_CONTEXT_SWITCHED =
   PERSONA_CONTEXT_SWITCHED_AUDIT_METADATA_SCHEMA;
+auditMetadataSchemas.SYSTEM_TASK_OUTCOME_RECORDED = z.union([
+  EMPTY_AUDIT_METADATA_SCHEMA,
+  notificationOutcomeReconciliationAuditMetadataSchema,
+]);
 
 export const AUDIT_METADATA_SCHEMAS_V1 = Object.freeze(auditMetadataSchemas);
 
@@ -192,9 +197,7 @@ const auditInputSchema = z
     actorUserId: z.uuid().nullish(),
     capability: z.string().regex(CAPABILITY_PATTERN),
     companyId: z.uuid().nullish(),
-    portalContext: z
-      .enum(["CANDIDATE", "EMPLOYER", "ADMIN"])
-      .nullish(),
+    portalContext: z.enum(["CANDIDATE", "EMPLOYER", "ADMIN"]).nullish(),
     sessionContextVersion: z.number().int().positive().nullish(),
     correlationId: z.uuid(),
     metadata: z.unknown().optional(),

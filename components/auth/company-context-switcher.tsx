@@ -30,27 +30,29 @@ export function CompanyContextSwitcher({
   );
 
   return (
-    <form action={formAction} className="grid gap-4">
+    <form action={formAction} className="grid min-w-0 gap-4">
       <input type="hidden" name="next" value="/employer/dashboard" />
       <FormFeedback state={state} />
-      <div className="grid gap-2">
+      <div className="grid min-w-0 gap-2">
         <Label htmlFor="company-context">Aktives Unternehmen</Label>
-        <select
-          id="company-context"
-          name="companyId"
-          required
-          defaultValue={currentCompanyId ?? ""}
-          className={formControlClassName(false)}
-        >
-          <option value="" disabled>
-            Unternehmen wählen
-          </option>
-          {companies.map((company) => (
-            <option key={company.companyId} value={company.companyId}>
-              {company.companyName} · {membershipRoleLabel(company.membershipRole)}
+        <div className="min-w-0 w-full max-w-full overflow-hidden rounded-lg focus-within:ring-3 focus-within:ring-ring/50">
+          <select
+            id="company-context"
+            name="companyId"
+            required
+            defaultValue={currentCompanyId ?? ""}
+            className={`${formControlClassName(false)} min-w-0 max-w-full overflow-hidden text-ellipsis focus-visible:ring-0`}
+          >
+            <option value="" disabled>
+              Unternehmen wählen
             </option>
-          ))}
-        </select>
+            {companies.map((company) => (
+              <option key={company.companyId} value={company.companyId}>
+                {company.companyName} · {membershipRoleLabel(company.membershipRole)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <SubmitButton
         pending={pending}

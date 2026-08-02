@@ -4,6 +4,8 @@ import { parseEnvironment } from "@/lib/config/env-schema";
 import { createDatabaseClient } from "@/lib/db/factory";
 import { dispatchNotificationBatch } from "@/lib/notifications/dispatcher";
 import { createEmailDeliveryProvider } from "@/lib/providers/email/delivery-composition";
+import { emailProviderActivationBinding } from "@/lib/providers/email/provider-activation-binding";
+import { resolvePersistedProviderActivation } from "@/lib/ops/operations-ledger";
 import { loadLocalEnvironment } from "@/scripts/load-local-environment";
 
 loadLocalEnvironment();
@@ -14,14 +16,29 @@ try {
   const command = parseArguments(process.argv.slice(2));
   const environment = parseEnvironment(process.env);
   database = environment.secrets.database.withValue(createDatabaseClient);
+  const binding = emailProviderActivationBinding(
+    environment,
+    "email.transactional",
+  );
+  if (binding === null) throw new Error("EMAIL_PROVIDER_DISABLED");
+  const authority = await resolvePersistedProviderActivation(database, {
+    adapterKey: binding.adapterKey,
+    adapterVersion: binding.adapterVersion,
+    environment: environment.APP_ENV,
+    expectedConfigurationDigest: binding.expectedConfigurationDigest,
+    expectedMode: binding.expectedMode,
+    expectedSecretVersionRef: binding.expectedSecretVersionRef,
+    now: new Date(),
+    useCase: binding.useCase,
+  });
+  if (!authority.active) throw new Error("EMAIL_PROVIDER_NOT_AUTHORIZED");
   const provider = createEmailDeliveryProvider(environment);
   const result = await dispatchNotificationBatch({
     database,
     environment,
     provider,
     workerId:
-      command.workerId ??
-      `phase20-command-${randomBytes(8).toString("hex")}`,
+      command.workerId ?? `phase20-command-${randomBytes(8).toString("hex")}`,
     batchSize: command.batchSize,
   });
 
@@ -56,9 +73,8 @@ function parseArguments(values: readonly string[]) {
       continue;
     }
 
-    const workerMatch = /^--worker-id=([A-Za-z0-9][A-Za-z0-9._:-]{0,95})$/u.exec(
-      value,
-    );
+    const workerMatch =
+      /^--worker-id=([A-Za-z0-9][A-Za-z0-9._:-]{0,95})$/u.exec(value);
     if (workerMatch !== null) {
       workerId = workerMatch[1];
       continue;

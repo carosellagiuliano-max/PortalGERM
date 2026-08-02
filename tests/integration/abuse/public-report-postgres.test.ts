@@ -8,8 +8,6 @@ import { createPublicReport } from "@/lib/abuse/public-report";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { parseEnvironment, type ServerEnvironment } from "@/lib/config/env-schema";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
-import { MockEmailProvider } from "@/lib/providers/email/mock-email-provider";
-import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
 type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
@@ -81,9 +79,6 @@ beforeEach(async () => {
 
 describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
   it("persists the sanitized report, CREATED event, required audit and target limit atomically", async () => {
-    const emailProvider = new MockEmailProvider(
-      new PrismaEmailLogRepository(client()),
-    );
     const result = await createPublicReport(
       {
         targetType: "COMPANY",
@@ -98,7 +93,6 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
         environment: runtimeEnvironment(),
         request: requestContext(CORRELATION_ID),
         currentUser: null,
-        emailProvider,
         now: NOW,
       },
     );
@@ -149,25 +143,27 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
     });
     expect(audit?.ipHash).toMatch(/^v1:[a-f0-9]{64}$/u);
     expect(audit?.retainUntil).toEqual(new Date(NOW.getTime() + 365 * DAY));
-    const email = await client().emailLog.findFirstOrThrow({
+    const email = await client().notificationOutbox.findFirstOrThrow({
       where: {
-        recipient: "abuse-admin@example.test",
         templateKey: "abuse_report_received",
+        dedupeKey: `abuse-report:${result.reportId}:configured:0`,
       },
       select: {
         purpose: true,
         status: true,
         payload: true,
+        recipientAddressCiphertext: true,
       },
     });
     expect(email).toMatchObject({
-      purpose: "abuse_report_received",
-      status: "MOCK_RECORDED",
+      purpose: "ABUSE_REPORT",
+      status: "PENDING",
     });
     expect(JSON.stringify(email.payload)).toContain("Betrug oder Täuschung");
     expect(JSON.stringify(email.payload)).not.toContain(
       "Belegter Betrugsverdacht",
     );
+    expect(email.recipientAddressCiphertext).toBeInstanceOf(Uint8Array);
 
     const buckets = await client().rateLimitBucket.findMany();
     expect(buckets).toEqual([
@@ -290,6 +286,7 @@ function buildEnvironment(connectionString: string): ServerEnvironment {
     RADAR_OPAQUE_ENCRYPTION_KEYS: `v1:${secret(14)}`,
     REVEAL_CONFIRMATION_KEYS: `v1:${secret(15)}`,
     PII_REVEAL_KEYS: `v1:${secret(16)}`,
+    NOTIFICATION_DELIVERY_KEYS: `v1:${secret(17)}`,
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",

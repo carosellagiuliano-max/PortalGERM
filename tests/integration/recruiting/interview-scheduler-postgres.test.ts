@@ -131,6 +131,62 @@ describe.sequential("Phase 28 interview scheduler on PostgreSQL", () => {
     expect(calendar?.calendar).not.toContain(fixture.candidateUserId);
   });
 
+  it("revokes Company calendar access with a stale participant Membership", async () => {
+    await expect(
+      getInterviewCalendarForActor(
+        interviewId,
+        fixture.employerUserId,
+        fixture.database,
+        fixture.now,
+      ),
+    ).resolves.not.toBeNull();
+
+    const fallbackOwner =
+      await fixture.database.companyMembership.findFirstOrThrow({
+        where: {
+          companyId: fixture.companyId,
+          userId: fixture.base.dual.userId,
+          status: "ACTIVE",
+        },
+        select: { id: true, role: true },
+      });
+    await fixture.database.companyMembership.update({
+      where: { id: fallbackOwner.id },
+      data: { role: "OWNER" },
+    });
+    await fixture.database.companyMembership.update({
+      where: { id: fixture.membershipId },
+      data: { status: "SUSPENDED" },
+    });
+    try {
+      await expect(
+        getInterviewCalendarForActor(
+          interviewId,
+          fixture.employerUserId,
+          fixture.database,
+          fixture.now,
+        ),
+      ).resolves.toBeNull();
+      await expect(
+        getInterviewCalendarForActor(
+          interviewId,
+          fixture.candidateUserId,
+          fixture.database,
+          fixture.now,
+        ),
+      ).resolves.not.toBeNull();
+    } finally {
+      await fixture.database.companyMembership.update({
+        where: { id: fixture.membershipId },
+        data: { status: "ACTIVE" },
+      });
+      await fixture.database.companyMembership.update({
+        where: { id: fallbackOwner.id },
+        data: { role: fallbackOwner.role },
+      });
+    }
+  });
+
   it("reschedules through a new proposal version and rejects stale concurrency", async () => {
     const requestedStart = new Date(fixture.now.getTime() + 4 * DAY);
     const requestedEnd = new Date(requestedStart.getTime() + HOUR);
@@ -266,3 +322,106 @@ describe.sequential("Phase 28 interview scheduler on PostgreSQL", () => {
     ).rejects.toThrow(/append-only/iu);
   });
 });
+
+describe.sequential("Phase 33 interview proposal abuse boundary", () => {
+  let fixture: Phase28RecruitingFixture;
+
+  beforeAll(async () => {
+    fixture = await createPhase28RecruitingFixture("proposal_rate_limit");
+  }, 120_000);
+
+  afterAll(async () => {
+    await fixture?.dispose();
+  });
+
+  it("rate-limits an authorized Application target with audit and zero denied domain effects", async () => {
+    for (let index = 0; index < 10; index += 1) {
+      await expect(
+        proposeInterview(
+          fixture.access,
+          proposalInput(fixture.applicationId, fixture.now, `allowed-${index}`),
+          fixture.dependencies(),
+        ),
+      ).resolves.toMatchObject({ ok: true, replay: false });
+    }
+
+    const before = await Promise.all([
+      fixture.database.interview.count(),
+      fixture.database.interviewProposal.count(),
+      fixture.database.interviewParticipant.count(),
+      fixture.database.interviewEvent.count(),
+      fixture.database.notificationOutbox.count(),
+    ]);
+    const deniedDependencies = fixture.dependencies();
+    await expect(
+      proposeInterview(
+        fixture.access,
+        proposalInput(fixture.applicationId, fixture.now, "denied"),
+        deniedDependencies,
+      ),
+    ).resolves.toEqual({ ok: false, code: "RATE_LIMITED" });
+    await expect(
+      Promise.all([
+        fixture.database.interview.count(),
+        fixture.database.interviewProposal.count(),
+        fixture.database.interviewParticipant.count(),
+        fixture.database.interviewEvent.count(),
+        fixture.database.notificationOutbox.count(),
+      ]),
+    ).resolves.toEqual(before);
+    await expect(
+      fixture.database.auditLog.findFirst({
+        where: {
+          action: "RATE_LIMITED",
+          actorUserId: fixture.employerUserId,
+          companyId: fixture.companyId,
+          correlationId: deniedDependencies.request.correlationId,
+          targetId: fixture.applicationId,
+          targetType: "APPLICATION",
+        },
+        select: { metadata: true, reasonCode: true, result: true },
+      }),
+    ).resolves.toMatchObject({
+      metadata: {
+        preset: "INTERVIEW_PROPOSE",
+        scope: "ACTOR_OR_IP_TARGET",
+      },
+      reasonCode: "RATE_LIMITED",
+      result: "DENIED",
+    });
+  });
+
+  it("does not spend a target bucket for an unauthorized Application ID", async () => {
+    const before = await fixture.database.rateLimitBucket.count({
+      where: { namespace: { startsWith: "v1:INTERVIEW_PROPOSE:" } },
+    });
+    const foreignApplicationId = randomUUID();
+    await expect(
+      proposeInterview(
+        fixture.access,
+        proposalInput(foreignApplicationId, fixture.now, "foreign"),
+        fixture.dependencies(),
+      ),
+    ).resolves.toEqual({ ok: false, code: "NOT_FOUND" });
+    await expect(
+      fixture.database.rateLimitBucket.count({
+        where: { namespace: { startsWith: "v1:INTERVIEW_PROPOSE:" } },
+      }),
+    ).resolves.toBe(before);
+  });
+});
+
+function proposalInput(applicationId: string, now: Date, suffix: string) {
+  return {
+    applicationId,
+    timeZone: "Europe/Zurich",
+    subject: `Phase 33 Interview ${suffix}`,
+    slots: [
+      {
+        startsAt: new Date(now.getTime() + 7 * DAY),
+        endsAt: new Date(now.getTime() + 7 * DAY + HOUR),
+      },
+    ],
+    idempotencyKey: `phase33-${suffix}`,
+  };
+}

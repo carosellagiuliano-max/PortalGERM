@@ -2,7 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
-import { hashNotificationRecipient } from "@/lib/notifications/outbox";
+import type { KeyringEntry } from "@/lib/config/env-schema";
+import { hashNotificationRecipientCandidates } from "@/lib/notifications/outbox";
 import { normalizedEmailSchema } from "@/lib/validation/common";
 
 const eventSchema = z.strictObject({
@@ -16,7 +17,10 @@ const eventSchema = z.strictObject({
     .passthrough(),
 });
 
-export function parseResendDeliveryEvent(payload: unknown) {
+export function parseResendDeliveryEvent(
+  payload: unknown,
+  recipientHashKeyring: readonly KeyringEntry<"NOTIFICATION_RECIPIENT_HASH_KEYS">[],
+) {
   const parsed = eventSchema.safeParse(payload);
   if (!parsed.success) return null;
   return Object.freeze({
@@ -29,7 +33,16 @@ export function parseResendDeliveryEvent(payload: unknown) {
     providerReceipt: parsed.data.data.email_id,
     occurredAt: new Date(parsed.data.created_at),
     recipientHashes: Object.freeze(
-      parsed.data.data.to.map(hashNotificationRecipient),
+      Array.from(
+        new Set(
+          parsed.data.data.to.flatMap((address) =>
+            hashNotificationRecipientCandidates(
+              address,
+              recipientHashKeyring,
+            ),
+          ),
+        ),
+      ),
     ),
   });
 }

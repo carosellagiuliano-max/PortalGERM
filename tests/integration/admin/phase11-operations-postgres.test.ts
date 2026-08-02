@@ -54,8 +54,6 @@ import { manageSalesLead } from "@/lib/admin/leads";
 import { projectAdminSlaAlerts } from "@/lib/admin/sla";
 import { mutateAdminTaxonomy } from "@/lib/admin/taxonomy";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
-import { MockEmailProvider, type EmailProvider } from "@/lib/providers/email";
-import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
 import { salesLeadAnalyticsKeyV1 } from "@/lib/sales/lead-policy";
 import { ADMIN_IMPORT_DEMO_FIXTURES } from "@/prisma/seed/fixtures";
 import { buildSeedPlanningGraph } from "@/prisma/seed/contract-identities";
@@ -106,7 +104,7 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
         id: true,
         companyId: true,
         version: true,
-        currentRevision: { select: { id: true, version: true } },
+        currentRevision: { select: { id: true, version: true, title: true } },
       },
     });
     if (job.currentRevision === null) throw new Error("Submitted fixture has no revision.");
@@ -121,15 +119,6 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
         deps("job-start-review", afterMilliseconds(1)),
       ),
     );
-    const persistedEmail = new MockEmailProvider(
-      new PrismaEmailLogRepository(client),
-    );
-    const email: EmailProvider = {
-      async send(input) {
-        await persistedEmail.send(input);
-        throw new Error("Simulated post-persistence delivery failure.");
-      },
-    };
     const approvedInput = {
       jobId: job.id,
       expectedJobVersion: started.value.jobVersion,
@@ -138,18 +127,18 @@ describe("Phase 11 PostgreSQL operations boundary", () => {
       idempotencyKey: randomUUID(),
     };
     const approved = requireSuccess(
-      await approveAdminJob(approvedInput, deps("job-approve", afterMilliseconds(2)), email),
+      await approveAdminJob(approvedInput, deps("job-approve", afterMilliseconds(2))),
     );
     expect(approved.value.status).toBe("APPROVED");
     await expect(
-      client.emailLog.findFirstOrThrow({
+      client.notificationOutbox.findFirstOrThrow({
         where: { templateKey: "job_approved" },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         select: { payload: true, status: true },
       }),
     ).resolves.toMatchObject({
-      payload: { subject: "Dein Stelleninserat wurde freigegeben" },
-      status: "MOCK_RECORDED",
+      payload: { jobTitle: job.currentRevision.title },
+      status: "PENDING",
     });
     const publishInput = {
       jobId: job.id,

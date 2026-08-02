@@ -46,6 +46,10 @@ import {
 import { isContactPackPlanEligibleV1 } from "@/lib/billing/checkout-eligibility";
 import { resolveCompanyDunningInTransaction } from "@/lib/billing/dunning";
 import {
+  paymentAttemptProviderRank,
+  subscriptionProviderInvoiceProjectionDigestV1,
+} from "@/lib/billing/subscription-provider-ordering";
+import {
   decodePlanEntitlementsV1,
   getEffectiveEntitlements,
 } from "@/lib/billing/entitlements";
@@ -56,15 +60,19 @@ import {
 import { createPrismaEntitlementRepository } from "@/lib/billing/prisma-publish-quota";
 import { computeVat } from "@/lib/billing/vat";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import type { EmailProvider, EmailTemplateKey } from "@/lib/providers/email";
-import { renderEmailTemplate } from "@/lib/providers/email/templates";
+import type { HostedPaymentProvider } from "@/lib/providers/payments";
 import { resolveProviderActivation } from "@/lib/ops/provider-activation-policy";
 import { recordAndDecideRiskSignal } from "@/lib/security/risk/risk-service";
 
 const BILLING_AUDIT_RETENTION_MS = 10 * 365 * 86_400_000;
-const CHECKOUT_TTL_MS = 30 * 60 * 1_000;
+// Stripe accepts hosted Checkout expiry only from 30 minutes onward. The
+// five-minute margin prevents network latency from making an otherwise valid
+// request fall below that provider minimum while keeping one shared deadline.
+const CHECKOUT_TTL_MS = 35 * 60 * 1_000;
 const COMPANY_BILLING_LOCK_NAMESPACE = 1212;
 const CHECKOUT_IDEMPOTENCY_LOCK_NAMESPACE = 1213;
 const CHECKOUT_HASH_SEPARATOR = String.fromCharCode(0);
@@ -140,24 +148,48 @@ type ProductQuote =
 type ResolvedQuote = PlanQuote | ProductQuote;
 
 type PreparedCheckoutOrder = Readonly<{
+  adapterKey: string | null;
   amountRappen: number;
   billingContactEmail: string;
   currency: "CHF";
   description: string;
+  expiresAt: Date | null;
   orderId: string;
   paymentAttemptId: string | null;
+  paymentAttemptFailureCode: string | null;
+  paymentPriceBindingId: string | null;
   provider: "MOCK" | "STRIPE";
+  providerMode: "CONTRACT" | "SANDBOX" | "LIVE" | null;
+  providerPriceReference: string | null;
   providerIdempotencyKey: string;
   quoteDigest: string | null;
   status: "HELD" | "PENDING" | "PAID";
 }>;
 
 type RealCheckoutAuthorization = Readonly<{
+  adapterKey: "stripe_contract" | "stripe_sandbox" | "stripe_live";
+  adapterVersion: "v1";
+  expectedLiveMode: boolean;
   paidScopeDecisionId: string;
   paymentAttemptId: string;
+  paymentPriceBindingId: string;
   providerActivationId: string;
+  providerMode: "CONTRACT" | "SANDBOX" | "LIVE";
+  providerPriceReference: string;
   quoteDigest: string;
   stepUpEvidenceId: string;
+}>;
+
+type RealSubscriptionBinding = Readonly<{
+  adapterKey: "stripe_contract" | "stripe_sandbox" | "stripe_live";
+  adapterVersion: "v1";
+  providerAccountReference: string;
+  providerCustomerReference: string;
+  providerEventAt: Date;
+  providerMode: "CONTRACT" | "SANDBOX" | "LIVE";
+  providerPriceReference: string;
+  providerRecurringAmountRappenSnapshot: number;
+  providerSubscriptionReference: string;
 }>;
 
 type PlanFulfillmentTerms = Readonly<{
@@ -238,7 +270,13 @@ export async function createCheckoutOrder(
                 take: 1,
                 orderBy: [{ createdAt: "desc" }, { id: "desc" }],
                 select: {
+                  adapterKey: true,
+                  failureCode: true,
                   id: true,
+                  expiresAt: true,
+                  paymentPriceBindingId: true,
+                  providerMode: true,
+                  providerPriceReference: true,
                   quoteDigest: true,
                   status: true,
                 },
@@ -282,18 +320,27 @@ export async function createCheckoutOrder(
             ) {
               return billingFailure("CONFLICT");
             }
-            if (attempt?.status === "HELD") {
+            if (
+              attempt?.status === "HELD" &&
+              attempt.failureCode !== "CHECKOUT_CALL_UNCERTAIN"
+            ) {
               return billingFailure("PAYMENT_HELD");
             }
             return billingSuccess(
               {
+                adapterKey: attempt?.adapterKey ?? null,
                 amountRappen: existing.totalRappen,
                 billingContactEmail: existing.billingContactEmailSnapshot,
                 currency: "CHF",
                 description: line.descriptionSnapshot,
+                expiresAt: existing.expiresAt,
                 orderId: existing.id,
                 paymentAttemptId: attempt?.id ?? null,
+                paymentAttemptFailureCode: attempt?.failureCode ?? null,
+                paymentPriceBindingId: attempt?.paymentPriceBindingId ?? null,
                 provider,
+                providerMode: attempt?.providerMode ?? null,
+                providerPriceReference: attempt?.providerPriceReference ?? null,
                 providerIdempotencyKey: existing.providerIdempotencyKey,
                 quoteDigest: attempt?.quoteDigest ?? null,
                 status: existing.status,
@@ -345,16 +392,25 @@ export async function createCheckoutOrder(
                       quote.value.kind === "PLAN"
                         ? quote.value.planVersion.plan.code
                         : quote.value.productVersion.product.code,
+                    planBillingInterval:
+                      quote.value.kind === "PLAN"
+                        ? quote.value.planVersion.billingInterval
+                        : null,
+                    planChangeKind:
+                      quote.value.kind === "PLAN"
+                        ? quote.value.snapshot.changeKind
+                        : null,
+                    planVersionId:
+                      quote.value.kind === "PLAN"
+                        ? quote.value.planVersion.id
+                        : null,
                   },
                   dependencies,
                   now,
                 )
               : billingSuccess<RealCheckoutAuthorization | null>(null);
           if (!realAuthorization.ok) return realAuthorization;
-          if (
-            provider === "MOCK" &&
-            dependencies.stepUp?.mode === "enforce"
-          ) {
+          if (provider === "MOCK" && dependencies.stepUp?.mode === "enforce") {
             const evidenceId = parsed.data.stepUpEvidenceId;
             const grantToken = parsed.data.stepUpGrantToken;
             if (
@@ -381,6 +437,7 @@ export async function createCheckoutOrder(
             }
           }
 
+          const checkoutExpiresAt = new Date(now.getTime() + CHECKOUT_TTL_MS);
           await transaction.order.create({
             data: {
               id: orderId,
@@ -403,7 +460,7 @@ export async function createCheckoutOrder(
               netTotalRappen: vat.net,
               vatTotalRappen: vat.vatAmount,
               totalRappen: vat.total,
-              expiresAt: new Date(now.getTime() + CHECKOUT_TTL_MS),
+              expiresAt: checkoutExpiresAt,
               lines: {
                 create: {
                   id: orderLineId,
@@ -470,14 +527,23 @@ export async function createCheckoutOrder(
                 stepUpEvidenceId: realAuthorization.value.stepUpEvidenceId,
                 provider: "STRIPE",
                 environment: dependencies.realPayment!.environment,
+                adapterKey: realAuthorization.value.adapterKey,
+                adapterVersion: realAuthorization.value.adapterVersion,
+                providerMode: realAuthorization.value.providerMode,
+                checkoutKind: "SUBSCRIPTION",
+                expectedLiveMode: realAuthorization.value.expectedLiveMode,
                 providerAccountReference:
                   dependencies.realPayment!.providerAccountReference,
+                paymentPriceBindingId:
+                  realAuthorization.value.paymentPriceBindingId,
+                providerPriceReference:
+                  realAuthorization.value.providerPriceReference,
                 attemptKey: providerIdempotencyKey,
                 quoteDigest: realAuthorization.value.quoteDigest,
                 amountRappen: vat.total,
                 currency: "CHF",
                 status: "CREATED",
-                expiresAt: new Date(now.getTime() + CHECKOUT_TTL_MS),
+                expiresAt: checkoutExpiresAt,
                 createdAt: now,
                 updatedAt: now,
               },
@@ -566,13 +632,21 @@ export async function createCheckoutOrder(
           });
 
           return billingSuccess({
+            adapterKey: realAuthorization.value?.adapterKey ?? null,
             amountRappen: vat.total,
             billingContactEmail: profile.billingContactEmail,
             currency: "CHF" as const,
             description: descriptionSnapshot,
+            expiresAt: checkoutExpiresAt,
             orderId,
             paymentAttemptId: realAuthorization.value?.paymentAttemptId ?? null,
+            paymentAttemptFailureCode: null,
+            paymentPriceBindingId:
+              realAuthorization.value?.paymentPriceBindingId ?? null,
             provider,
+            providerMode: realAuthorization.value?.providerMode ?? null,
+            providerPriceReference:
+              realAuthorization.value?.providerPriceReference ?? null,
             providerIdempotencyKey,
             quoteDigest: realAuthorization.value?.quoteDigest ?? null,
             status: realPaymentHeld ? "HELD" : "PENDING",
@@ -619,6 +693,25 @@ export async function createCheckoutOrder(
       prepared.replay === true,
     );
   }
+  let checkoutReservation: Readonly<{ digest: string; token: string }> | null =
+    null;
+  if (prepared.value.provider === "STRIPE") {
+    const authority = await revalidateHostedCheckoutAuthority(
+      dependencies,
+      prepared.value,
+      now,
+    );
+    if (!authority.active) {
+      await holdCheckoutForStaleAuthority(
+        dependencies,
+        prepared.value,
+        authority.reasonCode,
+        now,
+      );
+      return billingFailure("PAYMENT_HELD");
+    }
+    checkoutReservation = authority.reservation;
+  }
   const providerSession = await safeCreateProviderCheckout(
     dependencies,
     prepared.value,
@@ -631,16 +724,32 @@ export async function createCheckoutOrder(
     );
     return billingFailure("PAYMENT_PROVIDER_FAILED");
   }
-  if (
-    prepared.value.provider === "STRIPE" &&
-    !(await recordHostedCheckoutSession(
+  if (prepared.value.provider === "STRIPE" && checkoutReservation !== null) {
+    const recorded = await recordHostedCheckoutSession(
       dependencies,
       prepared.value,
       providerSession.providerSessionReference,
+      checkoutReservation,
       now,
-    ))
-  ) {
-    return billingFailure("WRITE_FAILED");
+    );
+    if (recorded.status !== "RECORDED") {
+      if (providerSession.providerSessionReference !== undefined) {
+        await safeExpireProviderCheckout(
+          dependencies,
+          prepared.value,
+          providerSession.providerSessionReference,
+        );
+      }
+      if (recorded.status === "STALE") {
+        return billingFailure("PAYMENT_HELD");
+      }
+      await recordCheckoutProviderFailure(
+        dependencies,
+        prepared.value.orderId,
+        now,
+      );
+      return billingFailure("WRITE_FAILED");
+    }
   }
   const analytics = await recordCheckoutStartedAnalytics(
     dependencies,
@@ -659,6 +768,292 @@ export async function createCheckoutOrder(
   );
 }
 
+type HostedCheckoutAuthorityDecision =
+  | Readonly<{
+      active: true;
+      reservation: Readonly<{ digest: string; token: string }>;
+    }>
+  | Readonly<{
+      active: false;
+      reasonCode:
+        | "CHECKOUT_ACTIVATION_STALE"
+        | "CHECKOUT_PRICE_BINDING_STALE"
+        | "CHECKOUT_RUNTIME_BINDING_STALE";
+    }>;
+
+/**
+ * The transaction that prepares an Order is not authority for a later
+ * network effect. Replays and fresh attempts both re-read the exact current
+ * activation and immutable price/account snapshot immediately before Stripe
+ * is called. Historic attempts are never silently rebound to a new merchant
+ * account, secret/config version or price.
+ */
+async function revalidateHostedCheckoutAuthority(
+  dependencies: BillingDependencies,
+  prepared: PreparedCheckoutOrder,
+  now: Date,
+): Promise<HostedCheckoutAuthorityDecision> {
+  const context = dependencies.realPayment;
+  const hostedProvider =
+    dependencies.paymentProvider as Partial<HostedPaymentProvider>;
+  if (
+    context === undefined ||
+    prepared.paymentAttemptId === null ||
+    prepared.paymentPriceBindingId === null ||
+    prepared.adapterKey === null ||
+    prepared.providerMode === null ||
+    prepared.providerPriceReference === null ||
+    prepared.quoteDigest === null ||
+    dependencies.paymentProvider.kind !== "STRIPE" ||
+    hostedProvider.adapterKey !== context.adapterKey ||
+    hostedProvider.adapterVersion !== context.adapterVersion ||
+    hostedProvider.providerMode !== context.providerMode ||
+    hostedProvider.expectedLiveMode !== context.expectedLiveMode ||
+    hostedProvider.providerAccountReference !== context.providerAccountReference
+  ) {
+    return Object.freeze({
+      active: false,
+      reasonCode: "CHECKOUT_RUNTIME_BINDING_STALE",
+    });
+  }
+
+  return dependencies.database.$transaction(
+    async (transaction) => {
+      await transaction.$queryRaw`
+        SELECT "id"
+        FROM "PaymentAttempt"
+        WHERE "id" = ${prepared.paymentAttemptId!}::uuid
+        FOR UPDATE
+      `;
+      const attemptBinding = await transaction.paymentAttempt.findFirst({
+        where: {
+          id: prepared.paymentAttemptId!,
+          orderId: prepared.orderId,
+          companyId: dependencies.actor.companyId,
+          provider: "STRIPE",
+        },
+        select: { paymentPriceBindingId: true },
+      });
+      if (attemptBinding === null) {
+        return Object.freeze({
+          active: false as const,
+          reasonCode: "CHECKOUT_ACTIVATION_STALE" as const,
+        });
+      }
+      const activationRows = await transaction.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"
+        FROM "ProviderActivation"
+        WHERE "environment" = ${context.environment}
+          AND "useCase" = 'payments.hosted-checkout'
+        ORDER BY "createdAt" DESC, "id" DESC
+        LIMIT 1
+        FOR UPDATE
+      `;
+      if (attemptBinding.paymentPriceBindingId !== null) {
+        await transaction.$queryRaw`
+          SELECT "id"
+          FROM "PaymentPriceBinding"
+          WHERE "id" = ${attemptBinding.paymentPriceBindingId}::uuid
+          FOR UPDATE
+        `;
+      }
+      const attempt = await transaction.paymentAttempt.findFirst({
+        where: {
+          id: prepared.paymentAttemptId!,
+          orderId: prepared.orderId,
+          companyId: dependencies.actor.companyId,
+          provider: "STRIPE",
+        },
+        include: {
+          paymentPriceBinding: true,
+          providerActivation: true,
+        },
+      });
+      const latestActivation =
+        activationRows[0] === undefined
+          ? null
+          : await transaction.providerActivation.findUnique({
+              where: { id: activationRows[0].id },
+            });
+      const attemptCanCallProvider =
+        attempt !== null &&
+        (["CREATED", "CHECKOUT_CREATED"].includes(attempt.status) ||
+          (attempt.status === "HELD" &&
+            attempt.failureCode === "CHECKOUT_CALL_UNCERTAIN"));
+      if (
+        attempt === null ||
+        latestActivation === null ||
+        attempt.providerActivationId !== latestActivation.id ||
+        attempt.providerActivation.id !== latestActivation.id ||
+        !attemptCanCallProvider ||
+        attempt.expiresAt.getTime() <= now.getTime()
+      ) {
+        return Object.freeze({
+          active: false,
+          reasonCode: "CHECKOUT_ACTIVATION_STALE",
+        });
+      }
+
+      const activationDecision = resolveProviderActivation({
+        activation: latestActivation,
+        adapterKey: context.adapterKey,
+        adapterVersion: context.adapterVersion,
+        environment: context.environment,
+        expectedConfigurationDigest: context.configurationDigest,
+        expectedMode: context.activationMode,
+        expectedSecretVersionRef: context.secretVersionRef,
+        now,
+        useCase: "payments.hosted-checkout",
+      });
+      if (
+        !activationDecision.active ||
+        activationDecision.adapterKey !== attempt.adapterKey ||
+        activationDecision.adapterVersion !== attempt.adapterVersion ||
+        activationDecision.mode !== context.activationMode ||
+        attempt.environment !== context.environment ||
+        attempt.adapterKey !== context.adapterKey ||
+        attempt.adapterVersion !== context.adapterVersion ||
+        attempt.providerMode !== context.providerMode ||
+        attempt.expectedLiveMode !== context.expectedLiveMode ||
+        attempt.providerAccountReference !== context.providerAccountReference ||
+        attempt.adapterKey !== prepared.adapterKey ||
+        attempt.providerMode !== prepared.providerMode ||
+        attempt.quoteDigest !== prepared.quoteDigest ||
+        attempt.amountRappen !== prepared.amountRappen ||
+        attempt.currency !== prepared.currency
+      ) {
+        return Object.freeze({
+          active: false,
+          reasonCode: "CHECKOUT_ACTIVATION_STALE",
+        });
+      }
+
+      const price = attempt.paymentPriceBinding;
+      if (
+        price === null ||
+        price.id !== prepared.paymentPriceBindingId ||
+        price.id !== attempt.paymentPriceBindingId ||
+        price.providerActivationId !== latestActivation.id ||
+        price.environment !== context.environment ||
+        price.adapterKey !== context.adapterKey ||
+        price.adapterVersion !== context.adapterVersion ||
+        price.providerMode !== context.providerMode ||
+        price.providerAccountReference !== context.providerAccountReference ||
+        price.providerPriceReference !== prepared.providerPriceReference ||
+        price.providerPriceReference !== attempt.providerPriceReference ||
+        price.billingInterval !== "MONTHLY" ||
+        price.amountRappen !== prepared.amountRappen ||
+        price.currency !== prepared.currency ||
+        price.effectiveAt.getTime() > now.getTime() ||
+        price.revokedAt !== null ||
+        (price.expiresAt !== null && price.expiresAt.getTime() <= now.getTime())
+      ) {
+        return Object.freeze({
+          active: false,
+          reasonCode: "CHECKOUT_PRICE_BINDING_STALE",
+        });
+      }
+      const reservationDigest = hostedCheckoutReservationDigest({
+        activationId: latestActivation.id,
+        activationConfigurationDigest: latestActivation.configurationDigest,
+        activationEffectiveAt:
+          latestActivation.effectiveAt?.toISOString() ?? "none",
+        activationEvidenceDigest: latestActivation.evidenceDigest,
+        activationExpiresAt:
+          latestActivation.expiresAt?.toISOString() ?? "none",
+        activationKillSwitchEngaged: latestActivation.killSwitchEngaged,
+        activationMode: latestActivation.mode,
+        activationRevokedAt:
+          latestActivation.revokedAt?.toISOString() ?? "none",
+        activationSecretVersionRef: latestActivation.secretVersionRef ?? "none",
+        adapterKey: attempt.adapterKey,
+        adapterVersion: attempt.adapterVersion,
+        amountRappen: attempt.amountRappen,
+        attemptKey: attempt.attemptKey,
+        currency: attempt.currency,
+        expectedLiveMode: attempt.expectedLiveMode,
+        orderId: attempt.orderId,
+        paymentAttemptId: attempt.id,
+        paymentPriceBindingId: price.id,
+        providerAccountReference: attempt.providerAccountReference,
+        providerIdempotencyKey: prepared.providerIdempotencyKey,
+        providerMode: attempt.providerMode,
+        providerPriceReference: price.providerPriceReference,
+        quoteDigest: attempt.quoteDigest,
+      });
+      if (
+        attempt.checkoutReservationToken !== null ||
+        attempt.checkoutReservationDigest !== null ||
+        attempt.checkoutReservedAt !== null
+      ) {
+        if (
+          attempt.checkoutReservationToken === null ||
+          attempt.checkoutReservationDigest !== reservationDigest ||
+          attempt.checkoutReservedAt === null
+        ) {
+          return Object.freeze({
+            active: false as const,
+            reasonCode: "CHECKOUT_RUNTIME_BINDING_STALE" as const,
+          });
+        }
+        return Object.freeze({
+          active: true as const,
+          reservation: Object.freeze({
+            digest: reservationDigest,
+            token: attempt.checkoutReservationToken,
+          }),
+        });
+      }
+      const reservationToken = randomUUID();
+      const reserved = await transaction.paymentAttempt.updateMany({
+        where: {
+          id: attempt.id,
+          OR: [
+            { status: { in: ["CREATED", "CHECKOUT_CREATED"] } },
+            {
+              status: "HELD",
+              failureCode: "CHECKOUT_CALL_UNCERTAIN",
+            },
+          ],
+          checkoutReservationToken: null,
+          checkoutReservationDigest: null,
+          checkoutReservedAt: null,
+        },
+        data: {
+          checkoutReservationToken: reservationToken,
+          checkoutReservationDigest: reservationDigest,
+          checkoutReservedAt: now,
+          updatedAt: now,
+        },
+      });
+      if (reserved.count !== 1) {
+        return Object.freeze({
+          active: false as const,
+          reasonCode: "CHECKOUT_RUNTIME_BINDING_STALE" as const,
+        });
+      }
+      return Object.freeze({
+        active: true as const,
+        reservation: Object.freeze({
+          digest: reservationDigest,
+          token: reservationToken,
+        }),
+      });
+    },
+    { isolationLevel: "Serializable" },
+  );
+}
+
+function hostedCheckoutReservationDigest(
+  input: Readonly<Record<string, boolean | number | string>>,
+) {
+  return createHash("sha256")
+    .update("swisstalenthub.checkout-reservation.v1", "utf8")
+    .update(CHECKOUT_HASH_SEPARATOR, "utf8")
+    .update(JSON.stringify(input), "utf8")
+    .digest("hex");
+}
+
 async function authorizeRealCheckout(
   transaction: Prisma.TransactionClient,
   input: Readonly<{
@@ -667,11 +1062,16 @@ async function authorizeRealCheckout(
     intent: CheckoutIntent;
     orderId: string;
     packageCode: string;
+    planBillingInterval: "MONTHLY" | "ANNUAL" | null;
+    planChangeKind: "NEW" | "UPGRADE" | "DOWNGRADE" | null;
+    planVersionId: string | null;
   }>,
   dependencies: BillingDependencies,
   now: Date,
 ): Promise<BillingCommandResult<RealCheckoutAuthorization>> {
   const context = dependencies.realPayment;
+  const hostedProvider =
+    dependencies.paymentProvider as Partial<HostedPaymentProvider>;
   const stepUpEvidenceId = input.intent.stepUpEvidenceId;
   const stepUpGrantToken = input.intent.stepUpGrantToken;
   if (
@@ -679,7 +1079,16 @@ async function authorizeRealCheckout(
     dependencies.paymentProvider.kind !== "STRIPE" ||
     stepUpEvidenceId === undefined ||
     input.intent.paymentOrderId !== input.orderId ||
-    input.intent.kind !== "PLAN"
+    input.intent.kind !== "PLAN" ||
+    input.planVersionId === null ||
+    input.planBillingInterval !== "MONTHLY" ||
+    input.planChangeKind !== "NEW" ||
+    hostedProvider.adapterKey !== context?.adapterKey ||
+    hostedProvider.adapterVersion !== context?.adapterVersion ||
+    hostedProvider.providerMode !== context?.providerMode ||
+    hostedProvider.expectedLiveMode !== context?.expectedLiveMode ||
+    hostedProvider.providerAccountReference !==
+      context?.providerAccountReference
   ) {
     return billingFailure(
       stepUpEvidenceId === undefined
@@ -699,15 +1108,20 @@ async function authorizeRealCheckout(
       where: {
         environment: context.environment,
         useCase: "payments.hosted-checkout",
+        adapterKey: context.adapterKey,
+        adapterVersion: context.adapterVersion,
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     }),
   ]);
   const providerDecision = resolveProviderActivation({
     activation: providerActivation,
-    adapterKey: "stripe_sandbox",
-    adapterVersion: "v1",
+    adapterKey: context.adapterKey,
+    adapterVersion: context.adapterVersion,
     environment: context.environment,
+    expectedConfigurationDigest: context.configurationDigest,
+    expectedMode: context.activationMode,
+    expectedSecretVersionRef: context.secretVersionRef,
     now,
     useCase: "payments.hosted-checkout",
   });
@@ -717,18 +1131,57 @@ async function authorizeRealCheckout(
     packageCode: input.packageCode,
     paidSelfServiceEnabled: context.paidSelfServiceEnabled,
     provider: providerDecision,
+    providerMode: context.providerMode,
     sandboxCohort: context.sandboxCohort,
     scopeDecision,
   });
   if (!activation.active || providerActivation === null) {
     return billingFailure("PAID_ACTIVATION_REQUIRED");
   }
+  if (
+    providerDecision.active === false ||
+    providerDecision.adapterKey !== context.adapterKey ||
+    providerDecision.adapterVersion !== context.adapterVersion ||
+    providerDecision.mode !== context.activationMode ||
+    context.expectedLiveMode !== (context.providerMode === "LIVE")
+  ) {
+    return billingFailure("PAID_ACTIVATION_REQUIRED");
+  }
+  const priceBindings = await transaction.paymentPriceBinding.findMany({
+    where: {
+      planVersionId: input.planVersionId,
+      providerActivationId: providerActivation.id,
+      environment: context.environment,
+      adapterKey: context.adapterKey,
+      adapterVersion: context.adapterVersion,
+      providerMode: context.providerMode,
+      providerAccountReference: context.providerAccountReference,
+      billingInterval: "MONTHLY",
+      amountRappen: input.amountRappen,
+      currency: "CHF",
+      effectiveAt: { lte: now },
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    take: 2,
+  });
+  if (priceBindings.length !== 1) {
+    return billingFailure("PAID_ACTIVATION_REQUIRED");
+  }
+  const priceBinding = priceBindings[0]!;
   const quoteDigest = realPaymentQuoteDigest({
     amountRappen: input.amountRappen,
     companyId: dependencies.actor.companyId,
     currency: "CHF",
     description: input.description,
     orderId: input.orderId,
+    adapterKey: context.adapterKey,
+    checkoutKind: "SUBSCRIPTION",
+    paymentPriceBindingId: priceBinding.id,
+    planVersionId: input.planVersionId,
+    providerAccountReference: context.providerAccountReference,
+    providerMode: context.providerMode,
+    providerPriceReference: priceBinding.providerPriceReference,
   });
   if (dependencies.stepUp?.mode === "enforce") {
     if (
@@ -753,9 +1206,15 @@ async function authorizeRealCheckout(
       return billingFailure("STEP_UP_REQUIRED");
     }
     return billingSuccess({
+      adapterKey: context.adapterKey,
+      adapterVersion: context.adapterVersion,
+      expectedLiveMode: context.expectedLiveMode,
       paidScopeDecisionId: activation.paidScopeDecisionId,
       paymentAttemptId: randomUUID(),
+      paymentPriceBindingId: priceBinding.id,
       providerActivationId: providerActivation.id,
+      providerMode: context.providerMode,
+      providerPriceReference: priceBinding.providerPriceReference,
       quoteDigest,
       stepUpEvidenceId,
     });
@@ -798,9 +1257,15 @@ async function authorizeRealCheckout(
   });
   if (consumed.count !== 1) return billingFailure("STEP_UP_REQUIRED");
   return billingSuccess({
+    adapterKey: context.adapterKey,
+    adapterVersion: context.adapterVersion,
+    expectedLiveMode: context.expectedLiveMode,
     paidScopeDecisionId: activation.paidScopeDecisionId,
     paymentAttemptId: randomUUID(),
+    paymentPriceBindingId: priceBinding.id,
     providerActivationId: providerActivation.id,
+    providerMode: context.providerMode,
+    providerPriceReference: priceBinding.providerPriceReference,
     quoteDigest,
     stepUpEvidenceId: evidence.id,
   });
@@ -980,7 +1445,7 @@ export async function confirmMockPayment(
           now,
         );
 
-        return billingSuccess({
+        const emailContext: EmailContext = Object.freeze({
           orderId: order.id,
           invoiceId: invoice.id,
           invoiceNumber: invoice.number,
@@ -1001,6 +1466,8 @@ export async function confirmMockPayment(
               ? null
               : line.productVersion.creditAmount * line.quantity,
         });
+        await enqueueBillingEmailOutbox(transaction, emailContext, now);
+        return billingSuccess(emailContext);
       },
       { isolationLevel: "Serializable" },
     ),
@@ -1009,10 +1476,6 @@ export async function confirmMockPayment(
   if (!transactionResult.ok) return transactionResult;
   const emailContext = transactionResult.value;
   await sendBillingNotifications(dependencies.database, emailContext);
-  const emailsRecorded = await sendBillingEmails(
-    dependencies.emailProvider,
-    emailContext,
-  );
   return billingSuccess(
     {
       orderId: emailContext.orderId,
@@ -1023,7 +1486,7 @@ export async function confirmMockPayment(
       additionalJobPermitId: emailContext.additionalJobPermitId,
       importAccessGrantId: emailContext.importAccessGrantId,
       jobBoostId: emailContext.jobBoostId,
-      emailsRecorded,
+      emailsRecorded: true,
     },
     transactionResult.replay === true,
   );
@@ -1036,7 +1499,13 @@ export async function projectRealPaymentSuccess(
     eventCreatedAt: Date;
     paymentAttemptId: string;
     providerEventId: string;
+    providerCustomerReference: string;
+    providerInvoiceReference: string | null;
     providerPaymentReference: string;
+    providerPeriodEnd?: Date;
+    providerPeriodStart?: Date;
+    providerPriceReference: string;
+    providerSubscriptionReference: string;
   }>,
   dependencies: Readonly<{
     database: BillingDependencies["database"];
@@ -1052,6 +1521,24 @@ export async function projectRealPaymentSuccess(
     !/^[A-Za-z0-9][A-Za-z0-9_.:-]{2,254}$/u.test(
       input.providerPaymentReference,
     ) ||
+    !/^[A-Za-z0-9][A-Za-z0-9_.:-]{2,254}$/u.test(
+      input.providerCustomerReference,
+    ) ||
+    !/^price_[A-Za-z0-9]{8,}$/u.test(input.providerPriceReference) ||
+    !/^[A-Za-z0-9][A-Za-z0-9_.:-]{2,254}$/u.test(
+      input.providerSubscriptionReference,
+    ) ||
+    (input.providerInvoiceReference !== null &&
+      !/^[A-Za-z0-9][A-Za-z0-9_.:-]{2,254}$/u.test(
+        input.providerInvoiceReference,
+      )) ||
+    (input.providerPeriodStart === undefined) !==
+      (input.providerPeriodEnd === undefined) ||
+    (input.providerPeriodStart !== undefined &&
+      (!Number.isFinite(input.providerPeriodStart.getTime()) ||
+        !Number.isFinite(input.providerPeriodEnd!.getTime()) ||
+        input.providerPeriodEnd!.getTime() <=
+          input.providerPeriodStart.getTime())) ||
     !Number.isFinite(input.eventCreatedAt.getTime())
   ) {
     return billingFailure("INVALID_INPUT");
@@ -1099,19 +1586,33 @@ export async function projectRealPaymentSuccess(
           WHERE "id" = ${order.id}::uuid
           FOR UPDATE
         `;
-        if (attempt.riskDecisions.length > 0 || attempt.status === "HELD") {
+        if (
+          attempt.riskDecisions.length > 0 ||
+          (attempt.status === "HELD" &&
+            attempt.failureCode !== "CHECKOUT_CALL_UNCERTAIN")
+        ) {
           await transaction.paymentAttempt.updateMany({
             where: { id: attempt.id, status: { not: "SUCCEEDED" } },
             data: {
               status: "HELD",
-              failureCode: "PAYMENT_RISK_HOLD",
+              failureCode: attempt.failureCode ?? "PAYMENT_RISK_HOLD",
               lastProviderEventAt: input.eventCreatedAt,
+              lastProviderEventRank: paymentAttemptProviderRank("SUCCEEDED"),
               updatedAt: now,
             },
           });
           return billingFailure("PAYMENT_HELD");
         }
         if (order.status === "PAID") {
+          if (
+            attempt.providerCustomerReference !==
+              input.providerCustomerReference ||
+            attempt.providerSubscriptionReference !==
+              input.providerSubscriptionReference ||
+            attempt.providerPriceReference !== input.providerPriceReference
+          ) {
+            return billingFailure("CONFLICT");
+          }
           const replay = buildPaidReplay(order);
           if (replay === null) return billingFailure("CONFLICT");
           return billingSuccess(
@@ -1129,12 +1630,18 @@ export async function projectRealPaymentSuccess(
           );
         }
         if (
-          order.status !== "PENDING" ||
-          attempt.status === "FAILED" ||
+          !["PENDING", "FAILED", "EXPIRED"].includes(order.status) ||
           attempt.status === "CANCELLED" ||
           input.amountRappen !== attempt.amountRappen ||
           input.amountRappen !== order.totalRappen ||
           attempt.currency !== "CHF" ||
+          attempt.checkoutKind !== "SUBSCRIPTION" ||
+          attempt.paymentPriceBindingId === null ||
+          attempt.adapterVersion !== "v1" ||
+          !["stripe_contract", "stripe_sandbox", "stripe_live"].includes(
+            attempt.adapterKey,
+          ) ||
+          attempt.providerPriceReference !== input.providerPriceReference ||
           order.currency !== "CHF" ||
           input.eventCreatedAt.getTime() <
             attempt.createdAt.getTime() - 5 * 60_000 ||
@@ -1211,11 +1718,12 @@ export async function projectRealPaymentSuccess(
           where: {
             id: order.id,
             companyId: order.companyId,
-            status: "PENDING",
+            status: { in: ["PENDING", "FAILED", "EXPIRED"] },
           },
           data: {
             status: "PAID",
             paidAt: now,
+            failedAt: null,
             providerReference: input.providerPaymentReference,
           },
         });
@@ -1226,13 +1734,23 @@ export async function projectRealPaymentSuccess(
           where: {
             id: attempt.id,
             status: {
-              in: ["CREATED", "CHECKOUT_CREATED", "PENDING"],
+              in: [
+                "CREATED",
+                "CHECKOUT_CREATED",
+                "PENDING",
+                "FAILED",
+                "EXPIRED",
+              ],
             },
           },
           data: {
             status: "SUCCEEDED",
             providerPaymentReference: input.providerPaymentReference,
+            providerCustomerReference: input.providerCustomerReference,
+            providerSubscriptionReference: input.providerSubscriptionReference,
+            providerInvoiceReference: input.providerInvoiceReference,
             lastProviderEventAt: input.eventCreatedAt,
+            lastProviderEventRank: paymentAttemptProviderRank("SUCCEEDED"),
             failureCode: null,
             updatedAt: now,
           },
@@ -1247,9 +1765,102 @@ export async function projectRealPaymentSuccess(
           line,
           actorDependencies,
           now,
+          {
+            adapterKey:
+              attempt.adapterKey as RealSubscriptionBinding["adapterKey"],
+            adapterVersion: "v1",
+            providerAccountReference: attempt.providerAccountReference,
+            providerCustomerReference: input.providerCustomerReference,
+            providerEventAt: input.eventCreatedAt,
+            providerMode: attempt.providerMode,
+            providerPriceReference: input.providerPriceReference,
+            providerRecurringAmountRappenSnapshot: attempt.amountRappen,
+            providerSubscriptionReference: input.providerSubscriptionReference,
+          },
         );
         if (!fulfillment.ok) {
           throw new BillingDomainRollbackError(fulfillment.code);
+        }
+        if (
+          input.providerInvoiceReference !== null &&
+          input.providerPeriodStart !== undefined &&
+          input.providerPeriodEnd !== undefined
+        ) {
+          if (
+            fulfillment.value.subscriptionId === null ||
+            attempt.providerMode === null ||
+            attempt.adapterKey === null ||
+            attempt.adapterVersion === null ||
+            attempt.providerAccountReference === null
+          ) {
+            throw new BillingDomainRollbackError("CONFLICT");
+          }
+          const scope = {
+            adapterKey: attempt.adapterKey,
+            environment: attempt.environment,
+            provider: "STRIPE" as const,
+            providerAccountReference: attempt.providerAccountReference,
+            providerInvoiceReference: input.providerInvoiceReference,
+          };
+          const paidFacts = {
+            amountRappen: input.amountRappen,
+            currency: "CHF" as const,
+            paidAt: input.eventCreatedAt,
+            periodEnd: input.providerPeriodEnd,
+            periodStart: input.providerPeriodStart,
+            providerPaymentReference: input.providerPaymentReference,
+          };
+          const paidProjectionDigest =
+            subscriptionProviderInvoiceProjectionDigestV1(
+              scope,
+              paidFacts,
+              fulfillment.value.subscriptionId,
+            );
+          const providerInvoice =
+            await transaction.subscriptionProviderInvoice.createMany({
+              data: [
+                {
+                  ...scope,
+                  ...paidFacts,
+                  adapterVersion: attempt.adapterVersion,
+                  companyId: order.companyId,
+                  orderId: order.id,
+                  paidProjectionDigest,
+                  paymentAttemptId: attempt.id,
+                  providerMode: attempt.providerMode,
+                  providerSubscriptionReference:
+                    input.providerSubscriptionReference,
+                  status: "PAID",
+                  subscriptionId: fulfillment.value.subscriptionId,
+                  createdAt: now,
+                  updatedAt: now,
+                },
+              ],
+              skipDuplicates: true,
+            });
+          if (providerInvoice.count !== 1) {
+            const existing =
+              await transaction.subscriptionProviderInvoice.findUnique({
+                where: {
+                  provider_environment_adapterKey_providerAccountReference_providerInvoiceReference:
+                    scope,
+                },
+                select: {
+                  paidProjectionDigest: true,
+                  paymentAttemptId: true,
+                  status: true,
+                  subscriptionId: true,
+                },
+              });
+            if (
+              existing?.status !== "PAID" ||
+              existing.paidProjectionDigest !== paidProjectionDigest ||
+              existing.paymentAttemptId !== attempt.id ||
+              existing.subscriptionId !== fulfillment.value.subscriptionId
+            ) {
+              throw new BillingDomainRollbackError("CONFLICT");
+            }
+          }
         }
         await resolveCompanyDunningInTransaction(transaction, {
           companyId: order.companyId,
@@ -1290,7 +1901,7 @@ export async function projectRealPaymentSuccess(
           line,
           now,
         );
-        return billingSuccess({
+        const emailContext: EmailContext = Object.freeze({
           orderId: order.id,
           invoiceId: invoice.id,
           invoiceNumber: invoice.number,
@@ -1307,6 +1918,8 @@ export async function projectRealPaymentSuccess(
           planName: line.planVersion?.plan.name ?? null,
           creditCount: null,
         });
+        await enqueueBillingEmailOutbox(transaction, emailContext, now);
+        return billingSuccess(emailContext);
       },
       { isolationLevel: "Serializable" },
     );
@@ -1318,10 +1931,6 @@ export async function projectRealPaymentSuccess(
   }
   if (!settled.ok) return settled;
   await sendBillingNotifications(dependencies.database, settled.value);
-  const emailsRecorded = await sendBillingEmails(
-    dependencies.emailProvider,
-    settled.value,
-  );
   return billingSuccess(
     {
       orderId: settled.value.orderId,
@@ -1332,7 +1941,7 @@ export async function projectRealPaymentSuccess(
       additionalJobPermitId: settled.value.additionalJobPermitId,
       importAccessGrantId: settled.value.importAccessGrantId,
       jobBoostId: settled.value.jobBoostId,
-      emailsRecorded,
+      emailsRecorded: true,
     },
     settled.replay === true,
   );
@@ -1687,6 +2296,7 @@ async function fulfillPlanOrder(
   line: ConfirmOrderRow["lines"][number],
   dependencies: BillingDependencies,
   now: Date,
+  realSubscriptionBinding?: RealSubscriptionBinding,
 ): Promise<BillingCommandResult<FulfillmentResult>> {
   const snapshot = line.subscriptionSnapshot;
   const plan = line.planVersion;
@@ -1834,6 +2444,27 @@ async function fulfillPlanOrder(
       monthlyEquivalentRappenSnapshot: plan.monthlyEquivalentRappen ?? 0,
       currencySnapshot: plan.currency,
       activatedAt: status === "ACTIVE" ? now : null,
+      ...(realSubscriptionBinding === undefined
+        ? {}
+        : {
+            paymentProvider: "STRIPE" as const,
+            paymentRuntimeMode: realSubscriptionBinding.providerMode,
+            paymentAdapterKey: realSubscriptionBinding.adapterKey,
+            paymentAdapterVersion: realSubscriptionBinding.adapterVersion,
+            providerAccountReference:
+              realSubscriptionBinding.providerAccountReference,
+            providerCustomerReference:
+              realSubscriptionBinding.providerCustomerReference,
+            providerSubscriptionReference:
+              realSubscriptionBinding.providerSubscriptionReference,
+            providerPriceReference:
+              realSubscriptionBinding.providerPriceReference,
+            providerRecurringAmountRappenSnapshot:
+              realSubscriptionBinding.providerRecurringAmountRappenSnapshot,
+            providerLastEventAt: realSubscriptionBinding.providerEventAt,
+            providerStatusEventAt: realSubscriptionBinding.providerEventAt,
+            providerStatusRank: 10,
+          }),
     },
   });
 
@@ -2583,10 +3214,11 @@ async function sendBillingNotifications(
   }
 }
 
-async function sendBillingEmails(
-  provider: EmailProvider,
+async function enqueueBillingEmailOutbox(
+  transaction: Prisma.TransactionClient,
   context: EmailContext,
-): Promise<boolean> {
+  now: Date,
+) {
   const messages: Readonly<{
     templateKey: EmailTemplateKey;
     data: Record<string, unknown>;
@@ -2632,21 +3264,17 @@ async function sendBillingEmails(
       },
     });
   }
-  let recorded = true;
   for (const message of messages) {
-    try {
-      const rendered = renderEmailTemplate(message.templateKey, message.data);
-      await provider.send({
-        to: context.billingEmail,
-        templateKey: message.templateKey,
-        data: message.data,
-        subject: rendered.subject,
-      });
-    } catch {
-      recorded = false;
-    }
+    await enqueueNotification(transaction, {
+      recipient: { userId: context.recipientUserId },
+      templateKey: message.templateKey,
+      payloadSchemaVersion: "v1",
+      payload: message.data,
+      dedupeKey: `${message.data.idempotencyKey}:email`,
+      availableAt: now,
+      maxAttempts: 8,
+    });
   }
-  return recorded;
 }
 
 function buildPaidReplay(order: ConfirmOrderRow): EmailContext | null {
@@ -3664,6 +4292,99 @@ async function recordCheckoutProviderFailure(
   }
 }
 
+async function holdCheckoutForStaleAuthority(
+  dependencies: BillingDependencies,
+  prepared: PreparedCheckoutOrder,
+  reasonCode: Extract<
+    HostedCheckoutAuthorityDecision,
+    { active: false }
+  >["reasonCode"],
+  now: Date,
+) {
+  if (prepared.paymentAttemptId === null) return false;
+  const paymentAttemptId = prepared.paymentAttemptId;
+  try {
+    return await dependencies.database.$transaction(
+      async (transaction) => {
+        await lockCompanyBillingScope(
+          transaction,
+          dependencies.actor.companyId,
+        );
+        await transaction.$queryRaw`
+          SELECT "id"
+          FROM "PaymentAttempt"
+          WHERE "id" = ${paymentAttemptId}::uuid
+          FOR UPDATE
+        `;
+        const attempt = await transaction.paymentAttempt.findFirst({
+          where: {
+            id: paymentAttemptId,
+            orderId: prepared.orderId,
+            companyId: dependencies.actor.companyId,
+            provider: "STRIPE",
+          },
+          select: { id: true, status: true, failureCode: true },
+        });
+        if (attempt === null) return false;
+        if (
+          attempt.status === "HELD" &&
+          attempt.failureCode !== "CHECKOUT_CALL_UNCERTAIN"
+        ) {
+          return true;
+        }
+        const held = await transaction.paymentAttempt.updateMany({
+          where: {
+            id: attempt.id,
+            OR: [
+              { status: { in: ["CREATED", "CHECKOUT_CREATED"] } },
+              {
+                status: "HELD",
+                failureCode: "CHECKOUT_CALL_UNCERTAIN",
+              },
+            ],
+          },
+          data: {
+            status: "HELD",
+            failureCode: reasonCode,
+            updatedAt: now,
+          },
+        });
+        if (held.count !== 1) return false;
+        await transaction.paymentEvent.createMany({
+          data: [
+            {
+              orderId: prepared.orderId,
+              provider: "STRIPE",
+              kind: "PENDING",
+              idempotencyKey: `checkout-authority-held:${prepared.orderId}`,
+              createdAt: now,
+              payload: {
+                schemaVersion: "1",
+                reasonCode,
+                externalChargeClaimed: false,
+              },
+            },
+          ],
+          skipDuplicates: true,
+        });
+        await writeBillingAudit(transaction, dependencies, now, {
+          action: "PAYMENT_ATTEMPT_HELD",
+          capability: "EMPLOYER_BILLING_CHECKOUT_CREATE",
+          targetId: attempt.id,
+          targetType: "PAYMENT_ATTEMPT",
+          reasonCode,
+        });
+        return true;
+      },
+      { isolationLevel: "Serializable" },
+    );
+  } catch {
+    // Authority denial remains fail-closed even when its observability write
+    // cannot be persisted. A replay performs the same fresh check again.
+    return false;
+  }
+}
+
 async function safeCreateProviderCheckout(
   dependencies: BillingDependencies,
   prepared: PreparedCheckoutOrder,
@@ -3686,15 +4407,23 @@ async function safeCreateProviderCheckout(
       cancelUrl,
       ...(prepared.provider === "STRIPE" &&
       prepared.paymentAttemptId !== null &&
-      prepared.quoteDigest !== null
+      prepared.quoteDigest !== null &&
+      prepared.providerPriceReference !== null &&
+      prepared.expiresAt !== null
         ? {
             authoritative: {
               amountRappen: prepared.amountRappen,
               currency: prepared.currency,
               customerEmail: prepared.billingContactEmail,
               description: prepared.description,
+              expiresAt: prepared.expiresAt,
               quoteDigest: prepared.quoteDigest,
               paymentAttemptId: prepared.paymentAttemptId,
+              checkout: {
+                kind: "SUBSCRIPTION" as const,
+                billingInterval: "MONTHLY" as const,
+                providerPriceReference: prepared.providerPriceReference,
+              },
             },
           }
         : {}),
@@ -3712,61 +4441,293 @@ async function recordHostedCheckoutSession(
   dependencies: BillingDependencies,
   prepared: PreparedCheckoutOrder,
   providerSessionReference: string | undefined,
+  reservation: Readonly<{ digest: string; token: string }>,
   now: Date,
-) {
+): Promise<
+  | Readonly<{ status: "RECORDED" }>
+  | Readonly<{ status: "STALE"; reasonCode: string }>
+  | Readonly<{ status: "FAILED" }>
+> {
+  const context = dependencies.realPayment;
   if (
     prepared.paymentAttemptId === null ||
-    providerSessionReference === undefined
+    prepared.paymentPriceBindingId === null ||
+    prepared.providerPriceReference === null ||
+    prepared.quoteDigest === null ||
+    providerSessionReference === undefined ||
+    context === undefined
   ) {
-    return false;
+    return Object.freeze({ status: "FAILED" as const });
   }
   const paymentAttemptId = prepared.paymentAttemptId;
   try {
-    return await dependencies.database.$transaction(async (transaction) => {
-      await transaction.$queryRaw`
+    return await dependencies.database.$transaction(
+      async (transaction) => {
+        await transaction.$queryRaw`
         SELECT "id"
         FROM "PaymentAttempt"
         WHERE "id" = ${paymentAttemptId}::uuid
         FOR UPDATE
       `;
-      const attempt = await transaction.paymentAttempt.findFirst({
-        where: {
-          id: paymentAttemptId,
-          orderId: prepared.orderId,
-          companyId: dependencies.actor.companyId,
-          provider: "STRIPE",
-        },
-        select: {
-          status: true,
-          providerSessionReference: true,
-        },
-      });
-      if (attempt === null) return false;
-      if (
-        attempt.providerSessionReference !== null &&
-        attempt.providerSessionReference !== providerSessionReference
-      ) {
-        return false;
-      }
-      if (
-        attempt.status !== "CREATED" &&
-        attempt.status !== "CHECKOUT_CREATED"
-      ) {
-        return false;
-      }
-      const updated = await transaction.paymentAttempt.updateMany({
-        where: {
-          id: paymentAttemptId,
-          status: { in: ["CREATED", "CHECKOUT_CREATED"] },
-        },
-        data: {
-          status: "CHECKOUT_CREATED",
-          providerSessionReference,
-          updatedAt: now,
-        },
-      });
-      return updated.count === 1;
+        const activationRows = await transaction.$queryRaw<
+          Array<{ id: string }>
+        >`
+        SELECT "id"
+        FROM "ProviderActivation"
+        WHERE "environment" = ${context.environment}
+          AND "useCase" = 'payments.hosted-checkout'
+        ORDER BY "createdAt" DESC, "id" DESC
+        LIMIT 1
+        FOR UPDATE
+      `;
+        await transaction.$queryRaw`
+        SELECT "id"
+        FROM "PaymentPriceBinding"
+        WHERE "id" = ${prepared.paymentPriceBindingId}::uuid
+        FOR UPDATE
+      `;
+        const attempt = await transaction.paymentAttempt.findFirst({
+          where: {
+            id: paymentAttemptId,
+            orderId: prepared.orderId,
+            companyId: dependencies.actor.companyId,
+            provider: "STRIPE",
+          },
+          include: {
+            paymentPriceBinding: true,
+            providerActivation: true,
+          },
+        });
+        const latestActivation =
+          activationRows[0] === undefined
+            ? null
+            : await transaction.providerActivation.findUnique({
+                where: { id: activationRows[0].id },
+              });
+        let staleReason:
+          | "CHECKOUT_ACTIVATION_STALE"
+          | "CHECKOUT_PRICE_BINDING_STALE"
+          | "CHECKOUT_RUNTIME_BINDING_STALE"
+          | null = null;
+        const attemptCanRecordSession =
+          attempt !== null &&
+          (["CREATED", "CHECKOUT_CREATED", "SUCCEEDED"].includes(
+            attempt.status,
+          ) ||
+            (attempt.status === "HELD" &&
+              attempt.failureCode === "CHECKOUT_CALL_UNCERTAIN"));
+        if (
+          attempt === null ||
+          latestActivation === null ||
+          attempt.providerActivationId !== latestActivation.id ||
+          attempt.providerActivation.id !== latestActivation.id ||
+          !attemptCanRecordSession ||
+          attempt.expiresAt.getTime() <= now.getTime()
+        ) {
+          staleReason = "CHECKOUT_ACTIVATION_STALE";
+        }
+        const activationDecision =
+          staleReason === null
+            ? resolveProviderActivation({
+                activation: latestActivation,
+                adapterKey: context.adapterKey,
+                adapterVersion: context.adapterVersion,
+                environment: context.environment,
+                expectedConfigurationDigest: context.configurationDigest,
+                expectedMode: context.activationMode,
+                expectedSecretVersionRef: context.secretVersionRef,
+                now,
+                useCase: "payments.hosted-checkout",
+              })
+            : null;
+        if (
+          staleReason === null &&
+          (activationDecision === null ||
+            !activationDecision.active ||
+            activationDecision.adapterKey !== attempt!.adapterKey ||
+            activationDecision.adapterVersion !== attempt!.adapterVersion ||
+            activationDecision.mode !== context.activationMode ||
+            attempt!.environment !== context.environment ||
+            attempt!.adapterKey !== context.adapterKey ||
+            attempt!.adapterVersion !== context.adapterVersion ||
+            attempt!.providerMode !== context.providerMode ||
+            attempt!.expectedLiveMode !== context.expectedLiveMode ||
+            attempt!.providerAccountReference !==
+              context.providerAccountReference ||
+            attempt!.quoteDigest !== prepared.quoteDigest ||
+            attempt!.amountRappen !== prepared.amountRappen ||
+            attempt!.currency !== prepared.currency)
+        ) {
+          staleReason = "CHECKOUT_ACTIVATION_STALE";
+        }
+        const price = attempt?.paymentPriceBinding ?? null;
+        if (
+          staleReason === null &&
+          (price === null ||
+            price.id !== prepared.paymentPriceBindingId ||
+            price.id !== attempt!.paymentPriceBindingId ||
+            price.providerActivationId !== latestActivation!.id ||
+            price.environment !== context.environment ||
+            price.adapterKey !== context.adapterKey ||
+            price.adapterVersion !== context.adapterVersion ||
+            price.providerMode !== context.providerMode ||
+            price.providerAccountReference !==
+              context.providerAccountReference ||
+            price.providerPriceReference !== prepared.providerPriceReference ||
+            price.providerPriceReference !== attempt!.providerPriceReference ||
+            price.billingInterval !== "MONTHLY" ||
+            price.amountRappen !== prepared.amountRappen ||
+            price.currency !== prepared.currency ||
+            price.effectiveAt.getTime() > now.getTime() ||
+            price.revokedAt !== null ||
+            (price.expiresAt !== null &&
+              price.expiresAt.getTime() <= now.getTime()))
+        ) {
+          staleReason = "CHECKOUT_PRICE_BINDING_STALE";
+        }
+        if (staleReason === null) {
+          const digest = hostedCheckoutReservationDigest({
+            activationId: latestActivation!.id,
+            activationConfigurationDigest:
+              latestActivation!.configurationDigest,
+            activationEffectiveAt:
+              latestActivation!.effectiveAt?.toISOString() ?? "none",
+            activationEvidenceDigest: latestActivation!.evidenceDigest,
+            activationExpiresAt:
+              latestActivation!.expiresAt?.toISOString() ?? "none",
+            activationKillSwitchEngaged: latestActivation!.killSwitchEngaged,
+            activationMode: latestActivation!.mode,
+            activationRevokedAt:
+              latestActivation!.revokedAt?.toISOString() ?? "none",
+            activationSecretVersionRef:
+              latestActivation!.secretVersionRef ?? "none",
+            adapterKey: attempt!.adapterKey,
+            adapterVersion: attempt!.adapterVersion,
+            amountRappen: attempt!.amountRappen,
+            attemptKey: attempt!.attemptKey,
+            currency: attempt!.currency,
+            expectedLiveMode: attempt!.expectedLiveMode,
+            orderId: attempt!.orderId,
+            paymentAttemptId: attempt!.id,
+            paymentPriceBindingId: price!.id,
+            providerAccountReference: attempt!.providerAccountReference,
+            providerIdempotencyKey: prepared.providerIdempotencyKey,
+            providerMode: attempt!.providerMode,
+            providerPriceReference: price!.providerPriceReference,
+            quoteDigest: attempt!.quoteDigest,
+          });
+          if (
+            attempt!.checkoutReservationToken !== reservation.token ||
+            attempt!.checkoutReservationDigest !== reservation.digest ||
+            digest !== reservation.digest ||
+            attempt!.checkoutReservedAt === null ||
+            (attempt!.providerSessionReference !== null &&
+              attempt!.providerSessionReference !== providerSessionReference)
+          ) {
+            staleReason = "CHECKOUT_RUNTIME_BINDING_STALE";
+          }
+        }
+        if (staleReason !== null) {
+          if (attempt !== null && attempt.status !== "SUCCEEDED") {
+            const held = await transaction.paymentAttempt.updateMany({
+              where: { id: attempt.id, status: { not: "SUCCEEDED" } },
+              data: {
+                status: "HELD",
+                failureCode: staleReason,
+                providerSessionReference:
+                  attempt.providerSessionReference ?? providerSessionReference,
+                updatedAt: now,
+              },
+            });
+            if (held.count === 1) {
+              await transaction.paymentEvent.createMany({
+                data: [
+                  {
+                    orderId: prepared.orderId,
+                    provider: "STRIPE",
+                    kind: "PENDING",
+                    idempotencyKey: `checkout-session-held:${prepared.orderId}`,
+                    createdAt: now,
+                    payload: {
+                      schemaVersion: "1",
+                      reasonCode: staleReason,
+                      externalChargeClaimed: false,
+                    },
+                  },
+                ],
+                skipDuplicates: true,
+              });
+              await writeBillingAudit(transaction, dependencies, now, {
+                action: "PAYMENT_ATTEMPT_HELD",
+                capability: "EMPLOYER_BILLING_CHECKOUT_CREATE",
+                targetId: attempt.id,
+                targetType: "PAYMENT_ATTEMPT",
+                reasonCode: staleReason,
+              });
+            }
+          }
+          return Object.freeze({
+            status: "STALE" as const,
+            reasonCode: staleReason,
+          });
+        }
+        if (attempt!.status === "SUCCEEDED") {
+          await transaction.paymentAttempt.updateMany({
+            where: {
+              id: paymentAttemptId,
+              status: "SUCCEEDED",
+              providerSessionReference: null,
+            },
+            data: { providerSessionReference, updatedAt: now },
+          });
+          return Object.freeze({ status: "RECORDED" as const });
+        }
+        const updated = await transaction.paymentAttempt.updateMany({
+          where: {
+            id: paymentAttemptId,
+            OR: [
+              { status: { in: ["CREATED", "CHECKOUT_CREATED"] } },
+              {
+                status: "HELD",
+                failureCode: "CHECKOUT_CALL_UNCERTAIN",
+              },
+            ],
+          },
+          data: {
+            status: "CHECKOUT_CREATED",
+            failureCode: null,
+            providerSessionReference,
+            updatedAt: now,
+          },
+        });
+        return updated.count === 1
+          ? Object.freeze({ status: "RECORDED" as const })
+          : Object.freeze({ status: "FAILED" as const });
+      },
+      { isolationLevel: "Serializable" },
+    );
+  } catch {
+    return Object.freeze({ status: "FAILED" as const });
+  }
+}
+
+async function safeExpireProviderCheckout(
+  dependencies: BillingDependencies,
+  prepared: PreparedCheckoutOrder,
+  providerSessionReference: string,
+) {
+  const hostedProvider =
+    dependencies.paymentProvider as Partial<HostedPaymentProvider>;
+  if (typeof hostedProvider.expireCheckoutSession !== "function") {
+    return false;
+  }
+  try {
+    await hostedProvider.expireCheckoutSession({
+      idempotencyKey: `expire-checkout:${prepared.orderId}`,
+      orderId: prepared.orderId,
+      providerSessionReference,
     });
+    return true;
   } catch {
     return false;
   }

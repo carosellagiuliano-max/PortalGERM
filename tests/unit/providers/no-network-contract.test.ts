@@ -158,19 +158,27 @@ describe("Phase-04 external-network boundary", () => {
     }
   });
 
-  it("keeps direct external transport confined to the explicit Resend sandbox adapter", () => {
+  it("keeps direct transport confined to the explicit Resend and ClamAV adapters", () => {
     const sourceRoot = join(process.cwd(), "lib", "providers");
     const providerFiles = listTypeScriptFiles(sourceRoot);
     const resendAdapterPath = providerFiles.find((path) =>
       path.endsWith("resend-email-provider.ts"),
     );
+    const clamAvAdapterPath = providerFiles.find((path) =>
+      path.endsWith("clamav-malware-scanner.ts"),
+    );
     expect(resendAdapterPath).toBeDefined();
+    expect(clamAvAdapterPath).toBeDefined();
 
     const nonNetworkSources = providerFiles
-      .filter((path) => path !== resendAdapterPath)
+      .filter(
+        (path) =>
+          path !== resendAdapterPath && path !== clamAvAdapterPath,
+      )
       .map((path) => readFileSync(path, "utf8"))
       .join("\n");
     const resendAdapter = readFileSync(resendAdapterPath!, "utf8");
+    const clamAvAdapter = readFileSync(clamAvAdapterPath!, "utf8");
     const composition = readFileSync(
       join(sourceRoot, "email", "delivery-composition.ts"),
       "utf8",
@@ -185,13 +193,26 @@ describe("Phase-04 external-network boundary", () => {
     );
     expect(resendAdapter).toContain('import "server-only";');
     expect(resendAdapter).toContain(
-      'const DEFAULT_ENDPOINT = "https://api.resend.com/emails";',
+      'export const RESEND_LIVE_ENDPOINT = "https://api.resend.com/emails";',
     );
     expect(resendAdapter).not.toMatch(
       /(?:from|import\s*)\s*\(?["']node:(?:http|https|net|tls)["']/u,
     );
     expect(resendAdapter).not.toMatch(
       /(?:api\.openai\.com|api\.stripe\.com|hooks\.stripe\.com)/iu,
+    );
+    expect(clamAvAdapter).toContain(
+      'import { createConnection, type Socket } from "node:net";',
+    );
+    expect(clamAvAdapter).toContain(
+      'import { connect as connectTls, type TLSSocket } from "node:tls";',
+    );
+    expect(clamAvAdapter).not.toMatch(
+      /(?:from|import\s*)\s*\(?["']node:(?:http|https)["']/u,
+    );
+    expect(clamAvAdapter).not.toMatch(/\bfetch\s*\(/u);
+    expect(clamAvAdapter).not.toMatch(
+      /(?:api\.openai\.com|api\.stripe\.com|hooks\.stripe\.com|api\.resend\.com)/iu,
     );
     expect(composition).toContain('case "resend_sandbox":');
     expect(composition).toContain("new ResendSandboxEmailProvider");

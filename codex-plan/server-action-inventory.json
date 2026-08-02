@@ -1,0 +1,1846 @@
+[
+  {
+    "action": "acceptInvitationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform Engineering",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/invite/resume",
+    "source": "app/(auth)/invite/resume/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "registerInvitationAccountAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform Engineering",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/invite/resume",
+    "source": "app/(auth)/invite/resume/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "submitPublicReportAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Trust & Safety",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/",
+    "source": "app/(public)/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "submitEmployerDemoLeadAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/employers/demo",
+    "source": "app/(public)/employers/demo/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "recordPublicJobAnalyticsAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Analytics / Privacy",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/jobs",
+    "source": "app/(public)/jobs/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "startPublicJobIntentAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform Engineering",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/jobs",
+    "source": "app/(public)/jobs/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "calculatePublicSalaryRadarAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform Engineering",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/salary-radar",
+    "source": "app/(public)/salary-radar/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "adminCommandAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Administration / Security",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin",
+    "source": "app/admin/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "companyVerificationAdminAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin/company-verification",
+    "source": "app/admin/company-verification/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "releaseHeldSettlementAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin/finance/reconciliation",
+    "source": "app/admin/finance/reconciliation/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "adminLegalAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin/legal",
+    "source": "app/admin/legal/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "adminPrivacyCaseAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin/privacy-requests",
+    "source": "app/admin/privacy-requests/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "adminSecurityAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin/security",
+    "source": "app/admin/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "reconcileNotificationProviderOutcomeAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin/system/notification-reconciliation",
+    "source": "app/admin/system/notification-reconciliation/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "assignTrustSafetyCaseAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Administration / Security",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin/trust-safety",
+    "source": "app/admin/trust-safety/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "decideTrustSafetyAppealAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Administration / Security",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin/trust-safety",
+    "source": "app/admin/trust-safety/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "decideTrustSafetyCaseAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Administration / Security",
+    "roles": [
+      "ADMIN"
+    ],
+    "routeScope": "/admin/trust-safety",
+    "source": "app/admin/trust-safety/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "unsubscribeJobAlertAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform Engineering",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/alerts/unsubscribe/[token]",
+    "source": "app/alerts/unsubscribe/[token]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "createJobAlertAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/alerts",
+    "source": "app/candidate/alerts/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "deleteJobAlertAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/alerts",
+    "source": "app/candidate/alerts/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "grantJobAlertDeliveryAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/alerts",
+    "source": "app/candidate/alerts/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "pauseJobAlertAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/alerts",
+    "source": "app/candidate/alerts/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "resumeJobAlertAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/alerts",
+    "source": "app/candidate/alerts/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "revokeJobAlertDeliveryAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/alerts",
+    "source": "app/candidate/alerts/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "runJobAlertDigestMockAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/alerts",
+    "source": "app/candidate/alerts/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "updateJobAlertAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/alerts",
+    "source": "app/candidate/alerts/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "applyToJobAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/applications",
+    "source": "app/candidate/applications/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "reportApplicationEmployerAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Trust & Safety",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/applications",
+    "source": "app/candidate/applications/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "updateCandidateApplicationNoteAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/applications",
+    "source": "app/candidate/applications/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "withdrawCandidateApplicationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/applications",
+    "source": "app/candidate/applications/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "createExternalTrackerAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/applications/external",
+    "source": "app/candidate/applications/external/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "setExternalTrackerReminderAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/applications/external",
+    "source": "app/candidate/applications/external/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "transitionExternalTrackerAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/applications/external",
+    "source": "app/candidate/applications/external/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "markCandidateNotificationReadAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/dashboard",
+    "source": "app/candidate/dashboard/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "cancelCandidateInterviewAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/interviews",
+    "source": "app/candidate/interviews/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "respondToCandidateInterviewAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/interviews",
+    "source": "app/candidate/interviews/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "completeCandidateOnboardingAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/jobpass",
+    "source": "app/candidate/jobpass/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "saveCandidateProfileAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/jobpass",
+    "source": "app/candidate/jobpass/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "setTalentRadarVisibilityAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/jobpass",
+    "source": "app/candidate/jobpass/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "markCandidateConversationReadAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/messages",
+    "source": "app/candidate/messages/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "reportCandidateMessageAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Trust & Safety",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/messages",
+    "source": "app/candidate/messages/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "sendCandidateMessageAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/messages",
+    "source": "app/candidate/messages/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "cancelCandidatePrivacyRequestAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/privacy",
+    "source": "app/candidate/privacy/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "createCandidatePrivacyRequestAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/privacy",
+    "source": "app/candidate/privacy/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "updateCandidateAnalyticsConsentAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/privacy",
+    "source": "app/candidate/privacy/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "completeCandidatePrivacyChallengeAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Privacy / Legal",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/privacy/requests/[id]/verify",
+    "source": "app/candidate/privacy/requests/[id]/verify/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "confirmSaveJobAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/saved-jobs",
+    "source": "app/candidate/saved-jobs/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "removeSavedJobAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/saved-jobs",
+    "source": "app/candidate/saved-jobs/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "acceptCandidateRadarRequestAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/talent-radar/requests",
+    "source": "app/candidate/talent-radar/requests/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "declineCandidateRadarRequestAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/talent-radar/requests",
+    "source": "app/candidate/talent-radar/requests/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "grantCandidateRadarRevealAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/talent-radar/requests",
+    "source": "app/candidate/talent-radar/requests/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "previewCandidateRadarRevealAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/talent-radar/requests",
+    "source": "app/candidate/talent-radar/requests/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "revokeCandidateRadarRevealAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Candidate Product",
+    "roles": [
+      "CANDIDATE"
+    ],
+    "routeScope": "/candidate/talent-radar/requests",
+    "source": "app/candidate/talent-radar/requests/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "cancelEmployerInterviewAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/applicants/[id]/interviews",
+    "source": "app/employer/applicants/[id]/interviews/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "proposeEmployerInterviewAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/applicants/[id]/interviews",
+    "source": "app/employer/applicants/[id]/interviews/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "respondToEmployerInterviewAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/applicants/[id]/interviews",
+    "source": "app/employer/applicants/[id]/interviews/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "addEmployerNoteAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/applicants",
+    "source": "app/employer/applicants/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "draftApplicantTextAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/applicants",
+    "source": "app/employer/applicants/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "reportEmployerApplicantAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Trust & Safety",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/applicants",
+    "source": "app/employer/applicants/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "sendEmployerMessageAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/applicants",
+    "source": "app/employer/applicants/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "transitionApplicationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/applicants",
+    "source": "app/employer/applicants/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "cancelSubscriptionAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/billing",
+    "source": "app/employer/billing/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "startBillingCheckoutAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/billing/checkout",
+    "source": "app/employer/billing/checkout/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "saveBillingProfileAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/billing/profile",
+    "source": "app/employer/billing/profile/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "startRealSubscriptionCheckoutAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Billing / Finance",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/billing/subscription",
+    "source": "app/employer/billing/subscription/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "completeEmployerCompanyOnboardingAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/company",
+    "source": "app/employer/company/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "saveEmployerCompanyProfileAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/company",
+    "source": "app/employer/company/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "addClaimEvidenceAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/company/claim-pending",
+    "source": "app/employer/company/claim-pending/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "cancelClaimAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/company/claim-pending",
+    "source": "app/employer/company/claim-pending/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "startNewCompanyVerificationCycleAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/company/verification",
+    "source": "app/employer/company/verification/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "submitCurrentCompanyVerificationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/company/verification",
+    "source": "app/employer/company/verification/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "closeEmployerJobAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "createEmployerJobRevisionFromPausedAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "createEmployerJobRevisionFromRejectedAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "duplicateEmployerJobAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "employerJobAiSuggestionAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "markEmployerJobFilledAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "pauseAndCreateEmployerJobRevisionAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "pauseEmployerJobAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "reactivateEmployerJobAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "reconfirmEmployerJobFreshnessAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "runEmployerJobReportingCheckAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Trust & Safety",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "saveEmployerJobStepAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "submitEmployerJobForReviewAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]",
+    "source": "app/employer/jobs/[id]/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "activateIncludedBoostAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]/boost",
+    "source": "app/employer/jobs/[id]/boost/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "cancelEmployerBoostAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/[id]/boost",
+    "source": "app/employer/jobs/[id]/boost/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "createEmployerJobDraftAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/jobs/new",
+    "source": "app/employer/jobs/new/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "cancelContactRequestAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/talent-radar",
+    "source": "app/employer/talent-radar/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "reportRadarCandidateAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Security / Trust & Safety",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/talent-radar",
+    "source": "app/employer/talent-radar/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "sendContactRequestAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/talent-radar",
+    "source": "app/employer/talent-radar/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "changeMemberRoleAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/team",
+    "source": "app/employer/team/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "removeMemberAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/team",
+    "source": "app/employer/team/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "resendInvitationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/team",
+    "source": "app/employer/team/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "revokeInvitationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/team",
+    "source": "app/employer/team/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "sendInvitationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/team",
+    "source": "app/employer/team/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "assignRecruiterAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Recruiting Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/team/assignments",
+    "source": "app/employer/team/assignments/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "revokeAssignmentAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Employer Product",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/team/assignments",
+    "source": "app/employer/team/assignments/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "attachCompanyVerificationDocumentAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/verification",
+    "source": "app/employer/verification/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "beginCompanyVerificationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/verification",
+    "source": "app/employer/verification/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "submitCompanyVerificationAppealAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/verification",
+    "source": "app/employer/verification/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "verifyCompanyDomainAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Company Trust",
+    "roles": [
+      "EMPLOYER",
+      "RECRUITER"
+    ],
+    "routeScope": "/employer/verification",
+    "source": "app/employer/verification/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "confirmMockPaymentAction",
+    "launchClasses": [
+      "LOCAL_CI"
+    ],
+    "owner": "Billing / Finance",
+    "roles": [
+      "LOCAL_DEMO"
+    ],
+    "routeScope": "/mock/checkout/[orderId]",
+    "source": "app/mock/checkout/[orderId]/actions.ts",
+    "status": "LOCAL_CI_ONLY"
+  },
+  {
+    "action": "authenticateTotpAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "beginTotpEnrollmentAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "beginWebAuthnAuthenticationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "beginWebAuthnEnrollmentAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "completeTotpEnrollmentAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "completeWebAuthnAuthenticationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "completeWebAuthnEnrollmentAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "consumeRecoveryCodeAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "revokeAuthenticatorAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "issueBoundStepUpGrantAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/step-up-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "submitTrustSafetyAppealAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/security",
+    "source": "app/security/trust-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "supportCaseAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Platform Engineering",
+    "roles": [
+      "CANDIDATE",
+      "EMPLOYER",
+      "RECRUITER",
+      "ADMIN"
+    ],
+    "routeScope": "/support",
+    "source": "app/support/actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "cancelLoginEmailChangeAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/_shared/auth/identity-actions",
+    "source": "lib/auth/identity-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "consumeEmailVerificationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "PUBLIC",
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/_shared/auth/identity-actions",
+    "source": "lib/auth/identity-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "requestLoginEmailChangeAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/_shared/auth/identity-actions",
+    "source": "lib/auth/identity-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "resendEmailVerificationAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "PUBLIC",
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/_shared/auth/identity-actions",
+    "source": "lib/auth/identity-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "createCandidatePersonaAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/_shared/auth/server-actions",
+    "source": "lib/auth/server-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "forgotPasswordAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/_shared/auth/server-actions",
+    "source": "lib/auth/server-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "getEmployerRegistrationClaimDefaults",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/_shared/auth/server-actions",
+    "source": "lib/auth/server-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "loginAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/_shared/auth/server-actions",
+    "source": "lib/auth/server-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "registerCandidateAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/_shared/auth/server-actions",
+    "source": "lib/auth/server-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "registerEmployerAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/_shared/auth/server-actions",
+    "source": "lib/auth/server-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "resetPasswordAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "PUBLIC"
+    ],
+    "routeScope": "/_shared/auth/server-actions",
+    "source": "lib/auth/server-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "switchCompanyContextAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/_shared/auth/server-actions",
+    "source": "lib/auth/server-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "switchPersonaContextAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Identity / Security",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/_shared/auth/server-actions",
+    "source": "lib/auth/server-actions.ts",
+    "status": "IMPLEMENTED"
+  },
+  {
+    "action": "setNotificationPreferenceAction",
+    "launchClasses": [
+      "LC4",
+      "LC5"
+    ],
+    "owner": "Communications / Platform",
+    "roles": [
+      "AUTHENTICATED"
+    ],
+    "routeScope": "/_shared/notifications/server-actions",
+    "source": "lib/notifications/server-actions.ts",
+    "status": "IMPLEMENTED"
+  }
+]

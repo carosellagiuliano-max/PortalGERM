@@ -57,6 +57,7 @@ const requestSchema = z.strictObject({
   orderId: z.uuid(),
   reasonCode: z.string().regex(/^[A-Z][A-Z0-9_]{1,63}$/u),
   stepUpEvidenceId: z.uuid(),
+  subscriptionProviderInvoiceId: z.uuid().optional(),
 });
 
 export async function requestFinanceRefund(
@@ -96,7 +97,9 @@ export async function requestFinanceRefund(
             replay.amountRappen !== input.amountRappen ||
             replay.reasonCode !== input.reasonCode ||
             replay.stepUpEvidenceId !== input.stepUpEvidenceId ||
-            replay.requestedByUserId !== dependencies.actor.userId
+            replay.requestedByUserId !== dependencies.actor.userId ||
+            replay.subscriptionProviderInvoiceId !==
+              (input.subscriptionProviderInvoiceId ?? null)
           ) {
             return { ok: false as const, code: "CONFLICT" as const };
           }
@@ -108,57 +111,38 @@ export async function requestFinanceRefund(
               "REQUESTED" | "PENDING" | "SUCCEEDED" | "FAILED",
           };
         }
-        await transaction.$queryRaw`
-          SELECT "id"
-          FROM "Order"
-          WHERE "id" = ${input.orderId}::uuid
-          FOR UPDATE
-        `;
-        const order = await transaction.order.findFirst({
-          where: {
-            id: input.orderId,
-            companyId: input.companyId,
-            provider: "STRIPE",
-            status: "PAID",
-          },
-          select: {
-            id: true,
-            totalRappen: true,
-            invoice: {
-              select: { id: true, status: true },
-            },
-            paymentAttempts: {
-              where: { provider: "STRIPE", status: "SUCCEEDED" },
-              orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-              take: 1,
-              select: {
-                id: true,
-                providerPaymentReference: true,
-              },
-            },
-            refunds: {
-              where: {
-                status: { in: ["REQUESTED", "PENDING", "SUCCEEDED"] },
-              },
-              select: { amountRappen: true },
-            },
-          },
-        });
-        const attempt = order?.paymentAttempts[0];
-        if (
-          order === null ||
-          order.invoice === null ||
-          order.invoice.status !== "PAID" ||
-          attempt === undefined ||
-          attempt.providerPaymentReference === null
-        ) {
+        const source =
+          input.subscriptionProviderInvoiceId === undefined
+            ? await loadInitialRefundSource(transaction, {
+                companyId: input.companyId,
+                orderId: input.orderId,
+              })
+            : await loadSubscriptionInvoiceRefundSource(transaction, {
+                companyId: input.companyId,
+                orderId: input.orderId,
+                subscriptionProviderInvoiceId:
+                  input.subscriptionProviderInvoiceId,
+              });
+        if (source === null) {
           return { ok: false as const, code: "NOT_FOUND" as const };
         }
-        const committedRefunds = order.refunds.reduce(
-          (sum, refund) => sum + refund.amountRappen,
-          0,
-        );
-        if (committedRefunds + input.amountRappen > order.totalRappen) {
+        const committedRefunds = await transaction.refund.aggregate({
+          where: {
+            sourceKind: source.sourceKind,
+            ...(source.subscriptionProviderInvoiceId === null
+              ? { paymentAttemptId: source.paymentAttemptId }
+              : {
+                  subscriptionProviderInvoiceId:
+                    source.subscriptionProviderInvoiceId,
+                }),
+            status: { in: ["REQUESTED", "PENDING", "SUCCEEDED"] },
+          },
+          _sum: { amountRappen: true },
+        });
+        if (
+          (committedRefunds._sum.amountRappen ?? 0) + input.amountRappen >
+          source.sourceAmountRappen
+        ) {
           return { ok: false as const, code: "CONFLICT" as const };
         }
         const action = financeRefundRequestAction({
@@ -166,6 +150,13 @@ export async function requestFinanceRefund(
           companyId: input.companyId,
           orderId: input.orderId,
           reasonCode: input.reasonCode,
+          ...(source.subscriptionProviderInvoiceId === null
+            ? {}
+            : {
+                sourceKind: source.sourceKind,
+                subscriptionProviderInvoiceId:
+                  source.subscriptionProviderInvoiceId,
+              }),
         });
         const consumed = await consumeFinanceStepUp(transaction, {
           action,
@@ -185,12 +176,18 @@ export async function requestFinanceRefund(
         await transaction.refund.create({
           data: {
             id: refundId,
-            orderId: order.id,
-            invoiceId: order.invoice.id,
-            paymentAttemptId: attempt.id,
+            orderId: source.orderId,
+            invoiceId: source.invoiceId,
+            subscriptionProviderInvoiceId:
+              source.subscriptionProviderInvoiceId,
+            paymentAttemptId: source.paymentAttemptId,
             companyId: input.companyId,
             amountRappen: input.amountRappen,
             currency: "CHF",
+            sourceKind: source.sourceKind,
+            sourceProviderPaymentReference:
+              source.sourceProviderPaymentReference,
+            sourceAmountRappen: source.sourceAmountRappen,
             status: "REQUESTED",
             reasonCode: input.reasonCode,
             idempotencyKey: input.idempotencyKey,
@@ -264,6 +261,7 @@ export async function approveAndSubmitFinanceRefund(
         providerPaymentReference: string;
         reasonCode: string;
         refundId: string;
+        sourceKind: "INITIAL_ORDER" | "SUBSCRIPTION_PROVIDER_INVOICE";
       }>
     | FinanceOperationResult;
   try {
@@ -277,15 +275,12 @@ export async function approveAndSubmitFinanceRefund(
         `;
         const refund = await transaction.refund.findUnique({
           where: { id: input.refundId },
-          include: {
-            paymentAttempt: {
-              select: { providerPaymentReference: true },
-            },
-          },
+          include: { paymentAttempt: { select: { id: true } } },
         });
         if (
           refund === null ||
-          refund.paymentAttempt.providerPaymentReference === null
+          refund.paymentAttempt.id !== refund.paymentAttemptId ||
+          refund.sourceProviderPaymentReference.length < 3
         ) {
           return { ok: false as const, code: "NOT_FOUND" as const };
         }
@@ -336,10 +331,10 @@ export async function approveAndSubmitFinanceRefund(
           amountRappen: refund.amountRappen,
           orderId: refund.orderId,
           paymentAttemptId: refund.paymentAttemptId,
-          providerPaymentReference:
-            refund.paymentAttempt.providerPaymentReference,
+          providerPaymentReference: refund.sourceProviderPaymentReference,
           reasonCode: refund.reasonCode,
           refundId: refund.id,
+          sourceKind: refund.sourceKind,
         };
       },
       { isolationLevel: "Serializable" },
@@ -358,6 +353,8 @@ export async function approveAndSubmitFinanceRefund(
       paymentAttemptId: prepared.paymentAttemptId,
       providerPaymentReference: prepared.providerPaymentReference,
       reasonCode: prepared.reasonCode,
+      refundId: prepared.refundId,
+      sourceKind: prepared.sourceKind,
     });
   } catch {
     // Ambiguous provider outcomes remain PENDING. The next idempotent retry or
@@ -365,24 +362,70 @@ export async function approveAndSubmitFinanceRefund(
     return { ok: false, code: "PROVIDER_UNAVAILABLE" };
   }
   try {
-    await dependencies.database.refund.updateMany({
-      where: {
-        id: prepared.refundId,
-        status: "PENDING",
-        providerRefundReference: null,
+    const persisted = await dependencies.database.$transaction(
+      async (transaction) => {
+        await transaction.$queryRaw`
+          SELECT "id"
+          FROM "Refund"
+          WHERE "id" = ${prepared.refundId}::uuid
+          FOR UPDATE
+        `;
+        const refund = await transaction.refund.findUnique({
+          where: { id: prepared.refundId },
+          select: {
+            amountRappen: true,
+            currency: true,
+            providerRefundReference: true,
+            sourceKind: true,
+            sourceProviderPaymentReference: true,
+            status: true,
+          },
+        });
+        if (
+          refund === null ||
+          refund.amountRappen !== providerResult.amountRappen ||
+          refund.currency !== providerResult.currency ||
+          refund.sourceKind !== prepared.sourceKind ||
+          refund.sourceProviderPaymentReference !==
+            prepared.providerPaymentReference ||
+          (refund.providerRefundReference !== null &&
+            refund.providerRefundReference !==
+              providerResult.providerRefundReference)
+        ) {
+          throw new Error("REFUND_PROVIDER_RESULT_CONFLICT");
+        }
+        if (refund.status === "SUCCEEDED") return refund.status;
+        if (refund.status !== "PENDING") {
+          throw new Error("REFUND_PROVIDER_RESULT_STATE_CONFLICT");
+        }
+        await transaction.refund.update({
+          where: { id: prepared.refundId },
+          data: {
+            providerRefundReference:
+              refund.providerRefundReference ??
+              providerResult.providerRefundReference,
+            ...(providerResult.status === "FAILED"
+              ? {
+                  status: "FAILED" as const,
+                  completedAt: dependencies.now,
+                  failureCode: "PROVIDER_REFUND_FAILED",
+                }
+              : {}),
+            updatedAt: dependencies.now,
+          },
+        });
+        return providerResult.status === "FAILED" ? "FAILED" : "PENDING";
       },
-      data: {
-        providerRefundReference: providerResult.providerRefundReference,
-        ...(providerResult.status === "FAILED"
-          ? {
-              status: "FAILED" as const,
-              completedAt: dependencies.now,
-              failureCode: "PROVIDER_REFUND_FAILED",
-            }
-          : {}),
-        updatedAt: dependencies.now,
-      },
-    });
+      { isolationLevel: "Serializable" },
+    );
+    if (persisted === "SUCCEEDED") {
+      return {
+        ok: true,
+        refundId: prepared.refundId,
+        replay: true,
+        status: "SUCCEEDED",
+      };
+    }
   } catch {
     return { ok: false, code: "WRITE_FAILED" };
   }
@@ -396,13 +439,21 @@ export async function approveAndSubmitFinanceRefund(
 
 export async function projectProviderRefundEvent(
   input: Readonly<{
+    adapterKey: string;
     amountRappen: number;
     correlationId: string;
     currency: string;
+    environment: string;
     now: Date;
+    orderId: string;
+    paymentAttemptId: string;
+    providerAccountReference: string;
     providerEventId: string;
+    providerMode: "CONTRACT" | "SANDBOX" | "LIVE";
+    providerPaymentReference: string;
     providerRefundReference: string;
     providerStatus: string;
+    refundId: string;
   }>,
   database: DatabaseClient,
 ): Promise<FinanceOperationResult> {
@@ -411,6 +462,9 @@ export async function projectProviderRefundEvent(
     input.amountRappen <= 0 ||
     input.currency !== "CHF" ||
     !z.uuid().safeParse(input.correlationId).success ||
+    !z.uuid().safeParse(input.orderId).success ||
+    !z.uuid().safeParse(input.paymentAttemptId).success ||
+    !z.uuid().safeParse(input.refundId).success ||
     !Number.isFinite(input.now.getTime())
   ) {
     return { ok: false, code: "INVALID_INPUT" };
@@ -418,15 +472,28 @@ export async function projectProviderRefundEvent(
   try {
     return await database.$transaction(
       async (transaction) => {
+        await transaction.$queryRaw`
+          SELECT "id"
+          FROM "Refund"
+          WHERE "id" = ${input.refundId}::uuid
+          FOR UPDATE
+        `;
         const refund = await transaction.refund.findUnique({
-          where: {
-            providerRefundReference: input.providerRefundReference,
-          },
+          where: { id: input.refundId },
           include: {
             order: {
               select: {
                 id: true,
-                totalRappen: true,
+              },
+            },
+            paymentAttempt: {
+              select: {
+                adapterKey: true,
+                environment: true,
+                id: true,
+                provider: true,
+                providerAccountReference: true,
+                providerMode: true,
               },
             },
           },
@@ -434,17 +501,39 @@ export async function projectProviderRefundEvent(
         if (refund === null) {
           return { ok: false as const, code: "NOT_FOUND" as const };
         }
-        await transaction.$queryRaw`
-          SELECT "id"
-          FROM "Refund"
-          WHERE "id" = ${refund.id}::uuid
-          FOR UPDATE
-        `;
         if (
+          refund.orderId !== input.orderId ||
+          refund.paymentAttemptId !== input.paymentAttemptId ||
+          refund.paymentAttempt.id !== input.paymentAttemptId ||
+          refund.paymentAttempt.provider !== "STRIPE" ||
+          refund.paymentAttempt.environment !== input.environment ||
+          refund.paymentAttempt.adapterKey !== input.adapterKey ||
+          refund.paymentAttempt.providerMode !== input.providerMode ||
+          refund.paymentAttempt.providerAccountReference !==
+            input.providerAccountReference ||
+          refund.sourceProviderPaymentReference !==
+            input.providerPaymentReference ||
           refund.amountRappen !== input.amountRappen ||
-          refund.currency !== input.currency
+          refund.currency !== input.currency ||
+          (refund.providerRefundReference !== null &&
+            refund.providerRefundReference !== input.providerRefundReference)
         ) {
           return { ok: false as const, code: "CONFLICT" as const };
+        }
+        if (refund.providerRefundReference === null) {
+          const bound = await transaction.refund.updateMany({
+            where: {
+              id: refund.id,
+              providerRefundReference: null,
+            },
+            data: {
+              providerRefundReference: input.providerRefundReference,
+              updatedAt: input.now,
+            },
+          });
+          if (bound.count !== 1) {
+            return { ok: false as const, code: "CONFLICT" as const };
+          }
         }
         if (refund.status === "SUCCEEDED") {
           return {
@@ -492,13 +581,19 @@ export async function projectProviderRefundEvent(
         });
         const totalSucceeded = await transaction.refund.aggregate({
           where: {
-            orderId: refund.orderId,
+            sourceKind: refund.sourceKind,
+            ...(refund.subscriptionProviderInvoiceId === null
+              ? { paymentAttemptId: refund.paymentAttemptId }
+              : {
+                  subscriptionProviderInvoiceId:
+                    refund.subscriptionProviderInvoiceId,
+                }),
             status: "SUCCEEDED",
           },
           _sum: { amountRappen: true },
         });
         const paymentKind =
-          (totalSucceeded._sum.amountRappen ?? 0) >= refund.order.totalRappen
+          (totalSucceeded._sum.amountRappen ?? 0) >= refund.sourceAmountRappen
             ? "REFUNDED"
             : "PARTIALLY_REFUNDED";
         await transaction.paymentEvent.createMany({
@@ -525,6 +620,8 @@ export async function projectProviderRefundEvent(
           data: {
             id: randomUUID(),
             invoiceId: refund.invoiceId,
+            subscriptionProviderInvoiceId:
+              refund.subscriptionProviderInvoiceId,
             refundId: refund.id,
             companyId: refund.companyId,
             number: creditNoteNumber(refund.id),
@@ -572,12 +669,134 @@ export async function projectProviderRefundEvent(
   }
 }
 
+type RefundSourceAuthority = Readonly<{
+  invoiceId: string | null;
+  orderId: string;
+  paymentAttemptId: string;
+  sourceAmountRappen: number;
+  sourceKind: "INITIAL_ORDER" | "SUBSCRIPTION_PROVIDER_INVOICE";
+  sourceProviderPaymentReference: string;
+  subscriptionProviderInvoiceId: string | null;
+}>;
+
+async function loadInitialRefundSource(
+  transaction: Prisma.TransactionClient,
+  input: Readonly<{ companyId: string; orderId: string }>,
+): Promise<RefundSourceAuthority | null> {
+  await transaction.$queryRaw`
+    SELECT "id"
+    FROM "Order"
+    WHERE "id" = ${input.orderId}::uuid
+    FOR UPDATE
+  `;
+  const order = await transaction.order.findFirst({
+    where: {
+      id: input.orderId,
+      companyId: input.companyId,
+      provider: "STRIPE",
+      status: "PAID",
+    },
+    select: {
+      id: true,
+      invoice: { select: { id: true, status: true } },
+      paymentAttempts: {
+        where: { provider: "STRIPE", status: "SUCCEEDED" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 2,
+        select: {
+          amountRappen: true,
+          currency: true,
+          id: true,
+          providerPaymentReference: true,
+        },
+      },
+    },
+  });
+  const attempt = order?.paymentAttempts[0];
+  if (
+    order === null ||
+    order.invoice?.status !== "PAID" ||
+    order.paymentAttempts.length !== 1 ||
+    attempt === undefined ||
+    attempt.currency !== "CHF" ||
+    attempt.amountRappen <= 0 ||
+    attempt.providerPaymentReference === null
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    invoiceId: order.invoice.id,
+    orderId: order.id,
+    paymentAttemptId: attempt.id,
+    sourceAmountRappen: attempt.amountRappen,
+    sourceKind: "INITIAL_ORDER" as const,
+    sourceProviderPaymentReference: attempt.providerPaymentReference,
+    subscriptionProviderInvoiceId: null,
+  });
+}
+
+async function loadSubscriptionInvoiceRefundSource(
+  transaction: Prisma.TransactionClient,
+  input: Readonly<{
+    companyId: string;
+    orderId: string;
+    subscriptionProviderInvoiceId: string;
+  }>,
+): Promise<RefundSourceAuthority | null> {
+  await transaction.$queryRaw`
+    SELECT "id"
+    FROM "SubscriptionProviderInvoice"
+    WHERE "id" = ${input.subscriptionProviderInvoiceId}::uuid
+    FOR UPDATE
+  `;
+  const providerInvoice =
+    await transaction.subscriptionProviderInvoice.findFirst({
+      where: {
+        id: input.subscriptionProviderInvoiceId,
+        companyId: input.companyId,
+        orderId: input.orderId,
+        provider: "STRIPE",
+        status: "PAID",
+      },
+      select: {
+        amountRappen: true,
+        companyId: true,
+        currency: true,
+        id: true,
+        orderId: true,
+        paymentAttemptId: true,
+        providerPaymentReference: true,
+      },
+    });
+  if (
+    providerInvoice === null ||
+    providerInvoice.amountRappen === null ||
+    providerInvoice.amountRappen <= 0 ||
+    providerInvoice.currency !== "CHF" ||
+    providerInvoice.providerPaymentReference === null
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    invoiceId: null,
+    orderId: providerInvoice.orderId,
+    paymentAttemptId: providerInvoice.paymentAttemptId,
+    sourceAmountRappen: providerInvoice.amountRappen,
+    sourceKind: "SUBSCRIPTION_PROVIDER_INVOICE" as const,
+    sourceProviderPaymentReference:
+      providerInvoice.providerPaymentReference,
+    subscriptionProviderInvoiceId: providerInvoice.id,
+  });
+}
+
 export function financeRefundRequestAction(
   input: Readonly<{
     amountRappen: number;
     companyId: string;
     orderId: string;
     reasonCode: string;
+    sourceKind?: "INITIAL_ORDER" | "SUBSCRIPTION_PROVIDER_INVOICE";
+    subscriptionProviderInvoiceId?: string;
   }>,
 ) {
   return `FINANCE_REFUND_REQUEST:${digestJson(input).slice(0, 48)}`;

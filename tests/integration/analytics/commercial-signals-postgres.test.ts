@@ -74,22 +74,12 @@ afterAll(async () => {
 });
 
 describe.sequential("Phase 12 commercial lifecycle signals", () => {
-  it("persists exact live signals once and heals an email failure idempotently", async () => {
-    const sentEmails: Array<Parameters<EmailProvider["send"]>[0]> = [];
-    const recordedEmailKeys = new Set<string>();
-    let failFirstAttempt = true;
+  it("persists each live signal and its durable email intent atomically once", async () => {
+    const legacySend = vi.fn(async () => {
+      throw new Error("legacy provider must not be called");
+    });
     const emailProvider: EmailProvider = Object.freeze({
-      async send(input: Parameters<EmailProvider["send"]>[0]) {
-        sentEmails.push(input);
-        const key = String(input.data.idempotencyKey);
-        if (failFirstAttempt) {
-          failFirstAttempt = false;
-          throw new Error("simulated email persistence interruption");
-        }
-        const created = !recordedEmailKeys.has(key);
-        recordedEmailKeys.add(key);
-        return { logId: `commercial-email-${key}`, created };
-      },
+      send: legacySend,
     });
     const first = await runCommercialLifecycleSignals({
       correlationId: id(80),
@@ -102,7 +92,7 @@ describe.sequential("Phase 12 commercial lifecycle signals", () => {
     expect(first).toEqual({
       candidates: 9,
       created: 9,
-      emailsRecorded: 8,
+      emailsRecorded: 9,
       existing: 0,
     });
 
@@ -279,11 +269,18 @@ describe.sequential("Phase 12 commercial lifecycle signals", () => {
         },
       }),
     ).resolves.toBe(9);
-    expect(sentEmails).toHaveLength(9);
-    expect(recordedEmailKeys.size).toBe(8);
-    expect(new Set(sentEmails.map((email) => email.data.idempotencyKey))).toEqual(
-      new Set(taskKeys),
-    );
+    expect(legacySend).not.toHaveBeenCalled();
+    await expect(
+      db().notificationOutbox.count({
+        where: {
+          recipientUserId: IDS.activeAdmin,
+          templateKey: "commercial_lifecycle_signal",
+          dedupeKey: {
+            in: taskKeys.map((key) => `commercial-email:${key}`),
+          },
+        },
+      }),
+    ).resolves.toBe(9);
 
     const retry = await runCommercialLifecycleSignals({
       correlationId: id(81),
@@ -295,11 +292,10 @@ describe.sequential("Phase 12 commercial lifecycle signals", () => {
     expect(retry).toEqual({
       candidates: 9,
       created: 0,
-      emailsRecorded: 1,
+      emailsRecorded: 0,
       existing: 9,
     });
-    expect(sentEmails).toHaveLength(18);
-    expect(recordedEmailKeys.size).toBe(9);
+    expect(legacySend).not.toHaveBeenCalled();
     await expect(
       db().systemTask.count({ where: { id: { in: taskIds } } }),
     ).resolves.toBe(9);
@@ -336,8 +332,7 @@ describe.sequential("Phase 12 commercial lifecycle signals", () => {
       emailsRecorded: 0,
       existing: 9,
     });
-    expect(sentEmails).toHaveLength(26);
-    expect(recordedEmailKeys.size).toBe(9);
+    expect(legacySend).not.toHaveBeenCalled();
     await expect(
       db().systemTask.count({ where: { id: completedTask.id, status: "DONE" } }),
     ).resolves.toBe(1);

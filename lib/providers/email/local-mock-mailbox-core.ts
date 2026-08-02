@@ -1,10 +1,6 @@
 import "server-only";
 
-import {
-  createHash,
-  randomUUID,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type { EmailTemplateKey } from "@/lib/providers/email/email-provider";
 import { normalizedEmailSchema } from "@/lib/validation/common";
@@ -15,6 +11,7 @@ export type LocalMockMailboxTemplateKey = Extract<
   EmailTemplateKey,
   | "password_reset_mock"
   | "company_invitation"
+  | "job_alert_digest"
   | "job_alert_digest_mock"
   | "identity_verification"
   | "login_email_change_verification"
@@ -178,7 +175,10 @@ export class LocalMockMailbox {
 function normalizeCaptureInput(
   input: LocalMockMailboxCaptureInput,
   allowedOrigin: string,
-): Omit<LocalMockMailboxEnvelope, "mailboxMessageId" | "capturedAt" | "expiresAt"> {
+): Omit<
+  LocalMockMailboxEnvelope,
+  "mailboxMessageId" | "capturedAt" | "expiresAt"
+> {
   const recipient = normalizedEmailSchema.safeParse(input.to);
   if (!recipient.success) {
     throw new LocalMockMailboxInputError("recipient_invalid");
@@ -186,6 +186,7 @@ function normalizeCaptureInput(
   if (
     input.templateKey !== "password_reset_mock" &&
     input.templateKey !== "company_invitation" &&
+    input.templateKey !== "job_alert_digest" &&
     input.templateKey !== "job_alert_digest_mock" &&
     input.templateKey !== "identity_verification" &&
     input.templateKey !== "login_email_change_verification"
@@ -258,7 +259,10 @@ function parseActionUrl(
       ) {
         throw new LocalMockMailboxInputError("action_url_invalid");
       }
-    } else if (templateKey === "job_alert_digest_mock") {
+    } else if (
+      templateKey === "job_alert_digest" ||
+      templateKey === "job_alert_digest_mock"
+    ) {
       const segments = url.pathname.split("/").filter(Boolean);
       if (
         segments.length !== 3 ||

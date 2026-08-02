@@ -430,9 +430,9 @@ async function seed() {
   await pool.query(grantSql, [IDS.grantB, IDS.accountB, "grant-b", IDS.userB]);
   const consumeSql = `INSERT INTO "CreditLedgerEntry" (
       "id","accountId","fundingSource","kind","amount","consumedGrantEntryId","validFrom",
-      "validTo","idempotencyKey","reasonCode","actorUserId"
+      "validTo","idempotencyKey","reasonCode","actorUserId","createdAt"
     ) VALUES ($1,$2,'ADMIN_GRANT','CONSUME',-1,$3,'2026-07-01T00:00:00Z',
-      '2026-08-01T00:00:00Z',$4,'CONTACT_REQUEST',$5)`;
+      '2026-08-01T00:00:00Z',$4,'CONTACT_REQUEST',$5,'2026-07-19T12:00:00Z')`;
   await pool.query(consumeSql, [
     IDS.ledgerA,
     IDS.accountA,

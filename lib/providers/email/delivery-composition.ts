@@ -8,7 +8,11 @@ import {
   type EmailDeliveryProvider,
 } from "./email-delivery-provider";
 import { LocalMockDeliveryProvider } from "./mock-delivery-provider";
-import { ResendSandboxEmailProvider } from "./resend-email-provider";
+import {
+  ResendContractEmailProvider,
+  ResendLiveEmailProvider,
+  ResendSandboxEmailProvider,
+} from "./resend-email-provider";
 
 class DisabledEmailDeliveryProvider implements EmailDeliveryProvider {
   readonly providerClass = "disabled-v1";
@@ -28,6 +32,17 @@ export function createEmailDeliveryProvider(
       return new LocalMockDeliveryProvider(emailProvider);
     case "resend_sandbox":
       return new ResendSandboxEmailProvider({
+        apiKey: environment.secrets.emailProvider,
+        from: environment.EMAIL_FROM,
+      });
+    case "resend_contract":
+      return new ResendContractEmailProvider({
+        apiKey: environment.secrets.emailProvider,
+        from: environment.EMAIL_FROM,
+        endpoint: environment.EMAIL_PROVIDER_CONTRACT_ENDPOINT,
+      });
+    case "resend_live":
+      return new ResendLiveEmailProvider({
         apiKey: environment.secrets.emailProvider,
         from: environment.EMAIL_FROM,
       });

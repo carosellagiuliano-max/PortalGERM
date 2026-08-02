@@ -12,6 +12,7 @@ import {
   revokeLegalPublication,
 } from "@/lib/legal/publication-service";
 import type { DatabaseClient } from "@/lib/db/factory";
+import { getAdminLegalControlPlane } from "@/lib/legal/admin-read";
 import {
   createPhase22Harness,
   PHASE22_NOW,
@@ -33,6 +34,27 @@ afterAll(async () => {
 });
 
 describe("Phase-22 legal publication workflow", () => {
+  it("denies Legal control-plane reads without ADMIN_LEGAL_READ", async () => {
+    const { client, users } = requireFixture();
+    const base = dependencies(client, users.legalAuthor);
+    await expect(
+      getAdminLegalControlPlane({
+        ...base,
+        actor: { ...base.actor, capabilities: [] },
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      getAdminLegalControlPlane({
+        ...base,
+        actor: { ...base.actor, capabilities: ["ADMIN_LEGAL_READ"] },
+      }),
+    ).resolves.toMatchObject({
+      documents: expect.any(Array),
+      approvals: expect.any(Array),
+      inventory: expect.any(Array),
+    });
+  });
+
   it("enforces author, reviewer and publisher separation and exposes only the exact current revision", async () => {
     const { client, users } = requireFixture();
     const draft = await createLegalDraft(

@@ -1,0 +1,762 @@
+name: swisstalenthub-phase33
+
+x-runtime-secrets: &runtime-secrets
+  SESSION_SECRET: ${PHASE33_SESSION_SECRET:-}
+  AUDIT_IP_HASH_KEYS: ${PHASE33_AUDIT_IP_HASH_KEYS:-}
+  RADAR_OPAQUE_LOOKUP_KEYS: ${PHASE33_RADAR_OPAQUE_LOOKUP_KEYS:-}
+  RADAR_OPAQUE_ENCRYPTION_KEYS: ${PHASE33_RADAR_OPAQUE_ENCRYPTION_KEYS:-}
+  REVEAL_CONFIRMATION_KEYS: ${PHASE33_REVEAL_CONFIRMATION_KEYS:-}
+  PII_REVEAL_KEYS: ${PHASE33_PII_REVEAL_KEYS:-}
+  PRIVACY_EXPORT_KEYS: ${PHASE33_PRIVACY_EXPORT_KEYS:-}
+
+x-runtime-defaults: &runtime-defaults
+  NODE_ENV: production
+  DATABASE_URL: postgresql://swisstalenthub:phase33-local-only@postgres:5432/swisstalenthub_test?schema=public
+  TEST_DATABASE_URL: postgresql://swisstalenthub:phase33-local-only@postgres:5432/swisstalenthub_upgrade_test?schema=public
+  NEXT_PUBLIC_APP_NAME: SwissTalentHub Phase 33 Contract
+  APP_BUILD_ID: ${PHASE33_APP_BUILD_ID:-phase33-contract-build}
+  RATE_LIMIT_BACKEND: postgres
+  ENABLE_LOCAL_MOCK_MAILBOX: "false"
+  ADMIN_MFA_REQUIRED: "false"
+  TRUSTED_PROXY_HOPS: "0"
+  EMAIL_PROVIDER_MODE: disabled
+  NOTIFICATION_DISPATCH: paused
+  WORKER_RUNTIME: autonomous
+  PAYMENT_PROVIDER_MODE: disabled
+  DOCUMENT_STORAGE_MODE: disabled
+  DOCUMENT_SCANNER_MODE: disabled
+  PRIVACY_PROCESSING_MODE: disabled
+  PRIVACY_EXPORT_STORAGE_MODE: disabled
+  LOG_LEVEL: warn
+  ABUSE_REPORT_ADMIN_EMAILS: phase33-contract@localhost.invalid
+
+x-contract-storage: &contract-storage
+  DATABASE_URL: postgresql://swisstalenthub:phase33-local-only@postgres:5432/swisstalenthub_contract_test?schema=public
+  DOCUMENT_VAULT_WRITES: "true"
+  DOCUMENT_STORAGE_MODE: s3_contract
+  DOCUMENT_SCANNER_MODE: clamav_contract
+  DOCUMENT_CLEAN_READS: "true"
+  DOCUMENT_RECONCILIATION: command
+  DOCUMENT_VAULT_COHORT: test
+  DOCUMENT_STORAGE_ENDPOINT: http://object-store:9000
+  DOCUMENT_STORAGE_BUCKET: phase33-documents
+  DOCUMENT_STORAGE_FORCE_PATH_STYLE: "true"
+  DOCUMENT_STORAGE_SSE: aes256
+  DOCUMENT_STORAGE_ENCRYPTION_VERSION: phase33-sse-v1
+  DOCUMENT_STORAGE_SECRET_VERSION: ${PHASE33_STORAGE_SECRET_VERSION:-}
+  DOCUMENT_STORAGE_REGION: ch-contract-1
+  DOCUMENT_STORAGE_ACCESS_KEY_ID: ${PHASE33_MINIO_ROOT_USER:-}
+  DOCUMENT_STORAGE_SECRET_ACCESS_KEY: ${PHASE33_MINIO_ROOT_PASSWORD:-}
+  DOCUMENT_SCANNER_HOST: scanner
+  DOCUMENT_SCANNER_PORT: "3310"
+  DOCUMENT_SCANNER_TLS: "false"
+  DOCUMENT_SCANNER_SECRET_VERSION: phase33-clamav-v1
+  PRIVACY_EXPORT_STORAGE_MODE: s3_contract
+  PRIVACY_EXPORT_STORAGE_BUCKET: phase33-privacy
+  PRIVACY_EXPORT_STORAGE_REGION: ch-contract-1
+  PRIVACY_PROCESSING_MODE: contract_worker
+  PRIVACY_PROCESSING_COHORT: test
+  PRIVACY_EXPORT_V2: "true"
+  PRIVACY_CORRECTION_EXECUTION: "true"
+  PRIVACY_ERASURE_EXECUTION: "true"
+  PRIVACY_PROVIDER_POSTGRES: "true"
+  PRIVACY_PROVIDER_DOCUMENTS: "true"
+  PRIVACY_PROVIDER_EMAIL: "true"
+  PRIVACY_PROVIDER_PAYMENT: "true"
+  PRIVACY_PROVIDER_ANALYTICS: "true"
+  PRIVACY_PROVIDER_BACKUP: "true"
+
+x-contract-providers: &contract-providers
+  EMAIL_PROVIDER_MODE: resend_contract
+  EMAIL_PROVIDER_CONTRACT_ENDPOINT: http://provider-contract:8080/resend/emails
+  EMAIL_PROVIDER_API_KEY: ${PHASE33_RESEND_API_KEY:-}
+  EMAIL_FROM: SwissTalentHub Phase 33 <contract@notifications.invalid>
+  RESEND_WEBHOOK_SECRET: ${PHASE33_RESEND_WEBHOOK_SECRET:-}
+  RESEND_SECRET_VERSION: ${PHASE33_RESEND_SECRET_VERSION:-}
+  RESEND_WEBHOOK_SECRET_VERSION: ${PHASE33_RESEND_WEBHOOK_SECRET_VERSION:-}
+  NOTIFICATION_DELIVERY_KEYS: ${PHASE33_NOTIFICATION_DELIVERY_KEYS:-}
+  NOTIFICATION_RECIPIENT_HASH_KEYS: ${PHASE33_NOTIFICATION_RECIPIENT_HASH_KEYS:-}
+  NOTIFICATION_OUTBOX_PRODUCERS: "true"
+  NOTIFICATION_DISPATCH: command
+  PAYMENT_PROVIDER_MODE: stripe_contract
+  PAYMENT_SANDBOX_COHORT: test
+  REAL_PAYMENT_INGESTION: "true"
+  REAL_PAYMENT_PROJECTION: "true"
+  PAID_SELF_SERVICE: "true"
+  PAID_SERVICE_RECOVERY: "true"
+  STRIPE_CONTRACT_ENDPOINT: http://provider-contract:8080
+  STRIPE_SECRET_KEY: ${PHASE33_STRIPE_SECRET_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${PHASE33_STRIPE_WEBHOOK_SECRET:-}
+  STRIPE_ACCOUNT_ID: acct_phase33contract01
+  STRIPE_SECRET_VERSION: ${PHASE33_STRIPE_SECRET_VERSION:-}
+
+x-local-mock-providers: &local-mock-providers
+  ENABLE_LOCAL_MOCK_MAILBOX: "true"
+  PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT: "true"
+  DEV_MAILBOX_SECRET: ${PHASE33_DEV_MAILBOX_SECRET:-}
+  EMAIL_PROVIDER_MODE: local_mock
+  NOTIFICATION_DELIVERY_KEYS: ${PHASE33_NOTIFICATION_DELIVERY_KEYS:-}
+  NOTIFICATION_RECIPIENT_HASH_KEYS: ${PHASE33_NOTIFICATION_RECIPIENT_HASH_KEYS:-}
+  NOTIFICATION_OUTBOX_PRODUCERS: "true"
+  NOTIFICATION_DISPATCH: command
+  PAYMENT_PROVIDER_MODE: disabled
+  DOCUMENT_VAULT_WRITES: "true"
+  DOCUMENT_STORAGE_MODE: filesystem_sandbox
+  DOCUMENT_SCANNER_MODE: sandbox
+  DOCUMENT_CLEAN_READS: "true"
+  DOCUMENT_RECONCILIATION: command
+  DOCUMENT_VAULT_COHORT: test
+  DOCUMENT_STORAGE_ROOT: /phase33/document-vault
+  DOCUMENT_STORAGE_KEYS: ${PHASE33_DOCUMENT_STORAGE_KEYS:-}
+  DOCUMENT_STORAGE_REGION: local-test
+  PRIVACY_EXPORT_STORAGE_MODE: filesystem_sandbox
+  PRIVACY_EXPORT_STORAGE_ROOT: /phase33/privacy-export
+  PRIVACY_EXPORT_KEYS: ${PHASE33_PRIVACY_EXPORT_KEYS:-}
+  PRIVACY_EXPORT_STORAGE_REGION: local-test
+  PRIVACY_PROCESSING_MODE: sandbox_command
+  PRIVACY_PROCESSING_COHORT: test
+  PRIVACY_EXPORT_V2: "true"
+  PRIVACY_CORRECTION_EXECUTION: "true"
+  PRIVACY_ERASURE_EXECUTION: "true"
+  PRIVACY_PROVIDER_POSTGRES: "true"
+  PRIVACY_PROVIDER_DOCUMENTS: "true"
+  PRIVACY_PROVIDER_EMAIL: "true"
+  PRIVACY_PROVIDER_PAYMENT: "true"
+  PRIVACY_PROVIDER_ANALYTICS: "true"
+  PRIVACY_PROVIDER_BACKUP: "true"
+
+x-hardened: &hardened
+  cap_drop:
+    - ALL
+  init: true
+  pids_limit: 256
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  stop_grace_period: 30s
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
+
+x-app-build: &app-build
+  context: .
+  dockerfile: Dockerfile
+  args:
+    APP_BUILD_ID: ${PHASE33_APP_BUILD_ID:-phase33-contract-build}
+
+services:
+  postgres:
+    image: postgres:16.13-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50
+    profiles: ["local-mock", "production-contract"]
+    environment:
+      POSTGRES_DB: swisstalenthub
+      POSTGRES_USER: swisstalenthub
+      POSTGRES_PASSWORD: phase33-local-only
+    command:
+      - postgres
+      - -c
+      - statement_timeout=5000
+      - -c
+      - idle_in_transaction_session_timeout=5000
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swisstalenthub -d swisstalenthub"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    networks:
+      - database
+    volumes:
+      - phase33-postgres:/var/lib/postgresql/data
+      - ./docker/postgres/phase33-init.sql:/docker-entrypoint-initdb.d/phase33-init.sql:ro
+    restart: unless-stopped
+
+  migrate-local:
+    profiles: ["local-mock"]
+    build:
+      <<: *app-build
+      target: migrator
+    command: ["db:migrate"]
+    environment:
+      <<: [*runtime-defaults, *runtime-secrets]
+      APP_ENV: local
+      APP_URL: http://127.0.0.1:${PHASE33_LOCAL_PORT:-3300}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - database
+    restart: "no"
+
+  seed-local:
+    profiles: ["local-mock"]
+    build:
+      <<: *app-build
+      target: migrator
+    command: ["db:seed"]
+    environment:
+      <<: [*runtime-defaults, *runtime-secrets]
+      # The seed guard intentionally rejects non-loopback databases for
+      # APP_ENV=local. This Compose database is an isolated, test-labelled
+      # Phase-33 target, so the one-shot seed runs under the stricter CI gate.
+      APP_ENV: ci
+      APP_URL: http://127.0.0.1:${PHASE33_LOCAL_PORT:-3300}
+    depends_on:
+      migrate-local:
+        condition: service_completed_successfully
+    networks:
+      - database
+    restart: "no"
+
+  app-local:
+    <<: *hardened
+    profiles: ["local-mock"]
+    build:
+      <<: *app-build
+      target: app
+    environment:
+      <<: [*local-mock-providers, *runtime-defaults, *runtime-secrets]
+      APP_ENV: local
+      APP_URL: http://127.0.0.1:${PHASE33_LOCAL_PORT:-3300}
+    depends_on:
+      bootstrap-local:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 20s
+    ports:
+      - "127.0.0.1:${PHASE33_LOCAL_PORT:-3300}:3000"
+    networks:
+      - database
+      - front
+    volumes:
+      - phase33-local-documents:/phase33/document-vault
+      - phase33-local-privacy:/phase33/privacy-export
+    tmpfs:
+      - /app/.next/cache:rw,noexec,nosuid,size=128m
+      - /tmp:rw,noexec,nosuid,size=64m
+    restart: unless-stopped
+
+  worker-local:
+    <<: *hardened
+    profiles: ["local-mock"]
+    build:
+      <<: *app-build
+      target: worker
+    environment:
+      <<: [*local-mock-providers, *runtime-defaults, *runtime-secrets]
+      APP_ENV: local
+      APP_URL: http://127.0.0.1:${PHASE33_LOCAL_PORT:-3300}
+    depends_on:
+      bootstrap-local:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 20s
+    networks:
+      - database
+    volumes:
+      - phase33-local-documents:/phase33/document-vault
+      - phase33-local-privacy:/phase33/privacy-export
+    restart: unless-stopped
+
+  scheduler-local:
+    <<: *hardened
+    profiles: ["local-mock"]
+    build:
+      <<: *app-build
+      target: scheduler
+    environment:
+      <<: [*local-mock-providers, *runtime-defaults, *runtime-secrets]
+      APP_ENV: local
+      APP_URL: http://127.0.0.1:${PHASE33_LOCAL_PORT:-3300}
+    depends_on:
+      bootstrap-local:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 20s
+    networks:
+      - database
+    volumes:
+      - phase33-local-documents:/phase33/document-vault
+      - phase33-local-privacy:/phase33/privacy-export
+    restart: unless-stopped
+
+  bootstrap-local:
+    <<: *hardened
+    profiles: ["local-mock"]
+    build:
+      <<: *app-build
+      target: migrator
+    command: ["phase33:local:bootstrap"]
+    environment:
+      <<: [*local-mock-providers, *runtime-defaults, *runtime-secrets]
+      APP_ENV: local
+      APP_URL: http://127.0.0.1:${PHASE33_LOCAL_PORT:-3300}
+      WORKER_RUNTIME: sandbox_command
+    depends_on:
+      seed-local:
+        condition: service_completed_successfully
+    networks:
+      - database
+    volumes:
+      - phase33-local-documents:/phase33/document-vault
+      - phase33-local-privacy:/phase33/privacy-export
+    restart: "no"
+
+  local-smoke:
+    <<: *hardened
+    profiles: ["local-mock"]
+    build:
+      <<: *app-build
+      target: migrator
+    command: ["phase33:local:smoke:internal"]
+    environment:
+      <<: [*local-mock-providers, *runtime-defaults, *runtime-secrets]
+      APP_ENV: local
+      APP_URL: http://127.0.0.1:${PHASE33_LOCAL_PORT:-3300}
+      WORKER_RUNTIME: sandbox_command
+    depends_on:
+      bootstrap-local:
+        condition: service_completed_successfully
+      app-local:
+        condition: service_healthy
+      worker-local:
+        condition: service_healthy
+      scheduler-local:
+        condition: service_healthy
+    networks:
+      - database
+    volumes:
+      - phase33-local-documents:/phase33/document-vault
+      - phase33-local-privacy:/phase33/privacy-export
+    restart: "no"
+
+  migrate-contract:
+    profiles: ["production-contract"]
+    build:
+      <<: *app-build
+      target: migrator
+    command: ["db:migrate"]
+    environment:
+      <<: [*runtime-defaults, *runtime-secrets]
+      APP_ENV: ci
+      APP_URL: https://localhost:${PHASE33_TLS_PORT:-3443}
+      TRUSTED_PROXY_HOPS: "1"
+      DATABASE_URL: postgresql://swisstalenthub:phase33-local-only@postgres:5432/swisstalenthub_contract_test?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - database
+    restart: "no"
+
+  object-store:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    profiles: ["production-contract"]
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${PHASE33_MINIO_ROOT_USER:-}
+      MINIO_ROOT_PASSWORD: ${PHASE33_MINIO_ROOT_PASSWORD:-}
+      MINIO_KMS_SECRET_KEY: phase33-sse:${PHASE33_MINIO_KMS_SECRET_KEY:-}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks:
+      - storage
+    volumes:
+      - phase33-object-store:/data
+    restart: unless-stopped
+
+  object-store-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    profiles: ["production-contract"]
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        mc alias set contract http://object-store:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}";
+        mc mb --ignore-existing contract/phase33-documents;
+        mc mb --ignore-existing contract/phase33-privacy;
+        mc version enable contract/phase33-documents;
+        mc version enable contract/phase33-privacy;
+        mc anonymous set none contract/phase33-documents;
+        mc anonymous set none contract/phase33-privacy
+    environment:
+      MINIO_ROOT_USER: ${PHASE33_MINIO_ROOT_USER:-}
+      MINIO_ROOT_PASSWORD: ${PHASE33_MINIO_ROOT_PASSWORD:-}
+    depends_on:
+      object-store:
+        condition: service_healthy
+    networks:
+      - storage
+    restart: "no"
+
+  scanner:
+    image: clamav/clamav:1.4.3@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4
+    profiles: ["production-contract"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "printf 'PING\\n' | nc -w 2 127.0.0.1 3310 | grep -q PONG",
+        ]
+      interval: 10s
+      timeout: 4s
+      retries: 30
+      start_period: 30s
+    networks:
+      - storage
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    restart: unless-stopped
+
+  provider-contract:
+    <<: *hardened
+    profiles: ["production-contract"]
+    build:
+      <<: *app-build
+      target: provider-contract
+    environment:
+      CONTRACT_RESEND_API_KEY: ${PHASE33_RESEND_API_KEY:-}
+      CONTRACT_STRIPE_ACCOUNT_ID: acct_phase33contract01
+      CONTRACT_STRIPE_SECRET_KEY: ${PHASE33_STRIPE_SECRET_KEY:-}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health/ready',{signal:AbortSignal.timeout(2000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    networks:
+      - providers
+    restart: unless-stopped
+
+  bootstrap-contract:
+    <<: *hardened
+    profiles: ["production-contract"]
+    build:
+      <<: *app-build
+      target: migrator
+    command: ["phase33:contract:bootstrap"]
+    environment:
+      <<:
+        [
+          *contract-providers,
+          *contract-storage,
+          *runtime-defaults,
+          *runtime-secrets,
+        ]
+      APP_ENV: ci
+      APP_URL: https://localhost:${PHASE33_TLS_PORT:-3443}
+      TRUSTED_PROXY_HOPS: "1"
+      WORKER_RUNTIME: sandbox_command
+    depends_on:
+      migrate-contract:
+        condition: service_completed_successfully
+      object-store-init:
+        condition: service_completed_successfully
+      provider-contract:
+        condition: service_healthy
+      scanner:
+        condition: service_healthy
+    networks:
+      - database
+      - providers
+      - storage
+    restart: "no"
+
+  provider-smoke-contract:
+    <<: *hardened
+    profiles: ["production-contract"]
+    build:
+      <<: *app-build
+      target: migrator
+    command:
+      [
+        "providers:smoke",
+        "--",
+        "--environment=ci",
+        "--mode=allowlist",
+        "--all-registered",
+      ]
+    environment:
+      <<:
+        [
+          *contract-providers,
+          *contract-storage,
+          *runtime-defaults,
+          *runtime-secrets,
+        ]
+      APP_ENV: ci
+      APP_URL: https://localhost:${PHASE33_TLS_PORT:-3443}
+      TRUSTED_PROXY_HOPS: "1"
+      WORKER_RUNTIME: sandbox_command
+    depends_on:
+      bootstrap-contract:
+        condition: service_completed_successfully
+    networks:
+      - database
+    restart: "no"
+
+  app-contract:
+    <<: *hardened
+    profiles: ["production-contract"]
+    build:
+      <<: *app-build
+      target: app
+    environment:
+      <<:
+        [
+          *contract-providers,
+          *contract-storage,
+          *runtime-defaults,
+          *runtime-secrets,
+        ]
+      APP_ENV: ci
+      APP_URL: https://localhost:${PHASE33_TLS_PORT:-3443}
+      TRUSTED_PROXY_HOPS: "1"
+    depends_on:
+      bootstrap-contract:
+        condition: service_completed_successfully
+      object-store-init:
+        condition: service_completed_successfully
+      provider-contract:
+        condition: service_healthy
+      scanner:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 20s
+    networks:
+      - database
+      - edge
+      - providers
+      - storage
+    tmpfs:
+      - /app/.next/cache:rw,noexec,nosuid,size=128m
+      - /tmp:rw,noexec,nosuid,size=64m
+    restart: unless-stopped
+
+  worker-contract:
+    <<: *hardened
+    profiles: ["production-contract"]
+    build:
+      <<: *app-build
+      target: worker
+    environment:
+      <<:
+        [
+          *contract-providers,
+          *contract-storage,
+          *runtime-defaults,
+          *runtime-secrets,
+        ]
+      APP_ENV: ci
+      APP_URL: https://localhost:${PHASE33_TLS_PORT:-3443}
+      TRUSTED_PROXY_HOPS: "1"
+    depends_on:
+      bootstrap-contract:
+        condition: service_completed_successfully
+      object-store-init:
+        condition: service_completed_successfully
+      provider-contract:
+        condition: service_healthy
+      scanner:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 20s
+    networks:
+      - database
+      - providers
+      - storage
+    restart: unless-stopped
+
+  scheduler-contract:
+    <<: *hardened
+    profiles: ["production-contract"]
+    build:
+      <<: *app-build
+      target: scheduler
+    environment:
+      <<:
+        [
+          *contract-providers,
+          *contract-storage,
+          *runtime-defaults,
+          *runtime-secrets,
+        ]
+      APP_ENV: ci
+      APP_URL: https://localhost:${PHASE33_TLS_PORT:-3443}
+      TRUSTED_PROXY_HOPS: "1"
+    depends_on:
+      bootstrap-contract:
+        condition: service_completed_successfully
+      provider-contract:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 20s
+    networks:
+      - database
+      - providers
+      - storage
+    restart: unless-stopped
+
+  tls-proxy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    profiles: ["production-contract"]
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    depends_on:
+      app-contract:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-check-certificate --quiet --spider https://localhost:8443/health/live",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 10s
+    ports:
+      - "127.0.0.1:${PHASE33_TLS_PORT:-3443}:8443"
+    networks:
+      - front
+      - edge
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /config:rw,noexec,nosuid,size=16m
+      - /data:rw,noexec,nosuid,size=64m
+      - /tmp:rw,noexec,nosuid,size=16m
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped
+
+  contract-smoke:
+    <<: *hardened
+    profiles: ["production-contract"]
+    build:
+      <<: *app-build
+      target: migrator
+    command: ["phase33:contract:smoke:internal"]
+    environment:
+      <<:
+        [
+          *contract-providers,
+          *contract-storage,
+          *runtime-defaults,
+          *runtime-secrets,
+        ]
+      APP_ENV: ci
+      APP_URL: https://localhost:${PHASE33_TLS_PORT:-3443}
+      TRUSTED_PROXY_HOPS: "1"
+      WORKER_RUNTIME: sandbox_command
+    depends_on:
+      bootstrap-contract:
+        condition: service_completed_successfully
+      provider-smoke-contract:
+        condition: service_completed_successfully
+      app-contract:
+        condition: service_healthy
+      worker-contract:
+        condition: service_healthy
+      scheduler-contract:
+        condition: service_healthy
+      tls-proxy:
+        condition: service_healthy
+    networks:
+      - database
+      - providers
+      - storage
+    restart: "no"
+
+networks:
+  database:
+    internal: true
+  edge:
+    internal: true
+  front:
+    internal: true
+  providers:
+    internal: true
+  storage:
+    internal: true
+
+volumes:
+  phase33-local-documents:
+  phase33-local-privacy:
+  phase33-object-store:
+  phase33-postgres:

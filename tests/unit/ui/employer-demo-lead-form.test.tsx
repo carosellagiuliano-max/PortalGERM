@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const actions = vi.hoisted(() => ({
   submitEmployerDemoLeadAction: vi.fn(),
@@ -29,6 +29,10 @@ describe("Phase 08 employer demo lead form", () => {
     actions.submitEmployerDemoLeadAction.mockResolvedValue(
       INITIAL_LEAD_ACTION_STATE,
     );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("renders every labelled field with the intended browser hints and optionality", () => {
@@ -183,6 +187,9 @@ describe("Phase 08 employer demo lead form", () => {
 
   it("renders global and field errors while retaining safe submitted values", async () => {
     const user = userEvent.setup();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     actions.submitEmployerDemoLeadAction.mockResolvedValue({
       status: "error",
       message: "Bitte prüfe die markierten Angaben.",
@@ -213,8 +220,11 @@ describe("Phase 08 employer demo lead form", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Bitte prüfe die markierten Angaben.",
     );
-    expect(email).toHaveAttribute("aria-invalid", "true");
-    expect(email).toHaveAccessibleDescription("Bitte prüfe die E-Mail-Adresse.");
+    const returnedCompany = screen.getByRole("textbox", { name: "Unternehmen" });
+    const returnedContact = screen.getByRole("textbox", { name: "Kontaktperson" });
+    const returnedEmail = screen.getByRole("textbox", { name: "Geschäftliche E-Mail" });
+    expect(returnedEmail).toHaveAttribute("aria-invalid", "true");
+    expect(returnedEmail).toHaveAccessibleDescription("Bitte prüfe die E-Mail-Adresse.");
     const purpose = screen.getByRole("checkbox", {
       name: /Ich bitte SwissTalentHub, mich zu dieser Anfrage zu kontaktieren/,
     });
@@ -222,11 +232,18 @@ describe("Phase 08 employer demo lead form", () => {
     expect(purpose).toHaveAccessibleDescription(
       `${privacyNotice} Bitte bestätige den Kontaktzweck.`,
     );
-    expect(company).toHaveValue("Alpenblick AG");
-    expect(contact).toHaveValue("Mira Muster");
+    expect(returnedCompany).toHaveValue("Alpenblick AG");
+    expect(returnedContact).toHaveValue("Mira Muster");
     expect(message).toHaveValue(
       "Wir möchten einen kontrollierten Import besprechen.",
     );
+    expect(
+      consoleError.mock.calls.some(([message]) =>
+        String(message).includes(
+          "changing the default value state of an uncontrolled FieldControl",
+        ),
+      ),
+    ).toBe(false);
   }, 15_000);
 
   it("replaces the form with a focused success status", async () => {

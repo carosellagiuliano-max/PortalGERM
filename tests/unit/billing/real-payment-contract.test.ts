@@ -16,6 +16,13 @@ describe("Phase-24 server-authoritative payment contract", () => {
       currency: "CHF" as const,
       description: "Starter Monatsplan",
       orderId: randomUUID(),
+      adapterKey: "stripe_sandbox" as const,
+      checkoutKind: "SUBSCRIPTION" as const,
+      paymentPriceBindingId: randomUUID(),
+      planVersionId: randomUUID(),
+      providerAccountReference: "acct_phase33test",
+      providerMode: "SANDBOX" as const,
+      providerPriceReference: "price_phase33starter",
     };
     const digest = realPaymentQuoteDigest(base);
     expect(digest).toMatch(/^[a-f0-9]{64}$/u);

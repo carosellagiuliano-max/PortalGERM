@@ -9,7 +9,10 @@ import {
 } from "@/lib/auth/current-user";
 import { decideAdminRuntimeAccess } from "@/lib/auth/admin-runtime-policy";
 import { INTERNAL_REQUEST_PATH_HEADER } from "@/lib/auth/request-context";
-import type { AdminCapability } from "@/lib/admin/capabilities";
+import {
+  hasAdminCapability,
+  type AdminCapability,
+} from "@/lib/admin/capabilities";
 import {
   ADMIN_GRANTS_POLICY_V2,
   resolveAdminActor,
@@ -73,6 +76,34 @@ export async function requireAdminPage(): Promise<AdminPageUser> {
     breakGlassGrantIds: resolved.breakGlassGrantIds,
     adminGrantPolicyVersion: resolved.policyVersion,
   });
+}
+
+export async function requireAdminCapabilityPage(
+  required: AdminCapability | readonly AdminCapability[],
+  mode: "all" | "any" = "all",
+): Promise<AdminPageUser> {
+  const user = await requireAdminPage();
+  const capabilities: readonly AdminCapability[] =
+    typeof required === "string" ? [required] : required;
+  const actor = {
+    userId: user.id,
+    role: user.role,
+    status: user.status,
+    capabilities: user.capabilities,
+  } as const;
+  if (
+    capabilities.length === 0 ||
+    !(mode === "all"
+      ? capabilities.every((capability) =>
+          hasAdminCapability(actor, capability),
+        )
+      : capabilities.some((capability) =>
+          hasAdminCapability(actor, capability),
+        ))
+  ) {
+    forbidden();
+  }
+  return user;
 }
 
 export function requireAuthenticatedPage(): Promise<AuthenticatedPageUser> {

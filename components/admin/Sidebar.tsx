@@ -20,7 +20,7 @@ export const ADMIN_NAVIGATION: readonly CapabilityNavigationItem[] = Object.free
     { href: "/admin/content", label: "Content", capabilities: ["ADMIN_CONTENT_MANAGE"] },
     { href: "/admin/leads", label: "Leads", capabilities: ["ADMIN_LEAD_MANAGE"] },
     { href: "/admin/billing", label: "Billing", capabilities: ["ADMIN_BILLING_READ"] },
-    { href: "/admin/finance/reconciliation", label: "Finance Ops", capabilities: ["ADMIN_BILLING_MUTATE"] },
+    { href: "/admin/finance/reconciliation", label: "Finance Ops", capabilities: ["ADMIN_BILLING_READ"] },
     { href: "/admin/plans", label: "Pläne", capabilities: ["ADMIN_CATALOG_READ"] },
     { href: "/admin/products", label: "Produkte", capabilities: ["ADMIN_CATALOG_READ"] },
     { href: "/admin/analytics", label: "Analytics", capabilities: ["ADMIN_ANALYTICS_READ"] },

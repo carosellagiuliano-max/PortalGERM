@@ -4,7 +4,9 @@ import {
   approveAdminRoleAssignment,
   requestAdminRoleAssignment,
 } from "@/lib/admin/security-governance";
+import { getAdminJobDetail, listAdminJobs } from "@/lib/admin/jobs";
 import { resolveAdminActor } from "@/lib/admin/role-policy";
+import { getRedactedDocumentVaultSummary } from "@/lib/documents/admin-read";
 import {
   createPhase25SecurityFixture,
   type Phase25SecurityFixture,
@@ -33,6 +35,17 @@ describe("Phase 25 persisted admin grants", () => {
     );
     expect(actor.capabilities).toEqual([]);
     expect(actor.duties).toEqual([]);
+    const dependencies = fixture.adminDependencies(fixture.targetAdmin);
+    await expect(listAdminJobs(dependencies)).resolves.toBeNull();
+    await expect(
+      getAdminJobDetail(
+        dependencies,
+        "11111111-1111-4111-8111-111111111111",
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      getRedactedDocumentVaultSummary(dependencies),
+    ).resolves.toBeNull();
   });
 
   it("requires a different approver and persists only the requested role", async () => {

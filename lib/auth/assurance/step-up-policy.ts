@@ -94,7 +94,7 @@ export const STEP_UP_POLICIES_V1: readonly StepUpPolicy[] = Object.freeze([
   policy(
     "CANDIDATE_PRIVACY",
     "CANDIDATE_PRIVACY",
-    /^PRIVACY_(EXPORT|DELETE|CORRECT)$/u,
+    /^PRIVACY_(EXPORT|DELETE|CORRECT|EXPORT_DOWNLOAD)$/u,
     ["CANDIDATE"],
     "FORBIDDEN",
     "REQUIRED",
@@ -128,6 +128,15 @@ export const STEP_UP_POLICIES_V1: readonly StepUpPolicy[] = Object.freeze([
     FIVE_MINUTES,
   ),
   policy(
+    "ADMIN_FINANCE_SETTLEMENT_RELEASE",
+    "FINANCE_RECONCILIATION",
+    /^PAYMENT_SETTLEMENT_RELEASE$/u,
+    ["ADMIN"],
+    "REQUIRED",
+    "REQUIRED",
+    FIVE_MINUTES,
+  ),
+  policy(
     "ADMIN_PRIVACY_EXECUTION",
     "ADMIN_PRIVACY",
     /^PRIVACY_(EXPORT|CORRECT|DELETE|HOLD)_(EXECUTE|RELEASE)$/u,
@@ -151,6 +160,15 @@ export const STEP_UP_POLICIES_V1: readonly StepUpPolicy[] = Object.freeze([
     /^COMPANY_VERIFICATION_(ASSIGN|DECIDE|REVOKE|RESTORE|APPEAL_DECIDE)$/u,
     ["ADMIN"],
     "REQUIRED",
+    "REQUIRED",
+    FIVE_MINUTES,
+  ),
+  policy(
+    "ADMIN_NOTIFICATION_OUTCOME_RECONCILIATION",
+    "NOTIFICATION_RECONCILIATION",
+    /^NOTIFICATION_OUTCOME_RECONCILE:(ACCEPTED|DEFINITIVELY_NOT_ACCEPTED|UNKNOWN)$/u,
+    ["ADMIN"],
+    "FORBIDDEN",
     "REQUIRED",
     FIVE_MINUTES,
   ),
@@ -182,8 +200,7 @@ export function resolveStepUpPolicy(
 ): StepUpPolicyDecision {
   const candidate = STEP_UP_POLICIES_V1.find(
     (entry) =>
-      entry.purpose === input.purpose &&
-      entry.actionPattern.test(input.action),
+      entry.purpose === input.purpose && entry.actionPattern.test(input.action),
   );
   if (candidate === undefined) return denied("UNKNOWN_ACTION");
   if (!candidate.roles.some((role) => role === input.actorRole)) {

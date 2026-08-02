@@ -8,10 +8,12 @@ import {
   finishWorkerRun,
   heartbeatWorkerRun,
 } from "@/lib/ops/worker-runtime";
+import { startHeartbeatLoop, type HeartbeatLoop } from "@/lib/ops/heartbeat-loop";
 import { runWorkerCycle } from "@/lib/ops/worker-service";
 import { loadLocalEnvironment } from "@/scripts/load-local-environment";
 
 const RUNTIME_VERSION = "v1";
+const WORKER_RUN_HEARTBEAT_MILLISECONDS = 10_000;
 
 try {
   await main();
@@ -47,6 +49,7 @@ async function main() {
     command.workerId ?? `phase23-${randomBytes(8).toString("hex")}`;
   const database = environment.secrets.database.withValue(createDatabaseClient);
   let workerRunId: string | undefined;
+  let workerHeartbeat: HeartbeatLoop | null = null;
   let shutdownRequested = false;
   const requestShutdown = () => {
     shutdownRequested = true;
@@ -70,6 +73,14 @@ async function main() {
       now: startedAt,
     });
     workerRunId = workerRun.id;
+    workerHeartbeat = startHeartbeatLoop({
+      intervalMilliseconds: WORKER_RUN_HEARTBEAT_MILLISECONDS,
+      heartbeat: () =>
+        heartbeatWorkerRun(database, {
+          workerRunId: workerRun.id,
+          now: new Date(),
+        }),
+    });
 
     do {
       const cycle = await runWorkerCycle({
@@ -79,10 +90,9 @@ async function main() {
         workerId,
         workerRunId,
       });
-      await heartbeatWorkerRun(database, {
-        workerRunId,
-        now: new Date(),
-      });
+      if (!workerHeartbeat.isHealthy()) {
+        throw new Error("WORKER_RUN_HEARTBEAT_LOST");
+      }
       console.info(
         JSON.stringify({
           command: "phase23-worker",
@@ -97,6 +107,11 @@ async function main() {
     } while (!shutdownRequested);
 
     const stoppedAt = new Date();
+    const heartbeatState = await workerHeartbeat.stop();
+    workerHeartbeat = null;
+    if (!heartbeatState.healthy) {
+      throw new Error("WORKER_RUN_HEARTBEAT_LOST");
+    }
     await beginWorkerDrain(database, { workerRunId, now: stoppedAt });
     await finishWorkerRun(database, {
       workerRunId,
@@ -104,6 +119,8 @@ async function main() {
       outcome: shutdownRequested ? "DRAINED" : "CLEAN",
     });
   } catch (error) {
+    await workerHeartbeat?.stop();
+    workerHeartbeat = null;
     if (workerRunId !== undefined) {
       await finishWorkerRun(database, {
         workerRunId,
@@ -123,6 +140,7 @@ async function main() {
     );
     process.exitCode = 1;
   } finally {
+    await workerHeartbeat?.stop();
     process.removeListener("SIGINT", requestShutdown);
     process.removeListener("SIGTERM", requestShutdown);
     await database.$disconnect();

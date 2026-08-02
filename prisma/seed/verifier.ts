@@ -14,7 +14,7 @@ import {
 import {
   firstJobAlertDueAt,
   jobAlertConsentNoticeHash,
-  JOB_ALERT_DELIVERY_NOTICE_V1,
+  JOB_ALERT_DELIVERY_NOTICE_V2,
   JOB_ALERT_POLICY_V1,
   nextJobAlertDueAt,
   parseStoredJobAlertQuery,
@@ -3272,7 +3272,7 @@ function verifyCandidateWorkflows(
         consent.userId === alert.candidateProfile.userId &&
         consent.kind === "JOB_ALERT_DELIVERY" &&
         consent.granted &&
-        consent.noticeVersion === JOB_ALERT_DELIVERY_NOTICE_V1.version &&
+        consent.noticeVersion === JOB_ALERT_DELIVERY_NOTICE_V2.version &&
         consent.noticeHash === jobAlertConsentNoticeHash() &&
         digest.policyVersion === JOB_ALERT_POLICY_V1.version &&
         digest.alertNameSnapshot === "Dein Jobabo" &&
@@ -3441,8 +3441,8 @@ function verifyCandidateWorkflows(
           ) &&
         current.kind === "JOB_ALERT_DELIVERY" &&
         current.granted &&
-        current.purpose === JOB_ALERT_DELIVERY_NOTICE_V1.purpose &&
-        current.noticeVersion === JOB_ALERT_DELIVERY_NOTICE_V1.version &&
+        current.purpose === JOB_ALERT_DELIVERY_NOTICE_V2.purpose &&
+        current.noticeVersion === JOB_ALERT_DELIVERY_NOTICE_V2.version &&
         current.noticeHash === jobAlertConsentNoticeHash() &&
         current.actorUserId === alert.candidateProfile.userId &&
         current.effectiveAt.getTime() <= alert.createdAt.getTime()

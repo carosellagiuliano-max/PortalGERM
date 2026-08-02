@@ -651,7 +651,9 @@ enum PaymentEventKind {
   CHECKOUT_CREATED
   PENDING
   PAID
+  RENEWAL_PAID
   FAILED
+  RENEWAL_FAILED
   CANCELLED
   REFUNDED
   PARTIALLY_REFUNDED
@@ -683,10 +685,34 @@ enum PaymentAttemptStatus {
   HELD
 }
 
+enum PaymentRuntimeMode {
+  CONTRACT
+  SANDBOX
+  LIVE
+}
+
+enum PaymentCheckoutKind {
+  ONE_TIME
+  SUBSCRIPTION
+}
+
 enum ProviderEventInboxStatus {
   RECEIVED
   PROJECTED
   HELD
+  IGNORED
+  FAILED
+}
+
+enum SubscriptionProviderInvoiceStatus {
+  FAILED
+  PAID
+  CONFLICT
+}
+
+enum EmailProviderEventInboxStatus {
+  RECEIVED
+  PROJECTED
   IGNORED
   FAILED
 }
@@ -722,6 +748,11 @@ enum RefundStatus {
   SUCCEEDED
   FAILED
   CANCELLED
+}
+
+enum RefundPaymentSourceKind {
+  INITIAL_ORDER
+  SUBSCRIPTION_PROVIDER_INVOICE
 }
 
 enum ChargebackStatus {
@@ -1146,6 +1177,7 @@ enum NotificationDeliveryOutcome {
 
 enum NotificationSuppressionReason {
   HARD_BOUNCE
+  PROVIDER_SUPPRESSION
   MANUAL_SECURITY
   USER_OPT_OUT
 }
@@ -2789,6 +2821,7 @@ model Company {
   systemTasks                       SystemTask[]
   auditLogs                         AuditLog[]
   paymentAttempts                   PaymentAttempt[]
+  subscriptionProviderInvoices      SubscriptionProviderInvoice[]
   reconciliationItems               ReconciliationItem[]
   refunds                           Refund[]
   chargebacks                       Chargeback[]
@@ -4023,64 +4056,91 @@ model AuthAssuranceEvidence {
 }
 
 model NotificationOutbox {
-  id                         String                        @id @default(uuid()) @db.Uuid
-  recipientUserId            String?                       @db.Uuid
-  recipientAddressCiphertext Bytes?
-  recipientAddressNonce      Bytes?
-  recipientAddressTag        Bytes?
-  recipientAddressKeyVersion String?                       @db.VarChar(32)
-  purpose                    NotificationPurpose
-  purposeClass               NotificationPurposeClass
-  channel                    NotificationChannel           @default(EMAIL)
-  templateKey                String                        @db.VarChar(64)
-  payloadSchemaVersion       String                        @db.VarChar(32)
-  payload                    Json
-  dedupeKey                  String                        @unique @db.VarChar(160)
-  providerDedupeKey          String                        @unique @db.VarChar(160)
-  status                     NotificationDeliveryStatus    @default(PENDING)
-  availableAt                DateTime                      @db.Timestamptz(3)
-  leaseOwner                 String?                       @db.VarChar(96)
-  leaseExpiresAt             DateTime?                     @db.Timestamptz(3)
-  attemptCount               Int                           @default(0)
-  maxAttempts                Int                           @default(5)
-  lastErrorCode              String?                       @db.VarChar(64)
-  deliveredAt                DateTime?                     @db.Timestamptz(3)
-  suppressedAt               DateTime?                     @db.Timestamptz(3)
-  deadLetteredAt             DateTime?                     @db.Timestamptz(3)
-  createdAt                  DateTime                      @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime                      @updatedAt @db.Timestamptz(3)
-  recipient                  User?                         @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
-  attempts                   NotificationDeliveryAttempt[]
+  id                          String                        @id @default(uuid()) @db.Uuid
+  recipientUserId             String?                       @db.Uuid
+  recipientAddressCiphertext  Bytes?
+  recipientAddressNonce       Bytes?
+  recipientAddressTag         Bytes?
+  recipientAddressKeyVersion  String?                       @db.VarChar(32)
+  recipientAddressBindingVersion String?                    @db.VarChar(16)
+  recipientAddressDigest      String?                       @db.Char(64)
+  recipientAddressDigestKeyVersion String?                  @db.VarChar(32)
+  recipientAddressExpiresAt   DateTime?                     @db.Timestamptz(3)
+  recipientAddressDestroyedAt DateTime?                     @db.Timestamptz(3)
+  purpose                     NotificationPurpose
+  purposeClass                NotificationPurposeClass
+  channel                     NotificationChannel           @default(EMAIL)
+  templateKey                 String                        @db.VarChar(64)
+  payloadSchemaVersion        String                        @db.VarChar(32)
+  payload                     Json
+  dedupeKey                   String                        @unique @db.VarChar(160)
+  providerDedupeKey           String                        @unique @db.VarChar(160)
+  providerRequestActivationId String?                       @db.Uuid
+  providerRequestCiphertext   Bytes?
+  providerRequestNonce        Bytes?
+  providerRequestTag          Bytes?
+  providerRequestKeyVersion   String?                       @db.VarChar(32)
+  providerRequestDigest       String?                       @db.Char(64)
+  providerRequestCreatedAt    DateTime?                     @db.Timestamptz(3)
+  providerRequestDestroyedAt  DateTime?                     @db.Timestamptz(3)
+  status                      NotificationDeliveryStatus    @default(PENDING)
+  availableAt                 DateTime                      @db.Timestamptz(3)
+  leaseOwner                  String?                       @db.VarChar(96)
+  leaseExpiresAt              DateTime?                     @db.Timestamptz(3)
+  attemptCount                Int                           @default(0)
+  maxAttempts                 Int                           @default(5)
+  lastErrorCode               String?                       @db.VarChar(64)
+  deliveredAt                 DateTime?                     @db.Timestamptz(3)
+  suppressedAt                DateTime?                     @db.Timestamptz(3)
+  deadLetteredAt              DateTime?                     @db.Timestamptz(3)
+  createdAt                   DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime                      @updatedAt @db.Timestamptz(3)
+  recipient                   User?                         @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
+  providerRequestActivation   ProviderActivation?           @relation("NotificationProviderRequestActivation", fields: [providerRequestActivationId], references: [id], onDelete: Restrict)
+  attempts                    NotificationDeliveryAttempt[]
 
   @@index([status, availableAt, createdAt])
   @@index([leaseExpiresAt])
   @@index([recipientUserId, purpose, createdAt])
+  @@index([recipientAddressDestroyedAt, status, createdAt])
+  @@index([providerRequestActivationId, status, createdAt])
+  @@index([providerRequestDestroyedAt, providerRequestCreatedAt, status])
 }
 
 model NotificationDeliveryAttempt {
-  id              String                      @id @default(uuid()) @db.Uuid
-  outboxId        String                      @db.Uuid
-  attemptNumber   Int
-  leaseOwner      String                      @db.VarChar(96)
-  leaseExpiresAt  DateTime                    @db.Timestamptz(3)
-  providerClass   String                      @db.VarChar(64)
-  outcome         NotificationDeliveryOutcome
-  providerReceipt String?                     @db.VarChar(255)
-  errorCode       String?                     @db.VarChar(64)
-  nextAvailableAt DateTime?                   @db.Timestamptz(3)
-  startedAt       DateTime                    @db.Timestamptz(3)
-  completedAt     DateTime                    @db.Timestamptz(3)
-  createdAt       DateTime                    @default(now()) @db.Timestamptz(3)
-  outbox          NotificationOutbox          @relation(fields: [outboxId], references: [id], onDelete: Restrict)
+  id                    String                      @id @default(uuid()) @db.Uuid
+  outboxId              String                      @db.Uuid
+  attemptNumber         Int
+  leaseOwner            String                      @db.VarChar(96)
+  leaseExpiresAt        DateTime                    @db.Timestamptz(3)
+  providerClass         String                      @db.VarChar(64)
+  outcome               NotificationDeliveryOutcome
+  providerReceipt       String?                     @db.VarChar(255)
+  providerActivationId  String?                     @db.Uuid
+  providerRequestDigest String?                     @db.Char(64)
+  recipientHash         String?                     @db.Char(64)
+  recipientHashKeyVersion String?                   @db.VarChar(32)
+  recipientEvidenceRetainUntil DateTime             @db.Timestamptz(3)
+  recipientEvidenceWipedAt DateTime?                @db.Timestamptz(3)
+  errorCode             String?                     @db.VarChar(64)
+  nextAvailableAt       DateTime?                   @db.Timestamptz(3)
+  startedAt             DateTime                    @db.Timestamptz(3)
+  completedAt           DateTime                    @db.Timestamptz(3)
+  createdAt             DateTime                    @default(now()) @db.Timestamptz(3)
+  outbox                NotificationOutbox          @relation(fields: [outboxId], references: [id], onDelete: Restrict)
+  providerActivation    ProviderActivation?         @relation("NotificationAttemptProviderActivation", fields: [providerActivationId], references: [id], onDelete: Restrict)
 
   @@unique([outboxId, attemptNumber])
   @@index([outboxId, startedAt])
   @@index([leaseExpiresAt, completedAt])
+  @@index([providerReceipt, providerClass, providerActivationId])
+  @@index([recipientEvidenceWipedAt, recipientEvidenceRetainUntil], map: "notification_attempt_evidence_retention_idx")
 }
 
 model NotificationSuppression {
   id            String                        @id @default(uuid()) @db.Uuid
   recipientHash String                        @db.VarChar(64)
+  recipientHashKeyVersion String?             @db.VarChar(32)
   reason        NotificationSuppressionReason
   source        String                        @db.VarChar(64)
   createdAt     DateTime                      @default(now()) @db.Timestamptz(3)
@@ -4650,31 +4710,35 @@ model PrivacyProcessorOutcome {
 }
 
 model PrivacyExportArtifact {
-  id                   String                      @id @default(uuid()) @db.Uuid
-  privacyRequestId     String                      @db.Uuid
-  privacyExecutionId   String                      @unique @db.Uuid
-  ownerUserId          String                      @db.Uuid
-  status               PrivacyExportArtifactStatus @default(BUILDING)
-  objectKey            String                      @unique @db.VarChar(512)
-  objectVersion        String                      @db.VarChar(128)
-  encryptionKeyVersion String                      @db.VarChar(32)
-  storageRegion        String                      @db.VarChar(64)
-  manifest             Json
-  manifestHash         String                      @db.Char(64)
-  packageSha256        String?                     @db.Char(64)
-  sizeBytes            Int?
-  downloadTokenHash    String                      @unique @db.Char(64)
-  expiresAt            DateTime                    @db.Timestamptz(3)
-  consumedAt           DateTime?                   @db.Timestamptz(3)
-  revokedAt            DateTime?                   @db.Timestamptz(3)
-  createdAt            DateTime                    @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime                    @updatedAt @db.Timestamptz(3)
-  privacyRequest       PrivacyRequest              @relation(fields: [privacyRequestId], references: [id], onDelete: Restrict)
-  privacyExecution     PrivacyExecution            @relation(fields: [privacyExecutionId], references: [id], onDelete: Restrict)
-  ownerUser            User                        @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  id                     String                      @id @default(uuid()) @db.Uuid
+  privacyRequestId       String                      @db.Uuid
+  privacyExecutionId     String                      @unique @db.Uuid
+  ownerUserId            String                      @db.Uuid
+  status                 PrivacyExportArtifactStatus @default(BUILDING)
+  objectKey              String                      @unique @db.VarChar(512)
+  objectVersion          String                      @db.VarChar(128)
+  encryptionKeyVersion   String                      @db.VarChar(32)
+  storageRegion          String                      @db.VarChar(64)
+  manifest               Json
+  manifestHash           String                      @db.Char(64)
+  packageSha256          String?                     @db.Char(64)
+  sizeBytes              Int?
+  downloadTokenHash      String                      @unique @db.Char(64)
+  expiresAt              DateTime                    @db.Timestamptz(3)
+  downloadClaimId        String?                     @db.Uuid
+  downloadClaimedAt      DateTime?                   @db.Timestamptz(3)
+  downloadClaimExpiresAt DateTime?                   @db.Timestamptz(3)
+  consumedAt             DateTime?                   @db.Timestamptz(3)
+  revokedAt              DateTime?                   @db.Timestamptz(3)
+  createdAt              DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                    @updatedAt @db.Timestamptz(3)
+  privacyRequest         PrivacyRequest              @relation(fields: [privacyRequestId], references: [id], onDelete: Restrict)
+  privacyExecution       PrivacyExecution            @relation(fields: [privacyExecutionId], references: [id], onDelete: Restrict)
+  ownerUser              User                        @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
 
   @@unique([id, ownerUserId])
   @@index([ownerUserId, status, expiresAt])
+  @@index([status, downloadClaimExpiresAt])
   @@index([privacyRequestId, createdAt])
 }
 
@@ -5173,6 +5237,7 @@ model PlanVersion {
   subscriptions              EmployerSubscription[]
   orderLines                 OrderLine[]
   creditLedgerEntries        CreditLedgerEntry[]
+  paymentPriceBindings       PaymentPriceBinding[]
   interestedSalesLeads       SalesLead[]            @relation("InterestedPlanVersion")
   interestedSalesLeadIntakes SalesLeadIntake[]      @relation("InterestedPlanVersionIntake")
 
@@ -5195,31 +5260,45 @@ model PlanEntitlement {
 }
 
 model EmployerSubscription {
-  id                              String                       @id @default(uuid()) @db.Uuid
-  companyId                       String                       @db.Uuid
-  planVersionId                   String                       @db.Uuid
-  sourceOrderId                   String?                      @unique @db.Uuid
-  status                          SubscriptionStatus
-  currentPeriodStart              DateTime                     @db.Timestamptz(3)
-  currentPeriodEnd                DateTime                     @db.Timestamptz(3)
-  billingIntervalSnapshot         BillingInterval
-  termMonthsSnapshot              Int
-  recurringNetRappenSnapshot      Int
-  monthlyEquivalentRappenSnapshot Int
-  currencySnapshot                String                       @db.Char(3)
-  activatedAt                     DateTime?                    @db.Timestamptz(3)
-  endedAt                         DateTime?                    @db.Timestamptz(3)
-  createdAt                       DateTime                     @default(now()) @db.Timestamptz(3)
-  updatedAt                       DateTime                     @updatedAt @db.Timestamptz(3)
-  company                         Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  planVersion                     PlanVersion                  @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
-  sourceOrder                     Order?                       @relation("SubscriptionSourceOrder", fields: [sourceOrderId], references: [id], onDelete: Restrict)
-  events                          SubscriptionEvent[]
-  currentChangeSchedules          SubscriptionChangeSchedule[] @relation("CurrentSubscriptionSchedule")
-  successorChangeSchedule         SubscriptionChangeSchedule?  @relation("SuccessorSubscriptionSchedule")
-  quotedOrderSnapshots            SubscriptionOrderSnapshot[]  @relation("SubscriptionOrderSource")
-  planAllowanceEntries            CreditLedgerEntry[]          @relation("PlanAllowanceSubscriptionSource")
-  dunningCases                    DunningCase[]
+  id                                    String                        @id @default(uuid()) @db.Uuid
+  companyId                             String                        @db.Uuid
+  planVersionId                         String                        @db.Uuid
+  sourceOrderId                         String?                       @unique @db.Uuid
+  status                                SubscriptionStatus
+  currentPeriodStart                    DateTime                      @db.Timestamptz(3)
+  currentPeriodEnd                      DateTime                      @db.Timestamptz(3)
+  billingIntervalSnapshot               BillingInterval
+  termMonthsSnapshot                    Int
+  recurringNetRappenSnapshot            Int
+  monthlyEquivalentRappenSnapshot       Int
+  currencySnapshot                      String                        @db.Char(3)
+  activatedAt                           DateTime?                     @db.Timestamptz(3)
+  endedAt                               DateTime?                     @db.Timestamptz(3)
+  paymentProvider                       PaymentProvider?
+  paymentRuntimeMode                    PaymentRuntimeMode?
+  paymentAdapterKey                     String?                       @db.VarChar(96)
+  paymentAdapterVersion                 String?                       @db.VarChar(32)
+  providerAccountReference              String?                       @db.VarChar(128)
+  providerCustomerReference             String?                       @db.VarChar(255)
+  providerSubscriptionReference         String?                       @unique @db.VarChar(255)
+  providerPriceReference                String?                       @db.VarChar(255)
+  providerRecurringAmountRappenSnapshot Int?
+  providerLastEventAt                   DateTime?                     @db.Timestamptz(3)
+  providerStatusEventAt                 DateTime?                     @db.Timestamptz(3)
+  providerStatusRank                    Int?
+  providerCancellationAt                DateTime?                     @db.Timestamptz(3)
+  createdAt                             DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                             DateTime                      @updatedAt @db.Timestamptz(3)
+  company                               Company                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  planVersion                           PlanVersion                   @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  sourceOrder                           Order?                        @relation("SubscriptionSourceOrder", fields: [sourceOrderId], references: [id], onDelete: Restrict)
+  events                                SubscriptionEvent[]
+  currentChangeSchedules                SubscriptionChangeSchedule[]  @relation("CurrentSubscriptionSchedule")
+  successorChangeSchedule               SubscriptionChangeSchedule?   @relation("SuccessorSubscriptionSchedule")
+  quotedOrderSnapshots                  SubscriptionOrderSnapshot[]   @relation("SubscriptionOrderSource")
+  planAllowanceEntries                  CreditLedgerEntry[]           @relation("PlanAllowanceSubscriptionSource")
+  dunningCases                          DunningCase[]
+  providerInvoices                      SubscriptionProviderInvoice[]
 
   @@unique([id, companyId])
   @@index([companyId, status, currentPeriodEnd])
@@ -5277,25 +5356,25 @@ model Product {
 }
 
 model ProductVersion {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  productId           String                  @db.Uuid
+  id                  String                   @id @default(uuid()) @db.Uuid
+  productId           String                   @db.Uuid
   version             Int
-  status              CatalogVersionStatus    @default(DRAFT)
+  status              CatalogVersionStatus     @default(DRAFT)
   netPriceRappen      Int
-  currency            String                  @default("CHF") @db.Char(3)
+  currency            String                   @default("CHF") @db.Char(3)
   durationDays        Int?
   creditType          CreditType?
   creditAmount        Int?
-  isPublic            Boolean                 @default(false)
-  isSelfService       Boolean                 @default(false)
-  priority            Int                     @default(0)
-  requiresLegalReview Boolean                 @default(false)
-  releaseDecisionId   String?                 @unique @db.Uuid
-  validFrom           DateTime                @db.Timestamptz(3)
-  validTo             DateTime?               @db.Timestamptz(3)
-  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
-  product             Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
-  releaseDecision     ProductReleaseDecision? @relation(fields: [releaseDecisionId], references: [id], onDelete: Restrict)
+  isPublic            Boolean                  @default(false)
+  isSelfService       Boolean                  @default(false)
+  priority            Int                      @default(0)
+  requiresLegalReview Boolean                  @default(false)
+  releaseDecisionId   String?                  @unique @db.Uuid
+  validFrom           DateTime                 @db.Timestamptz(3)
+  validTo             DateTime?                @db.Timestamptz(3)
+  createdAt           DateTime                 @default(now()) @db.Timestamptz(3)
+  product             Product                  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  releaseDecision     ProductReleaseDecision?  @relation(fields: [releaseDecisionId], references: [id], onDelete: Restrict)
   orderLines          OrderLine[]
   commercialReleases  CommercialOfferRelease[]
 
@@ -5343,43 +5422,44 @@ model CompanyBillingProfile {
 }
 
 model Order {
-  id                          String                @id @default(uuid()) @db.Uuid
-  companyId                   String                @db.Uuid
-  createdByUserId             String                @db.Uuid
-  status                      OrderStatus           @default(DRAFT)
-  provider                    PaymentProvider       @default(MOCK)
-  clientIdempotencyKey        String                @unique @db.VarChar(128)
-  providerIdempotencyKey      String?               @unique @db.VarChar(128)
-  providerReference           String?               @unique @db.VarChar(255)
-  requestFingerprint          String                @db.Char(64)
-  billingLegalNameSnapshot    String                @db.VarChar(200)
-  billingContactEmailSnapshot String                @db.VarChar(320)
-  billingStreetSnapshot       String                @db.VarChar(200)
-  billingPostalCodeSnapshot   String                @db.VarChar(16)
-  billingCitySnapshot         String                @db.VarChar(160)
-  billingCountryCodeSnapshot  String                @db.Char(2)
-  billingUidSnapshot          String?               @db.VarChar(32)
-  billingVatNumberSnapshot    String?               @db.VarChar(32)
-  currency                    String                @default("CHF") @db.Char(3)
-  netTotalRappen              Int
-  vatTotalRappen              Int
-  totalRappen                 Int
-  paidAt                      DateTime?             @db.Timestamptz(3)
-  failedAt                    DateTime?             @db.Timestamptz(3)
-  cancelledAt                 DateTime?             @db.Timestamptz(3)
-  expiresAt                   DateTime?             @db.Timestamptz(3)
-  createdAt                   DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt                   DateTime              @updatedAt @db.Timestamptz(3)
-  company                     Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  createdBy                   User                  @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
-  lines                       OrderLine[]
-  paymentEvents               PaymentEvent[]
-  invoice                     Invoice?
-  subscription                EmployerSubscription? @relation("SubscriptionSourceOrder")
-  paymentAttempts             PaymentAttempt[]
-  reconciliationItems         ReconciliationItem[]
-  refunds                     Refund[]
-  chargebacks                 Chargeback[]
+  id                           String                        @id @default(uuid()) @db.Uuid
+  companyId                    String                        @db.Uuid
+  createdByUserId              String                        @db.Uuid
+  status                       OrderStatus                   @default(DRAFT)
+  provider                     PaymentProvider               @default(MOCK)
+  clientIdempotencyKey         String                        @unique @db.VarChar(128)
+  providerIdempotencyKey       String?                       @unique @db.VarChar(128)
+  providerReference            String?                       @unique @db.VarChar(255)
+  requestFingerprint           String                        @db.Char(64)
+  billingLegalNameSnapshot     String                        @db.VarChar(200)
+  billingContactEmailSnapshot  String                        @db.VarChar(320)
+  billingStreetSnapshot        String                        @db.VarChar(200)
+  billingPostalCodeSnapshot    String                        @db.VarChar(16)
+  billingCitySnapshot          String                        @db.VarChar(160)
+  billingCountryCodeSnapshot   String                        @db.Char(2)
+  billingUidSnapshot           String?                       @db.VarChar(32)
+  billingVatNumberSnapshot     String?                       @db.VarChar(32)
+  currency                     String                        @default("CHF") @db.Char(3)
+  netTotalRappen               Int
+  vatTotalRappen               Int
+  totalRappen                  Int
+  paidAt                       DateTime?                     @db.Timestamptz(3)
+  failedAt                     DateTime?                     @db.Timestamptz(3)
+  cancelledAt                  DateTime?                     @db.Timestamptz(3)
+  expiresAt                    DateTime?                     @db.Timestamptz(3)
+  createdAt                    DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                    DateTime                      @updatedAt @db.Timestamptz(3)
+  company                      Company                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  createdBy                    User                          @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lines                        OrderLine[]
+  paymentEvents                PaymentEvent[]
+  invoice                      Invoice?
+  subscription                 EmployerSubscription?         @relation("SubscriptionSourceOrder")
+  paymentAttempts              PaymentAttempt[]
+  reconciliationItems          ReconciliationItem[]
+  refunds                      Refund[]
+  chargebacks                  Chargeback[]
+  subscriptionProviderInvoices SubscriptionProviderInvoice[]
 
   @@unique([id, companyId])
   @@index([companyId, status, createdAt])
@@ -5640,43 +5720,91 @@ model PaidScopeDecision {
   @@index([scopeCode, packageCode, status, effectiveAt, expiresAt])
 }
 
-model PaymentAttempt {
-  id                       String                @id @default(uuid()) @db.Uuid
-  orderId                  String                @db.Uuid
-  companyId                String                @db.Uuid
-  paidScopeDecisionId      String                @db.Uuid
-  providerActivationId     String                @db.Uuid
-  stepUpEvidenceId         String                @unique @db.Uuid
-  provider                 PaymentProvider
-  environment              String                @db.VarChar(32)
-  providerAccountReference String                @db.VarChar(128)
-  attemptKey               String                @unique @db.VarChar(160)
-  quoteDigest              String                @db.Char(64)
+/// Server-authoritative recurring price identity for exactly one activation,
+/// plan version, merchant account and runtime mode. Contract rows are test
+/// evidence only and can never authorize a LIVE PaymentAttempt.
+model PaymentPriceBinding {
+  id                       String             @id @default(uuid()) @db.Uuid
+  planVersionId            String             @db.Uuid
+  providerActivationId     String             @db.Uuid
+  environment              String             @db.VarChar(32)
+  adapterKey               String             @db.VarChar(96)
+  adapterVersion           String             @db.VarChar(32)
+  providerMode             PaymentRuntimeMode
+  providerAccountReference String             @db.VarChar(128)
+  providerPriceReference   String             @db.VarChar(255)
+  billingInterval          BillingInterval
   amountRappen             Int
-  currency                 String                @db.Char(3)
-  status                   PaymentAttemptStatus  @default(CREATED)
-  providerSessionReference String?               @unique @db.VarChar(255)
-  providerPaymentReference String?               @unique @db.VarChar(255)
-  failureCode              String?               @db.VarChar(64)
-  expiresAt                DateTime              @db.Timestamptz(3)
-  lastProviderEventAt      DateTime?             @db.Timestamptz(3)
-  createdAt                DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime              @updatedAt @db.Timestamptz(3)
-  order                    Order                 @relation(fields: [orderId, companyId], references: [id, companyId], onDelete: Restrict)
-  company                  Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  paidScopeDecision        PaidScopeDecision     @relation(fields: [paidScopeDecisionId], references: [id], onDelete: Restrict)
-  providerActivation       ProviderActivation    @relation(fields: [providerActivationId], references: [id], onDelete: Restrict)
-  stepUpEvidence           AuthAssuranceEvidence @relation(fields: [stepUpEvidenceId], references: [id], onDelete: Restrict)
-  providerEvents           ProviderEventInbox[]
-  reconciliationItems      ReconciliationItem[]
-  refunds                  Refund[]
-  chargebacks              Chargeback[]
-  dunningCases             DunningCase[]
-  riskDecisions            PaymentRiskDecision[]
+  currency                 String             @db.Char(3)
+  evidenceDigest           String             @db.Char(64)
+  effectiveAt              DateTime           @db.Timestamptz(3)
+  expiresAt                DateTime?          @db.Timestamptz(3)
+  revokedAt                DateTime?          @db.Timestamptz(3)
+  createdAt                DateTime           @default(now()) @db.Timestamptz(3)
+  planVersion              PlanVersion        @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  providerActivation       ProviderActivation @relation(fields: [providerActivationId], references: [id], onDelete: Restrict)
+  paymentAttempts          PaymentAttempt[]
 
+  @@unique([providerActivationId, planVersionId])
+  @@unique([environment, adapterKey, providerAccountReference, providerPriceReference])
+  @@index([planVersionId, environment, providerMode, effectiveAt, expiresAt])
+}
+
+model PaymentAttempt {
+  id                            String                        @id @default(uuid()) @db.Uuid
+  orderId                       String                        @db.Uuid
+  companyId                     String                        @db.Uuid
+  paidScopeDecisionId           String                        @db.Uuid
+  providerActivationId          String                        @db.Uuid
+  stepUpEvidenceId              String                        @unique @db.Uuid
+  provider                      PaymentProvider
+  environment                   String                        @db.VarChar(32)
+  adapterKey                    String                        @db.VarChar(96)
+  adapterVersion                String                        @db.VarChar(32)
+  providerMode                  PaymentRuntimeMode
+  checkoutKind                  PaymentCheckoutKind
+  expectedLiveMode              Boolean
+  providerAccountReference      String                        @db.VarChar(128)
+  paymentPriceBindingId         String?                       @db.Uuid
+  providerPriceReference        String?                       @db.VarChar(255)
+  providerCustomerReference     String?                       @db.VarChar(255)
+  providerSubscriptionReference String?                       @db.VarChar(255)
+  providerInvoiceReference      String?                       @db.VarChar(255)
+  checkoutReservationToken      String?                       @unique @db.Uuid
+  checkoutReservationDigest     String?                       @db.Char(64)
+  checkoutReservedAt            DateTime?                     @db.Timestamptz(3)
+  attemptKey                    String                        @unique @db.VarChar(160)
+  quoteDigest                   String                        @db.Char(64)
+  amountRappen                  Int
+  currency                      String                        @db.Char(3)
+  status                        PaymentAttemptStatus          @default(CREATED)
+  providerSessionReference      String?                       @unique @db.VarChar(255)
+  providerPaymentReference      String?                       @unique @db.VarChar(255)
+  failureCode                   String?                       @db.VarChar(64)
+  expiresAt                     DateTime                      @db.Timestamptz(3)
+  lastProviderEventAt           DateTime?                     @db.Timestamptz(3)
+  lastProviderEventRank         Int                           @default(0)
+  createdAt                     DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime                      @updatedAt @db.Timestamptz(3)
+  order                         Order                         @relation(fields: [orderId, companyId], references: [id, companyId], onDelete: Restrict)
+  company                       Company                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  paidScopeDecision             PaidScopeDecision             @relation(fields: [paidScopeDecisionId], references: [id], onDelete: Restrict)
+  providerActivation            ProviderActivation            @relation(fields: [providerActivationId], references: [id], onDelete: Restrict)
+  paymentPriceBinding           PaymentPriceBinding?          @relation(fields: [paymentPriceBindingId], references: [id], onDelete: Restrict)
+  stepUpEvidence                AuthAssuranceEvidence         @relation(fields: [stepUpEvidenceId], references: [id], onDelete: Restrict)
+  providerEvents                ProviderEventInbox[]
+  reconciliationItems           ReconciliationItem[]
+  refunds                       Refund[]
+  chargebacks                   Chargeback[]
+  dunningCases                  DunningCase[]
+  subscriptionProviderInvoices  SubscriptionProviderInvoice[]
+  riskDecisions                 PaymentRiskDecision[]
+
+  @@unique([id, companyId])
   @@index([companyId, status, createdAt])
   @@index([provider, environment, status, createdAt])
   @@index([providerPaymentReference])
+  @@index([providerSubscriptionReference, lastProviderEventAt])
 }
 
 model ProviderEventInbox {
@@ -5684,6 +5812,10 @@ model ProviderEventInbox {
   paymentAttemptId         String?                  @db.Uuid
   provider                 PaymentProvider
   environment              String                   @db.VarChar(32)
+  adapterKey               String                   @db.VarChar(96)
+  adapterVersion           String                   @db.VarChar(32)
+  providerMode             PaymentRuntimeMode
+  expectedLiveMode         Boolean
   providerAccountReference String                   @db.VarChar(128)
   providerEventId          String                   @db.VarChar(255)
   eventType                String                   @db.VarChar(96)
@@ -5694,6 +5826,10 @@ model ProviderEventInbox {
   signatureDigest          String                   @db.Char(64)
   payloadSchemaVersion     String                   @db.VarChar(32)
   normalizedPayload        Json
+  hydratedPaymentReference String?                  @db.VarChar(255)
+  hydrationEvidenceDigest  String?                  @db.Char(64)
+  hydrationSource          String?                  @db.VarChar(64)
+  hydratedAt               DateTime?                @db.Timestamptz(3)
   status                   ProviderEventInboxStatus @default(RECEIVED)
   receivedAt               DateTime                 @db.Timestamptz(3)
   processedAt              DateTime?                @db.Timestamptz(3)
@@ -5706,8 +5842,80 @@ model ProviderEventInbox {
   paymentAttempt           PaymentAttempt?          @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
 
   @@unique([provider, environment, providerEventId])
+  @@unique([provider, environment, adapterKey, providerAccountReference, providerEventId])
   @@index([status, receivedAt, id])
   @@index([paymentAttemptId, eventCreatedAt, id])
+}
+
+/// Durable, provider-scoped renewal fact. It deliberately does not pretend to
+/// be a Swiss tax invoice; Finance/Tax approval still owns that external
+/// accounting contract. PAID is terminal, while any conflicting signed paid
+/// fact moves the projection to CONFLICT and fails entitlement closed.
+model SubscriptionProviderInvoice {
+  id                            String                            @id @default(uuid()) @db.Uuid
+  subscriptionId                String                            @db.Uuid
+  paymentAttemptId              String                            @db.Uuid
+  orderId                       String                            @db.Uuid
+  companyId                     String                            @db.Uuid
+  provider                      PaymentProvider
+  environment                   String                            @db.VarChar(32)
+  adapterKey                    String                            @db.VarChar(96)
+  adapterVersion                String                            @db.VarChar(32)
+  providerMode                  PaymentRuntimeMode
+  providerAccountReference      String                            @db.VarChar(128)
+  providerSubscriptionReference String                            @db.VarChar(255)
+  providerInvoiceReference      String                            @db.VarChar(255)
+  status                        SubscriptionProviderInvoiceStatus
+  amountRappen                  Int?
+  currency                      String?                           @db.Char(3)
+  providerPaymentReference      String?                           @db.VarChar(255)
+  periodStart                   DateTime?                         @db.Timestamptz(3)
+  periodEnd                     DateTime?                         @db.Timestamptz(3)
+  firstFailureAt                DateTime?                         @db.Timestamptz(3)
+  paidAt                        DateTime?                         @db.Timestamptz(3)
+  conflictedAt                  DateTime?                         @db.Timestamptz(3)
+  paidProjectionDigest          String?                           @db.Char(64)
+  createdAt                     DateTime                          @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime                          @updatedAt @db.Timestamptz(3)
+  subscription                  EmployerSubscription              @relation(fields: [subscriptionId, companyId], references: [id, companyId], onDelete: Restrict)
+  paymentAttempt                PaymentAttempt                    @relation(fields: [paymentAttemptId, companyId], references: [id, companyId], onDelete: Restrict)
+  order                         Order                             @relation(fields: [orderId, companyId], references: [id, companyId], onDelete: Restrict)
+  company                       Company                           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  refunds                       Refund[]
+  creditNotes                   CreditNote[]
+
+  @@unique([provider, environment, adapterKey, providerAccountReference, providerInvoiceReference])
+  @@index([subscriptionId, status, periodStart, id])
+  @@index([companyId, status, createdAt, id])
+  @@index([paymentAttemptId, createdAt, id])
+}
+
+/// PII-minimised, signature-verified Resend/Svix event envelope. Raw payloads
+/// and recipient addresses are deliberately not persisted.
+model EmailProviderEventInbox {
+  id                     String                        @id @default(uuid()) @db.Uuid
+  environment            String                        @db.VarChar(32)
+  adapterKey             String                        @db.VarChar(96)
+  adapterVersion         String                        @db.VarChar(32)
+  providerActivationId   String                        @db.Uuid
+  svixId                 String                        @db.VarChar(255)
+  providerReceipt        String                        @db.VarChar(255)
+  recipientHashes        String[]
+  recipientHashesWipedAt DateTime?                     @db.Timestamptz(3)
+  eventType              String                        @db.VarChar(96)
+  eventCreatedAt         DateTime                      @db.Timestamptz(3)
+  payloadDigest          String                        @db.Char(64)
+  receivedAt             DateTime                      @db.Timestamptz(3)
+  processedAt            DateTime?                     @db.Timestamptz(3)
+  status                 EmailProviderEventInboxStatus @default(RECEIVED)
+  createdAt              DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                      @updatedAt @db.Timestamptz(3)
+  providerActivation     ProviderActivation            @relation("EmailEventProviderActivation", fields: [providerActivationId], references: [id], onDelete: Restrict)
+
+  @@unique([environment, adapterKey, svixId])
+  @@index([status, receivedAt, id])
+  @@index([providerReceipt, eventCreatedAt, id])
+  @@index([providerActivationId, status, receivedAt])
 }
 
 model ReconciliationRun {
@@ -5763,39 +5971,45 @@ model ReconciliationItem {
 }
 
 model Refund {
-  id                        String                     @id @default(uuid()) @db.Uuid
-  orderId                   String                     @db.Uuid
-  invoiceId                 String                     @db.Uuid
-  paymentAttemptId          String                     @db.Uuid
-  companyId                 String                     @db.Uuid
-  amountRappen              Int
-  currency                  String                     @db.Char(3)
-  status                    RefundStatus               @default(REQUESTED)
-  reasonCode                String                     @db.VarChar(64)
-  idempotencyKey            String                     @unique @db.VarChar(160)
-  providerRefundReference   String?                    @unique @db.VarChar(255)
-  stepUpEvidenceId          String                     @unique @db.Uuid
-  approvalStepUpEvidenceId  String?                    @unique @db.Uuid
-  requestedByUserId         String                     @db.Uuid
-  approvedByUserId          String?                    @db.Uuid
-  requestedAt               DateTime                   @db.Timestamptz(3)
-  completedAt               DateTime?                  @db.Timestamptz(3)
-  failureCode               String?                    @db.VarChar(64)
-  createdAt                 DateTime                   @default(now()) @db.Timestamptz(3)
-  updatedAt                 DateTime                   @updatedAt @db.Timestamptz(3)
-  order                     Order                      @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  invoice                   Invoice                    @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
-  paymentAttempt            PaymentAttempt             @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
-  company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  stepUpEvidence            AuthAssuranceEvidence      @relation("RefundRequestStepUpEvidence", fields: [stepUpEvidenceId], references: [id], onDelete: Restrict)
-  approvalStepUpEvidence    AuthAssuranceEvidence?     @relation("RefundApprovalStepUpEvidence", fields: [approvalStepUpEvidenceId], references: [id], onDelete: Restrict)
-  requestedBy               User                       @relation("RefundRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  approvedBy                User?                      @relation("RefundApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
-  creditNote                CreditNote?
-  serviceDeliveryAssessment ServiceDeliveryAssessment?
+  id                             String                       @id @default(uuid()) @db.Uuid
+  orderId                        String                       @db.Uuid
+  invoiceId                      String?                      @db.Uuid
+  subscriptionProviderInvoiceId  String?                      @db.Uuid
+  paymentAttemptId               String                       @db.Uuid
+  companyId                      String                       @db.Uuid
+  amountRappen                   Int
+  currency                       String                       @db.Char(3)
+  sourceKind                     RefundPaymentSourceKind      @default(INITIAL_ORDER)
+  sourceProviderPaymentReference String                       @db.VarChar(255)
+  sourceAmountRappen             Int
+  status                         RefundStatus                 @default(REQUESTED)
+  reasonCode                     String                       @db.VarChar(64)
+  idempotencyKey                 String                       @unique @db.VarChar(160)
+  providerRefundReference        String?                      @unique @db.VarChar(255)
+  stepUpEvidenceId               String                       @unique @db.Uuid
+  approvalStepUpEvidenceId       String?                      @unique @db.Uuid
+  requestedByUserId              String                       @db.Uuid
+  approvedByUserId               String?                      @db.Uuid
+  requestedAt                    DateTime                     @db.Timestamptz(3)
+  completedAt                    DateTime?                    @db.Timestamptz(3)
+  failureCode                    String?                      @db.VarChar(64)
+  createdAt                      DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt                      DateTime                     @updatedAt @db.Timestamptz(3)
+  order                          Order                        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  invoice                        Invoice?                     @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  subscriptionProviderInvoice    SubscriptionProviderInvoice? @relation(fields: [subscriptionProviderInvoiceId], references: [id], onDelete: Restrict)
+  paymentAttempt                 PaymentAttempt               @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+  company                        Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  stepUpEvidence                 AuthAssuranceEvidence        @relation("RefundRequestStepUpEvidence", fields: [stepUpEvidenceId], references: [id], onDelete: Restrict)
+  approvalStepUpEvidence         AuthAssuranceEvidence?       @relation("RefundApprovalStepUpEvidence", fields: [approvalStepUpEvidenceId], references: [id], onDelete: Restrict)
+  requestedBy                    User                         @relation("RefundRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  approvedBy                     User?                        @relation("RefundApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  creditNote                     CreditNote?
+  serviceDeliveryAssessment      ServiceDeliveryAssessment?
 
   @@index([companyId, status, requestedAt, id])
   @@index([status, requestedAt, id])
+  @@index([subscriptionProviderInvoiceId, status, requestedAt, id])
 }
 
 model Chargeback {
@@ -5821,22 +6035,24 @@ model Chargeback {
 }
 
 model CreditNote {
-  id             String           @id @default(uuid()) @db.Uuid
-  invoiceId      String           @db.Uuid
-  refundId       String           @unique @db.Uuid
-  companyId      String           @db.Uuid
-  number         String           @unique @db.VarChar(32)
-  amountRappen   Int
-  currency       String           @db.Char(3)
-  status         CreditNoteStatus @default(ISSUED)
-  reasonCode     String           @db.VarChar(64)
-  idempotencyKey String           @unique @db.VarChar(160)
-  issuedAt       DateTime         @db.Timestamptz(3)
-  voidedAt       DateTime?        @db.Timestamptz(3)
-  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
-  invoice        Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
-  refund         Refund           @relation(fields: [refundId], references: [id], onDelete: Restrict)
-  company        Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  id                            String                       @id @default(uuid()) @db.Uuid
+  invoiceId                     String?                      @db.Uuid
+  subscriptionProviderInvoiceId String?                      @db.Uuid
+  refundId                      String                       @unique @db.Uuid
+  companyId                     String                       @db.Uuid
+  number                        String                       @unique @db.VarChar(32)
+  amountRappen                  Int
+  currency                      String                       @db.Char(3)
+  status                        CreditNoteStatus             @default(ISSUED)
+  reasonCode                    String                       @db.VarChar(64)
+  idempotencyKey                String                       @unique @db.VarChar(160)
+  issuedAt                      DateTime                     @db.Timestamptz(3)
+  voidedAt                      DateTime?                    @db.Timestamptz(3)
+  createdAt                     DateTime                     @default(now()) @db.Timestamptz(3)
+  invoice                       Invoice?                     @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  subscriptionProviderInvoice   SubscriptionProviderInvoice? @relation(fields: [subscriptionProviderInvoiceId], references: [id], onDelete: Restrict)
+  refund                        Refund                       @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  company                       Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
   @@index([companyId, issuedAt, id])
 }
@@ -6146,74 +6362,83 @@ model SystemTask {
 }
 
 model WorkItem {
-  id                    String              @id @default(uuid()) @db.Uuid
-  handlerKey            String              @db.VarChar(96)
-  handlerVersion        String              @db.VarChar(32)
-  subjectType           String              @db.VarChar(64)
-  subjectId             String              @db.VarChar(128)
-  dedupeKey             String              @unique @db.VarChar(160)
-  effectKey             String              @db.VarChar(160)
-  priority              Int                 @default(50) @db.SmallInt
-  availableAt           DateTime            @db.Timestamptz(3)
-  status                WorkItemStatus      @default(PENDING)
-  attemptCount          Int                 @default(0)
-  maxAttempts           Int                 @default(8)
-  replayCount           Int                 @default(0)
-  payloadVersion        String              @db.VarChar(32)
-  payloadReference      Json
-  leaseOwner            String?             @db.VarChar(96)
-  leaseWorkerRunId      String?             @db.Uuid
-  leaseDeploymentDigest String?             @db.VarChar(128)
-  leaseClaimedAt        DateTime?           @db.Timestamptz(3)
-  leaseExpiresAt        DateTime?           @db.Timestamptz(3)
-  heartbeatAt           DateTime?           @db.Timestamptz(3)
-  fencingToken          Int                 @default(0)
-  lastFailureClass      WorkFailureClass?
-  lastErrorCode         String?             @db.VarChar(64)
-  lastErrorDigest       String?             @db.Char(64)
-  completedAt           DateTime?           @db.Timestamptz(3)
-  deadLetteredAt        DateTime?           @db.Timestamptz(3)
-  cancelledAt           DateTime?           @db.Timestamptz(3)
-  createdAt             DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime            @updatedAt @db.Timestamptz(3)
-  attempts              WorkAttempt[]
-  deadLetter            WorkDeadLetter?
-  effectReceipts        WorkEffectReceipt[]
-  replayAudits          WorkReplayAudit[]
-  leaseWorkerRun        WorkerRun?          @relation(fields: [leaseWorkerRunId], references: [id], onDelete: Restrict)
+  id                               String                   @id @default(uuid()) @db.Uuid
+  handlerKey                       String                   @db.VarChar(96)
+  handlerVersion                   String                   @db.VarChar(32)
+  subjectType                      String                   @db.VarChar(64)
+  subjectId                        String                   @db.VarChar(128)
+  dedupeKey                        String                   @unique @db.VarChar(160)
+  effectKey                        String                   @db.VarChar(160)
+  priority                         Int                      @default(50) @db.SmallInt
+  availableAt                      DateTime                 @db.Timestamptz(3)
+  status                           WorkItemStatus           @default(PENDING)
+  attemptCount                     Int                      @default(0)
+  maxAttempts                      Int                      @default(8)
+  replayCount                      Int                      @default(0)
+  payloadVersion                   String                   @db.VarChar(32)
+  payloadReference                 Json
+  leaseOwner                       String?                  @db.VarChar(96)
+  leaseWorkerRunId                 String?                  @db.Uuid
+  leaseDeploymentDigest            String?                  @db.VarChar(128)
+  leaseHandlerActivationId         String?                  @db.Uuid
+  leaseHandlerActivationGeneration Int?
+  leaseClaimedAt                   DateTime?                @db.Timestamptz(3)
+  leaseExpiresAt                   DateTime?                @db.Timestamptz(3)
+  heartbeatAt                      DateTime?                @db.Timestamptz(3)
+  fencingToken                     Int                      @default(0)
+  lastFailureClass                 WorkFailureClass?
+  lastErrorCode                    String?                  @db.VarChar(64)
+  lastErrorDigest                  String?                  @db.Char(64)
+  completedAt                      DateTime?                @db.Timestamptz(3)
+  deadLetteredAt                   DateTime?                @db.Timestamptz(3)
+  cancelledAt                      DateTime?                @db.Timestamptz(3)
+  createdAt                        DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt                        DateTime                 @updatedAt @db.Timestamptz(3)
+  attempts                         WorkAttempt[]
+  deadLetter                       WorkDeadLetter?
+  effectReceipts                   WorkEffectReceipt[]
+  replayAudits                     WorkReplayAudit[]
+  leaseWorkerRun                   WorkerRun?               @relation(fields: [leaseWorkerRunId], references: [id], onDelete: Restrict)
+  leaseHandlerActivation           WorkerHandlerActivation? @relation(fields: [leaseHandlerActivationId], references: [id], onDelete: Restrict)
 
   @@index([handlerKey, handlerVersion, status, availableAt])
   @@index([status, availableAt, priority])
   @@index([leaseExpiresAt])
+  @@index([leaseHandlerActivationId, leaseHandlerActivationGeneration])
   @@index([subjectType, subjectId])
   @@index([effectKey])
 }
 
 model WorkAttempt {
-  id               String             @id @default(uuid()) @db.Uuid
-  workItemId       String             @db.Uuid
-  workerRunId      String?            @db.Uuid
-  attemptNumber    Int
-  fencingToken     Int
-  workerId         String             @db.VarChar(96)
-  deploymentDigest String             @db.VarChar(128)
-  outcome          WorkAttemptOutcome
-  failureClass     WorkFailureClass?
-  errorCode        String?            @db.VarChar(64)
-  errorDigest      String?            @db.Char(64)
-  leaseClaimedAt   DateTime           @db.Timestamptz(3)
-  leaseExpiresAt   DateTime           @db.Timestamptz(3)
-  startedAt        DateTime           @db.Timestamptz(3)
-  completedAt      DateTime           @db.Timestamptz(3)
-  nextAvailableAt  DateTime?          @db.Timestamptz(3)
-  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
-  workItem         WorkItem           @relation(fields: [workItemId], references: [id], onDelete: Restrict)
-  workerRun        WorkerRun?         @relation(fields: [workerRunId], references: [id], onDelete: Restrict)
+  id                                   String                   @id @default(uuid()) @db.Uuid
+  workItemId                           String                   @db.Uuid
+  workerRunId                          String?                  @db.Uuid
+  handlerActivationId                  String?                  @db.Uuid
+  handlerActivationGeneration          Int?
+  handlerActivationCurrentAtCompletion Boolean?
+  attemptNumber                        Int
+  fencingToken                         Int
+  workerId                             String                   @db.VarChar(96)
+  deploymentDigest                     String                   @db.VarChar(128)
+  outcome                              WorkAttemptOutcome
+  failureClass                         WorkFailureClass?
+  errorCode                            String?                  @db.VarChar(64)
+  errorDigest                          String?                  @db.Char(64)
+  leaseClaimedAt                       DateTime                 @db.Timestamptz(3)
+  leaseExpiresAt                       DateTime                 @db.Timestamptz(3)
+  startedAt                            DateTime                 @db.Timestamptz(3)
+  completedAt                          DateTime                 @db.Timestamptz(3)
+  nextAvailableAt                      DateTime?                @db.Timestamptz(3)
+  createdAt                            DateTime                 @default(now()) @db.Timestamptz(3)
+  workItem                             WorkItem                 @relation(fields: [workItemId], references: [id], onDelete: Restrict)
+  workerRun                            WorkerRun?               @relation(fields: [workerRunId], references: [id], onDelete: Restrict)
+  handlerActivation                    WorkerHandlerActivation? @relation("WorkAttemptHandlerActivation", fields: [handlerActivationId], references: [id], onDelete: Restrict)
 
   @@unique([workItemId, attemptNumber])
   @@index([workItemId, completedAt])
   @@index([workerRunId, completedAt])
   @@index([outcome, completedAt])
+  @@index([handlerActivationId, handlerActivationGeneration, completedAt])
 }
 
 model WorkDeadLetter {
@@ -6232,17 +6457,25 @@ model WorkDeadLetter {
 }
 
 model WorkEffectReceipt {
-  id                    String   @id @default(uuid()) @db.Uuid
-  workItemId            String   @db.Uuid
-  effectKey             String   @unique @db.VarChar(160)
-  handlerKey            String   @db.VarChar(96)
-  handlerVersion        String   @db.VarChar(32)
-  effectDigest          String   @db.Char(64)
-  providerReceiptDigest String?  @db.Char(64)
-  createdAt             DateTime @default(now()) @db.Timestamptz(3)
-  workItem              WorkItem @relation(fields: [workItemId], references: [id], onDelete: Restrict)
+  id                                String                   @id @default(uuid()) @db.Uuid
+  workItemId                        String                   @db.Uuid
+  handlerActivationId               String?                  @db.Uuid
+  handlerActivationGeneration       Int?
+  handlerActivationCurrentAtReceipt Boolean?
+  leaseWorkerRunId                  String?                  @db.Uuid
+  leaseFencingToken                 Int?
+  effectKey                         String                   @unique @db.VarChar(160)
+  handlerKey                        String                   @db.VarChar(96)
+  handlerVersion                    String                   @db.VarChar(32)
+  effectDigest                      String                   @db.Char(64)
+  providerReceiptDigest             String?                  @db.Char(64)
+  createdAt                         DateTime                 @default(now()) @db.Timestamptz(3)
+  workItem                          WorkItem                 @relation(fields: [workItemId], references: [id], onDelete: Restrict)
+  leaseWorkerRun                    WorkerRun?               @relation("WorkEffectReceiptWorkerRun", fields: [leaseWorkerRunId], references: [id], onDelete: Restrict)
+  handlerActivation                 WorkerHandlerActivation? @relation("WorkEffectReceiptHandlerActivation", fields: [handlerActivationId], references: [id], onDelete: Restrict)
 
   @@index([workItemId, createdAt])
+  @@index([handlerActivationId, handlerActivationGeneration, createdAt])
 }
 
 model WorkReplayAudit {
@@ -6284,6 +6517,7 @@ model WorkerRun {
   updatedAt        DateTime               @updatedAt @db.Timestamptz(3)
   attempts         WorkAttempt[]
   leasedItems      WorkItem[]
+  effectReceipts   WorkEffectReceipt[]    @relation("WorkEffectReceiptWorkerRun")
 
   @@unique([environment, workerId, startedAt])
   @@index([environment, status, heartbeatAt])
@@ -6292,6 +6526,7 @@ model WorkerRun {
 
 model WorkerHandlerActivation {
   id                    String                   @id @default(uuid()) @db.Uuid
+  generation            Int                      @default(1)
   environment           String                   @db.VarChar(32)
   handlerKey            String                   @db.VarChar(96)
   handlerVersion        String                   @db.VarChar(32)
@@ -6316,41 +6551,48 @@ model WorkerHandlerActivation {
   revokeReasonCode      String?                  @db.VarChar(64)
   createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
+  leasedItems           WorkItem[]
+  attempts              WorkAttempt[]            @relation("WorkAttemptHandlerActivation")
+  effectReceipts        WorkEffectReceipt[]      @relation("WorkEffectReceiptHandlerActivation")
 
   @@index([environment, handlerKey, handlerVersion, createdAt])
   @@index([environment, mode, effectiveAt, expiresAt])
 }
 
 model ProviderActivation {
-  id                  String                   @id @default(uuid()) @db.Uuid
-  environment         String                   @db.VarChar(32)
-  useCase             String                   @db.VarChar(96)
-  adapterKey          String                   @db.VarChar(96)
-  adapterVersion      String                   @db.VarChar(32)
-  mode                OperationsActivationMode @default(DISABLED)
-  configurationDigest String                   @db.Char(64)
-  secretVersionRef    String?                  @db.VarChar(128)
-  region              String?                  @db.VarChar(64)
-  dpaRef              String?                  @db.VarChar(255)
-  contractRef         String?                  @db.VarChar(255)
-  approvalRef         String?                  @db.VarChar(255)
-  evidenceDigest      String                   @db.Char(64)
-  owner               String                   @db.VarChar(160)
-  runbookRef          String                   @db.VarChar(255)
-  health              OperationsHealthStatus   @default(UNKNOWN)
-  healthCheckedAt     DateTime?                @db.Timestamptz(3)
-  quotaUnits          Int?
-  sustainableCapacity Int?
-  unitCostMicros      BigInt?
-  unitCostSource      String?                  @db.VarChar(255)
-  killSwitchEngaged   Boolean                  @default(true)
-  effectiveAt         DateTime?                @db.Timestamptz(3)
-  expiresAt           DateTime?                @db.Timestamptz(3)
-  revokedAt           DateTime?                @db.Timestamptz(3)
-  revokeReasonCode    String?                  @db.VarChar(64)
-  createdAt           DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime                 @updatedAt @db.Timestamptz(3)
-  paymentAttempts     PaymentAttempt[]
+  id                   String                        @id @default(uuid()) @db.Uuid
+  environment          String                        @db.VarChar(32)
+  useCase              String                        @db.VarChar(96)
+  adapterKey           String                        @db.VarChar(96)
+  adapterVersion       String                        @db.VarChar(32)
+  mode                 OperationsActivationMode      @default(DISABLED)
+  configurationDigest  String                        @db.Char(64)
+  secretVersionRef     String?                       @db.VarChar(128)
+  region               String?                       @db.VarChar(64)
+  dpaRef               String?                       @db.VarChar(255)
+  contractRef          String?                       @db.VarChar(255)
+  approvalRef          String?                       @db.VarChar(255)
+  evidenceDigest       String                        @db.Char(64)
+  owner                String                        @db.VarChar(160)
+  runbookRef           String                        @db.VarChar(255)
+  health               OperationsHealthStatus        @default(UNKNOWN)
+  healthCheckedAt      DateTime?                     @db.Timestamptz(3)
+  quotaUnits           Int?
+  sustainableCapacity  Int?
+  unitCostMicros       BigInt?
+  unitCostSource       String?                       @db.VarChar(255)
+  killSwitchEngaged    Boolean                       @default(true)
+  effectiveAt          DateTime?                     @db.Timestamptz(3)
+  expiresAt            DateTime?                     @db.Timestamptz(3)
+  revokedAt            DateTime?                     @db.Timestamptz(3)
+  revokeReasonCode     String?                       @db.VarChar(64)
+  createdAt            DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                      @updatedAt @db.Timestamptz(3)
+  paymentAttempts      PaymentAttempt[]
+  paymentPriceBindings PaymentPriceBinding[]
+  notificationOutboxes NotificationOutbox[]          @relation("NotificationProviderRequestActivation")
+  notificationAttempts NotificationDeliveryAttempt[] @relation("NotificationAttemptProviderActivation")
+  emailProviderEvents  EmailProviderEventInbox[]     @relation("EmailEventProviderActivation")
 
   @@index([environment, useCase, createdAt])
   @@index([environment, mode, health, effectiveAt, expiresAt])
@@ -7361,23 +7603,23 @@ model SitemapCapacityObservation {
 /// Pre-registered commercial question. A new version is a new row; production
 /// release never rewrites the hypothesis or its thresholds.
 model CommercialHypothesis {
-  id                           String                  @id @default(uuid()) @db.Uuid
-  code                         String                  @db.VarChar(64)
-  version                      Int
-  offerKind                    CommercialOfferKind
-  clusterCode                  String                  @db.VarChar(96)
-  status                       CommercialReleaseStatus @default(DRAFT)
-  minimumIndependentBuyers     Int
-  minimumNetPaidRappen         Int
-  measurementWindowStart       DateTime                @db.Timestamptz(3)
-  measurementWindowEnd         DateTime                @db.Timestamptz(3)
-  offerDigest                  String                  @db.Char(64)
-  ownerUserId                  String                  @db.Uuid
-  preRegisteredAt              DateTime                @db.Timestamptz(3)
-  createdAt                    DateTime                @default(now()) @db.Timestamptz(3)
-  evidence                     CommercialEvidence[]
-  releases                     CommercialOfferRelease[]
-  owner                        User                     @relation("CommercialHypothesisOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  id                       String                   @id @default(uuid()) @db.Uuid
+  code                     String                   @db.VarChar(64)
+  version                  Int
+  offerKind                CommercialOfferKind
+  clusterCode              String                   @db.VarChar(96)
+  status                   CommercialReleaseStatus  @default(DRAFT)
+  minimumIndependentBuyers Int
+  minimumNetPaidRappen     Int
+  measurementWindowStart   DateTime                 @db.Timestamptz(3)
+  measurementWindowEnd     DateTime                 @db.Timestamptz(3)
+  offerDigest              String                   @db.Char(64)
+  ownerUserId              String                   @db.Uuid
+  preRegisteredAt          DateTime                 @db.Timestamptz(3)
+  createdAt                DateTime                 @default(now()) @db.Timestamptz(3)
+  evidence                 CommercialEvidence[]
+  releases                 CommercialOfferRelease[]
+  owner                    User                     @relation("CommercialHypothesisOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
 
   @@unique([code, version])
   @@index([clusterCode, offerKind, status])
@@ -7419,22 +7661,22 @@ model CommercialEvidence {
 /// V2 search assessment. A partial unique index in SQL permits only one first
 /// selected/public cluster at a time.
 model CommercialClusterDecision {
-  id                         String                   @id @default(uuid()) @db.Uuid
-  assessmentId               String                   @unique @db.Uuid
-  clusterCode                String                   @db.VarChar(96)
-  status                     CommercialClusterStatus  @default(RESEARCH)
-  policyVersion              String                   @db.VarChar(32)
-  selectedCorpusDigest       String                   @db.Char(64)
-  evidenceDigest             String                   @db.Char(64)
-  productApprovedByUserId    String?                  @db.Uuid
-  opsApprovedByUserId        String?                  @db.Uuid
-  decidedAt                  DateTime                 @db.Timestamptz(3)
-  activatedAt                DateTime?                @db.Timestamptz(3)
-  createdAt                  DateTime                 @default(now()) @db.Timestamptz(3)
-  assessment                 ClusterLaunchAssessment  @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
-  offerReleases              CommercialOfferRelease[]
-  productApprovedBy          User?                    @relation("CommercialClusterProductApprover", fields: [productApprovedByUserId], references: [id], onDelete: Restrict)
-  opsApprovedBy              User?                    @relation("CommercialClusterOpsApprover", fields: [opsApprovedByUserId], references: [id], onDelete: Restrict)
+  id                      String                   @id @default(uuid()) @db.Uuid
+  assessmentId            String                   @unique @db.Uuid
+  clusterCode             String                   @db.VarChar(96)
+  status                  CommercialClusterStatus  @default(RESEARCH)
+  policyVersion           String                   @db.VarChar(32)
+  selectedCorpusDigest    String                   @db.Char(64)
+  evidenceDigest          String                   @db.Char(64)
+  productApprovedByUserId String?                  @db.Uuid
+  opsApprovedByUserId     String?                  @db.Uuid
+  decidedAt               DateTime                 @db.Timestamptz(3)
+  activatedAt             DateTime?                @db.Timestamptz(3)
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  assessment              ClusterLaunchAssessment  @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  offerReleases           CommercialOfferRelease[]
+  productApprovedBy       User?                    @relation("CommercialClusterProductApprover", fields: [productApprovedByUserId], references: [id], onDelete: Restrict)
+  opsApprovedBy           User?                    @relation("CommercialClusterOpsApprover", fields: [opsApprovedByUserId], references: [id], onDelete: Restrict)
 
   @@index([status, decidedAt])
   @@index([clusterCode, status])
@@ -7443,61 +7685,61 @@ model CommercialClusterDecision {
 /// Immutable operational release. `modelPayload` contains versioned aggregates,
 /// never customer-level notes.
 model CapacityModelRelease {
-  id                                      String                   @id @default(uuid()) @db.Uuid
-  versionCode                             String                   @unique @db.VarChar(64)
-  status                                  CommercialReleaseStatus  @default(DRAFT)
-  modelDigest                             String                   @unique @db.Char(64)
-  modelPayload                            Json
-  maximumUtilizationBps                   Int
-  measuredUtilizationBps                  Int
-  maximumConciergeCogsRappenPerCustomer   Int
-  measuredConciergeCogsRappenPerCustomer  Int
-  approvedByUserId                        String?                  @db.Uuid
-  approvedAt                              DateTime?                @db.Timestamptz(3)
-  createdAt                               DateTime                 @default(now()) @db.Timestamptz(3)
-  offerReleases                           CommercialOfferRelease[]
-  approvedBy                              User?                    @relation("CapacityModelApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  id                                     String                   @id @default(uuid()) @db.Uuid
+  versionCode                            String                   @unique @db.VarChar(64)
+  status                                 CommercialReleaseStatus  @default(DRAFT)
+  modelDigest                            String                   @unique @db.Char(64)
+  modelPayload                           Json
+  maximumUtilizationBps                  Int
+  measuredUtilizationBps                 Int
+  maximumConciergeCogsRappenPerCustomer  Int
+  measuredConciergeCogsRappenPerCustomer Int
+  approvedByUserId                       String?                  @db.Uuid
+  approvedAt                             DateTime?                @db.Timestamptz(3)
+  createdAt                              DateTime                 @default(now()) @db.Timestamptz(3)
+  offerReleases                          CommercialOfferRelease[]
+  approvedBy                             User?                    @relation("CapacityModelApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
 
   @@index([status, approvedAt])
 }
 
 model CashflowModelRelease {
-  id                       String                   @id @default(uuid()) @db.Uuid
-  versionCode              String                   @db.VarChar(64)
-  scenarioCode             String                   @db.VarChar(64)
-  horizonMonths            Int
-  status                   CommercialReleaseStatus  @default(DRAFT)
-  modelDigest              String                   @unique @db.Char(64)
-  modelPayload             Json
-  openingCashRappen        Int
-  closingCashRappen        Int
-  peakFundingNeedRappen    Int
-  breakEvenMonth           Int?
-  approvedByUserId         String?                  @db.Uuid
-  approvedAt               DateTime?                @db.Timestamptz(3)
-  createdAt                DateTime                 @default(now()) @db.Timestamptz(3)
-  offerReleases            CommercialOfferRelease[]
-  approvedBy               User?                    @relation("CashflowModelApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  id                    String                   @id @default(uuid()) @db.Uuid
+  versionCode           String                   @db.VarChar(64)
+  scenarioCode          String                   @db.VarChar(64)
+  horizonMonths         Int
+  status                CommercialReleaseStatus  @default(DRAFT)
+  modelDigest           String                   @unique @db.Char(64)
+  modelPayload          Json
+  openingCashRappen     Int
+  closingCashRappen     Int
+  peakFundingNeedRappen Int
+  breakEvenMonth        Int?
+  approvedByUserId      String?                  @db.Uuid
+  approvedAt            DateTime?                @db.Timestamptz(3)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  offerReleases         CommercialOfferRelease[]
+  approvedBy            User?                    @relation("CashflowModelApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([versionCode, scenarioCode, horizonMonths])
   @@index([status, horizonMonths, approvedAt])
 }
 
 model ServicePolicyRelease {
-  id                       String                   @id @default(uuid()) @db.Uuid
-  versionCode              String                   @unique @db.VarChar(64)
-  status                   CommercialReleaseStatus  @default(DRAFT)
-  policyDigest             String                   @unique @db.Char(64)
-  customerCopyDigest       String                   @db.Char(64)
-  supportedOfferKinds      CommercialOfferKind[]
-  responseSlaMinutes       Int
-  remedyCodes              String[]                 @db.VarChar(32)
-  escalationOwner          String                   @db.VarChar(160)
-  approvedByUserId         String?                  @db.Uuid
-  approvedAt               DateTime?                @db.Timestamptz(3)
-  createdAt                DateTime                 @default(now()) @db.Timestamptz(3)
-  offerReleases            CommercialOfferRelease[]
-  approvedBy               User?                    @relation("ServicePolicyApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  id                  String                   @id @default(uuid()) @db.Uuid
+  versionCode         String                   @unique @db.VarChar(64)
+  status              CommercialReleaseStatus  @default(DRAFT)
+  policyDigest        String                   @unique @db.Char(64)
+  customerCopyDigest  String                   @db.Char(64)
+  supportedOfferKinds CommercialOfferKind[]
+  responseSlaMinutes  Int
+  remedyCodes         String[]                 @db.VarChar(32)
+  escalationOwner     String                   @db.VarChar(160)
+  approvedByUserId    String?                  @db.Uuid
+  approvedAt          DateTime?                @db.Timestamptz(3)
+  createdAt           DateTime                 @default(now()) @db.Timestamptz(3)
+  offerReleases       CommercialOfferRelease[]
+  approvedBy          User?                    @relation("ServicePolicyApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
 
   @@index([status, approvedAt])
 }
@@ -7505,36 +7747,36 @@ model ServicePolicyRelease {
 /// Technical release record. PUBLIC_ACTIVE is impossible without all owning
 /// evidence references; flags still default closed at runtime.
 model CommercialOfferRelease {
-  id                        String                   @id @default(uuid()) @db.Uuid
-  hypothesisId              String                   @unique @db.Uuid
-  productVersionId          String?                  @db.Uuid
-  clusterDecisionId         String                   @db.Uuid
-  capacityModelReleaseId    String                   @db.Uuid
-  cashflowModelReleaseId    String                   @db.Uuid
-  servicePolicyReleaseId    String                   @db.Uuid
-  offerKind                 CommercialOfferKind
-  status                    CommercialReleaseStatus @default(DRAFT)
-  serverPriceRappen         Int
-  currency                  String                   @default("CHF") @db.Char(3)
-  allowsPublic              Boolean                  @default(false)
-  allowsSelfService         Boolean                  @default(false)
-  legalApprovalReference    String?                  @db.VarChar(255)
-  taxApprovalReference      String?                  @db.VarChar(255)
-  avgApprovalReference      String?                  @db.VarChar(255)
-  privacyApprovalReference  String?                  @db.VarChar(255)
-  accountingApprovalReference String?                @db.VarChar(255)
-  releaseDigest             String                   @unique @db.Char(64)
-  approvedByUserId          String?                  @db.Uuid
-  approvedAt                DateTime?                @db.Timestamptz(3)
-  activatedAt               DateTime?                @db.Timestamptz(3)
-  createdAt                 DateTime                 @default(now()) @db.Timestamptz(3)
-  hypothesis                CommercialHypothesis     @relation(fields: [hypothesisId], references: [id], onDelete: Restrict)
-  productVersion            ProductVersion?         @relation(fields: [productVersionId], references: [id], onDelete: Restrict)
-  clusterDecision           CommercialClusterDecision @relation(fields: [clusterDecisionId], references: [id], onDelete: Restrict)
-  capacityModelRelease      CapacityModelRelease     @relation(fields: [capacityModelReleaseId], references: [id], onDelete: Restrict)
-  cashflowModelRelease      CashflowModelRelease     @relation(fields: [cashflowModelReleaseId], references: [id], onDelete: Restrict)
-  servicePolicyRelease      ServicePolicyRelease     @relation(fields: [servicePolicyReleaseId], references: [id], onDelete: Restrict)
-  approvedBy                User?                    @relation("CommercialOfferApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  id                          String                    @id @default(uuid()) @db.Uuid
+  hypothesisId                String                    @unique @db.Uuid
+  productVersionId            String?                   @db.Uuid
+  clusterDecisionId           String                    @db.Uuid
+  capacityModelReleaseId      String                    @db.Uuid
+  cashflowModelReleaseId      String                    @db.Uuid
+  servicePolicyReleaseId      String                    @db.Uuid
+  offerKind                   CommercialOfferKind
+  status                      CommercialReleaseStatus   @default(DRAFT)
+  serverPriceRappen           Int
+  currency                    String                    @default("CHF") @db.Char(3)
+  allowsPublic                Boolean                   @default(false)
+  allowsSelfService           Boolean                   @default(false)
+  legalApprovalReference      String?                   @db.VarChar(255)
+  taxApprovalReference        String?                   @db.VarChar(255)
+  avgApprovalReference        String?                   @db.VarChar(255)
+  privacyApprovalReference    String?                   @db.VarChar(255)
+  accountingApprovalReference String?                   @db.VarChar(255)
+  releaseDigest               String                    @unique @db.Char(64)
+  approvedByUserId            String?                   @db.Uuid
+  approvedAt                  DateTime?                 @db.Timestamptz(3)
+  activatedAt                 DateTime?                 @db.Timestamptz(3)
+  createdAt                   DateTime                  @default(now()) @db.Timestamptz(3)
+  hypothesis                  CommercialHypothesis      @relation(fields: [hypothesisId], references: [id], onDelete: Restrict)
+  productVersion              ProductVersion?           @relation(fields: [productVersionId], references: [id], onDelete: Restrict)
+  clusterDecision             CommercialClusterDecision @relation(fields: [clusterDecisionId], references: [id], onDelete: Restrict)
+  capacityModelRelease        CapacityModelRelease      @relation(fields: [capacityModelReleaseId], references: [id], onDelete: Restrict)
+  cashflowModelRelease        CashflowModelRelease      @relation(fields: [cashflowModelReleaseId], references: [id], onDelete: Restrict)
+  servicePolicyRelease        ServicePolicyRelease      @relation(fields: [servicePolicyReleaseId], references: [id], onDelete: Restrict)
+  approvedBy                  User?                     @relation("CommercialOfferApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
 
   @@index([status, offerKind, activatedAt])
   @@index([clusterDecisionId, status])

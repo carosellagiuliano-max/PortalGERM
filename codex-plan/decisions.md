@@ -59,6 +59,11 @@ Referenced by: Phase 03, 12, 13, 15, 18.
 
 ## ADR-005 — External services via adapter interfaces, mock-first
 
+**Status:** accepted as the historical mock-first baseline; superseded in part
+for explicitly approved provider implementations by ADR-031, ADR-034 and
+ADR-043. The port/composition-root boundary and fail-closed activation rule
+remain binding.
+
 **Decision:** Every actual external integration (payments, email, AI, Job-Room, storage, commute) is an interface under `lib/providers/<service>` with a working mock that records truthful local state. Real-provider files are unwired placeholders. Business logic imports only the service Composition Root/port, never a concrete adapter. P0 Analytics is an internal typed domain writer/aggregator and the HTML invoice is an internal renderer over immutable Invoice data; neither pretends to be an external provider port.
 
 **Why:** Lets real providers plug in later without touching business logic; satisfies "mock = working local behavior, not fake UI".
@@ -129,7 +134,7 @@ Referenced by: Phase 11, 12.
 
 ## ADR-012 — Stack baseline is re-pinned in the target repository
 
-**Decision:** `PortalGERM` pins **Node.js 24.18.0 LTS, npm 11.16.0, Next.js 16.2.10, React/ReactDOM 19.2.7, TypeScript 5.9.3, Tailwind CSS and `@tailwindcss/postcss` 4.3.3, PostCSS 8.5.20, ESLint 9.39.5 with `eslint-config-next` 16.2.10, Prisma CLI/Client/PG adapter 7.8.0, `pg` 8.22.0, Zod 4.4.3, Vitest 4.1.10, Vite 8.1.5 and jsdom 29.1.1**. All direct package versions are exact and npm 11.16.0 generated the committed lockfile. The installed Next 16.2.10 documentation for installation, project structure, Route Handlers, Proxy, ESLint, Vitest and response headers was read before implementing the request boundary. Source-repository versions remain comparison data only and never target evidence.
+**Decision:** `PortalGERM` pins **Node.js 24.18.0 LTS, npm 11.16.0, Next.js 16.2.11, React/ReactDOM 19.2.7, TypeScript 5.9.3, Tailwind CSS and `@tailwindcss/postcss` 4.3.3, PostCSS 8.5.20, ESLint 9.39.5 with `eslint-config-next` 16.2.11, Prisma CLI/Client/PG adapter 7.9.1, `pg` 8.22.0, Zod 4.4.3, Vitest 4.1.10, Vite 8.1.5 and jsdom 29.1.1**. All direct package versions are exact and npm 11.16.0 generated the committed lockfile. The installed Next 16.2.11 documentation for installation, project structure, Route Handlers, Proxy, ESLint, Vitest and response headers remains the request-boundary reference. Source-repository versions remain comparison data only and never target evidence.
 
 **Implications of the pinned baseline:**
 
@@ -423,9 +428,11 @@ Referenced by: Phase 19–32,
 ## ADR-031 — Identity assurance and durable notification delivery are separate layers
 
 **Status:** accepted and technically implemented for Phase 20; activation
-remains `DISABLED` beziehungsweise isolated `SANDBOX`. Supersedes ADR-014 only
-for the explicitly approved Phase-20/23 scope. The historical Mock-MVP
-decision remains true for nicht umgestellte Altpfade.
+remains `DISABLED` beziehungsweise isolated `SANDBOX`. Der additive
+Phase-33-Provider-/Retentionvertrag liegt im Arbeitsbaum vor, sein
+exact-candidate-G4-/Quality-Nachweis ist `PENDING`. Supersedes ADR-014 only for
+the explicitly approved Phase-20/23 scope. The historical Mock-MVP decision
+remains true for nicht umgestellte Altpfade.
 
 **Decision:** Registration produces a bounded low-assurance state until a
 single-use, expiring, supersedable email-verification token is consumed.
@@ -435,6 +442,26 @@ Attempts, provider idempotency, bounce/suppression and DLQ are durable. Phase
 20 liefert den bounded Command-Dispatcher samt Lease, Heartbeat, Retry und
 auditiertem Local-Sandbox-Replay; Phase 23 besitzt autonomes Scheduling,
 Production-Monitoring, Pager, Recovery und das Aktivierungsledger.
+
+Phase 33 präzisiert diesen Vertrag: `NOTIFICATION_DELIVERY_KEYS` ist ein
+eigenes AES-256-GCM-Keyring für eingefrorenes Provider-Requestmaterial und den
+zeilengebundenen expliziten AES-v2-Empfängerumschlag;
+`NOTIFICATION_RECIPIENT_HASH_KEYS` ist ein davon unabhängiges HMAC-Keyring für
+Lookup, Korrelation und Suppression. Resend-API und -Webhook binden getrennte
+Secret-Versionen. Der gewöhnliche Empfänger-/Request-Wipe erfolgt nach 23
+Stunden durch minutenbasierte providerunabhängige Maintenance, der explizite
+Empfängerumschlag gilt nie länger als 31 Tage. Korrelierbare Attempt-PII/
+Receipt-/Digest-Evidence wird nach exakt `400 × 24 h` einmalig kompaktiert;
+die nicht-PII Auditkette bleibt unveränderlich.
+
+Netzwerkfehler, 408/5xx, malformed/oversized 2xx und konkurrierende
+Idempotency-Konflikte sind unbekannte Provider-Ausgänge. Nach bounded
+Same-Key-Retry werden sie `PAUSED` und manuell reconciliert; Blind-Resend und
+blindes Dead Letter sind unzulässig. Webhook-Ingestion sperrt die exakte
+Activation im selben TX. Inbox- und Suppression-Evidence bleiben
+append-only/monoton, abgesehen von ihren ausdrücklich endlichen einmaligen
+Übergängen; jede kryptografische Referenz besitzt eine inventarisierte
+Key-Version.
 
 Authentication assurance is distinct from delivery: privileged actions use
 a short-lived, actor/purpose/tenant/action-bound StepUpGrant and never infer
@@ -918,3 +945,69 @@ Referenced by: Phase 24/25/29/30/31/32;
 `REQ-COM-031-001/002/003/004/005`, `REQ-BIL-001/002/003/004`,
 `REQ-MKT-001/002`, `REQ-INT-001/002`, `REQ-OPS-001/002`,
 `STH-018/019/022/028/034/035/037`.
+
+---
+
+## ADR-043 — Production-Contract prüft Live-Adaptercode, ist aber keine Live-Evidence
+
+**Status:** accepted als Phase-33-Architekturvertrag; die Implementierung liegt
+im Phase-33-Arbeitsbaum vor, ihr unveränderlicher Candidate-/Quality-Nachweis
+ist `PENDING`. Production-Aktivierung bleibt
+`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`.
+
+**Decision:** Phase 33 führt zwei strikt getrennte lokale Profile. `local/mock`
+verwendet ausschließlich klar gekennzeichnete, deterministische Mockadapter und
+Seedfixtures. `production-contract` startet das gebaute Next.js-Standalone-
+beziehungsweise OCI-Artefakt mit separatem Worker und Scheduler, PostgreSQL 16,
+lokalem TLS-Proxy, S3-kompatiblem Object Storage, Scanner und isolierten
+HTTP-Provider-Stubs. Es nutzt denselben Live-Adapter-, Validation-,
+Idempotency-, Failure- und Composition-Code, der später echte Provider
+anspricht, aber ausschließlich synthetische Credentials, Daten und
+Contractendpunkte ohne reale externe Nebenwirkung.
+
+Das Contractprofil läuft als eindeutig isolierter Local-/CI-Testvertrag mit
+Production-Buildsemantik. Es ist kein zusätzlicher Runtime-Modus, der in
+Preview, Staging oder Production auswählbar wäre. Testtransport und
+Contractendpunkte werden über Dependency Injection beziehungsweise eine
+test-only Composition Root bereitgestellt und von der normalen
+Staging-/Production-Environmentvalidation abgelehnt. Providerreceipts,
+Screenshots, Logs und Manifeste tragen eine nicht entfernbar gebundene
+`CONTRACT_ONLY`-Provenienz.
+
+Providerautorität und Datenlebenszyklus bleiben getrennt: Resend API und
+Webhook besitzen unabhängige Secret-Versionen, Notification-Verschlüsselung
+und Empfänger-HMAC unabhängige Keyrings. Minutenbasierte Retention läuft ohne
+Providerautorität weiter und darf weder durch einen Revoke gestoppt noch durch
+ein Secret aktiviert werden. Der Production-Contract muss die 23-h-/31-d-/
+exakt-400×24-h-Grenzen, Activation-TX-Lock, monotone Inbox/Suppression und
+Unknown-Outcome→`PAUSED`-Reconciliation prüfen, ohne daraus Live-Evidence
+abzuleiten.
+
+Production aktiviert weiterhin nur einen exakten, gesunden, gültigen
+`live`-Eintrag des persistierten Provider Activation Ledger, gebunden an
+Environment, Use Case, Adapter, Version, Konfigurationsdigest, Secret-Version,
+Evidence, Owner und Kill Switch. Ein Secret, Testreceipt oder grüner
+Contractlauf allein aktiviert nichts. Mock, Sandbox, Demo, `.invalid`, lokales
+Dateisystem und jeder Live→Mock-Fallback sind in Production unzulässig.
+Fehlende Konfiguration führt zum Boot-/Readiness-Fehler oder zu einer bewusst
+serverseitig deaktivierten und nicht beworbenen Funktion.
+
+Der technische Phase-33-Orchestrator darf deshalb
+`TECHNICALLY_READY_FOR_LC4` beziehungsweise
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION` ausgeben, wenn der gesamte
+Repository-, Runtime-, Provider-, Worker-, Browser- und Failure-Vertrag auf
+demselben Candidate grün ist. `GO_LIVE_APPROVED` benötigt zusätzlich echte
+Provider-/Stagingreceipts sowie sämtliche Legal-, Privacy-, AVG-, Tax-,
+Finance-, Operations-, Rollback-, Monitoring- und unabhängigen Approvals.
+
+**Why:** Reine Mocks prüfen weder das echte Serialisierungs-, Auth-, Timeout-,
+Retry- noch Fehlerverhalten eines Live-Adapters. Reale Provideraufrufe in einem
+lokalen Abschlusslauf wären dagegen unkontrolliert, kostenpflichtig oder
+datenschutzrelevant. Der isolierte Contractvertrag prüft den tatsächlichen
+Adaptercode reproduzierbar, ohne Testevidence als Zustellung, Zahlung oder
+Productionfreigabe misszuverstehen.
+
+Referenced by: Phase 20/21/23/24/32/33;
+`REQ-INT-002`, `REQ-OPS-005`, `REQ-REL-001`,
+`REQ-INT-033-001`, `REQ-OPS-033-001`, `REQ-QA-033-001`,
+`REQ-REL-033-001`, `STH-003/004/005/008/009/023/024`.

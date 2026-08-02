@@ -18,7 +18,12 @@ import type {
   CreatePaymentOperationInput,
   HostedPaymentProvider,
   NormalizedPaymentProviderEvent,
+  ProviderInvoicePaymentResolution,
   ProviderRefundResult,
+} from "@/lib/providers/payments";
+import {
+  resolveStripePaymentRuntime,
+  stripePaymentConfigurationDigest,
 } from "@/lib/providers/payments";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
@@ -64,6 +69,11 @@ export type Phase24StarterCheckout = Readonly<{
 
 export class Phase24HostedPaymentProvider implements HostedPaymentProvider {
   readonly kind = "STRIPE" as const;
+  readonly adapterKey = "stripe_sandbox" as const;
+  readonly adapterVersion = "v1" as const;
+  readonly providerAccountReference = "acct_phase24fixture";
+  readonly providerMode = "SANDBOX" as const;
+  readonly expectedLiveMode = false;
   readonly checkoutInputs: CreatePaymentOperationInput[] = [];
   readonly refundInputs: Array<{
     amountRappen: number;
@@ -72,10 +82,26 @@ export class Phase24HostedPaymentProvider implements HostedPaymentProvider {
     paymentAttemptId: string;
     providerPaymentReference: string;
     reasonCode: string;
+    refundId: string;
+    sourceKind: "INITIAL_ORDER" | "SUBSCRIPTION_PROVIDER_INVOICE";
+  }> = [];
+  readonly expiredCheckoutInputs: Array<{
+    idempotencyKey: string;
+    orderId: string;
+    providerSessionReference: string;
   }> = [];
   checkoutFailure = false;
+  beforeCheckoutReturn: (() => Promise<void>) | null = null;
+  beforeRefundReturn: (() => Promise<void>) | null = null;
   refundFailure = false;
   refundStatus: ProviderRefundResult["status"] = "PENDING";
+  invoicePaymentResolutionFailure = false;
+  invoicePaymentResolutionReference: string | null = null;
+  readonly invoicePaymentResolutionInputs: Array<{
+    amountRappen: number;
+    currency: "CHF";
+    providerInvoiceReference: string;
+  }> = [];
 
   async createCheckout(
     input: CreatePaymentOperationInput,
@@ -84,6 +110,7 @@ export class Phase24HostedPaymentProvider implements HostedPaymentProvider {
     if (this.checkoutFailure) {
       throw new Error("PHASE24_CHECKOUT_PROVIDER_FAILURE");
     }
+    await this.beforeCheckoutReturn?.();
     return Object.freeze({
       orderId: input.orderId,
       checkoutUrl: `https://checkout.stripe.com/c/pay/cs_test_${input.orderId.replaceAll("-", "")}`,
@@ -99,17 +126,51 @@ export class Phase24HostedPaymentProvider implements HostedPaymentProvider {
     paymentAttemptId: string;
     providerPaymentReference: string;
     reasonCode: string;
+    refundId: string;
+    sourceKind: "INITIAL_ORDER" | "SUBSCRIPTION_PROVIDER_INVOICE";
   }): Promise<ProviderRefundResult> {
     this.refundInputs.push(input);
     if (this.refundFailure) {
       throw new Error("PHASE24_REFUND_PROVIDER_FAILURE");
     }
+    await this.beforeRefundReturn?.();
     return Object.freeze({
       amountRappen: input.amountRappen,
       currency: "CHF" as const,
       providerRefundReference: `re_${input.idempotencyKey.replaceAll(/[^A-Za-z0-9]/gu, "")}`,
       status: this.refundStatus,
     });
+  }
+
+  async resolveInvoicePayment(input: {
+    amountRappen: number;
+    currency: "CHF";
+    providerInvoiceReference: string;
+  }): Promise<ProviderInvoicePaymentResolution> {
+    this.invoicePaymentResolutionInputs.push(input);
+    if (this.invoicePaymentResolutionFailure) {
+      throw new Error("PHASE24_INVOICE_PAYMENT_RESOLUTION_FAILURE");
+    }
+    const providerPaymentReference =
+      this.invoicePaymentResolutionReference ??
+      `pi_hydrated_${input.providerInvoiceReference.replaceAll(/[^A-Za-z0-9]/gu, "")}`;
+    return Object.freeze({
+      amountRappen: input.amountRappen,
+      currency: input.currency,
+      evidenceDigest: "e".repeat(64),
+      providerInvoicePaymentReference: `ip_${input.providerInvoiceReference.replaceAll(/[^A-Za-z0-9]/gu, "")}`,
+      providerInvoiceReference: input.providerInvoiceReference,
+      providerPaymentReference,
+      source: "STRIPE_INVOICE_PAYMENTS_LIST_V1" as const,
+    });
+  }
+
+  async expireCheckoutSession(input: {
+    idempotencyKey: string;
+    orderId: string;
+    providerSessionReference: string;
+  }): Promise<void> {
+    this.expiredCheckoutInputs.push(input);
   }
 
   async confirmPayment(): Promise<{ providerReference: string }> {
@@ -252,7 +313,10 @@ export async function createPhase24BillingFixture(
       adapterKey: "stripe_sandbox",
       adapterVersion: "v1",
       mode: "SANDBOX",
-      configurationDigest: "a".repeat(64),
+      configurationDigest: stripePaymentConfigurationDigest({
+        providerAccountReference: "acct_phase24fixture",
+        runtime: resolveStripePaymentRuntime("stripe_sandbox")!,
+      }),
       secretVersionRef: "secret:stripe:test:v1",
       region: "CH-test",
       dpaRef: "dpa:stripe:test",
@@ -288,6 +352,24 @@ export async function createPhase24BillingFixture(
       expiresAt: new Date(PHASE24_NOW.getTime() + 86_400_000),
     },
   });
+  await database.paymentPriceBinding.create({
+    data: {
+      planVersionId: starterPlanVersion.id,
+      providerActivationId: providerActivation.id,
+      environment: "ci",
+      adapterKey: "stripe_sandbox",
+      adapterVersion: "v1",
+      providerMode: "SANDBOX",
+      providerAccountReference: "acct_phase24fixture",
+      providerPriceReference: "price_phase33starter",
+      billingInterval: "MONTHLY",
+      amountRappen: PHASE24_STARTER_TOTAL_RAPPEN,
+      currency: "CHF",
+      evidenceDigest: "d".repeat(64),
+      effectiveAt: new Date(PHASE24_NOW.getTime() - 60_000),
+      expiresAt: new Date(PHASE24_NOW.getTime() + 86_400_000),
+    },
+  });
   const actor = Object.freeze({
     userId: owner.id,
     email: owner.email,
@@ -310,11 +392,21 @@ export async function createPhase24BillingFixture(
       paymentProvider: provider,
       emailProvider,
       realPayment: {
+        activationMode: "SANDBOX",
+        adapterKey: "stripe_sandbox",
+        adapterVersion: "v1",
         appUrl: "https://example.ch",
+        configurationDigest: stripePaymentConfigurationDigest({
+          providerAccountReference: "acct_phase24fixture",
+          runtime: resolveStripePaymentRuntime("stripe_sandbox")!,
+        }),
         environment: "ci",
+        expectedLiveMode: false,
         paidSelfServiceEnabled: true,
         providerAccountReference: "acct_phase24fixture",
+        providerMode: "SANDBOX",
         sandboxCohort: "test",
+        secretVersionRef: "secret:stripe:test:v1",
       },
       now: PHASE24_NOW,
     } satisfies BillingDependencies;
@@ -341,6 +433,18 @@ export async function createPhase24BillingFixture(
         currency: "CHF",
         description: "Starter Monatsplan",
         orderId,
+        adapterKey: "stripe_sandbox",
+        checkoutKind: "SUBSCRIPTION",
+        paymentPriceBindingId: (
+          await database.paymentPriceBinding.findFirstOrThrow({
+            where: { planVersionId: starterPlanVersion.id },
+            select: { id: true },
+          })
+        ).id,
+        planVersionId: starterPlanVersion.id,
+        providerAccountReference: "acct_phase24fixture",
+        providerMode: "SANDBOX",
+        providerPriceReference: "price_phase33starter",
       });
       const evidence = await database.authAssuranceEvidence.create({
         data: {
@@ -432,11 +536,19 @@ export function phase24ProviderEvent(
     liveMode: false,
     orderId: checkout.orderId,
     paymentAttemptId: checkout.paymentAttemptId,
+    refundId: null,
     providerAccountReference: "acct_phase24fixture",
+    providerCancelAtPeriodEnd: false,
+    providerCustomerReference: "cus_phase24fixture",
     providerEventId: `evt_${randomUUID().replaceAll("-", "")}`,
     providerObjectReference: checkout.providerSessionReference,
     providerPaymentReference: `pi_${randomUUID().replaceAll("-", "")}`,
+    providerInvoiceReference: `in_${randomUUID().replaceAll("-", "")}`,
+    providerPriceReference: "price_phase33starter",
     providerSessionReference: checkout.providerSessionReference,
+    providerSubscriptionReference: `sub_${checkout.orderId.replaceAll("-", "")}`,
+    providerPeriodStart: PHASE24_NOW,
+    providerPeriodEnd: new Date("2026-08-28T12:00:00.000Z"),
     providerStatus: "paid",
     ...input,
   });
@@ -451,10 +563,14 @@ export async function projectPhase24ProviderEvent(
   const receivedAt = new Date(event.eventCreatedAt.getTime() + 1_000);
   const ingestion = await ingestVerifiedPaymentEvent(
     {
+      adapterKey: "stripe_sandbox",
+      adapterVersion: "v1",
       correlationId,
       environment: "ci",
       event,
+      expectedLiveMode: false,
       projectionEnabled: input.projectionEnabled ?? true,
+      providerMode: "SANDBOX",
       rawBody: JSON.stringify({
         id: event.providerEventId,
         type: event.eventType,
@@ -476,6 +592,7 @@ export async function projectPhase24ProviderEvent(
           {
             database: fixture.database,
             emailProvider: fixture.dependencies().emailProvider,
+            paymentProvider: fixture.provider,
           },
         );
   return Object.freeze({ correlationId, ingestion, projection });

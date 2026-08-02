@@ -1,13 +1,14 @@
 # SwissTalentHub — Remediation-Masterplan
 
-> **Planungsstand:** 26. Juli 2026. Dieses Dokument steuert die
-> Remediation-Phasen 19 bis 32. Phase 19 ist auf
-> `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c`, Phase 20 auf
-> `59089009f54312a4c10989b7efde2d5fda9a2b8d` abgeschlossen und verifiziert;
-> Phasen 21 bis 32 bleiben offen, bis ihre eigene unveränderliche
-> Code-Evidence vorliegt. Daraus folgt weder Pilot- noch
-> Produktionsfreigabe. Die abgeschlossenen Phasen 01 bis 18 und ihre
-> historischen Nachweise werden nicht rückwirkend umgedeutet.
+> **Planungsstand:** 1. August 2026. Dieses Dokument steuert die
+> Remediation-Phasen 19 bis 33. Die datierten Records der Phasen 19–31
+> definieren ihren jeweiligen technischen, Quality- und Aktivierungsstand.
+> Phase 32 besitzt einen technischen LC1-Orchestrator, endet aber historisch
+> korrekt mit `NO_GO`; LC2–LC6 sind `NOT APPROVED`. Phase 33 ist
+> `IN_PROGRESS`, technisch/qualitativ `PENDING` und aktivierungsseitig
+> `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Daraus folgt weder Pilot- noch
+> Produktionsfreigabe. Die Phasen 01 bis 18 und alle bestehenden Evidence-
+> Records werden nicht rückwirkend umgedeutet.
 
 ## 1. Auftrag, Geltungsbereich und Status
 
@@ -91,7 +92,7 @@ Evidence aber auch nicht rückwirkend ungültig.
 
 ### 1.3 Technischer Phasenabschluss und LIVE-Aktivierung
 
-Die Reihenfolge 19–32 unterscheidet zwei Arten von Abhängigkeiten, damit
+Die Reihenfolge 19–33 unterscheidet zwei Arten von Abhängigkeiten, damit
 Provider-, Operations-, Legal- und Security-Gates keinen Zirkelschluss bilden:
 
 - **Implementierungsabhängigkeit:** Der Vorgänger besitzt Schema, Domain,
@@ -333,34 +334,36 @@ Infrastruktur, benannte Owner und bestätigte Betriebsziele.
   umgesetzt und ab 90 % beziehungsweise Capacity-/Performancefehlern zur
   Betriebs-/Releaseblockade eskaliert.
 
-## 6. Phasenübersicht 19–32
+## 6. Phasenübersicht 19–33
 
-Phasen 19 bis 21 sind durch ihre verlinkte Candidate-Evidence geschlossen.
-Phase 22 besitzt technische Candidate-Evidence, bleibt wegen externer
-Pflichtgates ungehakt; alle Kästchen 22–32 bleiben offen. Ein Planartefakt
-oder ein vorhandener Teilmechanismus schliesst keine weitere Phase. Bei
+Jede Phase 19–33 besitzt ihren datierten, getrennten Technik-/Quality-/
+Aktivierungsstand. Phase 32 bleibt wegen ihres historischen `NO_GO` ungehakt;
+Phase 33 ist die aktuelle technische Closure und ebenfalls offen. Ein
+Planartefakt oder ein vorhandener Teilmechanismus schliesst keine weitere
+Phase. Bei
 gemischt priorisierten
 Phasen erhält jeder Track eigene Evidence. Ein grüner P1-Track darf
 freigegeben werden, ohne einen nicht ausgelösten P3-Befund fälschlich zu
 schließen; dieser benötigt stattdessen einen datierten Deferred-Entscheid mit
 Headroom, Forecast, Alert und Owner.
 
-| Phase  | Titel                                                                                           | Primäre Befunde                                                                                | Hauptziel                                                                                                                                                                                                                                                                                                        |
-| ------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [x] 19 | [Remediation-Baseline und Regression](./19-remediation-baseline-regression.md)                  | alle `STH-*` als Steuerung                                                                     | Candidate `769ee62`, vollständige aktuelle Golden-Baseline, Regressionvertrag, Test-/Migrationsinventar und Gate-Backlog verifiziert                                                                                                                                                                             |
-| [x] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md)                      | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004` | technischer Verification-/E-Mail-Change-/Outbox-/Dispatcher-/Preference-Vertrag auf Candidate `5908900`; LIVE/Worker/Step-up bleiben gegatet                                                                                                                                                                     |
-| [x] 21 | [Document-/CV-Vault](./21-document-cv-vault.md)                                                 | `STH-003`; Storage-Anteil `STH-004`                                                            | Candidate `ca36bff`: echte CV-Bytes mit Quarantäne, Scan, immutable Application-Version, Single-use-Grant, Reconciliation und Audit im Local-/CI-Sandboxvertrag; LIVE/Retention/Worker/Bulk gegatet                                                                                                              |
-| [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md)                                 | `STH-006`, `STH-007`, `STH-017`                                                                | Candidate `0636a875`: technischer Local-/CI-Sandboxvertrag und automatisiertes G3 `PASS`; Counsel, alternative Identity, moderierte Forschung und jede Aktivierung `BLOCKED`, siehe [Evidence](./evidence/2026-07-26-phase-22.md)                                                                                |
-| [x] 23 | [Production Operations und Worker](./23-production-operations-workers.md)                       | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034`                        | Candidate `d16a2d9`: lokaler/CI Worker-/Ledger-/Capacity-Vertrag und lokales G3 `PASS`; reale Adapter bleiben `DISABLED`, Staging/Pager/Recovery und genehmigte SLO/RPO/RTO sind Phase-32-/G4-Gates, siehe [Evidence](./evidence/2026-07-27-phase-23.md)                                                         |
-| [x] 24 | [Reales Billing und Finance](./24-real-billing-finance.md)                                      | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031`                         | Candidate `f785944`: deaktivierter Local-/CI-Stripe-Testvertrag und lokales G3 `PASS` für Hosted Checkout, Webhook-Inbox, Reconciliation, Refund/Chargeback/Dunning und Service-Recovery; WTP/Tax/Legal/Finance/Phase-25/Staging/LIVE bleiben externe Gates, siehe [Evidence](./evidence/2026-07-27-phase-24.md) |
-| [x] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031`                                                     | Candidate `eb8cbcd`: 25A Admin-Least-Privilege/SoD/Break-glass, 25B Non-Admin-Step-up und 25C Fraud-/Scam-/ATO-Abwehr im deaktivierten Local-/CI-Vertrag mit lokalem G3 `PASS`; externe Security-/Trust-/Staging-/LIVE-Gates bleiben blockiert, siehe [Evidence](./evidence/2026-07-28-phase-25.md)              |
-| [ ] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md)                            | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034`                                | beweisgestützter, vier-Augen-fähiger Trust-Lifecycle mit Ablauf, Re-Review und schneller Sperrung                                                                                                                                                                                                                |
-| [x] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md)                                        | `STH-012`                                                                                      | Candidate `291b953`: owner-aktivierter, default-off Local-/CI-Vertrag und lokales G3 `PASS` für additive Personas, expliziten Session-/Company-Kontext, Invitation, Privacy und Admintrennung; Demand-/Staging-/Launch-Go offen, siehe [Evidence](./evidence/2026-07-28-phase-27.md)                             |
-| [x] 28 | [Recruiting-Workflows](./28-recruiting-workflows.md)                                            | `STH-015`, `STH-016`                                                                           | owner-aktivierte, getrennte default-off Local-/CI-Technikverträge für candidate-owned externen Tracker und persistente Interviewplanung; Demand-/Privacy-/Ops-/Support-/Provider-/Staging-/LIVE-Gates bleiben offen, siehe [Evidence](./evidence/2026-07-29-phase-28.md)                                         |
-| [ ] 29 | [Research, UX, Mobile und Accessibility](./29-ux-mobile-accessibility.md)                       | `STH-023`, `STH-025`, `STH-033`; UX-Regression `STH-026`                                       | technische Responsive-/JobPass-/3-Engine-/A11y-Automationsbasis lokal `PASS`; zwei reale Research-Runden, NVDA/VoiceOver und finaler Release-Scope-Re-Test offen, siehe [Evidence](./evidence/2026-07-29-phase-29.md)                                                                                            |
-| [ ] 30 | [Startcluster-Suche, Freshness und Scale Operations](./30-search-scale-operations.md)           | 30A: `STH-019`, `STH-036`; 30B: `STH-020/021`; 30C: `STH-027`; 30D: `STH-032`                  | technische Concept-/Learning-/Cluster-V2- und Freshness-/Consumerbasis lokal `PASS`; Recommendation-Trigger mitigiert, Admin-Scale und Sitemap-Shards unter Trigger deferred; Pflegefachreview, Zielalerts, Moderationskapazität, Staging/LIVE offen, siehe [Evidence](./evidence/2026-07-29-phase-30.md)        |
-| [ ] 31 | [Monetarisierung und Marktvalidierung](./31-monetization-market-validation.md)                  | `STH-018`, `STH-022`, `STH-028`, `STH-034`, `STH-035`, `STH-037`                               | technische fail-closed Commercial-/Cluster-/Offer-/Capacity-/Cashflow-/Recovery-/Importbasis lokal `PASS`; reale 31A-WTP/Delivery, Fachreviews, Cluster-/Legal-/Tax-/AVG-/Finance-/Ops-Entscheide, Zielumgebung und Aktivierung offen, siehe [Evidence](./evidence/2026-07-30-phase-31.md)                            |
-| [ ] 32 | [Finaler Production-Release-Audit](./32-production-release-audit.md)                            | `STH-024` und Abschluss aller `STH-001`–`STH-037`                                              | zielklassenspezifische Freigabe eines exakten Commits/Artefakts mit vollständiger automatischer, manueller und externer Evidence                                                                                                                                                                                 |
+| Phase  | Titel                                                                                           | Primäre Befunde                                                                                                  | Hauptziel                                                                                                                                                                                                                                                                                                                                  |
+| ------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [x] 19 | [Remediation-Baseline und Regression](./19-remediation-baseline-regression.md)                  | alle `STH-*` als Steuerung                                                                                       | Candidate `769ee62`, vollständige aktuelle Golden-Baseline, Regressionvertrag, Test-/Migrationsinventar und Gate-Backlog verifiziert                                                                                                                                                                                                       |
+| [x] 20 | [Identity, E-Mail und Notifications](./20-identity-email-notifications.md)                      | `STH-001`, `STH-002`, `STH-013`, `STH-026`, Identity-Anteil `STH-031`; E-Mail-Anteil `STH-004`                   | technischer Verification-/E-Mail-Change-/Outbox-/Dispatcher-/Preference-Vertrag auf Candidate `5908900`; LIVE/Worker/Step-up bleiben gegatet                                                                                                                                                                                               |
+| [x] 21 | [Document-/CV-Vault](./21-document-cv-vault.md)                                                 | `STH-003`; Storage-Anteil `STH-004`                                                                              | Candidate `ca36bff`: echte CV-Bytes mit Quarantäne, Scan, immutable Application-Version, Single-use-Grant, Reconciliation und Audit im Local-/CI-Sandboxvertrag; LIVE/Retention/Worker/Bulk gegatet                                                                                                                                        |
+| [ ] 22 | [Privacy, Legal und Analytics](./22-privacy-legal-analytics.md)                                 | `STH-006`, `STH-007`, `STH-017`                                                                                  | Candidate `0636a875`: technischer Local-/CI-Sandboxvertrag und automatisiertes G3 `PASS`; Counsel, alternative Identity, moderierte Forschung und jede Aktivierung `BLOCKED`, siehe [Evidence](./evidence/2026-07-26-phase-22.md)                                                                                                          |
+| [x] 23 | [Production Operations und Worker](./23-production-operations-workers.md)                       | verbleibende Provideranteile `STH-004`, `STH-008`, `STH-009`, `STH-034`                                          | Candidate `d16a2d9`: lokaler/CI Worker-/Ledger-/Capacity-Vertrag und lokales G3 `PASS`; reale Adapter bleiben `DISABLED`, Staging/Pager/Recovery und genehmigte SLO/RPO/RTO sind Phase-32-/33-/G4-Gates, siehe [Evidence](./evidence/2026-07-27-phase-23.md)                                                                               |
+| [x] 24 | [Reales Billing und Finance](./24-real-billing-finance.md)                                      | `STH-005`, `STH-035`; Payment-Anteil `STH-004`, Fraud-Anteil `STH-031`                                           | Candidate `f785944`: deaktivierter Local-/CI-Stripe-Testvertrag und lokales G3 `PASS` für Hosted Checkout, Webhook-Inbox, Reconciliation, Refund/Chargeback/Dunning und Service-Recovery; WTP/Tax/Legal/Finance/Phase-25/Staging/LIVE bleiben externe Gates, siehe [Evidence](./evidence/2026-07-27-phase-24.md)                           |
+| [x] 25 | [Privileged Action Assurance, Admin Least Privilege und Trust & Safety](./25-admin-security.md) | `STH-010`, `STH-011`, `STH-030`, `STH-031`                                                                       | Candidate `eb8cbcd`: 25A Admin-Least-Privilege/SoD/Break-glass, 25B Non-Admin-Step-up und 25C Fraud-/Scam-/ATO-Abwehr im deaktivierten Local-/CI-Vertrag mit lokalem G3 `PASS`; externe Security-/Trust-/Staging-/LIVE-Gates bleiben blockiert, siehe [Evidence](./evidence/2026-07-28-phase-25.md)                                        |
+| [x] 26 | [Company Trust und Verifikation](./26-company-trust-verification.md)                            | `STH-014`, Company-Anteil `STH-031`, Kapazitätsanteil `STH-034`                                                  | Candidate `96933aa`: strukturierte Register-/Domain-/Vault-Evidence, unabhängige Decision, Expiry/Re-review/Appeal und gemeinsame Badge-/Job-/Radar-Revocation im Local-/CI-Vertrag `PASS`; reale Provider, Legal/DPA/Region, Capacity, Staging/Pager und Public-Go bleiben blockiert, siehe [Evidence](./evidence/2026-07-28-phase-26.md) |
+| [x] 27 | [Multi-Persona Identity](./27-multi-persona-identity.md)                                        | `STH-012`                                                                                                        | Candidate `291b953`: owner-aktivierter, default-off Local-/CI-Vertrag und lokales G3 `PASS` für additive Personas, expliziten Session-/Company-Kontext, Invitation, Privacy und Admintrennung; Demand-/Staging-/Launch-Go offen, siehe [Evidence](./evidence/2026-07-28-phase-27.md)                                                       |
+| [x] 28 | [Recruiting-Workflows](./28-recruiting-workflows.md)                                            | `STH-015`, `STH-016`                                                                                             | owner-aktivierte, getrennte default-off Local-/CI-Technikverträge für candidate-owned externen Tracker und persistente Interviewplanung; Demand-/Privacy-/Ops-/Support-/Provider-/Staging-/LIVE-Gates bleiben offen, siehe [Evidence](./evidence/2026-07-29-phase-28.md)                                                                   |
+| [ ] 29 | [Research, UX, Mobile und Accessibility](./29-ux-mobile-accessibility.md)                       | `STH-023`, `STH-025`, `STH-033`; UX-Regression `STH-026`                                                         | technische Responsive-/JobPass-/3-Engine-/A11y-Automationsbasis lokal `PASS`; zwei reale Research-Runden, NVDA/VoiceOver und finaler Release-Scope-Re-Test offen, siehe [Evidence](./evidence/2026-07-29-phase-29.md)                                                                                                                      |
+| [ ] 30 | [Startcluster-Suche, Freshness und Scale Operations](./30-search-scale-operations.md)           | 30A: `STH-019`, `STH-036`; 30B: `STH-020/021`; 30C: `STH-027`; 30D: `STH-032`                                    | technische Concept-/Learning-/Cluster-V2- und Freshness-/Consumerbasis lokal `PASS`; Recommendation-Trigger mitigiert, Admin-Scale und Sitemap-Shards unter Trigger deferred; Pflegefachreview, Zielalerts, Moderationskapazität, Staging/LIVE offen, siehe [Evidence](./evidence/2026-07-29-phase-30.md)                                  |
+| [ ] 31 | [Monetarisierung und Marktvalidierung](./31-monetization-market-validation.md)                  | `STH-018`, `STH-022`, `STH-028`, `STH-034`, `STH-035`, `STH-037`                                                 | technische fail-closed Commercial-/Cluster-/Offer-/Capacity-/Cashflow-/Recovery-/Importbasis lokal `PASS`; reale 31A-WTP/Delivery, Fachreviews, Cluster-/Legal-/Tax-/AVG-/Finance-/Ops-Entscheide, Zielumgebung und Aktivierung offen, siehe [Evidence](./evidence/2026-07-30-phase-31.md)                                                 |
+| [ ] 32 | [Finaler Production-Release-Audit](./32-production-release-audit.md)                            | `STH-024` und Abschluss aller `STH-001`–`STH-037`                                                                | technischer LC1-Orchestrator vorhanden; [Evidence](./evidence/2026-07-30-phase-32.md) endet korrekt `LC1 / NO_GO`, LC2–LC6 `NOT APPROVED`; kein rückwirkender Pass                                                                                                                                                                         |
+| [ ] 33 | [Technische Go-live-Härtung und E2E-Abnahme](./33-go-live-readiness-e2e-acceptance.md)          | technische LC4-/LC5-Closure für `STH-003/004/005/006/008/009/013/023/024` und Regression aller Zielklassen-P0/P1 | `IN_PROGRESS`: Live-Adaptercode, Production-Contract-Runtime, vollständige Rollen-/Failure-/Browsermatrix und neuer technischer Candidate; Aktivierung bleibt [extern blockiert](./phase33-findings-ledger.md)                                                                                                                             |
 
 ## 7. Ausführungsplan je Phase
 
@@ -538,7 +541,7 @@ commitgebunden verifiziert. Runtime und Provider bleiben standardmässig
 `DISABLED`. Der lokale Technikvertrag ist geschlossen. Auf Product-Owner-
 Vorgabe wird Staging erst am Ende eingerichtet; reale Staging-/Provider-/
 Pager-/Restore-Evidence und genehmigte SLO/RPO/RTO bleiben zwingende
-Phase-32-/G4-Aktivierungsgates; siehe
+Phase-32-/33-/G4-Aktivierungsgates; siehe
 [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md).
 
 **Zweck:** Die verbleibenden realen Provideradapter werden über die
@@ -989,6 +992,69 @@ Produktionsversion geprobt; Migrationen, Provider-Side-Effects und
 Privacy-Löschung werden als Roll-forward-/Reconciliation-Fälle separat
 behandelt.
 
+**Historischer Stand 30. Juli 2026:** Der technische LC1-Orchestrator, das
+37-ID-Ledger und die fail-closed Releasepolicies sind implementiert. Die
+[Phase-32-Evidence](./evidence/2026-07-30-phase-32.md) endet mangels manuellem
+Walkthrough, echtem Rollback-/Roll-forward-Drill und unabhängigen Approvals
+korrekt mit `NO_GO`; LC2–LC6 sind `NOT APPROVED`. Phase 33 verändert diesen
+Record nicht.
+
+### [ ] 33 — Technische Go-live-Härtung, Mock-/Live-Parität und End-to-End-Abnahme
+
+**Zweck:** Der aktuelle Repositorybaum wird vollständig gegen Plan, Schema,
+Migrationen, Routen/Actions, Provider/Flags, Worker, Tests und Release-Gates
+auditiert. Alle bestätigten repository-internen LC4-/LC5-Techniklücken werden
+minimal geschlossen. Ein isolierter `production-contract`-Stack prüft den
+echten Live-Adaptercode ohne reale externe Nebenwirkungen; vollständige
+rollen-, tenant-, provider-, failure-, browser- und artefaktgebundene Evidence
+erzeugt einen neuen technischen Candidate.
+
+**Befunde und Requirements:** Keine neue `STH-*`-ID. Phase 33 bündelt
+insbesondere `STH-003/004/005/006/008/009/013/023/024` sowie
+`REQ-INT-033-001`, `REQ-OPS-033-001`, `REQ-QA-033-001` und
+`REQ-REL-033-001`. Das laufende, statusgebundene Ledger steht in
+[phase33-findings-ledger.md](./phase33-findings-ledger.md).
+
+**Tracks:** 33A Audit/Governance; 33B Mock-/Sandbox-/Live-Parität; 33C
+Production-Contract-Docker/Runtime/Worker; 33D Rollen-/Journey-/Failure-/
+Browser-/A11y-Matrix; 33E Remediation Loop, Freeze, Digests und technisches/
+externes Releaseurteil. Der vollständige 28-Punkte-/17-AC-Vertrag steht in
+[33-go-live-readiness-e2e-acceptance.md](./33-go-live-readiness-e2e-acceptance.md).
+
+Der Notification-Closure-Vertrag trennt Delivery-AES und Recipient-HMAC samt
+Key-Version-Inventar sowie Resend-API-/Webhook-Secret-Versionen. Er prüft den
+normalen 23-h-Wipe, AES-v2 maximal 31 Tage, exakt `400 × 24 h` bis zur
+irreversiblen Attempt-PII/Receipt/Digest-Kompaktion bei erhaltener nicht-PII
+Auditkette, providerunabhängige Minuten-Maintenance, Activation-TX-Lock,
+append-only/monotone Inbox/Suppression und bounded Unknown-Outcome→`PAUSED`-
+Reconciliation ohne Blind-Resend/Dead Letter.
+
+**Abhängigkeiten:** aktueller sauberer Main-Baselinecommit, unveränderte
+historische Migration-SHAs und Phase-01–18-Invarianten; technische Verträge
+20/21/23/24/25/26/29/30/31; Phase-32-`NO_GO` als Input. LC5 erbt LC4 und
+benötigt zusätzlich den technischen Payment-/Financepfad. Optionale Features
+bleiben unabhängig default-off.
+
+**Pflicht-Gates:** Fresh-/Upgrade-/Legacy-/Restart-/Concurrency-Migration;
+Environment-/Provider-Mode-/Ledger-Matrix; gepinnte isolierte Composeprofile;
+App/OCI, Worker, Scheduler, TLS, PostgreSQL 16, S3, Scanner und Provider-Stubs;
+vollständige Unit/PostgreSQL/HTTP/HSTS/E2E/3-Browser/360/320/Axe/Worker-
+Failure-/Recovery-Suite; Candidate-/Config-/Provider-/Migration-/Artefakt-
+Digests; Fail/unerklärte Skip/Retry/Leak jeweils null.
+
+Für `REQ-NOT-001` gehören die existierenden Delivery-Material-, Provider-
+Request-, Recipient-Envelope-, Attempt-Retention-, Resend-Inbox- und Outbox-
+Tests zum Pflichtlauf. Ihre Existenz oder ein gezielter Arbeitsbaumlauf ersetzt
+den finalen exact-candidate-G4 nicht.
+
+**Aktueller Status:** Plan `IN_PROGRESS`; Technik `PENDING`; Quality-Gate
+`PENDING`; Aktivierung `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Ein späterer technischer
+Pass darf nur `TECHNICALLY_READY_FOR_LC4` beziehungsweise
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION` ausgeben. `GO_LIVE_APPROVED` bleibt
+ohne reale Provider-, Legal-, Privacy-, AVG-, Tax-, Finance-, Operations-,
+Staging-, Rollback-, Monitoring-, Markt- und unabhängige Approval-Evidence
+unzulässig.
+
 ## 8. Abhängigkeiten, Parallelisierung und Konfliktgrenzen
 
 ### 8.1 Kritischer Pfad
@@ -1013,7 +1079,8 @@ behandelt.
   -> 29B finale UX/Mobile/A11y/Cross-Browser-Abnahme
   -> 31B Angebot aktivieren (Base/Hiring Sprint/Retainer/Concierge/Import
      vor Boost; Radar nur bei Talentdichte)
-  -> 32 zielklassenspezifischer G4-Release-Audit
+  -> 32 historischer zielklassenspezifischer G4-Audit: LC1 NO_GO
+  -> 33 bestätigte technische LC4-/LC5-Closure + neuer Candidate
 
 Optionale Seitenpfade, nicht Standard-Critical-Path:
   27 Technik owner-aktiviert/default-off; Marktaktivierung nur nach
@@ -1055,6 +1122,10 @@ technische Phase aber nicht.
   STH-027-Trigger integriert.
 - Phase-32-Runbook- und Evidence-Templates können vorbereitet werden, aber
   keine Ergebnisse oder Häkchen vorwegnehmen.
+- Phase-33-Audit, Migration-SHA-Inventar und Contract-Testentwurf dürfen
+  parallel lesen/planen. Adaptercomposition, Docker-Runtime und
+  Releaseorchestrator werden erst nach gemeinsamer Gapklassifikation
+  integriert; ein Track-Pass nimmt weder den Gesamtpass noch Aktivierung vorweg.
 
 ### 8.3 Nicht gleichzeitig integrieren
 
@@ -1082,6 +1153,10 @@ technische Phase aber nicht.
   dokumentiertem Trigger.
 - Während Phase 32 gilt Feature Freeze. Jeder notwendige Fix erzeugt einen
   neuen Releasecommit und einen risikobasiert vollständigen Neulauf.
+- Während Phase 33 sind nur bestätigte technische LC4-/LC5-Closure-Fixes
+  zulässig. Ein Fix nach Candidate-Freeze erzeugt einen neuen Candidate und
+  startet das vollständige Phase-33-Gate erneut. Optionaler Produktumfang,
+  reale Provideraktivierung und Broad Refactors bleiben ausgeschlossen.
 
 ## 9. Globaler Risiko- und Regressionsplan
 
@@ -1196,24 +1271,33 @@ müssen auf exakt demselben Releasecommit beziehungsweise nachweislich
 identischen Artefakt laufen. Ein danach notwendiger Codefix macht die
 betroffenen Ergebnisse erneut offen.
 
+Phase 33 ergänzt eine technische Konfigurationsgrenze: historische
+Migration-SHAs, Mock-/Production-Contract-Profile, Provider-/Worker-/Feature-
+Inventare, Rollen-/Journey-/Failurematrix und Config-/Standalone-/OCI-Digests
+müssen auf demselben neuen Candidate grün sein. Dieser Pass bleibt von realem
+Staging und sämtlichen External-/Approval-Gates getrennt.
+
 ## 12. Git- und Evidence-Ausführung
 
 ### 12.1 Branch- und Commitdisziplin
 
 1. Phase 19 startete erst nach bestätigter, sauber isolierter Baseline; ihr
    Abschlusscommit und Record bleiben die Basis aller Folgephasen.
-2. Jede Phase nutzt einen eigenen `codex/phase-XX-*`-Branch und enthält nur
-   ihren freigegebenen Scope.
+2. Die Phase arbeitet auf dem vom Owner freigegebenen Zielbranch; aktuell ist
+   dies `main`. Ein separater `codex/phase-XX-*`-Branch oder Pull Request wird
+   nur auf ausdrücklichen Wunsch angelegt. Der Commit enthält ausschließlich
+   den freigegebenen Scope.
 3. Vorhandene Nutzeränderungen werden weder gestaget noch überschrieben.
 4. Commit-Identität bleibt, wenn der Nutzer den Commit autorisiert,
    `Giuliano Carosella <carosellagiuliano@gmail.com>`.
 5. Commit erst nach bestandener phasenbezogener Verification und
    aktualisierter Evidence; ein Zwischencommit darf nicht als Phaseabschluss
    bezeichnet werden.
-6. Kein Push, Merge oder Pull Request erfolgt allein aufgrund dieses Plans.
-   Es gilt die jeweils ausdrückliche Nutzerfreigabe; ohne neue Freigabe
-   bleibt die Arbeit lokal. Ein Pull Request wird nur auf expliziten Wunsch
-   erstellt.
+6. Für einen ausdrücklich angeordneten Phase-Implementierungsabschluss gilt
+   die Standing Rule aus `AGENTS.md`: nach grünem Gate ein intentionaler
+   Phase-Commit und ausschließlich Fast-Forward direkt zu `origin/main`, kein
+   Pull Request und kein Force-Push. Read-only-/Planungsaufträge autorisieren
+   keinen Commit oder Push.
 7. Nach einem autorisierten Push werden lokaler SHA, Remote-SHA und Zielbranch
    verglichen. Eine erfolgreiche Übertragung ersetzt keine CI- oder
    Release-Evidence.
@@ -1245,7 +1329,7 @@ Evidence-Dateinamen.
 
 ## 13. Abschlussregel
 
-Die Reihenfolge 19–32 ist die verbindliche technische Integrationsreihenfolge,
+Die Reihenfolge 19–33 ist die verbindliche technische Integrationsreihenfolge,
 nicht die Reihenfolge externer Recherche. Ein Befund wird erst geschlossen,
 wenn die Zeile in [`remediation-traceability.md`](./remediation-traceability.md)
 auf eine tatsächlich bestandene Phase-Evidence zeigt. Bis dahin bleibt die
@@ -1255,4 +1339,5 @@ korrekte Produktaussage:
 > serverseitigen Schutzmechanismen und klaren Mock-Grenzen. Reale Provider,
 > autonome Operations, Rechts-/Privacy-/Tax-Freigaben, bezahlte
 > Marktvalidierung und ein exakt identisch verifizierter Produktionskandidat
-> sind durch die offenen Phasen 19–32 gegatet.
+> sind durch den historischen Phase-32-`NO_GO`, die laufende technische Phase
+> 33 und weiterhin offene externe Aktivierungsgates gesperrt.

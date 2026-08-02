@@ -363,8 +363,8 @@ describe.sequential("Phase 12 checkout authorization and transaction security", 
       }),
     ).resolves.toBe(0);
     await expect(
-      client().emailLog.count({
-        where: { recipient: data().radarLoss.actor.email },
+      client().notificationOutbox.count({
+        where: { recipientUserId: data().radarLoss.actor.userId },
       }),
     ).resolves.toBe(0);
     await expect(
@@ -466,15 +466,15 @@ describe.sequential("Phase 12 checkout authorization and transaction security", 
       }),
     ).resolves.toBe(1);
 
-    const emailLogs = await client().emailLog.findMany({
-      where: { recipient: actor.email },
+    const emailLogs = await client().notificationOutbox.findMany({
+      where: { recipientUserId: actor.userId },
       orderBy: { templateKey: "asc" },
-      select: { templateKey: true },
+      select: { status: true, templateKey: true },
     });
     expect(emailLogs).toEqual([
-      { templateKey: "invoice_issued" },
-      { templateKey: "payment_received" },
-      { templateKey: "subscription_activated" },
+      { status: "PENDING", templateKey: "invoice_issued" },
+      { status: "PENDING", templateKey: "payment_received" },
+      { status: "PENDING", templateKey: "subscription_activated" },
     ]);
     const notifications = await client().notification.findMany({
       where: { recipientUserId: actor.userId },

@@ -1,13 +1,13 @@
-import {
-  existsSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
+import {
+  ROUTE_HANDLER_ROLES,
+  rolesForRouteHandler,
+} from "@/scripts/route-handler-policy";
+
 type RouteRecord = Readonly<{
-  kind: "page" | "handler";
+  kind: "page" | "handler" | "metadata";
   path: string;
   roles: readonly string[];
 }>;
@@ -28,7 +28,36 @@ const observed = Object.freeze(
     ),
 );
 
+const observedHandlerPaths = observed
+  .filter((route) => route.kind === "handler")
+  .map((route) => route.path);
+const missingHandlerPolicies = observedHandlerPaths.filter(
+  (path) => rolesForRouteHandler(path) === null,
+);
+const staleHandlerPolicies = Object.keys(ROUTE_HANDLER_ROLES).filter(
+  (path) => !observedHandlerPaths.includes(path),
+);
+const handlerPolicyFailures = [
+  ...(missingHandlerPolicies.length === 0
+    ? []
+    : [
+        `Handler routes without an explicit policy: ${missingHandlerPolicies.join(", ")}.`,
+      ]),
+  ...(staleHandlerPolicies.length === 0
+    ? []
+    : [
+        `Handler policies without an implemented route: ${staleHandlerPolicies.join(", ")}.`,
+      ]),
+];
+
 if (print || write) {
+  if (handlerPolicyFailures.length > 0) {
+    console.error(
+      `Route handler policy audit failed:\n${handlerPolicyFailures.join("\n")}`,
+    );
+    process.exitCode = 1;
+    process.exit();
+  }
   if (write) {
     writeFileSync(inventoryPath, `${JSON.stringify(observed, null, 2)}\n`, {
       encoding: "utf8",
@@ -43,7 +72,7 @@ if (print || write) {
   process.exit(0);
 }
 
-const failures: string[] = [];
+const failures: string[] = [...handlerPolicyFailures];
 if (!existsSync(inventoryPath)) {
   failures.push("codex-plan/route-inventory.json is missing.");
 } else {
@@ -78,9 +107,10 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   const pages = observed.filter((route) => route.kind === "page").length;
-  const handlers = observed.length - pages;
+  const handlers = observed.filter((route) => route.kind === "handler").length;
+  const metadata = observed.length - pages - handlers;
   console.info(
-    `Route inventory audit passed: ${pages} pages, ${handlers} handlers; Candidate/Employer/Admin layouts present and broad private loading boundaries absent.`,
+    `Route inventory audit passed: ${pages} pages, ${handlers} handlers, ${metadata} metadata endpoints; Candidate/Employer/Admin layouts present and broad private loading boundaries absent.`,
   );
 }
 
@@ -89,46 +119,44 @@ function collectRouteFiles(directory: string): string[] {
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) return collectRouteFiles(path);
     return entry.isFile() &&
-      (entry.name === "page.tsx" || entry.name === "route.ts")
+      ["page.tsx", "route.ts", "robots.ts", "sitemap.ts"].includes(entry.name)
       ? [path]
       : [];
   });
 }
 
 function toRouteRecord(file: string): RouteRecord {
+  const fileName = file.replaceAll("\\", "/").split("/").at(-1);
   const segments = relative(appDirectory, file)
     .replaceAll("\\", "/")
     .split("/")
     .slice(0, -1)
     .filter((segment) => !/^\(.+\)$/u.test(segment));
-  const path = `/${segments.join("/")}`.replace(/\/$/u, "") || "/";
+  const routePath = `/${segments.join("/")}`.replace(/\/$/u, "") || "/";
+  const kind =
+    fileName === "page.tsx"
+      ? "page"
+      : fileName === "route.ts"
+        ? "handler"
+        : "metadata";
+  const path =
+    fileName === "robots.ts"
+      ? `${routePath === "/" ? "" : routePath}/robots.txt`
+      : fileName === "sitemap.ts"
+        ? `${routePath === "/" ? "" : routePath}/sitemap.xml`
+        : routePath;
   return Object.freeze({
-    kind: file.endsWith("page.tsx") ? "page" : "handler",
+    kind,
     path,
-    roles: rolesFor(path),
+    roles:
+      kind === "handler"
+        ? (rolesForRouteHandler(path) ?? ["UNREVIEWED_HANDLER"])
+        : rolesForPage(path),
   });
 }
 
-function rolesFor(path: string): readonly string[] {
+function rolesForPage(path: string): readonly string[] {
   if (path === "/forbidden") return ["PUBLIC"];
-  if (
-    path === "/api/documents/read" ||
-    isAtOrBelow(path, "/api/documents/read-grants")
-  ) {
-    return ["AUTHENTICATED"];
-  }
-  if (path.endsWith("/read-grants")) {
-    return ["CANDIDATE", "EMPLOYER", "RECRUITER"];
-  }
-  if (
-    path === "/api/documents/status" ||
-    isAtOrBelow(path, "/api/documents/upload-intents") ||
-    isAtOrBelow(path, "/api/privacy/exports") ||
-    path.endsWith("/delete-request") ||
-    path.endsWith("/scan")
-  ) {
-    return ["CANDIDATE"];
-  }
   if (isAtOrBelow(path, "/candidate")) return ["CANDIDATE"];
   if (isAtOrBelow(path, "/employer")) return ["EMPLOYER", "RECRUITER"];
   if (isAtOrBelow(path, "/admin")) return ["ADMIN"];
@@ -139,8 +167,6 @@ function rolesFor(path: string): readonly string[] {
   if (path === "/logout" || path.startsWith("/session/")) {
     return ["AUTHENTICATED"];
   }
-  if (path === "/dev/mailbox") return ["LOCAL_OPS_TOKEN"];
-  if (path.startsWith("/health/")) return ["PUBLIC_OPERATIONS"];
   return ["PUBLIC"];
 }
 

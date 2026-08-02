@@ -8,6 +8,7 @@ import {
 } from "@/lib/audit/log";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import {
   PrivacyRequestEventKind,
   PrivacyRequestStatus,
@@ -776,6 +777,7 @@ async function applyAdminDecision(
         PrivacyRequestStatus.IDENTITY_CHECK,
         "IDENTITY_CHECK_REQUIRED",
         command.idempotencyKey,
+        now,
       );
       break;
     }
@@ -798,7 +800,12 @@ async function applyAdminDecision(
       });
       if (consumed.count !== 1) return failure("CHALLENGE_UNAVAILABLE");
       const updated = await updateCaseVersion(transaction, loaded, {
-        ...assignment,
+        // Identity verification and privacy execution are deliberately
+        // separated duties. The verifier releases the case back to the
+        // processing queue; the first authorized processor claims it while
+        // creating the persisted execution approval.
+          assignedAdminUserId: null,
+          assignmentReasonCode: null,
         status: PrivacyRequestStatus.IN_PROGRESS,
         verifiedAt: now,
         processingStartedAt: now,
@@ -836,6 +843,7 @@ async function applyAdminDecision(
         PrivacyRequestStatus.IN_PROGRESS,
         "PROCESSING_STARTED",
         command.idempotencyKey,
+        now,
       );
       break;
     }
@@ -917,6 +925,7 @@ async function applyAdminDecision(
         PrivacyRequestStatus.REJECTED,
         command.reasonCode,
         command.idempotencyKey,
+        now,
       );
       break;
     }
@@ -1048,6 +1057,7 @@ async function createCompletionEvidence(
     PrivacyRequestStatus.COMPLETED,
     "COMPLETED",
     idempotencyKey,
+    now,
   );
 }
 
@@ -1237,7 +1247,7 @@ function toDecisionActor(
 async function updateCaseVersion(
   transaction: TransactionClient,
   loaded: NonNullable<LoadedCase>,
-  data: Prisma.PrivacyRequestUpdateManyMutationInput,
+  data: Prisma.PrivacyRequestUncheckedUpdateManyInput,
 ) {
   const updated = await transaction.privacyRequest.updateMany({
     where: {
@@ -1291,6 +1301,7 @@ async function notifyRequester(
     | "COMPLETED"
     | PrivacyRequestRejectionCode,
   idempotencyKey: string,
+  now: Date,
 ) {
   await writeNotificationExactlyOnce(createPrismaNotificationPort(transaction), {
     recipientUserId: loaded.requesterUserId,
@@ -1302,6 +1313,24 @@ async function notifyRequester(
       status,
       reasonCode,
     },
+  });
+  await enqueueNotification(transaction, {
+    recipient: { userId: loaded.requesterUserId },
+    templateKey: "privacy_request_changed",
+    payloadSchemaVersion: "privacy-request-v1",
+    payload: {
+      requestId: loaded.id,
+      statusLabel:
+        status === PrivacyRequestStatus.IDENTITY_CHECK
+          ? "Identitätsprüfung erforderlich"
+          : status === PrivacyRequestStatus.IN_PROGRESS
+            ? "In Bearbeitung"
+            : status === PrivacyRequestStatus.COMPLETED
+              ? "Abgeschlossen"
+              : "Abgelehnt",
+    },
+    dedupeKey: `privacy-case:${idempotencyKey}:email`,
+    availableAt: now,
   });
 }
 

@@ -6,6 +6,7 @@ import {
   EMAIL_TEMPLATE_KEYS,
   type EmailTemplateKey,
 } from "@/lib/providers/email/email-provider";
+import type { EmailProviderActivationUseCase } from "@/lib/providers/email/provider-activation-binding";
 
 export type NotificationPurposePolicy = Readonly<{
   purpose: NotificationPurpose;
@@ -19,9 +20,7 @@ export type NotificationPurposePolicy = Readonly<{
  */
 export const EMAIL_NOTIFICATION_POLICY = Object.freeze({
   identity_verification: mandatory("IDENTITY_VERIFICATION"),
-  login_email_change_verification: mandatory(
-    "LOGIN_EMAIL_CHANGE_VERIFICATION",
-  ),
+  login_email_change_verification: mandatory("LOGIN_EMAIL_CHANGE_VERIFICATION"),
   login_email_changed_notice: mandatory("LOGIN_EMAIL_CHANGED_NOTICE"),
   registration_welcome: mandatory("IDENTITY_VERIFICATION"),
   password_reset_mock: mandatory("PASSWORD_RESET"),
@@ -33,6 +32,7 @@ export const EMAIL_NOTIFICATION_POLICY = Object.freeze({
   talent_contact_request_received: mandatory("TALENT_CONTACT_REQUEST"),
   identity_revealed: mandatory("IDENTITY_REVEAL"),
   job_alert_preview: optional("JOB_ALERT"),
+  job_alert_digest: optional("JOB_ALERT"),
   job_alert_digest_mock: optional("JOB_ALERT"),
   subscription_activated: mandatory("SUBSCRIPTION_TRANSACTIONAL"),
   subscription_renewal_reminder: mandatory("SUBSCRIPTION_TRANSACTIONAL"),
@@ -52,26 +52,38 @@ export const EMAIL_NOTIFICATION_POLICY = Object.freeze({
   credits_granted: mandatory("USAGE_OPERATIONAL"),
   commercial_lifecycle_signal: optional("COMMERCIAL_OPTIONAL"),
   privacy_request_changed: mandatory("PRIVACY_REQUEST"),
-  external_application_reminder: optional(
-    "EXTERNAL_APPLICATION_REMINDER",
-  ),
+  external_application_reminder: optional("EXTERNAL_APPLICATION_REMINDER"),
   interview_changed: mandatory("INTERVIEW_SCHEDULING"),
   interview_reminder: mandatory("INTERVIEW_SCHEDULING"),
 } satisfies Record<EmailTemplateKey, NotificationPurposePolicy>);
 
-export const MUTABLE_NOTIFICATION_PURPOSES = Object.freeze(
-  [...new Set(
+export const MUTABLE_NOTIFICATION_PURPOSES = Object.freeze([
+  ...new Set(
     EMAIL_TEMPLATE_KEYS.flatMap((templateKey) => {
       const policy = EMAIL_NOTIFICATION_POLICY[templateKey];
       return policy.preferenceMutable ? [policy.purpose] : [];
     }),
-  )] as readonly NotificationPurpose[],
-);
+  ),
+] as readonly NotificationPurpose[]);
 
 export function policyForTemplate(
   templateKey: EmailTemplateKey,
 ): NotificationPurposePolicy {
   return EMAIL_NOTIFICATION_POLICY[templateKey];
+}
+
+/**
+ * Provider authority is deliberately narrower than the delivery channel.
+ * Job-alert mail owns an independently revocable provider use case; every
+ * other reviewed template is transactional. Callers must still verify that
+ * the persisted purpose/classification match the closed template policy.
+ */
+export function providerUseCaseForTemplate(
+  templateKey: EmailTemplateKey,
+): EmailProviderActivationUseCase {
+  return EMAIL_NOTIFICATION_POLICY[templateKey].purpose === "JOB_ALERT"
+    ? "email.job-alert"
+    : "email.transactional";
 }
 
 export function classifyPurpose(
@@ -91,11 +103,13 @@ export function mayUserDisablePurpose(purpose: NotificationPurpose) {
   return MUTABLE_NOTIFICATION_PURPOSES.includes(purpose);
 }
 
-export function resolveNotificationSendDecision(input: Readonly<{
-  purpose: NotificationPurpose;
-  preferenceEnabled: boolean | undefined;
-  optionalEmailEnabled: boolean;
-}>): "SEND" | "SUPPRESS" | "REJECT_UNKNOWN" {
+export function resolveNotificationSendDecision(
+  input: Readonly<{
+    purpose: NotificationPurpose;
+    preferenceEnabled: boolean | undefined;
+    optionalEmailEnabled: boolean;
+  }>,
+): "SEND" | "SUPPRESS" | "REJECT_UNKNOWN" {
   const classification = classifyPurpose(input.purpose);
   if (classification === undefined) return "REJECT_UNKNOWN";
   if (classification === "MANDATORY") return "SEND";
@@ -104,9 +118,7 @@ export function resolveNotificationSendDecision(input: Readonly<{
     : "SUPPRESS";
 }
 
-function mandatory(
-  purpose: NotificationPurpose,
-): NotificationPurposePolicy {
+function mandatory(purpose: NotificationPurpose): NotificationPurposePolicy {
   return Object.freeze({
     purpose,
     classification: "MANDATORY",

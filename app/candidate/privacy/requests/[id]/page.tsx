@@ -5,6 +5,7 @@ import Link from "@/components/shared/app-link";
 import { notFound } from "next/navigation";
 
 import { PrivacyCaseCancelForm } from "@/components/candidate/privacy-case-cancel-form";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -197,8 +198,18 @@ export default async function CandidatePrivacyRequestDetailPage({
               <p>{artifact.sizeBytes ?? 0} Bytes · Manifest <span className="break-all font-mono">{artifact.manifestHash}</span></p>
             ) : null}
             {artifact !== null && downloadToken !== null ? (
-              <form method="post" action={`/api/privacy/exports/${artifact.id}`}>
+              <form
+                className="grid max-w-xl gap-3"
+                method="post"
+                action={`/api/privacy/exports/${artifact.id}`}
+              >
                 <input type="hidden" name="token" value={downloadToken} />
+                <StepUpGrantControl
+                  action="PRIVACY_EXPORT_DOWNLOAD"
+                  purpose="CANDIDATE_PRIVACY"
+                  resourceId={artifact.id}
+                  securityHref="/candidate/settings/security"
+                />
                 <button className={buttonVariants()} type="submit">
                   Export einmalig herunterladen
                 </button>

@@ -56,7 +56,12 @@ export default defineConfig({
     },
     {
       name: "firefox-journeys",
-      testMatch: "**/quality/phase29-critical-journeys.spec.ts",
+      testMatch: [
+        "**/quality/phase29-critical-journeys.spec.ts",
+        "**/flows/phase33-public-candidate.spec.ts",
+        "**/flows/phase33-employer-recruiter.spec.ts",
+        "**/flows/phase33-privileged-operations.spec.ts",
+      ],
       grep: /@journey/u,
       use: {
         ...devices["Desktop Firefox"],
@@ -65,7 +70,12 @@ export default defineConfig({
     },
     {
       name: "webkit-journeys",
-      testMatch: "**/quality/phase29-critical-journeys.spec.ts",
+      testMatch: [
+        "**/quality/phase29-critical-journeys.spec.ts",
+        "**/flows/phase33-public-candidate.spec.ts",
+        "**/flows/phase33-employer-recruiter.spec.ts",
+        "**/flows/phase33-privileged-operations.spec.ts",
+      ],
       grep: /@journey/u,
       use: {
         ...devices["Desktop Safari"],

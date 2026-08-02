@@ -212,6 +212,11 @@ function resultFailure(code: string): EmployerActionState {
       "Neue Interviewaktionen sind vorübergehend deaktiviert. Bestehende Termine können weiterhin abgesagt werden.",
     );
   }
+  if (code === "RATE_LIMITED") {
+    return fail(
+      "Zu viele Interviewvorschläge in kurzer Zeit. Bitte versuche es später erneut.",
+    );
+  }
   return fail();
 }
 

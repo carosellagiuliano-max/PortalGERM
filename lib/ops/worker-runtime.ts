@@ -20,15 +20,9 @@ import {
   type WorkFailureDescriptor,
 } from "@/lib/ops/worker-retry-policy";
 
-const identifierSchema = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9._:-]{1,159}$/u);
-const versionSchema = z
-  .string()
-  .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/u);
-const subjectTypeSchema = z
-  .string()
-  .regex(/^[A-Z][A-Z0-9_]{1,63}$/u);
+const identifierSchema = z.string().regex(/^[a-z0-9][a-z0-9._:-]{1,159}$/u);
+const versionSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/u);
+const subjectTypeSchema = z.string().regex(/^[A-Z][A-Z0-9_]{1,63}$/u);
 const subjectIdSchema = z
   .string()
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u);
@@ -48,9 +42,12 @@ const payloadReferenceSchema = z
   .refine((value) => Object.keys(value).length <= 16, {
     message: "Work payload references are limited to 16 scalar fields.",
   })
-  .refine((value) => Buffer.byteLength(JSON.stringify(value), "utf8") <= 8_192, {
-    message: "Work payload reference exceeds the bounded storage contract.",
-  });
+  .refine(
+    (value) => Buffer.byteLength(JSON.stringify(value), "utf8") <= 8_192,
+    {
+      message: "Work payload reference exceeds the bounded storage contract.",
+    },
+  );
 
 export type MinimalWorkPayload = z.infer<typeof payloadReferenceSchema>;
 
@@ -65,6 +62,8 @@ export type ClaimedWorkItem = Readonly<{
   id: string;
   leaseClaimedAt: Date;
   leaseExpiresAt: Date;
+  leaseHandlerActivationId: string | null;
+  leaseHandlerActivationGeneration: number | null;
   maxAttempts: number;
   payloadReference: MinimalWorkPayload;
   payloadVersion: string;
@@ -81,9 +80,16 @@ export type WorkLeaseIdentity = Readonly<{
   workItemId: string;
 }>;
 
+type WorkActivationLeaseBinding = Readonly<{
+  activationId: string;
+  activationGeneration: number;
+}>;
+
+type WorkerClaimPolicy = Partial<WorkerLeasePolicy> &
+  Partial<WorkActivationLeaseBinding>;
+
 export type WorkCompletionResult =
-  | Readonly<{ status: "COMPLETED" }>
-  | Readonly<{ status: "LEASE_LOST" }>;
+  Readonly<{ status: "COMPLETED" }> | Readonly<{ status: "LEASE_LOST" }>;
 
 export type WorkFailureResult =
   | Readonly<{
@@ -123,11 +129,10 @@ export async function enqueueWorkItem(
       subjectType: subjectTypeSchema,
     })
     .safeParse(raw);
-  if (
-    !parsed.success ||
-    !Number.isFinite(parsed.data.availableAt.getTime())
-  ) {
-    throw new TypeError("Work item does not satisfy the closed queue contract.");
+  if (!parsed.success || !Number.isFinite(parsed.data.availableAt.getTime())) {
+    throw new TypeError(
+      "Work item does not satisfy the closed queue contract.",
+    );
   }
 
   const payloadReference = canonicalPayload(parsed.data.payloadReference);
@@ -291,7 +296,7 @@ export async function claimWorkBatch(
     handlerVersion: string;
     now: Date;
     payloadVersion: string;
-    policy?: Partial<WorkerLeasePolicy>;
+    policy?: WorkerClaimPolicy;
     workerId: string;
     workerRunId: string;
   }>,
@@ -304,6 +309,7 @@ export async function claimWorkBatch(
   ) {
     throw new TypeError("Worker claim identity is invalid.");
   }
+  const activationBinding = parseClaimActivationBinding(input.policy);
   const policy = resolveWorkerLeasePolicy(input.policy);
   const leaseExpiresAt = new Date(
     input.now.getTime() + policy.leaseMilliseconds,
@@ -315,6 +321,19 @@ export async function claimWorkBatch(
   });
 
   const rows = await database.$transaction(async (transaction) => {
+    if (
+      activationBinding !== null &&
+      !(await lockClaimActivation(transaction, {
+        ...activationBinding,
+        deploymentDigest: input.deploymentDigest,
+        handlerKey: input.handlerKey,
+        handlerVersion: input.handlerVersion,
+        now: input.now,
+        payloadVersion: input.payloadVersion,
+      }))
+    ) {
+      return [];
+    }
     const claimed = await transaction.$queryRaw<ClaimedWorkItemRow[]>(
       Prisma.sql`
         WITH candidates AS MATERIALIZED (
@@ -343,6 +362,9 @@ export async function claimWorkBatch(
             "id",
             "workItemId",
             "workerRunId",
+            "handlerActivationId",
+            "handlerActivationGeneration",
+            "handlerActivationCurrentAtCompletion",
             "attemptNumber",
             "fencingToken",
             "workerId",
@@ -361,6 +383,23 @@ export async function claimWorkBatch(
             gen_random_uuid(),
             candidate."id",
             candidate."leaseWorkerRunId",
+            candidate."leaseHandlerActivationId",
+            candidate."leaseHandlerActivationGeneration",
+            CASE
+              WHEN candidate."leaseHandlerActivationId" IS NULL THEN NULL
+              ELSE EXISTS (
+                SELECT 1
+                  FROM "WorkerHandlerActivation" AS activation
+                 WHERE activation."id" = candidate."leaseHandlerActivationId"
+                   AND activation."generation" = candidate."leaseHandlerActivationGeneration"
+                   AND activation."mode" <> 'DISABLED'
+                   AND activation."killSwitchEngaged" = false
+                   AND activation."effectiveAt" IS NOT NULL
+                   AND activation."effectiveAt" <= ${input.now}
+                   AND (activation."expiresAt" IS NULL OR activation."expiresAt" > ${input.now})
+                   AND activation."revokedAt" IS NULL
+              )
+            END,
             candidate."attemptCount",
             candidate."fencingToken",
             candidate."leaseOwner",
@@ -386,6 +425,8 @@ export async function claimWorkBatch(
                  "leaseOwner" = ${input.workerId},
                  "leaseWorkerRunId" = ${input.workerRunId}::uuid,
                  "leaseDeploymentDigest" = ${input.deploymentDigest},
+                 "leaseHandlerActivationId" = ${activationBinding?.activationId ?? null}::uuid,
+                 "leaseHandlerActivationGeneration" = ${activationBinding?.activationGeneration ?? null},
                  "leaseClaimedAt" = ${input.now},
                  "leaseExpiresAt" = ${leaseExpiresAt},
                  "heartbeatAt" = ${input.now},
@@ -408,6 +449,8 @@ export async function claimWorkBatch(
             item."payloadReference",
             item."leaseClaimedAt",
             item."leaseExpiresAt",
+            item."leaseHandlerActivationId",
+            item."leaseHandlerActivationGeneration",
             item."fencingToken"
         )
         SELECT *
@@ -445,25 +488,44 @@ export async function heartbeatWorkLease(
   const leaseExpiresAt = new Date(
     input.now.getTime() + policy.leaseMilliseconds,
   );
-  const updated = await database.workItem.updateMany({
-    where: {
-      id: identity.workItemId,
-      status: "LEASED",
-      leaseOwner: identity.workerId,
-      leaseWorkerRunId: identity.workerRunId,
-      leaseDeploymentDigest: identity.deploymentDigest,
-      fencingToken: identity.fencingToken,
-      leaseExpiresAt: { gt: input.now },
-    },
-    data: {
-      heartbeatAt: input.now,
-      leaseExpiresAt,
-      updatedAt: input.now,
-    },
-  });
+  const updated = await database.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`
+      UPDATE "WorkItem" AS item
+         SET "heartbeatAt" = ${input.now},
+             "leaseExpiresAt" = ${leaseExpiresAt},
+             "updatedAt" = ${input.now}
+       WHERE item."id" = ${identity.workItemId}::uuid
+         AND item."status" = 'LEASED'
+         AND item."leaseOwner" = ${identity.workerId}
+         AND item."leaseWorkerRunId" = ${identity.workerRunId}::uuid
+         AND item."leaseDeploymentDigest" = ${identity.deploymentDigest}
+         AND item."fencingToken" = ${identity.fencingToken}
+         AND item."leaseExpiresAt" > ${input.now}
+         AND (
+           item."leaseHandlerActivationId" IS NULL
+           OR EXISTS (
+             SELECT 1
+               FROM "WorkerHandlerActivation" AS activation
+              WHERE activation."id" = item."leaseHandlerActivationId"
+                AND activation."generation" = item."leaseHandlerActivationGeneration"
+                AND activation."handlerKey" = item."handlerKey"
+                AND activation."handlerVersion" = item."handlerVersion"
+                AND activation."payloadVersion" = item."payloadVersion"
+                AND activation."deploymentDigest" = item."leaseDeploymentDigest"
+                AND activation."mode" <> 'DISABLED'
+                AND activation."killSwitchEngaged" = false
+                AND activation."effectiveAt" IS NOT NULL
+                AND activation."effectiveAt" <= ${input.now}
+                AND (activation."expiresAt" IS NULL OR activation."expiresAt" > ${input.now})
+                AND activation."revokedAt" IS NULL
+           )
+         )
+      RETURNING item."id"
+    `,
+  );
   return Object.freeze({
-    extended: updated.count === 1,
-    leaseExpiresAt: updated.count === 1 ? leaseExpiresAt : null,
+    extended: updated.length === 1,
+    leaseExpiresAt: updated.length === 1 ? leaseExpiresAt : null,
   });
 }
 
@@ -484,12 +546,29 @@ export async function recordFencedEffectReceipt(
     (input.providerReceiptDigest !== undefined &&
       !sha256Schema.safeParse(input.providerReceiptDigest).success)
   ) {
-    throw new TypeError("Worker effect evidence must contain only SHA-256 digests.");
+    throw new TypeError(
+      "Worker effect evidence must contain only SHA-256 digests.",
+    );
   }
   return database.$transaction(async (transaction) => {
-    const lease = await lockCurrentLease(transaction, identity, input.now);
+    // A revoke intentionally prevents the next heartbeat/new effect. It must
+    // not erase evidence for an effect that already returned. The original
+    // lease/fence may therefore append its receipt while it still owns the
+    // WorkItem, even when its deadline passed or its activation generation is
+    // now stale. A takeover changes the fence and still blocks this write.
+    const lease = await lockEffectReceiptLease(
+      transaction,
+      identity,
+      input.now,
+    );
     if (lease === null) {
       return Object.freeze({ status: "LEASE_LOST" as const });
+    }
+    if (
+      lease.handlerKey !== input.handlerKey ||
+      lease.handlerVersion !== input.handlerVersion
+    ) {
+      throw new Error("WORK_EFFECT_HANDLER_CONFLICT");
     }
     const existing = await transaction.workEffectReceipt.findUnique({
       where: { effectKey: lease.effectKey },
@@ -517,6 +596,11 @@ export async function recordFencedEffectReceipt(
         handlerVersion: input.handlerVersion,
         effectDigest: input.effectDigest,
         providerReceiptDigest: input.providerReceiptDigest,
+        handlerActivationId: lease.handlerActivationId,
+        handlerActivationGeneration: lease.handlerActivationGeneration,
+        handlerActivationCurrentAtReceipt: lease.handlerActivationCurrent,
+        leaseWorkerRunId: identity.workerRunId,
+        leaseFencingToken: identity.fencingToken,
         createdAt: input.now,
       },
     });
@@ -551,6 +635,9 @@ export async function completeWorkItem(
         workerId: identity.workerId,
         deploymentDigest: identity.deploymentDigest,
         outcome,
+        handlerActivationId: lease.handlerActivationId,
+        handlerActivationGeneration: lease.handlerActivationGeneration,
+        handlerActivationCurrentAtCompletion: lease.handlerActivationCurrent,
         leaseClaimedAt: lease.leaseClaimedAt,
         leaseExpiresAt: lease.leaseExpiresAt,
         startedAt: lease.leaseClaimedAt,
@@ -682,7 +769,8 @@ export async function failWorkItem(
       }),
     });
     await transaction.workDeadLetter.createMany({
-      data: [{
+      data: [
+        {
           workItemId: identity.workItemId,
           terminalAttempt: lease.attemptCount,
           failureClass: decision.failureClass,
@@ -690,7 +778,8 @@ export async function failWorkItem(
           errorDigest,
           deploymentDigest: identity.deploymentDigest,
           createdAt: input.now,
-        }],
+        },
+      ],
       skipDuplicates: true,
     });
     await incrementFailedRun(transaction, identity.workerRunId, input.now);
@@ -723,6 +812,8 @@ type ClaimedWorkItemRow = Readonly<{
   id: string;
   leaseClaimedAt: Date;
   leaseExpiresAt: Date;
+  leaseHandlerActivationId: string | null;
+  leaseHandlerActivationGeneration: number | null;
   maxAttempts: number;
   payloadReference: unknown;
   payloadVersion: string;
@@ -735,9 +826,15 @@ type LockedLease = Readonly<{
   attemptCount: number;
   dedupeKey: string;
   effectKey: string;
+  handlerActivationCurrent: boolean | null;
+  handlerActivationGeneration: number | null;
+  handlerActivationId: string | null;
+  handlerKey: string;
+  handlerVersion: string;
   leaseClaimedAt: Date;
   leaseExpiresAt: Date;
   maxAttempts: number;
+  payloadVersion: string;
 }>;
 
 function parseClaimedWorkItem(row: ClaimedWorkItemRow): ClaimedWorkItem {
@@ -757,8 +854,64 @@ function parseClaimedWorkItem(row: ClaimedWorkItemRow): ClaimedWorkItem {
     payloadReference: payloadReferenceSchema.parse(row.payloadReference),
     leaseClaimedAt: row.leaseClaimedAt,
     leaseExpiresAt: row.leaseExpiresAt,
+    leaseHandlerActivationId: row.leaseHandlerActivationId,
+    leaseHandlerActivationGeneration: row.leaseHandlerActivationGeneration,
     fencingToken: row.fencingToken,
   });
+}
+
+function parseClaimActivationBinding(
+  policy: WorkerClaimPolicy | undefined,
+): WorkActivationLeaseBinding | null {
+  const activationId = policy?.activationId;
+  const activationGeneration = policy?.activationGeneration;
+  if (activationId === undefined && activationGeneration === undefined) {
+    return null;
+  }
+  if (
+    !uuidSchema.safeParse(activationId).success ||
+    !Number.isSafeInteger(activationGeneration) ||
+    (activationGeneration ?? 0) < 1
+  ) {
+    throw new TypeError("Worker activation lease binding is invalid.");
+  }
+  return Object.freeze({
+    activationId: activationId!,
+    activationGeneration: activationGeneration!,
+  });
+}
+
+async function lockClaimActivation(
+  transaction: Prisma.TransactionClient,
+  input: WorkActivationLeaseBinding &
+    Readonly<{
+      deploymentDigest: string;
+      handlerKey: string;
+      handlerVersion: string;
+      now: Date;
+      payloadVersion: string;
+    }>,
+) {
+  const rows = await transaction.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`
+      SELECT activation."id"
+        FROM "WorkerHandlerActivation" AS activation
+       WHERE activation."id" = ${input.activationId}::uuid
+         AND activation."generation" = ${input.activationGeneration}
+         AND activation."handlerKey" = ${input.handlerKey}
+         AND activation."handlerVersion" = ${input.handlerVersion}
+         AND activation."payloadVersion" = ${input.payloadVersion}
+         AND activation."deploymentDigest" = ${input.deploymentDigest}
+         AND activation."mode" <> 'DISABLED'
+         AND activation."killSwitchEngaged" = false
+         AND activation."effectiveAt" IS NOT NULL
+         AND activation."effectiveAt" <= ${input.now}
+         AND (activation."expiresAt" IS NULL OR activation."expiresAt" > ${input.now})
+         AND activation."revokedAt" IS NULL
+       FOR UPDATE
+    `,
+  );
+  return rows.length === 1;
 }
 
 async function terminalizeExpiredAttemptBudgets(
@@ -790,6 +943,9 @@ async function terminalizeExpiredAttemptBudgets(
           "id",
           "workItemId",
           "workerRunId",
+          "handlerActivationId",
+          "handlerActivationGeneration",
+          "handlerActivationCurrentAtCompletion",
           "attemptNumber",
           "fencingToken",
           "workerId",
@@ -808,6 +964,23 @@ async function terminalizeExpiredAttemptBudgets(
           gen_random_uuid(),
           exhausted."id",
           exhausted."leaseWorkerRunId",
+          exhausted."leaseHandlerActivationId",
+          exhausted."leaseHandlerActivationGeneration",
+          CASE
+            WHEN exhausted."leaseHandlerActivationId" IS NULL THEN NULL
+            ELSE EXISTS (
+              SELECT 1
+                FROM "WorkerHandlerActivation" AS activation
+               WHERE activation."id" = exhausted."leaseHandlerActivationId"
+                 AND activation."generation" = exhausted."leaseHandlerActivationGeneration"
+                 AND activation."mode" <> 'DISABLED'
+                 AND activation."killSwitchEngaged" = false
+                 AND activation."effectiveAt" IS NOT NULL
+                 AND activation."effectiveAt" <= ${input.now}
+                 AND (activation."expiresAt" IS NULL OR activation."expiresAt" > ${input.now})
+                 AND activation."revokedAt" IS NULL
+            )
+          END,
           exhausted."attemptCount",
           exhausted."fencingToken",
           exhausted."leaseOwner",
@@ -831,6 +1004,8 @@ async function terminalizeExpiredAttemptBudgets(
                "leaseOwner" = NULL,
                "leaseWorkerRunId" = NULL,
                "leaseDeploymentDigest" = NULL,
+               "leaseHandlerActivationId" = NULL,
+               "leaseHandlerActivationGeneration" = NULL,
                "leaseClaimedAt" = NULL,
                "leaseExpiresAt" = NULL,
                "heartbeatAt" = NULL,
@@ -876,15 +1051,39 @@ async function lockCurrentLease(
   identity: WorkLeaseIdentity,
   now: Date,
 ): Promise<LockedLease | null> {
-  const rows = await transaction.$queryRaw<LockedLease[]>(
+  return lockLease(transaction, identity, now, true);
+}
+
+async function lockEffectReceiptLease(
+  transaction: Prisma.TransactionClient,
+  identity: WorkLeaseIdentity,
+  now: Date,
+): Promise<LockedLease | null> {
+  return lockLease(transaction, identity, now, false);
+}
+
+async function lockLease(
+  transaction: Prisma.TransactionClient,
+  identity: WorkLeaseIdentity,
+  now: Date,
+  requireUnexpired: boolean,
+): Promise<LockedLease | null> {
+  const rows = await transaction.$queryRaw<
+    Array<Omit<LockedLease, "handlerActivationCurrent">>
+  >(
     Prisma.sql`
       SELECT
         "attemptCount",
         "dedupeKey",
         "effectKey",
+        "handlerKey",
+        "handlerVersion",
+        "leaseHandlerActivationId" AS "handlerActivationId",
+        "leaseHandlerActivationGeneration" AS "handlerActivationGeneration",
         "leaseClaimedAt",
         "leaseExpiresAt",
-        "maxAttempts"
+        "maxAttempts",
+        "payloadVersion"
       FROM "WorkItem"
       WHERE "id" = ${identity.workItemId}::uuid
         AND "status" = 'LEASED'
@@ -892,11 +1091,40 @@ async function lockCurrentLease(
         AND "leaseWorkerRunId" = ${identity.workerRunId}::uuid
         AND "leaseDeploymentDigest" = ${identity.deploymentDigest}
         AND "fencingToken" = ${identity.fencingToken}
-        AND "leaseExpiresAt" > ${now}
+        AND (${requireUnexpired} = false OR "leaseExpiresAt" > ${now})
       FOR UPDATE
     `,
   );
-  return rows[0] ?? null;
+  const lease = rows[0];
+  if (lease === undefined) return null;
+  if (lease.handlerActivationId === null) {
+    return Object.freeze({
+      ...lease,
+      handlerActivationCurrent: null,
+    });
+  }
+  const currentActivation = await transaction.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`
+      SELECT activation."id"
+        FROM "WorkerHandlerActivation" AS activation
+       WHERE activation."id" = ${lease.handlerActivationId}::uuid
+         AND activation."generation" = ${lease.handlerActivationGeneration}
+         AND activation."deploymentDigest" = ${identity.deploymentDigest}
+         AND activation."handlerKey" = ${lease.handlerKey}
+         AND activation."handlerVersion" = ${lease.handlerVersion}
+         AND activation."payloadVersion" = ${lease.payloadVersion}
+         AND activation."mode" <> 'DISABLED'
+         AND activation."killSwitchEngaged" = false
+         AND activation."effectiveAt" IS NOT NULL
+         AND activation."effectiveAt" <= ${now}
+         AND (activation."expiresAt" IS NULL OR activation."expiresAt" > ${now})
+         AND activation."revokedAt" IS NULL
+    `,
+  );
+  return Object.freeze({
+    ...lease,
+    handlerActivationCurrent: currentActivation.length === 1,
+  });
 }
 
 function clearLease<T extends object>(data: T) {
@@ -905,25 +1133,29 @@ function clearLease<T extends object>(data: T) {
     leaseOwner: null,
     leaseWorkerRunId: null,
     leaseDeploymentDigest: null,
+    leaseHandlerActivationId: null,
+    leaseHandlerActivationGeneration: null,
     leaseClaimedAt: null,
     leaseExpiresAt: null,
     heartbeatAt: null,
   };
 }
 
-function attemptData(input: Readonly<{
-  errorCode: string;
-  errorDigest: string;
-  failureClass: WorkFailureClass;
-  identity: WorkLeaseIdentity;
-  lease: LockedLease;
-  nextAvailableAt?: Date;
-  now: Date;
-  outcome: Extract<
-    WorkAttemptOutcome,
-    "RETRY_SCHEDULED" | "DEAD_LETTERED" | "PAUSED"
-  >;
-}>) {
+function attemptData(
+  input: Readonly<{
+    errorCode: string;
+    errorDigest: string;
+    failureClass: WorkFailureClass;
+    identity: WorkLeaseIdentity;
+    lease: LockedLease;
+    nextAvailableAt?: Date;
+    now: Date;
+    outcome: Extract<
+      WorkAttemptOutcome,
+      "RETRY_SCHEDULED" | "DEAD_LETTERED" | "PAUSED"
+    >;
+  }>,
+) {
   return {
     workItemId: input.identity.workItemId,
     workerRunId: input.identity.workerRunId,
@@ -932,6 +1164,9 @@ function attemptData(input: Readonly<{
     workerId: input.identity.workerId,
     deploymentDigest: input.identity.deploymentDigest,
     outcome: input.outcome,
+    handlerActivationId: input.lease.handlerActivationId,
+    handlerActivationGeneration: input.lease.handlerActivationGeneration,
+    handlerActivationCurrentAtCompletion: input.lease.handlerActivationCurrent,
     failureClass: input.failureClass,
     errorCode: input.errorCode,
     errorDigest: input.errorDigest,

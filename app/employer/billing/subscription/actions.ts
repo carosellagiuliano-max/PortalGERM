@@ -10,7 +10,12 @@ import {
 import type { BillingActionState } from "@/lib/billing/employer-action-state";
 import { createCheckoutOrder } from "@/lib/billing/orders";
 import { getServerEnvironment } from "@/lib/config/env";
-import { createHostedPaymentProvider } from "@/lib/providers/payments/payment-composition";
+import {
+  createHostedPaymentProvider,
+  getHostedPaymentRuntime,
+  getStripeContractEndpoint,
+} from "@/lib/providers/payments/payment-composition";
+import { stripePaymentConfigurationDigest } from "@/lib/providers/payments";
 
 const REAL_CHECKOUT_FIELDS = new Set([
   "idempotencyKey",
@@ -47,11 +52,16 @@ export async function startRealSubscriptionCheckoutAction(
     getEmployerBillingActionDependencies(true),
     Promise.resolve(getServerEnvironment()),
   ]);
+  const paymentRuntime = getHostedPaymentRuntime(environment);
+  const contractEndpoint = getStripeContractEndpoint(environment);
   if (
     base === null ||
-    environment.PAYMENT_PROVIDER_MODE !== "stripe_sandbox" ||
-    !environment.PAID_SELF_SERVICE ||
-    environment.PAYMENT_SANDBOX_COHORT !== "test"
+    paymentRuntime === null ||
+    environment.STRIPE_ACCOUNT_ID === undefined ||
+    environment.STRIPE_SECRET_VERSION === undefined ||
+    (paymentRuntime.adapterKey === "stripe_contract" &&
+      contractEndpoint === undefined) ||
+    !environment.PAID_SELF_SERVICE
   ) {
     return Object.freeze({
       status: "error",
@@ -65,7 +75,7 @@ export async function startRealSubscriptionCheckoutAction(
   } catch {
     return Object.freeze({
       status: "error",
-      message: "Der freigegebene Sandbox-Zahlungsanbieter ist nicht verfügbar.",
+      message: "Der freigegebene Zahlungsanbieter ist nicht verfügbar.",
     });
   }
   const result = await createCheckoutOrder(
@@ -81,11 +91,24 @@ export async function startRealSubscriptionCheckoutAction(
       ...base,
       paymentProvider: provider,
       realPayment: {
+        activationMode: paymentRuntime.activationMode,
+        adapterKey: paymentRuntime.adapterKey,
+        adapterVersion: paymentRuntime.adapterVersion,
         appUrl: environment.APP_URL,
-        environment: environment.APP_ENV as "local" | "ci" | "staging",
+        configurationDigest: stripePaymentConfigurationDigest({
+          ...(paymentRuntime.adapterKey === "stripe_contract"
+            ? { contractEndpoint }
+            : {}),
+          providerAccountReference: environment.STRIPE_ACCOUNT_ID,
+          runtime: paymentRuntime,
+        }),
+        environment: environment.APP_ENV,
+        expectedLiveMode: paymentRuntime.expectedLiveMode,
         paidSelfServiceEnabled: environment.PAID_SELF_SERVICE,
-        providerAccountReference: environment.STRIPE_ACCOUNT_ID!,
+        providerAccountReference: environment.STRIPE_ACCOUNT_ID,
+        providerMode: paymentRuntime.providerMode,
         sandboxCohort: environment.PAYMENT_SANDBOX_COHORT,
+        secretVersionRef: environment.STRIPE_SECRET_VERSION,
       },
     },
   );

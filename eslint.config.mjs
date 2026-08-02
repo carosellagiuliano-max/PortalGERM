@@ -38,6 +38,7 @@ export default defineConfig([
   globalIgnores([
     ".next/**",
     "coverage/**",
+    "dist/**",
     "lib/generated/**",
     "node_modules/**",
     "playwright-report/**",

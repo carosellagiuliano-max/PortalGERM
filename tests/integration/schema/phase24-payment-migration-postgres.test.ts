@@ -80,6 +80,10 @@ describe("Phase-24 additive payment migration", () => {
         data: {
           provider: "STRIPE",
           environment: "ci",
+          adapterKey: "stripe_sandbox",
+          adapterVersion: "v1",
+          providerMode: "SANDBOX",
+          expectedLiveMode: false,
           providerAccountReference: "acct_phase24test",
           providerEventId: "evt_phase24_live",
           eventType: "checkout.session.completed",

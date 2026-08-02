@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   firstJobAlertDueAt,
   jobAlertConsentNoticeHash,
-  JOB_ALERT_DELIVERY_NOTICE_V1,
+  JOB_ALERT_DELIVERY_NOTICE_V2,
   JOB_ALERT_POLICY_V1,
   nextJobAlertDueAt,
   parseStoredJobAlertQuery,
@@ -814,8 +814,8 @@ describe.sequential(
           actorUserId: alert.candidateProfile.userId,
           granted: true,
           kind: "JOB_ALERT_DELIVERY",
-          purpose: JOB_ALERT_DELIVERY_NOTICE_V1.purpose,
-          noticeVersion: JOB_ALERT_DELIVERY_NOTICE_V1.version,
+          purpose: JOB_ALERT_DELIVERY_NOTICE_V2.purpose,
+          noticeVersion: JOB_ALERT_DELIVERY_NOTICE_V2.version,
           noticeHash: jobAlertConsentNoticeHash(),
         });
         const digest = alert.digests[0];

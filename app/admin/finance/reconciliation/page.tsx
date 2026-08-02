@@ -1,12 +1,17 @@
 import type { Metadata } from "next";
 import Link from "@/components/shared/app-link";
 
+import { releaseHeldSettlementAction } from "@/app/admin/finance/reconciliation/actions";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { hasAdminCapability } from "@/lib/admin/capabilities";
 import { requireAdminPage } from "@/lib/auth/route-guards";
 import { getFinanceReconciliationPage } from "@/lib/billing/finance-read-model";
+import { PAYMENT_SETTLEMENT_RELEASE_POLICY_V1 } from "@/lib/billing/payment-inbox";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { formatChfFromRappen, formatDateTime } from "@/lib/utils/format";
@@ -19,7 +24,10 @@ export const metadata: Metadata = {
 export default async function FinanceReconciliationPage({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ cursor?: string | string[] }>;
+  searchParams: Promise<{
+    cursor?: string | string[];
+    result?: string | string[];
+  }>;
 }>) {
   const [admin, query] = await Promise.all([requireAdminPage(), searchParams]);
   const cursor = typeof query.cursor === "string" ? query.cursor : null;
@@ -35,6 +43,16 @@ export default async function FinanceReconciliationPage({
   );
   if (data === null) return null;
   const environment = getServerEnvironment();
+  const result = typeof query.result === "string" ? query.result : null;
+  const canReleaseSettlement = hasAdminCapability(
+    {
+      userId: admin.id,
+      role: admin.role,
+      status: admin.status,
+      capabilities: admin.capabilities,
+    },
+    "ADMIN_BILLING_MUTATE",
+  );
   return (
     <div className="grid gap-7">
       <header>
@@ -51,6 +69,21 @@ export default async function FinanceReconciliationPage({
           Fälle gespeichert und niemals still korrigiert.
         </p>
       </header>
+
+      {result === null ? null : (
+        <Alert variant={result === "RELEASED" ? "default" : "destructive"}>
+          <AlertTitle>
+            {result === "RELEASED"
+              ? "Settlement freigegeben"
+              : "Freigabe nicht ausgeführt"}
+          </AlertTitle>
+          <AlertDescription>
+            {result === "RELEASED"
+              ? "Das signierte Ereignis wurde genau einmal wieder in die Projektions-Queue gestellt."
+              : `Der sichere Freigabevertrag hat den Vorgang blockiert (${result}).`}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {!environment.FINANCE_REPAIR_ACTIONS ? (
         <Alert>
@@ -109,6 +142,67 @@ export default async function FinanceReconciliationPage({
                 <time className="text-xs text-muted-foreground">
                   {formatDateTime(item.createdAt)}
                 </time>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">
+            Nach Provider-Widerruf gehaltene Zahlungen
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {data.heldSettlements.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Keine bereits bezahlte Providertransaktion wartet auf eine
+              Finance-Entscheidung.
+            </p>
+          ) : (
+            data.heldSettlements.map((settlement) => (
+              <div className="rounded-lg border p-3" key={settlement.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{settlement.eventType}</span>
+                  <time className="text-xs text-muted-foreground">
+                    {formatDateTime(settlement.receivedAt)}
+                  </time>
+                </div>
+                <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                  Inbox {settlement.id}
+                </p>
+                {!environment.FINANCE_REPAIR_ACTIONS ||
+                !canReleaseSettlement ||
+                settlement.paymentAttempt === null ? (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Die Freigabe bleibt gesperrt, bis Reparaturmodus,
+                    Billing-Mutation-Capability und eine gebundene Zahlung
+                    gemeinsam vorliegen.
+                  </p>
+                ) : (
+                  <form
+                    action={releaseHeldSettlementAction}
+                    className="mt-3 grid gap-3"
+                  >
+                    <input name="inboxId" type="hidden" value={settlement.id} />
+                    <input
+                      name="reasonCode"
+                      type="hidden"
+                      value="HISTORIC_SETTLEMENT_REVIEWED"
+                    />
+                    <StepUpGrantControl
+                      action={PAYMENT_SETTLEMENT_RELEASE_POLICY_V1.action}
+                      purpose={PAYMENT_SETTLEMENT_RELEASE_POLICY_V1.purpose}
+                      resourceId={settlement.id}
+                      securityHref="/admin/security"
+                      tenantId={settlement.paymentAttempt.companyId}
+                    />
+                    <Button type="submit">
+                      Signierte Zahlung zur Projektion freigeben
+                    </Button>
+                  </form>
+                )}
               </div>
             ))
           )}

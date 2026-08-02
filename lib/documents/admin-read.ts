@@ -1,25 +1,31 @@
 import "server-only";
 
-import type { DatabaseClient } from "@/lib/db/factory";
+import {
+  requireCapability,
+  type AdminDependencies,
+} from "@/lib/admin/common";
 
 export async function getRedactedDocumentVaultSummary(
-  database: DatabaseClient,
+  dependencies: AdminDependencies,
 ) {
+  if (!(await requireCapability(dependencies, "ADMIN_OPS_READ"))) {
+    return null;
+  }
   const [statuses, scanOutcomes, pendingIntents, lifecycle] = await Promise.all([
-    database.documentVersion.groupBy({
+    dependencies.database.documentVersion.groupBy({
       by: ["status"],
       _count: { _all: true },
       orderBy: { status: "asc" },
     }),
-    database.documentScanAttempt.groupBy({
+    dependencies.database.documentScanAttempt.groupBy({
       by: ["outcome"],
       _count: { _all: true },
       orderBy: { outcome: "asc" },
     }),
-    database.documentUploadIntent.count({
+    dependencies.database.documentUploadIntent.count({
       where: { status: { in: ["CREATED", "UPLOADING", "UPLOADED"] } },
     }),
-    database.objectLifecycleOutcome.groupBy({
+    dependencies.database.objectLifecycleOutcome.groupBy({
       by: ["kind", "status"],
       _count: { _all: true },
       orderBy: [{ kind: "asc" }, { status: "asc" }],

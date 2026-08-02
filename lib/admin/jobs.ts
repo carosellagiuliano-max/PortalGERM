@@ -16,16 +16,14 @@ import {
 } from "@/lib/billing/boosts";
 import { publishWithQuota } from "@/lib/billing/usage";
 import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
-import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { establishPublicationFreshness } from "@/lib/jobs/freshness";
 import { buildJobPublicationSourceScopeV1 } from "@/lib/jobs/freshness-policy";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import { decideJobTransition, type JobStatus } from "@/lib/policies/status/job";
 import type { EmailProvider } from "@/lib/providers/email";
-import { renderEmailTemplate } from "@/lib/providers/email/templates";
-import { createLogger } from "@/lib/utils/logger";
 import {
   adminErrorResult,
   AdminDomainError,
@@ -41,7 +39,6 @@ import {
 
 const DAY = 86_400_000;
 const MAX_PUBLICATION_DAYS = 90;
-const logger = createLogger();
 
 export const adminJobCommandSchema = z.strictObject({
   jobId: z.uuid(),
@@ -66,17 +63,20 @@ export type AdminJobCommandValue = Readonly<{
 }>;
 
 export async function listAdminJobs(
-  database: DatabaseClient,
+  dependencies: AdminDependencies,
   status: "PENDING" | JobStatus | "ALL" = "PENDING",
-  now = new Date(),
+  now = adminNow(dependencies.now),
 ) {
+  if (!(await requireCapability(dependencies, "ADMIN_JOB_REVIEW"))) {
+    return null;
+  }
   const statusWhere =
     status === "ALL"
       ? { not: "REMOVED" as const }
       : status === "PENDING"
         ? { in: ["SUBMITTED", "IN_REVIEW", "CHANGES_REQUESTED"] as JobStatus[] }
         : status;
-  return database.job.findMany({
+  return dependencies.database.job.findMany({
     where: { status: statusWhere },
     orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
     take: 200,
@@ -117,11 +117,16 @@ export async function listAdminJobs(
 }
 
 export async function getAdminJobDetail(
-  database: DatabaseClient,
+  dependencies: AdminDependencies,
   jobId: string,
 ) {
-  if (!z.uuid().safeParse(jobId).success) return null;
-  return database.job.findUnique({
+  if (
+    !(await requireCapability(dependencies, "ADMIN_JOB_REVIEW")) ||
+    !z.uuid().safeParse(jobId).success
+  ) {
+    return null;
+  }
+  return dependencies.database.job.findUnique({
     where: { id: jobId },
     select: {
       id: true,
@@ -268,9 +273,9 @@ export async function requestAdminJobChanges(
 export async function approveAdminJob(
   input: AdminJobCommand,
   dependencies: AdminDependencies,
-  email?: EmailProvider,
+  _legacyEmail?: EmailProvider,
 ) {
-  const result = await transitionReviewJob(input, dependencies, {
+  return transitionReviewJob(input, dependencies, {
     action: "APPROVE",
     auditAction: "JOB_APPROVED",
     eventKind: "APPROVED",
@@ -278,24 +283,14 @@ export async function approveAdminJob(
     operation: "admin-job-approve",
     toStatus: "APPROVED",
   });
-  if (result.ok && !result.replay && email !== undefined) {
-    await sendJobReviewEmailsAfterCommit(
-      dependencies,
-      result.value.jobId,
-      "job_approved",
-      undefined,
-      email,
-    );
-  }
-  return result;
 }
 
 export async function rejectAdminJob(
   input: AdminJobCommand,
   dependencies: AdminDependencies,
-  email?: EmailProvider,
+  _legacyEmail?: EmailProvider,
 ) {
-  const result = await transitionReviewJob(input, dependencies, {
+  return transitionReviewJob(input, dependencies, {
     action: "REJECT",
     auditAction: "JOB_REJECTED",
     eventKind: "REJECTED",
@@ -304,16 +299,6 @@ export async function rejectAdminJob(
     reasonRequired: true,
     toStatus: "REJECTED",
   });
-  if (result.ok && !result.replay && email !== undefined) {
-    await sendJobReviewEmailsAfterCommit(
-      dependencies,
-      result.value.jobId,
-      "job_rejected",
-      input.reasonCode,
-      email,
-    );
-  }
-  return result;
 }
 
 export async function publishAdminJob(
@@ -647,6 +632,7 @@ async function transitionReviewJob(
               select: {
                 id: true,
                 version: true,
+                title: true,
                 submittedAt: true,
                 approvedAt: true,
                 rejectedAt: true,
@@ -744,6 +730,18 @@ async function transitionReviewJob(
           job.id,
           transition.notificationStatus,
           eventKey,
+          transition.toStatus === "APPROVED" ||
+            transition.toStatus === "REJECTED"
+            ? {
+                templateKey:
+                  transition.toStatus === "APPROVED"
+                    ? "job_approved"
+                    : "job_rejected",
+                jobTitle: revision.title,
+                reason: parsed.data.reasonCode,
+                availableAt: now,
+              }
+            : undefined,
         );
         await writeAdminAudit(transaction, dependencies, now, {
           action: transition.auditAction,
@@ -779,6 +777,12 @@ async function notifyJobManagers(
   status:
     "IN_REVIEW" | "CHANGES_REQUESTED" | "APPROVED" | "REJECTED" | "PUBLISHED",
   dedupeKey: string,
+  email?: Readonly<{
+    templateKey: "job_approved" | "job_rejected";
+    jobTitle: string;
+    reason: string | undefined;
+    availableAt: Date;
+  }>,
 ) {
   const managers = await transaction.companyMembership.findMany({
     where: {
@@ -804,74 +808,19 @@ async function notifyJobManagers(
         },
       },
     );
-  }
-}
-
-async function sendJobReviewEmails(
-  database: DatabaseClient,
-  jobId: string,
-  templateKey: "job_approved" | "job_rejected",
-  reason: string | undefined,
-  email: EmailProvider,
-) {
-  const job = await database.job.findUnique({
-    where: { id: jobId },
-    select: {
-      currentRevision: { select: { title: true } },
-      company: {
-        select: {
-          memberships: {
-            where: {
-              status: "ACTIVE",
-              removedAt: null,
-              role: { in: ["OWNER", "ADMIN"] },
-              user: { status: "ACTIVE" },
-            },
-            select: { user: { select: { email: true } } },
-          },
+    if (email !== undefined) {
+      await enqueueNotification(transaction, {
+        recipient: { userId: manager.userId },
+        templateKey: email.templateKey,
+        payloadSchemaVersion: "job-review-v1",
+        payload: {
+          jobTitle: email.jobTitle,
+          ...(email.reason === undefined ? {} : { reason: email.reason }),
         },
-      },
-    },
-  });
-  if (job === null) return;
-  for (const membership of job.company.memberships) {
-    const data = {
-      jobTitle: job.currentRevision?.title ?? "Stelleninserat",
-      ...(reason === undefined ? {} : { reason }),
-    };
-    await email.send({
-      to: membership.user.email,
-      templateKey,
-      subject: renderEmailTemplate(templateKey, data).subject,
-      data,
-    });
-  }
-}
-
-async function sendJobReviewEmailsAfterCommit(
-  dependencies: AdminDependencies,
-  jobId: string,
-  templateKey: "job_approved" | "job_rejected",
-  reason: string | undefined,
-  email: EmailProvider,
-) {
-  try {
-    await sendJobReviewEmails(
-      dependencies.database,
-      jobId,
-      templateKey,
-      reason,
-      email,
-    );
-  } catch (error) {
-    // The transactional status event, audit and in-app notification are the
-    // authoritative result. A post-commit email failure must never make the
-    // caller retry an already committed review transition.
-    logger.error(
-      "admin_job.review_email_retryable",
-      { entityId: jobId, error, operation: templateKey },
-      dependencies.correlationId,
-    );
+        dedupeKey: `${dedupeKey}:email:${manager.userId}`,
+        availableAt: email.availableAt,
+      });
+    }
   }
 }
 

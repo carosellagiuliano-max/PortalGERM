@@ -278,6 +278,105 @@ describe("Phase-23 PostgreSQL worker claims, leases and fencing", () => {
       client.workDeadLetter.count({ where: { workItemId: terminal.id } }),
     ).resolves.toBe(1);
   });
+
+  it("fences every unstarted item in a claimed batch after the activation kill switch", async () => {
+    const client = db();
+    const handlerKey = "test.activation-barrier";
+    const activation = await client.workerHandlerActivation.create({
+      data: {
+        environment: "ci",
+        handlerKey,
+        handlerVersion: "v1",
+        payloadVersion: "v1",
+        mode: "SANDBOX",
+        configurationDigest: "a".repeat(64),
+        deploymentDigest: DEPLOYMENT,
+        owner: "Platform",
+        runbookRef: "codex-plan/runbooks/worker.md",
+        sloRef: "codex-plan/worker-slo.md",
+        evidenceDigest: "b".repeat(64),
+        providerUseCase: null,
+        leaseMilliseconds: 6_000,
+        heartbeatMilliseconds: 2_000,
+        batchSize: 3,
+        maxAttempts: 8,
+        maxConcurrency: 1,
+        killSwitchEngaged: false,
+        effectiveAt: NOW,
+      },
+    });
+    await Promise.all(
+      Array.from({ length: 3 }, (_, index) =>
+        enqueueWorkItem(client, {
+          handlerKey,
+          handlerVersion: "v1",
+          payloadVersion: "v1",
+          subjectType: "DIAGNOSTIC",
+          subjectId: `barrier-${index}`,
+          dedupeKey: `${handlerKey}:v1:${index}`,
+          effectKey: `effect:${handlerKey}:v1:${index}`,
+          availableAt: NOW,
+          payloadReference: { ordinal: index },
+        }),
+      ),
+    );
+    const run = await workerRun("activation-barrier-worker", NOW);
+    const claimed = await claimWorkBatch(client, {
+      deploymentDigest: DEPLOYMENT,
+      handlerKey,
+      handlerVersion: "v1",
+      payloadVersion: "v1",
+      workerId: "activation-barrier-worker",
+      workerRunId: run.id,
+      now: NOW,
+      policy: {
+        activationId: activation.id,
+        activationGeneration: activation.generation,
+        batchSize: 3,
+        leaseMilliseconds: 6_000,
+        heartbeatMilliseconds: 2_000,
+      },
+    });
+    expect(claimed).toHaveLength(3);
+    expect(claimed.every((item) => item.leaseHandlerActivationId === activation.id)).toBe(true);
+
+    await client.workerHandlerActivation.update({
+      where: { id: activation.id },
+      data: {
+        killSwitchEngaged: true,
+        revokedAt: new Date(NOW.getTime() + 1),
+        revokeReasonCode: "TEST_KILL_SWITCH",
+      },
+    });
+    const barrierAt = new Date(NOW.getTime() + 2);
+    const starts = await Promise.all(
+      claimed.map((item) =>
+        heartbeatWorkLease(
+          client,
+          identity(
+            item.id,
+            "activation-barrier-worker",
+            run.id,
+            item.fencingToken,
+          ),
+          { now: barrierAt, leaseMilliseconds: 6_000 },
+        ),
+      ),
+    );
+
+    expect(starts.every((result) => result.extended === false)).toBe(true);
+    await expect(
+      client.workEffectReceipt.count({
+        where: { workItem: { handlerKey } },
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      client.workerHandlerActivation.findUniqueOrThrow({
+        where: { id: activation.id },
+        select: { generation: true },
+      }),
+    ).resolves.toEqual({ generation: activation.generation + 1 });
+  });
 });
 
 async function workerRun(workerId: string, now: Date) {

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 const phase32StandaloneBuild = process.env.PHASE32_STANDALONE_BUILD === "true";
+const phase33StandaloneBuild = process.env.PHASE33_STANDALONE_BUILD === "true";
 
 const baseSecurityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -112,7 +113,9 @@ const nextConfig = (phase: string): NextConfig => {
 
   return {
     allowedDevOrigins: ["127.0.0.1"],
-    ...(phase32StandaloneBuild ? { output: "standalone" as const } : {}),
+    ...(phase32StandaloneBuild || phase33StandaloneBuild
+      ? { output: "standalone" as const }
+      : {}),
     outputFileTracingRoot: projectRoot,
     experimental: {
       authInterrupts: true,

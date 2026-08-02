@@ -373,6 +373,34 @@ describe("Phase-14 persisted Privacy case service", () => {
         reasonCode: "COMPLETED",
       },
     ]);
+    const statusOutbox = await client.notificationOutbox.findMany({
+      where: {
+        recipientUserId: fixture.requester.id,
+        dedupeKey: { startsWith: "privacy-case:" },
+      },
+      orderBy: { dedupeKey: "asc" },
+      select: { dedupeKey: true, payload: true, status: true },
+    });
+    expect(statusOutbox).toEqual([
+      {
+        dedupeKey: "privacy-case:delete-admin-verify-v1:email",
+        payload: { requestId: privacyCase.id, statusLabel: "In Bearbeitung" },
+        status: "PENDING",
+      },
+      {
+        dedupeKey: "privacy-case:delete-assessment-complete-v1:email",
+        payload: { requestId: privacyCase.id, statusLabel: "Abgeschlossen" },
+        status: "PENDING",
+      },
+      {
+        dedupeKey: "privacy-case:delete-start-check-v1:email",
+        payload: {
+          requestId: privacyCase.id,
+          statusLabel: "Identitätsprüfung erforderlich",
+        },
+        status: "PENDING",
+      },
+    ]);
     const redactedEvidence = JSON.stringify({
       notifications,
       audits: await client.auditLog.findMany({
@@ -761,6 +789,14 @@ describe("Phase-14 persisted Privacy case service", () => {
           where: {
             recipientUserId: fixture.requester.id,
             kind: "PRIVACY_REQUEST_CHANGED",
+          },
+        }),
+      ).resolves.toBe(0);
+      await expect(
+        client.notificationOutbox.count({
+          where: {
+            recipientUserId: fixture.requester.id,
+            dedupeKey: "privacy-case:rollback-identity-start-v1:email",
           },
         }),
       ).resolves.toBe(0);

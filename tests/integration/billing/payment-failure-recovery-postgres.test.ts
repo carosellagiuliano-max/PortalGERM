@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createCheckoutOrder } from "@/lib/billing/orders";
-import { projectPaymentInboxEvent } from "@/lib/billing/payment-inbox";
+import { reconcilePersistedPayments } from "@/lib/billing/finance-reconciliation";
+import {
+  projectPaymentInboxEvent,
+  resumePaymentInboxProjectionBacklog,
+} from "@/lib/billing/payment-inbox";
 import {
   createPhase24BillingFixture,
   createPhase24StarterCheckout,
@@ -25,7 +29,7 @@ describe("Phase 24 payment failure recovery", () => {
     await fixture.dispose();
   });
 
-  it("holds an ambiguous provider failure and never falls back to Mock", async () => {
+  it("resolves an ambiguous provider failure by replaying the exact Stripe idempotency key", async () => {
     fixture.provider.checkoutFailure = true;
     const orderId = randomUUID();
     const evidence = await fixture.issueCheckoutStepUp(orderId);
@@ -37,19 +41,37 @@ describe("Phase 24 payment failure recovery", () => {
       idempotencyKey: `failure-${randomUUID()}`,
     };
     const first = await createCheckoutOrder(command, fixture.dependencies());
+    await expect(
+      reconcilePersistedPayments(
+        {
+          correlationId: randomUUID(),
+          environment: "ci",
+          now: new Date(fixture.now.getTime() + 1_000),
+        },
+        fixture.database,
+      ),
+    ).resolves.toMatchObject({ matched: 0, mismatched: 1, processed: 1 });
+    fixture.provider.checkoutFailure = false;
     const replay = await createCheckoutOrder(command, fixture.dependencies());
 
     expect(first).toEqual({ ok: false, code: "PAYMENT_PROVIDER_FAILED" });
-    expect(replay).toEqual({ ok: false, code: "PAYMENT_HELD" });
-    expect(fixture.provider.checkoutInputs).toHaveLength(1);
+    expect(replay).toMatchObject({
+      ok: true,
+      replay: true,
+      value: { orderId, status: "PENDING" },
+    });
+    expect(fixture.provider.checkoutInputs).toHaveLength(2);
+    expect(fixture.provider.checkoutInputs[0]?.idempotencyKey).toBe(
+      fixture.provider.checkoutInputs[1]?.idempotencyKey,
+    );
     await expect(
       fixture.database.paymentAttempt.findFirstOrThrow({
         where: { orderId },
         select: { failureCode: true, status: true },
       }),
     ).resolves.toEqual({
-      failureCode: "CHECKOUT_CALL_UNCERTAIN",
-      status: "HELD",
+      failureCode: null,
+      status: "CHECKOUT_CREATED",
     });
     expect(
       await fixture.database.paymentEvent.count({
@@ -58,7 +80,7 @@ describe("Phase 24 payment failure recovery", () => {
     ).toBe(0);
   });
 
-  it("keeps ingestion durable while projection is disabled and projects later", async () => {
+  it("atomically resumes a disabled projection backlog exactly once and projects later", async () => {
     fixture.provider.checkoutFailure = false;
     const checkout = await createPhase24StarterCheckout(fixture);
     const event = phase24ProviderEvent(checkout);
@@ -71,6 +93,36 @@ describe("Phase 24 payment failure recovery", () => {
         where: { subjectId: deferred.ingestion.inboxId },
       }),
     ).toBe(0);
+
+    const resumed = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        resumePaymentInboxProjectionBacklog(
+          {
+            batchSize: 100,
+            now: new Date(event.eventCreatedAt.getTime() + 4_000),
+          },
+          fixture.database,
+        ),
+      ),
+    );
+    expect(resumed.reduce((sum, result) => sum + result.created, 0)).toBe(1);
+    expect(
+      await fixture.database.workItem.count({
+        where: {
+          handlerKey: "payments.inbox-project",
+          subjectId: deferred.ingestion.inboxId,
+        },
+      }),
+    ).toBe(1);
+    await expect(
+      resumePaymentInboxProjectionBacklog(
+        {
+          batchSize: 100,
+          now: new Date(event.eventCreatedAt.getTime() + 4_500),
+        },
+        fixture.database,
+      ),
+    ).resolves.toEqual({ selected: 0, created: 0, replayed: 0 });
 
     const projected = await projectPaymentInboxEvent(
       {

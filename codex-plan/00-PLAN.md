@@ -1,48 +1,48 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** Stand 29. Juli 2026. **Phasen 01 bis 28 besitzen den
-> jeweils dokumentierten technischen Zielstand; die Remediation-Verträge
-> 20–28 sind Local/CI und überwiegend default-off.** Phase 22 bleibt trotz
-> automatisiert grünem Technikvertrag wegen Counsel, alternativer Identity und
-> moderierter Forschung fachlich ungeschlossen. Reales Staging,
-> Provider-Sandbox, Pager/On-call, automatischer Backup-Lifecycle und
-> genehmigte SLO/RPO/RTO bleiben zwingende Phase-32-/G4-Aktivierungsgates.
-> Phase 27 und die unabhängigen Tracks 28A/28B sind technisch owner-aktiviert,
-> aber Demand-/Kohorten-/LIVE-seitig weiterhin `DISABLED`. Weder historische
-> Evidence noch eine grüne lokale Sandbox ist eine Pilot- oder
-> Produktionsfreigabe. AVG/Legal/Privacy/Tax, Providerverträge, bezahlte
-> Marktvalidierung, Cashflow/Runway, LIVE-Daten, Incident Ownership und
-> Operationskapazität benötigen zusätzlich externe oder organisatorische
-> Freigaben. Das separat gegatete `REQ-REC-002`-Paket bleibt offen.
+> **Planstatus:** Stand 1. August 2026. Phasen 01–32 besitzen jeweils ihren
+> datierten, commitgebundenen Technik-, Quality- und Aktivierungsstand. Die
+> Phase-32-Evidence bewertet ausschließlich LC1 und endet ehrlich mit
+> `NO_GO`; LC2–LC6 sind dort `NOT APPROVED`. Phase 33 ist `IN_PROGRESS`,
+> technisch und im Quality-Gate `PENDING` sowie aktivierungsseitig
+> `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Sie soll LC4 Public Free und LC5 Paid
+> Self-Service technisch ohne weiteren Codewechsel konfigurierbar machen,
+> darf aber weder Phase 32 rückwirkend umdeuten noch reale Staging-, Provider-,
+> Legal-, Privacy-, AVG-, Tax-, Finance-, Operations-, Markt- oder
+> Production-Evidence vortäuschen. Optionale Phase-27/28-, Salary-, Boost- und
+> Paid-Radar-Tracks bleiben bis zu ihren eigenen Gates `DISABLED`.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
-Die folgende Liste ist die empfohlene **Lesereihenfolge**, nicht die Konflikthierarchie. Für widersprüchliche Aussagen gilt überall identisch: `AGENTS.md`/Masterauftrag → explizite freigegebene ADR in `decisions.md` → `requirements-matrix.md` → aktueller Masterplan/Architecture Blueprint/Product Strategy → ausführende Phase/Implementation Plan → übertragenes Legacy-Inventar. Quickref/Glossary fassen zusammen und dürfen eine höher priorisierte Detailentscheidung nicht überschreiben; ein Konflikt wird an der niedrigeren Stelle repariert statt interpretiert.
+Die folgende Liste ist die empfohlene **Lesereihenfolge**, nicht die Konflikthierarchie. Für widersprüchliche Aussagen gilt überall identisch: `AGENTS.md`/aktuelle Owner-Anweisung → explizit freigegebene ADR in `decisions.md` → `requirements-matrix.md` → aktueller Masterplan/Architecture Blueprint/Product Strategy → `remediation-execution-contract.md` und `remediation-traceability.md` → ausführende Detailphase/Implementation Plan → übertragenes Legacy-Inventar. Quickref/Glossary fassen zusammen und dürfen eine höher priorisierte Detailentscheidung nicht überschreiben; ein Konflikt wird an der niedrigeren Stelle repariert statt interpretiert.
 
 1. [`../AGENTS.md`](../AGENTS.md) — verbindliche Arbeits- und Evidence-Regeln.
 2. [`99-rules-quickref.md`](./99-rules-quickref.md) — nicht verhandelbare Produkt-/Technikregeln.
 3. [`product-strategy.md`](./product-strategy.md) — Zielgruppen, Positionierung, Marketplace, Journeys, Growth, Monetarisierung und KPIs.
 4. [`commercial-go-live-gates.md`](./commercial-go-live-gates.md) — bezahlte Marktvalidierung, Cashflow, Packaging, AVG, LIVE-Lohndaten, Worker, Startcluster-Suchqualität und Sitemap-Kapazitätsgates.
-5. [`remediation-masterplan.md`](./remediation-masterplan.md) — verbindlicher Ausführungs-, Abhängigkeits-, Risiko- und Evidence-Rahmen für die offenen Phasen 19 bis 32.
+5. [`remediation-masterplan.md`](./remediation-masterplan.md) — verbindlicher Ausführungs-, Abhängigkeits-, Risiko- und Evidence-Rahmen für die Phasen 19 bis 33.
 6. [`remediation-execution-contract.md`](./remediation-execution-contract.md) — sechs Launchklassen, vier Statusdimensionen, 28 Pflichtfelder, Test-/Golden-/Evidence- und Folgephasengates.
 7. [`remediation-traceability.md`](./remediation-traceability.md) — unabhängige Einzelbewertung und lückenlose Zuordnung aller Befunde `STH-001` bis `STH-037`.
 8. [`architecture-blueprint.md`](./architecture-blueprint.md) — Ist-Kern sowie prospektive Rollen, Routen, Daten, Use Cases, Security, UX, Test und Betrieb.
 9. [`requirements-matrix.md`](./requirements-matrix.md) — Anforderung → Phase → Modell → Policy → UX → Test → Abnahme.
 10. [`decisions.md`](./decisions.md) und [`glossary.md`](./glossary.md) — verbindliche ADRs und Begriffe.
 11. [`route-role-matrix.md`](./route-role-matrix.md) und
-    [`route-inventory.json`](./route-inventory.json) — tatsächliches
-    Ist-Inventar getrennt vom geplanten Phase-19+-Delta.
+    [`route-inventory.json`](./route-inventory.json),
+    [`server-action-inventory.json`](./server-action-inventory.json) und
+    [`feature-flag-inventory.json`](./feature-flag-inventory.json) —
+    tatsächliche Route-/Action-/Laufzeitkontroll-Ist-Inventare getrennt vom
+    geplanten Phase-19+-Delta.
 12. [`product-quality-gates.md`](./product-quality-gates.md) und
     [`release-checklist.md`](./release-checklist.md) — Feature-, Launchklassen-
     und Release-Gates.
 13. [`plan-audit.md`](./plan-audit.md) — Konflikte, Klassifizierung, offene Entscheidungen und verworfener Scope.
-14. [`implementation-plan.md`](./implementation-plan.md) — historischer Plan 01–18 plus prospektiver kritischer Pfad 19–32.
+14. [`implementation-plan.md`](./implementation-plan.md) — historischer Plan 01–18 plus Remediationpfad 19–33.
 15. [`runbooks/remediation-production-target.md`](./runbooks/remediation-production-target.md)
     — geplanter LC2–LC6-Ops-/Recovery-Vertrag; noch nicht ausgeführt.
 16. Die Detailphasen `01` bis `18` — implementierte technische Deliverables und ihre Evidence.
-17. Die Detailphasen `19` bis `28` mit ihrem jeweils getrennten Technik-,
-    Quality- und Aktivierungsstatus sowie `29` bis `32` als offene
-    Arbeitspakete; ein Plandokument ist keine Erledigung.
+17. Die Detailphasen `19` bis `32` mit ihrem jeweils datierten Technik-,
+    Quality- und Aktivierungsstatus sowie Phase `33` als aktuelle technische
+    Abschlussarbeit; ein Plandokument ist keine Erledigung.
 18. [`remediation-evidence-template.md`](./remediation-evidence-template.md)
     — leere, nicht rückwirkende Evidence-Vorlage für Phase 19+.
 
@@ -232,7 +232,8 @@ commitgebunden verifizierter lokaler/CI Technikvertrag `d16a2d9` für
 Provider-Governance, autonome Worker, DLQ/Replay, Capacity und read-only
 Ops-Cockpit. Lokales G3 `PASS`; Realprovider bleiben `DISABLED`. Staging,
 Pager/On-call, Provider-Sandbox, automatischer Backup-Lifecycle und
-genehmigte SLO/RPO/RTO sind verbindlich an Phase 32/G4 übertragen. Siehe
+genehmigte SLO/RPO/RTO bleiben verbindliche Phase-32-/33-/G4-
+Aktivierungsgates. Siehe
 [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md).
 
 ### [x] 24 — Reales Billing und Finance
@@ -320,12 +321,30 @@ offen; daher bleibt die Gesamtphase `[ ]`. Siehe
 
 ### [ ] 32 — Finaler Production-Release-Audit
 
-[`32-production-release-audit.md`](./32-production-release-audit.md) · vollständige automatische, manuelle, betriebliche und externe Evidence auf exakt einem Releasecommit/Artefakt.
+[`32-production-release-audit.md`](./32-production-release-audit.md) · der
+technische LC1-Orchestrator und die Releasepolicies sind implementiert; die
+[Phase-32-Evidence](./evidence/2026-07-30-phase-32.md) endet mangels manueller,
+Rollback- und unabhängiger Approval-Evidence korrekt mit `LC1 / NO_GO` und
+`LC2–LC6 NOT APPROVED`. Dieser historische Entscheid bleibt unverändert.
+
+### [ ] 33 — Technische Go-live-Härtung und End-to-End-Abnahme
+
+[`33-go-live-readiness-e2e-acceptance.md`](./33-go-live-readiness-e2e-acceptance.md) ·
+`IN_PROGRESS`: vollständiger Audit, Mock-/Sandbox-/Live-Parität,
+isolierte `local/mock`- und `production-contract`-Runtime, rollenübergreifende
+Wirkungs-/Failure-/Browser-Matrix sowie neuer commit-/artefaktgebundener
+technischer LC4-/LC5-Konfigurationscandidate. Der laufende Vertrag umfasst
+zusätzlich getrennte Notification-Delivery-/Recipient-Hash-Keyrings und
+Resend-API-/Webhook-Secret-Versionen, providerunabhängige 23-h-/31-d-/
+400×24-h-Lebenszyklen, monotone Inbox-/Suppression-Evidence und sichere
+Reconciliation unbekannter Provider-Ausgänge. Technik und Quality sind
+`PENDING`; Aktivierung ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Siehe
+[Findings Ledger](./phase33-findings-ledger.md).
 
 Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in
-[`implementation-plan.md`](./implementation-plan.md). Für die technisch
-bearbeiteten Phasen 19 bis 28 sowie die offenen Phasen 29 bis 32 sind
-Reihenfolge, Parallelisierung und Konfliktgrenzen verbindlich in
+[`implementation-plan.md`](./implementation-plan.md). Für die
+Remediationphasen 19 bis 33 sind Reihenfolge, Parallelisierung und
+Konfliktgrenzen verbindlich in
 [`remediation-masterplan.md`](./remediation-masterplan.md) festgelegt.
 
 ## 7. Verantwortungsauflösung alter Konflikte
@@ -370,6 +389,7 @@ npm run build
 npm run test:e2e:http
 npm run test:e2e:browser
 npm run test:e2e:hsts
+npm run test:phase33
 ```
 
 `npm run test:e2e` bleibt der kombinierte HTTP- plus Browserbefehl; der Abschlussnachweis führt die Teilgates getrennt auf, damit ein Fehler eindeutig zuordenbar ist. Erwartet wird Exit-Code 0 sowie phasenspezifische DB-/HTTP-/Browser-Assertions. Kein nicht ausführbarer, nur gezielt ausgeführter oder durch Retries maskierter Befehl wird als bestanden markiert.
@@ -400,6 +420,11 @@ zielklassenspezifische P0–P4-Matrix steht in
   Deploymentartefakt die zielrelevante vollständige Unit-/Integration-/HTTP-/
   Browser-/Security-/Accessibility-/Recovery-Suite sowie den manuellen
   Rollen-Walkthrough; historische E2E-01–08-Evidence allein genügt nicht;
+- Phase 33 ergänzt auf einem neuen unveränderlichen Candidate die technische
+  LC4-/LC5-Konfigurationsreadiness mit historischen Migration-SHA,
+  Mock-/Production-Contract-Profilen, Live-Adaptercode gegen isolierte Stubs,
+  Provider-/Worker-/Feature-/Routeinventar und Standalone-/OCI-Digests. Dieser
+  technische Pass ersetzt weder das Phase-32-`NO_GO` noch externe Approvals;
 - 0 offene P0 und 0 zielscope-relevante P1-Auditpunkte sowie 0 kritische
   Accessibility-/Security-Funde;
 - Cross-Tenant- und Talent-PII-Leak-Tests grün;
@@ -472,28 +497,25 @@ Eine Funktion/Phase gilt nur als umgesetzt, wenn:
 
 ## 12. Startpunkt
 
-Phasen 01 bis 21 wurden gemäss ihren Detailverträgen auf ihren jeweiligen
-Evidence-Candidates umgesetzt und verifiziert. Phase 22 besitzt auf Candidate
-`0636a875` einen technisch implementierten und automatisiert G3-grünen
-Local-/CI-Sandboxvertrag, bleibt aber wegen der in ihrer Evidence genannten
-externen Pflichtgates ungehakt. Phase 23 ist auf `d16a2d9` als pausierter
-lokaler/CI Technikvertrag geschlossen; ihre reale Aktivierung bleibt wegen
-der in der [Evidence](./evidence/2026-07-27-phase-23.md) benannten und an
-Phase 32/G4 übertragenen Pflichtgates gesperrt.
-Phase 27 ist auf `291b953` als default-off Local-/CI-Technikvertrag
-geschlossen; ihr Demand-, Kohorten-, Staging- und LIVE-Scope bleibt gemäss
-[Evidence](./evidence/2026-07-28-phase-27.md) offen und ist keine
-Launchvoraussetzung. Phase 28 ist mit zwei getrennten default-off
-Local-/CI-Techniktracks geschlossen; externer Tracker und Interview-Scheduler
-bleiben gemäss [Evidence](./evidence/2026-07-29-phase-28.md) bis zu ihren
-jeweiligen Demand-/Privacy-/Operations-/Support- und optionalen Providergates
-ausgeschaltet. Nichtaktivierende frühe
-Research-Tracks 29A/31A dürfen gemäss der
-Abhängigkeitslogik des [`remediation-masterplan.md`](./remediation-masterplan.md)
-parallel vorbereitet werden. Provider-, Legal-, Markt- und Operations-Gates
-bleiben separat und können nur für die jeweilige Launchklasse geschlossen
-werden; insbesondere bleiben reale E-Mail-/Storage-/Scanner-Zustellung,
-Production-Retention/Legal-Hold, autonome Ausführung im Productionbetrieb,
-MFA/Step-up, Bulkzugriff und REQ-REC-002 gegatet. Die Referenz aus `PortalGIT`
-bleibt reine
-Vergleichsbasis und darf weiterhin nicht blind übernommen werden.
+Die datierten Evidence-Records der Phasen 19–31 bleiben die Wahrheit über ihre
+jeweiligen technischen Local-/CI-Verträge und offenen Aktivierungsgates.
+Phase 32 hat den LC1-Releasevertrag technisch implementiert, aber auf ihrem
+Candidate wegen fehlendem Walkthrough, Rollback und unabhängigen Approvals
+korrekt `NO_GO` entschieden; LC2–LC6 wurden nicht freigegeben.
+
+Phase 33 beginnt deshalb nicht bei null und wiederholt keine optionalen
+Produktphasen. Sie auditiert den aktuellen `main` vollständig, schützt alle
+historischen Invarianten, schließt ausschließlich bestätigte repository-
+interne LC4-/LC5-Techniklücken und baut eine realistische isolierte
+Production-Contract-Evidence. Ausgangsstatus ist `IN_PROGRESS`, Technik und
+Quality `PENDING`, Aktivierung `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Kein Provider,
+Paid Offer, Cluster, Salary-, Tracker-, Scheduler-, Persona- oder Public-Trust-
+Scope wird durch die Existenz der Phase automatisch aktiviert.
+
+Abschluss ist erst zulässig, wenn jede Zeile der
+[Phase-33-AC-Matrix](./33-go-live-readiness-e2e-acceptance.md#21-akzeptanzkriterien-und-vollständige-actest-matrix)
+auf demselben unveränderlichen Candidate belegt ist und das
+[Findings Ledger](./phase33-findings-ledger.md) keine technische LC4-/LC5-
+P0/P1-Lücke mehr enthält. Selbst dann bleiben echte Provider-, Legal-, AVG-,
+Tax-, Finance-, Operations-, Staging-, Research-/WTP- und Approval-Gates
+separate Voraussetzungen für `GO_LIVE_APPROVED`.

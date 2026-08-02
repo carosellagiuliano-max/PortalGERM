@@ -12,6 +12,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   "talent_contact_request_received",
   "identity_revealed",
   "job_alert_preview",
+  "job_alert_digest",
   "job_alert_digest_mock",
   "subscription_activated",
   "subscription_renewal_reminder",

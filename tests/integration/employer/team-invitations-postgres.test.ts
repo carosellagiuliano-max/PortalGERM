@@ -65,6 +65,7 @@ beforeAll(async () => {
       APP_URL,
       DATABASE_URL: migrated.connectionString,
       RATE_LIMIT_BACKEND: "postgres",
+      EMAIL_PROVIDER_MODE: "local_mock",
     }),
   );
   await seedSharedCatalog(database);

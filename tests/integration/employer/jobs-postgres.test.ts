@@ -30,8 +30,6 @@ import {
   type JobWizardStepTwo,
 } from "@/lib/employer/jobs";
 import { createJobSlug } from "@/lib/jobs/slug";
-import { MockEmailProvider } from "@/lib/providers/email";
-import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
 import { MockJobroomProvider } from "@/lib/providers/jobroom";
 import {
   JOBROOM_FIXTURE_IDS,
@@ -591,7 +589,6 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
         correlationId: id(214),
         now: new Date(NOW.getTime() + 6_000),
       },
-      new MockEmailProvider(new PrismaEmailLogRepository(client)),
     );
     if (!rejected.ok) {
       throw new Error(`Admin rejection failed with ${rejected.code}.`);
@@ -610,14 +607,17 @@ describe("Phase 10 employer jobs PostgreSQL boundary", () => {
       ]),
     );
     await expect(
-      client.emailLog.findFirstOrThrow({
+      client.notificationOutbox.findFirstOrThrow({
         where: { templateKey: "job_rejected" },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         select: { payload: true, status: true },
       }),
     ).resolves.toMatchObject({
-      payload: { subject: "Dein Stelleninserat benötigt Anpassungen" },
-      status: "MOCK_RECORDED",
+      payload: {
+        jobTitle: expect.any(String),
+        reason: "QUALITY_REQUIREMENTS_NOT_MET",
+      },
+      status: "PENDING",
     });
   });
 

@@ -100,6 +100,35 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
           { scope: "IP", limit: 120, windowMs: HOUR },
         ],
       },
+      EMPLOYER_MESSAGE_SEND: {
+        buckets: [
+          { scope: "USER", limit: 60, windowMs: HOUR },
+          { scope: "IP", limit: 120, windowMs: HOUR },
+          { scope: "COMPANY", limit: 120, windowMs: HOUR },
+          { scope: "ACTOR_OR_IP_TARGET", limit: 20, windowMs: HOUR },
+        ],
+      },
+      INTERVIEW_PROPOSE: {
+        buckets: [
+          { scope: "USER", limit: 30, windowMs: HOUR },
+          { scope: "IP", limit: 90, windowMs: HOUR },
+          { scope: "COMPANY", limit: 60, windowMs: HOUR },
+          { scope: "ACTOR_OR_IP_TARGET", limit: 10, windowMs: HOUR },
+        ],
+      },
+      SUPPORT_CASE_CREATE: {
+        buckets: [
+          { scope: "USER", limit: 10, windowMs: DAY },
+          { scope: "IP", limit: 20, windowMs: DAY },
+        ],
+      },
+      SUPPORT_CASE_REPLY: {
+        buckets: [
+          { scope: "USER", limit: 30, windowMs: HOUR },
+          { scope: "IP", limit: 60, windowMs: HOUR },
+          { scope: "ACTOR_OR_IP_TARGET", limit: 15, windowMs: HOUR },
+        ],
+      },
       PRIVACY_REQUEST: {
         buckets: [{ scope: "USER", limit: 5, windowMs: 30 * DAY }],
       },

@@ -7,6 +7,10 @@ import { z } from "zod";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import {
+  documentObjectStoreActivationBinding,
+  documentScannerActivationBinding,
+} from "@/lib/documents/provider-activation-binding";
+import {
   getWorkerHandlerDefinition,
   type WorkerHandlerCatalogEntry,
 } from "@/lib/ops/handler-catalog";
@@ -20,6 +24,12 @@ import {
 } from "@/lib/ops/worker-activation-policy";
 import { getProviderDefinition } from "@/lib/ops/provider-catalog";
 import { resolveWorkerLeasePolicy } from "@/lib/ops/worker-lease-policy";
+import {
+  emailProviderActivationBinding,
+  type EmailProviderActivationUseCase,
+} from "@/lib/providers/email/provider-activation-binding";
+import { paymentProviderActivationBinding } from "@/lib/providers/payments/provider-activation-binding";
+import { privacyExportStoreActivationBinding } from "@/lib/privacy/provider-activation-binding";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const safeReferenceSchema = z
@@ -60,10 +70,17 @@ export async function resolvePersistedProviderActivation(
     adapterKey: string;
     adapterVersion: string;
     environment: string;
+    expectedConfigurationDigest?: string;
+    expectedMode?: "SANDBOX" | "ALLOWLIST" | "LIVE";
+    expectedSecretVersionRef?: string;
     now: Date;
     useCase: string;
   }>,
-): Promise<ProviderActivationDecision> {
+): Promise<
+  | (Extract<ProviderActivationDecision, { active: true }> &
+      Readonly<{ activationId: string }>)
+  | Extract<ProviderActivationDecision, { active: false }>
+> {
   const activation = await database.providerActivation.findFirst({
     where: {
       environment: input.environment,
@@ -71,7 +88,10 @@ export async function resolvePersistedProviderActivation(
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
-  return resolveProviderActivation({ ...input, activation });
+  const decision = resolveProviderActivation({ ...input, activation });
+  return decision.active
+    ? Object.freeze({ ...decision, activationId: activation!.id })
+    : decision;
 }
 
 export async function activateSandboxHandler(
@@ -214,12 +234,78 @@ export async function activateSandboxProvider(
     input.adapterVersion,
   );
   if (provider === null) throw new Error("PROVIDER_NOT_REGISTERED");
-  const configurationDigest = digestJson({
-    adapterKey: provider.adapterKey,
-    adapterVersion: provider.adapterVersion,
-    region: input.region,
-    useCase: provider.useCase,
-  });
+  const documentBinding =
+    provider.useCase === "documents.object-store"
+      ? documentObjectStoreActivationBinding(input.environment)
+      : provider.useCase === "documents.malware-scan"
+        ? documentScannerActivationBinding(input.environment)
+        : null;
+  const emailBinding = isEmailProviderUseCase(provider.useCase)
+    ? emailProviderActivationBinding(input.environment, provider.useCase)
+    : null;
+  const paymentBinding =
+    provider.useCase === "payments.hosted-checkout"
+      ? paymentProviderActivationBinding(input.environment)
+      : null;
+  const privacyBinding =
+    provider.useCase === "privacy.export-store"
+      ? privacyExportStoreActivationBinding(input.environment)
+      : null;
+  if (
+    (provider.useCase === "documents.object-store" ||
+      provider.useCase === "documents.malware-scan") &&
+    (documentBinding === null ||
+      documentBinding.adapterKey !== provider.adapterKey ||
+      documentBinding.region !== input.region ||
+      documentBinding.expectedMode !== "SANDBOX" ||
+      documentBinding.expectedSecretVersionRef !== input.secretVersionRef ||
+      provider.adapterVersion !== "v1")
+  ) {
+    throw new Error("PROVIDER_CONFIGURATION_SCOPE_MISMATCH");
+  }
+  if (
+    isEmailProviderUseCase(provider.useCase) &&
+    (emailBinding === null ||
+      emailBinding.adapterKey !== provider.adapterKey ||
+      emailBinding.expectedMode !== "SANDBOX" ||
+      (emailBinding.expectedSecretVersionRef !== undefined &&
+        emailBinding.expectedSecretVersionRef !== input.secretVersionRef) ||
+      provider.adapterVersion !== emailBinding.adapterVersion)
+  ) {
+    throw new Error("PROVIDER_CONFIGURATION_SCOPE_MISMATCH");
+  }
+  if (
+    provider.useCase === "payments.hosted-checkout" &&
+    (paymentBinding === null ||
+      paymentBinding.adapterKey !== provider.adapterKey ||
+      paymentBinding.expectedMode !== "SANDBOX" ||
+      paymentBinding.expectedSecretVersionRef !== input.secretVersionRef ||
+      paymentBinding.region !== input.region ||
+      provider.adapterVersion !== paymentBinding.adapterVersion)
+  ) {
+    throw new Error("PROVIDER_CONFIGURATION_SCOPE_MISMATCH");
+  }
+  if (
+    provider.useCase === "privacy.export-store" &&
+    (privacyBinding === null ||
+      privacyBinding.adapterKey !== provider.adapterKey ||
+      privacyBinding.expectedMode !== "SANDBOX" ||
+      privacyBinding.expectedSecretVersionRef !== input.secretVersionRef ||
+      provider.adapterVersion !== privacyBinding.adapterVersion)
+  ) {
+    throw new Error("PROVIDER_CONFIGURATION_SCOPE_MISMATCH");
+  }
+  const configurationDigest =
+    documentBinding?.expectedConfigurationDigest ??
+    emailBinding?.expectedConfigurationDigest ??
+    paymentBinding?.expectedConfigurationDigest ??
+    privacyBinding?.expectedConfigurationDigest ??
+    digestJson({
+      adapterKey: provider.adapterKey,
+      adapterVersion: provider.adapterVersion,
+      region: input.region,
+      useCase: provider.useCase,
+    });
 
   return database.$transaction(async (transaction) => {
     const previous = await transaction.providerActivation.findMany({
@@ -303,14 +389,26 @@ export async function activateSandboxProvider(
   });
 }
 
-function assertLocalSandboxAuthority(input: Readonly<{
-  actorReference: string;
-  environment: ServerEnvironment;
-  evidenceDigest: string;
-  now: Date;
-  reasonCode: string;
-  stepUpEvidenceDigest: string;
-}>) {
+function isEmailProviderUseCase(
+  value: string,
+): value is EmailProviderActivationUseCase {
+  return (
+    value === "email.transactional" ||
+    value === "email.job-alert" ||
+    value === "email.delivery-events"
+  );
+}
+
+function assertLocalSandboxAuthority(
+  input: Readonly<{
+    actorReference: string;
+    environment: ServerEnvironment;
+    evidenceDigest: string;
+    now: Date;
+    reasonCode: string;
+    stepUpEvidenceDigest: string;
+  }>,
+) {
   if (
     (input.environment.APP_ENV !== "local" &&
       input.environment.APP_ENV !== "ci") ||

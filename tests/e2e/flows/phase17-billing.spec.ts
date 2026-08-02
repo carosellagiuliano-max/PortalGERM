@@ -937,9 +937,9 @@ async function assertPaidStarterEvidence(
     },
   ]);
 
-  const billingEmails = await database.emailLog.findMany({
+  const billingEmails = await database.notificationOutbox.findMany({
     where: {
-      recipient: scenario.billing.billingContactEmail,
+      recipientUserId: scenario.ownerUserId,
       templateKey: {
         in: [
           "invoice_issued",
@@ -955,9 +955,9 @@ async function assertPaidStarterEvidence(
     },
   });
   expect(billingEmails).toEqual([
-    { status: "MOCK_RECORDED", templateKey: "invoice_issued" },
-    { status: "MOCK_RECORDED", templateKey: "payment_received" },
-    { status: "MOCK_RECORDED", templateKey: "subscription_activated" },
+    { status: "PENDING", templateKey: "invoice_issued" },
+    { status: "PENDING", templateKey: "payment_received" },
+    { status: "PENDING", templateKey: "subscription_activated" },
   ]);
 
   const auditCounts = await Promise.all([

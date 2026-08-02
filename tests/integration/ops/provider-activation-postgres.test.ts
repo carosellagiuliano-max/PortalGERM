@@ -43,7 +43,7 @@ describe("Phase-23 persisted provider activation ledger", () => {
       now: NOW,
       reasonCode: "CONTROLLED_SANDBOX",
       region: "local-test",
-      secretVersionRef: "secret:test:v1",
+      secretVersionRef: "builtin:local-mock-mailbox:v1",
       stepUpEvidenceDigest: DIGEST,
       sustainableCapacity: 1_000,
       unitCostMicros: 10n,
@@ -58,6 +58,7 @@ describe("Phase-23 persisted provider activation ledger", () => {
       useCase: "email.transactional",
     });
     expect(decision).toEqual({
+      activationId: activation.id,
       active: true,
       adapterKey: "local_mock",
       adapterVersion: "v1",
@@ -186,6 +187,7 @@ describe("Phase-23 persisted provider activation ledger", () => {
 function sandboxEnvironment() {
   return parseEnvironment(
     createValidEnvironment({
+      EMAIL_PROVIDER_MODE: "local_mock",
       WORKER_RUNTIME: "sandbox_command",
     }),
   );

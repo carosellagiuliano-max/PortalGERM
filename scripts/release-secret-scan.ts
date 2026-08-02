@@ -8,6 +8,7 @@ import {
   scanPhase32ArtifactSecrets,
   type Phase32SecretCandidate,
 } from "@/lib/release/phase32-artifact-secret-scan";
+import { SENSITIVE_ENVIRONMENT_VARIABLES } from "@/lib/security/sensitive-data-registry";
 
 const repository = process.cwd();
 const tracked = execFileSync("git", ["ls-files", "-z"], {
@@ -60,23 +61,7 @@ config({
   override: false,
   quiet: true,
 });
-const secretVariables = [
-  "SESSION_SECRET",
-  "AUDIT_IP_HASH_KEYS",
-  "RADAR_OPAQUE_LOOKUP_KEYS",
-  "RADAR_OPAQUE_ENCRYPTION_KEYS",
-  "REVEAL_CONFIRMATION_KEYS",
-  "PII_REVEAL_KEYS",
-  "NOTIFICATION_DELIVERY_KEYS",
-  "DEV_MAILBOX_SECRET",
-  "BACKUP_AGE_IDENTITY_FILE",
-  "STRIPE_SECRET_KEY",
-  "STRIPE_WEBHOOK_SECRET",
-  "EMAIL_PROVIDER_API_KEY",
-  "OPENAI_API_KEY",
-  "SEARCH_LEARNING_HASH_SECRET",
-  "MAPS_API_KEY",
-] as const;
+const secretVariables = SENSITIVE_ENVIRONMENT_VARIABLES;
 for (const variable of secretVariables) {
   const value = process.env[variable]?.trim();
   if (value === undefined || value.length < 12) continue;
@@ -97,9 +82,15 @@ const artifactRoot = process.env.PHASE32_ARTIFACT_SCAN_ROOT?.trim();
 if (artifactRoot !== undefined && artifactRoot !== "") {
   const artifactCandidates: Phase32SecretCandidate[] = [
     ...secretVariables,
-    "DATABASE_URL",
-    "TEST_DATABASE_URL",
     "STRIPE_SECRET_VERSION",
+    "RESEND_SECRET_VERSION",
+    "RESEND_WEBHOOK_SECRET_VERSION",
+    "DOCUMENT_STORAGE_SECRET_VERSION",
+    "DOCUMENT_SCANNER_SECRET_VERSION",
+    "PHASE33_STRIPE_SECRET_VERSION",
+    "PHASE33_RESEND_SECRET_VERSION",
+    "PHASE33_RESEND_WEBHOOK_SECRET_VERSION",
+    "PHASE33_STORAGE_SECRET_VERSION",
   ].flatMap((variable) => {
     const value = process.env[variable]?.trim();
     if (value === undefined || value.length < 12) return [];

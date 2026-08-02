@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
+import { CLUSTER_EVALUATION_BATCH_SIZE } from "@/lib/admin/cluster-evaluation-policy";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { filterPubliclyEligibleJobsInTransaction } from "@/lib/jobs/public-eligibility";
 import { calculateRelevanceProxy } from "@/lib/search/relevance";
@@ -25,7 +26,6 @@ import {
 } from "@/lib/admin/common";
 
 const DAY_MS = 86_400_000;
-const EVALUATION_BATCH_SIZE = 500;
 
 const evaluationSchema = z.strictObject({
   cantonId: z.uuid(),
@@ -39,7 +39,7 @@ export async function evaluateClusterLaunch(
 ) {
   const parsed = evaluationSchema.safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
-  if (!await requireCapability(dependencies, "ADMIN_CONTENT_MANAGE")) {
+  if (!(await requireCapability(dependencies, "ADMIN_CONTENT_MANAGE"))) {
     return adminFailure("FORBIDDEN");
   }
   const evaluatedAt = adminNow(dependencies.now);
@@ -86,7 +86,8 @@ export async function evaluateClusterLaunch(
             select: { id: true, name: true },
           }),
         ]);
-        if (canton === null || category === null) return adminFailure("NOT_FOUND");
+        if (canton === null || category === null)
+          return adminFailure("NOT_FOUND");
 
         const evidenceWindowStart = new Date(
           evaluatedAt.getTime() -
@@ -169,17 +170,18 @@ export async function evaluateClusterLaunch(
         });
         const promotedQueryResultCounts = promotedQueries.map((query) => ({
           query,
-          relevantJobCount: eligibleJobs.filter((job) =>
-            calculateRelevanceProxy(query, {
-              title: job.title,
-              companyName: job.companyName,
-              body: [
-                job.description,
-                ...job.tasks,
-                ...job.requirements,
-                job.offer ?? "",
-              ].join(" "),
-            }).score > 0
+          relevantJobCount: eligibleJobs.filter(
+            (job) =>
+              calculateRelevanceProxy(query, {
+                title: job.title,
+                companyName: job.companyName,
+                body: [
+                  job.description,
+                  ...job.tasks,
+                  ...job.requirements,
+                  job.offer ?? "",
+                ].join(" "),
+              }).score > 0,
           ).length,
         }));
         const evidence: ClusterLaunchEvidenceV1 = Object.freeze({
@@ -189,10 +191,13 @@ export async function evaluateClusterLaunch(
           evaluatedAt: evaluatedAt.toISOString(),
           evidenceWindowStart: evidenceWindowStart.toISOString(),
           evidenceWindowEnd: evaluatedAt.toISOString(),
-          candidateActivityWindowStart: candidateActivityWindowStart.toISOString(),
+          candidateActivityWindowStart:
+            candidateActivityWindowStart.toISOString(),
           liveJobCount: eligibleJobs.length,
           activeCandidateCount,
-          activeEmployerCount: new Set(eligibleJobs.map(({ companyId }) => companyId)).size,
+          activeEmployerCount: new Set(
+            eligibleJobs.map(({ companyId }) => companyId),
+          ).size,
           applicationCountsByEligibleJob: Object.freeze(
             eligibleJobIds.map((jobId) => applicationCounts.get(jobId) ?? 0),
           ),
@@ -291,7 +296,7 @@ async function loadEligibleClusterJobs(
         expiresAt: { gt: now },
       },
       orderBy: { id: "asc" },
-      take: EVALUATION_BATCH_SIZE,
+      take: CLUSTER_EVALUATION_BATCH_SIZE,
       select: { id: true },
     });
     if (rows.length === 0) break;
@@ -302,12 +307,12 @@ async function loadEligibleClusterJobs(
       transaction,
     );
     eligibleIds.push(...eligible.map(({ id }) => id));
-    if (rows.length < EVALUATION_BATCH_SIZE) break;
+    if (rows.length < CLUSTER_EVALUATION_BATCH_SIZE) break;
     afterId = rows.at(-1)?.id;
     if (afterId === undefined) break;
   }
   const jobs: EligibleClusterJob[] = [];
-  for (const ids of chunks(eligibleIds, EVALUATION_BATCH_SIZE)) {
+  for (const ids of chunks(eligibleIds, CLUSTER_EVALUATION_BATCH_SIZE)) {
     const rows = await transaction.job.findMany({
       where: { id: { in: [...ids] } },
       select: {
@@ -327,15 +332,19 @@ async function loadEligibleClusterJobs(
     });
     for (const row of rows) {
       if (row.publishedRevision === null) continue;
-      jobs.push(Object.freeze({
-        id: row.id,
-        companyId: row.companyId,
-        companyName: row.company.name,
-        ...row.publishedRevision,
-      }));
+      jobs.push(
+        Object.freeze({
+          id: row.id,
+          companyId: row.companyId,
+          companyName: row.company.name,
+          ...row.publishedRevision,
+        }),
+      );
     }
   }
-  return Object.freeze(jobs.sort((left, right) => left.id.localeCompare(right.id)));
+  return Object.freeze(
+    jobs.sort((left, right) => left.id.localeCompare(right.id)),
+  );
 }
 
 async function loadApplicationCounts(
@@ -345,7 +354,7 @@ async function loadApplicationCounts(
   windowEnd: Date,
 ): Promise<ReadonlyMap<string, number>> {
   const counts = new Map<string, number>();
-  for (const ids of chunks(jobIds, EVALUATION_BATCH_SIZE)) {
+  for (const ids of chunks(jobIds, CLUSTER_EVALUATION_BATCH_SIZE)) {
     const applications = await transaction.application.findMany({
       where: {
         jobId: { in: [...ids] },
@@ -375,7 +384,7 @@ async function loadResponseEvidence(
 ): Promise<Readonly<{ due: number; onTime: number }>> {
   let due = 0;
   let onTime = 0;
-  for (const ids of chunks(jobIds, EVALUATION_BATCH_SIZE)) {
+  for (const ids of chunks(jobIds, CLUSTER_EVALUATION_BATCH_SIZE)) {
     const [applications, canonicalResponses] = await Promise.all([
       transaction.application.findMany({
         where: {
@@ -405,7 +414,12 @@ async function loadResponseEvidence(
           jobProvenanceSnapshot: "LIVE",
           occurredAt: { lte: windowEnd },
         },
-        select: { dedupeKey: true, companyId: true, jobId: true, occurredAt: true },
+        select: {
+          dedupeKey: true,
+          companyId: true,
+          jobId: true,
+          occurredAt: true,
+        },
       }),
     ]);
     const firstResponseByApplication = new Map<string, Date>();
@@ -423,10 +437,16 @@ async function loadResponseEvidence(
     }
     for (const application of applications) {
       const targetDays = application.submissionSnapshot?.responseTargetDays;
-      if (!Number.isSafeInteger(targetDays) || targetDays === undefined || targetDays < 1) {
+      if (
+        !Number.isSafeInteger(targetDays) ||
+        targetDays === undefined ||
+        targetDays < 1
+      ) {
         continue;
       }
-      const dueAt = new Date(application.submittedAt.getTime() + targetDays * DAY_MS);
+      const dueAt = new Date(
+        application.submittedAt.getTime() + targetDays * DAY_MS,
+      );
       if (dueAt > windowEnd) continue;
       due += 1;
       const firstEmployerResponse = firstResponseByApplication.get(
@@ -444,7 +464,10 @@ async function loadResponseEvidence(
   return Object.freeze({ due, onTime });
 }
 
-function chunks<T>(values: readonly T[], size: number): readonly (readonly T[])[] {
+function chunks<T>(
+  values: readonly T[],
+  size: number,
+): readonly (readonly T[])[] {
   const result: T[][] = [];
   for (let index = 0; index < values.length; index += size) {
     result.push(values.slice(index, index + size));
@@ -452,16 +475,18 @@ function chunks<T>(values: readonly T[], size: number): readonly (readonly T[])[
   return result;
 }
 
-function assessmentResult(assessment: Readonly<{
-  id: string;
-  status: string;
-  evidenceHash: string;
-  liveJobCount: number;
-  activeCandidateCount: number;
-  activeEmployerCount: number;
-  medianApplicationsTimes2: number;
-  responseRateBasisPoints: number;
-  contentCoverageBasisPoints: number;
-}>) {
+function assessmentResult(
+  assessment: Readonly<{
+    id: string;
+    status: string;
+    evidenceHash: string;
+    liveJobCount: number;
+    activeCandidateCount: number;
+    activeEmployerCount: number;
+    medianApplicationsTimes2: number;
+    responseRateBasisPoints: number;
+    contentCoverageBasisPoints: number;
+  }>,
+) {
   return Object.freeze({ ...assessment });
 }

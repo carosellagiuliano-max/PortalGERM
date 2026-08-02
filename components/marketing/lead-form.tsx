@@ -245,16 +245,18 @@ function TextField({
 }> & Pick<React.ComponentProps<"input">, "autoComplete" | "inputMode" | "maxLength" | "placeholder">) {
   const errorId = `${id}-error`;
   const invalid = hasError(state.fieldErrors, name);
+  const returnedValue = state.values?.[name] ?? "";
   return (
     <div className="grid content-start gap-2">
       <Label htmlFor={id}>{label}</Label>
       <Input
+        key={`${name}:${returnedValue}`}
         {...inputProps}
         id={id}
         name={name}
         type={type}
         required={required}
-        defaultValue={state.values?.[name]}
+        defaultValue={returnedValue || undefined}
         className="h-11"
         aria-invalid={invalid || undefined}
         aria-describedby={invalid ? errorId : undefined}

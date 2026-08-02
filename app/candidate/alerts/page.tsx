@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { BellRingIcon, ShieldCheckIcon } from "lucide-react";
 
-import { AlertDeliveryConsentCard, AlertList } from "@/components/candidate/alert-list";
+import {
+  AlertDeliveryConsentCard,
+  AlertList,
+} from "@/components/candidate/alert-list";
 import { AlertForm } from "@/components/candidate/alert-form";
 import {
   Card,
@@ -12,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getCandidateJobAlertPageData } from "@/lib/candidate/job-alerts";
+import { getServerEnvironment } from "@/lib/config/env";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,12 +27,19 @@ export const metadata: Metadata = {
 export default async function CandidateAlertsPage() {
   const user = await requireCandidatePage();
   const data = await getCandidateJobAlertPageData(user.id);
+  const environment = getServerEnvironment();
+  const manualMockEnabled =
+    environment.EMAIL_PROVIDER_MODE === "local_mock" &&
+    (environment.APP_ENV === "local" || environment.APP_ENV === "ci");
 
   return (
     <section aria-labelledby="alerts-title" className="grid max-w-5xl gap-7">
       <header>
         <p className="eyebrow">Jobabos</p>
-        <h1 id="alerts-title" className="mt-2 text-3xl font-semibold tracking-tight">
+        <h1
+          id="alerts-title"
+          className="mt-2 text-3xl font-semibold tracking-tight"
+        >
           Passende Stellen im Blick behalten
         </h1>
         <p className="mt-3 max-w-3xl leading-7 text-muted-foreground">
@@ -45,7 +56,8 @@ export default async function CandidateAlertsPage() {
             </span>
             <CardTitle as="h2">Neues Jobabo</CardTitle>
             <CardDescription>
-              Die Aktivierung und die Service-Zustellung sind bewusst getrennte Entscheidungen.
+              Die Aktivierung und die Service-Zustellung sind bewusst getrennte
+              Entscheidungen.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -63,12 +75,17 @@ export default async function CandidateAlertsPage() {
               <span className="mb-2 grid size-11 place-items-center rounded-lg bg-emerald-100 text-emerald-800">
                 <ShieldCheckIcon className="size-5" aria-hidden="true" />
               </span>
-              <CardTitle as="h2">Transparenter MVP-Modus</CardTitle>
+              <CardTitle as="h2">
+                {manualMockEnabled
+                  ? "Transparenter Testmodus"
+                  : "Service-Zustellung"}
+              </CardTitle>
             </CardHeader>
             <CardContent className="text-sm leading-6 text-muted-foreground">
-              Job-Alerts werden im MVP nur als lokaler Mock-Eintrag erzeugt,
-              ohne externe Tracking-Pixel. Du kannst sie jederzeit mit einem
-              Klick pausieren.
+              {manualMockEnabled
+                ? "Job-Alerts werden lokal als klar gekennzeichneter Mock-Eintrag erzeugt, ohne externe Wirkung."
+                : "Fällige Job-Alerts werden über die freigegebene Service-Zustellung verarbeitet, ohne Marketing-Einwilligung oder Tracking-Pixel."}{" "}
+              Du kannst sie jederzeit mit einem Klick pausieren.
             </CardContent>
           </Card>
         </div>
@@ -77,7 +94,7 @@ export default async function CandidateAlertsPage() {
       <div>
         <h2 className="text-xl font-semibold">Deine Jobabos</h2>
         <div className="mt-4">
-          <AlertList data={data} />
+          <AlertList data={data} manualMockEnabled={manualMockEnabled} />
         </div>
       </div>
     </section>

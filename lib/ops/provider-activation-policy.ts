@@ -44,6 +44,9 @@ export type ProviderActivationDecision =
       reason:
         | "MISSING_LEDGER"
         | "LEDGER_SCOPE_MISMATCH"
+        | "ACTIVATION_MODE_MISMATCH"
+        | "CONFIGURATION_MISMATCH"
+        | "SECRET_VERSION_MISMATCH"
         | "DISABLED"
         | "KILL_SWITCH"
         | "NOT_YET_EFFECTIVE"
@@ -61,6 +64,9 @@ export function resolveProviderActivation(input: Readonly<{
   adapterKey: string;
   adapterVersion: string;
   environment: string;
+  expectedConfigurationDigest?: string;
+  expectedMode?: Exclude<OperationsActivationMode, "DISABLED">;
+  expectedSecretVersionRef?: string;
   healthMaximumAgeMilliseconds?: number;
   now: Date;
   useCase: string;
@@ -78,6 +84,24 @@ export function resolveProviderActivation(input: Readonly<{
     return inactive("LEDGER_SCOPE_MISMATCH");
   }
   if (activation.mode === "DISABLED") return inactive("DISABLED");
+  if (
+    input.expectedMode !== undefined &&
+    activation.mode !== input.expectedMode
+  ) {
+    return inactive("ACTIVATION_MODE_MISMATCH");
+  }
+  if (
+    input.expectedConfigurationDigest !== undefined &&
+    activation.configurationDigest !== input.expectedConfigurationDigest
+  ) {
+    return inactive("CONFIGURATION_MISMATCH");
+  }
+  if (
+    input.expectedSecretVersionRef !== undefined &&
+    activation.secretVersionRef !== input.expectedSecretVersionRef
+  ) {
+    return inactive("SECRET_VERSION_MISMATCH");
+  }
   if (activation.revokedAt !== null) return inactive("REVOKED");
   if (activation.killSwitchEngaged) return inactive("KILL_SWITCH");
   if (
@@ -143,7 +167,11 @@ function isModeAllowedInEnvironment(
     return environment === "local" || environment === "ci" || environment === "staging";
   }
   if (mode === "ALLOWLIST") {
-    return environment === "staging" || environment === "production";
+    return (
+      environment === "ci" ||
+      environment === "staging" ||
+      environment === "production"
+    );
   }
   return environment === "production";
 }

@@ -16,8 +16,11 @@ import {
 } from "@/lib/documents/document-upload-policy";
 import {
   assertDocumentBulkAccessDisabled,
+  isDocumentDataProvenanceAllowed,
   resolveDocumentRuntime,
 } from "@/lib/documents/runtime-policy";
+import { hasExactDocumentProviderAuthority } from "@/lib/documents/provider-activation-guard";
+import { getDocumentStorageEncryptionVersion } from "@/lib/providers/storage/document-storage-composition";
 import type { DocumentObjectStore } from "@/lib/providers/storage/document-object-store";
 import { DocumentObjectStoreFailure } from "@/lib/providers/storage/document-object-store";
 import type {
@@ -75,6 +78,15 @@ export async function createDocumentUploadIntent(
     });
   }
   assertDocumentBulkAccessDisabled(dependencies.environment);
+  const encryptionKeyVersion = getDocumentStorageEncryptionVersion(
+    dependencies.environment,
+  );
+  if (encryptionKeyVersion === null) {
+    return Object.freeze({
+      ok: false,
+      code: "DOCUMENT_VAULT_UNAVAILABLE",
+    });
+  }
   const policy = validateDocumentUploadMetadata(input);
   if (!policy.ok || !isBoundedIdempotencyKey(input.idempotencyKey)) {
     return Object.freeze({
@@ -89,214 +101,215 @@ export async function createDocumentUploadIntent(
     return await withSerializationRetry(() =>
       dependencies.database.$transaction(
         async (transaction) => {
-        await acquireDocumentLock(transaction, input.actorUserId, "CV");
-        const profile = await transaction.candidateProfile.findUnique({
-          where: { userId: input.actorUserId },
-          select: {
-            id: true,
-            user: {
-              select: {
-                role: true,
-                status: true,
-                dataProvenance: true,
+          await acquireDocumentLock(transaction, input.actorUserId, "CV");
+          const profile = await transaction.candidateProfile.findUnique({
+            where: { userId: input.actorUserId },
+            select: {
+              id: true,
+              user: {
+                select: {
+                  role: true,
+                  status: true,
+                  dataProvenance: true,
+                },
               },
             },
-          },
-        });
-        if (
-          profile === null ||
-          profile.user.role !== "CANDIDATE" ||
-          profile.user.status !== "ACTIVE" ||
-          !["DEMO", "TEST"].includes(profile.user.dataProvenance)
-        ) {
-          return Object.freeze({
-            ok: false as const,
-            code: "NOT_AUTHORIZED" as const,
           });
-        }
-
-        const replay = await transaction.documentUploadIntent.findUnique({
-          where: {
-            actorUserId_idempotencyKey: {
-              actorUserId: input.actorUserId,
-              idempotencyKey: input.idempotencyKey,
-            },
-          },
-          select: {
-            id: true,
-            documentVersionId: true,
-            expectedSizeBytes: true,
-            expectedSha256: true,
-            declaredMimeType: true,
-            safeFilename: true,
-            expiresAt: true,
-            status: true,
-          },
-        });
-        if (replay !== null) {
           if (
-            replay.expectedSizeBytes !== policy.expectedSizeBytes ||
-            replay.expectedSha256 !== (policy.expectedSha256 ?? null) ||
-            replay.declaredMimeType !== policy.declaredMimeType ||
-            replay.safeFilename !== policy.safeFilename
+            profile === null ||
+            profile.user.role !== "CANDIDATE" ||
+            profile.user.status !== "ACTIVE" ||
+            !isDocumentDataProvenanceAllowed(
+              dependencies.environment,
+              profile.user.dataProvenance,
+            )
           ) {
+            return Object.freeze({
+              ok: false as const,
+              code: "NOT_AUTHORIZED" as const,
+            });
+          }
+
+          const replay = await transaction.documentUploadIntent.findUnique({
+            where: {
+              actorUserId_idempotencyKey: {
+                actorUserId: input.actorUserId,
+                idempotencyKey: input.idempotencyKey,
+              },
+            },
+            select: {
+              id: true,
+              documentVersionId: true,
+              expectedSizeBytes: true,
+              expectedSha256: true,
+              declaredMimeType: true,
+              safeFilename: true,
+              expiresAt: true,
+              status: true,
+            },
+          });
+          if (replay !== null) {
+            if (
+              replay.expectedSizeBytes !== policy.expectedSizeBytes ||
+              replay.expectedSha256 !== (policy.expectedSha256 ?? null) ||
+              replay.declaredMimeType !== policy.declaredMimeType ||
+              replay.safeFilename !== policy.safeFilename
+            ) {
+              return Object.freeze({
+                ok: false as const,
+                code: "UPLOAD_CONFLICT" as const,
+              });
+            }
+            return Object.freeze({
+              ok: true as const,
+              duplicate: true,
+              intentId: replay.id,
+              documentVersionId: replay.documentVersionId,
+              expiresAt: replay.expiresAt,
+              status: replay.status,
+            });
+          }
+
+          await transaction.documentUploadIntent.updateMany({
+            where: {
+              candidateProfileId: profile.id,
+              purpose: "CV",
+              status: { in: ["CREATED", "UPLOADING", "UPLOADED"] },
+              expiresAt: { lte: now },
+            },
+            data: {
+              status: "EXPIRED",
+              abortedAt: now,
+            },
+          });
+          const activeUploads = await transaction.documentUploadIntent.count({
+            where: {
+              actorUserId: input.actorUserId,
+              status: { in: ["CREATED", "UPLOADING", "UPLOADED"] },
+              expiresAt: { gt: now },
+            },
+          });
+          if (
+            activeUploads >=
+            DOCUMENT_UPLOAD_POLICY_V1.maximumConcurrentUploadsPerActor
+          ) {
+            return Object.freeze({
+              ok: false as const,
+              code: "UPLOAD_QUOTA_EXCEEDED" as const,
+            });
+          }
+          const currentForPurpose =
+            await transaction.documentUploadIntent.findFirst({
+              where: {
+                candidateProfileId: profile.id,
+                purpose: "CV",
+                status: { in: ["CREATED", "UPLOADING", "UPLOADED"] },
+                expiresAt: { gt: now },
+              },
+              select: { id: true },
+            });
+          if (currentForPurpose !== null) {
             return Object.freeze({
               ok: false as const,
               code: "UPLOAD_CONFLICT" as const,
             });
           }
-          return Object.freeze({
-            ok: true as const,
-            duplicate: true,
-            intentId: replay.id,
-            documentVersionId: replay.documentVersionId,
-            expiresAt: replay.expiresAt,
-            status: replay.status,
-          });
-        }
 
-        await transaction.documentUploadIntent.updateMany({
-          where: {
-            candidateProfileId: profile.id,
-            purpose: "CV",
-            status: { in: ["CREATED", "UPLOADING", "UPLOADED"] },
-            expiresAt: { lte: now },
-          },
-          data: {
-            status: "EXPIRED",
-            abortedAt: now,
-          },
-        });
-        const activeUploads = await transaction.documentUploadIntent.count({
-          where: {
-            actorUserId: input.actorUserId,
-            status: { in: ["CREATED", "UPLOADING", "UPLOADED"] },
-            expiresAt: { gt: now },
-          },
-        });
-        if (
-          activeUploads >=
-          DOCUMENT_UPLOAD_POLICY_V1.maximumConcurrentUploadsPerActor
-        ) {
-          return Object.freeze({
-            ok: false as const,
-            code: "UPLOAD_QUOTA_EXCEEDED" as const,
-          });
-        }
-        const currentForPurpose =
-          await transaction.documentUploadIntent.findFirst({
+          const document = await transaction.document.upsert({
             where: {
+              candidateProfileId_purpose: {
+                candidateProfileId: profile.id,
+                purpose: "CV",
+              },
+            },
+            update: { updatedAt: now },
+            create: {
               candidateProfileId: profile.id,
               purpose: "CV",
-              status: { in: ["CREATED", "UPLOADING", "UPLOADED"] },
-              expiresAt: { gt: now },
+              createdAt: now,
+              updatedAt: now,
             },
             select: { id: true },
           });
-        if (currentForPurpose !== null) {
-          return Object.freeze({
-            ok: false as const,
-            code: "UPLOAD_CONFLICT" as const,
+          const latestVersion = await transaction.documentVersion.findFirst({
+            where: { documentId: document.id },
+            orderBy: [{ sequence: "desc" }, { id: "desc" }],
+            select: { sequence: true },
           });
-        }
-
-        const document = await transaction.document.upsert({
-          where: {
-            candidateProfileId_purpose: {
+          const documentVersionId = randomUUID();
+          const objectVersion = randomUUID();
+          await transaction.documentVersion.create({
+            data: {
+              id: documentVersionId,
+              documentId: document.id,
               candidateProfileId: profile.id,
-              purpose: "CV",
+              sequence: (latestVersion?.sequence ?? 0) + 1,
+              objectKey: `candidate-cv/${documentVersionId}`,
+              providerObjectVersion: objectVersion,
+              safeFilename: policy.safeFilename,
+              declaredMimeType: policy.declaredMimeType,
+              encryptionKeyVersion,
+              storageRegion: dependencies.environment.DOCUMENT_STORAGE_REGION,
+              status: "UPLOADING",
+              createdAt: now,
             },
-          },
-          update: { updatedAt: now },
-          create: {
-            candidateProfileId: profile.id,
-            purpose: "CV",
-            createdAt: now,
-            updatedAt: now,
-          },
-          select: { id: true },
-        });
-        const latestVersion = await transaction.documentVersion.findFirst({
-          where: { documentId: document.id },
-          orderBy: [{ sequence: "desc" }, { id: "desc" }],
-          select: { sequence: true },
-        });
-        const documentVersionId = randomUUID();
-        const objectVersion = randomUUID();
-        const writer =
-          dependencies.environment.secrets.keyrings.DOCUMENT_STORAGE_KEYS[0]!;
-        await transaction.documentVersion.create({
-          data: {
-            id: documentVersionId,
-            documentId: document.id,
-            candidateProfileId: profile.id,
-            sequence: (latestVersion?.sequence ?? 0) + 1,
-            objectKey: `candidate-cv/${documentVersionId}`,
-            providerObjectVersion: objectVersion,
-            safeFilename: policy.safeFilename,
-            declaredMimeType: policy.declaredMimeType,
-            encryptionKeyVersion: writer.version,
-            storageRegion: dependencies.environment.DOCUMENT_STORAGE_REGION,
-            status: "UPLOADING",
-            createdAt: now,
-          },
-        });
-        const expiresAt = new Date(
-          now.getTime() + DOCUMENT_UPLOAD_POLICY_V1.intentTtlMilliseconds,
-        );
-        const intent = await transaction.documentUploadIntent.create({
-          data: {
+          });
+          const expiresAt = new Date(
+            now.getTime() + DOCUMENT_UPLOAD_POLICY_V1.intentTtlMilliseconds,
+          );
+          const intent = await transaction.documentUploadIntent.create({
+            data: {
+              documentVersionId,
+              candidateProfileId: profile.id,
+              actorUserId: input.actorUserId,
+              purpose: "CV",
+              idempotencyKey: input.idempotencyKey,
+              expectedSizeBytes: policy.expectedSizeBytes,
+              expectedSha256: policy.expectedSha256,
+              declaredMimeType: policy.declaredMimeType,
+              safeFilename: policy.safeFilename,
+              status: "CREATED",
+              expiresAt,
+              createdAt: now,
+              updatedAt: now,
+            },
+            select: { id: true },
+          });
+          await transaction.documentAccessEvent.create({
+            data: {
+              documentVersionId,
+              actorUserId: input.actorUserId,
+              kind: "UPLOAD_INTENT_CREATED",
+              outcomeCode: "CREATED",
+              correlationId: input.correlationId,
+              occurredAt: now,
+            },
+          });
+          await writeRequiredAudit(
+            createPrismaTransactionAuditPort(transaction),
+            {
+              action: "DOCUMENT_UPLOAD_INTENT_CREATED",
+              actorKind: "USER",
+              actorUserId: input.actorUserId,
+              capability: "CANDIDATE_DOCUMENT_UPLOAD",
+              correlationId: input.correlationId,
+              result: "SUCCEEDED",
+              retainUntil: new Date(
+                now.getTime() + AUDIT_RETENTION_MILLISECONDS,
+              ),
+              targetId: intent.id,
+              targetType: "DOCUMENT_UPLOAD_INTENT",
+            },
+          );
+          return Object.freeze({
+            ok: true as const,
+            duplicate: false,
+            intentId: intent.id,
             documentVersionId,
-            candidateProfileId: profile.id,
-            actorUserId: input.actorUserId,
-            purpose: "CV",
-            idempotencyKey: input.idempotencyKey,
-            expectedSizeBytes: policy.expectedSizeBytes,
-            expectedSha256: policy.expectedSha256,
-            declaredMimeType: policy.declaredMimeType,
-            safeFilename: policy.safeFilename,
-            status: "CREATED",
             expiresAt,
-            createdAt: now,
-            updatedAt: now,
-          },
-          select: { id: true },
-        });
-        await transaction.documentAccessEvent.create({
-          data: {
-            documentVersionId,
-            actorUserId: input.actorUserId,
-            kind: "UPLOAD_INTENT_CREATED",
-            outcomeCode: "CREATED",
-            correlationId: input.correlationId,
-            occurredAt: now,
-          },
-        });
-        await writeRequiredAudit(
-          createPrismaTransactionAuditPort(transaction),
-          {
-            action: "DOCUMENT_UPLOAD_INTENT_CREATED",
-            actorKind: "USER",
-            actorUserId: input.actorUserId,
-            capability: "CANDIDATE_DOCUMENT_UPLOAD",
-            correlationId: input.correlationId,
-            result: "SUCCEEDED",
-            retainUntil: new Date(
-              now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-            ),
-            targetId: intent.id,
-            targetType: "DOCUMENT_UPLOAD_INTENT",
-          },
-        );
-        return Object.freeze({
-          ok: true as const,
-          duplicate: false,
-          intentId: intent.id,
-          documentVersionId,
-          expiresAt,
-          status: "CREATED",
-        });
-      },
+            status: "CREATED",
+          });
+        },
         { isolationLevel: "Serializable" },
       ),
     );
@@ -334,6 +347,15 @@ export async function createCompanyVerificationDocumentUploadIntent(
     });
   }
   assertDocumentBulkAccessDisabled(dependencies.environment);
+  const encryptionKeyVersion = getDocumentStorageEncryptionVersion(
+    dependencies.environment,
+  );
+  if (encryptionKeyVersion === null) {
+    return Object.freeze({
+      ok: false,
+      code: "DOCUMENT_VAULT_UNAVAILABLE",
+    });
+  }
   const policy = validateDocumentUploadMetadata(input);
   if (!policy.ok || !isBoundedIdempotencyKey(input.idempotencyKey)) {
     return Object.freeze({
@@ -359,7 +381,8 @@ export async function createCompanyVerificationDocumentUploadIntent(
             where: {
               id: input.companyId,
               status: "ACTIVE",
-              dataProvenance: { in: ["DEMO", "TEST"] },
+              dataProvenance:
+                runtime.mode === "LIVE" ? "LIVE" : { in: ["DEMO", "TEST"] },
               memberships: {
                 some: {
                   id: input.membershipId,
@@ -485,8 +508,6 @@ export async function createCompanyVerificationDocumentUploadIntent(
           });
           const documentVersionId = randomUUID();
           const objectVersion = randomUUID();
-          const writer =
-            dependencies.environment.secrets.keyrings.DOCUMENT_STORAGE_KEYS[0]!;
           await transaction.documentVersion.create({
             data: {
               id: documentVersionId,
@@ -497,16 +518,14 @@ export async function createCompanyVerificationDocumentUploadIntent(
               providerObjectVersion: objectVersion,
               safeFilename: policy.safeFilename,
               declaredMimeType: policy.declaredMimeType,
-              encryptionKeyVersion: writer.version,
-              storageRegion:
-                dependencies.environment.DOCUMENT_STORAGE_REGION,
+              encryptionKeyVersion,
+              storageRegion: dependencies.environment.DOCUMENT_STORAGE_REGION,
               status: "UPLOADING",
               createdAt: now,
             },
           });
           const expiresAt = new Date(
-            now.getTime() +
-              DOCUMENT_UPLOAD_POLICY_V1.intentTtlMilliseconds,
+            now.getTime() + DOCUMENT_UPLOAD_POLICY_V1.intentTtlMilliseconds,
           );
           const intent = await transaction.documentUploadIntent.create({
             data: {
@@ -611,54 +630,51 @@ export async function uploadDocumentIntentBody(
   const prepared = await withSerializationRetry(() =>
     dependencies.database.$transaction(
       async (transaction) => {
-      const intent = await transaction.documentUploadIntent.findFirst({
-        where: { id: input.intentId, actorUserId: input.actorUserId },
-        select: uploadIntentSelect,
-      });
-      if (intent === null) return { kind: "NOT_FOUND" as const };
-      await lockRow(transaction, "DocumentUploadIntent", intent.id);
-      const current =
-        await transaction.documentUploadIntent.findUniqueOrThrow({
-          where: { id: intent.id },
+        const intent = await transaction.documentUploadIntent.findFirst({
+          where: { id: input.intentId, actorUserId: input.actorUserId },
           select: uploadIntentSelect,
         });
-      if (current.expiresAt <= now) {
-        if (["CREATED", "UPLOADING", "UPLOADED"].includes(current.status)) {
+        if (intent === null) return { kind: "NOT_FOUND" as const };
+        await lockRow(transaction, "DocumentUploadIntent", intent.id);
+        const current =
+          await transaction.documentUploadIntent.findUniqueOrThrow({
+            where: { id: intent.id },
+            select: uploadIntentSelect,
+          });
+        if (current.expiresAt <= now) {
+          if (["CREATED", "UPLOADING", "UPLOADED"].includes(current.status)) {
+            await transaction.documentUploadIntent.update({
+              where: { id: current.id },
+              data: { status: "EXPIRED", abortedAt: now, updatedAt: now },
+            });
+          }
+          return { kind: "EXPIRED" as const };
+        }
+        if (current.status === "UPLOADED" || current.status === "FINALIZED") {
+          return { kind: "DUPLICATE" as const, intent: current };
+        }
+        if (current.status !== "CREATED" && current.status !== "UPLOADING") {
+          return { kind: "INVALID_STATE" as const };
+        }
+        if (current.status === "CREATED") {
           await transaction.documentUploadIntent.update({
             where: { id: current.id },
-            data: { status: "EXPIRED", abortedAt: now, updatedAt: now },
+            data: { status: "UPLOADING", updatedAt: now },
+          });
+          await transaction.documentAccessEvent.create({
+            data: {
+              documentVersionId: current.documentVersionId,
+              actorUserId: input.actorUserId,
+              companyId: current.companyId,
+              kind: "UPLOAD_STARTED",
+              outcomeCode: "STREAMING",
+              correlationId: input.correlationId,
+              occurredAt: now,
+            },
           });
         }
-        return { kind: "EXPIRED" as const };
-      }
-      if (
-        current.status === "UPLOADED" ||
-        current.status === "FINALIZED"
-      ) {
-        return { kind: "DUPLICATE" as const, intent: current };
-      }
-      if (current.status !== "CREATED" && current.status !== "UPLOADING") {
-        return { kind: "INVALID_STATE" as const };
-      }
-      if (current.status === "CREATED") {
-        await transaction.documentUploadIntent.update({
-          where: { id: current.id },
-          data: { status: "UPLOADING", updatedAt: now },
-        });
-        await transaction.documentAccessEvent.create({
-          data: {
-            documentVersionId: current.documentVersionId,
-            actorUserId: input.actorUserId,
-            companyId: current.companyId,
-            kind: "UPLOAD_STARTED",
-            outcomeCode: "STREAMING",
-            correlationId: input.correlationId,
-            occurredAt: now,
-          },
-        });
-      }
-      return { kind: "READY" as const, intent: current };
-    },
+        return { kind: "READY" as const, intent: current };
+      },
       { isolationLevel: "Serializable" },
     ),
   );
@@ -698,6 +714,19 @@ export async function uploadDocumentIntentBody(
       detailCode: "CONTENT_LENGTH_MISMATCH",
     });
   }
+  if (
+    !(await hasExactDocumentProviderAuthority(
+      dependencies.database,
+      dependencies.environment,
+      now,
+      ["OBJECT_STORE"],
+    ))
+  ) {
+    return Object.freeze({
+      ok: false,
+      code: "DOCUMENT_VAULT_UNAVAILABLE",
+    });
+  }
   if (prepared.kind === "DUPLICATE") {
     const receipt = await dependencies.objectStore.headObject(
       intent.documentVersion.objectKey,
@@ -734,7 +763,8 @@ export async function uploadDocumentIntentBody(
       );
       if (
         existing !== null &&
-        existing.objectVersion === intent.documentVersion.providerObjectVersion &&
+        existing.objectVersion ===
+          intent.documentVersion.providerObjectVersion &&
         existing.sizeBytes === intent.expectedSizeBytes &&
         (intent.expectedSha256 === null ||
           existing.sha256 === intent.expectedSha256)
@@ -774,59 +804,59 @@ export async function uploadDocumentIntentBody(
   await withSerializationRetry(() =>
     dependencies.database.$transaction(
       async (transaction) => {
-      await lockRow(transaction, "DocumentUploadIntent", intent.id);
-      const current =
-        await transaction.documentUploadIntent.findUniqueOrThrow({
-          where: { id: intent.id },
-          select: { status: true },
-        });
-      if (current.status === "UPLOADING") {
-        await transaction.documentVersion.update({
-          where: { id: intent.documentVersionId },
-          data: {
-            status: "QUARANTINED",
-            sizeBytes: receipt!.sizeBytes,
-            sha256: receipt!.sha256,
-            uploadedAt: now,
-          },
-        });
-        await transaction.documentUploadIntent.update({
-          where: { id: intent.id },
-          data: { status: "UPLOADED", updatedAt: now },
-        });
-        await transaction.documentAccessEvent.create({
-          data: {
-            documentVersionId: intent.documentVersionId,
-            actorUserId: input.actorUserId,
-            companyId: intent.companyId,
-            kind: "UPLOAD_COMPLETED",
-            outcomeCode: "QUARANTINED",
-            correlationId: input.correlationId,
-            occurredAt: now,
-          },
-        });
-        await writeRequiredAudit(
-          createPrismaTransactionAuditPort(transaction),
-          {
-            action: "DOCUMENT_UPLOAD_COMPLETED",
-            actorKind: "USER",
-            actorUserId: input.actorUserId,
-            capability:
-              intent.companyId === null
-                ? "CANDIDATE_DOCUMENT_UPLOAD"
-                : "COMPANY_VERIFICATION_DOCUMENT_UPLOAD",
-            companyId: intent.companyId,
-            correlationId: input.correlationId,
-            result: "SUCCEEDED",
-            retainUntil: new Date(
-              now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-            ),
-            targetId: intent.documentVersionId,
-            targetType: "DOCUMENT_VERSION",
-          },
-        );
-      }
-    },
+        await lockRow(transaction, "DocumentUploadIntent", intent.id);
+        const current =
+          await transaction.documentUploadIntent.findUniqueOrThrow({
+            where: { id: intent.id },
+            select: { status: true },
+          });
+        if (current.status === "UPLOADING") {
+          await transaction.documentVersion.update({
+            where: { id: intent.documentVersionId },
+            data: {
+              status: "QUARANTINED",
+              sizeBytes: receipt!.sizeBytes,
+              sha256: receipt!.sha256,
+              uploadedAt: now,
+            },
+          });
+          await transaction.documentUploadIntent.update({
+            where: { id: intent.id },
+            data: { status: "UPLOADED", updatedAt: now },
+          });
+          await transaction.documentAccessEvent.create({
+            data: {
+              documentVersionId: intent.documentVersionId,
+              actorUserId: input.actorUserId,
+              companyId: intent.companyId,
+              kind: "UPLOAD_COMPLETED",
+              outcomeCode: "QUARANTINED",
+              correlationId: input.correlationId,
+              occurredAt: now,
+            },
+          });
+          await writeRequiredAudit(
+            createPrismaTransactionAuditPort(transaction),
+            {
+              action: "DOCUMENT_UPLOAD_COMPLETED",
+              actorKind: "USER",
+              actorUserId: input.actorUserId,
+              capability:
+                intent.companyId === null
+                  ? "CANDIDATE_DOCUMENT_UPLOAD"
+                  : "COMPANY_VERIFICATION_DOCUMENT_UPLOAD",
+              companyId: intent.companyId,
+              correlationId: input.correlationId,
+              result: "SUCCEEDED",
+              retainUntil: new Date(
+                now.getTime() + AUDIT_RETENTION_MILLISECONDS,
+              ),
+              targetId: intent.documentVersionId,
+              targetType: "DOCUMENT_VERSION",
+            },
+          );
+        }
+      },
       { isolationLevel: "Serializable" },
     ),
   );
@@ -884,6 +914,19 @@ export async function finalizeDocumentUploadIntent(
   if (intent.status !== "UPLOADED") {
     return Object.freeze({ ok: false, code: "INVALID_STATE" });
   }
+  if (
+    !(await hasExactDocumentProviderAuthority(
+      dependencies.database,
+      dependencies.environment,
+      now,
+      ["OBJECT_STORE"],
+    ))
+  ) {
+    return Object.freeze({
+      ok: false,
+      code: "DOCUMENT_VAULT_UNAVAILABLE",
+    });
+  }
   const receipt = await dependencies.objectStore.headObject(
     intent.documentVersion.objectKey,
   );
@@ -892,8 +935,7 @@ export async function finalizeDocumentUploadIntent(
     receipt.objectVersion !== intent.documentVersion.providerObjectVersion ||
     receipt.sizeBytes !== intent.expectedSizeBytes ||
     receipt.sha256 !== intent.documentVersion.sha256 ||
-    (intent.expectedSha256 !== null &&
-      receipt.sha256 !== intent.expectedSha256)
+    (intent.expectedSha256 !== null && receipt.sha256 !== intent.expectedSha256)
   ) {
     await dependencies.database.documentUploadIntent.updateMany({
       where: { id: intent.id, status: "UPLOADED" },
@@ -931,11 +973,7 @@ export async function scanDocumentVersion(
   | Readonly<{
       ok: true;
       duplicate: boolean;
-      status:
-        | "CLEAN"
-        | "REJECTED"
-        | "INFECTED"
-        | "SCAN_FAILED";
+      status: "CLEAN" | "REJECTED" | "INFECTED" | "SCAN_FAILED";
       outcomeCode: string;
     }>
   | Readonly<{
@@ -958,56 +996,54 @@ export async function scanDocumentVersion(
   const prepared = await withSerializationRetry(() =>
     dependencies.database.$transaction(
       async (transaction) => {
-      await lockRow(transaction, "DocumentVersion", input.documentVersionId);
-      const version = await transaction.documentVersion.findFirst({
-        where: {
-          id: input.documentVersionId,
-          OR: [
-            { candidateProfile: { userId: input.actorUserId } },
-            {
-              company: {
-                memberships: {
-                  some: {
-                    userId: input.actorUserId,
-                    status: "ACTIVE",
-                    removedAt: null,
-                    role: { in: ["OWNER", "ADMIN"] },
+        await lockRow(transaction, "DocumentVersion", input.documentVersionId);
+        const version = await transaction.documentVersion.findFirst({
+          where: {
+            id: input.documentVersionId,
+            OR: [
+              { candidateProfile: { userId: input.actorUserId } },
+              {
+                company: {
+                  memberships: {
+                    some: {
+                      userId: input.actorUserId,
+                      status: "ACTIVE",
+                      removedAt: null,
+                      role: { in: ["OWNER", "ADMIN"] },
+                    },
                   },
                 },
               },
-            },
-          ],
-        },
-        select: scanVersionSelect,
-      });
-      if (version === null) return { kind: "NOT_FOUND" as const };
-      if (
-        ["CLEAN", "REJECTED", "INFECTED"].includes(version.status)
-      ) {
-        return { kind: "TERMINAL" as const, version };
-      }
-      if (
-        version.status !== "QUARANTINED" &&
-        version.status !== "SCAN_FAILED"
-      ) {
-        return { kind: "INVALID_STATE" as const };
-      }
-      await transaction.documentVersion.update({
-        where: { id: version.id },
-        data: { status: "SCANNING", scanCompletedAt: null },
-      });
-      await transaction.documentAccessEvent.create({
-        data: {
-          documentVersionId: version.id,
-          actorUserId: input.actorUserId,
-          kind: "SCAN_REQUESTED",
-          outcomeCode: "SCANNING",
-          correlationId: input.correlationId,
-          occurredAt: now,
-        },
-      });
-      return { kind: "READY" as const, version };
-    },
+            ],
+          },
+          select: scanVersionSelect,
+        });
+        if (version === null) return { kind: "NOT_FOUND" as const };
+        if (["CLEAN", "REJECTED", "INFECTED"].includes(version.status)) {
+          return { kind: "TERMINAL" as const, version };
+        }
+        if (
+          version.status !== "QUARANTINED" &&
+          version.status !== "SCAN_FAILED"
+        ) {
+          return { kind: "INVALID_STATE" as const };
+        }
+        await transaction.documentVersion.update({
+          where: { id: version.id },
+          data: { status: "SCANNING", scanCompletedAt: null },
+        });
+        await transaction.documentAccessEvent.create({
+          data: {
+            documentVersionId: version.id,
+            actorUserId: input.actorUserId,
+            kind: "SCAN_REQUESTED",
+            outcomeCode: "SCANNING",
+            correlationId: input.correlationId,
+            occurredAt: now,
+          },
+        });
+        return { kind: "READY" as const, version };
+      },
       { isolationLevel: "Serializable" },
     ),
   );
@@ -1027,6 +1063,21 @@ export async function scanDocumentVersion(
     });
   }
 
+  if (
+    !(await hasExactDocumentProviderAuthority(
+      dependencies.database,
+      dependencies.environment,
+      now,
+      ["OBJECT_STORE", "MALWARE_SCANNER"],
+    ))
+  ) {
+    await dependencies.database.documentVersion.updateMany({
+      where: { id: prepared.version.id, status: "SCANNING" },
+      data: { status: "SCAN_FAILED", scanCompletedAt: now },
+    });
+    return Object.freeze({ ok: false, code: "PROVIDER_DEGRADED" });
+  }
+
   const opened = await dependencies.objectStore.openVerifiedRead(
     prepared.version.objectKey,
   );
@@ -1042,8 +1093,7 @@ export async function scanDocumentVersion(
   } else {
     receipt = await dependencies.scanner.scan(opened.body, {
       declaredMimeType: prepared.version.declaredMimeType,
-      timeoutMilliseconds:
-        DOCUMENT_UPLOAD_POLICY_V1.scannerTimeoutMilliseconds,
+      timeoutMilliseconds: DOCUMENT_UPLOAD_POLICY_V1.scannerTimeoutMilliseconds,
     });
   }
   const status = scanOutcomeToStatus(receipt.outcome);
@@ -1051,156 +1101,152 @@ export async function scanDocumentVersion(
   await withSerializationRetry(() =>
     dependencies.database.$transaction(
       async (transaction) => {
-      await lockRow(transaction, "DocumentVersion", prepared.version.id);
-      const current = await transaction.documentVersion.findUniqueOrThrow({
-        where: { id: prepared.version.id },
-        select: { status: true },
-      });
-      if (current.status !== "SCANNING") return;
-      const lastAttempt = await transaction.documentScanAttempt.findFirst({
-        where: { documentVersionId: prepared.version.id },
-        orderBy: [{ attemptNumber: "desc" }, { id: "desc" }],
-        select: { attemptNumber: true },
-      });
-      await transaction.documentScanAttempt.create({
-        data: {
-          documentVersionId: prepared.version.id,
-          attemptNumber: (lastAttempt?.attemptNumber ?? 0) + 1,
-          engineVersion: receipt.engineVersion,
-          signatureVersion: receipt.signatureVersion,
-          outcome: receipt.outcome,
-          detectedMimeType: receipt.detectedMimeType,
-          outcomeCode: receipt.outcomeCode,
-          startedAt: now,
-          completedAt: now,
-        },
-      });
-      await transaction.documentVersion.update({
-        where: { id: prepared.version.id },
-        data: {
-          status,
-          detectedMimeType: receipt.detectedMimeType,
-          scanCompletedAt: now,
-        },
-      });
-
-      if (status === "CLEAN") {
-        const canonical = await transaction.document.findUniqueOrThrow({
-          where: { id: prepared.version.documentId },
-          select: { currentVersionId: true },
+        await lockRow(transaction, "DocumentVersion", prepared.version.id);
+        const current = await transaction.documentVersion.findUniqueOrThrow({
+          where: { id: prepared.version.id },
+          select: { status: true },
         });
-        if (
-          canonical.currentVersionId !== null &&
-          canonical.currentVersionId !== prepared.version.id
-        ) {
-          const replaced = await transaction.documentVersion.updateMany({
-            where: {
-              id: canonical.currentVersionId,
-              ...(prepared.version.candidateProfileId === null
-                ? { companyId: prepared.version.companyId }
-                : {
-                    candidateProfileId:
-                      prepared.version.candidateProfileId,
-                  }),
-              status: "CLEAN",
-            },
-            data: { status: "REPLACED", replacedAt: now },
+        if (current.status !== "SCANNING") return;
+        const lastAttempt = await transaction.documentScanAttempt.findFirst({
+          where: { documentVersionId: prepared.version.id },
+          orderBy: [{ attemptNumber: "desc" }, { id: "desc" }],
+          select: { attemptNumber: true },
+        });
+        await transaction.documentScanAttempt.create({
+          data: {
+            documentVersionId: prepared.version.id,
+            attemptNumber: (lastAttempt?.attemptNumber ?? 0) + 1,
+            engineVersion: receipt.engineVersion,
+            signatureVersion: receipt.signatureVersion,
+            outcome: receipt.outcome,
+            detectedMimeType: receipt.detectedMimeType,
+            outcomeCode: receipt.outcomeCode,
+            startedAt: now,
+            completedAt: now,
+          },
+        });
+        await transaction.documentVersion.update({
+          where: { id: prepared.version.id },
+          data: {
+            status,
+            detectedMimeType: receipt.detectedMimeType,
+            scanCompletedAt: now,
+          },
+        });
+
+        if (status === "CLEAN") {
+          const canonical = await transaction.document.findUniqueOrThrow({
+            where: { id: prepared.version.documentId },
+            select: { currentVersionId: true },
           });
-          if (replaced.count > 0) {
-            await writeRequiredAudit(
-              createPrismaTransactionAuditPort(transaction),
-              {
-                action: "DOCUMENT_REPLACED",
-                actorKind: "USER",
-                actorUserId: input.actorUserId,
-                capability:
-                  prepared.version.companyId === null
-                    ? "CANDIDATE_DOCUMENT_REPLACE"
-                    : "COMPANY_VERIFICATION_DOCUMENT_REPLACE",
-                companyId: prepared.version.companyId,
-                correlationId: input.correlationId,
-                result: "SUCCEEDED",
-                retainUntil: new Date(
-                  now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-                ),
-                targetId: canonical.currentVersionId,
-                targetType: "DOCUMENT_VERSION",
+          if (
+            canonical.currentVersionId !== null &&
+            canonical.currentVersionId !== prepared.version.id
+          ) {
+            const replaced = await transaction.documentVersion.updateMany({
+              where: {
+                id: canonical.currentVersionId,
+                ...(prepared.version.candidateProfileId === null
+                  ? { companyId: prepared.version.companyId }
+                  : {
+                      candidateProfileId: prepared.version.candidateProfileId,
+                    }),
+                status: "CLEAN",
               },
-            );
+              data: { status: "REPLACED", replacedAt: now },
+            });
+            if (replaced.count > 0) {
+              await writeRequiredAudit(
+                createPrismaTransactionAuditPort(transaction),
+                {
+                  action: "DOCUMENT_REPLACED",
+                  actorKind: "USER",
+                  actorUserId: input.actorUserId,
+                  capability:
+                    prepared.version.companyId === null
+                      ? "CANDIDATE_DOCUMENT_REPLACE"
+                      : "COMPANY_VERIFICATION_DOCUMENT_REPLACE",
+                  companyId: prepared.version.companyId,
+                  correlationId: input.correlationId,
+                  result: "SUCCEEDED",
+                  retainUntil: new Date(
+                    now.getTime() + AUDIT_RETENTION_MILLISECONDS,
+                  ),
+                  targetId: canonical.currentVersionId,
+                  targetType: "DOCUMENT_VERSION",
+                },
+              );
+            }
           }
-        }
-        if (prepared.version.candidateProfileId !== null) {
-          await transaction.candidateDocumentMetadata.updateMany({
-            where: {
-              candidateProfileId: prepared.version.candidateProfileId,
-              purpose: "CV",
-              status: "ACTIVE",
-              NOT: { documentVersionId: prepared.version.id },
-            },
-            data: { status: "REMOVED", removedAt: now },
+          if (prepared.version.candidateProfileId !== null) {
+            await transaction.candidateDocumentMetadata.updateMany({
+              where: {
+                candidateProfileId: prepared.version.candidateProfileId,
+                purpose: "CV",
+                status: "ACTIVE",
+                NOT: { documentVersionId: prepared.version.id },
+              },
+              data: { status: "REMOVED", removedAt: now },
+            });
+            await transaction.candidateDocumentMetadata.upsert({
+              where: { documentVersionId: prepared.version.id },
+              update: {
+                status: "ACTIVE",
+                removedAt: null,
+                storageKind: "VAULT_ENCRYPTED",
+              },
+              create: {
+                candidateProfileId: prepared.version.candidateProfileId,
+                storageKey: `vault-version:${prepared.version.id}`,
+                safeFilename: prepared.version.safeFilename,
+                mimeType:
+                  receipt.detectedMimeType ?? prepared.version.declaredMimeType,
+                sizeBytes: prepared.version.sizeBytes!,
+                purpose: "CV",
+                status: "ACTIVE",
+                storageKind: "VAULT_ENCRYPTED",
+                documentVersionId: prepared.version.id,
+                createdAt: now,
+              },
+            });
+          }
+          await transaction.document.update({
+            where: { id: prepared.version.documentId },
+            data: { currentVersionId: prepared.version.id, updatedAt: now },
           });
-          await transaction.candidateDocumentMetadata.upsert({
-            where: { documentVersionId: prepared.version.id },
-            update: {
-              status: "ACTIVE",
-              removedAt: null,
-              storageKind: "VAULT_ENCRYPTED",
-            },
-            create: {
-              candidateProfileId: prepared.version.candidateProfileId,
-              storageKey: `vault-version:${prepared.version.id}`,
-              safeFilename: prepared.version.safeFilename,
-              mimeType:
-                receipt.detectedMimeType ??
-                prepared.version.declaredMimeType,
-              sizeBytes: prepared.version.sizeBytes!,
-              purpose: "CV",
-              status: "ACTIVE",
-              storageKind: "VAULT_ENCRYPTED",
-              documentVersionId: prepared.version.id,
-              createdAt: now,
-            },
-          });
         }
-        await transaction.document.update({
-          where: { id: prepared.version.documentId },
-          data: { currentVersionId: prepared.version.id, updatedAt: now },
-        });
-      }
 
-      await transaction.documentAccessEvent.create({
-        data: {
-          documentVersionId: prepared.version.id,
-          actorUserId: input.actorUserId,
-          companyId: prepared.version.companyId,
-          kind: "SCAN_COMPLETED",
-          outcomeCode: receipt.outcomeCode,
-          correlationId: input.correlationId,
-          occurredAt: now,
-        },
-      });
-      await writeRequiredAudit(
-        createPrismaTransactionAuditPort(transaction),
-        {
-          action: "DOCUMENT_SCAN_COMPLETED",
-          actorKind: "USER",
-          actorUserId: input.actorUserId,
-          capability:
-            prepared.version.companyId === null
-              ? "CANDIDATE_DOCUMENT_SCAN_SANDBOX"
-              : "COMPANY_VERIFICATION_DOCUMENT_SCAN",
-          companyId: prepared.version.companyId,
-          correlationId: input.correlationId,
-          reasonCode: receipt.outcomeCode,
-          result: status === "CLEAN" ? "SUCCEEDED" : "DENIED",
-          retainUntil: new Date(
-            now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-          ),
-          targetId: prepared.version.id,
-          targetType: "DOCUMENT_VERSION",
-        },
-      );
-    },
+        await transaction.documentAccessEvent.create({
+          data: {
+            documentVersionId: prepared.version.id,
+            actorUserId: input.actorUserId,
+            companyId: prepared.version.companyId,
+            kind: "SCAN_COMPLETED",
+            outcomeCode: receipt.outcomeCode,
+            correlationId: input.correlationId,
+            occurredAt: now,
+          },
+        });
+        await writeRequiredAudit(
+          createPrismaTransactionAuditPort(transaction),
+          {
+            action: "DOCUMENT_SCAN_COMPLETED",
+            actorKind: "USER",
+            actorUserId: input.actorUserId,
+            capability:
+              prepared.version.companyId === null
+                ? "CANDIDATE_DOCUMENT_SCAN_SANDBOX"
+                : "COMPANY_VERIFICATION_DOCUMENT_SCAN",
+            companyId: prepared.version.companyId,
+            correlationId: input.correlationId,
+            reasonCode: receipt.outcomeCode,
+            result: status === "CLEAN" ? "SUCCEEDED" : "DENIED",
+            retainUntil: new Date(now.getTime() + AUDIT_RETENTION_MILLISECONDS),
+            targetId: prepared.version.id,
+            targetType: "DOCUMENT_VERSION",
+          },
+        );
+      },
       { isolationLevel: "Serializable" },
     ),
   );
@@ -1241,7 +1287,10 @@ export async function requestCandidateDocumentDeletion(
         },
       });
       if (version === null) {
-        return Object.freeze({ ok: false as const, code: "NOT_FOUND" as const });
+        return Object.freeze({
+          ok: false as const,
+          code: "NOT_FOUND" as const,
+        });
       }
       if (version.status !== "CLEAN" && version.status !== "REPLACED") {
         return Object.freeze({
@@ -1271,23 +1320,18 @@ export async function requestCandidateDocumentDeletion(
           occurredAt: now,
         },
       });
-      await writeRequiredAudit(
-        createPrismaTransactionAuditPort(transaction),
-        {
-          action: "DOCUMENT_DELETE_REQUESTED",
-          actorKind: "USER",
-          actorUserId: input.actorUserId,
-          capability: "CANDIDATE_DOCUMENT_DELETE_REQUEST",
-          correlationId: input.correlationId,
-          reasonCode: "AWAITING_PHASE22_POLICY",
-          result: "SUCCEEDED",
-          retainUntil: new Date(
-            now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-          ),
-          targetId: version.id,
-          targetType: "DOCUMENT_VERSION",
-        },
-      );
+      await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
+        action: "DOCUMENT_DELETE_REQUESTED",
+        actorKind: "USER",
+        actorUserId: input.actorUserId,
+        capability: "CANDIDATE_DOCUMENT_DELETE_REQUEST",
+        correlationId: input.correlationId,
+        reasonCode: "AWAITING_PHASE22_POLICY",
+        result: "SUCCEEDED",
+        retainUntil: new Date(now.getTime() + AUDIT_RETENTION_MILLISECONDS),
+        targetId: version.id,
+        targetType: "DOCUMENT_VERSION",
+      });
       return Object.freeze({
         ok: true as const,
         status: "DELETE_PENDING" as const,
@@ -1365,7 +1409,9 @@ export async function getCandidateDocumentVaultView(
     : Object.freeze({
         legacyMetadata: Object.freeze(
           profile.documents
-            .filter((document) => document.storageKind === "METADATA_ONLY_LEGACY")
+            .filter(
+              (document) => document.storageKind === "METADATA_ONLY_LEGACY",
+            )
             .map((document) =>
               Object.freeze({
                 id: document.id,
@@ -1458,23 +1504,18 @@ export async function issueDocumentReadGrant(
           occurredAt: now,
         },
       });
-      await writeRequiredAudit(
-        createPrismaTransactionAuditPort(transaction),
-        {
-          action: "DOCUMENT_READ_GRANTED",
-          actorKind: "USER",
-          actorUserId: input.actorUserId,
-          capability: "DOCUMENT_SINGLE_OBJECT_READ",
-          companyId: input.companyId,
-          correlationId: input.correlationId,
-          result: "SUCCEEDED",
-          retainUntil: new Date(
-            now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-          ),
-          targetId: grant.id,
-          targetType: "DOCUMENT_READ_GRANT",
-        },
-      );
+      await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
+        action: "DOCUMENT_READ_GRANTED",
+        actorKind: "USER",
+        actorUserId: input.actorUserId,
+        capability: "DOCUMENT_SINGLE_OBJECT_READ",
+        companyId: input.companyId,
+        correlationId: input.correlationId,
+        result: "SUCCEEDED",
+        retainUntil: new Date(now.getTime() + AUDIT_RETENTION_MILLISECONDS),
+        targetId: grant.id,
+        targetType: "DOCUMENT_READ_GRANT",
+      });
       return Object.freeze({
         ok: true as const,
         grantId: grant.id,
@@ -1547,34 +1588,33 @@ export async function issueCompanyVerificationDocumentReadGrant(
           code: "NOT_AUTHORIZED" as const,
         });
       }
-      const evidence =
-        await transaction.companyVerificationEvidence.findFirst({
-          where: {
+      const evidence = await transaction.companyVerificationEvidence.findFirst({
+        where: {
+          companyId: input.companyId,
+          verificationRequestId: input.verificationRequestId,
+          documentVersionId: input.documentVersionId,
+          type: "DOCUMENT",
+          status: "VALID",
+          revokedAt: null,
+          verificationRequest: {
+            policyVersion: "COMPANY_TRUST_POLICY_V2",
+            assignedReviewerUserId: input.actorUserId,
+            status: { in: ["PENDING", "CHANGES_REQUESTED", "VERIFIED"] },
+            supersededBy: null,
+          },
+          documentVersion: {
             companyId: input.companyId,
-            verificationRequestId: input.verificationRequestId,
-            documentVersionId: input.documentVersionId,
-            type: "DOCUMENT",
-            status: "VALID",
-            revokedAt: null,
-            verificationRequest: {
-              policyVersion: "COMPANY_TRUST_POLICY_V2",
-              assignedReviewerUserId: input.actorUserId,
-              status: { in: ["PENDING", "CHANGES_REQUESTED", "VERIFIED"] },
-              supersededBy: null,
-            },
-            documentVersion: {
+            status: "CLEAN",
+            replacedAt: null,
+            document: {
               companyId: input.companyId,
-              status: "CLEAN",
-              replacedAt: null,
-              document: {
-                companyId: input.companyId,
-                purpose: "COMPANY_VERIFICATION",
-                currentVersionId: input.documentVersionId,
-              },
+              purpose: "COMPANY_VERIFICATION",
+              currentVersionId: input.documentVersionId,
             },
           },
-          select: { id: true },
-        });
+        },
+        select: { id: true },
+      });
       if (evidence === null) {
         return Object.freeze({
           ok: false as const,
@@ -1608,23 +1648,18 @@ export async function issueCompanyVerificationDocumentReadGrant(
           occurredAt: now,
         },
       });
-      await writeRequiredAudit(
-        createPrismaTransactionAuditPort(transaction),
-        {
-          action: "DOCUMENT_READ_GRANTED",
-          actorKind: "USER",
-          actorUserId: input.actorUserId,
-          capability: "COMPANY_VERIFICATION_DOCUMENT_READ",
-          companyId: input.companyId,
-          correlationId: input.correlationId,
-          result: "SUCCEEDED",
-          retainUntil: new Date(
-            now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-          ),
-          targetId: grant.id,
-          targetType: "DOCUMENT_READ_GRANT",
-        },
-      );
+      await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
+        action: "DOCUMENT_READ_GRANTED",
+        actorKind: "USER",
+        actorUserId: input.actorUserId,
+        capability: "COMPANY_VERIFICATION_DOCUMENT_READ",
+        companyId: input.companyId,
+        correlationId: input.correlationId,
+        result: "SUCCEEDED",
+        retainUntil: new Date(now.getTime() + AUDIT_RETENTION_MILLISECONDS),
+        targetId: grant.id,
+        targetType: "DOCUMENT_READ_GRANT",
+      });
       return Object.freeze({
         ok: true as const,
         grantId: grant.id,
@@ -1713,6 +1748,16 @@ export async function consumeDocumentReadGrant(
     });
     return Object.freeze({ ok: false, code: "GRANT_REVOKED" });
   }
+  if (
+    !(await hasExactDocumentProviderAuthority(
+      dependencies.database,
+      dependencies.environment,
+      now,
+      ["OBJECT_STORE"],
+    ))
+  ) {
+    return Object.freeze({ ok: false, code: "PROVIDER_DEGRADED" });
+  }
   const opened = await dependencies.objectStore.openVerifiedRead(
     grant.documentVersion.objectKey,
   );
@@ -1767,23 +1812,18 @@ export async function consumeDocumentReadGrant(
           occurredAt: now,
         },
       });
-      await writeRequiredAudit(
-        createPrismaTransactionAuditPort(transaction),
-        {
-          action: "DOCUMENT_READ",
-          actorKind: "USER",
-          actorUserId: grant.actorUserId,
-          capability: "DOCUMENT_SINGLE_OBJECT_READ",
-          companyId: grant.companyId,
-          correlationId: input.correlationId,
-          result: "SUCCEEDED",
-          retainUntil: new Date(
-            now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-          ),
-          targetId: grant.documentVersionId,
-          targetType: "DOCUMENT_VERSION",
-        },
-      );
+      await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
+        action: "DOCUMENT_READ",
+        actorKind: "USER",
+        actorUserId: grant.actorUserId,
+        capability: "DOCUMENT_SINGLE_OBJECT_READ",
+        companyId: grant.companyId,
+        correlationId: input.correlationId,
+        result: "SUCCEEDED",
+        retainUntil: new Date(now.getTime() + AUDIT_RETENTION_MILLISECONDS),
+        targetId: grant.documentVersionId,
+        targetType: "DOCUMENT_VERSION",
+      });
       return true;
     },
     { isolationLevel: "Serializable" },
@@ -1889,33 +1929,32 @@ async function authorizeDocumentRead(
     if (!hasAdminCapability(resolved, "COMPANY_VERIFICATION_REVIEW")) {
       return Object.freeze({ ok: false, code: "NOT_AUTHORIZED" });
     }
-    const evidence =
-      await transaction.companyVerificationEvidence.findFirst({
-        where: {
+    const evidence = await transaction.companyVerificationEvidence.findFirst({
+      where: {
+        companyId: input.companyId,
+        documentVersionId: input.documentVersionId,
+        type: "DOCUMENT",
+        status: "VALID",
+        revokedAt: null,
+        verificationRequest: {
+          policyVersion: "COMPANY_TRUST_POLICY_V2",
+          assignedReviewerUserId: input.actorUserId,
+          status: { in: ["PENDING", "CHANGES_REQUESTED", "VERIFIED"] },
+          supersededBy: null,
+        },
+        documentVersion: {
           companyId: input.companyId,
-          documentVersionId: input.documentVersionId,
-          type: "DOCUMENT",
-          status: "VALID",
-          revokedAt: null,
-          verificationRequest: {
-            policyVersion: "COMPANY_TRUST_POLICY_V2",
-            assignedReviewerUserId: input.actorUserId,
-            status: { in: ["PENDING", "CHANGES_REQUESTED", "VERIFIED"] },
-            supersededBy: null,
-          },
-          documentVersion: {
+          status: "CLEAN",
+          replacedAt: null,
+          document: {
             companyId: input.companyId,
-            status: "CLEAN",
-            replacedAt: null,
-            document: {
-              companyId: input.companyId,
-              purpose: "COMPANY_VERIFICATION",
-              currentVersionId: input.documentVersionId,
-            },
+            purpose: "COMPANY_VERIFICATION",
+            currentVersionId: input.documentVersionId,
           },
         },
-        select: { id: true },
-      });
+      },
+      select: { id: true },
+    });
     return evidence === null
       ? Object.freeze({ ok: false, code: "NOT_FOUND" })
       : Object.freeze({ ok: true });
@@ -2051,10 +2090,7 @@ async function acquireDocumentLock(
 
 async function lockRow(
   transaction: Prisma.TransactionClient,
-  table:
-    | "DocumentUploadIntent"
-    | "DocumentVersion"
-    | "DocumentReadGrant",
+  table: "DocumentUploadIntent" | "DocumentVersion" | "DocumentReadGrant",
   id: string,
 ): Promise<void> {
   const identifiers = {

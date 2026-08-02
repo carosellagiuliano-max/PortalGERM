@@ -22,6 +22,7 @@ export async function openDunningForPaymentFailureInTransaction(
     correlationId: string;
     now: Date;
     paymentAttemptId: string;
+    providerInvoiceReference?: string;
   }>,
 ) {
   const subscription = await transaction.employerSubscription.findFirst({
@@ -38,7 +39,10 @@ export async function openDunningForPaymentFailureInTransaction(
     select: { id: true, status: true },
   });
   if (subscription === null) return null;
-  const idempotencyKey = `dunning:${input.paymentAttemptId}`;
+  const idempotencyKey =
+    input.providerInvoiceReference === undefined
+      ? `dunning:${input.paymentAttemptId}`
+      : `dunning:invoice:${input.providerInvoiceReference}`;
   const existing = await transaction.dunningCase.findUnique({
     where: { idempotencyKey },
     select: { id: true },
@@ -106,20 +110,82 @@ export async function resolveCompanyDunningInTransaction(
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
+  return resolveDunningCasesInTransaction(transaction, cases, input);
+}
+
+export async function resolveProviderInvoiceDunningInTransaction(
+  transaction: Prisma.TransactionClient,
+  input: Readonly<{
+    companyId: string;
+    correlationId: string;
+    now: Date;
+    providerInvoiceReference: string;
+  }>,
+) {
+  const dunning = await transaction.dunningCase.findUnique({
+    where: {
+      idempotencyKey: `dunning:invoice:${input.providerInvoiceReference}`,
+    },
+  });
+  if (
+    dunning === null ||
+    dunning.companyId !== input.companyId ||
+    !["OPEN", "GRACE", "SUSPENDED"].includes(dunning.status)
+  ) {
+    return 0;
+  }
+  return resolveDunningCasesInTransaction(transaction, [dunning], input);
+}
+
+async function resolveDunningCasesInTransaction(
+  transaction: Prisma.TransactionClient,
+  cases: readonly Readonly<{
+    id: string;
+    subscriptionId: string;
+    previousSubscriptionStatus:
+      | "SCHEDULED"
+      | "ACTIVE"
+      | "CANCELLING"
+      | "SUSPENDED"
+      | "EXPIRED"
+      | "CANCELLED";
+  }>[],
+  input: Readonly<{
+    companyId: string;
+    correlationId: string;
+    now: Date;
+  }>,
+) {
+  let resolved = 0;
   for (const dunning of cases) {
-    await transaction.dunningCase.update({
-      where: { id: dunning.id },
+    const updated = await transaction.dunningCase.updateMany({
+      where: {
+        id: dunning.id,
+        companyId: input.companyId,
+        status: { in: ["OPEN", "GRACE", "SUSPENDED"] },
+      },
       data: {
         status: "RESOLVED",
         resolvedAt: input.now,
         updatedAt: input.now,
       },
     });
-    const subscription = await transaction.employerSubscription.findUnique({
-      where: { id: dunning.subscriptionId },
-      select: { status: true, currentPeriodEnd: true },
-    });
+    if (updated.count !== 1) continue;
+    resolved += 1;
+    const [subscription, remainingCases] = await Promise.all([
+      transaction.employerSubscription.findUnique({
+        where: { id: dunning.subscriptionId },
+        select: { status: true, currentPeriodEnd: true },
+      }),
+      transaction.dunningCase.count({
+        where: {
+          subscriptionId: dunning.subscriptionId,
+          status: { in: ["OPEN", "GRACE", "SUSPENDED"] },
+        },
+      }),
+    ]);
     if (
+      remainingCases === 0 &&
       subscription?.status === "SUSPENDED" &&
       subscription.currentPeriodEnd.getTime() > input.now.getTime()
     ) {
@@ -131,19 +197,23 @@ export async function resolveCompanyDunningInTransaction(
         where: { id: dunning.subscriptionId },
         data: { status: restoredStatus, updatedAt: input.now },
       });
-      await transaction.subscriptionEvent.create({
-        data: {
-          id: randomUUID(),
-          subscriptionId: dunning.subscriptionId,
-          kind: "RESUMED",
-          actorUserId: null,
-          reasonCode: "PAYMENT_RECOVERED",
-          idempotencyKey: `dunning-resumed:${dunning.id}`,
-          correlationId: input.correlationId,
-          createdAt: input.now,
-        },
+      await transaction.subscriptionEvent.createMany({
+        data: [
+          {
+            id: randomUUID(),
+            subscriptionId: dunning.subscriptionId,
+            kind: "RESUMED",
+            actorUserId: null,
+            reasonCode: "PAYMENT_RECOVERED",
+            idempotencyKey: `dunning-resumed:${dunning.id}`,
+            correlationId: input.correlationId,
+            createdAt: input.now,
+          },
+        ],
+        skipDuplicates: true,
       });
     } else if (
+      remainingCases === 0 &&
       subscription?.status === "SUSPENDED" &&
       subscription.currentPeriodEnd.getTime() <= input.now.getTime()
     ) {
@@ -155,17 +225,20 @@ export async function resolveCompanyDunningInTransaction(
           updatedAt: input.now,
         },
       });
-      await transaction.subscriptionEvent.create({
-        data: {
-          id: randomUUID(),
-          subscriptionId: dunning.subscriptionId,
-          kind: "EXPIRED",
-          actorUserId: null,
-          reasonCode: "DUNNING_RECOVERY_AFTER_PERIOD_END",
-          idempotencyKey: `dunning-expired:${dunning.id}`,
-          correlationId: input.correlationId,
-          createdAt: input.now,
-        },
+      await transaction.subscriptionEvent.createMany({
+        data: [
+          {
+            id: randomUUID(),
+            subscriptionId: dunning.subscriptionId,
+            kind: "EXPIRED",
+            actorUserId: null,
+            reasonCode: "DUNNING_RECOVERY_AFTER_PERIOD_END",
+            idempotencyKey: `dunning-expired:${dunning.id}`,
+            correlationId: input.correlationId,
+            createdAt: input.now,
+          },
+        ],
+        skipDuplicates: true,
       });
     }
     await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
@@ -181,7 +254,7 @@ export async function resolveCompanyDunningInTransaction(
       targetType: "DUNNING_CASE",
     });
   }
-  return cases.length;
+  return resolved;
 }
 
 export async function projectDueDunningCases(

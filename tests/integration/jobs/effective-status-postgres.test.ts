@@ -9,8 +9,11 @@ import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
 type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
-const NOW = new Date("2026-08-01T12:00:00.000Z");
 const HOUR = 3_600_000;
+// The publication trigger only accepts a revision that is still valid when the
+// fixture is inserted. Project the clock one day forward so the test can model
+// coherent jobs crossing their expiry boundary without bypassing that trigger.
+const NOW = new Date(Date.now() + 24 * HOUR);
 const IDS = {
   user: "15000000-0000-4000-8000-000000000101",
   company: "15000000-0000-4000-8000-000000000102",

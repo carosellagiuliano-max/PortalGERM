@@ -6,11 +6,20 @@ import {
 } from "@/lib/generated/prisma/enums";
 
 export const USER_CONSENT_NOTICES_V1 = Object.freeze({
-  TERMS: Object.freeze({ noticeVersion: "terms-v1", purpose: "Terms acceptance" }),
-  MARKETING: Object.freeze({ noticeVersion: "marketing-v1", purpose: "Marketing communication" }),
-  DATA_USE: Object.freeze({ noticeVersion: "data-use-v1", purpose: "Profile data use" }),
+  TERMS: Object.freeze({
+    noticeVersion: "terms-v1",
+    purpose: "Terms acceptance",
+  }),
+  MARKETING: Object.freeze({
+    noticeVersion: "marketing-v1",
+    purpose: "Marketing communication",
+  }),
+  DATA_USE: Object.freeze({
+    noticeVersion: "data-use-v1",
+    purpose: "Profile data use",
+  }),
   JOB_ALERT_DELIVERY: Object.freeze({
-    noticeVersion: "job-alert-delivery-v1",
+    noticeVersion: "job-alert-delivery-v2",
     purpose: "Job alert delivery",
   }),
 } as const satisfies Record<
@@ -83,6 +92,8 @@ export async function hasCurrentUserConsent(
     return false;
   }
   const event = await repository.latest(userId, kind, at);
-  return event?.granted === true &&
-    event.noticeVersion === USER_CONSENT_NOTICES_V1[kind].noticeVersion;
+  return (
+    event?.granted === true &&
+    event.noticeVersion === USER_CONSENT_NOTICES_V1[kind].noticeVersion
+  );
 }

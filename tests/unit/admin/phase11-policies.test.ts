@@ -99,6 +99,11 @@ describe("Phase 11 admin policy boundary", () => {
       "/admin/trust-safety",
       "/admin/system",
     ]);
+    expect(
+      ADMIN_NAVIGATION.find(
+        ({ href }) => href === "/admin/finance/reconciliation",
+      )?.capabilities,
+    ).toEqual(["ADMIN_BILLING_READ"]);
   });
 });
 

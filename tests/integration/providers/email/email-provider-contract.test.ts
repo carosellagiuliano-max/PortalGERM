@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { parseEnvironment } from "@/lib/config/env-schema";
+import { legacyV1NotificationRecipientHashForRead } from "@/lib/notifications/outbox";
 import {
   EmailDeliveryFailure,
   type EmailDeliveryRequest,
@@ -26,9 +27,9 @@ const request: EmailDeliveryRequest = Object.freeze({
 describe("Phase 20 real e-mail provider contract", () => {
   it("selects one explicit provider class without a real-to-mock fallback", async () => {
     const sandboxEnvironment = contractEnvironment();
-    expect(
-      createEmailDeliveryProvider(sandboxEnvironment).providerClass,
-    ).toBe("resend-sandbox-v1");
+    expect(createEmailDeliveryProvider(sandboxEnvironment).providerClass).toBe(
+      "resend-sandbox-v1",
+    );
 
     const disabledEnvironment = parseEnvironment(createValidEnvironment());
     const disabled = createEmailDeliveryProvider(disabledEnvironment);
@@ -66,9 +67,9 @@ describe("Phase 20 real e-mail provider contract", () => {
 
   it.each([
     [429, "rate_limit_exceeded", "TRANSIENT"],
-    [500, "internal_error", "TRANSIENT"],
+    [500, "internal_error", "TIMEOUT"],
     [422, "validation_error", "PERMANENT"],
-    [409, "concurrent_idempotent_requests", "TRANSIENT"],
+    [409, "concurrent_idempotent_requests", "TIMEOUT"],
     [409, "invalid_idempotent_request", "PERMANENT"],
   ] as const)(
     "classifies HTTP %s / %s as %s",
@@ -81,7 +82,7 @@ describe("Phase 20 real e-mail provider contract", () => {
     },
   );
 
-  it("classifies bounded aborts as timeout and network failures as transient", async () => {
+  it("classifies bounded aborts and network ambiguity as timeout", async () => {
     const timeoutProvider = createProvider(
       (_input, init) =>
         new Promise<Response>((_resolve, reject) => {
@@ -100,12 +101,12 @@ describe("Phase 20 real e-mail provider contract", () => {
       throw new TypeError("network unavailable");
     });
     await expect(networkProvider.deliver(request)).rejects.toMatchObject({
-      kind: "TRANSIENT",
-      code: "NETWORK_FAILURE",
+      kind: "TIMEOUT",
+      code: "PROVIDER_OUTCOME_UNKNOWN",
     });
   });
 
-  it("fails closed for missing config and rejects malformed provider receipts", async () => {
+  it("fails closed for missing config and classifies malformed success receipts as ambiguous", async () => {
     expect(
       () =>
         new ResendSandboxEmailProvider({
@@ -115,8 +116,8 @@ describe("Phase 20 real e-mail provider contract", () => {
     ).toThrowError(EmailDeliveryFailure);
     const provider = createProvider(async () => response(200, {}));
     await expect(provider.deliver(request)).rejects.toMatchObject({
-      kind: "PERMANENT",
-      code: "PROVIDER_RECEIPT_INVALID",
+      kind: "TIMEOUT",
+      code: "PROVIDER_OUTCOME_UNKNOWN",
     });
     await expect(
       provider.deliver({ ...request, to: "real-person@example.com" }),
@@ -126,23 +127,62 @@ describe("Phase 20 real e-mail provider contract", () => {
     });
   });
 
-  it("reduces bounce/suppression events to receipt and recipient hashes", () => {
-    const parsed = parseResendDeliveryEvent({
-      type: "email.bounced",
-      created_at: "2026-07-26T12:00:00.000Z",
-      data: {
-        email_id: "email-1",
-        to: ["bounced@resend.dev"],
-        bounce: { type: "Permanent" },
-      },
+  it("treats declared and streamed oversized 2xx bodies as ambiguous outcomes", async () => {
+    const declared = createProvider(
+      async () =>
+        new Response('{"id":"already-accepted"}', {
+          status: 200,
+          headers: { "content-length": "70000" },
+        }),
+    );
+    await expect(declared.deliver(request)).rejects.toMatchObject({
+      kind: "TIMEOUT",
+      code: "PROVIDER_OUTCOME_UNKNOWN",
     });
+
+    const streamed = createProvider(async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(40_000));
+          controller.enqueue(new Uint8Array(40_000));
+          controller.close();
+        },
+      });
+      return new Response(body, { status: 200 });
+    });
+    await expect(streamed.deliver(request)).rejects.toMatchObject({
+      kind: "TIMEOUT",
+      code: "PROVIDER_OUTCOME_UNKNOWN",
+    });
+  });
+
+  it("reduces bounce/suppression events to receipt and recipient hashes", () => {
+    const keyring =
+      contractEnvironment().secrets.keyrings.NOTIFICATION_RECIPIENT_HASH_KEYS;
+    const parsed = parseResendDeliveryEvent(
+      {
+        type: "email.bounced",
+        created_at: "2026-07-26T12:00:00.000Z",
+        data: {
+          email_id: "email-1",
+          to: ["bounced@resend.dev"],
+          bounce: { type: "Permanent" },
+        },
+      },
+      keyring,
+    );
     expect(parsed).toMatchObject({
       kind: "BOUNCED",
       providerReceipt: "email-1",
     });
     expect(parsed?.recipientHashes[0]).toMatch(/^[a-f0-9]{64}$/u);
+    expect(parsed?.recipientHashes).not.toContain(
+      legacyV1NotificationRecipientHashForRead("bounced@resend.dev"),
+    );
     expect(JSON.stringify(parsed)).not.toContain("bounced@resend.dev");
-    expect(parseResendDeliveryEvent({ type: "email.bounced" })).toBeNull();
+    expect(
+      parseResendDeliveryEvent({ type: "email.bounced" }, keyring),
+    ).toBeNull();
   });
 });
 
@@ -165,6 +205,7 @@ function contractEnvironment() {
     createValidEnvironment({
       EMAIL_PROVIDER_MODE: "resend_sandbox",
       EMAIL_PROVIDER_API_KEY: "re_phase20_contract_only",
+      RESEND_SECRET_VERSION: "phase33-email-contract-v1",
       EMAIL_FROM: "SwissTalentHub <sandbox@resend.dev>",
       NOTIFICATION_OUTBOX_PRODUCERS: "true",
       NOTIFICATION_DISPATCH: "command",

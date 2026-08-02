@@ -1,7 +1,13 @@
 import "server-only";
 
+import { resumePaymentInboxProjectionBacklog } from "@/lib/billing/payment-inbox";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
+import {
+  documentObjectStoreActivationBinding,
+  documentScannerActivationBinding,
+  type DocumentProviderActivationBinding,
+} from "@/lib/documents/provider-activation-binding";
 import {
   WORKER_HANDLER_CATALOG,
   type WorkerHandlerCatalogEntry,
@@ -11,6 +17,8 @@ import {
   resolvePersistedProviderActivation,
 } from "@/lib/ops/operations-ledger";
 import { enqueueWorkItem } from "@/lib/ops/worker-runtime";
+import { emailProviderActivationBinding } from "@/lib/providers/email/provider-activation-binding";
+import { paymentProviderActivationBinding } from "@/lib/providers/payments/provider-activation-binding";
 
 export type WorkerScheduleResult = Readonly<{
   created: number;
@@ -39,7 +47,10 @@ export async function scheduleActivatedWork(
   let replayed = 0;
 
   for (const handler of WORKER_HANDLER_CATALOG) {
-    if (handler.schedule === "event-driven") {
+    if (
+      handler.schedule.startsWith("event-driven") &&
+      handler.handlerKey !== "payments.inbox-project"
+    ) {
       handlerStates.push({
         handlerKey: handler.handlerKey,
         reason: "EVENT_DRIVEN",
@@ -83,17 +94,25 @@ export async function scheduleActivatedWork(
     }
 
     const outcomes =
-      handler.handlerKey === "documents.scan"
-        ? await enqueueDocumentScans(
-            handler,
-            activation.policy.maxAttempts,
-            dependencies,
+      handler.handlerKey === "payments.inbox-project"
+        ? await resumePaymentInboxProjectionBacklog(
+            {
+              batchSize: activation.policy.batchSize,
+              now: dependencies.now,
+            },
+            dependencies.database,
           )
-        : await enqueueScheduleTick(
-            handler,
-            activation.policy.maxAttempts,
-            dependencies,
-          );
+        : handler.handlerKey === "documents.scan"
+          ? await enqueueDocumentScans(
+              handler,
+              activation.policy.maxAttempts,
+              dependencies,
+            )
+          : await enqueueScheduleTick(
+              handler,
+              activation.policy.maxAttempts,
+              dependencies,
+            );
     created += outcomes.created;
     replayed += outcomes.replayed;
     handlerStates.push({
@@ -158,17 +177,15 @@ async function enqueueDocumentScans(
     where: { status: { in: ["QUARANTINED", "SCAN_FAILED"] } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: 100,
-    select: {
-      id: true,
-      createdAt: true,
-      _count: { select: { scanAttempts: true } },
-    },
+    select: { id: true },
   });
   let created = 0;
   let replayed = 0;
   for (const version of versions) {
-    const revision = `${version.createdAt.getTime()}-${version._count.scanAttempts}`;
-    const dedupeKey = `${handler.handlerKey}:${handler.handlerVersion}:${version.id}:${revision}`;
+    // A document version owns exactly one automatic scan work item. Retries
+    // are transitions of that item; deriving a new key from attempt history
+    // would create parallel retry chains and bypass the configured DLQ budget.
+    const dedupeKey = documentScanDedupeKey(handler, version.id);
     const outcome = await enqueueWorkItem(dependencies.database, {
       handlerKey: handler.handlerKey,
       handlerVersion: handler.handlerVersion,
@@ -188,6 +205,13 @@ async function enqueueDocumentScans(
   return Object.freeze({ created, replayed });
 }
 
+export function documentScanDedupeKey(
+  handler: Pick<WorkerHandlerCatalogEntry, "handlerKey" | "handlerVersion">,
+  documentVersionId: string,
+) {
+  return `${handler.handlerKey}:${handler.handlerVersion}:${documentVersionId}`;
+}
+
 async function findProviderBlock(
   handler: WorkerHandlerCatalogEntry,
   dependencies: Readonly<{
@@ -197,73 +221,163 @@ async function findProviderBlock(
   }>,
 ): Promise<string | null> {
   const requirements = providerRequirements(handler, dependencies.environment);
-  for (const requirement of requirements) {
-    if (requirement.adapterKey === "disabled") {
-      return `PROVIDER_${requirement.useCase}_DISABLED`;
-    }
-    const decision = await resolvePersistedProviderActivation(
-      dependencies.database,
-      {
-        environment: dependencies.environment.APP_ENV,
-        useCase: requirement.useCase,
-        adapterKey: requirement.adapterKey,
-        adapterVersion: "v1",
-        now: dependencies.now,
-      },
+  if (handler.handlerKey === "notifications.dispatch") {
+    const configuredRequirements = requirements.filter(
+      (requirement) => requirement.adapterKey !== "disabled",
     );
-    if (!decision.active) {
-      return `PROVIDER_${requirement.useCase}_${decision.reason}`;
+    if (configuredRequirements.length === 0) {
+      return "PROVIDER_EMAIL_OUTBOX_DISABLED";
     }
+
+    // The shared outbox contains independently revocable purposes. Scheduling
+    // is allowed when at least one purpose can make progress; the dispatcher
+    // still revalidates the exact purpose immediately before every provider
+    // call and pauses rows for any other purpose without consuming an attempt.
+    for (const requirement of configuredRequirements) {
+      if (
+        (await providerRequirementBlock(requirement, dependencies)) === null
+      ) {
+        return null;
+      }
+    }
+    return "PROVIDER_EMAIL_OUTBOX_NO_ACTIVE_PURPOSE";
+  }
+
+  for (const requirement of requirements) {
+    const block = await providerRequirementBlock(requirement, dependencies);
+    if (block !== null) return block;
   }
   return null;
+}
+
+async function providerRequirementBlock(
+  requirement: ProviderRequirement,
+  dependencies: Readonly<{
+    database: DatabaseClient;
+    environment: ServerEnvironment;
+    now: Date;
+  }>,
+): Promise<string | null> {
+  if (requirement.adapterKey === "disabled") {
+    return `PROVIDER_${requirement.useCase}_DISABLED`;
+  }
+  const decision = await resolvePersistedProviderActivation(
+    dependencies.database,
+    {
+      environment: dependencies.environment.APP_ENV,
+      useCase: requirement.useCase,
+      adapterKey: requirement.adapterKey,
+      adapterVersion: "v1",
+      ...(requirement.expectedConfigurationDigest === undefined
+        ? {}
+        : {
+            expectedConfigurationDigest:
+              requirement.expectedConfigurationDigest,
+          }),
+      ...(requirement.expectedMode === undefined
+        ? {}
+        : { expectedMode: requirement.expectedMode }),
+      ...(requirement.expectedSecretVersionRef === undefined
+        ? {}
+        : {
+            expectedSecretVersionRef: requirement.expectedSecretVersionRef,
+          }),
+      now: dependencies.now,
+    },
+  );
+  return decision.active
+    ? null
+    : `PROVIDER_${requirement.useCase}_${decision.reason}`;
 }
 
 function providerRequirements(
   handler: WorkerHandlerCatalogEntry,
   environment: ServerEnvironment,
-) {
+): readonly ProviderRequirement[] {
   switch (handler.handlerKey) {
     case "notifications.dispatch":
+      // The outbox intentionally contains independently revocable
+      // transactional and job-alert purposes. The dispatcher resolves and
+      // rechecks the exact use-case binding immediately before each provider
+      // I/O instead of allowing one activation to authorize the whole batch.
       return [
-        {
-          useCase: "email.transactional",
-          adapterKey: environment.EMAIL_PROVIDER_MODE,
-        },
+        providerRequirement(
+          emailProviderActivationBinding(environment, "email.transactional"),
+          "email.transactional",
+        ),
+        providerRequirement(
+          emailProviderActivationBinding(environment, "email.job-alert"),
+          "email.job-alert",
+        ),
       ];
     case "candidate.job-alert-digest":
       return [
-        {
-          useCase: "email.job-alert",
-          adapterKey: environment.EMAIL_PROVIDER_MODE,
-        },
+        providerRequirement(
+          emailProviderActivationBinding(environment, "email.job-alert"),
+          "email.job-alert",
+        ),
       ];
     case "documents.scan":
       return [
-        {
-          useCase: "documents.object-store",
-          adapterKey: environment.DOCUMENT_STORAGE_MODE,
-        },
-        {
-          useCase: "documents.malware-scan",
-          adapterKey: "deterministic_sandbox",
-        },
+        providerRequirement(
+          documentObjectStoreActivationBinding(environment),
+          "documents.object-store",
+        ),
+        providerRequirement(
+          documentScannerActivationBinding(environment),
+          "documents.malware-scan",
+        ),
       ];
     case "documents.reconcile":
       return [
-        {
-          useCase: "documents.object-store",
-          adapterKey: environment.DOCUMENT_STORAGE_MODE,
-        },
+        providerRequirement(
+          documentObjectStoreActivationBinding(environment),
+          "documents.object-store",
+        ),
       ];
     case "payments.inbox-project":
     case "payments.reconcile":
       return [
-        {
-          useCase: "payments.hosted-checkout",
-          adapterKey: environment.PAYMENT_PROVIDER_MODE,
-        },
+        providerRequirement(
+          paymentProviderActivationBinding(environment),
+          "payments.hosted-checkout",
+        ),
       ];
     default:
       return [];
   }
+}
+
+type ProviderRequirement = Readonly<{
+  adapterKey: string;
+  expectedConfigurationDigest?: string;
+  expectedMode?: "SANDBOX" | "ALLOWLIST" | "LIVE";
+  expectedSecretVersionRef?: string;
+  useCase: string;
+}>;
+
+function providerRequirement(
+  binding: Pick<
+    DocumentProviderActivationBinding,
+    | "adapterKey"
+    | "expectedConfigurationDigest"
+    | "expectedMode"
+    | "expectedSecretVersionRef"
+  > | null,
+  useCase: string,
+): ProviderRequirement {
+  if (binding === null) {
+    return Object.freeze({ adapterKey: "disabled", useCase });
+  }
+  return Object.freeze({
+    adapterKey: binding.adapterKey,
+    expectedConfigurationDigest: binding.expectedConfigurationDigest,
+    expectedMode: binding.expectedMode,
+    ...(binding.expectedSecretVersionRef === undefined
+      ? {}
+      : {
+          expectedSecretVersionRef: binding.expectedSecretVersionRef,
+        }),
+    useCase,
+  });
 }

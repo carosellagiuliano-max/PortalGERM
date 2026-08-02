@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
+import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -29,6 +30,7 @@ import {
   isIanaTimeZone,
 } from "@/lib/recruiting/time-zones";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 const MINUTE = 60_000;
 const DAY = 86_400_000;
@@ -65,6 +67,7 @@ type InterviewFailureCode =
   | "FORBIDDEN"
   | "CONFLICT"
   | "EXPIRED"
+  | "RATE_LIMITED"
   | "IDEMPOTENCY_CONFLICT"
   | "WRITE_FAILED";
 
@@ -164,8 +167,76 @@ export async function proposeInterview(
     return failure("INVALID_INPUT");
   }
   try {
+    // Resolve the target through the current Company membership/assignment
+    // before consuming a target-scoped bucket. An attacker therefore cannot
+    // use foreign Application IDs to spend another tenant's rate budget.
+    const authorizedApplication = await loadAuthorizedApplication(
+      dependencies.database,
+      input.data.applicationId,
+      access,
+      now,
+    );
+    if (authorizedApplication === null) return failure("NOT_FOUND");
+
+    const key = eventKey("interview:propose", input.data.idempotencyKey);
+    const replay = await dependencies.database.interviewEvent.findUnique({
+      where: { idempotencyKey: key },
+      select: {
+        interview: {
+          select: {
+            id: true,
+            applicationId: true,
+            companyId: true,
+            status: true,
+            version: true,
+          },
+        },
+      },
+    });
+    if (replay !== null) {
+      return replay.interview.applicationId === authorizedApplication.id &&
+        replay.interview.companyId === authorizedApplication.companyId
+        ? success(replay.interview, true)
+        : failure("IDEMPOTENCY_CONFLICT");
+    }
+
+    const rate = await consumeRequestRateLimit(
+      "INTERVIEW_PROPOSE",
+      {
+        actorId: access.userId,
+        userId: access.userId,
+        companyId: authorizedApplication.companyId,
+        targetId: authorizedApplication.id,
+      },
+      dependencies.request,
+      now,
+      {
+        database: dependencies.database,
+        environment: dependencies.environment,
+      },
+    );
+    if (!rate.allowed) {
+      await recordRateLimitDenial(
+        rate.audit,
+        {
+          actorKind: "USER",
+          actorUserId: access.userId,
+          capability: "COMPANY_INTERVIEW_MANAGE",
+          companyId: authorizedApplication.companyId,
+          targetId: authorizedApplication.id,
+          targetType: "APPLICATION",
+        },
+        {
+          database: dependencies.database,
+          environment: dependencies.environment,
+          request: dependencies.request,
+          now,
+        },
+      );
+      return failure("RATE_LIMITED");
+    }
+
     return await runSerializable(dependencies.database, async (transaction) => {
-      const key = eventKey("interview:propose", input.data.idempotencyKey);
       const replay = await transaction.interviewEvent.findUnique({
         where: { idempotencyKey: key },
         select: {
@@ -935,6 +1006,12 @@ export async function getInterviewCalendarForActor(
       applicationId: true,
       companyId: true,
       candidateProfileId: true,
+      candidateProfile: {
+        select: {
+          userId: true,
+          user: { select: { status: true } },
+        },
+      },
       status: true,
       timeZone: true,
       subject: true,
@@ -944,7 +1021,7 @@ export async function getInterviewCalendarForActor(
       participants: {
         where: { userId: actorUserId },
         take: 1,
-        select: { id: true },
+        select: { id: true, kind: true },
       },
       calendarArtifacts: {
         orderBy: [{ sequence: "desc" }, { createdAt: "desc" }],
@@ -967,8 +1044,12 @@ export async function getInterviewCalendarForActor(
   ) {
     return null;
   }
-  const participant = interview.participants.length === 1;
-  const companyActor = participant
+  const participant = interview.participants[0];
+  const candidateActor =
+    participant?.kind === "CANDIDATE" &&
+    interview.candidateProfile.userId === actorUserId &&
+    interview.candidateProfile.user.status === "ACTIVE";
+  const companyActor = candidateActor
     ? false
     : await hasCurrentCompanyApplicationAccess(
         database,
@@ -977,7 +1058,7 @@ export async function getInterviewCalendarForActor(
         actorUserId,
         now,
       );
-  if (!participant && !companyActor) return null;
+  if (!candidateActor && !companyActor) return null;
   const artifact = interview.calendarArtifacts.find(
     ({ method }) =>
       method ===

@@ -64,6 +64,8 @@ describe("Phase-23 worker lease policy", () => {
     const handler = getWorkerHandlerDefinition("ops.diagnostic-effect", "v1");
     expect(handler).not.toBeNull();
     const base = {
+      id: "0196f82d-3fb4-7f1a-8c9d-123456789abc",
+      generation: 1,
       environment: "local",
       handlerKey: "ops.diagnostic-effect",
       handlerVersion: "v1",

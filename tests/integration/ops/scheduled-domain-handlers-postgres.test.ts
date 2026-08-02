@@ -170,7 +170,8 @@ function autonomousFixtureHandlers() {
     (handler) =>
       handler.execution === "IMPLEMENTED" &&
       handler.providerUseCase === null &&
-      handler.schedule !== "manual-sandbox-only",
+      handler.schedule !== "manual-sandbox-only" &&
+      !handler.schedule.startsWith("event-driven"),
   );
 }
 

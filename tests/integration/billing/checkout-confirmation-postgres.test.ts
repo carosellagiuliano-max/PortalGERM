@@ -169,6 +169,19 @@ describe.sequential("Phase 12 mock checkout confirmation", () => {
       credits_granted: 0,
     });
     await expect(
+      client().emailLog.count({
+        where: {
+          templateKey: {
+            in: [
+              "payment_received",
+              "invoice_issued",
+              "subscription_activated",
+            ],
+          },
+        },
+      }),
+    ).resolves.toBe(0);
+    await expect(
       client().auditLog.count({
         where: {
           companyId: data().starterActor.companyId,
@@ -447,7 +460,7 @@ async function expectEmailCounts(
 ) {
   for (const [templateKey, count] of Object.entries(expected)) {
     await expect(
-      client().emailLog.count({ where: { templateKey } }),
+      client().notificationOutbox.count({ where: { templateKey } }),
     ).resolves.toBe(count);
   }
 }

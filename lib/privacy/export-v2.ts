@@ -14,9 +14,14 @@ import {
   writeRequiredAudit,
   type AuditPersistenceRecord,
 } from "@/lib/audit/log";
+import {
+  consumeStepUpGrant,
+  type StepUpActor,
+} from "@/lib/auth/assurance/step-up-service";
 import type { KeyringEntry } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import type { DocumentObjectStore } from "@/lib/providers/storage/document-object-store";
 import { PRIVACY_EXPORT_STORAGE_POLICY_V1 } from "@/lib/providers/storage/privacy-export-storage";
@@ -31,6 +36,7 @@ const SHA256 = z.string().regex(/^[a-f0-9]{64}$/u);
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1_000;
 const AUDIT_RETENTION_DAYS = 400;
 const MAX_EXPORT_ATTEMPTS = 5;
+const DOWNLOAD_CLAIM_LEASE_MILLISECONDS = 30_000;
 const EXPORT_PAGE_SIZE = 250;
 const UTF8_ENCODER = new TextEncoder();
 const PRIVACY_EXPORT_POLICY_VERSION = "privacy-export-v2";
@@ -62,18 +68,25 @@ const createInputSchema = z
   })
   .strict();
 
-const consumeInputSchema = z
-  .object({
+const consumeInputSchema = z.union([
+  z
+    .object({
+      artifactId: UUID,
+      ownerUserId: UUID,
+      token: z.string().min(43).max(128),
+      stepUpEvidenceId: UUID,
+      stepUpGrantToken: z.string().min(32).max(128),
+    })
+    .strict(),
+  z
+    .object({
     artifactId: UUID,
     ownerUserId: UUID,
     token: z.string().min(43).max(128),
-    stepUpEvidenceRef: z
-      .string()
-      .regex(
-        /^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u,
-      ),
-  })
-  .strict();
+      stepUpEvidenceRef: z.string().regex(/^sandbox:[A-Za-z0-9._:-]{8,220}$/u),
+    })
+    .strict(),
+]);
 
 export type PrivacyExportManifestSectionV2 = Readonly<{
   category: string;
@@ -104,7 +117,11 @@ export type PrivacyExportV2Dependencies = Readonly<{
   exportKeyring: readonly KeyringEntry<"PRIVACY_EXPORT_KEYS">[];
   featureEnabled: boolean;
   cohortAllowed: boolean;
-  processingMode: "disabled" | "sandbox_command";
+  processingMode:
+    | "disabled"
+    | "sandbox_command"
+    | "contract_worker"
+    | "autonomous_worker";
   now?: Date;
 }>;
 
@@ -198,7 +215,7 @@ export async function createPrivacyExportV2(
   if (!input.success || !isValidDate(now)) return failure("INVALID_INPUT");
   if (
     !dependencies.featureEnabled ||
-    dependencies.processingMode !== "sandbox_command"
+    dependencies.processingMode === "disabled"
   ) {
     return failure("FEATURE_DISABLED");
   }
@@ -273,87 +290,105 @@ export async function createPrivacyExportV2(
 
 export async function consumePrivacyExportV2(
   rawInput: unknown,
-  dependencies: Pick<
-    PrivacyExportV2Dependencies,
-    "database" | "exportStore" | "exportKeyring" | "processingMode" | "now"
-  >,
+  dependencies: Readonly<{
+    database: DatabaseClient;
+    exportStore: DocumentObjectStore;
+    exportKeyring: readonly KeyringEntry<"PRIVACY_EXPORT_KEYS">[];
+    processingMode: PrivacyExportV2Dependencies["processingMode"];
+    stepUpActor?: StepUpActor;
+    correlationId?: string;
+    now?: Date;
+  }>,
 ): Promise<PrivacyExportDownloadResult> {
   const input = consumeInputSchema.safeParse(rawInput);
   const now = dependencies.now ?? new Date();
   if (!input.success || !isValidDate(now)) {
     return downloadFailure("INVALID_INPUT");
   }
-  if (dependencies.processingMode !== "sandbox_command") {
+  if (dependencies.processingMode === "disabled") {
+    return downloadFailure("NOT_FOUND");
+  }
+  if (
+    !("stepUpEvidenceId" in input.data) &&
+    dependencies.processingMode !== "sandbox_command"
+  ) {
     return downloadFailure("NOT_FOUND");
   }
 
-  const artifact = await dependencies.database.privacyExportArtifact.findFirst({
-    where: {
-      id: input.data.artifactId,
-      ownerUserId: input.data.ownerUserId,
-    },
-    select: {
-      id: true,
-      ownerUserId: true,
-      privacyRequestId: true,
-      status: true,
-      objectKey: true,
-      objectVersion: true,
-      encryptionKeyVersion: true,
-      packageSha256: true,
-      sizeBytes: true,
-      downloadTokenHash: true,
-      expiresAt: true,
-      consumedAt: true,
-      revokedAt: true,
-      privacyExecution: {
-        select: { stepUpEvidenceRef: true },
-      },
-    },
-  });
-  if (artifact === null || artifact.status !== "READY") {
-    return downloadFailure("NOT_FOUND");
-  }
-  if (artifact.expiresAt <= now) {
-    await dependencies.database.privacyExportArtifact.updateMany({
-      where: { id: artifact.id, status: "READY", consumedAt: null },
-      data: { status: "EXPIRED" },
-    });
-    return downloadFailure("EXPIRED");
-  }
-  const expectedToken = derivePrivacyExportDownloadToken(
-    dependencies.exportKeyring,
-    artifact.encryptionKeyVersion,
-    artifact.id,
-    artifact.ownerUserId,
-    artifact.expiresAt,
-  );
-  if (
-    expectedToken === null ||
-    !constantTimeTextEqual(expectedToken, input.data.token) ||
-    sha256(input.data.token) !== artifact.downloadTokenHash ||
-    artifact.privacyExecution.stepUpEvidenceRef !== input.data.stepUpEvidenceRef
-  ) {
-    return downloadFailure("TOKEN_INVALID");
-  }
-
-  const opened = await dependencies.exportStore
-    .openVerifiedRead(artifact.objectKey)
-    .catch(() => null);
-  if (
-    opened === null ||
-    artifact.packageSha256 === null ||
-    artifact.sizeBytes === null ||
-    opened.receipt.sha256 !== artifact.packageSha256 ||
-    opened.receipt.sizeBytes !== artifact.sizeBytes ||
-    opened.receipt.objectVersion !== artifact.objectVersion
-  ) {
-    return downloadFailure("STORAGE_FAILED");
-  }
-
-  const consumed = await dependencies.database.$transaction(
+  const claimId = randomUUID();
+  const claimed = await dependencies.database.$transaction(
     async (transaction) => {
-      const updated = await transaction.privacyExportArtifact.updateMany({
+      await transaction.$queryRaw`
+        SELECT "id"
+        FROM "PrivacyExportArtifact"
+        WHERE "id" = ${input.data.artifactId}::uuid
+        FOR UPDATE
+      `;
+      const artifact = await transaction.privacyExportArtifact.findFirst({
+        where: {
+          id: input.data.artifactId,
+          ownerUserId: input.data.ownerUserId,
+        },
+        select: {
+          id: true,
+          ownerUserId: true,
+          privacyRequestId: true,
+          status: true,
+          objectKey: true,
+          objectVersion: true,
+          encryptionKeyVersion: true,
+          packageSha256: true,
+          sizeBytes: true,
+          downloadTokenHash: true,
+          expiresAt: true,
+          consumedAt: true,
+          revokedAt: true,
+          downloadClaimId: true,
+          downloadClaimedAt: true,
+          downloadClaimExpiresAt: true,
+          privacyExecution: { select: { stepUpEvidenceRef: true } },
+        },
+      });
+      if (artifact === null || artifact.status !== "READY") {
+        return Object.freeze({ ok: false as const, code: "NOT_FOUND" as const });
+      }
+      if (artifact.expiresAt <= now) {
+        await transaction.privacyExportArtifact.updateMany({
+          where: { id: artifact.id, status: "READY", consumedAt: null },
+          data: {
+            status: "EXPIRED",
+            downloadClaimId: null,
+            downloadClaimedAt: null,
+            downloadClaimExpiresAt: null,
+          },
+        });
+        return Object.freeze({ ok: false as const, code: "EXPIRED" as const });
+      }
+      const expectedToken = derivePrivacyExportDownloadToken(
+        dependencies.exportKeyring,
+        artifact.encryptionKeyVersion,
+        artifact.id,
+        artifact.ownerUserId,
+        artifact.expiresAt,
+      );
+      if (
+        expectedToken === null ||
+        !constantTimeTextEqual(expectedToken, input.data.token) ||
+        sha256(input.data.token) !== artifact.downloadTokenHash
+      ) {
+        return Object.freeze({ ok: false as const, code: "TOKEN_INVALID" as const });
+      }
+      if (
+        artifact.downloadClaimId !== null &&
+        artifact.downloadClaimExpiresAt !== null &&
+        artifact.downloadClaimExpiresAt > now
+      ) {
+        return Object.freeze({ ok: false as const, code: "NOT_FOUND" as const });
+      }
+      const claimExpiresAt = new Date(
+        now.getTime() + DOWNLOAD_CLAIM_LEASE_MILLISECONDS,
+      );
+      const claim = await transaction.privacyExportArtifact.updateMany({
         where: {
           id: artifact.id,
           ownerUserId: input.data.ownerUserId,
@@ -361,35 +396,265 @@ export async function consumePrivacyExportV2(
           consumedAt: null,
           revokedAt: null,
           expiresAt: { gt: now },
+          OR: [
+            { downloadClaimId: null },
+            { downloadClaimExpiresAt: { lte: now } },
+          ],
         },
-        data: { status: "CONSUMED", consumedAt: now },
+        data: {
+          downloadClaimId: claimId,
+          downloadClaimedAt: now,
+          downloadClaimExpiresAt: claimExpiresAt,
+        },
       });
-      if (updated.count !== 1) return false;
-      await writeRequiredAudit(prismaAuditPort(transaction), {
-        action: "PRIVACY_EXPORT_ARTIFACT_DOWNLOADED",
-        actorKind: "USER",
-        actorUserId: input.data.ownerUserId,
-        capability: "PRIVACY_EXPORT_DOWNLOAD",
-        correlationId: randomUUID(),
-        metadata: {},
-        result: "SUCCEEDED",
-        retainUntil: auditRetainUntil(now),
-        targetId: artifact.id,
-        targetType: "PRIVACY_EXPORT_ARTIFACT",
+      if (claim.count !== 1) {
+        return Object.freeze({ ok: false as const, code: "NOT_FOUND" as const });
+      }
+      return Object.freeze({
+        ok: true as const,
+        artifact,
+        claimExpiresAt,
       });
-      return true;
     },
     transactionOptions(),
   );
-  if (!consumed) return downloadFailure("NOT_FOUND");
+  if (!claimed.ok) return claimed;
+  const artifact = claimed.artifact;
+
+  const opened = await dependencies.exportStore
+    .openVerifiedRead(artifact.objectKey)
+    .catch(() => null);
+  const buffered =
+    opened === null
+      ? null
+      : await fullyBufferVerifiedExport(opened, artifact).catch(() => null);
+  if (buffered === null) {
+    await releasePrivacyExportDownloadClaim(
+      dependencies.database,
+      artifact.id,
+      artifact.ownerUserId,
+      claimId,
+    ).catch(() => undefined);
+    return downloadFailure("STORAGE_FAILED");
+  }
+
+  let consumed: { ok: true } | { ok: false; code: "NOT_FOUND" | "TOKEN_INVALID" };
+  try {
+    consumed = await dependencies.database.$transaction(
+      async (transaction) => {
+        await transaction.$queryRaw`
+          SELECT "id"
+          FROM "PrivacyExportArtifact"
+          WHERE "id" = ${artifact.id}::uuid
+          FOR UPDATE
+        `;
+        const current = await transaction.privacyExportArtifact.findFirst({
+          where: {
+            id: artifact.id,
+            ownerUserId: input.data.ownerUserId,
+          },
+          select: {
+            id: true,
+            status: true,
+            consumedAt: true,
+            revokedAt: true,
+            expiresAt: true,
+            downloadClaimId: true,
+            downloadClaimExpiresAt: true,
+            privacyExecution: { select: { stepUpEvidenceRef: true } },
+          },
+        });
+        if (
+          current === null ||
+          current.status !== "READY" ||
+          current.consumedAt !== null ||
+          current.revokedAt !== null ||
+          current.expiresAt <= now ||
+          current.downloadClaimId !== claimId ||
+          current.downloadClaimExpiresAt === null ||
+          current.downloadClaimExpiresAt <= now
+        ) {
+          return Object.freeze({ ok: false as const, code: "NOT_FOUND" as const });
+        }
+        const stepUpConsumed =
+          "stepUpEvidenceId" in input.data
+            ? dependencies.stepUpActor !== undefined &&
+              dependencies.correlationId !== undefined &&
+              (await consumeStepUpGrant(transaction, {
+                evidenceId: input.data.stepUpEvidenceId,
+                grantToken: input.data.stepUpGrantToken,
+                actor: dependencies.stepUpActor,
+                purpose: "CANDIDATE_PRIVACY",
+                action: "PRIVACY_EXPORT_DOWNLOAD",
+                resourceId: current.id,
+                correlationId: dependencies.correlationId,
+                now,
+              }))
+            : dependencies.processingMode === "sandbox_command" &&
+              current.privacyExecution.stepUpEvidenceRef ===
+                input.data.stepUpEvidenceRef;
+        if (!stepUpConsumed) {
+          await transaction.privacyExportArtifact.updateMany({
+            where: { id: current.id, downloadClaimId: claimId },
+            data: {
+              downloadClaimId: null,
+              downloadClaimedAt: null,
+              downloadClaimExpiresAt: null,
+            },
+          });
+          return Object.freeze({
+            ok: false as const,
+            code: "TOKEN_INVALID" as const,
+          });
+        }
+        const finalized = await transaction.privacyExportArtifact.updateMany({
+          where: {
+            id: current.id,
+            ownerUserId: input.data.ownerUserId,
+            status: "READY",
+            consumedAt: null,
+            revokedAt: null,
+            expiresAt: { gt: now },
+            downloadClaimId: claimId,
+            downloadClaimExpiresAt: { gt: now },
+          },
+          data: {
+            status: "CONSUMED",
+            consumedAt: now,
+            downloadClaimId: null,
+            downloadClaimedAt: null,
+            downloadClaimExpiresAt: null,
+          },
+        });
+        if (finalized.count !== 1) {
+          throw new PrivacyExportClaimConflict();
+        }
+        await writeRequiredAudit(prismaAuditPort(transaction), {
+          action: "PRIVACY_EXPORT_ARTIFACT_DOWNLOADED",
+          actorKind: "USER",
+          actorUserId: input.data.ownerUserId,
+          capability: "PRIVACY_EXPORT_DOWNLOAD",
+          correlationId: dependencies.correlationId ?? randomUUID(),
+          metadata: {},
+          result: "SUCCEEDED",
+          retainUntil: auditRetainUntil(now),
+          targetId: artifact.id,
+          targetType: "PRIVACY_EXPORT_ARTIFACT",
+        });
+        return Object.freeze({ ok: true as const });
+      },
+      transactionOptions(),
+    );
+  } catch (error) {
+    await releasePrivacyExportDownloadClaim(
+      dependencies.database,
+      artifact.id,
+      artifact.ownerUserId,
+      claimId,
+    ).catch(() => undefined);
+    if (!(error instanceof PrivacyExportClaimConflict)) {
+      return downloadFailure("STORAGE_FAILED");
+    }
+    consumed = Object.freeze({ ok: false as const, code: "NOT_FOUND" as const });
+  }
+  if (!consumed.ok) {
+    await releasePrivacyExportDownloadClaim(
+      dependencies.database,
+      artifact.id,
+      artifact.ownerUserId,
+      claimId,
+    ).catch(() => undefined);
+    return consumed;
+  }
 
   return Object.freeze({
     ok: true,
     filename: `swisstalenthub-datenauszug-${artifact.privacyRequestId}.sthprivacy`,
     contentType: "application/vnd.swisstalenthub.privacy-export-v2",
-    contentLength: opened.receipt.sizeBytes,
-    body: opened.body,
+    contentLength: buffered.sizeBytes,
+    body: bufferedExportBody(buffered.bytes),
   });
+}
+
+async function fullyBufferVerifiedExport(
+  opened: Awaited<ReturnType<DocumentObjectStore["openVerifiedRead"]>>,
+  artifact: Readonly<{
+    objectVersion: string;
+    packageSha256: string | null;
+    sizeBytes: number | null;
+  }>,
+) {
+  if (
+    opened === null ||
+    artifact.packageSha256 === null ||
+    artifact.sizeBytes === null ||
+    artifact.sizeBytes <= 0 ||
+    artifact.sizeBytes > PRIVACY_EXPORT_STORAGE_POLICY_V1.maximumBytes ||
+    opened.receipt.sha256 !== artifact.packageSha256 ||
+    opened.receipt.sizeBytes !== artifact.sizeBytes ||
+    opened.receipt.objectVersion !== artifact.objectVersion
+  ) {
+    throw new Error("PRIVACY_EXPORT_STORAGE_EVIDENCE_MISMATCH");
+  }
+  const digest = createHash("sha256");
+  const bytes: Uint8Array[] = [];
+  let sizeBytes = 0;
+  for await (const chunk of opened.body) {
+    if (!(chunk instanceof Uint8Array) || chunk.byteLength === 0) {
+      throw new Error("PRIVACY_EXPORT_STORAGE_BODY_INVALID");
+    }
+    sizeBytes += chunk.byteLength;
+    if (
+      sizeBytes > artifact.sizeBytes ||
+      sizeBytes > PRIVACY_EXPORT_STORAGE_POLICY_V1.maximumBytes
+    ) {
+      throw new Error("PRIVACY_EXPORT_STORAGE_BODY_TOO_LARGE");
+    }
+    const owned = Uint8Array.from(chunk);
+    digest.update(owned);
+    bytes.push(owned);
+  }
+  if (
+    sizeBytes !== artifact.sizeBytes ||
+    digest.digest("hex") !== artifact.packageSha256
+  ) {
+    throw new Error("PRIVACY_EXPORT_STORAGE_BODY_CORRUPT");
+  }
+  return Object.freeze({ bytes: Object.freeze(bytes), sizeBytes });
+}
+
+async function* bufferedExportBody(bytes: readonly Uint8Array[]) {
+  for (const chunk of bytes) yield chunk;
+}
+
+async function releasePrivacyExportDownloadClaim(
+  database: DatabaseClient,
+  artifactId: string,
+  ownerUserId: string,
+  claimId: string,
+) {
+  await database.privacyExportArtifact.updateMany({
+    where: {
+      id: artifactId,
+      ownerUserId,
+      status: "READY",
+      consumedAt: null,
+      revokedAt: null,
+      downloadClaimId: claimId,
+    },
+    data: {
+      downloadClaimId: null,
+      downloadClaimedAt: null,
+      downloadClaimExpiresAt: null,
+    },
+  });
+}
+
+class PrivacyExportClaimConflict extends Error {
+  constructor() {
+    super("Privacy export claim no longer owns the artifact.");
+    this.name = "PrivacyExportClaimConflict";
+  }
 }
 
 async function setupExportExecution(
@@ -453,9 +718,10 @@ async function setupExportExecution(
         existing.attemptCount < MAX_EXPORT_ATTEMPTS
       ) {
         const expiresAt = new Date(
-          now.getTime() +
+          existing.exportArtifact.createdAt.getTime() +
             PRIVACY_EXPORT_STORAGE_POLICY_V1.artifactTtlMilliseconds,
         );
+        if (expiresAt <= now) return failure("CONFLICT");
         const token = derivePrivacyExportDownloadToken(
           dependencies.exportKeyring,
           existing.exportArtifact.encryptionKeyVersion,
@@ -1531,6 +1797,24 @@ async function finalizeExportExecution(
         },
       },
     );
+    await transaction.notificationOutbox.updateMany({
+      where: {
+        dedupeKey: `privacy-export-v2:${setup.requestId}:retry-required-email`,
+        status: "PENDING",
+      },
+      data: { status: "SUPPRESSED", suppressedAt: now },
+    });
+    await enqueueNotification(transaction, {
+      recipient: { userId: setup.artifact.ownerUserId },
+      templateKey: "privacy_request_changed",
+      payloadSchemaVersion: "privacy-request-v1",
+      payload: {
+        requestId: setup.requestId,
+        statusLabel: "Abgeschlossen",
+      },
+      dedupeKey: `privacy-export-v2:${setup.requestId}:ready-email`,
+      availableAt: now,
+    });
     for (const audit of [
       {
         action: "PRIVACY_EXPORT_ARTIFACT_CREATED" as const,
@@ -1617,6 +1901,17 @@ async function markExportFailure(
         },
       },
     );
+    await enqueueNotification(transaction, {
+      recipient: { userId: setup.artifact.ownerUserId },
+      templateKey: "privacy_request_changed",
+      payloadSchemaVersion: "privacy-request-v1",
+      payload: {
+        requestId: setup.requestId,
+        statusLabel: "Weitere Bearbeitung erforderlich",
+      },
+      dedupeKey: `privacy-export-v2:${setup.requestId}:retry-required-email`,
+      availableAt: now,
+    });
   }, transactionOptions());
 }
 

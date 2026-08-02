@@ -25,14 +25,9 @@ import type {
 } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
-import {
-  EmailLogIdempotencyConflictError,
-  MockEmailProvider,
-  type EmailLogRepository,
-  type MockEmailLogRecord,
-} from "@/lib/providers/email/mock-email-provider";
 import {
   type RadarOpaqueKey,
 } from "@/lib/privacy/radar-opaque";
@@ -745,7 +740,6 @@ export async function sendContactRequest(
           select: {
             status: true,
             dataProvenance: true,
-            email: true,
           },
         },
       },
@@ -894,10 +888,16 @@ export async function sendContactRequest(
       dedupeKey: `contact:${request.id}:received`,
       payload: { requestId: request.id, status: "PENDING" },
     });
-    await writeContactRequestEmailInTransaction(transaction, {
-      candidateEmail: candidate.user.email,
-      companyName: employer.companyName,
-      contactRequestId: request.id,
+    await enqueueNotification(transaction, {
+      recipient: { userId: candidate.userId },
+      templateKey: "talent_contact_request_received",
+      payloadSchemaVersion: "talent-contact-v1",
+      payload: {
+        contactRequestId: request.id,
+        companyName: employer.companyName,
+      },
+      dedupeKey: `contact:${request.id}:email`,
+      availableAt: now,
     });
     await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
       action: "CONTACT_REQUEST_SENT",
@@ -1093,74 +1093,6 @@ async function acquireCandidateContactLock(
   await transaction.$queryRaw<readonly { locked: boolean }[]>`
     SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0)) IS NULL AS "locked"
   `;
-}
-
-async function writeContactRequestEmailInTransaction(
-  transaction: Prisma.TransactionClient,
-  input: Readonly<{
-    candidateEmail: string;
-    companyName: string;
-    contactRequestId: string;
-  }>,
-): Promise<void> {
-  const provider = new MockEmailProvider(
-    createTransactionEmailLogRepository(transaction),
-  );
-  await provider.send({
-    to: input.candidateEmail,
-    templateKey: "talent_contact_request_received",
-    subject: "Neue Kontaktanfrage über Talent Radar",
-    data: {
-      companyName: input.companyName,
-      idempotencyKey: `contact:${input.contactRequestId}`,
-    },
-  });
-}
-
-function createTransactionEmailLogRepository(
-  transaction: Prisma.TransactionClient,
-): EmailLogRepository {
-  return Object.freeze({
-    async record(input: MockEmailLogRecord) {
-      try {
-        const row = await transaction.emailLog.create({
-          data: {
-            ...(input.id === undefined ? {} : { id: input.id }),
-            recipient: input.recipient,
-            purpose: input.purpose,
-            templateKey: input.templateKey,
-            payload: input.payload as Prisma.InputJsonObject,
-            status: input.status,
-            providerReference: input.providerReference,
-          },
-          select: { id: true },
-        });
-        return { id: row.id, created: true };
-      } catch (error) {
-        if (input.id === undefined || databaseErrorCode(error) !== "P2002") {
-          throw error;
-        }
-        const existing = await transaction.emailLog.findUnique({
-          where: { id: input.id },
-          select: {
-            id: true,
-            recipient: true,
-            templateKey: true,
-            providerReference: true,
-          },
-        });
-        if (
-          existing === null ||
-          existing.recipient !== input.recipient ||
-          existing.templateKey !== input.templateKey ||
-          existing.providerReference !== input.providerReference
-        ) {
-          throw new EmailLogIdempotencyConflictError();
-        }
-        return { id: existing.id, created: false };
-      }
-    },
-  });
 }
 
 function createTransactionOpaqueResolutionRepository(

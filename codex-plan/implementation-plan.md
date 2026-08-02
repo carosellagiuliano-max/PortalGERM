@@ -9,8 +9,8 @@
 > und `DISABLED`; Phase 23 ist auf `d16a2d9` als commitgebundener lokaler/CI
 > Technikvertrag mit lokalem G3 `PASS` geschlossen. Realprovider bleiben
 > `DISABLED`; Staging, Pager/On-call, Provider-Sandbox, Backup-Lifecycle und
-> genehmigte SLO/RPO/RTO sind auf Product-Owner-Vorgabe verbindliche
-> Phase-32-/G4-Gates; siehe
+> genehmigte SLO/RPO/RTO sind verbindliche Phase-32-/33-/G4-
+> Aktivierungsgates; siehe
 > [Phase-23-Evidence](./evidence/2026-07-27-phase-23.md). Für die
 > Fortsetzung gilt der prospektive Abschnitt am Ende dieses Dokuments zusammen
 > mit
@@ -370,7 +370,7 @@ flowchart LR
 
 **Dateien/Ordner:** `app/support/*`, `app/admin/*`, admin capability policies, moderation/import/report/support/content/system-task domains.
 
-**Datenmodelle:** Moderation Events, Verification, Abuse, Import*, Taxonomy, SupportCase/Event, ContentPage/Revision, Sales Activity/SystemTask, Audit.
+**Datenmodelle:** Moderation Events, Verification, Abuse, Import\*, Taxonomy, SupportCase/Event, ContentPage/Revision, Sales Activity/SystemTask, Audit.
 
 **Funktionen:** ordered review→approve→publish; Claim/Verification; exact moderation restriction apply/lift/expiry matrix; licensed XML/JSON parse→per-item existing-Company mapping/rights→decision/commit plus idempotent DRAFT→REMOVED tombstone rollback (`PARTIALLY_ROLLED_BACK` conflicts); P1 ImportSetupApproval; Support requester reply; `OPS_CASE_SLA_POLICY_V1`; content/leads/cockpit. No Billing logic.
 
@@ -598,16 +598,14 @@ flowchart LR
 
 Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert und lokal verifiziert. Der technische Abschluss ist „Demo-ready, serverseitig gegatet, mit lokalen Mock-Providern“, nicht pilot- oder production-ready. Weitere Umsetzung beginnt nur über ein ausdrücklich freigegebenes Folgepaket oder durch Schliessen der externen Staging-/Legal-/Privacy-/Tax-/Provider-/Ops-Gates; REQ-REC-002 bleibt separat gegatet. Quellcode aus Referenzprojekten bleibt reine Vergleichsbasis und darf nicht blind kopiert oder als Ziel-Evidence behandelt werden.
 
-## Prospektiver Ausführungsplan Phase 19–32
+## Ausführungsplan Phase 19–33
 
-> Dieser Abschnitt ist das ausdrücklich freigegebene Folgepaket auf
-> Planungsebene. Phasen 19 bis 28 sind technisch implementiert und ihre
-> jeweiligen lokalen/CI-Gates grün. Phase 30 besitzt eine grüne technische
-> Concept-/Freshness-/Monitoring-Basis, bleibt wegen Fachreview-,
-> Zielumgebungs- und Operationsgates insgesamt offen. Aktivierung,
-> Realprovider, Staging und externe Fach-/Operationsfreigaben bleiben je
-> Phase getrennt `DISABLED`/`BLOCKED`; Phasen 29–32 sind nicht pauschal
-> abgeschlossen.
+> Die datierten Phase-19–31-Records definieren ihren getrennten technischen,
+> Quality- und Aktivierungsstand. Phase 32 implementierte den LC1-
+> Releasevertrag, entschied jedoch korrekt `NO_GO`; LC2–LC6 blieben
+> `NOT APPROVED`. Phase 33 ist als technische LC4-/LC5-Closure
+> `IN_PROGRESS`; Technik/Quality sind `PENDING`, Aktivierung ist
+> `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`.
 > Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
 > Folgephasengate-Vertrag aus
 > [`remediation-execution-contract.md`](./remediation-execution-contract.md).
@@ -637,6 +635,7 @@ flowchart TD
   P26 --> U29
   U29 --> B31["31B Offer/cluster activation decision"]
   B31 --> P32["32 Exact-artifact launch audit"]
+  P32 --> P33["33 Technical LC4/LC5 closure + new candidate"]
   X30["30B Scale reads"] -. "volume/query trigger" .-> P32
   C30["30C Sitemap shards"] -. "capacity trigger" .-> P32
   P27["27 Multi-Persona"] -. "explicit demand only" .-> U29
@@ -711,8 +710,21 @@ flowchart TD
     finalen Scope mit moderierten Runden und realen NVDA-/VoiceOver-Smokes
     geprüft werden; erst danach genau das lieferbare Angebot/den Cluster
     aktivieren.
-12. **Phase 32**: genau eine Launchklasse auf exakt demselben deployten
-    Artefakt prüfen.
+12. **Phase 32 — historischer Stand:** technischer LC1-Orchestrator; der
+    Candidate blieb wegen fehlendem Walkthrough, Rollback und unabhängigen
+    Approvals korrekt `NO_GO`, LC2–LC6 `NOT APPROVED`.
+13. **Phase 33 — `IN_PROGRESS`:** 33A vollständiger Audit; 33B Mock-/Sandbox-/
+    Live-Parität; 33C Production-Contract-App/Worker/Scheduler/TLS/S3/Scanner/
+    Provider-Stubs; 33D Rollen-/Journey-/Failure-/3-Browser-/A11y-Abnahme;
+    33E Remediation, Freeze, Digests und getrenntes technisches/
+    Aktivierungsurteil. Siehe
+    [Detailphase](./33-go-live-readiness-e2e-acceptance.md) und
+    [Findings Ledger](./phase33-findings-ledger.md).
+    Der Notification-Anteil umfasst ausdrücklich getrennte Delivery-AES-/
+    Recipient-HMAC-Keyrings, getrennte Resend-API-/Webhook-Secret-Versionen,
+    providerunabhängige 23-h-/31-d-/exakt-400×24-h-Retention, monotone
+    Inbox/Suppression, Activation-TX-Lock und Unknown-Outcome→`PAUSED`-
+    Reconciliation. Sein exact-candidate-G4 bleibt `PENDING`.
 
 ### Parallel zulässig
 
@@ -732,6 +744,10 @@ flowchart TD
 - Phase 28 ist technisch abgeschlossen, aber beide Tracks bleiben unabhängig
   default-off; nur die jeweils freigegebene Kohorte darf nach eigenem Demand-,
   Privacy-, Ops-/Support- und gegebenenfalls Providergate aktiviert werden.
+- Phase-33-Audit, Migration-SHA-Inventar und Contract-Testentwurf dürfen
+  parallel read-only laufen. Adapter-, Runtime- und Releaseintegration folgen
+  erst der gemeinsamen Findingklassifikation; kein Track-Pass nimmt das
+  Gesamturteil vorweg.
 
 ### Bewusst ausserhalb des Standardpfads
 
@@ -750,4 +766,6 @@ flowchart TD
 
 Zwischen zwei grossen Auth/RBAC-, Schema-/Backfill-, Keyring/Object-,
 Worker-, Payment- oder destruktiven Privacy-Cutovers liegt ein grünes G3 mit
-Kill-Switch-/Rollback-Evidence. Phase 32 enthält keine neue Funktion.
+Kill-Switch-/Rollback-Evidence. Phase 32 enthält keine neue Funktion. Phase 33
+liefert ausschließlich bestätigte technische Closure-Gaps; ein Fix nach
+Candidate-Freeze erzwingt einen neuen Candidate und vollständigen Neulauf.

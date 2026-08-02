@@ -18,46 +18,65 @@ export async function getFinanceReconciliationPage(
   if (!hasAdminCapability(actor, "ADMIN_BILLING_READ")) return null;
   const safeCursor =
     cursor !== null && cursorSchema.safeParse(cursor).success ? cursor : null;
-  const [runs, openItems, inboxCounts, attemptCounts] = await Promise.all([
-    database.reconciliationRun.findMany({
-      orderBy: [{ startedAt: "desc" }, { id: "desc" }],
-      take: 26,
-      ...(safeCursor === null ? {} : { cursor: { id: safeCursor }, skip: 1 }),
-      include: {
-        _count: { select: { items: true } },
-      },
-    }),
-    database.reconciliationItem.findMany({
-      where: { status: { in: ["OPEN", "ESCALATED"] } },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      take: 25,
-      select: {
-        id: true,
-        companyId: true,
-        providerReference: true,
-        status: true,
-        mismatchKind: true,
-        expectedAmountRappen: true,
-        observedAmountRappen: true,
-        expectedCurrency: true,
-        observedCurrency: true,
-        reasonCode: true,
-        createdAt: true,
-      },
-    }),
-    database.providerEventInbox.groupBy({
-      by: ["status"],
-      _count: { _all: true },
-    }),
-    database.paymentAttempt.groupBy({
-      by: ["status"],
-      _count: { _all: true },
-    }),
-  ]);
+  const [runs, openItems, heldSettlements, inboxCounts, attemptCounts] =
+    await Promise.all([
+      database.reconciliationRun.findMany({
+        orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+        take: 26,
+        ...(safeCursor === null ? {} : { cursor: { id: safeCursor }, skip: 1 }),
+        include: {
+          _count: { select: { items: true } },
+        },
+      }),
+      database.reconciliationItem.findMany({
+        where: { status: { in: ["OPEN", "ESCALATED"] } },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: 25,
+        select: {
+          id: true,
+          companyId: true,
+          providerReference: true,
+          status: true,
+          mismatchKind: true,
+          expectedAmountRappen: true,
+          observedAmountRappen: true,
+          expectedCurrency: true,
+          observedCurrency: true,
+          reasonCode: true,
+          createdAt: true,
+        },
+      }),
+      database.providerEventInbox.findMany({
+        where: {
+          provider: "STRIPE",
+          status: "HELD",
+          errorCode: "SETTLEMENT_AFTER_PROVIDER_REVOKE",
+        },
+        orderBy: [{ receivedAt: "asc" }, { id: "asc" }],
+        take: 25,
+        select: {
+          id: true,
+          eventType: true,
+          receivedAt: true,
+          paymentAttempt: {
+            select: { companyId: true, orderId: true },
+          },
+        },
+      }),
+      database.providerEventInbox.groupBy({
+        by: ["status"],
+        _count: { _all: true },
+      }),
+      database.paymentAttempt.groupBy({
+        by: ["status"],
+        _count: { _all: true },
+      }),
+    ]);
   return Object.freeze({
     runs: Object.freeze(runs.slice(0, 25)),
     nextCursor: runs.length > 25 ? runs[24]!.id : null,
     openItems: Object.freeze(openItems),
+    heldSettlements: Object.freeze(heldSettlements),
     inboxCounts: Object.freeze(
       Object.fromEntries(
         inboxCounts.map((row) => [row.status, row._count._all]),

@@ -6,6 +6,7 @@ import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { DOCUMENT_UPLOAD_POLICY_V1 } from "@/lib/documents/document-upload-policy";
 import { resolveDocumentRuntime } from "@/lib/documents/runtime-policy";
+import { hasExactDocumentProviderAuthority } from "@/lib/documents/provider-activation-guard";
 import type { DocumentObjectStore } from "@/lib/providers/storage/document-object-store";
 
 export type DocumentReconciliationFinding = Readonly<{
@@ -20,11 +21,7 @@ export type DocumentReconciliationFinding = Readonly<{
     | "LEGAL_HOLD"
     | "CONSISTENT";
   status:
-    | "OBSERVED"
-    | "QUARANTINED"
-    | "REPAIRED"
-    | "RETRYABLE"
-    | "BLOCKED_BY_HOLD";
+    "OBSERVED" | "QUARANTINED" | "REPAIRED" | "RETRYABLE" | "BLOCKED_BY_HOLD";
 }>;
 
 export async function reconcileDocumentObjects(
@@ -66,11 +63,19 @@ export async function reconcileDocumentObjects(
     return Object.freeze({ ok: false, code: "RECONCILIATION_DISABLED" });
   }
   const now = input.now ?? new Date();
+  if (
+    !(await hasExactDocumentProviderAuthority(
+      dependencies.database,
+      dependencies.environment,
+      now,
+      ["OBJECT_STORE"],
+    ))
+  ) {
+    return Object.freeze({ ok: false, code: "PROVIDER_DEGRADED" });
+  }
   const limit = DOCUMENT_UPLOAD_POLICY_V1.reconcilerBatchSize;
   const [inventory, versions] = await Promise.all([
-    dependencies.objectStore
-      .listObjects({ limit })
-      .catch(() => null),
+    dependencies.objectStore.listObjects({ limit }).catch(() => null),
     dependencies.database.documentVersion.findMany({
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: limit,
@@ -124,12 +129,7 @@ export async function reconcileDocumentObjects(
       (version.sha256 !== null && object.sha256 !== version.sha256)
     ) {
       findings.push(
-        finding(
-          objectKeyHash,
-          version.id,
-          "CHECKSUM_MISMATCH",
-          "QUARANTINED",
-        ),
+        finding(objectKeyHash, version.id, "CHECKSUM_MISMATCH", "QUARANTINED"),
       );
     } else {
       findings.push(
@@ -140,12 +140,7 @@ export async function reconcileDocumentObjects(
   for (const object of inventory) {
     if (!versionsByHash.has(object.objectKeyHash)) {
       findings.push(
-        finding(
-          object.objectKeyHash,
-          null,
-          "OBJECT_WITHOUT_DB",
-          "QUARANTINED",
-        ),
+        finding(object.objectKeyHash, null, "OBJECT_WITHOUT_DB", "QUARANTINED"),
       );
     }
   }
@@ -153,25 +148,25 @@ export async function reconcileDocumentObjects(
   let changed = 0;
   if (input.mode === "command") {
     for (const item of findings) {
-      const idempotencyKey =
-        `phase21:${item.kind}:${item.objectKeyHash}:${item.documentVersionId ?? "orphan"}`;
-      const result = await dependencies.database.objectLifecycleOutcome.createMany({
-        data: [
-          {
-            documentVersionId: item.documentVersionId,
-            objectKeyHash: item.objectKeyHash,
-            kind: item.kind,
-            status: item.status,
-            reasonCode:
-              item.kind === "DELETE_PENDING" || item.kind === "LEGAL_HOLD"
-                ? "AWAITING_PHASE22_POLICY"
-                : "PHASE21_RECONCILIATION",
-            idempotencyKey,
-            observedAt: now,
-          },
-        ],
-        skipDuplicates: true,
-      });
+      const idempotencyKey = `phase21:${item.kind}:${item.objectKeyHash}:${item.documentVersionId ?? "orphan"}`;
+      const result =
+        await dependencies.database.objectLifecycleOutcome.createMany({
+          data: [
+            {
+              documentVersionId: item.documentVersionId,
+              objectKeyHash: item.objectKeyHash,
+              kind: item.kind,
+              status: item.status,
+              reasonCode:
+                item.kind === "DELETE_PENDING" || item.kind === "LEGAL_HOLD"
+                  ? "AWAITING_PHASE22_POLICY"
+                  : "PHASE21_RECONCILIATION",
+              idempotencyKey,
+              observedAt: now,
+            },
+          ],
+          skipDuplicates: true,
+        });
       changed += result.count;
       if (
         item.kind === "INCOMPLETE_UPLOAD" &&

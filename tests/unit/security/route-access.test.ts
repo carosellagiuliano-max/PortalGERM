@@ -117,8 +117,22 @@ describe("canonical route access wrappers", () => {
     for (const path of pagePaths) {
       expect(
         readFileSync(path, "utf8"),
-        `${path} must call requireAdminPage() inside the page boundary`,
-      ).toMatch(/\brequireAdminPage\s*\(/u);
+        `${path} must call an Admin page guard inside the page boundary`,
+      ).toMatch(/\brequireAdmin(?:Capability)?Page\s*\(/u);
+    }
+  });
+
+  it("requires an explicit read capability before sensitive Admin page queries", () => {
+    const root = join(process.cwd(), "app", "admin");
+    for (const path of [
+      join(root, "jobs", "page.tsx"),
+      join(root, "jobs", "[id]", "page.tsx"),
+      join(root, "legal", "page.tsx"),
+      join(root, "system", "page.tsx"),
+    ]) {
+      expect(readFileSync(path, "utf8"), path).toMatch(
+        /\brequireAdminCapabilityPage\s*\(/u,
+      );
     }
   });
 });

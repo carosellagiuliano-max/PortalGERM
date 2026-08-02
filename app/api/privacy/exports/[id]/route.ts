@@ -1,49 +1,67 @@
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentAuthContext } from "@/lib/auth/current-user";
+import { getAuthRequestContext } from "@/lib/auth/request-context";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { asyncIterableToWebReadable } from "@/lib/documents/http";
 import { consumePrivacyExportV2 } from "@/lib/privacy/export-v2";
 import { createPrivacyExportObjectStore } from "@/lib/providers/storage/privacy-export-storage";
+import { bindObjectStoreToProviderAuthority } from "@/lib/providers/storage/provider-authority-bound-object-store";
+import { privacyExportStoreActivationBinding } from "@/lib/privacy/provider-activation-binding";
 
 export async function POST(
   request: Request,
   context: Readonly<{ params: Promise<{ id: string }> }>,
 ) {
-  const [user, { id }] = await Promise.all([getCurrentUser(), context.params]);
-  if (user === null || !sameOrigin(request)) return unavailable();
-  const body = await request.formData().catch(() => null);
-  const token = body?.get("token");
-  if (typeof token !== "string") return unavailable();
-  const database = getDatabase();
-  const challenge = await database.privacyIdentityChallenge.findFirst({
-    where: {
-      userId: user.id,
-      verifiedAt: { not: null },
-      consumedAt: { not: null },
-    },
-    orderBy: { verifiedAt: "desc" },
-    select: { id: true, verifiedAt: true },
-  });
-  const environment = getServerEnvironment();
+  const [auth, requestContext, { id }] = await Promise.all([
+    getCurrentAuthContext(),
+    getAuthRequestContext(),
+    context.params,
+  ]);
   if (
-    challenge?.verifiedAt === null ||
-    challenge === null ||
-    challenge.verifiedAt.getTime() < Date.now() - 15 * 60 * 1_000
+    auth === null ||
+    auth.user.role !== "CANDIDATE" ||
+    !sameOrigin(request)
   ) {
     return unavailable();
   }
+  const body = await request.formData().catch(() => null);
+  const token = body?.get("token");
+  const stepUpEvidenceId = body?.get("stepUpEvidenceId");
+  const stepUpGrantToken = body?.get("stepUpGrantToken");
+  if (
+    typeof token !== "string" ||
+    typeof stepUpEvidenceId !== "string" ||
+    typeof stepUpGrantToken !== "string"
+  ) {
+    return unavailable();
+  }
+  const database = getDatabase();
+  const environment = getServerEnvironment();
   const result = await consumePrivacyExportV2(
     {
       artifactId: id,
-      ownerUserId: user.id,
+      ownerUserId: auth.user.id,
       token,
-      stepUpEvidenceRef: `sandbox:privacy-challenge:${challenge.id}`,
+      stepUpEvidenceId,
+      stepUpGrantToken,
     },
     {
       database,
-      exportStore: createPrivacyExportObjectStore(environment),
+      exportStore: bindObjectStoreToProviderAuthority({
+        binding: privacyExportStoreActivationBinding(environment),
+        database,
+        delegate: createPrivacyExportObjectStore(environment),
+        environment,
+      }),
       exportKeyring: environment.secrets.keyrings.PRIVACY_EXPORT_KEYS,
       processingMode: environment.PRIVACY_PROCESSING_MODE,
+      stepUpActor: {
+        userId: auth.user.id,
+        sessionId: auth.session.id,
+        role: auth.user.role,
+        status: auth.user.status,
+      },
+      correlationId: requestContext.correlationId,
       now: new Date(),
     },
   );

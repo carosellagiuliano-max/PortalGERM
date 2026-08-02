@@ -1,25 +1,20 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import { createInitialEmailVerification } from "@/lib/auth/email-verification-service";
-import {
-  createDatabaseClient,
-  type DatabaseClient,
-} from "@/lib/db/factory";
+import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import { dispatchNotificationBatch } from "@/lib/notifications/dispatcher";
 import {
   enqueueNotification,
+  hashNotificationRecipient,
   NotificationOutboxInputError,
 } from "@/lib/notifications/outbox";
+import {
+  destroyedNotificationRecipientMaterial,
+  maintainNotificationPrivacyRetention,
+} from "@/lib/notifications/retention";
 import {
   PHASE20_SANDBOX_REPLAY_CONFIRMATION,
   replayDeadLetterNotification,
@@ -30,12 +25,14 @@ import {
   type EmailDeliveryRequest,
 } from "@/lib/providers/email/email-delivery-provider";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
+import { keyMaterial } from "@/tests/fixtures/environment";
 import {
   PHASE20_NOW,
   createPhase20User,
   phase20Environment,
   phase20Request,
 } from "@/tests/fixtures/phase20-identity";
+import { activatePhase33SandboxEmailUseCases } from "@/tests/fixtures/phase33-provider-activation";
 
 type Migrated = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 let migrated: Migrated | undefined;
@@ -52,6 +49,12 @@ beforeAll(async () => {
     OPTIONAL_EMAIL: "true",
     DELIVERY_REPLAY: "true",
   });
+  await activatePhase33SandboxEmailUseCases(
+    database,
+    environment,
+    ["email.transactional"],
+    PHASE20_NOW,
+  );
 });
 
 afterAll(async () => {
@@ -71,7 +74,9 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
           recipient: { userId: recipient.id },
           templateKey: "login_email_changed_notice",
           payloadSchemaVersion: "identity-v1",
-          payload: { emailChangeId: `20000000-0000-4000-8000-${String(index).padStart(12, "0")}` },
+          payload: {
+            emailChangeId: `20000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+          },
           dedupeKey: `phase20-batch:${index}`,
           availableAt: PHASE20_NOW,
         });
@@ -96,10 +101,7 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
         clock: () => PHASE20_NOW,
       }),
     ]);
-    expect([first.status, second.status]).toEqual([
-      "COMPLETED",
-      "COMPLETED",
-    ]);
+    expect([first.status, second.status]).toEqual(["COMPLETED", "COMPLETED"]);
     expect(first.claimed + second.claimed).toBe(105);
     expect(first.delivered + second.delivered).toBe(105);
     expect(Math.max(first.claimed, second.claimed)).toBeLessThanOrEqual(100);
@@ -110,12 +112,24 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
     expect(provider.effects.size).toBe(105);
     expect(
       await db().notificationOutbox.count({
-        where: { dedupeKey: { startsWith: "phase20-batch:" }, status: "DELIVERED" },
+        where: {
+          dedupeKey: { startsWith: "phase20-batch:" },
+          status: "DELIVERED",
+        },
       }),
     ).toBe(105);
     expect(
       await db().notificationDeliveryAttempt.count({
         where: { outbox: { dedupeKey: { startsWith: "phase20-batch:" } } },
+      }),
+    ).toBe(105);
+    expect(
+      await db().notificationOutbox.count({
+        where: {
+          dedupeKey: { startsWith: "phase20-batch:" },
+          providerRequestCiphertext: null,
+          providerRequestDestroyedAt: { not: null },
+        },
       }),
     ).toBe(105);
   });
@@ -179,6 +193,160 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
     expect(await db().notificationOutbox.count()).toBe(before);
   });
 
+  it("deduplicates an explicit recipient only when its keyed identity matches", async () => {
+    const keyring = env().secrets.keyrings.NOTIFICATION_DELIVERY_KEYS;
+    const hashKeyring = env().secrets.keyrings.NOTIFICATION_RECIPIENT_HASH_KEYS;
+    const recipientExpiresAt = new Date(Date.now() + 23 * 60 * 60_000);
+    const input = {
+      recipient: {
+        address: "outbox-dedupe-address-a@example.test",
+        hashKeyring,
+        keyring,
+        retentionUntil: recipientExpiresAt,
+      },
+      templateKey: "privacy_request_changed" as const,
+      payloadSchemaVersion: "privacy-request-v1",
+      payload: {
+        requestId: "20000000-0000-4000-8000-000000000044",
+        statusLabel: "Abgeschlossen",
+      },
+      dedupeKey: "phase33-address-dedupe",
+      availableAt: PHASE20_NOW,
+    };
+    await expect(
+      db().$transaction((transaction) =>
+        enqueueNotification(transaction, {
+          ...input,
+          dedupeKey: "phase33-address-unbounded-retention",
+          recipient: {
+            ...input.recipient,
+            retentionUntil: new Date("9999-12-31T23:59:59.000Z"),
+          },
+        }),
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<NotificationOutboxInputError>>({
+        code: "RECIPIENT_RETENTION_INVALID",
+      }),
+    );
+    const first = await db().$transaction((transaction) =>
+      enqueueNotification(transaction, input),
+    );
+    await expect(
+      db().$transaction((transaction) =>
+        enqueueNotification(transaction, input),
+      ),
+    ).resolves.toMatchObject({ id: first.id });
+    await expect(
+      db().$transaction((transaction) =>
+        enqueueNotification(transaction, {
+          ...input,
+          recipient: {
+            address: "outbox-dedupe-address-b@example.test",
+            hashKeyring,
+            keyring,
+            retentionUntil: input.recipient.retentionUntil,
+          },
+        }),
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<NotificationOutboxInputError>>({
+        code: "DEDUPE_CONFLICT",
+      }),
+    );
+    await db().notificationOutbox.update({
+      where: { id: first.id },
+      data: {
+        status: "SUPPRESSED",
+        suppressedAt: PHASE20_NOW,
+        ...destroyedNotificationRecipientMaterial(PHASE20_NOW),
+      },
+    });
+  });
+
+  it("never wipes an expired explicit recipient under a live lease and suppresses it after lease expiry", async () => {
+    const keyring = env().secrets.keyrings.NOTIFICATION_DELIVERY_KEYS;
+    const hashKeyring = env().secrets.keyrings.NOTIFICATION_RECIPIENT_HASH_KEYS;
+    const insertedAt = new Date();
+    const recipientExpiresAt = new Date(insertedAt.getTime() + 60_000);
+    const enqueued = await db().$transaction((transaction) =>
+      enqueueNotification(transaction, {
+        recipient: {
+          address: "outbox-retention-lease@example.test",
+          hashKeyring,
+          keyring,
+          retentionUntil: recipientExpiresAt,
+        },
+        templateKey: "privacy_request_changed",
+        payloadSchemaVersion: "privacy-request-v1",
+        payload: {
+          requestId: "20000000-0000-4000-8000-000000000045",
+          statusLabel: "Abgeschlossen",
+        },
+        dedupeKey: "phase33-address-retention-lease",
+        availableAt: insertedAt,
+      }),
+    );
+    const leaseExpiresAt = new Date(insertedAt.getTime() + 120_000);
+    await db().notificationOutbox.update({
+      where: { id: enqueued.id },
+      data: {
+        status: "LEASED",
+        leaseOwner: "retention-race-worker",
+        leaseExpiresAt,
+      },
+    });
+
+    const whileLeased = await maintainNotificationPrivacyRetention(
+      db(),
+      new Date(insertedAt.getTime() + 90_000),
+    );
+    expect(whileLeased.suppressedRecipients).toBe(0);
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: enqueued.id },
+        select: {
+          recipientAddressCiphertext: true,
+          recipientAddressDestroyedAt: true,
+          status: true,
+        },
+      }),
+    ).resolves.toMatchObject({
+      recipientAddressCiphertext: expect.any(Uint8Array),
+      recipientAddressDestroyedAt: null,
+      status: "LEASED",
+    });
+
+    const reclaimedAt = new Date(leaseExpiresAt.getTime() + 1);
+    const reclaimed = await maintainNotificationPrivacyRetention(
+      db(),
+      reclaimedAt,
+    );
+    expect(reclaimed.suppressedRecipients).toBe(1);
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: enqueued.id },
+        select: {
+          lastErrorCode: true,
+          leaseExpiresAt: true,
+          leaseOwner: true,
+          recipientAddressCiphertext: true,
+          recipientAddressDestroyedAt: true,
+          status: true,
+          suppressedAt: true,
+        },
+      }),
+    ).resolves.toEqual({
+      lastErrorCode: "RECIPIENT_MATERIAL_RETENTION_EXPIRED",
+      leaseExpiresAt: null,
+      leaseOwner: null,
+      recipientAddressCiphertext: null,
+      recipientAddressDestroyedAt: reclaimedAt,
+      status: "SUPPRESSED",
+      suppressedAt: reclaimedAt,
+    });
+  });
+
   it("rehydrates a single-use verification link after producer state is gone", async () => {
     const recipient = await createPhase20User(db(), {
       email: "outbox-rehydration@example.test",
@@ -193,10 +361,11 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
         environment: env(),
       }),
     );
-    const persistedBeforeDispatch = await db().notificationOutbox.findFirstOrThrow({
-      where: { recipientUserId: recipient.id },
-      include: { attempts: true },
-    });
+    const persistedBeforeDispatch =
+      await db().notificationOutbox.findFirstOrThrow({
+        where: { recipientUserId: recipient.id },
+        include: { attempts: true },
+      });
     expect(JSON.stringify(persistedBeforeDispatch)).not.toContain(
       issued.rawToken,
     );
@@ -217,6 +386,114 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
         where: { id: persistedBeforeDispatch.id },
       }),
     ).toMatchObject({ status: "DELIVERED", attemptCount: 1 });
+  });
+
+  it("pauses without provider I/O when verification-token key authority changed", async () => {
+    const recipient = await createPhase20User(db(), {
+      email: "outbox-verification-key-rotation@example.test",
+      verified: false,
+    });
+    const issued = await db().$transaction((transaction) =>
+      createInitialEmailVerification(transaction, {
+        userId: recipient.id,
+        emailNormalized: recipient.emailNormalized,
+        now: PHASE20_NOW,
+        correlationId: phase20Request(42).correlationId,
+        environment: env(),
+      }),
+    );
+    const rotatedSessionEnvironment = phase20Environment(
+      migrated!.connectionString,
+      {
+        EMAIL_PROVIDER_MODE: "local_mock",
+        NOTIFICATION_DISPATCH: "command",
+        OPTIONAL_EMAIL: "true",
+        DELIVERY_REPLAY: "true",
+        SESSION_SECRET: keyMaterial(99),
+      },
+    );
+    const provider = new RecordingProvider();
+
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: rotatedSessionEnvironment,
+        provider,
+        workerId: "verification-key-rotation-worker",
+        clock: () => PHASE20_NOW,
+      }),
+    ).resolves.toMatchObject({ claimed: 1, paused: 1 });
+    expect(provider.requests).toHaveLength(0);
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: issued.outboxId },
+        select: { status: true, lastErrorCode: true },
+      }),
+    ).resolves.toEqual({
+      status: "PAUSED",
+      lastErrorCode: "CHALLENGE_TOKEN_BINDING_MISMATCH",
+    });
+  });
+
+  it("suppresses a frozen retry after its verification challenge is superseded", async () => {
+    const recipient = await createPhase20User(db(), {
+      email: "outbox-verification-superseded@example.test",
+      verified: false,
+    });
+    const issued = await db().$transaction((transaction) =>
+      createInitialEmailVerification(transaction, {
+        userId: recipient.id,
+        emailNormalized: recipient.emailNormalized,
+        now: PHASE20_NOW,
+        correlationId: phase20Request(43).correlationId,
+        environment: env(),
+      }),
+    );
+    const provider = new RecordingProvider([
+      new EmailDeliveryFailure("TIMEOUT", "PROVIDER_OUTCOME_UNKNOWN"),
+    ]);
+    let clock = PHASE20_NOW;
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "verification-superseded-worker-a",
+        clock: () => clock,
+      }),
+    ).resolves.toMatchObject({ claimed: 1, retried: 1 });
+    await db().emailVerificationChallenge.update({
+      where: { id: issued.challengeId },
+      data: { supersededAt: new Date(PHASE20_NOW.getTime() + 30_000) },
+    });
+
+    clock = new Date(PHASE20_NOW.getTime() + 60_001);
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "verification-superseded-worker-b",
+        clock: () => clock,
+      }),
+    ).resolves.toMatchObject({ claimed: 1, suppressed: 1 });
+    expect(provider.requests).toHaveLength(1);
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: issued.outboxId },
+        select: {
+          status: true,
+          lastErrorCode: true,
+          providerRequestCiphertext: true,
+          providerRequestDestroyedAt: true,
+        },
+      }),
+    ).resolves.toEqual({
+      status: "SUPPRESSED",
+      lastErrorCode: "CHALLENGE_TERMINAL",
+      providerRequestCiphertext: null,
+      providerRequestDestroyedAt: clock,
+    });
   });
 
   it("takes over an expired lease, retries transient failure, and preserves one provider key", async () => {
@@ -255,7 +532,7 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
       lastErrorCode: "PROVIDER_500",
     });
     expect(persisted.attempts).toHaveLength(1);
-
+    const firstProviderRequest = structuredClone(provider.requests[0]);
     clock = new Date(PHASE20_NOW.getTime() + 60_001);
     const second = await dispatchNotificationBatch({
       database: db(),
@@ -264,11 +541,19 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
       workerId: "restart-worker",
       clock: () => clock,
     });
-    expect(second).toMatchObject({ claimed: 1, delivered: 1 });
     persisted = await db().notificationOutbox.findUniqueOrThrow({
       where: { id: outbox.id },
       include: { attempts: { orderBy: { attemptNumber: "asc" } } },
     });
+    expect(
+      second,
+      JSON.stringify({
+        second,
+        status: persisted.status,
+        error: persisted.lastErrorCode,
+        attempts: persisted.attempts.map(({ outcome }) => outcome),
+      }),
+    ).toMatchObject({ claimed: 1, delivered: 1 });
     expect(persisted.status).toBe("DELIVERED");
     expect(persisted.attempts.map(({ outcome }) => outcome)).toEqual([
       "TRANSIENT_FAILURE",
@@ -278,6 +563,372 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
       new Set([persisted.providerDedupeKey]),
     );
     expect(provider.effects.size).toBe(1);
+    expect(provider.requests).toHaveLength(2);
+    expect(provider.requests[1]).toEqual(firstProviderRequest);
+    expect(provider.requests[1]?.to).toBe("outbox-retry@example.test");
+  });
+
+  it("suppresses a frozen retry when the user recipient address changed", async () => {
+    const recipient = await createPhase20User(db(), {
+      email: "outbox-recipient-change@example.test",
+      verified: true,
+    });
+    const outbox = await enqueue(recipient.id, "phase33-recipient-change", 3);
+    const provider = new RecordingProvider([
+      new EmailDeliveryFailure("TIMEOUT", "PROVIDER_OUTCOME_UNKNOWN"),
+    ]);
+    let clock = PHASE20_NOW;
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "recipient-change-worker-a",
+        clock: () => clock,
+      }),
+    ).resolves.toMatchObject({ claimed: 1, retried: 1 });
+    await db().user.update({
+      where: { id: recipient.id },
+      data: {
+        email: "outbox-recipient-changed@example.test",
+        emailNormalized: "outbox-recipient-changed@example.test",
+      },
+    });
+
+    clock = new Date(PHASE20_NOW.getTime() + 60_001);
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "recipient-change-worker-b",
+        clock: () => clock,
+      }),
+    ).resolves.toMatchObject({ claimed: 1, suppressed: 1 });
+    expect(provider.requests).toHaveLength(1);
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: outbox.id },
+        select: {
+          status: true,
+          providerRequestCiphertext: true,
+          providerRequestDestroyedAt: true,
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: "SUPPRESSED",
+      providerRequestCiphertext: null,
+      providerRequestDestroyedAt: clock,
+    });
+  });
+
+  it("pauses an ambiguous retry before the provider idempotency window expires", async () => {
+    const recipient = await createPhase20User(db(), {
+      email: "outbox-stale-ambiguous@example.test",
+      verified: true,
+    });
+    const outbox = await enqueue(recipient.id, "phase33-stale-ambiguous", 3);
+    const provider = new RecordingProvider([
+      new EmailDeliveryFailure("TIMEOUT", "PROVIDER_OUTCOME_UNKNOWN"),
+    ]);
+    let clock = PHASE20_NOW;
+    const first = await dispatchNotificationBatch({
+      database: db(),
+      environment: env(),
+      provider,
+      workerId: "stale-ambiguous-worker-a",
+      clock: () => clock,
+    });
+    expect(first).toMatchObject({ claimed: 1, retried: 1 });
+    expect(provider.requests).toHaveLength(1);
+
+    clock = new Date(PHASE20_NOW.getTime() + 24 * 60 * 60_000);
+    const second = await maintainNotificationPrivacyRetention(db(), clock);
+    expect(second).toMatchObject({ pausedRequests: 1 });
+    expect(provider.requests).toHaveLength(1);
+    expect(
+      await db().notificationOutbox.findUniqueOrThrow({
+        where: { id: outbox.id },
+        select: { status: true, lastErrorCode: true },
+      }),
+    ).toEqual({
+      status: "PAUSED",
+      lastErrorCode: "PROVIDER_OUTCOME_RECONCILIATION_REQUIRED",
+    });
+  });
+
+  it("never dead-letters an unknown provider outcome on the final attempt", async () => {
+    const recipient = await createPhase20User(db(), {
+      email: "outbox-final-ambiguous@example.test",
+      verified: true,
+    });
+    const outbox = await enqueue(recipient.id, "phase33-final-ambiguous", 1);
+    const provider = new RecordingProvider([
+      new EmailDeliveryFailure("TIMEOUT", "PROVIDER_OUTCOME_UNKNOWN"),
+    ]);
+
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "final-ambiguous-worker",
+        clock: () => PHASE20_NOW,
+      }),
+    ).resolves.toMatchObject({
+      claimed: 1,
+      deadLettered: 0,
+      paused: 1,
+    });
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: outbox.id },
+        select: {
+          lastErrorCode: true,
+          providerRequestCiphertext: true,
+          providerRequestDestroyedAt: true,
+          status: true,
+        },
+      }),
+    ).resolves.toMatchObject({
+      lastErrorCode: "PROVIDER_OUTCOME_RECONCILIATION_REQUIRED",
+      providerRequestCiphertext: expect.any(Uint8Array),
+      providerRequestDestroyedAt: null,
+      status: "PAUSED",
+    });
+    await expect(
+      db().notificationDeliveryAttempt.findFirstOrThrow({
+        where: { outboxId: outbox.id },
+        select: { outcome: true },
+      }),
+    ).resolves.toEqual({ outcome: "TIMED_OUT" });
+
+    const retentionSweepAt = new Date(
+      PHASE20_NOW.getTime() + 24 * 60 * 60_000,
+    );
+    await maintainNotificationPrivacyRetention(db(), retentionSweepAt);
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: outbox.id },
+        select: {
+          providerRequestCiphertext: true,
+          providerRequestDestroyedAt: true,
+        },
+      }),
+    ).resolves.toEqual({
+      providerRequestCiphertext: null,
+      providerRequestDestroyedAt: retentionSweepAt,
+    });
+  });
+
+  it("wipes and pauses a snapshot left before the first attempt receipt commit", async () => {
+    const recipient = await createPhase20User(db(), {
+      email: "outbox-attempt-commit-crash@example.test",
+      verified: true,
+    });
+    const outbox = await enqueue(
+      recipient.id,
+      "phase33-attempt-commit-crash",
+      3,
+    );
+    const provider = new RecordingProvider();
+    await db().$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION reject_phase33_notification_attempt()
+      RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'injected attempt commit crash';
+      END;
+      $$ LANGUAGE plpgsql;
+      CREATE TRIGGER reject_phase33_notification_attempt_trigger
+      BEFORE INSERT ON "NotificationDeliveryAttempt"
+      FOR EACH ROW EXECUTE FUNCTION reject_phase33_notification_attempt();
+    `);
+    try {
+      await expect(
+        dispatchNotificationBatch({
+          database: db(),
+          environment: env(),
+          provider,
+          workerId: "attempt-commit-crash-worker-a",
+          clock: () => PHASE20_NOW,
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await db().$executeRawUnsafe(`
+        DROP TRIGGER IF EXISTS reject_phase33_notification_attempt_trigger
+          ON "NotificationDeliveryAttempt";
+        DROP FUNCTION IF EXISTS reject_phase33_notification_attempt();
+      `);
+    }
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: outbox.id },
+        select: {
+          attemptCount: true,
+          providerRequestCiphertext: true,
+          providerRequestDestroyedAt: true,
+        },
+      }),
+    ).resolves.toMatchObject({
+      attemptCount: 0,
+      providerRequestCiphertext: expect.any(Uint8Array),
+      providerRequestDestroyedAt: null,
+    });
+
+    const afterProviderTtl = new Date(PHASE20_NOW.getTime() + 24 * 60 * 60_000);
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "attempt-commit-crash-worker-b",
+        clock: () => afterProviderTtl,
+      }),
+    ).resolves.toMatchObject({ claimed: 0, paused: 1 });
+    expect(provider.requests).toHaveLength(1);
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: outbox.id },
+        select: {
+          status: true,
+          attemptCount: true,
+          providerRequestCiphertext: true,
+          providerRequestDestroyedAt: true,
+        },
+      }),
+    ).resolves.toEqual({
+      status: "PAUSED",
+      attemptCount: 0,
+      providerRequestCiphertext: null,
+      providerRequestDestroyedAt: afterProviderTtl,
+    });
+  });
+
+  it("treats unknown hydration infrastructure failures as bounded transient retries", async () => {
+    const recipient = await createPhase20User(db(), {
+      email: "outbox-hydration-retry@example.test",
+      verified: false,
+    });
+    const issued = await db().$transaction((transaction) =>
+      createInitialEmailVerification(transaction, {
+        userId: recipient.id,
+        emailNormalized: recipient.emailNormalized,
+        now: PHASE20_NOW,
+        correlationId: phase20Request(41).correlationId,
+        environment: env(),
+      }),
+    );
+    const hydration = vi
+      .spyOn(db().emailVerificationChallenge, "findUnique")
+      .mockRejectedValueOnce(new Error("temporary hydration database outage"));
+    const provider = new RecordingProvider();
+    let clock = PHASE20_NOW;
+    try {
+      const first = await dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "hydration-retry-worker-a",
+        clock: () => clock,
+      });
+      expect(first).toMatchObject({ claimed: 1, retried: 1 });
+      expect(provider.requests).toHaveLength(0);
+      expect(
+        await db().notificationOutbox.findUniqueOrThrow({
+          where: { id: issued.outboxId },
+        }),
+      ).toMatchObject({
+        status: "RETRY",
+        attemptCount: 1,
+        lastErrorCode: "DISPATCH_INFRASTRUCTURE_FAILURE",
+      });
+
+      clock = new Date(PHASE20_NOW.getTime() + 60_001);
+      const second = await dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "hydration-retry-worker-b",
+        clock: () => clock,
+      });
+      expect(second).toMatchObject({ claimed: 1, delivered: 1 });
+      expect(provider.effects.size).toBe(1);
+      expect(
+        await db().notificationDeliveryAttempt.findMany({
+          where: { outboxId: issued.outboxId },
+          orderBy: { attemptNumber: "asc" },
+          select: { outcome: true },
+        }),
+      ).toEqual([{ outcome: "TRANSIENT_FAILURE" }, { outcome: "ACCEPTED" }]);
+    } finally {
+      hydration.mockRestore();
+    }
+  });
+
+  it("honours suppressions written by a retained HMAC key after rotation", async () => {
+    const oldEnvironment = phase20Environment(migrated!.connectionString, {
+      EMAIL_PROVIDER_MODE: "local_mock",
+      NOTIFICATION_DISPATCH: "command",
+      OPTIONAL_EMAIL: "true",
+      DELIVERY_REPLAY: "true",
+      NOTIFICATION_RECIPIENT_HASH_KEYS: `recipient-hash-v1:${keyMaterial(51)}`,
+    });
+    const rotatedEnvironment = phase20Environment(migrated!.connectionString, {
+      EMAIL_PROVIDER_MODE: "local_mock",
+      NOTIFICATION_DISPATCH: "command",
+      OPTIONAL_EMAIL: "true",
+      DELIVERY_REPLAY: "true",
+      NOTIFICATION_RECIPIENT_HASH_KEYS:
+        `recipient-hash-v2:${keyMaterial(52)},` +
+        `recipient-hash-v1:${keyMaterial(51)}`,
+    });
+    await activatePhase33SandboxEmailUseCases(
+      db(),
+      rotatedEnvironment,
+      ["email.transactional"],
+      PHASE20_NOW,
+    );
+    const recipient = await createPhase20User(db(), {
+      email: "outbox-rotated-suppression@example.test",
+      verified: true,
+    });
+    const oldHash = hashNotificationRecipient(
+      recipient.emailNormalized,
+      oldEnvironment.secrets.keyrings.NOTIFICATION_RECIPIENT_HASH_KEYS,
+    );
+    await db().notificationSuppression.create({
+      data: {
+        recipientHash: oldHash,
+        recipientHashKeyVersion:
+          oldEnvironment.secrets.keyrings.NOTIFICATION_RECIPIENT_HASH_KEYS[0]!
+            .version,
+        reason: "HARD_BOUNCE",
+        source: "rotation-test",
+        createdAt: PHASE20_NOW,
+      },
+    });
+    const outbox = await enqueue(
+      recipient.id,
+      "phase20-rotated-suppression",
+      3,
+    );
+    const provider = new RecordingProvider();
+
+    const result = await dispatchNotificationBatch({
+      database: db(),
+      environment: rotatedEnvironment,
+      provider,
+      workerId: "rotated-suppression-worker",
+      clock: () => PHASE20_NOW,
+    });
+
+    expect(result).toMatchObject({ claimed: 1, suppressed: 1 });
+    expect(provider.requests).toHaveLength(0);
+    expect(
+      await db().notificationOutbox.findUniqueOrThrow({
+        where: { id: outbox.id },
+      }),
+    ).toMatchObject({ status: "SUPPRESSED", attemptCount: 1 });
   });
 
   it("deduplicates recovery after provider acceptance but before local completion", async () => {
@@ -330,11 +981,7 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
       "phase20-transient-dlq",
       2,
     );
-    const bounced = await enqueue(
-      bounceRecipient.id,
-      "phase20-bounce",
-      2,
-    );
+    const bounced = await enqueue(bounceRecipient.id, "phase20-bounce", 2);
 
     const terminalRows = await db().notificationOutbox.findMany({
       where: { id: { in: [poison.id, transient.id, bounced.id] } },
@@ -377,9 +1024,9 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
       deadLettered: 1,
     });
     clock = new Date(PHASE20_NOW.getTime() + 60_001);
-    poisonProvider.failuresByKey.get(keyFor(transient.id))?.push(
-      new EmailDeliveryFailure("TRANSIENT", "PROVIDER_500"),
-    );
+    poisonProvider.failuresByKey
+      .get(keyFor(transient.id))
+      ?.push(new EmailDeliveryFailure("TRANSIENT", "PROVIDER_500"));
     const second = await dispatchNotificationBatch({
       database: db(),
       environment: env(),
@@ -403,7 +1050,11 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
         where: { id: bounced.id },
       }),
     ).toMatchObject({ status: "SUPPRESSED", attemptCount: 1 });
-    expect(await db().notificationSuppression.count()).toBe(1);
+    expect(
+      await db().notificationSuppression.count({
+        where: { source: poisonProvider.providerClass, releasedAt: null },
+      }),
+    ).toBe(1);
 
     const admin = await db().user.create({
       data: {
@@ -462,16 +1113,28 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
     );
     expect(replay).toMatchObject({
       ok: true,
-      value: { outboxId: poison.id, nextAttempt: 2 },
+      value: {
+        predecessorOutboxId: poison.id,
+        nextAttempt: 1,
+      },
     });
+    if (!replay.ok) throw new Error("Expected sandbox replay successor.");
     expect(
       await db().notificationOutbox.findUniqueOrThrow({
         where: { id: poison.id },
       }),
     ).toMatchObject({
-      status: "RETRY",
-      deadLetteredAt: null,
-      maxAttempts: 2,
+      status: "DEAD_LETTER",
+      providerRequestCiphertext: null,
+    });
+    expect(
+      await db().notificationOutbox.findUniqueOrThrow({
+        where: { id: replay.value.outboxId },
+      }),
+    ).toMatchObject({
+      status: "PENDING",
+      attemptCount: 0,
+      providerRequestActivationId: null,
     });
     expect(
       await db().auditLog.count({
@@ -481,6 +1144,91 @@ describe.sequential("Phase 20 durable notification dispatch", () => {
         },
       }),
     ).toBe(1);
+
+    const replayProvider = new RecordingProvider();
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider: replayProvider,
+        workerId: "replay-successor-worker",
+        batchSize: 1,
+        clock: () => clock,
+      }),
+    ).resolves.toMatchObject({ claimed: 1, delivered: 1 });
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: replay.value.outboxId },
+        select: { status: true, attemptCount: true },
+      }),
+    ).resolves.toEqual({ status: "DELIVERED", attemptCount: 1 });
+  });
+
+  it("moves a frozen request across an activation change to one non-reclaimable reconciliation pause", async () => {
+    const recipient = await createPhase20User(db(), {
+      email: "outbox-activation-change@example.test",
+      verified: true,
+    });
+    const outbox = await enqueue(recipient.id, "phase33-activation-change", 3);
+    const provider = new RecordingProvider([
+      new EmailDeliveryFailure("TIMEOUT", "PROVIDER_OUTCOME_UNKNOWN"),
+    ]);
+    let clock = PHASE20_NOW;
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "activation-change-worker-a",
+        clock: () => clock,
+      }),
+    ).resolves.toMatchObject({ claimed: 1, retried: 1 });
+    await activatePhase33SandboxEmailUseCases(
+      db(),
+      env(),
+      ["email.transactional"],
+      new Date(PHASE20_NOW.getTime() + 30_000),
+    );
+
+    clock = new Date(PHASE20_NOW.getTime() + 60_001);
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "activation-change-worker-b",
+        clock: () => clock,
+      }),
+    ).resolves.toMatchObject({ claimed: 1, paused: 1 });
+    expect(provider.requests).toHaveLength(1);
+    await expect(
+      db().notificationOutbox.findUniqueOrThrow({
+        where: { id: outbox.id },
+        select: {
+          status: true,
+          lastErrorCode: true,
+          providerRequestCiphertext: true,
+          providerRequestDestroyedAt: true,
+        },
+      }),
+    ).resolves.toEqual({
+      status: "PAUSED",
+      lastErrorCode:
+        "FROZEN_REQUEST_ACTIVATION_CHANGED_RECONCILIATION_REQUIRED",
+      providerRequestCiphertext: null,
+      providerRequestDestroyedAt: clock,
+    });
+
+    clock = new Date(PHASE20_NOW.getTime() + 120_001);
+    await expect(
+      dispatchNotificationBatch({
+        database: db(),
+        environment: env(),
+        provider,
+        workerId: "activation-change-worker-c",
+        clock: () => clock,
+      }),
+    ).resolves.toMatchObject({ claimed: 0, paused: 0 });
   });
 });
 
@@ -513,9 +1261,7 @@ class RecordingProvider implements EmailDeliveryProvider {
 }
 
 class MappedFailureProvider extends RecordingProvider {
-  constructor(
-    readonly failuresByKey: Map<string, EmailDeliveryFailure[]>,
-  ) {
+  constructor(readonly failuresByKey: Map<string, EmailDeliveryFailure[]>) {
     super();
   }
 

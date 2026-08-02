@@ -15,6 +15,7 @@ import {
   createDocumentMalwareScanner,
   createDocumentObjectStore,
 } from "@/lib/providers/storage/document-storage-composition";
+import { activateSandboxProvider } from "@/lib/ops/operations-ledger";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 import {
   createValidEnvironment,
@@ -37,10 +38,12 @@ export async function createDocumentVaultHarness(purpose: string) {
       DOCUMENT_VAULT_COHORT: "test",
       DOCUMENT_STORAGE_ROOT: root,
       DOCUMENT_STORAGE_REGION: "local-test",
+      WORKER_RUNTIME: "sandbox_command",
     }),
   );
   const database = createDatabaseClient(migrated.connectionString);
   await database.$connect();
+  await activateSandboxDocumentProviders(database, environment, new Date());
   const objectStore = createDocumentObjectStore(environment);
   const scanner = createDocumentMalwareScanner(environment);
   return Object.freeze({
@@ -62,6 +65,48 @@ export async function createDocumentVaultHarness(purpose: string) {
       await rm(root, { recursive: true, force: true });
     },
   });
+}
+
+export async function activateSandboxDocumentProviders(
+  database: ReturnType<typeof createDatabaseClient>,
+  environment: ReturnType<typeof parseEnvironment>,
+  now: Date,
+) {
+  const evidenceDigest = createHash("sha256")
+    .update("phase33-document-provider-fixture", "utf8")
+    .digest("hex");
+  for (const provider of [
+    {
+      adapterKey: "filesystem_sandbox",
+      secretVersionRef: "builtin:filesystem-sandbox:v1",
+      useCase: "documents.object-store",
+    },
+    {
+      adapterKey: "deterministic_sandbox",
+      secretVersionRef: "builtin:deterministic-scanner:v1",
+      useCase: "documents.malware-scan",
+    },
+  ] as const) {
+    await activateSandboxProvider(database, {
+      actorReference: "phase33-document-fixture",
+      adapterKey: provider.adapterKey,
+      adapterVersion: "v1",
+      approvalRef: "approval:phase33-document-fixture",
+      contractRef: "contract:phase33-document-fixture",
+      dpaRef: "dpa:phase33-document-fixture",
+      environment,
+      evidenceDigest,
+      now,
+      reasonCode: "CONTROLLED_SANDBOX",
+      region: environment.DOCUMENT_STORAGE_REGION,
+      secretVersionRef: provider.secretVersionRef,
+      stepUpEvidenceDigest: evidenceDigest,
+      sustainableCapacity: 10_000,
+      unitCostMicros: 0n,
+      unitCostSource: "fixture:phase33",
+      useCase: provider.useCase,
+    });
+  }
 }
 
 export async function seedVaultCandidate(

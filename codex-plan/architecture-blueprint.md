@@ -8,13 +8,17 @@
 > `e34262e3074565840e371c336a5d2ba5cf3efbac`. Phase 19 hat die aktuelle
 > Architektur-/Governance-Baseline anschliessend auf Candidate
 > `769ee620b60bfae4b3c80f318e4cf3595ea8ff7c` verifiziert; die
-> Remediation-Phasen 20–28 sind inzwischen in ihren jeweils dokumentierten
-> default-off Local-/CI-Verträgen technisch umgesetzt; externe Fach-,
-> Provider-, Staging- und LIVE-Gates bleiben davon getrennt. Phasen 29–32
-> bleiben offen. Abschnitte 1–16 beschreiben den geschützten MVP-Kern, die
+> Remediation-Phasen 20–31 besitzen inzwischen ihre jeweils datierten
+> technischen Local-/CI-Verträge; externe Fach-, Provider-, Staging- und
+> LIVE-Gates bleiben davon getrennt. Phase 32 endet historisch `LC1 / NO_GO`.
+> Phase 33 ist als technische LC4-/LC5-Closure `IN_PROGRESS`; Technik/Quality
+> sind `PENDING`, Aktivierung ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Abschnitte 1–16
+> beschreiben den geschützten MVP-Kern, die
 > Remediation-Architektur steht ab Abschnitt 17. Ist-Routen kommen aus
-> `route-inventory.json`, geplante Routen dürfen dort nicht vorweggenommen
-> werden.
+> `route-inventory.json`; Server Actions und schema-definierte
+> Laufzeitkontrollen kommen aus `server-action-inventory.json` und
+> `feature-flag-inventory.json`. Geplante Oberflächen dürfen in keinem dieser
+> Ist-Inventare vorweggenommen werden.
 
 ## 1. Architekturziele und Leitprinzipien
 
@@ -95,23 +99,23 @@ Direkte Prisma-Aufrufe sind in Page-Komponenten nur für triviale, bereits autor
 
 ### Globale Rollen
 
-| Rolle | Bedeutung | Darf nicht automatisch |
-|---|---|---|
-| `CANDIDATE` | eigenes Profil, Bewerbungen, Alerts, Radar-Consent | andere Kandidaten, Firmeninternes oder Admin-Daten lesen |
-| `EMPLOYER` | Nutzer mit Firmenmitgliedschaft | ohne Membership auf eine Firma zugreifen |
-| `RECRUITER` | Recruiting-Nutzer mit begrenztem Firmen-/Jobkontext | Billing, Ownership, Verifizierung oder fremde Jobs verwalten |
-| `ADMIN` | Plattformbetrieb im MVP | Audit umgehen, Success Fee aktivieren, Geheimnisse/CV-Inhalte einsehen |
+| Rolle       | Bedeutung                                           | Darf nicht automatisch                                                 |
+| ----------- | --------------------------------------------------- | ---------------------------------------------------------------------- |
+| `CANDIDATE` | eigenes Profil, Bewerbungen, Alerts, Radar-Consent  | andere Kandidaten, Firmeninternes oder Admin-Daten lesen               |
+| `EMPLOYER`  | Nutzer mit Firmenmitgliedschaft                     | ohne Membership auf eine Firma zugreifen                               |
+| `RECRUITER` | Recruiting-Nutzer mit begrenztem Firmen-/Jobkontext | Billing, Ownership, Verifizierung oder fremde Jobs verwalten           |
+| `ADMIN`     | Plattformbetrieb im MVP                             | Audit umgehen, Success Fee aktivieren, Geheimnisse/CV-Inhalte einsehen |
 
 Eine spätere Trennung in `SUPPORT`, `MODERATOR`, `SALES`, `FINANCE` ist P1. Bis dahin müssen Admin-Aktionen trotzdem in Capability-Funktionen gekapselt sein, damit die globale Rolle nicht überall hartcodiert wird.
 
 ### Firmenrollen
 
-| Firmenrolle | Profil | Jobs | Bewerbungen | Team | Billing | Analytics |
-|---|---|---|---|---|---|---|
-| `OWNER` | schreiben | alle | alle | verwalten; letzter Owner geschützt | verwalten | planabhängig |
-| `ADMIN` | schreiben | alle | alle | einladen/entfernen ausser Owner | lesen/kaufen nach Policy | planabhängig |
-| `RECRUITER` | lesen | zugewiesen/erstellen nach Policy | zugewiesene Jobs | nein | nein | jobbezogen |
-| `VIEWER` | lesen | lesen | anonymisierte/erlaubte Ansicht | nein | nein | planabhängig lesen |
+| Firmenrolle | Profil    | Jobs                             | Bewerbungen                    | Team                               | Billing                  | Analytics          |
+| ----------- | --------- | -------------------------------- | ------------------------------ | ---------------------------------- | ------------------------ | ------------------ |
+| `OWNER`     | schreiben | alle                             | alle                           | verwalten; letzter Owner geschützt | verwalten                | planabhängig       |
+| `ADMIN`     | schreiben | alle                             | alle                           | einladen/entfernen ausser Owner    | lesen/kaufen nach Policy | planabhängig       |
+| `RECRUITER` | lesen     | zugewiesen/erstellen nach Policy | zugewiesene Jobs               | nein                               | nein                     | jobbezogen         |
+| `VIEWER`    | lesen     | lesen                            | anonymisierte/erlaubte Ansicht | nein                               | nein                     | planabhängig lesen |
 
 ### Autorisierungsreihenfolge
 
@@ -132,74 +136,74 @@ Jede Zeile ist eine Seitengruppe. Für jede konkrete Route gelten zusätzlich Lo
 
 ### Öffentlich und Auth
 
-| Route(n) | Zweck / Primäraktion | Daten / Servergrenze | Sekundäraktionen und Vertrauen | Mobile |
-|---|---|---|---|---|
-| `/` | Nutzen verstehen; Stelle suchen | veröffentlichte, nicht abgelaufene Jobs; kuratierte Firmen/Cluster | Salary Radar, Arbeitgeber-CTA, Score-Erklärung, Datenstand | Suche zuerst; Sektionen als kompakte Cards |
-| `/jobs` | relevante Stellen filtern | paginierte Search Query, Allowlist-Params, Ranking | Suche speichern, Filter löschen, Alternativen; Boost-Label | Filter-Sheet, sticky Ergebniszahl, keine breite Tabelle |
-| `/jobs/[slug]` | entscheiden; bewerben/merken | Published-only Read Model, ScoreSnapshot, Company, Kandidaten-Match optional | teilen, ähnliche Jobs, Meldung; Datenstand/Scorefaktoren | primärer CTA sticky, lange Abschnitte einklappbar |
-| `/jobs/kanton/[canton]`, `/jobs/kategorie/[category]`, `/jobs/kanton/[canton]/kategorie/[category]` | Cluster erkunden; Jobabo | Kombination ist P0 für freigegebene Startcluster; jede Route nur indexierbar bei Content-/Liquiditätsgate | lokale Orientierung, Canonical, aktualisierte Jobzahl | Filter/Content priorisiert, keine Textwüste |
-| `/companies`, `/companies/[slug]` | Arbeitgeber prüfen | canonical ACTIVE/LIVE validated/sanitized public allowlist + Published Jobs; P0 has no separate profile review, Verification is only the badge/publish trust gate | Profil beanspruchen, Jobs, Verifizierungsstatus | Jobs als Cards |
-| `/salary-radar` | Lohnspanne orientieren | validierte Kriterien, versionierte SalaryBand Query | Methodik/Abdeckung, passende Jobs, Ergebnis speichern | schrittweises Formular, Ergebnis sofort sichtbar |
-| `/guide`, `/guide/[slug]` | konkrete Karrierefrage lösen | Published Content, Autor/Review/Aktualität | passende Suche/Jobabo; Quellen | lesbare Typografie, Inhaltsanker |
-| `/pricing` | Plan verstehen | aktive Version von Plan/Product-Katalog | P0 Monatskonditionen, FAQ, Demo; MWST/Laufzeit; inaktive Jahresforschung nicht rendern | keine abgeschnittene Vergleichstabelle; Featuregruppen |
-| `/employers/*` | Arbeitgebernutzen verstehen | kuratierter Content und echte/markierte Beispiele | Demo, erste Stelle, Talent Radar, Import | CTA je Abschnitt, kurze Belege |
-| `/employers/demo` | Demo anfragen | rate-limitierte Lead-Mutation + Notification | Datenschutzhinweis, Erfolg/Follow-up | kurzes Formular |
-| `/login`, `/register/*`, `/forgot-password`, `/reset-password` | sicher anmelden/onboarden | Auth Use Cases, sichere `next`-Allowlist, hashed single-use Reset, generische Fehler | Rollenwahl, Passwortanforderung, invalid/expired/used Reset | Einspaltig, Passwortmanager-freundlich |
-| `/support`, `/support/[id]` | Hilfe anfragen/verfolgen | requester-scoped SupportCase/Event | authenticated intake, bounded text, own-case safe 404 | kurzes Formular + Timeline |
-| `/invite/[token]` | Team-Einladung sicher annehmen | hashed single-use CompanyInvitation + Membership transaction | Login/Register resume, matching email, expiry/revoke/seat/Company checks | einspaltige Status-/Bestätigungsseite |
+| Route(n)                                                                                            | Zweck / Primäraktion            | Daten / Servergrenze                                                                                                                                              | Sekundäraktionen und Vertrauen                                                         | Mobile                                                  |
+| --------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `/`                                                                                                 | Nutzen verstehen; Stelle suchen | veröffentlichte, nicht abgelaufene Jobs; kuratierte Firmen/Cluster                                                                                                | Salary Radar, Arbeitgeber-CTA, Score-Erklärung, Datenstand                             | Suche zuerst; Sektionen als kompakte Cards              |
+| `/jobs`                                                                                             | relevante Stellen filtern       | paginierte Search Query, Allowlist-Params, Ranking                                                                                                                | Suche speichern, Filter löschen, Alternativen; Boost-Label                             | Filter-Sheet, sticky Ergebniszahl, keine breite Tabelle |
+| `/jobs/[slug]`                                                                                      | entscheiden; bewerben/merken    | Published-only Read Model, ScoreSnapshot, Company, Kandidaten-Match optional                                                                                      | teilen, ähnliche Jobs, Meldung; Datenstand/Scorefaktoren                               | primärer CTA sticky, lange Abschnitte einklappbar       |
+| `/jobs/kanton/[canton]`, `/jobs/kategorie/[category]`, `/jobs/kanton/[canton]/kategorie/[category]` | Cluster erkunden; Jobabo        | Kombination ist P0 für freigegebene Startcluster; jede Route nur indexierbar bei Content-/Liquiditätsgate                                                         | lokale Orientierung, Canonical, aktualisierte Jobzahl                                  | Filter/Content priorisiert, keine Textwüste             |
+| `/companies`, `/companies/[slug]`                                                                   | Arbeitgeber prüfen              | canonical ACTIVE/LIVE validated/sanitized public allowlist + Published Jobs; P0 has no separate profile review, Verification is only the badge/publish trust gate | Profil beanspruchen, Jobs, Verifizierungsstatus                                        | Jobs als Cards                                          |
+| `/salary-radar`                                                                                     | Lohnspanne orientieren          | validierte Kriterien, versionierte SalaryBand Query                                                                                                               | Methodik/Abdeckung, passende Jobs, Ergebnis speichern                                  | schrittweises Formular, Ergebnis sofort sichtbar        |
+| `/guide`, `/guide/[slug]`                                                                           | konkrete Karrierefrage lösen    | Published Content, Autor/Review/Aktualität                                                                                                                        | passende Suche/Jobabo; Quellen                                                         | lesbare Typografie, Inhaltsanker                        |
+| `/pricing`                                                                                          | Plan verstehen                  | aktive Version von Plan/Product-Katalog                                                                                                                           | P0 Monatskonditionen, FAQ, Demo; MWST/Laufzeit; inaktive Jahresforschung nicht rendern | keine abgeschnittene Vergleichstabelle; Featuregruppen  |
+| `/employers/*`                                                                                      | Arbeitgebernutzen verstehen     | kuratierter Content und echte/markierte Beispiele                                                                                                                 | Demo, erste Stelle, Talent Radar, Import                                               | CTA je Abschnitt, kurze Belege                          |
+| `/employers/demo`                                                                                   | Demo anfragen                   | rate-limitierte Lead-Mutation + Notification                                                                                                                      | Datenschutzhinweis, Erfolg/Follow-up                                                   | kurzes Formular                                         |
+| `/login`, `/register/*`, `/forgot-password`, `/reset-password`                                      | sicher anmelden/onboarden       | Auth Use Cases, sichere `next`-Allowlist, hashed single-use Reset, generische Fehler                                                                              | Rollenwahl, Passwortanforderung, invalid/expired/used Reset                            | Einspaltig, Passwortmanager-freundlich                  |
+| `/support`, `/support/[id]`                                                                         | Hilfe anfragen/verfolgen        | requester-scoped SupportCase/Event                                                                                                                                | authenticated intake, bounded text, own-case safe 404                                  | kurzes Formular + Timeline                              |
+| `/invite/[token]`                                                                                   | Team-Einladung sicher annehmen  | hashed single-use CompanyInvitation + Membership transaction                                                                                                      | Login/Register resume, matching email, expiry/revoke/seat/Company checks               | einspaltige Status-/Bestätigungsseite                   |
 
 ### Kandidat
 
-| Route | Zweck / Primäraktion | Daten / Mutation | Wesentliche Zustände | Mobile |
-|---|---|---|---|---|
-| `/candidate/dashboard` | nächste sinnvolle Aktion | JobPass-Fortschritt, Alerts, Bewerbungen, Empfehlungen | neue Nutzer: Checkliste; keine Empfehlungen: Such-CTA; offene Antwort | priorisierte Liste statt Kartenfriedhof |
-| `/candidate/jobpass` | Profil vervollständigen | Profil/Skills/Sprachen/Präferenzen/CV-Metadaten; autosaved Draft + final validation | unvollständig, gespeichert, Konflikt, Radar-Preview | Abschnitte/Stepper; sticky Save |
-| `/candidate/saved-jobs` | gemerkte Stellen vergleichen | Candidate-owned SavedJob Query/Delete | abgelaufen: klar markiert + ähnliche Jobs | Swipe/Overflow-Aktionen zugänglich |
-| `/candidate/applications`, `/candidate/applications/[id]` | Status verfolgen/handeln | candidate-owned Application Timeline, withdraw, messages | Empty CTA, withdrawn, job closed, permission-safe 404 | Liste/Timeline statt Kanban als Standard |
-| `/candidate/alerts` | Jobabos verwalten | CRUD, Frequenz/Consent, Preview | pausiert, keine Treffer, Zustellfehler-Mock | Card-Liste, Inline Toggle mit Bestätigung |
-| `/candidate/messages`, `/candidate/messages/[id]` | kontextbezogen kommunizieren | participant-scoped threads/messages | blockiert, geschlossen, unread, abuse report | Chat mit Kontextkopf; keine horizontale Zweispalte nötig |
-| `/candidate/talent-radar` | Opt-in und anonyme Vorschau | Consent + radar-safe fields | off by default, paused, active, incomplete | Feld-für-Feld Vorschau |
-| `/candidate/talent-radar/requests`, `/candidate/talent-radar/requests/[id]` | Kontakt annehmen/ablehnen, danach optional Reveal | candidate-owned ContactRequest/Event; Conversation erst nach Accept | pending/expired/cancelled/accepted/declined; Accept zeigt keine Identität | Request Cards + klare getrennte Bestätigungen |
-| `/candidate/privacy` | Datenkontrolle | Candidate/User Consent history, ContactRequests, RevealGrants, PrivacyRequests | offene Anfrage, recent-password Mock-Identitätsprüfung, Einschränkungen | klare Bereiche und irreversible Folgen |
+| Route                                                                       | Zweck / Primäraktion                              | Daten / Mutation                                                                    | Wesentliche Zustände                                                      | Mobile                                                   |
+| --------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `/candidate/dashboard`                                                      | nächste sinnvolle Aktion                          | JobPass-Fortschritt, Alerts, Bewerbungen, Empfehlungen                              | neue Nutzer: Checkliste; keine Empfehlungen: Such-CTA; offene Antwort     | priorisierte Liste statt Kartenfriedhof                  |
+| `/candidate/jobpass`                                                        | Profil vervollständigen                           | Profil/Skills/Sprachen/Präferenzen/CV-Metadaten; autosaved Draft + final validation | unvollständig, gespeichert, Konflikt, Radar-Preview                       | Abschnitte/Stepper; sticky Save                          |
+| `/candidate/saved-jobs`                                                     | gemerkte Stellen vergleichen                      | Candidate-owned SavedJob Query/Delete                                               | abgelaufen: klar markiert + ähnliche Jobs                                 | Swipe/Overflow-Aktionen zugänglich                       |
+| `/candidate/applications`, `/candidate/applications/[id]`                   | Status verfolgen/handeln                          | candidate-owned Application Timeline, withdraw, messages                            | Empty CTA, withdrawn, job closed, permission-safe 404                     | Liste/Timeline statt Kanban als Standard                 |
+| `/candidate/alerts`                                                         | Jobabos verwalten                                 | CRUD, Frequenz/Consent, Preview                                                     | pausiert, keine Treffer, Zustellfehler-Mock                               | Card-Liste, Inline Toggle mit Bestätigung                |
+| `/candidate/messages`, `/candidate/messages/[id]`                           | kontextbezogen kommunizieren                      | participant-scoped threads/messages                                                 | blockiert, geschlossen, unread, abuse report                              | Chat mit Kontextkopf; keine horizontale Zweispalte nötig |
+| `/candidate/talent-radar`                                                   | Opt-in und anonyme Vorschau                       | Consent + radar-safe fields                                                         | off by default, paused, active, incomplete                                | Feld-für-Feld Vorschau                                   |
+| `/candidate/talent-radar/requests`, `/candidate/talent-radar/requests/[id]` | Kontakt annehmen/ablehnen, danach optional Reveal | candidate-owned ContactRequest/Event; Conversation erst nach Accept                 | pending/expired/cancelled/accepted/declined; Accept zeigt keine Identität | Request Cards + klare getrennte Bestätigungen            |
+| `/candidate/privacy`                                                        | Datenkontrolle                                    | Candidate/User Consent history, ContactRequests, RevealGrants, PrivacyRequests      | offene Anfrage, recent-password Mock-Identitätsprüfung, Einschränkungen   | klare Bereiche und irreversible Folgen                   |
 
 ### Arbeitgeber und Recruiter
 
-| Route | Zweck / Primäraktion | Daten / Mutation | Permission / Locked | Mobile |
-|---|---|---|---|---|
-| `/employer/dashboard` | Onboarding/Arbeitsqueue | Company Read Model, usage, jobs, applications, suggestions | Membership; planabhängige Module | Tasks vor Charts |
-| `/employer/company` | Profil/Claim/Verification | Company, VerificationRequest, media metadata | Owner/Admin write; Recruiter read | Formularabschnitte, Statusbanner |
-| `/employer/company/claim-pending` | bestehenden Firmenbeitritt nachweisen/verfolgen | current User's ClaimRequest only; no Company Read Model/Membership | Employer User; evidence/cancel, Admin decides | generischer Pending/Evidence/Rejected state |
-| `/employer/team`, `/employer/team/invitations` | Mitglieder/Rollen | Membership/Invitation Use Cases | Owner/Admin, Seat gate, letzter Owner geschützt | Card-Liste statt Tabelle |
-| `/employer/jobs` | Stellen verwalten | company-scoped paginated Jobs | assigned subset for recruiter | Statusfilter-Sheet, row→card |
-| `/employer/jobs/new` | Draft erstellen/einreichen | step drafts, score preview, ReportingCheck, submit transition | create permission + quota at publish, not at draft | Stepper mit Resume; Summary vor Submit |
-| `/employer/jobs/[id]` | Draft bearbeiten oder publizierte Revision pausieren/klonen, Performance | company/assignment-scoped Job + immutable published Revision/Score | PUBLISHED ist content-read-only; `pauseAndCreateRevision` entfernt Öffentlichkeit und startet Review; role×assignment matrix + audit | Actions im Overflow, Warnungen sichtbar |
-| `/employer/applicants`, `/employer/applicants/[id]` | Pipeline bearbeiten | job-scoped Applications/Events/Messages | candidate identity only from application/reveal; assignments | Stage-Filter + Liste; Drag optional, nie einziges UI |
-| `/employer/talent-radar` | anonyme Talente suchen/kontaktieren | locked state führt **keine** candidate query aus; safe search when entitled | access + atomic allowance/credit | Filter-Sheet; anonyme Cards |
-| `/employer/talent-radar/requests/[id]` | Anfrage/Reveal-Status | company-scoped ContactRequest + permitted RevealGrant | keine Identität vor ACCEPTED+REVEALED | Timeline |
-| `/employer/analytics` | Funnel verstehen/verbessern | aggregierte company/job metrics with thresholds | plan levels, suppression for small counts | KPI summaries + funnels, no dense BI |
-| `/employer/billing` | Plan/Usage verstehen | subscription, entitlements, ledger summaries | Owner/Admin read; Plan change/cancel Owner only | klare current/next action |
-| `/employer/billing/checkout`, `/success` | Mock-Kauf bestätigen | idempotent Order workflow; server-priced | Plan/subscription Owner only; one-time Product Owner/Admin; product eligibility | einspaltige Zusammenfassung |
-| `/employer/billing/invoices`, `/usage` | Belege/Nutzung | tenant-scoped Invoice + entitlement/ledger | Owner/Admin; immutable invoice view | Cards/download later |
+| Route                                               | Zweck / Primäraktion                                                     | Daten / Mutation                                                            | Permission / Locked                                                                                                                  | Mobile                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| `/employer/dashboard`                               | Onboarding/Arbeitsqueue                                                  | Company Read Model, usage, jobs, applications, suggestions                  | Membership; planabhängige Module                                                                                                     | Tasks vor Charts                                     |
+| `/employer/company`                                 | Profil/Claim/Verification                                                | Company, VerificationRequest, media metadata                                | Owner/Admin write; Recruiter read                                                                                                    | Formularabschnitte, Statusbanner                     |
+| `/employer/company/claim-pending`                   | bestehenden Firmenbeitritt nachweisen/verfolgen                          | current User's ClaimRequest only; no Company Read Model/Membership          | Employer User; evidence/cancel, Admin decides                                                                                        | generischer Pending/Evidence/Rejected state          |
+| `/employer/team`, `/employer/team/invitations`      | Mitglieder/Rollen                                                        | Membership/Invitation Use Cases                                             | Owner/Admin, Seat gate, letzter Owner geschützt                                                                                      | Card-Liste statt Tabelle                             |
+| `/employer/jobs`                                    | Stellen verwalten                                                        | company-scoped paginated Jobs                                               | assigned subset for recruiter                                                                                                        | Statusfilter-Sheet, row→card                         |
+| `/employer/jobs/new`                                | Draft erstellen/einreichen                                               | step drafts, score preview, ReportingCheck, submit transition               | create permission + quota at publish, not at draft                                                                                   | Stepper mit Resume; Summary vor Submit               |
+| `/employer/jobs/[id]`                               | Draft bearbeiten oder publizierte Revision pausieren/klonen, Performance | company/assignment-scoped Job + immutable published Revision/Score          | PUBLISHED ist content-read-only; `pauseAndCreateRevision` entfernt Öffentlichkeit und startet Review; role×assignment matrix + audit | Actions im Overflow, Warnungen sichtbar              |
+| `/employer/applicants`, `/employer/applicants/[id]` | Pipeline bearbeiten                                                      | job-scoped Applications/Events/Messages                                     | candidate identity only from application/reveal; assignments                                                                         | Stage-Filter + Liste; Drag optional, nie einziges UI |
+| `/employer/talent-radar`                            | anonyme Talente suchen/kontaktieren                                      | locked state führt **keine** candidate query aus; safe search when entitled | access + atomic allowance/credit                                                                                                     | Filter-Sheet; anonyme Cards                          |
+| `/employer/talent-radar/requests/[id]`              | Anfrage/Reveal-Status                                                    | company-scoped ContactRequest + permitted RevealGrant                       | keine Identität vor ACCEPTED+REVEALED                                                                                                | Timeline                                             |
+| `/employer/analytics`                               | Funnel verstehen/verbessern                                              | aggregierte company/job metrics with thresholds                             | plan levels, suppression for small counts                                                                                            | KPI summaries + funnels, no dense BI                 |
+| `/employer/billing`                                 | Plan/Usage verstehen                                                     | subscription, entitlements, ledger summaries                                | Owner/Admin read; Plan change/cancel Owner only                                                                                      | klare current/next action                            |
+| `/employer/billing/checkout`, `/success`            | Mock-Kauf bestätigen                                                     | idempotent Order workflow; server-priced                                    | Plan/subscription Owner only; one-time Product Owner/Admin; product eligibility                                                      | einspaltige Zusammenfassung                          |
+| `/employer/billing/invoices`, `/usage`              | Belege/Nutzung                                                           | tenant-scoped Invoice + entitlement/ledger                                  | Owner/Admin; immutable invoice view                                                                                                  | Cards/download later                                 |
 
 ### Admin und Betrieb
 
-| Route | Arbeitszweck | Hauptaktionen / Daten | Schutz / UX |
-|---|---|---|---|
-| `/admin` | priorisierte Tagesübersicht | Queue counts, SLA breaches, system health | Capability + Audit; keine Vanity-only-Charts |
-| `/admin/jobs`, `/admin/jobs/[id]` | Moderation | approve/request changes/reject/pause, versions, score evidence | Begründung Pflicht, Preview, Confirmation |
-| `/admin/companies`, `/admin/companies/[id]` | Verification/Suspension | verification, membership, active jobs, abuse | Suspension transaction + impact preview |
-| `/admin/users`, `/admin/users/[id]` | Nutzerstatus/Rollen | suspend/reactivate, sessions revoke | kein Passwort/Token sichtbar; role change audited |
-| `/admin/taxonomy` | Kategorien/Kantone/Orte/Codes | CRUD/version/import | Referenzen/Impact vor Delete; prefer deactivate |
-| `/admin/reports`, `/admin/reports/[id]` | Missbrauchsfälle | triage, restrict, resolve, notes | sensitive queue, severity/SLA |
-| `/admin/imports`, `/admin/imports/[id]` | Feed-Vorschau/Dubletten/Fehler | parse→preview→approve→commit/rollback | source/license, no direct publish by parser |
-| `/admin/support`, `/admin/support/[id]` | Supportfälle priorisieren/lösen | triage, assign, request info, resolve/reopen, SLA/Event history | Support-Capability, need-to-know, keine Inhalte in Analytics |
-| `/admin/content`, `/admin/content/[id]` | Guide-/Cluster-Content steuern | draft, review, preview, publish/unpublish, revision history | Content-Capability, safe Markdown, SEO gate remains separate |
-| `/admin/billing`, `/admin/orders`, `/admin/invoices` | finanzielle Ausnahmen | state inspection, manual mock actions | ledger-first, idempotent; no silent edits |
-| `/admin/plans`, `/admin/products` | Katalogversionen | create version, schedule activation, deactivate | existing contracts not rewritten |
-| `/admin/leads`, `/admin/leads/[id]` | Sales-Follow-up | assign task, outcome, next date | consent/purpose, access scoped later |
-| `/admin/business-cockpit` | Aktionen aus Signalen | accept/dismiss/assign recommendation | Evidenz + Zeitraum + Outcome required |
-| `/admin/privacy-requests` | Export/Delete-Mock bearbeiten | verify, export manifest, status | least privilege, immutable evidence |
-| `/admin/audit`, `/admin/system` | Untersuchung/Betrieb | filters, correlation id, provider/queue health | redacted metadata, retention policy |
+| Route                                                | Arbeitszweck                    | Hauptaktionen / Daten                                           | Schutz / UX                                                  |
+| ---------------------------------------------------- | ------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------ |
+| `/admin`                                             | priorisierte Tagesübersicht     | Queue counts, SLA breaches, system health                       | Capability + Audit; keine Vanity-only-Charts                 |
+| `/admin/jobs`, `/admin/jobs/[id]`                    | Moderation                      | approve/request changes/reject/pause, versions, score evidence  | Begründung Pflicht, Preview, Confirmation                    |
+| `/admin/companies`, `/admin/companies/[id]`          | Verification/Suspension         | verification, membership, active jobs, abuse                    | Suspension transaction + impact preview                      |
+| `/admin/users`, `/admin/users/[id]`                  | Nutzerstatus/Rollen             | suspend/reactivate, sessions revoke                             | kein Passwort/Token sichtbar; role change audited            |
+| `/admin/taxonomy`                                    | Kategorien/Kantone/Orte/Codes   | CRUD/version/import                                             | Referenzen/Impact vor Delete; prefer deactivate              |
+| `/admin/reports`, `/admin/reports/[id]`              | Missbrauchsfälle                | triage, restrict, resolve, notes                                | sensitive queue, severity/SLA                                |
+| `/admin/imports`, `/admin/imports/[id]`              | Feed-Vorschau/Dubletten/Fehler  | parse→preview→approve→commit/rollback                           | source/license, no direct publish by parser                  |
+| `/admin/support`, `/admin/support/[id]`              | Supportfälle priorisieren/lösen | triage, assign, request info, resolve/reopen, SLA/Event history | Support-Capability, need-to-know, keine Inhalte in Analytics |
+| `/admin/content`, `/admin/content/[id]`              | Guide-/Cluster-Content steuern  | draft, review, preview, publish/unpublish, revision history     | Content-Capability, safe Markdown, SEO gate remains separate |
+| `/admin/billing`, `/admin/orders`, `/admin/invoices` | finanzielle Ausnahmen           | state inspection, manual mock actions                           | ledger-first, idempotent; no silent edits                    |
+| `/admin/plans`, `/admin/products`                    | Katalogversionen                | create version, schedule activation, deactivate                 | existing contracts not rewritten                             |
+| `/admin/leads`, `/admin/leads/[id]`                  | Sales-Follow-up                 | assign task, outcome, next date                                 | consent/purpose, access scoped later                         |
+| `/admin/business-cockpit`                            | Aktionen aus Signalen           | accept/dismiss/assign recommendation                            | Evidenz + Zeitraum + Outcome required                        |
+| `/admin/privacy-requests`                            | Export/Delete-Mock bearbeiten   | verify, export manifest, status                                 | least privilege, immutable evidence                          |
+| `/admin/audit`, `/admin/system`                      | Untersuchung/Betrieb            | filters, correlation id, provider/queue health                  | redacted metadata, retention policy                          |
 
 ### Systemrouten
 
@@ -359,17 +363,17 @@ Jede Mutation akzeptiert ein Zod-validiertes Command DTO plus serverseitig erzeu
 
 Der Score bewertet **beobachtbare Inserattransparenz**, nicht Budget oder Firmenstatus. Die Gewichte sind der eingefrorene P0/v2-Baseline-Vertrag:
 
-| Faktor | Punkte | Evidenz |
-|---|---:|---|
-| Lohnband + Zeitraum/Währung | 25 | strukturierte Felder, plausibles Min≤Max |
-| Aufgaben und Anforderungen konkret | 15 | Mindeststruktur, keine Keyword-Menge als Qualitätssignal |
-| Pensum/Vertragsart/Start klar | 15 | strukturierte Felder |
-| Arbeitsort + Remote/Hybrid klar | 10 | strukturierte Policy |
-| Bewerbungsprozess/Aufwand klar | 10 | Schritte/Unterlagen |
-| Antwortziel | 10 | Zusage + später tatsächliche Evidenz separat |
-| Benefits konkret | 5 | keine leeren Marketingphrasen |
-| Inklusion/Barriere-/Kontaktinfo | 5 | strukturierte Angaben |
-| Ablauf/Aktualität | 5 | gültiges Datum |
+| Faktor                             | Punkte | Evidenz                                                  |
+| ---------------------------------- | -----: | -------------------------------------------------------- |
+| Lohnband + Zeitraum/Währung        |     25 | strukturierte Felder, plausibles Min≤Max                 |
+| Aufgaben und Anforderungen konkret |     15 | Mindeststruktur, keine Keyword-Menge als Qualitätssignal |
+| Pensum/Vertragsart/Start klar      |     15 | strukturierte Felder                                     |
+| Arbeitsort + Remote/Hybrid klar    |     10 | strukturierte Policy                                     |
+| Bewerbungsprozess/Aufwand klar     |     10 | Schritte/Unterlagen                                      |
+| Antwortziel                        |     10 | Zusage + später tatsächliche Evidenz separat             |
+| Benefits konkret                   |      5 | keine leeren Marketingphrasen                            |
+| Inklusion/Barriere-/Kontaktinfo    |      5 | strukturierte Angaben                                    |
+| Ablauf/Aktualität                  |      5 | gültiges Datum                                           |
 
 Die exakten Evidenzprädikate sind bindend in Phase 03: Tasks `PARTIAL=8`, Antwortziel nur integer `1..30`, Benefits ab zwei, freshness mit injiziertem `now` und `now < validThrough <= now+120 Tage`; alle übrigen Tabellenfaktoren erhalten nur bei der dort definierten validen Evidenz ihre vollen Punkte. Unternehmensverifizierung erscheint als separates Badge. `scoreVersion`, Faktoren, Gründe, Verbesserungsvorschläge und Input-Snapshot werden gespeichert. Änderungen erzeugen einen neuen Snapshot. Boost/Plan/Product sind keine Funktionsparameter und werden durch Tests ausgeschlossen.
 
@@ -404,18 +408,18 @@ Boosts dürfen irrelevante Jobs nicht vor relevante Filterresultate setzen. Curs
 
 ### Bedrohungsfokus
 
-| Risiko | Prävention | Verifikation |
-|---|---|---|
-| Cross-Tenant/IDOR | scoping by company/candidate in Query, object-level policies, safe 404 | Integrationstests mit zweiter Firma/Kandidat |
-| Talent-PII-Leak | Prisma `select` allowlist, Safe DTO, opaque IDs, response snapshot test | Payload-Tests, Log-/HTML-Suche nach Canary-PII |
-| Privilege escalation | global + membership + assignment + capability | Rollenmatrix-Tests |
-| CSRF/unsafe mutation | SameSite, Origin/Host-Prüfung, POST/Server Action tokens where needed | negative origin tests |
-| Credential attack | Argon/bcrypt, generische Fehler, rate limit, session rotation/revocation | auth unit/integration tests |
-| XSS/content injection | plain text/strict sanitization, CSP nonce, no raw HTML | malicious fixture + browser CSP check |
-| Credit/payment race | transaction, ledger, unique idempotency key | concurrent DB integration test |
-| Import attack | safe parser, size/depth limits, preview/commit separation | malicious XML/JSON fixtures; CSV denied |
-| Sensitive logging | central redaction + log schema | automated secret/PII canary test |
-| Enumeration | opaque IDs, consistent 404/auth messages, bounded search | negative tests/rate limit |
+| Risiko                | Prävention                                                               | Verifikation                                   |
+| --------------------- | ------------------------------------------------------------------------ | ---------------------------------------------- |
+| Cross-Tenant/IDOR     | scoping by company/candidate in Query, object-level policies, safe 404   | Integrationstests mit zweiter Firma/Kandidat   |
+| Talent-PII-Leak       | Prisma `select` allowlist, Safe DTO, opaque IDs, response snapshot test  | Payload-Tests, Log-/HTML-Suche nach Canary-PII |
+| Privilege escalation  | global + membership + assignment + capability                            | Rollenmatrix-Tests                             |
+| CSRF/unsafe mutation  | SameSite, Origin/Host-Prüfung, POST/Server Action tokens where needed    | negative origin tests                          |
+| Credential attack     | Argon/bcrypt, generische Fehler, rate limit, session rotation/revocation | auth unit/integration tests                    |
+| XSS/content injection | plain text/strict sanitization, CSP nonce, no raw HTML                   | malicious fixture + browser CSP check          |
+| Credit/payment race   | transaction, ledger, unique idempotency key                              | concurrent DB integration test                 |
+| Import attack         | safe parser, size/depth limits, preview/commit separation                | malicious XML/JSON fixtures; CSV denied        |
+| Sensitive logging     | central redaction + log schema                                           | automated secret/PII canary test               |
+| Enumeration           | opaque IDs, consistent 404/auth messages, bounded search                 | negative tests/rate limit                      |
 
 ### Privacy-Lebenszyklus
 
@@ -433,14 +437,14 @@ CSP mit per-request Nonce, `frame-ancestors 'none'`, `X-Content-Type-Options: no
 
 Nur Payment, Email, Storage, Job-Room, AI und Commute sind externe Provider-Ports. Analytics-Validierung/Aggregation und der HTML-Rechnungsrenderer bleiben interne Domain-/Application-Services; es gibt im P0 weder `AnalyticsProvider` noch `InvoiceProvider`.
 
-| Port | P0 Mock-Verhalten | Persistenz | Reale Integration: zusätzliche Gates |
-|---|---|---|---|
-| Payment | Checkout-Page, bestätigbarer Erfolgs-/Fehlerfall | Order/PaymentEvent/Invoice/Fulfillment | Webhook-Signatur, Idempotenz, PCI-Scope, Refund/Dunning |
-| Email | Template rendern und Zustellung simulieren | Notification/EmailLog | DPA, Domain, Bounce/Complaint, unsubscribe |
-| Storage | Legacy-Metadaten plus Local-/CI-Sandbox: gestreamte AES-GCM-Quarantäne, geschlossene Content-/Scanner-Policy und single-use Read-Grants | Document/DocumentVersion/Intent/Scan/Grant/Access/Lifecycle; Legacy bleibt metadata-only | externer Object Store/KMS/Scanner, DPA/Region, Production-Retention/Legal-Hold, autonome Worker und Bulk-Step-up |
-| Job-Room | versionierte OccupationCode-Liste | ReportingCheck + DatasetVersion | offizieller Vertrag/API, jährliches Update, Monitoring |
-| AI | deterministische Textvorschläge, nie Entscheidung | Prompt-/Rule-Version ohne sensible Inhalte | DPIA/Legal, DPA, Evaluation, Human Review |
-| Commute | deterministische Distanzklasse/aus | optional Cache | Kartenlizenz, Standortminimierung |
+| Port     | P0 Mock-Verhalten                                                                                                                       | Persistenz                                                                               | Reale Integration: zusätzliche Gates                                                                             |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Payment  | Checkout-Page, bestätigbarer Erfolgs-/Fehlerfall                                                                                        | Order/PaymentEvent/Invoice/Fulfillment                                                   | Webhook-Signatur, Idempotenz, PCI-Scope, Refund/Dunning                                                          |
+| Email    | Template rendern und Zustellung simulieren                                                                                              | Notification/EmailLog                                                                    | DPA, Domain, Bounce/Complaint, unsubscribe                                                                       |
+| Storage  | Legacy-Metadaten plus Local-/CI-Sandbox: gestreamte AES-GCM-Quarantäne, geschlossene Content-/Scanner-Policy und single-use Read-Grants | Document/DocumentVersion/Intent/Scan/Grant/Access/Lifecycle; Legacy bleibt metadata-only | externer Object Store/KMS/Scanner, DPA/Region, Production-Retention/Legal-Hold, autonome Worker und Bulk-Step-up |
+| Job-Room | versionierte OccupationCode-Liste                                                                                                       | ReportingCheck + DatasetVersion                                                          | offizieller Vertrag/API, jährliches Update, Monitoring                                                           |
+| AI       | deterministische Textvorschläge, nie Entscheidung                                                                                       | Prompt-/Rule-Version ohne sensible Inhalte                                               | DPIA/Legal, DPA, Evaluation, Human Review                                                                        |
+| Commute  | deterministische Distanzklasse/aus                                                                                                      | optional Cache                                                                           | Kartenlizenz, Standortminimierung                                                                                |
 
 Interne Analytics persistiert `AnalyticsEvent/MetricDaily`; eine spätere Drittanbieter-Weitergabe braucht ein separates Product/Privacy/Vendor-Review. Die interne HTML-Rechnungsansicht rendert ausschliesslich den immutable Invoice Snapshot; PDF/A, Archivierung und Steuer-/Nummernprüfung sind ein eigenes späteres Gate, kein Adapter-Swap.
 
@@ -454,17 +458,17 @@ Jede wichtige Seite hat: präzisen Seitentitel/Nutzen, eine primäre Aktion, max
 
 ### Zustandsvertrag
 
-| Zustand | Standard |
-|---|---|
-| Loading | Skeleton in endgültiger Geometrie; Aktion verhindert Doppelsubmit |
-| Empty | erklärt Ursache, zeigt eine relevante nächste Aktion und ggf. Beispiel **klar als Beispiel** |
-| Validation | Feldfehler de-CH, Eingaben bleiben erhalten, Fokus zum ersten Fehler |
-| Conflict | nennt geänderten Zustand und bietet Refresh/erneuten Versuch |
-| Forbidden/Locked | unterscheidet fehlende Rolle von Planlimit; keine Daten hinter Blur laden |
-| Error | sichere Nachricht + Korrelations-ID; Retry nur wenn idempotent |
-| Success | bestätigt persistierten Zustand, nennt nächste Aktion und relevante Wirkung |
-| Onboarding | Fortschritt, optional/erforderlich, fortsetzbar |
-| Offline | keine falsche Erfolgsanzeige; Entwurf lokal nur bei klarer Datenpolitik |
+| Zustand          | Standard                                                                                     |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| Loading          | Skeleton in endgültiger Geometrie; Aktion verhindert Doppelsubmit                            |
+| Empty            | erklärt Ursache, zeigt eine relevante nächste Aktion und ggf. Beispiel **klar als Beispiel** |
+| Validation       | Feldfehler de-CH, Eingaben bleiben erhalten, Fokus zum ersten Fehler                         |
+| Conflict         | nennt geänderten Zustand und bietet Refresh/erneuten Versuch                                 |
+| Forbidden/Locked | unterscheidet fehlende Rolle von Planlimit; keine Daten hinter Blur laden                    |
+| Error            | sichere Nachricht + Korrelations-ID; Retry nur wenn idempotent                               |
+| Success          | bestätigt persistierten Zustand, nennt nächste Aktion und relevante Wirkung                  |
+| Onboarding       | Fortschritt, optional/erforderlich, fortsetzbar                                              |
+| Offline          | keine falsche Erfolgsanzeige; Entwurf lokal nur bei klarer Datenpolitik                      |
 
 ### Mobile und Barrierefreiheit
 
@@ -543,7 +547,7 @@ P1 pre-Production backup contract: a dedicated runner streams `pg_dump --format=
 
 Eine Funktion ist nur fertig, wenn Datenmodell/Migration, validierter Use Case, serverseitige Policy, Transaktion/Idempotenz, Audit/Notification, alle UX-Zustände, Mobile/A11y, realistische Seeds, relevante Unit-/Integration-/E2E-Tests, Observability und Dokumentation nachweisbar zusammenarbeiten. „Im Plan“, „Datei vorhanden“ oder „UI klickbar“ genügt nicht.
 
-## 17. Prospektive Remediation-Architektur Phase 19–32
+## 17. Remediation-Architektur Phase 19–33
 
 > Dieser Abschnitt ist Zielarchitektur. Identity/Outbox (Phase 20), der
 > Local-/CI-Sandboxanteil des Private Document Vault (Phase 21) sowie der
@@ -574,6 +578,7 @@ flowchart LR
   Discovery["29A/31A Research, WTP, Capacity"] --> Search
   Discovery --> Payment
   Discovery --> Release["31B/32 Launch Decision"]
+  Release --> Closure["33 Technical LC4/LC5 Closure"]
 ```
 
 ### 17.1 Identity, assurance and delivery
@@ -585,6 +590,20 @@ flowchart LR
   binding, assurance method, issued/expires/used/revoked and risk version.
 - typed NotificationOutbox, Attempt, ProviderReceipt/Suppression and
   DeadLetter contracts; business transaction and outbox commit atomically.
+- `NOTIFICATION_DELIVERY_KEYS` encrypts the frozen provider request and the
+  row-bound explicit recipient envelope; `NOTIFICATION_RECIPIENT_HASH_KEYS`
+  independently HMACs recipient lookup/correlation/suppression. Every stored
+  reference carries its key version, and Resend API/webhook authorities bind
+  independent secret versions;
+- explicit recipient evidence is AES-v2, normally wiped with provider request
+  material after 23 hours and never retained longer than 31 days. A
+  minute-boundary, provider-independent maintenance path still runs after
+  provider expiry/revoke. At exactly `400 × 24 h`, correlatable Attempt PII,
+  receipt and request digest are irreversibly compacted while the non-PII
+  status/timeline/audit chain remains immutable;
+- EmailProviderEventInbox and NotificationSuppression are append-only/
+  monotone except for their single explicit terminal/release transitions.
+  Webhook projection locks the exact activation in the same transaction;
 - Low-Assurance Registrierung, email-change Reverification, recovery and
   session/device revocation remain distinct status machines.
 
@@ -597,8 +616,20 @@ flowchart LR
   authorize;
 - `DataInventoryVersion` enumerates database, object and external-provider
   processors for EXPORT/CORRECT/DELETE;
-- encrypted ExportArtifact plus expiring single-use access; erasure processors
-  are idempotent and resumable;
+- Phase 33 binds the Verifier→Processor handoff to a persisted `PRIVACY`
+  approval, two independent action-/resource-bound single-use Admin step-ups
+  and exactly one WorkItem carrying only the approval reference; verifier,
+  requester and approver duties remain separated;
+- EXPORT/CORRECT/DELETE run only through the registered resumable worker
+  service. Encrypted ExportArtifact access additionally requires a fresh
+  Candidate-owned, artifact-bound single-use step-up and a short CAS download
+  lease; SHA, size and complete bounded body are verified before Step-up and
+  Artifact consume. Failed reads release the lease. Consumed Approval and
+  Execution authority evidence are immutable, so a COMMITTED replay can
+  reconstruct its receipt without depending on a newly granted authority;
+  erasure processors are idempotent and resumable, and DELETE stages its
+  encrypted success or bounded failure notification transactionally before
+  anonymization;
 - legal text, consent and DSFA/AVG determinations are versioned and activated
   separately from technical publication.
 
@@ -607,14 +638,19 @@ flowchart LR
 - PostgreSQL-backed queue/lease with claim owner, heartbeat/lease expiry,
   attempt, next run, last classified error, DLQ and replay evidence;
 - Phase-23 implementation uses atomic `SKIP LOCKED` claims, monotonic fencing,
-  append-only attempts/DLQ/effect receipts/replay audits and a paused-by-
-  default WorkerRun lifecycle; unknown handler/payload versions are not
-  claimed;
+  append-only non-PII attempt timelines/DLQ/effect receipts/replay audits and a
+  paused-by-default WorkerRun lifecycle; the sole Attempt mutation exception
+  is Phase 33's one-way PII/receipt/digest compaction after exactly 400 days;
+  unknown handler/payload versions are not claimed;
+- email network errors, HTTP 408/5xx, malformed/oversized 2xx and concurrent
+  idempotency conflicts remain unknown outcomes. They receive bounded retries
+  with the same idempotency key, then move to `PAUSED` for manual
+  reconciliation; no blind resend or dead-letter transition is permitted;
 - provider activation ledger records environment, adapter/config/secret
   version, DPA/contract, owner, health, sandbox/LIVE approval and rollback;
 - handler/provider activation is exact to environment, use case, version and
   deployment digest, with no Real→Mock fallback; Production mutation remains
-  disabled until Phase-25-Assurance plus Phase-32 Provider-/Staging-G4 auf
+  disabled until Phase-25-Assurance plus Phase-32-/33-Provider-/Staging-G4 auf
   demselben Artefakt freigegeben sind;
 - metrics include queue age/depth/arrival/service rate, retry/DLQ, SLO,
   handling time and capacity; logs remain redacted;
@@ -624,13 +660,21 @@ flowchart LR
 
 ### 17.4 Payment and service delivery
 
-- Phase 24 implements a disabled-by-default Stripe-test Hosted-Checkout port;
-  the server binds CHF amount, VAT, company, plan, WTP decision,
-  ProviderActivation and one action-bound AssuranceEvidence in one Attempt;
+- Historical Phase 24 implements a disabled-by-default Stripe-test
+  Hosted-Checkout port. Phase 33 adds Contract/Sandbox/Live adapter code and
+  production composition without activating it; LC4 exposes no purchase path
+  and LC5 remains blocked by WTP, Provider, Finance, Tax, Legal and target
+  environment evidence;
+- the server binds CHF amount, VAT, company, plan/price, WTP decision,
+  ProviderActivation generation and action-bound AssuranceEvidence in an
+  immutable Attempt, reserves the exact authority transactionally and
+  revalidates it around the out-of-transaction provider call;
 - the PSP webhook Inbox stores only normalized allowlisted fields plus
   raw/signature digests, Provider Event ID and processing state; raw-body
-  signature, account, test environment, amount, currency, order, tenant and
-  transition are validated before domain projection;
+  signature, account, mode, amount, currency, order, tenant and transition are
+  validated before domain projection. Checkout timeout followed by webhook,
+  duplicate semantic invoice event aliases, unexpanded invoice payment data,
+  renewal authority and provider expiry are recovered idempotently;
 - reconciliation binds PaymentAttempt/Inbox to immutable
   Order/Invoice/PaymentEvent/Subscription/Ledger snapshots and persists every
   deviation instead of silently repairing it;
@@ -640,10 +684,11 @@ flowchart LR
 - ServiceDeliveryAssessment distinguishes expected recruiting outcome from
   platform-caused non-delivery and issues at most one approved extension,
   exact credit restoration or Finance escalation/refund;
-- Real-Payment capability exists only as Local-/CI-/Staging test-mode code and
-  remains disabled unless Phase-31A WTP-Go plus Provider, Tax, Legal, Finance,
-  Phase-25-Step-up and LC5 external gates are present. Phase 24 has no LIVE
-  provider mode and no Real→Mock fallback.
+- Phase-33 Real-Payment code is locally testable through isolated
+  production-contract stubs and has no Real→Mock fallback. It remains
+  disabled unless Phase-31A WTP-Go plus Provider, Tax, Legal, Finance,
+  Phase-25-Step-up, target-environment and LC5 external gates are present;
+  provider code or secrets alone grant no authority.
 
 ### 17.5 Privileged security, fraud and company trust
 
@@ -712,6 +757,76 @@ flowchart LR
   feed the one public Eligibility predicate used by Search, Sitemap, Alerts,
   Recommendations, Boost and Analytics.
 
+### 17.8 Phase-33 Production-Contract- und Live-Adaptertopologie
+
+Phase 33 prüft zwei strikt getrennte lokale Profile. Beide verwenden eigene
+Compose-Projektnamen, Netzwerke, Volumes, Ports und synthetische Daten; kein
+Dienst darf die persönliche Developerdatenbank oder ein externes
+Providerkonto erreichen.
+
+```mermaid
+flowchart LR
+  subgraph LocalMock["local/mock · APP_ENV local"]
+    LMApp["Next Dev/App"] --> LMDb["PostgreSQL 16 Demo DB"]
+    LMApp --> LMMock["Persisted labelled mocks"]
+  end
+
+  subgraph Contract["production-contract · Production build / isolated CI contract"]
+    Client["Browser 3 engines"] --> TLS["Pinned TLS reverse proxy"]
+    TLS --> App["Standalone/OCI Next app"]
+    App --> DB["PostgreSQL 16 app/upgrade DBs"]
+    Worker["Separate worker"] --> DB
+    Scheduler["Scheduler/maintenance"] --> DB
+    Worker --> MailStub["E-mail HTTP contract stub"]
+    App --> PayStub["Payment HTTP contract stub"]
+    App --> S3["S3-compatible object storage"]
+    Worker --> Scan["Scanner contract service"]
+    S3 --> Scan
+  end
+```
+
+`production-contract` startet das gebaute Artefakt und denselben Live-
+Adapter-, Validation-, Timeout-, Retry-, Idempotency- und Failurecode, der
+später echte Provider anspricht. Contractendpunkte werden ausschließlich über
+eine test-only Composition Root/Dependency Injection bereitgestellt und sind
+in Preview/Staging/Production nicht auswählbar. Jedes Receipt und Manifest
+trägt `CONTRACT_ONLY`-Provenienz und kann weder einen Provider aktivieren noch
+als reale Zustellung/Zahlung gelten.
+
+Für E-Mail bindet das Profil getrennt `RESEND_SECRET_VERSION` und
+`RESEND_WEBHOOK_SECRET_VERSION`, getrennte Delivery-AES-/Recipient-HMAC-
+Keyrings samt Key-Version-Inventar sowie die providerunabhängige Minuten-
+Retention. Es injiziert die Unknown-Outcome-Klassen bis `PAUSED`/manueller
+Reconciliation und prüft Activation-TX-Lock, monotone Inbox/Suppression und
+die 23-h-/31-d-/exakt-400×24-h-Lebenszyklen.
+
+Der normale Runtimeentscheid bleibt:
+
+```text
+APP_ENV
+→ use-case-specific provider mode
+→ capability/feature gate
+→ exact persisted ProviderActivation
+→ adapter key + version + config digest + secret version
+→ evidence/region/DPA/owner/health/validity/kill switch
+→ start live adapter OR fail closed/feature absent
+```
+
+Local/CI erlaubt gekennzeichnete Mocks; Staging ausschließlich explizit
+freigegebene Sandbox/Allowlist-Modi; Production für sichtbare Funktionen nur
+`live`. Mock, Sandbox, Demo, `.invalid`, lokales Dateisystem, Secret-allein,
+expired/revoked/unhealthy Ledger und Live→Mock-Fallback sind in Production
+unzulässig. Fehlende Konfiguration erzeugt Boot-/Readiness-Fehler oder einen
+serverseitig deaktivierten, nicht beworbenen Use Case.
+
+Der Phase-33-Releasecandidate bindet Tree/Lockfile, alle historischen
+Migration-SHAs, Runtime-/Feature-/Provider-/Workerinventare, Konfigurations-
+und Ledgerdigests sowie Standalone-/OCI-Image-Digest. Das technische Urteil
+`TECHNICALLY_READY_FOR_LC4` beziehungsweise
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION` ist architektonisch getrennt von
+`GO_LIVE_APPROVED` und ersetzt weder das Phase-32-`NO_GO` noch reale externe
+Evidence.
+
 ## 18. Route and process delta
 
 The actual route inventory is generated from the implementation. The
@@ -720,7 +835,7 @@ normative current and planned delta is maintained in
 launchclass, role/capability, tenant/owner guard, data class, UX states,
 feature flag, owning test and activation gate.
 
-Implemented route families through Phase 28:
+Implemented route families through Phase 30 include:
 
 - email verify/resend, login-email change and Candidate-/Employer-/Admin-
   Security-/Step-up settings;
@@ -732,11 +847,16 @@ Implemented route families through Phase 28:
   Queue/Detail/Decision und owner-geschützter Verification-Dokumentupload;
 - Public Company-/Job-/Radar-Reads konsumieren dieselbe aktuelle
   Company-Trust-Projektion; private Evidence wird nicht projiziert;
-- payment webhook is implemented by Phase 24 and remains behind explicit
-  test-PSP config, ProviderActivation and independent ingestion/projection
-  switches;
-- provider/worker operations are implemented read-only beziehungsweise über
-  den Phase-23-Handlervertrag; Production-Replay und Pager bleiben deaktiviert.
+- payment and Resend webhook handlers, durable inbox/projection and
+  Contract/Sandbox/Live adapter code are implemented behind use-case-specific
+  modes, exact ProviderActivation and independent ingestion/projection
+  switches; no provider is thereby activated;
+- S3-compatible storage and ClamAV adapters reuse the Phase-21 quarantine,
+  scan, grant, privacy-export and reconciliation contracts; Production needs
+  paired live modes and exact authority, otherwise the use case stays closed;
+- provider/worker operations include separate app/worker/scheduler runtime
+  roles and local contract probes; target hosting, Production-Replay authority,
+  monitoring and Pager remain external/deactivated.
 - `/account/portal` resolves one versioned Candidate/Employer/Admin Session
   context; Candidate-/Employer-layout switchers expose only current
   PersonaAssignment plus Membership-authorized destinations. Existing-
@@ -746,11 +866,15 @@ Implemented route families through Phase 28:
   list/detail, Employer application interview list/detail and guarded calendar
   export are implemented. Both Phase-28 tracks remain independently disabled
   by default and make no ATS, Calendar-provider, Demand or LIVE claim.
+- Candidate-/Employer-Notification-Preferences sowie Employer-Reconfirm/Fill,
+  Public-/Candidate-Unavailable-Report und Admin-Freshness-/Duplicate-Review
+  sind technisch implementiert; reale Zustellung, Moderationskapazität und
+  Public-Aktivierung bleiben separat gegatet.
 
-Still planned, subject to the owning ADR and phase:
-
-- Employer job reconfirm/fill and public/candidate unavailable-report entry;
-- central notification preferences.
+Phase 33 deklariert keine neuen Produktseiten vorab. Das aktuelle
+`route-inventory.json` und jede Server Action/Route Handler-Composition werden
+read-only inventarisiert; nur eine bestätigte technische LC4-/LC5-Closure darf
+eine additive Route erzeugen und muss danach das Inventar aktualisieren.
 
 Multi-Persona market activation remains absent unless its explicit
 moderated-demand and cohort gates pass; the disabled technical route is not a
@@ -778,3 +902,9 @@ Architecture is accepted only when the owning detail phase instantiates all
 [`remediation-execution-contract.md`](./remediation-execution-contract.md).
 The six launchclasses select stricter activation gates; they never weaken
 tenant, privacy, security, payment or evidence requirements.
+
+Phase 33 ergänzt 17 messbare AC-Zeilen, ein statusgebundenes Findings Ledger,
+historische Migration-SHA sowie Mock-/Production-Contract-, Provider-/Worker-/
+E2E-/Artefaktdigests. Die Architektur bleibt bis zum vollständigen Lauf
+`PENDING`; die Existenz dieses Zielbilds ist keine Implementierungs- oder
+Activation-Evidence.

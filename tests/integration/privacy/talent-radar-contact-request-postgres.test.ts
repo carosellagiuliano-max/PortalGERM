@@ -185,15 +185,15 @@ describe.sequential("Phase 14 Talent Radar ContactRequest transaction", () => {
       requestId: persisted.id,
       status: "PENDING",
     });
-    const email = await db().emailLog.findFirstOrThrow({
+    const email = await db().notificationOutbox.findFirstOrThrow({
       where: {
-        recipient: candidate.email,
+        recipientUserId: candidate.candidateUserId,
         templateKey: "talent_contact_request_received",
       },
     });
     expect(email).toMatchObject({
-      purpose: "talent_contact_request_received",
-      status: "MOCK_RECORDED",
+      purpose: "TALENT_CONTACT_REQUEST",
+      status: "PENDING",
     });
     const auditRows = await db().auditLog.findMany({
       where: { companyId: employer.companyId },
@@ -205,7 +205,7 @@ describe.sequential("Phase 14 Talent Radar ContactRequest transaction", () => {
     ]);
     const operationalEvidence = JSON.stringify({
       notification,
-      email: { ...email, recipient: "[recipient-required-for-delivery]" },
+      email,
       auditRows,
     });
     for (const forbidden of [
@@ -245,7 +245,9 @@ describe.sequential("Phase 14 Talent Radar ContactRequest transaction", () => {
       }),
     ).resolves.toBe(1);
     await expect(
-      db().emailLog.count({ where: { recipient: candidate.email } }),
+      db().notificationOutbox.count({
+        where: { recipientUserId: candidate.candidateUserId },
+      }),
     ).resolves.toBe(1);
 
     const differentTarget = await createCandidateProof(

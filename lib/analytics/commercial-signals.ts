@@ -12,8 +12,8 @@ import {
 import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quota";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import type { EmailProvider } from "@/lib/providers/email";
-import { renderEmailTemplate } from "@/lib/providers/email/templates";
 
 export type CommercialSignalReason =
   | "SUBSCRIPTION_END_30D"
@@ -64,7 +64,7 @@ export async function runCommercialLifecycleSignals(
     dependencies.database.user.findFirst({
       where: { role: "ADMIN", status: "ACTIVE" },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: { id: true, emailNormalized: true },
+      select: { id: true },
     }),
     dependencies.database.employerSubscription.findMany({
       where: {
@@ -313,27 +313,7 @@ export async function runCommercialLifecycleSignals(
     } else {
       created += 1;
     }
-    if (!task.shouldNotify) continue;
-    const data = {
-      companyName: candidate.companyName,
-      signalLabel: signalLabel(candidate.reasonCode),
-      dueDate: formatZurichDate(candidate.dueAt),
-      idempotencyKey,
-    };
-    const rendered = renderEmailTemplate("commercial_lifecycle_signal", data);
-    try {
-      const delivery = await dependencies.emailProvider.send({
-        to: operator.emailNormalized,
-        templateKey: "commercial_lifecycle_signal",
-        subject: rendered.subject,
-        data,
-      });
-      if (delivery.created ?? task.created) {
-        emailsRecorded += 1;
-      }
-    } catch {
-      // The committed task/notification remains authoritative and retryable.
-    }
+    if (task.emailCreated) emailsRecorded += 1;
   }
 
   return Object.freeze({
@@ -360,9 +340,18 @@ async function createSignalTask(
             select: { id: true, status: true },
           });
           if (existing !== null) {
+            const notification = isActiveTaskStatus(existing.status)
+              ? await enqueueCommercialSignalEmail(
+                  transaction,
+                  candidate,
+                  operatorUserId,
+                  idempotencyKey,
+                  now,
+                )
+              : null;
             return Object.freeze({
               created: false,
-              shouldNotify: isActiveTaskStatus(existing.status),
+              emailCreated: notification?.created ?? false,
             });
           }
           const task = await transaction.systemTask.create({
@@ -414,7 +403,17 @@ async function createSignalTask(
               targetType: "SYSTEM_TASK",
             },
           );
-          return Object.freeze({ created: true, shouldNotify: true });
+          const notification = await enqueueCommercialSignalEmail(
+            transaction,
+            candidate,
+            operatorUserId,
+            idempotencyKey,
+            now,
+          );
+          return Object.freeze({
+            created: true,
+            emailCreated: notification.created,
+          });
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
@@ -423,14 +422,9 @@ async function createSignalTask(
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
       ) {
-        const existing = await dependencies.database.systemTask.findUnique({
-          where: { idempotencyKey },
-          select: { status: true },
-        });
         return Object.freeze({
           created: false,
-          shouldNotify:
-            existing !== null && isActiveTaskStatus(existing.status),
+          emailCreated: false,
         });
       }
       if (
@@ -444,6 +438,36 @@ async function createSignalTask(
     }
   }
   throw new Error("Commercial signal transaction retry budget exhausted.");
+}
+
+async function enqueueCommercialSignalEmail(
+  transaction: Prisma.TransactionClient,
+  candidate: CommercialSignalCandidate,
+  operatorUserId: string,
+  idempotencyKey: string,
+  availableAt: Date,
+) {
+  const dedupeKey = `commercial-email:${idempotencyKey}`;
+  const existing = await transaction.notificationOutbox.findUnique({
+    where: { dedupeKey },
+    select: { id: true },
+  });
+  const outbox = await enqueueNotification(transaction, {
+    recipient: { userId: operatorUserId },
+    templateKey: "commercial_lifecycle_signal",
+    payloadSchemaVersion: "commercial-signal-v1",
+    payload: {
+      companyName: candidate.companyName,
+      signalLabel: signalLabel(candidate.reasonCode),
+      dueDate: formatZurichDate(candidate.dueAt),
+    },
+    dedupeKey,
+    availableAt,
+  });
+  return Object.freeze({
+    ...outbox,
+    created: existing === null,
+  });
 }
 
 function isActiveTaskStatus(status: string) {

@@ -1,0 +1,22 @@
+{
+  admin off
+  auto_https disable_redirects
+  local_certs
+}
+
+https://localhost:8443 {
+  tls internal
+
+  header {
+    Strict-Transport-Security "max-age=63072000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    -Server
+  }
+
+  reverse_proxy app-contract:3000 {
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Proto https
+    header_up X-Real-IP {remote_host}
+  }
+}

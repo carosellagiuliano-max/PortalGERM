@@ -52,6 +52,13 @@ gelten nicht als Nachweis.
 - [`2026-07-30-phase-32.md`](./2026-07-30-phase-32.md) — candidate-gebundener LC1-G4-Orchestrator, sechs Launchklassen, 37-Findingsledger und striktes Release-Manifest; Walkthrough, Rollback und unabhängige Approvals fehlen, daher Release `NO_GO` und LC2–LC6 `NOT APPROVED`.
 - [`2026-08-01-runtime-findings-follow-up.md`](./2026-08-01-runtime-findings-follow-up.md) — unabhängig klassifizierte Runtime-/Nutzerweg-/Security-/Betriebsbefunde; bestätigte Codefehler geschlossen, bewusste Fail-closed-Verträge abgegrenzt und externe Legal-/Provider-/Scale-Gates weiterhin offen.
 
+Phase 33 ist `IN_PROGRESS`. Ihr geplanter Record
+`YYYY-MM-DD-phase-33.md` wird bewusst erst angelegt beziehungsweise hier
+verlinkt, wenn Basis-/Endcommit, vollständige Commandmatrix und Resultate
+tatsächlich vorliegen. Die Existenz der
+[Phasendatei](../33-go-live-readiness-e2e-acceptance.md) oder des
+[Findings Ledgers](../phase33-findings-ledger.md) ist keine Evidence.
+
 ## Pflichtfelder eines Records
 
 1. Datum, Zeitzone, Phase, Branch und vollständiger Ziel-Commit.
@@ -68,6 +75,34 @@ gelten nicht als Nachweis.
 7. Bestätigung, dass der Arbeitsbaum des Ziel-Commits reproduzierbar installiert
    wurde und keine fremden oder generierten lokalen Artefakte als Voraussetzung
    dienten.
+
+Für Phase 33 zusätzlich verpflichtend:
+
+8. SHA-256 aller vor Phase 33 vorhandenen SQL-Migrationen vor und nach der
+   Änderung sowie jede neue Migration und alle Fresh-/Upgrade-/Legacy-/
+   Partial-/Restart-/Concurrency-Zustände.
+9. getrennte `local/mock`- und `production-contract`-Profile, Service-/Image-
+   Versionen, Netz-/Volume-Isolation und Healthchecks; Contract-Stubs und
+   synthetische Receipts sind ausdrücklich `CONTRACT_ONLY`.
+10. Environment-/Feature-/Provider-/Workerinventare und ihre Config-/Ledger-/
+    Migration-/Standalone-/OCI-Artefaktdigests.
+11. jede Phase-33-AC-Zeile, Rollen-/Journey-/Browser-/Viewport-/A11y-/
+    Provider-/Worker-/Failurematrix, Exit/Dauer/Pass/Fail/Skip/Retry sowie alle
+    initialen Root Causes, Fixes und Re-Runs.
+12. getrenntes technisches Urteil und Aktivierungsurteil. Zulässig sind
+    `TECHNICALLY_READY_FOR_LC4` beziehungsweise
+    `TECHNICALLY_READY_FOR_LC5_CONFIGURATION`; ohne sämtliche reale External-
+    und Approval-Evidence bleibt die Aktivierung
+    `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. `GO_LIVE_APPROVED` darf kein
+    lokaler Contractlauf begründen.
+13. für `AC-33-05` das vollständige Notification-Delivery-/Recipient-Hash-
+    Key-Version-Inventar, getrennte Resend-API-/Webhook-Secret-Versionen,
+    gelaufene 23-h-/31-d-/exakt-400×24-h-Grenztests, minutenbasierte
+    providerunabhängige Retention, Activation-TX-Lock, append-only/monotone
+    Inbox-/Suppression-Evidence sowie alle network/5xx/408/malformed-2xx/
+    concurrent-idempotency-Pfade bis bounded Same-Key-Retry→`PAUSED`/manueller
+    Reconciliation. Es dürfen nur tatsächlich ausgeführte Testpfade mit
+    exaktem Befehl, Exit, Zählung und Artefakt als Resultat eingetragen werden.
 
 ## Checkbox-Regel
 

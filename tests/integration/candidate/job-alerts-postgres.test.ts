@@ -174,7 +174,7 @@ describe.sequential("PostgreSQL Phase-09 job-alert contract", () => {
     expect(consentEvents).toHaveLength(1);
     expect(consentEvents[0]).toMatchObject({
       granted: true,
-      noticeVersion: "job-alert-delivery-v1",
+      noticeVersion: "job-alert-delivery-v2",
     });
     expect(consentAudits).toHaveLength(1);
     expect(consentAudits[0]).toMatchObject({
@@ -450,7 +450,7 @@ describe.sequential("PostgreSQL Phase-09 job-alert contract", () => {
         kind: "JOB_ALERT_DELIVERY",
         granted: true,
         purpose: "Job alert delivery",
-        noticeVersion: "job-alert-delivery-v1",
+        noticeVersion: "job-alert-delivery-v2",
         noticeHash: "0".repeat(64),
         actorUserId: IDS.otherCandidateUser,
         effectiveAt: DATES.activation,
@@ -685,9 +685,9 @@ describe.sequential("PostgreSQL Phase-09 job-alert contract", () => {
     expect(
       alertsAfterRevoke.find(({ id }) => id === alreadyPaused.id)?.updatedAt,
     ).toEqual(pausedBefore.updatedAt);
-    expect(globalPauseEvents.map(({ jobAlertId }) => jobAlertId).sort()).toEqual(
-      [firstActive.id, secondActive.id].sort(),
-    );
+    expect(
+      globalPauseEvents.map(({ jobAlertId }) => jobAlertId).sort(),
+    ).toEqual([firstActive.id, secondActive.id].sort());
     expect(accountAfterRevoke).toEqual({ status: "ACTIVE" });
     expect(profileAfterRevoke).toEqual({ onboardingStatus: "DRAFT" });
     expect(radarConsentsAfterRevoke).toEqual([radarConsent]);

@@ -4,14 +4,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createResolvedAbuseReport: vi.fn(),
+  consumeRequestRateLimit: vi.fn(),
   database: {},
   getAuthRequestContext: vi.fn(),
   getDatabase: vi.fn(),
   getEmployerContext: vi.fn(),
   getServerEnvironment: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(),
+  recordRateLimitDenial: vi.fn(),
   resolveEmployerApplicantReportTarget: vi.fn(),
   revalidatePath: vi.fn(),
+  sendEmployerApplicationMessage: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -30,6 +33,9 @@ vi.mock("@/lib/auth/request-context", () => ({
   getAuthRequestContext: mocks.getAuthRequestContext,
   isValidAuthMutationOrigin: mocks.isValidAuthMutationOrigin,
 }));
+vi.mock("@/lib/auth/rate-limit-runtime", () => ({
+  consumeRequestRateLimit: mocks.consumeRequestRateLimit,
+}));
 vi.mock("@/lib/config/env", () => ({
   getServerEnvironment: mocks.getServerEnvironment,
 }));
@@ -39,15 +45,21 @@ vi.mock("@/lib/employer/applications", () => ({
   draftEmployerApplicationText: vi.fn(),
   resolveEmployerApplicantReportTarget:
     mocks.resolveEmployerApplicantReportTarget,
-  sendEmployerApplicationMessage: vi.fn(),
+  sendEmployerApplicationMessage: mocks.sendEmployerApplicationMessage,
   transitionEmployerApplication: vi.fn(),
 }));
 vi.mock("@/lib/providers/ai", () => ({ aiProvider: { marker: "ai" } }));
 vi.mock("@/lib/providers/email", () => ({
   emailProvider: { marker: "email" },
 }));
+vi.mock("@/lib/security/rate-limit-audit", () => ({
+  recordRateLimitDenial: mocks.recordRateLimitDenial,
+}));
 
-import { reportEmployerApplicantAction } from "@/app/employer/applicants/actions";
+import {
+  reportEmployerApplicantAction,
+  sendEmployerMessageAction,
+} from "@/app/employer/applicants/actions";
 import { INITIAL_EMPLOYER_ACTION_STATE } from "@/lib/employer/action-state";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -87,6 +99,14 @@ describe("employer applicant report action", () => {
     mocks.createResolvedAbuseReport.mockResolvedValue({
       ok: true,
       reportId: "77777777-7777-4777-8777-777777777777",
+    });
+    mocks.consumeRequestRateLimit.mockResolvedValue({
+      allowed: true,
+      status: 200,
+    });
+    mocks.sendEmployerApplicationMessage.mockResolvedValue({
+      ok: true,
+      duplicate: false,
     });
   });
 
@@ -142,6 +162,61 @@ describe("employer applicant report action", () => {
     });
     expect(mocks.createResolvedAbuseReport).not.toHaveBeenCalled();
   });
+
+  it("authorizes the application before rate limiting and writes no message when denied", async () => {
+    mocks.consumeRequestRateLimit.mockResolvedValue({
+      allowed: false,
+      status: 429,
+      code: "RATE_LIMITED",
+      audit: {
+        action: "RATE_LIMITED",
+        preset: "EMPLOYER_MESSAGE_SEND",
+        scope: "ACTOR_OR_IP_TARGET",
+      },
+    });
+    const formData = messageForm();
+
+    const state = await sendEmployerMessageAction(
+      INITIAL_EMPLOYER_ACTION_STATE,
+      formData,
+    );
+
+    expect(
+      mocks.resolveEmployerApplicantReportTarget.mock.invocationCallOrder[0]!,
+    ).toBeLessThan(
+      mocks.consumeRequestRateLimit.mock.invocationCallOrder[0]!,
+    );
+    expect(mocks.consumeRequestRateLimit).toHaveBeenCalledWith(
+      "EMPLOYER_MESSAGE_SEND",
+      expect.objectContaining({
+        actorId: USER_ID,
+        companyId: COMPANY_ID,
+        targetId: APPLICATION_ID,
+      }),
+      expect.any(Object),
+      expect.any(Date),
+      expect.objectContaining({ database: mocks.database }),
+    );
+    expect(mocks.recordRateLimitDenial).toHaveBeenCalledOnce();
+    expect(mocks.sendEmployerApplicationMessage).not.toHaveBeenCalled();
+    expect(state).toEqual({
+      status: "error",
+      message:
+        "Zu viele Nachrichten in kurzer Zeit. Bitte versuche es später erneut.",
+    });
+  });
+
+  it("does not consume a target bucket for a foreign application", async () => {
+    mocks.resolveEmployerApplicantReportTarget.mockResolvedValue(null);
+
+    await sendEmployerMessageAction(
+      INITIAL_EMPLOYER_ACTION_STATE,
+      messageForm(),
+    );
+
+    expect(mocks.consumeRequestRateLimit).not.toHaveBeenCalled();
+    expect(mocks.sendEmployerApplicationMessage).not.toHaveBeenCalled();
+  });
 });
 
 function validForm(): FormData {
@@ -152,5 +227,16 @@ function validForm(): FormData {
     "description",
     "Das Profil enthält widersprüchliche Angaben, die geprüft werden sollen.",
   );
+  return formData;
+}
+
+function messageForm(): FormData {
+  const formData = new FormData();
+  formData.set("applicationId", APPLICATION_ID);
+  formData.set(
+    "body",
+    "Guten Tag, wir möchten den nächsten Schritt mit Ihnen besprechen.",
+  );
+  formData.set("idempotencyKey", "message-rate-limited-01");
   return formData;
 }

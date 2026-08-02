@@ -1,7 +1,13 @@
 "use client";
 
 import { useActionState } from "react";
-import { BellOffIcon, MailCheckIcon, PauseIcon, PlayIcon, Trash2Icon } from "lucide-react";
+import {
+  BellOffIcon,
+  MailCheckIcon,
+  PauseIcon,
+  PlayIcon,
+  Trash2Icon,
+} from "lucide-react";
 
 import {
   INITIAL_JOB_ALERT_ACTION_STATE,
@@ -26,6 +32,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { JOB_ALERT_DELIVERY_NOTICE_V2 } from "@/lib/candidate/job-alert-policy";
 import type { CandidateJobAlertPageData } from "@/lib/candidate/job-alerts";
 
 type Action = (
@@ -51,14 +58,25 @@ export function AlertDeliveryConsentCard({
       </CardHeader>
       <CardContent className="grid gap-4">
         <p className="text-sm leading-6 text-muted-foreground">
-          Ein globaler Widerruf pausiert alle aktiven Jobabos. Eine spätere
-          Freigabe aktiviert keines davon automatisch.
+          {JOB_ALERT_DELIVERY_NOTICE_V2.copy} Ein globaler Widerruf pausiert
+          alle aktiven Jobabos. Eine spätere Freigabe aktiviert keines davon
+          automatisch.
         </p>
         <InlineAction
-          action={granted ? revokeJobAlertDeliveryAction : grantJobAlertDeliveryAction}
-          label={granted ? "Zustellung global widerrufen" : "Zustellung freigeben"}
+          action={
+            granted ? revokeJobAlertDeliveryAction : grantJobAlertDeliveryAction
+          }
+          label={
+            granted ? "Zustellung global widerrufen" : "Zustellung freigeben"
+          }
           variant={granted ? "outline" : "default"}
-          icon={granted ? <BellOffIcon aria-hidden="true" /> : <MailCheckIcon aria-hidden="true" />}
+          icon={
+            granted ? (
+              <BellOffIcon aria-hidden="true" />
+            ) : (
+              <MailCheckIcon aria-hidden="true" />
+            )
+          }
         />
       </CardContent>
     </Card>
@@ -67,7 +85,11 @@ export function AlertDeliveryConsentCard({
 
 export function AlertList({
   data,
-}: Readonly<{ data: CandidateJobAlertPageData }>) {
+  manualMockEnabled,
+}: Readonly<{
+  data: CandidateJobAlertPageData;
+  manualMockEnabled: boolean;
+}>) {
   if (data.alerts.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-7 text-center">
@@ -83,7 +105,8 @@ export function AlertList({
   return (
     <div className="grid gap-5">
       {data.alerts.map((alert) => {
-        const title = alert.query.keyword || alert.legacyLabel || "Alle passenden Stellen";
+        const title =
+          alert.query.keyword || alert.legacyLabel || "Alle passenden Stellen";
         const canResume =
           data.deliveryConsentGranted &&
           alert.status !== "DELETED" &&
@@ -93,30 +116,48 @@ export function AlertList({
             <CardHeader>
               <CardTitle as="h2">{title}</CardTitle>
               <CardDescription>
-                {frequencyLabel(alert.frequency)} · erstellt {formatDate(alert.createdAt)}
+                {frequencyLabel(alert.frequency)} · erstellt{" "}
+                {formatDate(alert.createdAt)}
               </CardDescription>
               <CardAction>
-                <Badge variant={alert.status === "ACTIVE" ? "default" : "secondary"}>
+                <Badge
+                  variant={alert.status === "ACTIVE" ? "default" : "secondary"}
+                >
                   {statusLabel(alert.status)}
                 </Badge>
               </CardAction>
             </CardHeader>
             <CardContent className="grid gap-5">
               {alert.filterRequiresRepair ? (
-                <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-                  Dieser historische Filter konnte nicht sicher aufgelöst werden.
-                  Prüfe und speichere die Auswahl neu, bevor du das Jobabo aktivierst.
+                <p
+                  role="alert"
+                  className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                >
+                  Dieser historische Filter konnte nicht sicher aufgelöst
+                  werden. Prüfe und speichere die Auswahl neu, bevor du das
+                  Jobabo aktivierst.
                 </p>
               ) : null}
               <dl className="grid gap-3 text-sm sm:grid-cols-3">
-                <Stat label="Nächster Termin" value={formatDateTime(alert.nextDueAt)} />
+                <Stat
+                  label="Nächster Termin"
+                  value={formatDateTime(alert.nextDueAt)}
+                />
                 <Stat
                   label="Letzter Digest"
-                  value={alert.lastDigestAt === null ? "Noch keiner" : formatDateTime(alert.lastDigestAt)}
+                  value={
+                    alert.lastDigestAt === null
+                      ? "Noch keiner"
+                      : formatDateTime(alert.lastDigestAt)
+                  }
                 />
                 <Stat
                   label="Letzte Treffer"
-                  value={alert.lastDigestCount === null ? "–" : String(alert.lastDigestCount)}
+                  value={
+                    alert.lastDigestCount === null
+                      ? "–"
+                      : String(alert.lastDigestCount)
+                  }
                 />
               </dl>
 
@@ -136,12 +177,14 @@ export function AlertList({
                     icon={<PlayIcon aria-hidden="true" />}
                   />
                 )}
-                <InlineAction
-                  action={runJobAlertDigestMockAction.bind(null, alert.id)}
-                  label="Fälligen Mock-Digest ausführen"
-                  variant="secondary"
-                  icon={<MailCheckIcon aria-hidden="true" />}
-                />
+                {manualMockEnabled ? (
+                  <InlineAction
+                    action={runJobAlertDigestMockAction.bind(null, alert.id)}
+                    label="Fälligen Mock-Digest ausführen"
+                    variant="secondary"
+                    icon={<MailCheckIcon aria-hidden="true" />}
+                  />
+                ) : null}
                 <InlineAction
                   action={deleteJobAlertAction.bind(null, alert.id)}
                   label="Löschen"
@@ -157,15 +200,17 @@ export function AlertList({
                 <div className="mt-4 rounded-lg bg-muted/40 p-4 text-sm leading-6">
                   <p className="font-medium">Neue Stellen aus deinem Jobabo</p>
                   <p className="mt-2">
-                    Für «{title}» wurden {alert.lastDigestCount ?? 0} neue Stellen
-                    vorgemerkt. Dies ist nur eine schreibgeschützte Vorschau und
-                    löst keinen Versand aus.
+                    Für «{title}» wurden {alert.lastDigestCount ?? 0} neue
+                    Stellen vorgemerkt. Dies ist nur eine schreibgeschützte
+                    Vorschau und löst keinen Versand aus.
                   </p>
                 </div>
               </details>
 
               <details className="rounded-lg border p-4">
-                <summary className="cursor-pointer font-medium">Filter bearbeiten</summary>
+                <summary className="cursor-pointer font-medium">
+                  Filter bearbeiten
+                </summary>
                 <div className="mt-5">
                   <AlertForm
                     alert={alert}
@@ -210,7 +255,11 @@ function InlineAction({
       {state.status !== "idle" ? (
         <p
           role={state.status === "error" ? "alert" : "status"}
-          className={state.status === "error" ? "max-w-xs text-xs text-destructive" : "max-w-xs text-xs text-emerald-700"}
+          className={
+            state.status === "error"
+              ? "max-w-xs text-xs text-destructive"
+              : "max-w-xs text-xs text-emerald-700"
+          }
         >
           {state.message}
         </p>

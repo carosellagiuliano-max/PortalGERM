@@ -16,11 +16,10 @@ import { getDatabase } from "@/lib/db/client";
 import { getServerEnvironment } from "@/lib/config/env";
 import type { PrivacyRequestRejectionCode } from "@/lib/generated/prisma/enums";
 import { createPostgresPrivacyCaseService } from "@/lib/privacy/privacy-case-service";
-import { createPrivacyExportV2 } from "@/lib/privacy/export-v2";
-import { runPrivacyExecutionV2 } from "@/lib/privacy/execution-v2";
-import { emailProvider } from "@/lib/providers/email";
-import { createDocumentObjectStore } from "@/lib/providers/storage/document-storage-composition";
-import { createPrivacyExportObjectStore } from "@/lib/providers/storage/privacy-export-storage";
+import {
+  approveAndEnqueuePrivacyExecution,
+  requestPrivacyExecutionApproval,
+} from "@/lib/privacy/execution-approval";
 
 export async function adminPrivacyCaseAction(
   _previous: AdminPrivacyCaseActionState,
@@ -31,7 +30,10 @@ export async function adminPrivacyCaseAction(
     getAuthRequestContext(),
   ]);
   if (!isValidAuthMutationOrigin(request)) {
-    return failure("Die Anfrage konnte nicht sicher bestätigt werden.", "FORBIDDEN");
+    return failure(
+      "Die Anfrage konnte nicht sicher bestätigt werden.",
+      "FORBIDDEN",
+    );
   }
 
   const operation = one(formData, "operation");
@@ -66,84 +68,74 @@ export async function adminPrivacyCaseAction(
   const now = new Date();
 
   try {
-    if (operation === "privacy-complete-export") {
+    if (operation === "privacy-request-execution-approval") {
       const environment = getServerEnvironment();
-      const result = await createPrivacyExportV2(
+      const result = await requestPrivacyExecutionApproval(
         {
-          privacyRequestId: requestId,
-          actorUserId: admin.id,
-          approvalActorUserId: one(formData, "approvalActorUserId"),
+          requestId,
+          requestVersion: version,
           idempotencyKey,
-          approvalEvidenceRef: one(formData, "approvalEvidenceRef"),
-          stepUpEvidenceRef: one(formData, "stepUpEvidenceRef"),
+          stepUpEvidenceId: one(formData, "stepUpEvidenceId"),
+          stepUpGrantToken: one(formData, "stepUpGrantToken"),
         },
         {
+          actor: {
+            userId: admin.id,
+            sessionId: admin.sessionId,
+            role: admin.role,
+            status: admin.status,
+            capabilities: admin.capabilities,
+          },
+          correlationId: request.correlationId,
           database,
-          exportStore: createPrivacyExportObjectStore(environment),
-          documentStore: createDocumentObjectStore(environment),
-          exportKeyring:
-            environment.secrets.keyrings.PRIVACY_EXPORT_KEYS,
-          featureEnabled: environment.PRIVACY_EXPORT_V2,
-          cohortAllowed: environment.PRIVACY_PROCESSING_COHORT === "test",
-          processingMode: environment.PRIVACY_PROCESSING_MODE,
+          environment,
           now,
         },
       );
       if (!result.ok) {
-        return failure(
-          result.code === "FEATURE_DISABLED"
-            ? "Export V2 ist serverseitig gesperrt. Es wird kein Mock-Abschluss erzeugt."
-            : "Der reale Export konnte nicht sicher abgeschlossen werden.",
-          result.code,
-        );
+        return failure(messageForApprovalCode(result.code), result.code);
       }
       revalidatePrivacyCasePaths(requestId);
       return success(
         result.replay
-          ? "Das verschlüsselte Exportartefakt war bereits sicher erstellt."
-          : "Verschlüsseltes Exportartefakt erstellt. Der Einmal-Download ist höchstens 15 Minuten verfügbar.",
+          ? "Diese Vollzugsfreigabe war bereits sicher beantragt."
+          : "Vollzug beantragt. Eine zweite unabhängige Privacy-Person muss ihn mit eigener Sicherheitsbestätigung freigeben.",
       );
     }
 
-    if (
-      operation === "privacy-complete-delete" ||
-      operation === "privacy-complete-correction"
-    ) {
+    if (operation === "privacy-approve-execution") {
       const environment = getServerEnvironment();
-      const result = await runPrivacyExecutionV2(
+      const approvalId = one(formData, "approvalId");
+      const result = await approveAndEnqueuePrivacyExecution(
         {
-          privacyRequestId: requestId,
-          actorUserId: admin.id,
-          approvalActorUserId: one(formData, "approvalActorUserId"),
+          approvalId,
+          requestId,
           idempotencyKey,
-          approvalEvidenceRef: one(formData, "approvalEvidenceRef"),
-          stepUpEvidenceRef: one(formData, "stepUpEvidenceRef"),
+          stepUpEvidenceId: one(formData, "stepUpEvidenceId"),
+          stepUpGrantToken: one(formData, "stepUpGrantToken"),
         },
         {
+          actor: {
+            userId: admin.id,
+            sessionId: admin.sessionId,
+            role: admin.role,
+            status: admin.status,
+            capabilities: admin.capabilities,
+          },
+          correlationId: request.correlationId,
           database,
-          documentStore: createDocumentObjectStore(environment),
-          correctionEnabled: environment.PRIVACY_CORRECTION_EXECUTION,
-          erasureEnabled: environment.PRIVACY_ERASURE_EXECUTION,
-          cohortAllowed: environment.PRIVACY_PROCESSING_COHORT === "test",
-          processingMode: environment.PRIVACY_PROCESSING_MODE,
+          environment,
           now,
         },
       );
       if (!result.ok) {
-        return failure(
-          result.code === "FEATURE_DISABLED"
-            ? "Der reale Privacy-Vollzug ist serverseitig gesperrt. Es wird kein Assessment als Löschung oder Korrektur ausgegeben."
-            : result.code === "RETRY_REQUIRED"
-              ? "Ein Processor ist vorübergehend ausgefallen. Der Fall bleibt sichtbar offen und kann sicher fortgesetzt werden."
-              : "Die Privacy-Execution konnte nicht sicher abgeschlossen werden.",
-          result.code,
-        );
+        return failure(messageForApprovalCode(result.code), result.code);
       }
       revalidatePrivacyCasePaths(requestId);
       return success(
         result.replay
-          ? "Diese Privacy-Execution war bereits vollständig verarbeitet."
-          : "Alle erforderlichen Processor-Outcomes sind terminal dokumentiert.",
+          ? "Diese Freigabe war bereits atomar in die Worker-Queue gestellt."
+          : "Unabhängig freigegeben und genau einmal in die Privacy-Worker-Queue gestellt.",
       );
     }
 
@@ -154,41 +146,31 @@ export async function adminPrivacyCaseAction(
         : operation === "privacy-verify-identity"
           ? await service.verifyIdentity(actor, common, now)
           : operation === "privacy-reject"
-                ? await service.rejectRequest(
-                    actor,
-                    {
-                      ...common,
-                      reasonCode: one(
-                        formData,
-                        "reasonCode",
-                      ) as PrivacyRequestRejectionCode,
-                      ...optionalText(formData, "safeNote"),
-                    },
-                    now,
-                  )
-                : operation === "privacy-add-note"
-                  ? await service.addInternalNote(
-                      actor,
-                      { ...common, note: one(formData, "note") ?? "" },
-                      now,
-                    )
-                  : null;
+            ? await service.rejectRequest(
+                actor,
+                {
+                  ...common,
+                  reasonCode: one(
+                    formData,
+                    "reasonCode",
+                  ) as PrivacyRequestRejectionCode,
+                  ...optionalText(formData, "safeNote"),
+                },
+                now,
+              )
+            : operation === "privacy-add-note"
+              ? await service.addInternalNote(
+                  actor,
+                  { ...common, note: one(formData, "note") ?? "" },
+                  now,
+                )
+              : null;
 
     if (result === null) {
       return failure("Unbekannte Datenschutz-Aktion.", "INVALID_COMMAND");
     }
     if (!result.ok) return failure(messageForCode(result.code), result.code);
 
-    if (operation === "privacy-start-identity" && result.status === "IDENTITY_CHECK") {
-      await sendPrivacyStatusEmail(requestId, "IDENTITY_CHECK", idempotencyKey);
-    } else if (
-      ["privacy-complete-delete", "privacy-complete-correction"].includes(operation) &&
-      result.status === "COMPLETED"
-    ) {
-      await sendPrivacyStatusEmail(requestId, "COMPLETED", idempotencyKey);
-    } else if (operation === "privacy-reject" && result.status === "REJECTED") {
-      await sendPrivacyStatusEmail(requestId, "REJECTED", idempotencyKey);
-    }
     revalidatePrivacyCasePaths(requestId);
     return success(
       result.idempotent
@@ -200,36 +182,6 @@ export async function adminPrivacyCaseAction(
       "Die Datenschutz-Aktion konnte nicht vollständig ausgeführt werden.",
       "WRITE_FAILED",
     );
-  }
-}
-
-async function sendPrivacyStatusEmail(
-  requestId: string,
-  status: "IDENTITY_CHECK" | "COMPLETED" | "REJECTED",
-  idempotencyKey: string,
-) {
-  const privacyCase = await getDatabase().privacyRequest.findUnique({
-    where: { id: requestId },
-    select: { requester: { select: { email: true } } },
-  });
-  if (privacyCase === null) return;
-  try {
-    await emailProvider.send({
-      to: privacyCase.requester.email,
-      templateKey: "privacy_request_changed",
-      subject: "Status deiner Datenschutzanfrage wurde aktualisiert",
-      data: {
-        statusLabel:
-          status === "IDENTITY_CHECK"
-            ? "Identitätsprüfung erforderlich"
-            : status === "COMPLETED"
-              ? "Abgeschlossen"
-              : "Abgelehnt",
-        idempotencyKey,
-      },
-    });
-  } catch {
-    // The persisted case transition and notification remain authoritative.
   }
 }
 
@@ -253,13 +205,23 @@ function successMessage(operation: string) {
     ? "Identitätsprüfung gestartet."
     : operation === "privacy-verify-identity"
       ? "Identität bestätigt; der Fall ist nun in Bearbeitung."
-      : operation === "privacy-complete-delete"
-        ? "Löschungsprüfung abgeschlossen."
-        : operation === "privacy-complete-correction"
-          ? "Korrekturergebnis dokumentiert."
-          : operation === "privacy-reject"
+      : operation === "privacy-reject"
             ? "Anfrage mit dokumentiertem Grund abgelehnt."
             : "Interne Notiz gespeichert.";
+}
+
+function messageForApprovalCode(code: string) {
+  return code === "DISABLED"
+    ? "Der autonome Privacy-Vollzug ist serverseitig deaktiviert oder seine Provider-/Outbox-Konfiguration ist unvollständig."
+    : code === "STEP_UP_REQUIRED"
+      ? "Für diesen exakten Fall fehlt eine frische, einmalige Sicherheitsbestätigung."
+      : code === "FORBIDDEN"
+        ? "Berechtigung oder Funktionstrennung erlauben diese Aktion nicht."
+        : code === "STALE_VERSION" || code === "CONFIGURATION_CHANGED"
+          ? "Fall oder Laufzeitkonfiguration haben sich geändert. Bitte lade die Seite neu und starte eine neue Freigabe."
+          : code === "CONFLICT"
+            ? "Für diesen Fall besteht bereits eine andere oder abgelaufene Freigabe."
+            : "Die Privacy-Freigabe konnte nicht sicher gespeichert werden.";
 }
 
 function messageForCode(code: string) {

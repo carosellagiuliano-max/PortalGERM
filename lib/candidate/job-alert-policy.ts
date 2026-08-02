@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 
 import { z } from "zod";
 
@@ -8,6 +8,7 @@ import {
   type AlertFrequency as AlertFrequencyType,
   type RemotePreference as RemotePreferenceType,
 } from "@/lib/generated/prisma/enums";
+import type { KeyringEntry } from "@/lib/config/env-schema";
 import { trimmedString } from "@/lib/validation/common";
 
 export const JOB_ALERT_POLICY_V1 = Object.freeze({
@@ -19,12 +20,14 @@ export const JOB_ALERT_POLICY_V1 = Object.freeze({
   unsubscribeLifetimeDays: 180,
 } as const);
 
-export const JOB_ALERT_DELIVERY_NOTICE_V1 = Object.freeze({
-  version: "job-alert-delivery-v1",
+export const JOB_ALERT_DELIVERY_NOTICE_V2 = Object.freeze({
+  version: "job-alert-delivery-v2",
   purpose: "Job alert delivery",
-  copy:
-    "Ich möchte dieses Jobabo als lokalen Mock-Eintrag erhalten. Dies ist unabhängig von Marketing-Nachrichten.",
+  copy: "Ich möchte dieses Jobabo per Service-E-Mail erhalten. Dies ist unabhängig von Marketing-Nachrichten und jederzeit widerrufbar.",
 });
+
+const JOB_ALERT_UNSUBSCRIBE_TOKEN_DOMAIN =
+  "swisstalenthub.job-alert-unsubscribe-token.v2";
 
 const nullableUuid = z.union([z.string().uuid(), z.null()]);
 
@@ -45,7 +48,8 @@ export const jobAlertQuerySchema = z
     if (value.workloadMin > value.workloadMax) {
       context.addIssue({
         code: "custom",
-        message: "Das minimale Pensum darf nicht über dem maximalen Pensum liegen.",
+        message:
+          "Das minimale Pensum darf nicht über dem maximalen Pensum liegen.",
         path: ["workloadMax"],
       });
     }
@@ -93,13 +97,18 @@ export type ParsedStoredJobAlertQuery =
   | Readonly<{ kind: "legacy"; query: LegacyJobAlertQuery }>
   | Readonly<{ kind: "invalid" }>;
 
-export function parseStoredJobAlertQuery(value: unknown): ParsedStoredJobAlertQuery {
+export function parseStoredJobAlertQuery(
+  value: unknown,
+): ParsedStoredJobAlertQuery {
   const current = jobAlertQuerySchema.safeParse(value);
   if (current.success) {
     return Object.freeze({ kind: "v1", query: Object.freeze(current.data) });
   }
   const legacy = legacyJobAlertQuerySchema.safeParse(value);
-  if (legacy.success && (legacy.data.category !== undefined || legacy.data.canton !== undefined)) {
+  if (
+    legacy.success &&
+    (legacy.data.category !== undefined || legacy.data.canton !== undefined)
+  ) {
     return Object.freeze({
       kind: "legacy",
       query: Object.freeze({
@@ -170,7 +179,10 @@ export function createJobAlertUnsubscribeToken(
 ) {
   assertValidDate(issuedAt);
   const bytes = random(JOB_ALERT_POLICY_V1.unsubscribeTokenBytes);
-  if (!Buffer.isBuffer(bytes) || bytes.byteLength !== JOB_ALERT_POLICY_V1.unsubscribeTokenBytes) {
+  if (
+    !Buffer.isBuffer(bytes) ||
+    bytes.byteLength !== JOB_ALERT_POLICY_V1.unsubscribeTokenBytes
+  ) {
     throw new JobAlertPolicyError("token_entropy_invalid");
   }
   const rawToken = bytes.toString("base64url");
@@ -179,7 +191,12 @@ export function createJobAlertUnsubscribeToken(
     issuedAt.getTime() +
       JOB_ALERT_POLICY_V1.unsubscribeLifetimeDays * 24 * 60 * 60 * 1_000,
   );
-  return Object.freeze({ rawToken, tokenHash, issuedAt: new Date(issuedAt), expiresAt });
+  return Object.freeze({
+    rawToken,
+    tokenHash,
+    issuedAt: new Date(issuedAt),
+    expiresAt,
+  });
 }
 
 export function hashJobAlertUnsubscribeToken(rawToken: string) {
@@ -188,13 +205,42 @@ export function hashJobAlertUnsubscribeToken(rawToken: string) {
   return createHash("sha256").update(parsed.data, "utf8").digest("hex");
 }
 
+/**
+ * Reconstructs the bearer only while an outbox delivery is hydrated. The
+ * database and outbox retain the token row id, key version and SHA-256 hash,
+ * never the bearer itself. Keeping the key version in the payload also makes
+ * rotation fail closed instead of silently changing an in-flight message.
+ */
+export function deriveJobAlertUnsubscribeToken(
+  input: Readonly<{
+    digestId: string;
+    tokenId: string;
+    key: KeyringEntry<"NOTIFICATION_DELIVERY_KEYS">;
+  }>,
+) {
+  const digestId = jobAlertIdSchema.safeParse(input.digestId);
+  const tokenId = jobAlertIdSchema.safeParse(input.tokenId);
+  if (!digestId.success || !tokenId.success) {
+    throw new JobAlertPolicyError("token_identity_invalid");
+  }
+  return input.key.key.withValue((encodedKey) =>
+    createHmac("sha256", Buffer.from(encodedKey, "base64"))
+      .update(JOB_ALERT_UNSUBSCRIBE_TOKEN_DOMAIN, "utf8")
+      .update("\0", "utf8")
+      .update(tokenId.data, "utf8")
+      .update("\0", "utf8")
+      .update(digestId.data, "utf8")
+      .digest("base64url"),
+  );
+}
+
 export function jobAlertConsentNoticeHash() {
   return createHash("sha256")
-    .update(JOB_ALERT_DELIVERY_NOTICE_V1.version, "utf8")
+    .update(JOB_ALERT_DELIVERY_NOTICE_V2.version, "utf8")
     .update("\0", "utf8")
-    .update(JOB_ALERT_DELIVERY_NOTICE_V1.purpose, "utf8")
+    .update(JOB_ALERT_DELIVERY_NOTICE_V2.purpose, "utf8")
     .update("\0", "utf8")
-    .update(JOB_ALERT_DELIVERY_NOTICE_V1.copy, "utf8")
+    .update(JOB_ALERT_DELIVERY_NOTICE_V2.copy, "utf8")
     .digest("hex");
 }
 
@@ -290,7 +336,8 @@ function zurichParts(value: Date): ZurichParts {
       .map(({ type, value: partValue }) => [type, partValue]),
   );
   const isoWeekday = weekdayNumber[parts.weekday ?? ""];
-  if (isoWeekday === undefined) throw new JobAlertPolicyError("calendar_invalid");
+  if (isoWeekday === undefined)
+    throw new JobAlertPolicyError("calendar_invalid");
   return Object.freeze({
     year: Number(parts.year),
     month: Number(parts.month),
@@ -308,7 +355,9 @@ function isStrictlyBeforeLocalEight(parts: ZurichParts) {
 }
 
 function addCalendarDays(parts: ZurichParts, days: number) {
-  const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days, 12));
+  const shifted = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day + days, 12),
+  );
   return Object.freeze({
     year: shifted.getUTCFullYear(),
     month: shifted.getUTCMonth() + 1,

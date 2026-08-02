@@ -9,8 +9,14 @@ import {
   writeRequiredAudit,
   type AuditPersistenceRecord,
 } from "@/lib/audit/log";
+import type { KeyringEntry } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
+import {
+  destroyedNotificationRecipientMaterial,
+  notificationRecipientMaterialExpiresAt,
+} from "@/lib/notifications/retention";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import type { DocumentObjectStore } from "@/lib/providers/storage/document-object-store";
 import {
@@ -41,10 +47,14 @@ const commandSchema = z
     idempotencyKey: UUID,
     approvalEvidenceRef: z
       .string()
-      .regex(/^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u),
+      .regex(
+        /^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u,
+      ),
     stepUpEvidenceRef: z
       .string()
-      .regex(/^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u),
+      .regex(
+        /^phase25:[A-Za-z0-9._:-]{8,220}$|^sandbox:[A-Za-z0-9._:-]{8,220}$/u,
+      ),
   })
   .strict();
 
@@ -54,13 +64,23 @@ export type PrivacyExecutionV2Dependencies = Readonly<{
   correctionEnabled: boolean;
   erasureEnabled: boolean;
   cohortAllowed: boolean;
-  processingMode: "disabled" | "sandbox_command";
+  processingMode:
+    "disabled" | "sandbox_command" | "contract_worker" | "autonomous_worker";
+  notificationDeliveryKeyring?: readonly KeyringEntry<"NOTIFICATION_DELIVERY_KEYS">[];
+  notificationRecipientHashKeyring?: readonly KeyringEntry<"NOTIFICATION_RECIPIENT_HASH_KEYS">[];
   now?: Date;
   injectProcessorFailure?: (
     processorKey: string,
     attempt: number,
   ) => "RETRYABLE" | "TERMINAL" | null;
+  injectCrashAfterStage?: (stage: PrivacyExecutionCrashStage) => boolean;
 }>;
+
+export type PrivacyExecutionCrashStage =
+  | "ERASURE_NOTIFICATION_STAGED"
+  | "ERASURE_POSTGRES_ANONYMIZED"
+  | "ERASURE_PROCESSOR_OUTCOME_COMMITTED"
+  | "ERASURE_EXECUTION_COMPLETED";
 
 export type PrivacyExecutionV2Result =
   | Readonly<{
@@ -96,6 +116,7 @@ type Setup = Readonly<{
   subjectClass: "USER" | "CANDIDATE" | "EMPLOYER_MEMBER";
   subjectReferenceHash: string;
   requiredProcessors: readonly string[];
+  recipientRetentionUntil: Date;
   replay: boolean;
 }>;
 
@@ -120,7 +141,7 @@ export async function runPrivacyExecutionV2(
   const now = dependencies.now ?? new Date();
   if (!command.success || !isValidDate(now)) return failure("INVALID_INPUT");
   if (
-    dependencies.processingMode !== "sandbox_command" ||
+    dependencies.processingMode === "disabled" ||
     !dependencies.cohortAllowed
   ) {
     return failure("FEATURE_DISABLED");
@@ -180,6 +201,12 @@ export async function runPrivacyExecutionV2(
         dependencies,
         now,
       );
+      if (execution.kind === "ERASURE" && processorKey === "postgres-primary") {
+        injectPrivacyExecutionCrash(
+          dependencies,
+          "ERASURE_POSTGRES_ANONYMIZED",
+        );
+      }
       domainEventRefs.push(...(result.domainEventRefs ?? []));
       await storeProcessorResult(
         execution,
@@ -188,13 +215,21 @@ export async function runPrivacyExecutionV2(
         dependencies.database,
         now,
       );
+      if (execution.kind === "ERASURE" && processorKey === "postgres-primary") {
+        injectPrivacyExecutionCrash(
+          dependencies,
+          "ERASURE_PROCESSOR_OUTCOME_COMMITTED",
+        );
+      }
     } catch (error) {
+      if (error instanceof InjectedPrivacyExecutionCrash) throw error;
       const terminal = error instanceof TerminalProcessorError;
       await storeProcessorFailure(
         execution,
         processorKey,
         terminal,
         dependencies.database,
+        dependencies.notificationDeliveryKeyring ?? [],
         now,
       );
       return Object.freeze({
@@ -209,8 +244,12 @@ export async function runPrivacyExecutionV2(
     execution,
     domainEventRefs,
     dependencies.database,
+    dependencies.notificationDeliveryKeyring ?? [],
     now,
   );
+  if (execution.kind === "ERASURE") {
+    injectPrivacyExecutionCrash(dependencies, "ERASURE_EXECUTION_COMPLETED");
+  }
   return Object.freeze({
     ok: true,
     replay: setup.value.replay,
@@ -289,6 +328,10 @@ async function setupExecution(
           subjectClass: existing.subjectClass as Setup["subjectClass"],
           subjectReferenceHash: existing.subjectReferenceHash,
           requiredProcessors: Object.freeze(existing.requiredProcessors),
+          recipientRetentionUntil: erasureNotificationRetentionUntil(
+            request.dueAt,
+            existing.startedAt ?? existing.createdAt,
+          ),
           replay: true,
         }),
       });
@@ -425,6 +468,10 @@ async function setupExecution(
         subjectClass,
         subjectReferenceHash,
         requiredProcessors: Object.freeze(requiredProcessors),
+        recipientRetentionUntil: erasureNotificationRetentionUntil(
+          request.dueAt,
+          now,
+        ),
         replay: false,
       }),
     });
@@ -445,7 +492,14 @@ async function executeProcessor(
   }
   switch (processorKey) {
     case "postgres-primary":
-      return executePostgresErasure(setup, dependencies.database, now);
+      return executePostgresErasure(
+        setup,
+        dependencies.database,
+        dependencies.notificationDeliveryKeyring ?? [],
+        dependencies.notificationRecipientHashKeyring ?? [],
+        dependencies,
+        now,
+      );
     case "document-object-store":
       return executeDocumentErasure(
         setup,
@@ -510,7 +564,10 @@ async function executePostgresCorrection(
     for (const field of request.correctionFields) {
       const value = field.correctionText.trim();
       if (value.length === 0) throw new TerminalProcessorError();
-      if (field.fieldCode === "DISPLAY_NAME" || field.fieldCode === "LEGAL_NAME") {
+      if (
+        field.fieldCode === "DISPLAY_NAME" ||
+        field.fieldCode === "LEGAL_NAME"
+      ) {
         if (value.length > 160) throw new TerminalProcessorError();
         await transaction.user.update({
           where: { id: setup.requesterUserId },
@@ -567,6 +624,9 @@ async function executePostgresCorrection(
 async function executePostgresErasure(
   setup: Setup,
   database: DatabaseClient,
+  notificationDeliveryKeyring: readonly KeyringEntry<"NOTIFICATION_DELIVERY_KEYS">[],
+  notificationRecipientHashKeyring: readonly KeyringEntry<"NOTIFICATION_RECIPIENT_HASH_KEYS">[],
+  dependencies: PrivacyExecutionV2Dependencies,
   now: Date,
 ): Promise<ProcessorResult> {
   return database.$transaction(async (transaction) => {
@@ -587,16 +647,31 @@ async function executePostgresErasure(
       );
     const accountHold = held("USER_ACCOUNT");
     if (accountHold === undefined) {
-      const activeAssignments =
-        await transaction.personaAssignment.findMany({
-          where: { userId: user.id, status: "ACTIVE" },
-          select: {
-            id: true,
-            status: true,
-            source: true,
-            version: true,
-          },
-        });
+      if (
+        notificationDeliveryKeyring.length > 0 &&
+        notificationRecipientHashKeyring.length > 0
+      ) {
+        await stageErasureStatusEmails(
+          transaction,
+          setup,
+          user.email,
+          notificationDeliveryKeyring,
+          notificationRecipientHashKeyring,
+        );
+        injectPrivacyExecutionCrash(
+          dependencies,
+          "ERASURE_NOTIFICATION_STAGED",
+        );
+      }
+      const activeAssignments = await transaction.personaAssignment.findMany({
+        where: { userId: user.id, status: "ACTIVE" },
+        select: {
+          id: true,
+          status: true,
+          source: true,
+          version: true,
+        },
+      });
       for (const assignment of activeAssignments) {
         await transaction.personaAssignment.update({
           where: { id: assignment.id },
@@ -641,9 +716,7 @@ async function executePostgresErasure(
         proofs.push(proof("PERSONA_ASSIGNMENT", "ANONYMIZED"));
       }
     } else {
-      proofs.push(
-        proof("USER_ACCOUNT", "RETAINED", accountHold.basisRef),
-      );
+      proofs.push(proof("USER_ACCOUNT", "RETAINED", accountHold.basisRef));
     }
     const recruitingErasure = await applyRecruitingPrivacyErasureV1(
       transaction,
@@ -767,7 +840,11 @@ async function executeDocumentErasure(
     select: { id: true },
   });
   if (profile === null) {
-    return successProcessorResult(setup, "document-object-store", "NO_DOCUMENTS");
+    return successProcessorResult(
+      setup,
+      "document-object-store",
+      "NO_DOCUMENTS",
+    );
   }
   const versions = await database.documentVersion.findMany({
     where: {
@@ -829,10 +906,7 @@ async function executeDocumentErasure(
       data: { status: "DELETED" },
     });
     proofs.push(
-      proof(
-        `DOCUMENT_VERSION:${sha256(version.id).slice(0, 16)}`,
-        "ERASED",
-      ),
+      proof(`DOCUMENT_VERSION:${sha256(version.id).slice(0, 16)}`, "ERASED"),
     );
   }
   return Object.freeze({
@@ -842,10 +916,55 @@ async function executeDocumentErasure(
     outcomeCode: "DOCUMENT_ERASURE_RECONCILED",
     retainedBasisRef: proofs.find(({ retainedBasisRef }) => retainedBasisRef)
       ?.retainedBasisRef,
-    receiptHash: sha256(
-      stableReceipt(setup, "document-object-store", proofs),
-    ),
+    receiptHash: sha256(stableReceipt(setup, "document-object-store", proofs)),
     proofs: Object.freeze(proofs),
+  });
+}
+
+const DEFERRED_ERASURE_NOTIFICATION_AT = new Date("9999-12-31T23:59:59.000Z");
+
+async function stageErasureStatusEmails(
+  transaction: Prisma.TransactionClient,
+  setup: Setup,
+  recipientAddress: string,
+  keyring: readonly KeyringEntry<"NOTIFICATION_DELIVERY_KEYS">[],
+  hashKeyring: readonly KeyringEntry<"NOTIFICATION_RECIPIENT_HASH_KEYS">[],
+) {
+  const successDedupeKey = erasureSuccessEmailDedupeKey(setup.executionId);
+  const failureDedupeKey = erasureFailureEmailDedupeKey(setup.executionId);
+  const existing = await transaction.notificationOutbox.count({
+    where: { dedupeKey: { in: [successDedupeKey, failureDedupeKey] } },
+  });
+  if (existing === 2) return;
+  if (existing !== 0) throw new TerminalProcessorError();
+  await enqueueNotification(transaction, {
+    recipient: {
+      address: recipientAddress,
+      keyring,
+      hashKeyring,
+      retentionUntil: setup.recipientRetentionUntil,
+    },
+    templateKey: "privacy_request_changed",
+    payloadSchemaVersion: "privacy-request-v1",
+    payload: { requestId: setup.requestId, statusLabel: "Abgeschlossen" },
+    dedupeKey: successDedupeKey,
+    availableAt: DEFERRED_ERASURE_NOTIFICATION_AT,
+  });
+  await enqueueNotification(transaction, {
+    recipient: {
+      address: recipientAddress,
+      keyring,
+      hashKeyring,
+      retentionUntil: setup.recipientRetentionUntil,
+    },
+    templateKey: "privacy_request_changed",
+    payloadSchemaVersion: "privacy-request-v1",
+    payload: {
+      requestId: setup.requestId,
+      statusLabel: "Weitere Bearbeitung erforderlich",
+    },
+    dedupeKey: failureDedupeKey,
+    availableAt: DEFERRED_ERASURE_NOTIFICATION_AT,
   });
 }
 
@@ -912,9 +1031,7 @@ async function executeAnalyticsErasure(
     receiptHash: sha256(
       stableReceipt(setup, "analytics-store", { revoked: latest.length }),
     ),
-    proofs: Object.freeze([
-      proof("OPTIONAL_PRODUCT_ANALYTICS", "ERASED"),
-    ]),
+    proofs: Object.freeze([proof("OPTIONAL_PRODUCT_ANALYTICS", "ERASED")]),
   });
 }
 
@@ -1007,9 +1124,7 @@ async function storeProcessorResult(
       },
     });
     for (const item of result.proofs ?? []) {
-      const proofDigest = sha256(
-        stableReceipt(setup, processorKey, item),
-      );
+      const proofDigest = sha256(stableReceipt(setup, processorKey, item));
       await transaction.erasureProof.upsert({
         where: {
           privacyExecutionId_processorKey_entityKey: {
@@ -1094,6 +1209,7 @@ async function storeProcessorFailure(
   processorKey: string,
   terminal: boolean,
   database: DatabaseClient,
+  notificationDeliveryKeyring: readonly KeyringEntry<"NOTIFICATION_DELIVERY_KEYS">[],
   now: Date,
 ) {
   await database.$transaction(async (transaction) => {
@@ -1149,6 +1265,59 @@ async function storeProcessorFailure(
         },
       },
     );
+    const requester = await transaction.user.findUnique({
+      where: { id: setup.requesterUserId },
+      select: { status: true },
+    });
+    if (
+      setup.kind === "ERASURE" &&
+      requester?.status !== "ACTIVE" &&
+      notificationDeliveryKeyring.length > 0
+    ) {
+      const omitted = await activateStagedErasureEmail(
+        transaction,
+        setup,
+        "FAILURE",
+        now,
+      );
+      if (omitted) {
+        await recordErasureDeliveryOmitted(
+          transaction,
+          setup,
+          "IN_PROGRESS",
+          now,
+        );
+      }
+      if (terminal) {
+        await transaction.notificationOutbox.updateMany({
+          where: {
+            dedupeKey: erasureSuccessEmailDedupeKey(setup.executionId),
+            status: "PENDING",
+            recipientAddressCiphertext: { not: null },
+            recipientAddressDestroyedAt: null,
+          },
+          data: {
+            status: "SUPPRESSED",
+            suppressedAt: now,
+            ...destroyedNotificationRecipientMaterial(now),
+          },
+        });
+      }
+    } else {
+      await enqueueNotification(transaction, {
+        recipient: { userId: setup.requesterUserId },
+        templateKey: "privacy_request_changed",
+        payloadSchemaVersion: "privacy-request-v1",
+        payload: {
+          requestId: setup.requestId,
+          statusLabel: terminal
+            ? "Bearbeitung dauerhaft blockiert"
+            : "Weitere Bearbeitung erforderlich",
+        },
+        dedupeKey: `privacy-execution:${setup.executionId}:${processorKey}:${terminal ? "terminal" : "retry"}:email`,
+        availableAt: now,
+      });
+    }
   }, transactionOptions());
 }
 
@@ -1156,6 +1325,7 @@ async function completeExecution(
   setup: Setup,
   domainEventRefs: readonly string[],
   database: DatabaseClient,
+  notificationDeliveryKeyring: readonly KeyringEntry<"NOTIFICATION_DELIVERY_KEYS">[],
   now: Date,
 ) {
   await database.$transaction(async (transaction) => {
@@ -1165,9 +1335,7 @@ async function completeExecution(
     });
     if (
       outcomes.length !== setup.requiredProcessors.length ||
-      outcomes.some(
-        ({ status }) => !["SUCCEEDED", "RETAINED"].includes(status),
-      )
+      outcomes.some(({ status }) => !["SUCCEEDED", "RETAINED"].includes(status))
     ) {
       throw new Error(EXECUTION_ERROR);
     }
@@ -1241,9 +1409,7 @@ async function completeExecution(
         fromStatus: "IN_PROGRESS",
         toStatus: "COMPLETED",
         actorUserId: setup.actorUserId,
-        reasonCode: anyRetained
-          ? "COMPLETED_WITH_RETENTION"
-          : "COMPLETED",
+        reasonCode: anyRetained ? "COMPLETED_WITH_RETENTION" : "COMPLETED",
         idempotencyKey: `PRIVACY_EXECUTION:COMPLETED:${setup.executionId}`,
         correlationId: randomUUID(),
         createdAt: now,
@@ -1259,21 +1425,73 @@ async function completeExecution(
           requestId: setup.requestId,
           type: setup.kind === "CORRECTION" ? "CORRECT" : "DELETE",
           status: "COMPLETED",
-          reasonCode: anyRetained
-            ? "COMPLETED_WITH_RETENTION"
-            : "COMPLETED",
+          reasonCode: anyRetained ? "COMPLETED_WITH_RETENTION" : "COMPLETED",
         },
       },
     );
+    await transaction.notificationOutbox.updateMany({
+      where: {
+        dedupeKey: { startsWith: `privacy-execution:${setup.executionId}:` },
+        status: "PENDING",
+        OR: [
+          { dedupeKey: { endsWith: ":retry:email" } },
+          { dedupeKey: { endsWith: ":terminal:email" } },
+        ],
+      },
+      data: { status: "SUPPRESSED", suppressedAt: now },
+    });
+    const requester = await transaction.user.findUnique({
+      where: { id: setup.requesterUserId },
+      select: { status: true },
+    });
+    if (
+      setup.kind === "ERASURE" &&
+      requester?.status !== "ACTIVE" &&
+      notificationDeliveryKeyring.length > 0
+    ) {
+      const omitted = await activateStagedErasureEmail(
+        transaction,
+        setup,
+        "SUCCESS",
+        now,
+      );
+      if (omitted) {
+        await recordErasureDeliveryOmitted(
+          transaction,
+          setup,
+          "COMPLETED",
+          now,
+        );
+      }
+      await transaction.notificationOutbox.updateMany({
+        where: {
+          dedupeKey: erasureFailureEmailDedupeKey(setup.executionId),
+          status: "PENDING",
+          availableAt: DEFERRED_ERASURE_NOTIFICATION_AT,
+        },
+        data: {
+          status: "SUPPRESSED",
+          suppressedAt: now,
+          ...destroyedNotificationRecipientMaterial(now),
+        },
+      });
+    } else {
+      await enqueueNotification(transaction, {
+        recipient: { userId: setup.requesterUserId },
+        templateKey: "privacy_request_changed",
+        payloadSchemaVersion: "privacy-request-v1",
+        payload: { requestId: setup.requestId, statusLabel: "Abgeschlossen" },
+        dedupeKey: `privacy-execution:${setup.executionId}:completed-email`,
+        availableAt: now,
+      });
+    }
     await writeRequiredAudit(prismaAuditPort(transaction), {
       action: "PRIVACY_EXECUTION_COMPLETED",
       actorKind: "SYSTEM",
       capability: "PRIVACY_PROCESSOR_EXECUTE",
       correlationId: randomUUID(),
       metadata: {},
-      reasonCode: anyRetained
-        ? "COMPLETED_WITH_RETENTION"
-        : "COMPLETED",
+      reasonCode: anyRetained ? "COMPLETED_WITH_RETENTION" : "COMPLETED",
       result: "SUCCEEDED",
       retainUntil: auditRetainUntil(now),
       targetId: setup.executionId,
@@ -1297,16 +1515,15 @@ async function activeHolds(
   });
 }
 
-function retainedResult(
-  processorKey: string,
-  basis: string,
-): ProcessorResult {
+function retainedResult(processorKey: string, basis: string): ProcessorResult {
   return Object.freeze({
     status: "RETAINED",
     outcomeCode: "RETAINED_WITH_BASIS",
     retainedBasisRef: basis,
     receiptHash: sha256(`${processorKey}:${basis}`),
-    proofs: Object.freeze([proof(processorKey.toUpperCase(), "RETAINED", basis)]),
+    proofs: Object.freeze([
+      proof(processorKey.toUpperCase(), "RETAINED", basis),
+    ]),
   });
 }
 
@@ -1341,8 +1558,11 @@ function orderProcessors(processors: readonly string[]) {
     "analytics-store",
     "notification-outbox",
     "payment-ledger",
-    "postgres-primary",
     "backup-restore",
+    // The account address is anonymized here. Keeping PostgreSQL last lets us
+    // stage the encrypted completion/failure recipient only after every
+    // external processor has reached a terminal success/retention outcome.
+    "postgres-primary",
   ];
   return [...processors].sort(
     (left, right) => order.indexOf(left) - order.indexOf(right),
@@ -1371,10 +1591,7 @@ async function subjectClassesForIdentity(
         select: { kind: true },
       }),
     ]);
-  const classes = new Set<string>([
-    "USER",
-    subjectClassForRole(legacyRole),
-  ]);
+  const classes = new Set<string>(["USER", subjectClassForRole(legacyRole)]);
   if (
     candidateProfileCount > 0 ||
     assignments.some(({ kind }) => kind === "CANDIDATE")
@@ -1396,6 +1613,160 @@ function stableReceipt(setup: Setup, processorKey: string, value: unknown) {
     processorKey,
     subjectReferenceHash: setup.subjectReferenceHash,
     value,
+  });
+}
+
+function erasureSuccessEmailDedupeKey(executionId: string) {
+  return `privacy-execution:${executionId}:completed-email`;
+}
+
+function erasureFailureEmailDedupeKey(executionId: string) {
+  return `privacy-execution:${executionId}:erasure-retry-email`;
+}
+
+function erasureNotificationRetentionUntil(dueAt: Date, startedAt: Date) {
+  return notificationRecipientMaterialExpiresAt(
+    new Date(Math.max(dueAt.getTime(), startedAt.getTime())),
+  );
+}
+
+async function activateStagedErasureEmail(
+  transaction: Prisma.TransactionClient,
+  setup: Setup,
+  kind: "SUCCESS" | "FAILURE",
+  now: Date,
+) {
+  const dedupeKey =
+    kind === "SUCCESS"
+      ? erasureSuccessEmailDedupeKey(setup.executionId)
+      : erasureFailureEmailDedupeKey(setup.executionId);
+  const expectedStatusLabel =
+    kind === "SUCCESS" ? "Abgeschlossen" : "Weitere Bearbeitung erforderlich";
+  const activated = await transaction.notificationOutbox.updateMany({
+    where: {
+      dedupeKey,
+      status: "PENDING",
+      availableAt: DEFERRED_ERASURE_NOTIFICATION_AT,
+      recipientAddressCiphertext: { not: null },
+      recipientAddressDestroyedAt: null,
+      recipientAddressExpiresAt: { gt: now },
+    },
+    data: { availableAt: now },
+  });
+  if (activated.count === 1) return false;
+  const existing = await transaction.notificationOutbox.findUnique({
+    where: { dedupeKey },
+    select: {
+      id: true,
+      recipientUserId: true,
+      recipientAddressCiphertext: true,
+      recipientAddressDestroyedAt: true,
+      recipientAddressExpiresAt: true,
+      status: true,
+      lastErrorCode: true,
+      purpose: true,
+      purposeClass: true,
+      templateKey: true,
+      payloadSchemaVersion: true,
+      payload: true,
+    },
+  });
+  if (
+    existing === null ||
+    existing.recipientUserId !== null ||
+    existing.purpose !== "PRIVACY_REQUEST" ||
+    existing.purposeClass !== "MANDATORY" ||
+    existing.templateKey !== "privacy_request_changed" ||
+    existing.payloadSchemaVersion !== "privacy-request-v1" ||
+    !matchesErasureEmailPayload(
+      existing.payload,
+      setup.requestId,
+      expectedStatusLabel,
+    )
+  ) {
+    throw new Error(EXECUTION_ERROR);
+  }
+  if (
+    existing.status === "PENDING" &&
+    existing.recipientAddressCiphertext !== null &&
+    existing.recipientAddressDestroyedAt === null &&
+    existing.recipientAddressExpiresAt !== null &&
+    existing.recipientAddressExpiresAt.getTime() <= now.getTime()
+  ) {
+    const expired = await transaction.notificationOutbox.updateMany({
+      where: {
+        id: existing.id,
+        status: "PENDING",
+        recipientAddressCiphertext: { not: null },
+        recipientAddressDestroyedAt: null,
+        recipientAddressExpiresAt: { lte: now },
+      },
+      data: {
+        status: "SUPPRESSED",
+        availableAt: now,
+        suppressedAt: now,
+        lastErrorCode: "RECIPIENT_MATERIAL_RETENTION_EXPIRED",
+        ...destroyedNotificationRecipientMaterial(now),
+      },
+    });
+    if (expired.count !== 1) throw new Error(EXECUTION_ERROR);
+    return true;
+  }
+  if (
+    ["PAUSED", "SUPPRESSED"].includes(existing.status) &&
+    existing.lastErrorCode === "RECIPIENT_MATERIAL_RETENTION_EXPIRED" &&
+    existing.recipientAddressCiphertext === null &&
+    existing.recipientAddressDestroyedAt !== null
+  ) {
+    return true;
+  }
+  if (
+    existing.recipientAddressCiphertext !== null ||
+    ["DELIVERED", "SUPPRESSED", "DEAD_LETTER"].includes(existing.status)
+  ) {
+    return false;
+  }
+  throw new Error(EXECUTION_ERROR);
+}
+
+function matchesErasureEmailPayload(
+  payload: unknown,
+  requestId: string,
+  statusLabel: string,
+) {
+  return (
+    payload !== null &&
+    !Array.isArray(payload) &&
+    typeof payload === "object" &&
+    (payload as Record<string, unknown>).requestId === requestId &&
+    (payload as Record<string, unknown>).statusLabel === statusLabel
+  );
+}
+
+async function recordErasureDeliveryOmitted(
+  transaction: Prisma.TransactionClient,
+  setup: Setup,
+  requestStatus: "IN_PROGRESS" | "COMPLETED",
+  now: Date,
+) {
+  await transaction.privacyRequestEvent.upsert({
+    where: {
+      idempotencyKey: `PRIVACY_EXECUTION:DELIVERY_OMITTED:${setup.executionId}`,
+    },
+    create: {
+      privacyRequestId: setup.requestId,
+      kind: "NOTE_ADDED",
+      fromStatus: requestStatus,
+      toStatus: requestStatus,
+      actorUserId: setup.actorUserId,
+      reasonCode: "DELIVERY_OMITTED_RETENTION_EXPIRED",
+      safeNote:
+        "Die externe Status-E-Mail wurde wegen abgelaufener Empfänger-Retention nicht versandt; die In-App-Mitteilung bleibt bestehen.",
+      idempotencyKey: `PRIVACY_EXECUTION:DELIVERY_OMITTED:${setup.executionId}`,
+      correlationId: randomUUID(),
+      createdAt: now,
+    },
+    update: {},
   });
 }
 
@@ -1466,6 +1837,22 @@ function failure<
 
 function isValidDate(value: Date) {
   return value instanceof Date && Number.isFinite(value.getTime());
+}
+
+function injectPrivacyExecutionCrash(
+  dependencies: PrivacyExecutionV2Dependencies,
+  stage: PrivacyExecutionCrashStage,
+) {
+  if (dependencies.injectCrashAfterStage?.(stage) === true) {
+    throw new InjectedPrivacyExecutionCrash(stage);
+  }
+}
+
+class InjectedPrivacyExecutionCrash extends Error {
+  constructor(readonly stage: PrivacyExecutionCrashStage) {
+    super(`Injected privacy execution crash after ${stage}.`);
+    this.name = "InjectedPrivacyExecutionCrash";
+  }
 }
 
 class RetryableProcessorError extends Error {}

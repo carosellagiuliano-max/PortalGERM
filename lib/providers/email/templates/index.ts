@@ -16,6 +16,7 @@ import { identityVerificationTemplate } from "./identity-verification";
 import { invoiceIssuedTemplate } from "./invoice-issued";
 import { interviewChangedTemplate } from "./interview-changed";
 import { interviewReminderTemplate } from "./interview-reminder";
+import { jobAlertDigestTemplate } from "./job-alert-digest";
 import { jobAlertDigestMockTemplate } from "./job-alert-digest-mock";
 import { jobAlertPreviewTemplate } from "./job-alert-preview";
 import { jobApprovedTemplate } from "./job-approved";
@@ -57,6 +58,7 @@ const TEMPLATE_REGISTRY = assertTemplateRegistryComplete({
   invoice_issued: invoiceIssuedTemplate,
   interview_changed: interviewChangedTemplate,
   interview_reminder: interviewReminderTemplate,
+  job_alert_digest: jobAlertDigestTemplate,
   job_alert_digest_mock: jobAlertDigestMockTemplate,
   job_alert_preview: jobAlertPreviewTemplate,
   job_approved: jobApprovedTemplate,

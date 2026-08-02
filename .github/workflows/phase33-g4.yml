@@ -1,0 +1,141 @@
+name: Phase 33 G4 · Technical LC4 + LC5
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase33-g4-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  technical-g4:
+    name: Technical G4 only · no deployment or activation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Repository vollständig und ohne Push-Credentials auschecken
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Node.js 24.18.0 mit unveränderlichem npm-Downloadcache einrichten
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: npm 11.16.0 einrichten
+        run: npm install --global npm@11.16.0
+
+      - name: Gepinnte Runtime und isolierte Docker-Engine prüfen
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v24.18.0"
+          test "$(npm --version)" = "11.16.0"
+          docker version
+          docker compose version
+
+      - name: Lokales Recovery-Werkzeug installieren
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends age
+
+      - name: Abhängigkeiten reproduzierbar installieren
+        run: npm ci
+
+      - name: Chromium, Firefox und WebKit mit Systemabhängigkeiten installieren
+        run: >-
+          node node_modules/@playwright/test/cli.js install --with-deps
+          chromium firefox webkit
+
+      - name: Unveränderten Phase-33-G4-Testreport mit 38 Pflichtbefehlen erzeugen
+        run: npm run test:phase33
+
+      - name: Candidate- und OCI-Referenz des vollständigen Reports validieren
+        id: phase33-report
+        run: |
+          set -euo pipefail
+          oci_image_reference="$(npm run --silent phase33:ci:report-reference -- \
+            --report=test-results/phase33/test-report.json \
+            --candidate="${GITHUB_SHA}")"
+          test -n "${oci_image_reference}"
+          printf 'oci_image_reference=%s\n' "${oci_image_reference}" >> "${GITHUB_OUTPUT}"
+
+      - name: LC4- und LC5-Manifeste aus demselben Report und OCI-Image erzeugen
+        env:
+          OCI_IMAGE_REFERENCE: ${{ steps.phase33-report.outputs.oci_image_reference }}
+        run: |
+          set -euo pipefail
+          npm run phase33:manifest -- \
+            --target=LC4 \
+            --test-report=test-results/phase33/test-report.json \
+            --oci-image="${OCI_IMAGE_REFERENCE}" \
+            --output=test-results/phase33/technical-manifest-lc4.json
+          npm run phase33:manifest -- \
+            --target=LC5 \
+            --test-report=test-results/phase33/test-report.json \
+            --oci-image="${OCI_IMAGE_REFERENCE}" \
+            --output=test-results/phase33/technical-manifest-lc5.json
+
+      - name: Beide technischen Readiness-Verdicts fail-closed erzeugen
+        run: |
+          set -euo pipefail
+          npm run phase33:release:technical -- \
+            --technical-manifest=test-results/phase33/technical-manifest-lc4.json \
+            --output=test-results/phase33/release-verdict-lc4.json
+          npm run phase33:release:technical -- \
+            --technical-manifest=test-results/phase33/technical-manifest-lc5.json \
+            --output=test-results/phase33/release-verdict-lc5.json
+
+      - name: Externe Aktivierung muss für LC4 und LC5 gesperrt bleiben
+        run: |
+          set -euo pipefail
+          for target in lc4 lc5; do
+            set +e
+            npm run phase33:release:activation -- \
+              --technical-manifest="test-results/phase33/technical-manifest-${target}.json"
+            activation_status=$?
+            set -e
+            if [ "${activation_status}" -ne 2 ]; then
+              echo "Expected externally blocked activation exit 2 for ${target}, got ${activation_status}."
+              exit 1
+            fi
+          done
+
+      - name: Gemeinsame Evidence und externe Sperre strukturell verifizieren
+        run: >-
+          npm run phase33:ci:evidence-verify --
+          --candidate="${GITHUB_SHA}"
+
+      - name: Vollständige technische Phase-33-Reports hochladen
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: phase33-g4-technical-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/phase33/test-report.json
+            test-results/phase33/recovery-manifest.json
+            test-results/phase33/logs/*.log
+            test-results/phase33/technical-manifest-lc4.json
+            test-results/phase33/technical-manifest-lc5.json
+            test-results/phase33/release-verdict-lc4.json
+            test-results/phase33/release-verdict-lc5.json
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 30
+          compression-level: 9

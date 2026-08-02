@@ -129,6 +129,15 @@ describe.sequential("Phase 13 Job Boost PostgreSQL lifecycle", () => {
     });
     if (!adjacent.ok) throw new Error("Expected adjacent Boost.");
     expect(await db().jobBoost.count({ where: { jobId: IDS.job } })).toBe(2);
+    expect(
+      await db().notificationOutbox.count({
+        where: {
+          templateKey: "job_boost_activated",
+          recipientUserId: IDS.user,
+        },
+      }),
+    ).toBe(2);
+    expect(emailProvider.send).not.toHaveBeenCalled();
 
     const projection = await syncBoostStatusProjection({
       database: db(),

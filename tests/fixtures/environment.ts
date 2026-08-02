@@ -22,6 +22,7 @@ export function createValidEnvironment(
     REVEAL_CONFIRMATION_KEYS: `confirm-v1:${keyMaterial(5)}`,
     PII_REVEAL_KEYS: `reveal-v1:${keyMaterial(6)}`,
     NOTIFICATION_DELIVERY_KEYS: `notification-v1:${keyMaterial(8)}`,
+    NOTIFICATION_RECIPIENT_HASH_KEYS: `recipient-hash-v1:${keyMaterial(29)}`,
     DOCUMENT_STORAGE_KEYS: "",
     PRIVACY_EXPORT_KEYS: "",
     RATE_LIMIT_BACKEND: "postgres",

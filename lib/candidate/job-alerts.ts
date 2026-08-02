@@ -8,12 +8,13 @@ import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { trackAnalyticsEventV1 } from "@/lib/analytics/track";
 import {
-  JOB_ALERT_DELIVERY_NOTICE_V1,
+  JOB_ALERT_DELIVERY_NOTICE_V2,
   JOB_ALERT_POLICY_V1,
   JobAlertPolicyError,
   type JobAlertCommand,
   type JobAlertQuery,
   createJobAlertUnsubscribeToken,
+  deriveJobAlertUnsubscribeToken,
   defaultJobAlertQuery,
   distanceInKilometres,
   firstJobAlertDueAt,
@@ -28,6 +29,7 @@ import {
   unsubscribeRawTokenSchema,
 } from "@/lib/candidate/job-alert-policy";
 import { getServerEnvironment } from "@/lib/config/env";
+import type { ServerEnvironment } from "@/lib/config/env-schema";
 import { getDatabase } from "@/lib/db/client";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
@@ -41,6 +43,7 @@ import {
   filterPubliclyEligibleJobsInTransaction,
   type PublicEligibilityEnvironment,
 } from "@/lib/jobs/public-eligibility";
+import { enqueueNotification } from "@/lib/notifications/outbox";
 import { calculateRelevanceProxy } from "@/lib/search/relevance";
 import { scanJobAlertDigestMatches } from "@/lib/candidate/job-alert-digest-scan";
 import {
@@ -151,7 +154,7 @@ export async function getCandidateJobAlertPageData(
   if (profile === null) throw new JobAlertActionError("NOT_FOUND");
 
   const [consent, cantons, categories, cities] = await Promise.all([
-    latestDeliveryConsent(database, actorUserId, now),
+    hasCurrentDeliveryAuthorization(database, actorUserId, now),
     database.canton.findMany({
       where: { isActive: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -237,7 +240,7 @@ export async function getCandidateJobAlertPageData(
 
   return Object.freeze({
     alerts: Object.freeze(alerts),
-    deliveryConsentGranted: isCurrentDeliveryConsent(consent),
+    deliveryConsentGranted: consent,
     references: Object.freeze({
       cantons: Object.freeze(cantons.map((row) => Object.freeze(row))),
       categories: Object.freeze(categories.map((row) => Object.freeze(row))),
@@ -274,8 +277,12 @@ export async function createJobAlert(input: unknown, options: MutationOptions) {
       throw new JobAlertActionError("LIMIT_REACHED");
     }
     await assertQueryReferences(transaction, command.query);
-    const consent = await latestDeliveryConsent(transaction, actorUserId, now);
-    if (command.active && !isCurrentDeliveryConsent(consent)) {
+    const deliveryAuthorized = await hasCurrentDeliveryAuthorization(
+      transaction,
+      actorUserId,
+      now,
+    );
+    if (command.active && !deliveryAuthorized) {
       if (!command.deliveryConsentAccepted) {
         throw new JobAlertActionError("CONSENT_REQUIRED");
       }
@@ -348,12 +355,12 @@ export async function updateJobAlert(
       command.active &&
       (alert.status === "PAUSED" || alert.status === "UNSUBSCRIBED")
     ) {
-      const consent = await latestDeliveryConsent(
+      const deliveryAuthorized = await hasCurrentDeliveryAuthorization(
         transaction,
         actorUserId,
         now,
       );
-      if (!isCurrentDeliveryConsent(consent)) {
+      if (!deliveryAuthorized) {
         throw new JobAlertActionError("CONSENT_REQUIRED");
       }
       nextStatus = "ACTIVE";
@@ -567,23 +574,10 @@ export async function runJobAlertDigestMock(options: DigestRunOptions) {
       },
     });
 
-  const candidates = await database.jobAlert.findMany({
-    where: {
-      ...(alertId === undefined ? {} : { id: alertId }),
-      status: "ACTIVE",
-      nextDueAt: { lte: options.now },
-      ...(candidateUserId === undefined
-        ? { candidateProfile: { user: { status: "ACTIVE" } } }
-        : {
-            candidateProfile: {
-              userId: candidateUserId,
-              user: { status: "ACTIVE" },
-            },
-          }),
-    },
-    orderBy: [{ nextDueAt: "asc" }, { id: "asc" }],
-    take: MAX_DUE_ALERTS_PER_MANUAL_RUN,
-    select: { id: true },
+  const candidates = await findDueAlertIds(database, {
+    alertId,
+    candidateUserId,
+    now: options.now,
   });
 
   const completed: Array<
@@ -624,6 +618,390 @@ export async function runJobAlertDigestMock(options: DigestRunOptions) {
     );
   }
   return Object.freeze({ completed: Object.freeze(completed), skipped });
+}
+
+type DurableDigestRunOptions = Readonly<{
+  now: Date;
+  alertId?: string;
+  candidateUserId?: string;
+  database?: DatabaseClient;
+  environment?: ServerEnvironment;
+}>;
+
+/**
+ * Produces a real, durable delivery intent. Domain state, digest snapshot,
+ * hashed unsubscribe bearer and NotificationOutbox row commit together. The
+ * notification dispatcher owns provider retries and receipts afterwards.
+ */
+export async function runJobAlertDigestDelivery(
+  options: DurableDigestRunOptions,
+) {
+  assertDate(options.now);
+  const database = options.database ?? getDatabase();
+  const environment = options.environment ?? getServerEnvironment();
+  const alertId =
+    options.alertId === undefined ? undefined : parseAlertId(options.alertId);
+  const candidateUserId =
+    options.candidateUserId === undefined
+      ? undefined
+      : parseActor(options.candidateUserId);
+  const eligibilityEnvironment = jobAlertEligibilityEnvironment(
+    environment.APP_ENV,
+  );
+  const candidates = await findDueAlertIds(database, {
+    alertId,
+    candidateUserId,
+    now: options.now,
+  });
+  const completed: Array<
+    Readonly<{
+      alertId: string;
+      digestId: string;
+      itemCount: number;
+      outboxId: string;
+    }>
+  > = [];
+  let skipped = 0;
+  for (const candidate of candidates) {
+    const result = await processDueAlertToOutbox(database, candidate.id, {
+      candidateUserId,
+      eligibilityEnvironment,
+      environment,
+      now: options.now,
+    });
+    if (result === null) {
+      skipped += 1;
+    } else {
+      completed.push(result);
+    }
+  }
+  return Object.freeze({ completed: Object.freeze(completed), skipped });
+}
+
+async function findDueAlertIds(
+  database: DatabaseClient,
+  options: Readonly<{
+    alertId: string | undefined;
+    candidateUserId: string | undefined;
+    now: Date;
+  }>,
+) {
+  return database.jobAlert.findMany({
+    where: {
+      ...(options.alertId === undefined ? {} : { id: options.alertId }),
+      status: "ACTIVE",
+      nextDueAt: { lte: options.now },
+      ...(options.candidateUserId === undefined
+        ? { candidateProfile: { user: { status: "ACTIVE" } } }
+        : {
+            candidateProfile: {
+              userId: options.candidateUserId,
+              user: { status: "ACTIVE" },
+            },
+          }),
+    },
+    orderBy: [{ nextDueAt: "asc" }, { id: "asc" }],
+    take: MAX_DUE_ALERTS_PER_MANUAL_RUN,
+    select: { id: true },
+  });
+}
+
+type DurableProcessDueOptions = Readonly<{
+  candidateUserId: string | undefined;
+  eligibilityEnvironment: PublicEligibilityEnvironment;
+  environment: ServerEnvironment;
+  now: Date;
+}>;
+
+async function processDueAlertToOutbox(
+  database: DatabaseClient,
+  alertId: string,
+  options: DurableProcessDueOptions,
+) {
+  return database.$transaction(async (transaction) => {
+    const locked = await transaction.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"
+        FROM "JobAlert"
+        WHERE "id" = ${alertId}::uuid
+          AND "status" = 'ACTIVE'
+          AND "nextDueAt" <= ${options.now}
+        FOR UPDATE SKIP LOCKED
+      `;
+    if (locked.length !== 1) return null;
+    const alert = await transaction.jobAlert.findUnique({
+      where: { id: alertId },
+      select: {
+        id: true,
+        query: true,
+        frequency: true,
+        status: true,
+        nextDueAt: true,
+        lastSuccessfulCutoffAt: true,
+        createdAt: true,
+        candidateProfile: {
+          select: {
+            userId: true,
+            user: { select: { status: true } },
+          },
+        },
+      },
+    });
+    if (
+      alert === null ||
+      alert.status !== "ACTIVE" ||
+      alert.candidateProfile.user.status !== "ACTIVE" ||
+      (options.candidateUserId !== undefined &&
+        alert.candidateProfile.userId !== options.candidateUserId)
+    ) {
+      return null;
+    }
+    if (
+      !(await hasCurrentDeliveryAuthorization(
+        transaction,
+        alert.candidateProfile.userId,
+        options.now,
+      )) ||
+      !(await ensureJobAlertNotificationPreferenceEnabled(
+        transaction,
+        alert.candidateProfile.userId,
+        options.now,
+      ))
+    ) {
+      return null;
+    }
+
+    const window = jobAlertWindow(
+      alert.createdAt,
+      alert.lastSuccessfulCutoffAt,
+      options.now,
+    );
+    const pendingDigests = await transaction.jobAlertDigest.findMany({
+      where: {
+        jobAlertId: alert.id,
+        windowStart: window.start,
+        windowEnd: { gt: window.start },
+        runAt: { not: null },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: 2,
+      select: {
+        id: true,
+        alertNameSnapshot: true,
+        itemCount: true,
+        policyVersion: true,
+        windowEnd: true,
+        windowStart: true,
+      },
+    });
+    if (pendingDigests.length > 1) {
+      throw new Error("Multiple pending job-alert digests require repair.");
+    }
+    const existingDigest = pendingDigests[0] ?? null;
+    const retryingExistingDigest = existingDigest !== null;
+    let digest = existingDigest;
+    let jobs: Awaited<ReturnType<typeof findDigestJobs>> = [];
+    if (digest === null) {
+      const query = await resolveStoredQuery(transaction, alert.query);
+      if (query === null) {
+        await transaction.jobAlert.update({
+          where: { id: alert.id },
+          data: { status: "PAUSED", updatedAt: options.now },
+        });
+        await transaction.jobAlertEvent.create({
+          data: {
+            jobAlertId: alert.id,
+            kind: "PAUSED",
+            reasonCode: "INVALID_STORED_QUERY_REQUIRES_REPAIR",
+            createdAt: options.now,
+          },
+        });
+        return null;
+      }
+      jobs = await findDigestJobs(
+        transaction,
+        alert.id,
+        query,
+        window,
+        options.now,
+        options.eligibilityEnvironment,
+      );
+      digest = await transaction.jobAlertDigest.create({
+        data: {
+          jobAlertId: alert.id,
+          policyVersion: JOB_ALERT_POLICY_V1.version,
+          alertNameSnapshot: jobAlertDisplayName(query),
+          // This historical snapshot remains an audit/domain snapshot. The
+          // dispatcher resolves the current active user address at send time.
+          recipientEmailSnapshot: (
+            await transaction.user.findUniqueOrThrow({
+              where: { id: alert.candidateProfile.userId },
+              select: { emailNormalized: true },
+            })
+          ).emailNormalized,
+          windowStart: window.start,
+          windowEnd: window.end,
+          scheduledFor: alert.nextDueAt,
+          runAt: options.now,
+          itemCount: jobs.length,
+          createdAt: options.now,
+        },
+        select: {
+          id: true,
+          alertNameSnapshot: true,
+          itemCount: true,
+          policyVersion: true,
+          windowEnd: true,
+          windowStart: true,
+        },
+      });
+    }
+    if (
+      retryingExistingDigest &&
+      (existingDigest.policyVersion !== JOB_ALERT_POLICY_V1.version ||
+        existingDigest.windowStart.getTime() !== window.start.getTime())
+    ) {
+      throw new Error("Existing job-alert digest does not match retry state.");
+    }
+    if (!retryingExistingDigest && jobs.length > 0) {
+      await transaction.jobAlertDigestItem.createMany({
+        data: jobs.map((job, index) => ({
+          digestId: digest.id,
+          jobAlertId: alert.id,
+          jobId: job.id,
+          sortOrder: index,
+          createdAt: options.now,
+        })),
+      });
+    }
+
+    const dedupeKey = `job-alert-digest:${digest.id}`;
+    const existingOutbox = await transaction.notificationOutbox.findUnique({
+      where: { dedupeKey },
+      select: {
+        availableAt: true,
+        payload: true,
+        payloadSchemaVersion: true,
+      },
+    });
+    const existingPayload =
+      existingOutbox === null
+        ? null
+        : parseJobAlertOutboxPayload(
+            existingOutbox.payload,
+            existingOutbox.payloadSchemaVersion,
+          );
+    if (existingPayload !== null && existingPayload.digestId !== digest.id) {
+      throw new Error("Job-alert outbox digest binding is invalid.");
+    }
+
+    const writerKey =
+      existingPayload === null
+        ? options.environment.secrets.keyrings.NOTIFICATION_DELIVERY_KEYS[0]
+        : options.environment.secrets.keyrings.NOTIFICATION_DELIVERY_KEYS.find(
+            (candidate) =>
+              candidate.version === existingPayload.tokenKeyVersion,
+          );
+    if (writerKey === undefined) {
+      throw new Error("JOB_ALERT_UNSUBSCRIBE_KEY_VERSION_UNAVAILABLE");
+    }
+    const tokenId = existingPayload?.unsubscribeTokenId ?? randomUUID();
+    const rawToken = deriveJobAlertUnsubscribeToken({
+      digestId: digest.id,
+      tokenId,
+      key: writerKey,
+    });
+    const expectedTokenHash = hashJobAlertUnsubscribeToken(rawToken);
+    if (existingPayload === null) {
+      await transaction.jobAlertUnsubscribeToken.create({
+        data: {
+          id: tokenId,
+          jobAlertId: alert.id,
+          digestId: digest.id,
+          tokenHash: expectedTokenHash,
+          issuedAt: options.now,
+          expiresAt: new Date(
+            options.now.getTime() +
+              JOB_ALERT_POLICY_V1.unsubscribeLifetimeDays * DAY_MILLISECONDS,
+          ),
+        },
+      });
+    } else {
+      const persistedToken =
+        await transaction.jobAlertUnsubscribeToken.findUnique({
+          where: { id: tokenId },
+          select: {
+            digestId: true,
+            jobAlertId: true,
+            tokenHash: true,
+          },
+        });
+      if (
+        persistedToken === null ||
+        persistedToken.digestId !== digest.id ||
+        persistedToken.jobAlertId !== alert.id ||
+        persistedToken.tokenHash !== expectedTokenHash
+      ) {
+        throw new Error("Job-alert unsubscribe token binding is invalid.");
+      }
+    }
+    const outbox = await enqueueNotification(transaction, {
+      recipient: { userId: alert.candidateProfile.userId },
+      templateKey: "job_alert_digest",
+      payloadSchemaVersion: "job-alert-digest-v1",
+      payload: {
+        digestId: digest.id,
+        tokenKeyVersion: writerKey.version,
+        unsubscribeTokenId: tokenId,
+      },
+      dedupeKey,
+      availableAt: existingOutbox?.availableAt ?? options.now,
+    });
+    if (outbox.created) {
+      await transaction.jobAlertEvent.create({
+        data: {
+          jobAlertId: alert.id,
+          kind: "UPDATED",
+          actorUserId: null,
+          reasonCode: "DIGEST_OUTBOX_ENQUEUED",
+          createdAt: options.now,
+        },
+      });
+    }
+    await transaction.jobAlert.update({
+      where: { id: alert.id },
+      data: {
+        lastSuccessfulCutoffAt: digest.windowEnd,
+        nextDueAt: nextJobAlertDueAt(options.now, alert.frequency),
+        updatedAt: options.now,
+      },
+    });
+    return Object.freeze({
+      alertId: alert.id,
+      digestId: digest.id,
+      itemCount: digest.itemCount,
+      outboxId: outbox.id,
+    });
+  }, transactionOptions());
+}
+
+function parseJobAlertOutboxPayload(
+  payload: unknown,
+  payloadSchemaVersion: string,
+) {
+  if (payloadSchemaVersion !== "job-alert-digest-v1") {
+    throw new Error("Job-alert outbox schema is invalid.");
+  }
+  const parsed = z
+    .strictObject({
+      digestId: z.string().uuid(),
+      tokenKeyVersion: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/u),
+      unsubscribeTokenId: z.string().uuid(),
+    })
+    .safeParse(payload);
+  if (!parsed.success) {
+    throw new Error("Job-alert outbox payload is invalid.");
+  }
+  return Object.freeze(parsed.data);
 }
 
 type ProcessDueOptions = DigestRunOptions &
@@ -677,12 +1055,12 @@ async function processDueAlert(
     ) {
       return null;
     }
-    const consent = await latestDeliveryConsent(
+    const deliveryAuthorized = await hasCurrentDeliveryAuthorization(
       transaction,
       alert.candidateProfile.userId,
       options.now,
     );
-    if (!isCurrentDeliveryConsent(consent)) return null;
+    if (!deliveryAuthorized) return null;
 
     const window = jobAlertWindow(
       alert.createdAt,
@@ -1077,8 +1455,12 @@ async function transitionOwnedAlert(
         changed: false,
       });
     }
-    const consent = await latestDeliveryConsent(transaction, actorUserId, now);
-    if (!isCurrentDeliveryConsent(consent)) {
+    const deliveryAuthorized = await hasCurrentDeliveryAuthorization(
+      transaction,
+      actorUserId,
+      now,
+    );
+    if (!deliveryAuthorized) {
       throw new JobAlertActionError("CONSENT_REQUIRED");
     }
     const hasPendingDigest = await hasDigestAtScheduledTime(
@@ -1267,7 +1649,34 @@ async function assertQueryReferences(
   }
 }
 
-type ConsentDatabase = Pick<Prisma.TransactionClient, "userConsentEvent">;
+type ConsentDatabase = Pick<
+  Prisma.TransactionClient,
+  "notificationPreference" | "userConsentEvent"
+>;
+
+async function hasCurrentDeliveryAuthorization(
+  database: ConsentDatabase,
+  userId: string,
+  at: Date,
+) {
+  const [consent, preference] = await Promise.all([
+    latestDeliveryConsent(database, userId, at),
+    database.notificationPreference.findUnique({
+      where: {
+        userId_purpose_channel: {
+          userId,
+          purpose: "JOB_ALERT",
+          channel: "EMAIL",
+        },
+      },
+      select: { enabled: true },
+    }),
+  ]);
+  // A missing projection is tolerated only for pre-outbox rows. The durable
+  // producer creates it atomically before enqueueing; an explicit opt-out is
+  // authoritative immediately.
+  return isCurrentDeliveryConsent(consent) && preference?.enabled !== false;
+}
 
 async function latestDeliveryConsent(
   database: ConsentDatabase,
@@ -1315,8 +1724,8 @@ async function appendDeliveryConsent(
 ) {
   const notice = USER_CONSENT_NOTICES_V1.JOB_ALERT_DELIVERY;
   if (
-    notice.noticeVersion !== JOB_ALERT_DELIVERY_NOTICE_V1.version ||
-    notice.purpose !== JOB_ALERT_DELIVERY_NOTICE_V1.purpose
+    notice.noticeVersion !== JOB_ALERT_DELIVERY_NOTICE_V2.version ||
+    notice.purpose !== JOB_ALERT_DELIVERY_NOTICE_V2.purpose
   ) {
     throw new JobAlertPolicyError("consent_notice_drift");
   }
@@ -1342,6 +1751,15 @@ async function appendDeliveryConsent(
       createdAt,
     },
   });
+  await projectJobAlertNotificationPreference(transaction, {
+    actorUserId: userId,
+    enabled: granted,
+    now: createdAt,
+    reasonCode: granted
+      ? "JOB_ALERT_DELIVERY_GRANTED"
+      : "JOB_ALERT_DELIVERY_REVOKED",
+    userId,
+  });
   await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
     action: "USER_CONSENT_CHANGED",
     actorKind: "USER",
@@ -1358,6 +1776,121 @@ async function appendDeliveryConsent(
     targetId: userId,
     targetType: "USER",
   });
+}
+
+async function projectJobAlertNotificationPreference(
+  transaction: Prisma.TransactionClient,
+  input: Readonly<{
+    actorUserId: string | null;
+    enabled: boolean;
+    now: Date;
+    reasonCode: string;
+    userId: string;
+  }>,
+) {
+  const current = await transaction.notificationPreference.findUnique({
+    where: {
+      userId_purpose_channel: {
+        userId: input.userId,
+        purpose: "JOB_ALERT",
+        channel: "EMAIL",
+      },
+    },
+    select: { enabled: true, version: true },
+  });
+  if (current?.enabled === input.enabled) return;
+  const version = (current?.version ?? 0) + 1;
+  await transaction.notificationPreference.upsert({
+    where: {
+      userId_purpose_channel: {
+        userId: input.userId,
+        purpose: "JOB_ALERT",
+        channel: "EMAIL",
+      },
+    },
+    create: {
+      userId: input.userId,
+      purpose: "JOB_ALERT",
+      channel: "EMAIL",
+      enabled: input.enabled,
+      version,
+      createdAt: input.now,
+      updatedAt: input.now,
+    },
+    update: {
+      enabled: input.enabled,
+      version,
+      updatedAt: input.now,
+    },
+  });
+  await transaction.notificationPreferenceEvent.create({
+    data: {
+      userId: input.userId,
+      purpose: "JOB_ALERT",
+      channel: "EMAIL",
+      enabled: input.enabled,
+      version,
+      actorUserId: input.actorUserId,
+      reasonCode: input.reasonCode,
+      createdAt: input.now,
+    },
+  });
+}
+
+async function ensureJobAlertNotificationPreferenceEnabled(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  now: Date,
+) {
+  const current = await transaction.notificationPreference.findUnique({
+    where: {
+      userId_purpose_channel: {
+        userId,
+        purpose: "JOB_ALERT",
+        channel: "EMAIL",
+      },
+    },
+    select: { enabled: true },
+  });
+  if (current !== null) return current.enabled;
+  const projection = await transaction.notificationPreference.upsert({
+    where: {
+      userId_purpose_channel: {
+        userId,
+        purpose: "JOB_ALERT",
+        channel: "EMAIL",
+      },
+    },
+    create: {
+      userId,
+      purpose: "JOB_ALERT",
+      channel: "EMAIL",
+      enabled: true,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    },
+    update: {},
+    select: { enabled: true, version: true },
+  });
+  if (projection.enabled && projection.version === 1) {
+    await transaction.notificationPreferenceEvent.createMany({
+      data: [
+        {
+          userId,
+          purpose: "JOB_ALERT",
+          channel: "EMAIL",
+          enabled: true,
+          version: 1,
+          actorUserId: null,
+          reasonCode: "CURRENT_CONSENT_PROJECTED",
+          createdAt: now,
+        },
+      ],
+      skipDuplicates: true,
+    });
+  }
+  return projection.enabled;
 }
 
 async function resolveStoredQuery(

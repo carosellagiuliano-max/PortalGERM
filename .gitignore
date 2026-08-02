@@ -3,6 +3,7 @@ node_modules/
 .next/
 next-env.d.ts
 out/
+dist/
 coverage/
 *.tsbuildinfo
 

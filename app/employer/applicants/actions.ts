@@ -11,12 +11,14 @@ import {
 } from "@/lib/abuse/public-report";
 import { getEmployerContext } from "@/lib/auth/employer-context";
 import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
+import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import type { EmployerActionState } from "@/lib/employer/action-state";
 import { addEmployerApplicationNote, draftEmployerApplicationText, resolveEmployerApplicantReportTarget, sendEmployerApplicationMessage, transitionEmployerApplication } from "@/lib/employer/applications";
 import { aiProvider } from "@/lib/providers/ai";
 import { emailProvider } from "@/lib/providers/email";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 export async function transitionApplicationAction(_state: EmployerActionState, formData: FormData): Promise<EmployerActionState> {
   const deps = await dependencies();
@@ -39,7 +41,48 @@ export async function addEmployerNoteAction(_state: EmployerActionState, formDat
 export async function sendEmployerMessageAction(_state: EmployerActionState, formData: FormData): Promise<EmployerActionState> {
   const deps = await dependencies();
   if (deps === null) return fail();
-  const result = await sendEmployerApplicationMessage(deps.access, { applicationId: formData.get("applicationId"), body: formData.get("body"), idempotencyKey: formData.get("idempotencyKey") }, deps);
+  const applicationId = z.uuid().safeParse(formData.get("applicationId"));
+  if (!applicationId.success) return fail();
+  const target = await resolveEmployerApplicantReportTarget(
+    applicationId.data,
+    deps.access,
+    deps.database,
+  );
+  if (target === null) return fail();
+  const now = new Date();
+  const rate = await consumeRequestRateLimit(
+    "EMPLOYER_MESSAGE_SEND",
+    {
+      actorId: deps.currentUser.id,
+      userId: deps.currentUser.id,
+      companyId: deps.access.companyId,
+      targetId: applicationId.data,
+    },
+    deps.request,
+    now,
+    { environment: deps.environment, database: deps.database },
+  );
+  if (!rate.allowed) {
+    await recordRateLimitDenial(
+      rate.audit,
+      {
+        actorKind: "USER",
+        actorUserId: deps.currentUser.id,
+        capability: "COMPANY_APPLICATION_MESSAGE",
+        companyId: deps.access.companyId,
+        targetId: applicationId.data,
+        targetType: "APPLICATION",
+      },
+      {
+        database: deps.database,
+        environment: deps.environment,
+        request: deps.request,
+        now,
+      },
+    );
+    return fail("Zu viele Nachrichten in kurzer Zeit. Bitte versuche es später erneut.");
+  }
+  const result = await sendEmployerApplicationMessage(deps.access, { applicationId: applicationId.data, body: formData.get("body"), idempotencyKey: formData.get("idempotencyKey") }, { ...deps, now });
   if (!result.ok) return fail();
   revalidatePath(`/employer/applicants/${String(formData.get("applicationId") ?? "")}`);
   return success(result.duplicate ? "Nachricht war bereits sicher gesendet." : "Nachricht gesendet.");

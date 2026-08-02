@@ -13,7 +13,8 @@ import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { emailProvider } from "@/lib/providers/email";
+import { enqueueNotification } from "@/lib/notifications/outbox";
+import { notificationRecipientMaterialExpiresAt } from "@/lib/notifications/retention";
 import {
   SALES_LEAD_INTAKE_POLICY_V1,
   SALES_LEAD_NOTICE_HASH_V1,
@@ -62,102 +63,63 @@ export async function submitPublicEmployerLead(
 
   let result: LeadTransactionResult;
   try {
-    result = await dependencies.database.$transaction(async (transaction) => {
-      await acquireLeadLocks(transaction, input.idempotencyKey, input.email, purpose);
+    result = await dependencies.database.$transaction(
+      async (transaction) => {
+        await acquireLeadLocks(
+          transaction,
+          input.idempotencyKey,
+          input.email,
+          purpose,
+        );
 
-      const priorActivity = await transaction.salesActivity.findUnique({
-        where: { idempotencyKey: input.idempotencyKey },
-        select: {
-          id: true,
-          payloadHash: true,
-          createdAt: true,
-          salesLead: {
-            select: {
-              id: true,
-              purpose: true,
+        const priorActivity = await transaction.salesActivity.findUnique({
+          where: { idempotencyKey: input.idempotencyKey },
+          select: {
+            id: true,
+            payloadHash: true,
+            createdAt: true,
+            salesLead: {
+              select: {
+                id: true,
+                purpose: true,
+              },
             },
           },
-        },
-      });
-      if (priorActivity !== null) {
-        if (priorActivity.payloadHash !== payloadHash) {
-          throw new LeadIdempotencyConflict();
-        }
-        return Object.freeze({
-          leadId: priorActivity.salesLead.id,
-          activityId: priorActivity.id,
-          purpose: asLeadPurpose(priorActivity.salesLead.purpose),
-          occurredAt: priorActivity.createdAt,
-          duplicate: true,
         });
-      }
+        if (priorActivity !== null) {
+          if (priorActivity.payloadHash !== payloadHash) {
+            throw new LeadIdempotencyConflict();
+          }
+          return Object.freeze({
+            leadId: priorActivity.salesLead.id,
+            activityId: priorActivity.id,
+            purpose: asLeadPurpose(priorActivity.salesLead.purpose),
+            occurredAt: priorActivity.createdAt,
+            duplicate: true,
+          });
+        }
 
-      const planVersionId = await resolveInterestedPlanVersionId(
-        transaction,
-        input.interestCode,
-        dependencies.now,
-      );
-      const existing = await transaction.salesLead.findUnique({
-        where: {
-          emailNormalized_purpose: {
-            emailNormalized: input.email,
-            purpose,
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
-      const organizationNormalized = normalizeOrganizationName(input.companyName);
-      const commonData = {
-        organizationNormalized,
-        organizationName: input.companyName,
-        contactName: input.contactName,
-        phoneNormalized: input.phone ?? null,
-        companySizeCode: input.companySizeCode,
-        hiringNeedCode: input.hiringNeedCode,
-        interestCode: input.interestCode,
-        callbackWindowCode: input.callbackWindowCode ?? null,
-        consentSource: SALES_LEAD_INTAKE_POLICY_V1.consentSource,
-        message: input.message,
-        noticeVersion: SALES_LEAD_INTAKE_POLICY_V1.notice.version,
-        noticeHash: SALES_LEAD_NOTICE_HASH_V1,
-        slaPolicyVersion: SALES_LEAD_INTAKE_POLICY_V1.sla.version,
-        interestedPlanVersionId: planVersionId,
-      } as const;
-
-      const lead = existing === null
-        ? await transaction.salesLead.create({
-            data: {
+        const planVersionId = await resolveInterestedPlanVersionId(
+          transaction,
+          input.interestCode,
+          dependencies.now,
+        );
+        const existing = await transaction.salesLead.findUnique({
+          where: {
+            emailNormalized_purpose: {
               emailNormalized: input.email,
               purpose,
-              ...commonData,
-              dueAt,
-              nextAt: dueAt,
-              retainUntil,
-              status: "NEW",
             },
-            select: { id: true },
-          })
-        : existing;
-
-      const activity = await transaction.salesActivity.create({
-        data: {
-          salesLeadId: lead.id,
-          kind: "INTAKE_RECEIVED",
-          outcomeCode: "PUBLIC_INTAKE",
-          idempotencyKey: input.idempotencyKey,
-          payloadHash,
-          correlationId: dependencies.request.correlationId,
-          createdAt: dependencies.now,
-        },
-        select: { id: true, createdAt: true },
-      });
-
-      const intake = await transaction.salesLeadIntake.create({
-        data: {
-          salesLeadId: lead.id,
-          salesActivityId: activity.id,
+          },
+          select: {
+            id: true,
+          },
+        });
+        const organizationNormalized = normalizeOrganizationName(
+          input.companyName,
+        );
+        const commonData = {
+          organizationNormalized,
           organizationName: input.companyName,
           contactName: input.contactName,
           phoneNormalized: input.phone ?? null,
@@ -165,78 +127,148 @@ export async function submitPublicEmployerLead(
           hiringNeedCode: input.hiringNeedCode,
           interestCode: input.interestCode,
           callbackWindowCode: input.callbackWindowCode ?? null,
+          consentSource: SALES_LEAD_INTAKE_POLICY_V1.consentSource,
           message: input.message,
           noticeVersion: SALES_LEAD_INTAKE_POLICY_V1.notice.version,
           noticeHash: SALES_LEAD_NOTICE_HASH_V1,
           slaPolicyVersion: SALES_LEAD_INTAKE_POLICY_V1.sla.version,
-          dueAt,
-          retainUntil,
           interestedPlanVersionId: planVersionId,
-          createdAt: dependencies.now,
-        },
-        select: { id: true },
-      });
+        } as const;
 
-      await transaction.systemTask.create({
-        data: {
-          kind: "SALES_FOLLOW_UP",
-          reasonCode: "PUBLIC_EMPLOYER_LEAD_INTAKE",
-          evidenceReference: `sales-lead-intake:${intake.id}`,
-          dueAt,
-          status: "OPEN",
-          idempotencyKey:
-            `SALES_FOLLOW_UP:${intake.id}:${SALES_LEAD_INTAKE_POLICY_V1.sla.version}`,
-        },
-      });
+        const lead =
+          existing === null
+            ? await transaction.salesLead.create({
+                data: {
+                  emailNormalized: input.email,
+                  purpose,
+                  ...commonData,
+                  dueAt,
+                  nextAt: dueAt,
+                  retainUntil,
+                  status: "NEW",
+                },
+                select: { id: true },
+              })
+            : existing;
 
-      await writeRequiredAudit(
-        createPrismaTransactionAuditPort(transaction),
-        {
-          action: "LEAD_SUBMITTED",
-          actorKind: "ANONYMOUS",
-          capability: "PUBLIC_EMPLOYER_DEMO_SUBMIT",
-          correlationId: dependencies.request.correlationId,
-          reasonCode: "PUBLIC_INTAKE",
-          result: "SUCCEEDED",
-          retainUntil,
-          targetId: lead.id,
-          targetType: "SALES_LEAD",
-        },
-        {
-          sourceIp: dependencies.request.sourceIp,
-          keyring: dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
-        },
-      );
+        const activity = await transaction.salesActivity.create({
+          data: {
+            salesLeadId: lead.id,
+            kind: "INTAKE_RECEIVED",
+            outcomeCode: "PUBLIC_INTAKE",
+            idempotencyKey: input.idempotencyKey,
+            payloadHash,
+            correlationId: dependencies.request.correlationId,
+            createdAt: dependencies.now,
+          },
+          select: { id: true, createdAt: true },
+        });
 
-      await trackAnalyticsEventV1(
-        {
-          schemaVersion: "1",
-          producerEventId: `LEAD_SUBMITTED:${activity.id}`,
-          occurredAt: activity.createdAt,
-          kind: "LEAD_SUBMITTED",
-          pseudonymousSessionId: salesLeadAnalyticsKeyV1(lead.id),
-          properties: { leadPurpose: purpose },
-        },
-        {
-          producer: "employer-demo",
-          productAnalyticsEnabled: false,
-          provenance: {
-            actor: getAnonymousOperationalRuntimeProvenanceV1(
-              dependencies.environment.APP_ENV,
+        const intake = await transaction.salesLeadIntake.create({
+          data: {
+            salesLeadId: lead.id,
+            salesActivityId: activity.id,
+            organizationName: input.companyName,
+            contactName: input.contactName,
+            phoneNormalized: input.phone ?? null,
+            companySizeCode: input.companySizeCode,
+            hiringNeedCode: input.hiringNeedCode,
+            interestCode: input.interestCode,
+            callbackWindowCode: input.callbackWindowCode ?? null,
+            message: input.message,
+            noticeVersion: SALES_LEAD_INTAKE_POLICY_V1.notice.version,
+            noticeHash: SALES_LEAD_NOTICE_HASH_V1,
+            slaPolicyVersion: SALES_LEAD_INTAKE_POLICY_V1.sla.version,
+            dueAt,
+            retainUntil,
+            interestedPlanVersionId: planVersionId,
+            createdAt: dependencies.now,
+          },
+          select: { id: true },
+        });
+
+        await transaction.systemTask.create({
+          data: {
+            kind: "SALES_FOLLOW_UP",
+            reasonCode: "PUBLIC_EMPLOYER_LEAD_INTAKE",
+            evidenceReference: `sales-lead-intake:${intake.id}`,
+            dueAt,
+            status: "OPEN",
+            idempotencyKey: `SALES_FOLLOW_UP:${intake.id}:${SALES_LEAD_INTAKE_POLICY_V1.sla.version}`,
+          },
+        });
+
+        await writeRequiredAudit(
+          createPrismaTransactionAuditPort(transaction),
+          {
+            action: "LEAD_SUBMITTED",
+            actorKind: "ANONYMOUS",
+            capability: "PUBLIC_EMPLOYER_DEMO_SUBMIT",
+            correlationId: dependencies.request.correlationId,
+            reasonCode: "PUBLIC_INTAKE",
+            result: "SUCCEEDED",
+            retainUntil,
+            targetId: lead.id,
+            targetType: "SALES_LEAD",
+          },
+          {
+            sourceIp: dependencies.request.sourceIp,
+            keyring:
+              dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
+          },
+        );
+
+        await trackAnalyticsEventV1(
+          {
+            schemaVersion: "1",
+            producerEventId: `LEAD_SUBMITTED:${activity.id}`,
+            occurredAt: activity.createdAt,
+            kind: "LEAD_SUBMITTED",
+            pseudonymousSessionId: salesLeadAnalyticsKeyV1(lead.id),
+            properties: { leadPurpose: purpose },
+          },
+          {
+            producer: "employer-demo",
+            productAnalyticsEnabled: false,
+            provenance: {
+              actor: getAnonymousOperationalRuntimeProvenanceV1(
+                dependencies.environment.APP_ENV,
+              ),
+            },
+          },
+          createTransactionAnalyticsWriter(transaction),
+        );
+
+        await enqueueNotification(transaction, {
+          recipient: {
+            address: SALES_LEAD_INTAKE_POLICY_V1.notificationRecipient,
+            keyring:
+              dependencies.environment.secrets.keyrings
+                .NOTIFICATION_DELIVERY_KEYS,
+            hashKeyring:
+              dependencies.environment.secrets.keyrings
+                .NOTIFICATION_RECIPIENT_HASH_KEYS,
+            retentionUntil: notificationRecipientMaterialExpiresAt(
+              activity.createdAt,
             ),
           },
-        },
-        createTransactionAnalyticsWriter(transaction),
-      );
+          templateKey: "demo_request_received",
+          payloadSchemaVersion: "sales-lead-v1",
+          payload: { salesActivityId: activity.id },
+          dedupeKey: `sales-lead:${activity.id}`,
+          availableAt: activity.createdAt,
+        });
 
-      return Object.freeze({
-        leadId: lead.id,
-        activityId: activity.id,
-        purpose,
-        occurredAt: activity.createdAt,
-        duplicate: false,
-      });
-    }, { isolationLevel: "ReadCommitted" });
+        return Object.freeze({
+          leadId: lead.id,
+          activityId: activity.id,
+          purpose,
+          occurredAt: activity.createdAt,
+          duplicate: false,
+        });
+      },
+      { isolationLevel: "ReadCommitted" },
+    );
   } catch (error) {
     if (error instanceof LeadIdempotencyConflict) {
       return Object.freeze({ ok: false, code: "IDEMPOTENCY_CONFLICT" });
@@ -253,27 +285,6 @@ export async function submitPublicEmployerLead(
       ok: false,
       code: "WRITE_FAILED",
     });
-  }
-
-  try {
-    await emailProvider.send({
-      to: SALES_LEAD_INTAKE_POLICY_V1.notificationRecipient,
-      templateKey: "demo_request_received",
-      subject: "Neue Demo-Anfrage eingegangen",
-      data: {
-        idempotencyKey: result.activityId,
-      },
-    });
-  } catch (error) {
-    logger.error(
-      "public_lead.notification_failed",
-      {
-        error,
-        errorCode: databaseErrorCode(error),
-      },
-      dependencies.request.correlationId,
-    );
-    return Object.freeze({ ok: false, code: "NOTIFICATION_FAILED" });
   }
 
   return Object.freeze({
@@ -321,7 +332,7 @@ async function resolveInterestedPlanVersionId(
     select: { id: true },
     take: 2,
   });
-  return rows.length === 1 ? rows[0]?.id ?? null : null;
+  return rows.length === 1 ? (rows[0]?.id ?? null) : null;
 }
 
 async function acquireLeadLocks(
@@ -333,7 +344,9 @@ async function acquireLeadLocks(
   const keys = [
     `lead-intake:${idempotencyKey}`,
     `lead-identity:${email}\0${purpose}`,
-  ].map((value) => createHash("sha256").update(value, "utf8").digest("hex")).sort();
+  ]
+    .map((value) => createHash("sha256").update(value, "utf8").digest("hex"))
+    .sort();
   for (const key of keys) {
     await transaction.$queryRawUnsafe(
       'SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS "locked"',
@@ -342,7 +355,10 @@ async function acquireLeadLocks(
   }
 }
 
-function updateLengthPrefixed(hash: ReturnType<typeof createHash>, value: string) {
+function updateLengthPrefixed(
+  hash: ReturnType<typeof createHash>,
+  value: string,
+) {
   const bytes = Buffer.from(value, "utf8");
   const length = Buffer.allocUnsafe(4);
   length.writeUInt32BE(bytes.length);
@@ -351,7 +367,11 @@ function updateLengthPrefixed(hash: ReturnType<typeof createHash>, value: string
 }
 
 function normalizeOrganizationName(value: string) {
-  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("de-CH");
+  return value
+    .normalize("NFKC")
+    .trim()
+    .replace(/\s+/gu, " ")
+    .toLocaleLowerCase("de-CH");
 }
 
 function asLeadPurpose(value: string): LeadTransactionResult["purpose"] {
@@ -360,7 +380,8 @@ function asLeadPurpose(value: string): LeadTransactionResult["purpose"] {
     value === "SALES_CONTACT" ||
     value === "ENTERPRISE" ||
     value === "IMPORT"
-  ) return value;
+  )
+    return value;
   return "EMPLOYER_DEMO";
 }
 

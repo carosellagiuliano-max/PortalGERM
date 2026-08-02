@@ -44,6 +44,7 @@ const PERSISTED_TEMPLATE_DATA_KEYS = {
   identity_revealed: ["companyName"],
   identity_verification: [],
   invoice_issued: ["invoiceNumber"],
+  job_alert_digest: ["alertName", "jobCount"],
   job_alert_digest_mock: ["alertName", "jobCount"],
   job_alert_preview: ["alertName", "jobCount"],
   job_approved: ["jobTitle"],
@@ -174,10 +175,10 @@ export class MockEmailProvider implements EmailProvider {
     const messageFingerprint = buildMessageFingerprint(
       to,
       templateKey,
-      templateKey === "job_alert_digest_mock"
+      isJobAlertDigestTemplate(templateKey)
         ? persisted.subject
         : outbound.subject,
-      templateKey === "job_alert_digest_mock" ? persisted.body : outbound.body,
+      isJobAlertDigestTemplate(templateKey) ? persisted.body : outbound.body,
     );
     const mailboxEnvelope =
       action === undefined || this.#mailbox === undefined
@@ -224,6 +225,7 @@ type SensitiveAction = Readonly<{
   templateKey:
     | "password_reset_mock"
     | "company_invitation"
+    | "job_alert_digest"
     | "job_alert_digest_mock"
     | "identity_verification"
     | "login_email_change_verification";
@@ -247,8 +249,8 @@ function getSensitiveAction(
   if (templateKey === "company_invitation") {
     return parseSensitiveAction(templateKey, data, "invitationUrl", false);
   }
-  if (templateKey === "job_alert_digest_mock") {
-    return parseJobAlertUnsubscribeAction(data);
+  if (isJobAlertDigestTemplate(templateKey)) {
+    return parseJobAlertUnsubscribeAction(templateKey, data);
   }
   return undefined;
 }
@@ -306,6 +308,7 @@ function parseSensitiveAction(
 }
 
 function parseJobAlertUnsubscribeAction(
+  templateKey: "job_alert_digest" | "job_alert_digest_mock",
   data: Readonly<Record<string, unknown>>,
 ): SensitiveAction {
   const value = actionUrl(data, "unsubscribeUrl");
@@ -330,7 +333,7 @@ function parseJobAlertUnsubscribeAction(
     throw new MockEmailInputError(["data.unsubscribeUrl:invalid"]);
   }
   return Object.freeze({
-    templateKey: "job_alert_digest_mock",
+    templateKey,
     url: value,
     taints: uniqueSensitiveValues([
       value,
@@ -338,6 +341,15 @@ function parseJobAlertUnsubscribeAction(
       encodeURIComponent(rawToken),
     ]),
   });
+}
+
+function isJobAlertDigestTemplate(
+  templateKey: EmailTemplateKey,
+): templateKey is "job_alert_digest" | "job_alert_digest_mock" {
+  return (
+    templateKey === "job_alert_digest" ||
+    templateKey === "job_alert_digest_mock"
+  );
 }
 
 function resolveOperationParts(

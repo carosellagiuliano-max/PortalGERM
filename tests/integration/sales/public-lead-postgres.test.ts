@@ -12,17 +12,12 @@ import {
 
 vi.mock("server-only", () => ({}));
 
-const emailMocks = vi.hoisted(() => ({ send: vi.fn() }));
-vi.mock("@/lib/providers/email", () => ({
-  emailProvider: Object.freeze({ send: emailMocks.send }),
-}));
-
 import type { AuthRequestContext } from "@/lib/auth/request-context";
-import { parseEnvironment, type ServerEnvironment } from "@/lib/config/env-schema";
+import {
+  parseEnvironment,
+  type ServerEnvironment,
+} from "@/lib/config/env-schema";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
-import type { EmailProvider } from "@/lib/providers/email/email-provider";
-import { MockEmailProvider } from "@/lib/providers/email/mock-email-provider";
-import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
 import {
   SALES_LEAD_INTAKE_POLICY_V1,
   SALES_LEAD_NOTICE_HASH_V1,
@@ -97,7 +92,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  emailMocks.send.mockReset();
   await database?.$disconnect().catch(() => undefined);
   database = undefined;
   environment = undefined;
@@ -115,6 +109,7 @@ beforeEach(async () => {
   // gives every case exact, independent cardinality assertions.
   await migrated.pool.query(`
     TRUNCATE TABLE
+      "NotificationOutbox",
       "SalesLeadIntake",
       "AnalyticsEvent",
       "EmailLog",
@@ -125,22 +120,55 @@ beforeEach(async () => {
     CASCADE
   `);
 
-  const provider = new MockEmailProvider(
-    new PrismaEmailLogRepository(client()),
-  );
-  emailMocks.send.mockReset();
-  emailMocks.send.mockImplementation(
-    (input: Parameters<EmailProvider["send"]>[0]) => provider.send(input),
-  );
 });
 
 describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
+  it("commits one durable notification with the Lead and never calls the legacy provider", async () => {
+    const input = leadInput("phase33-durable-lead-notification-0001");
+    const result = await submitPublicEmployerLead(input, {
+      database: client(),
+      environment: Object.freeze({
+        ...runtimeEnvironment(),
+        NOTIFICATION_OUTBOX_PRODUCERS: true,
+        NOTIFICATION_DISPATCH: "command" as const,
+      }),
+      request: requestContext(correlationId(330)),
+      now: NOW,
+    });
+
+    expect(result).toMatchObject({ ok: true, duplicate: false });
+    await expect(
+      client().notificationOutbox.findMany({
+        select: {
+          purpose: true,
+          status: true,
+          templateKey: true,
+          payloadSchemaVersion: true,
+          payload: true,
+          recipientUserId: true,
+        },
+      }),
+    ).resolves.toEqual([
+      {
+        purpose: "USAGE_OPERATIONAL",
+        status: "PENDING",
+        templateKey: "demo_request_received",
+        payloadSchemaVersion: "sales-lead-v1",
+        payload: {
+          salesActivityId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
+        },
+        recipientUserId: null,
+      },
+    ]);
+  });
+
   it("persists one complete, privacy-bounded intake and every required operational effect", async () => {
     const input = leadInput("phase08-normal-intake-0001");
     const result = await submit(input, requestContext(correlationId(1)));
 
     expect(result).toMatchObject({ ok: true, duplicate: false });
-    if (!result.ok) throw new Error("Expected a successful public Lead intake.");
+    if (!result.ok)
+      throw new Error("Expected a successful public Lead intake.");
 
     const [lead, intake] = await Promise.all([
       client().salesLead.findUnique({
@@ -216,7 +244,7 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
       client().auditLog.findFirst({
         where: { action: "LEAD_SUBMITTED", targetId: result.leadId },
       }),
-      client().emailLog.findFirst({
+      client().notificationOutbox.findFirst({
         where: { templateKey: "demo_request_received" },
       }),
       client().analyticsEvent.findFirst({
@@ -233,8 +261,7 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
       evidenceReference: `sales-lead-intake:${intake.id}`,
       dueAt: salesLeadDueAtV1(NOW),
       status: "OPEN",
-      idempotencyKey:
-        `SALES_FOLLOW_UP:${intake.id}:${SALES_LEAD_INTAKE_POLICY_V1.sla.version}`,
+      idempotencyKey: `SALES_FOLLOW_UP:${intake.id}:${SALES_LEAD_INTAKE_POLICY_V1.sla.version}`,
     });
     expect(audit).toMatchObject({
       actorUserId: null,
@@ -254,17 +281,12 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
     expect(audit?.ipHash).toMatch(/^v1:[a-f0-9]{64}$/u);
     expect(audit?.ipHash).not.toContain(SOURCE_IP);
     expect(email).toMatchObject({
-      recipient: SALES_LEAD_INTAKE_POLICY_V1.notificationRecipient,
-      purpose: "demo_request_received",
+      purpose: "USAGE_OPERATIONAL",
       templateKey: "demo_request_received",
-      status: "MOCK_RECORDED",
-      errorCode: null,
+      status: "PENDING",
     });
     expect(email?.payload).toMatchObject({
-      schemaVersion: "1",
-      deliveryStatus: "mock_recorded",
-      externalDeliveryClaimed: false,
-      subject: "Neue Demo-Anfrage eingegangen",
+      salesActivityId: result.activityId,
     });
     expect(analytics).toMatchObject({
       kind: "LEAD_SUBMITTED",
@@ -317,7 +339,8 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
 
     expect(first).toMatchObject({ ok: true, duplicate: false });
     expect(retry).toMatchObject({ ok: true, duplicate: true });
-    if (!first.ok || !retry.ok) throw new Error("Expected idempotent Lead results.");
+    if (!first.ok || !retry.ok)
+      throw new Error("Expected idempotent Lead results.");
     expect(retry.leadId).toBe(first.leadId);
     expect(retry.activityId).toBe(first.activityId);
     await expectExactCounts({
@@ -344,7 +367,9 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
       (result): result is Extract<typeof result, { ok: true }> => result.ok,
     );
     expect(new Set(successful.map(({ leadId }) => leadId))).toHaveLength(1);
-    expect(new Set(successful.map(({ activityId }) => activityId))).toHaveLength(1);
+    expect(
+      new Set(successful.map(({ activityId }) => activityId)),
+    ).toHaveLength(1);
     expect(successful.filter(({ duplicate }) => !duplicate)).toHaveLength(1);
     expect(successful.filter(({ duplicate }) => duplicate)).toHaveLength(7);
     await expectExactCounts({
@@ -471,12 +496,14 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
       second.activityId,
     ]);
     expect(tasks).toHaveLength(2);
-    expect(tasks.map(({ evidenceReference }) => evidenceReference).sort()).toEqual(
-      intakes.map(({ id }) => `sales-lead-intake:${id}`).sort(),
-    );
-    expect(tasks.every(({ reasonCode }) =>
-      reasonCode === "PUBLIC_EMPLOYER_LEAD_INTAKE"
-    )).toBe(true);
+    expect(
+      tasks.map(({ evidenceReference }) => evidenceReference).sort(),
+    ).toEqual(intakes.map(({ id }) => `sales-lead-intake:${id}`).sort());
+    expect(
+      tasks.every(
+        ({ reasonCode }) => reasonCode === "PUBLIC_EMPLOYER_LEAD_INTAKE",
+      ),
+    ).toBe(true);
     expect(tasks.map(({ dueAt }) => dueAt)).toEqual([
       salesLeadDueAtV1(NOW),
       salesLeadDueAtV1(followUpAt),
@@ -493,21 +520,11 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
       NOW,
       followUpAt,
     ]);
-    expect(new Set(analytics.map(({ pseudonymousSessionId }) =>
-      pseudonymousSessionId
-    ))).toEqual(new Set([salesLeadAnalyticsKeyV1(first.leadId)]));
-    expect(emailMocks.send).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ data: { idempotencyKey: first.activityId } }),
-    );
-    expect(emailMocks.send).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ data: { idempotencyKey: second.activityId } }),
-    );
-    expect(emailMocks.send).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({ data: { idempotencyKey: first.activityId } }),
-    );
+    expect(
+      new Set(
+        analytics.map(({ pseudonymousSessionId }) => pseudonymousSessionId),
+      ),
+    ).toEqual(new Set([salesLeadAnalyticsKeyV1(first.leadId)]));
     await expectExactCounts({
       leads: 1,
       intakes: 2,
@@ -558,22 +575,19 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
     });
   });
 
-  it("commits intake effects on transient mail failure and heals one mail on retry", async () => {
+  it("commits one durable mail intent and keeps it idempotent on retry", async () => {
     const input = leadInput("phase08-mail-recovery-0001");
-    emailMocks.send.mockRejectedValueOnce(
-      new Error("Transient mock mail failure"),
-    );
 
     const first = await submit(input, requestContext(correlationId(36)));
 
-    expect(first).toEqual({ ok: false, code: "NOTIFICATION_FAILED" });
+    expect(first).toMatchObject({ ok: true, duplicate: false });
     await expectExactCounts({
       leads: 1,
       intakes: 1,
       activities: 1,
       tasks: 1,
       audits: 1,
-      emails: 0,
+      emails: 1,
       analytics: 1,
     });
     const [lead, activity] = await Promise.all([
@@ -589,10 +603,6 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
       leadId: lead.id,
       activityId: activity.id,
     });
-    expect(emailMocks.send).toHaveBeenCalledTimes(2);
-    expect(emailMocks.send).toHaveBeenLastCalledWith(
-      expect.objectContaining({ data: { idempotencyKey: activity.id } }),
-    );
     await expectExactCounts({
       leads: 1,
       intakes: 1,
@@ -679,22 +689,36 @@ function correlationId(index: number) {
   return `08200000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 }
 
-async function expectExactCounts(expected: Readonly<{
-  leads: number;
-  intakes: number;
-  activities: number;
-  tasks: number;
-  audits: number;
-  emails: number;
-  analytics: number;
-}>) {
+async function expectExactCounts(
+  expected: Readonly<{
+    leads: number;
+    intakes: number;
+    activities: number;
+    tasks: number;
+    audits: number;
+    emails: number;
+    analytics: number;
+  }>,
+) {
   await expect(client().salesLead.count()).resolves.toBe(expected.leads);
-  await expect(client().salesLeadIntake.count()).resolves.toBe(expected.intakes);
-  await expect(client().salesActivity.count()).resolves.toBe(expected.activities);
+  await expect(client().salesLeadIntake.count()).resolves.toBe(
+    expected.intakes,
+  );
+  await expect(client().salesActivity.count()).resolves.toBe(
+    expected.activities,
+  );
   await expect(client().systemTask.count()).resolves.toBe(expected.tasks);
-  await expect(client().auditLog.count({ where: { action: "LEAD_SUBMITTED" } })).resolves.toBe(expected.audits);
-  await expect(client().emailLog.count({ where: { templateKey: "demo_request_received" } })).resolves.toBe(expected.emails);
-  await expect(client().analyticsEvent.count({ where: { kind: "LEAD_SUBMITTED" } })).resolves.toBe(expected.analytics);
+  await expect(
+    client().auditLog.count({ where: { action: "LEAD_SUBMITTED" } }),
+  ).resolves.toBe(expected.audits);
+  await expect(
+    client().notificationOutbox.count({
+      where: { templateKey: "demo_request_received" },
+    }),
+  ).resolves.toBe(expected.emails);
+  await expect(
+    client().analyticsEvent.count({ where: { kind: "LEAD_SUBMITTED" } }),
+  ).resolves.toBe(expected.analytics);
 }
 
 function buildEnvironment(connectionString: string): ServerEnvironment {
@@ -710,6 +734,7 @@ function buildEnvironment(connectionString: string): ServerEnvironment {
     RADAR_OPAQUE_ENCRYPTION_KEYS: `v1:${secret(24)}`,
     REVEAL_CONFIRMATION_KEYS: `v1:${secret(25)}`,
     PII_REVEAL_KEYS: `v1:${secret(26)}`,
+    NOTIFICATION_DELIVERY_KEYS: `notification-v1:${secret(27)}`,
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",

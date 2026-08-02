@@ -4,10 +4,16 @@ import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { ingestVerifiedPaymentEvent } from "@/lib/billing/payment-inbox";
 import { resolvePersistedProviderActivation } from "@/lib/ops/operations-ledger";
-import { createHostedPaymentProvider } from "@/lib/providers/payments/payment-composition";
+import {
+  createHostedPaymentProvider,
+  getHostedPaymentRuntime,
+  getStripeContractEndpoint,
+} from "@/lib/providers/payments/payment-composition";
 import {
   STRIPE_PAYMENT_ADAPTER_V1,
   StripePaymentProviderError,
+  readBoundedStripeWebhookBody,
+  stripePaymentConfigurationDigest,
 } from "@/lib/providers/payments";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +27,16 @@ export async function POST(
 ) {
   const { provider } = await context.params;
   const environment = getServerEnvironment();
+  const paymentRuntime = getHostedPaymentRuntime(environment);
+  const contractEndpoint = getStripeContractEndpoint(environment);
   if (
     provider !== "stripe" ||
     !environment.REAL_PAYMENT_INGESTION ||
-    environment.PAYMENT_PROVIDER_MODE !== "stripe_sandbox"
+    paymentRuntime === null ||
+    environment.STRIPE_ACCOUNT_ID === undefined ||
+    environment.STRIPE_SECRET_VERSION === undefined ||
+    (paymentRuntime.adapterKey === "stripe_contract" &&
+      contractEndpoint === undefined)
   ) {
     return json(
       { accepted: false, code: "PAYMENT_INGESTION_DISABLED" },
@@ -42,42 +54,71 @@ export async function POST(
       declaredLength >
         STRIPE_PAYMENT_ADAPTER_V1.maximumRawBodyBytes)
   ) {
-    return json({ accepted: false, code: "INVALID_SIGNATURE" }, 400);
-  }
-  const now = new Date();
-  const database = getDatabase();
-  const activation = await resolvePersistedProviderActivation(database, {
-    adapterKey: "stripe_sandbox",
-    adapterVersion: "v1",
-    environment: environment.APP_ENV,
-    now,
-    useCase: "payments.hosted-checkout",
-  });
-  if (!activation.active || activation.mode !== "SANDBOX") {
     return json(
-      { accepted: false, code: "PAYMENT_PROVIDER_INACTIVE" },
-      503,
+      {
+        accepted: false,
+        code:
+          declaredLength > STRIPE_PAYMENT_ADAPTER_V1.maximumRawBodyBytes
+            ? "BODY_TOO_LARGE"
+            : "INVALID_SIGNATURE",
+      },
+      declaredLength > STRIPE_PAYMENT_ADAPTER_V1.maximumRawBodyBytes
+        ? 413
+        : 400,
     );
   }
   try {
-    // Request.text() is deliberately called exactly once. Signature
-    // verification operates on this unparsed raw body.
-    const rawBody = await request.text();
+    // Internet-controlled bytes are bounded and authenticated before the
+    // route is allowed to acquire a database client or query the activation
+    // ledger. This keeps invalid webhook traffic out of the DB pool.
+    const rawBody = await readBoundedStripeWebhookBody(request);
     const hostedProvider =
       createHostedPaymentProvider(environment);
+    if (
+      hostedProvider.adapterKey !== paymentRuntime.adapterKey ||
+      hostedProvider.providerMode !== paymentRuntime.providerMode ||
+      hostedProvider.expectedLiveMode !== paymentRuntime.expectedLiveMode
+    ) {
+      throw new StripePaymentProviderError(
+        "INVALID_CONFIGURATION",
+        "Payment provider composition does not match its activation binding.",
+      );
+    }
     const event = hostedProvider.verifyWebhook({
       rawBody,
       signatureHeader: signature,
     });
+    const now = new Date();
+    const database = getDatabase();
+    const activation = await resolvePersistedProviderActivation(database, {
+      adapterKey: paymentRuntime.adapterKey,
+      adapterVersion: paymentRuntime.adapterVersion,
+      environment: environment.APP_ENV,
+      expectedConfigurationDigest: stripePaymentConfigurationDigest({
+        ...(paymentRuntime.adapterKey === "stripe_contract"
+          ? { contractEndpoint }
+          : {}),
+        providerAccountReference: environment.STRIPE_ACCOUNT_ID,
+        runtime: paymentRuntime,
+      }),
+      expectedMode: paymentRuntime.activationMode,
+      expectedSecretVersionRef: environment.STRIPE_SECRET_VERSION,
+      now,
+      useCase: "payments.hosted-checkout",
+    });
+    const outboundActivationActive =
+      activation.active && activation.mode === paymentRuntime.activationMode;
     const ingested = await ingestVerifiedPaymentEvent(
       {
+        adapterKey: paymentRuntime.adapterKey,
+        adapterVersion: paymentRuntime.adapterVersion,
         correlationId: randomUUID(),
-        environment: environment.APP_ENV as
-          | "local"
-          | "ci"
-          | "staging",
+        environment: environment.APP_ENV,
         event,
+        expectedLiveMode: paymentRuntime.expectedLiveMode,
+        outboundActivationActive,
         projectionEnabled: environment.REAL_PAYMENT_PROJECTION,
+        providerMode: paymentRuntime.providerMode,
         rawBody,
         receivedAt: now,
         signatureHeader: signature,
@@ -95,7 +136,10 @@ export async function POST(
     );
   } catch (error) {
     if (error instanceof StripePaymentProviderError) {
-      return json({ accepted: false, code: error.code }, 400);
+      return json(
+        { accepted: false, code: error.code },
+        error.code === "BODY_TOO_LARGE" ? 413 : 400,
+      );
     }
     return json(
       { accepted: false, code: "PAYMENT_INGESTION_UNAVAILABLE" },

@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { JOB_ALERT_DELIVERY_NOTICE_V2 } from "@/lib/candidate/job-alert-policy";
 import type { CandidateJobAlertListItem } from "@/lib/candidate/job-alerts";
 
 type References = Readonly<{
@@ -32,9 +33,10 @@ export function AlertForm({
   deliveryConsentGranted: boolean;
   references: References;
 }>) {
-  const serverAction = alert === undefined
-    ? createJobAlertAction
-    : updateJobAlertAction.bind(null, alert.id);
+  const serverAction =
+    alert === undefined
+      ? createJobAlertAction
+      : updateJobAlertAction.bind(null, alert.id);
   const [state, action, pending] = useActionState(
     serverAction,
     INITIAL_JOB_ALERT_ACTION_STATE,
@@ -77,7 +79,9 @@ export function AlertForm({
           >
             <option value="">Alle Kategorien</option>
             {references.categories.map((category) => (
-              <option key={category.id} value={category.id}>{category.name}</option>
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
             ))}
           </select>
         </Field>
@@ -190,14 +194,14 @@ export function AlertForm({
         </CheckboxField>
         {alert === undefined ? (
           <CheckboxField name="deliveryConsentAccepted" defaultChecked={false}>
-            Ich willige separat in die Service-Zustellung dieses Jobabos ein.
-            Dies aktiviert keine Marketing-Nachrichten.
+            {JOB_ALERT_DELIVERY_NOTICE_V2.copy}
           </CheckboxField>
         ) : null}
         {!deliveryConsentGranted ? (
           <p className="text-xs leading-5 text-amber-800">
             Die globale Service-Zustellung ist derzeit nicht freigegeben. Ein
-            bestehendes Jobabo kann erst nach separater Freigabe wieder aktiviert werden.
+            bestehendes Jobabo kann erst nach separater Freigabe wieder
+            aktiviert werden.
           </p>
         ) : null}
       </div>

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { inspectPostgresTarget } from "@/lib/db/database-target";
 import { BUILD_IDENTIFIER_PATTERN } from "@/lib/health/build-identifier";
+import { APPLICATION_SENSITIVE_ENVIRONMENT_VARIABLES } from "@/lib/security/sensitive-data-registry";
 
 const KEYRING_VARIABLES = [
   "AUDIT_IP_HASH_KEYS",
@@ -13,6 +14,7 @@ const KEYRING_VARIABLES = [
   "REVEAL_CONFIRMATION_KEYS",
   "PII_REVEAL_KEYS",
   "NOTIFICATION_DELIVERY_KEYS",
+  "NOTIFICATION_RECIPIENT_HASH_KEYS",
   "DOCUMENT_STORAGE_KEYS",
   "PRIVACY_EXPORT_KEYS",
 ] as const;
@@ -24,22 +26,12 @@ const FUTURE_PROVIDER_VARIABLES = [
   "MAPS_API_KEY",
 ] as const;
 
-const SENSITIVE_VARIABLES = [
-  "DATABASE_URL",
-  "TEST_DATABASE_URL",
-  "SESSION_SECRET",
-  "SEARCH_LEARNING_HASH_SECRET",
-  "DEV_MAILBOX_SECRET",
-  ...KEYRING_VARIABLES,
-  ...FUTURE_PROVIDER_VARIABLES,
-  "STRIPE_SECRET_KEY",
-  "STRIPE_WEBHOOK_SECRET",
-  "EMAIL_PROVIDER_API_KEY",
-] as const;
+const SENSITIVE_VARIABLES = APPLICATION_SENSITIVE_ENVIRONMENT_VARIABLES;
 
 const PLACEHOLDER_PATTERN =
   /(replace|change[-_ ]?me|placeholder|example|your[-_]|<[^>]+>)/i;
 const KEY_VERSION_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,31}$/;
+const MAX_NOTIFICATION_DELIVERY_KEYRING_ENTRIES = 5;
 const secretPurpose: unique symbol = Symbol("secret-purpose");
 
 const emptyToUndefined = (value: unknown) =>
@@ -99,11 +91,19 @@ const rawEnvironmentSchema = z
     REVEAL_CONFIRMATION_KEYS: z.string({ error: "is required" }),
     PII_REVEAL_KEYS: z.string({ error: "is required" }),
     NOTIFICATION_DELIVERY_KEYS: optionalString,
+    NOTIFICATION_RECIPIENT_HASH_KEYS: optionalString,
     DOCUMENT_STORAGE_KEYS: optionalString,
     PRIVACY_EXPORT_KEYS: optionalString,
+    DOCUMENT_STORAGE_ACCESS_KEY_ID: optionalString,
+    DOCUMENT_STORAGE_SECRET_ACCESS_KEY: optionalString,
+    DOCUMENT_STORAGE_SESSION_TOKEN: optionalString,
     RATE_LIMIT_BACKEND: z.enum(["postgres", "memory"]).default("postgres"),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(8).default(0),
     ENABLE_LOCAL_MOCK_MAILBOX: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT: z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
@@ -196,7 +196,13 @@ const rawEnvironmentSchema = z
       .default("false")
       .transform((value) => value === "true"),
     EMAIL_PROVIDER_MODE: z
-      .enum(["disabled", "local_mock", "resend_sandbox"])
+      .enum([
+        "disabled",
+        "local_mock",
+        "resend_contract",
+        "resend_sandbox",
+        "resend_live",
+      ])
       .default("disabled"),
     NOTIFICATION_DISPATCH: z.enum(["paused", "command"]).default("paused"),
     OPTIONAL_EMAIL: z
@@ -215,7 +221,7 @@ const rawEnvironmentSchema = z
       .default("false")
       .transform((value) => value === "true"),
     PAYMENT_PROVIDER_MODE: z
-      .enum(["disabled", "stripe_sandbox"])
+      .enum(["disabled", "stripe_contract", "stripe_sandbox", "stripe_live"])
       .default("disabled"),
     PAYMENT_SANDBOX_COHORT: z.enum(["none", "test"]).default("none"),
     REAL_PAYMENT_INGESTION: z
@@ -263,9 +269,11 @@ const rawEnvironmentSchema = z
       .default("false")
       .transform((value) => value === "true"),
     DOCUMENT_STORAGE_MODE: z
-      .enum(["disabled", "filesystem_sandbox"])
+      .enum(["disabled", "filesystem_sandbox", "s3_contract", "s3_live"])
       .default("disabled"),
-    DOCUMENT_SCANNER_MODE: z.enum(["disabled", "sandbox"]).default("disabled"),
+    DOCUMENT_SCANNER_MODE: z
+      .enum(["disabled", "sandbox", "clamav_contract", "clamav_live"])
+      .default("disabled"),
     DOCUMENT_CLEAN_READS: z
       .enum(["true", "false"])
       .default("false")
@@ -277,13 +285,35 @@ const rawEnvironmentSchema = z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
-    DOCUMENT_VAULT_COHORT: z.enum(["none", "test"]).default("none"),
+    DOCUMENT_VAULT_COHORT: z.enum(["none", "test", "live"]).default("none"),
     DOCUMENT_STORAGE_ROOT: optionalString,
+    DOCUMENT_STORAGE_ENDPOINT: optionalString,
+    DOCUMENT_STORAGE_BUCKET: optionalString,
+    DOCUMENT_STORAGE_FORCE_PATH_STYLE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    DOCUMENT_STORAGE_SSE: z.enum(["aes256", "aws_kms"]).default("aes256"),
+    DOCUMENT_STORAGE_KMS_KEY_ID: optionalString,
+    DOCUMENT_STORAGE_ENCRYPTION_VERSION: optionalString,
+    DOCUMENT_STORAGE_SECRET_VERSION: optionalString,
     DOCUMENT_STORAGE_REGION: z
       .string()
       .trim()
       .regex(/^[a-z0-9][a-z0-9-]{1,31}$/u)
       .default("local-test"),
+    DOCUMENT_SCANNER_HOST: optionalString,
+    DOCUMENT_SCANNER_PORT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(65_535)
+      .default(3310),
+    DOCUMENT_SCANNER_TLS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    DOCUMENT_SCANNER_SECRET_VERSION: optionalString,
     LEGAL_PUBLICATION_PRIVACY: z
       .enum(["true", "false"])
       .default("false")
@@ -309,13 +339,21 @@ const rawEnvironmentSchema = z
       .default("false")
       .transform((value) => value === "true"),
     PRIVACY_PROCESSING_MODE: z
-      .enum(["disabled", "sandbox_command"])
+      .enum([
+        "disabled",
+        "sandbox_command",
+        "contract_worker",
+        "autonomous_worker",
+      ])
       .default("disabled"),
-    PRIVACY_PROCESSING_COHORT: z.enum(["none", "test"]).default("none"),
+    PRIVACY_PROCESSING_COHORT: z
+      .enum(["none", "test", "approved"])
+      .default("none"),
     PRIVACY_EXPORT_STORAGE_MODE: z
-      .enum(["disabled", "filesystem_sandbox"])
+      .enum(["disabled", "filesystem_sandbox", "s3_contract", "s3_live"])
       .default("disabled"),
     PRIVACY_EXPORT_STORAGE_ROOT: optionalString,
+    PRIVACY_EXPORT_STORAGE_BUCKET: optionalString,
     PRIVACY_EXPORT_STORAGE_REGION: z
       .string()
       .trim()
@@ -365,6 +403,7 @@ const rawEnvironmentSchema = z
         /^[^<>\s@]+@[^<>\s@]+$/.test(value),
       "must be a bounded mailbox or display-name mailbox",
     ),
+    EMAIL_PROVIDER_CONTRACT_ENDPOINT: optionalString,
     ABUSE_REPORT_ADMIN_EMAILS: adminEmailDistribution,
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
     BACKUP_AGE_RECIPIENT: optionalString,
@@ -373,7 +412,11 @@ const rawEnvironmentSchema = z
     STRIPE_WEBHOOK_SECRET: optionalString,
     STRIPE_ACCOUNT_ID: optionalString,
     STRIPE_SECRET_VERSION: optionalString,
+    STRIPE_CONTRACT_ENDPOINT: optionalString,
     EMAIL_PROVIDER_API_KEY: optionalString,
+    RESEND_WEBHOOK_SECRET: optionalString,
+    RESEND_SECRET_VERSION: optionalString,
+    RESEND_WEBHOOK_SECRET_VERSION: optionalString,
     OPENAI_API_KEY: optionalString,
     STORAGE_ENDPOINT: optionalString,
     JOBROOM_API_URL: optionalString,
@@ -445,7 +488,34 @@ const rawEnvironmentSchema = z
       });
     }
 
-    if (productionRuntime && environment.ENABLE_LOCAL_MOCK_MAILBOX) {
+    const phase33LocalMockRuntimeContract =
+      environment.PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT &&
+      environment.APP_ENV === "local" &&
+      environment.NODE_ENV === "production" &&
+      isLoopbackHttpOrigin(environment.APP_URL) &&
+      environment.APP_BUILD_ID !== undefined &&
+      /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(environment.APP_BUILD_ID) &&
+      environment.ENABLE_LOCAL_MOCK_MAILBOX &&
+      environment.EMAIL_PROVIDER_MODE === "local_mock" &&
+      environment.PAYMENT_PROVIDER_MODE === "disabled";
+
+    if (
+      environment.PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT &&
+      !phase33LocalMockRuntimeContract
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT"],
+        message:
+          "requires the exact loopback-only Phase-33 Local production-build contract with a full candidate commit and payments disabled",
+      });
+    }
+
+    if (
+      productionRuntime &&
+      environment.ENABLE_LOCAL_MOCK_MAILBOX &&
+      !phase33LocalMockRuntimeContract
+    ) {
       context.addIssue({
         code: "custom",
         path: ["ENABLE_LOCAL_MOCK_MAILBOX"],
@@ -461,6 +531,17 @@ const rawEnvironmentSchema = z
         code: "custom",
         path: ["NOTIFICATION_DELIVERY_KEYS"],
         message: "is required when notification outbox producers are enabled",
+      });
+    }
+    if (
+      environment.NOTIFICATION_OUTBOX_PRODUCERS &&
+      environment.NOTIFICATION_RECIPIENT_HASH_KEYS === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["NOTIFICATION_RECIPIENT_HASH_KEYS"],
+        message:
+          "is required when notification outbox producers are enabled",
       });
     }
 
@@ -679,7 +760,10 @@ const rawEnvironmentSchema = z
       });
     }
 
-    if (environment.EMAIL_PROVIDER_MODE === "local_mock" && productionRuntime) {
+    if (
+      environment.EMAIL_PROVIDER_MODE === "local_mock" &&
+      ["preview", "staging", "production"].includes(environment.APP_ENV)
+    ) {
       context.addIssue({
         code: "custom",
         path: ["EMAIL_PROVIDER_MODE"],
@@ -687,7 +771,28 @@ const rawEnvironmentSchema = z
       });
     }
 
-    if (environment.EMAIL_PROVIDER_MODE === "resend_sandbox") {
+    const resendMode = environment.EMAIL_PROVIDER_MODE;
+    const resendSelected =
+      resendMode === "resend_contract" ||
+      resendMode === "resend_sandbox" ||
+      resendMode === "resend_live";
+    if (resendSelected) {
+      if (!environment.NOTIFICATION_OUTBOX_PRODUCERS) {
+        context.addIssue({
+          code: "custom",
+          path: ["NOTIFICATION_OUTBOX_PRODUCERS"],
+          message:
+            "must be enabled for every Resend mode so no live delivery can use the legacy mock path",
+        });
+      }
+      if (environment.NOTIFICATION_DISPATCH !== "command") {
+        context.addIssue({
+          code: "custom",
+          path: ["NOTIFICATION_DISPATCH"],
+          message:
+            "must be command for every Resend mode so durable email can be delivered",
+        });
+      }
       if (
         environment.EMAIL_PROVIDER_API_KEY === undefined ||
         environment.EMAIL_FROM === undefined
@@ -695,22 +800,144 @@ const rawEnvironmentSchema = z
         context.addIssue({
           code: "custom",
           path: ["EMAIL_PROVIDER_MODE"],
+          message: `${resendMode} requires EMAIL_PROVIDER_API_KEY and EMAIL_FROM`,
+        });
+      }
+      if (
+        environment.EMAIL_PROVIDER_API_KEY !== undefined &&
+        !/^re_[A-Za-z0-9_-]{8,}$/u.test(environment.EMAIL_PROVIDER_API_KEY)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["EMAIL_PROVIDER_API_KEY"],
+          message: "must be a bounded Resend API credential",
+        });
+      }
+      if (
+        environment.RESEND_SECRET_VERSION === undefined ||
+        !KEY_VERSION_PATTERN.test(environment.RESEND_SECRET_VERSION)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["RESEND_SECRET_VERSION"],
+          message: "every Resend mode requires a safe secret-version label",
+        });
+      }
+      if (
+        environment.RESEND_WEBHOOK_SECRET !== undefined &&
+        !/^whsec_[A-Za-z0-9+/_=-]{8,}$/u.test(environment.RESEND_WEBHOOK_SECRET)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["RESEND_WEBHOOK_SECRET"],
+          message: "must be a bounded Resend/Svix signing secret",
+        });
+      }
+      if (
+        (resendMode === "resend_contract" || resendMode === "resend_live") &&
+        environment.RESEND_WEBHOOK_SECRET === undefined
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["RESEND_WEBHOOK_SECRET"],
+          message: "contract/live delivery requires a webhook secret",
+        });
+      }
+      if (
+        environment.RESEND_WEBHOOK_SECRET !== undefined &&
+        (environment.RESEND_WEBHOOK_SECRET_VERSION === undefined ||
+          !KEY_VERSION_PATTERN.test(environment.RESEND_WEBHOOK_SECRET_VERSION))
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["RESEND_WEBHOOK_SECRET_VERSION"],
           message:
-            "resend_sandbox requires EMAIL_PROVIDER_API_KEY and EMAIL_FROM",
+            "a configured Resend webhook requires its own safe secret-version label",
+        });
+      }
+      if (
+        environment.RESEND_WEBHOOK_SECRET === undefined &&
+        environment.RESEND_WEBHOOK_SECRET_VERSION !== undefined
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["RESEND_WEBHOOK_SECRET_VERSION"],
+          message: "must remain empty without RESEND_WEBHOOK_SECRET",
         });
       }
       if (environment.NOTIFICATION_DELIVERY_KEYS === undefined) {
         context.addIssue({
           code: "custom",
           path: ["NOTIFICATION_DELIVERY_KEYS"],
-          message: "is required for sandbox delivery",
+          message: "is required for durable provider delivery",
         });
       }
-    } else if (environment.EMAIL_PROVIDER_API_KEY !== undefined) {
+      if (environment.NOTIFICATION_RECIPIENT_HASH_KEYS === undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["NOTIFICATION_RECIPIENT_HASH_KEYS"],
+          message: "is required for durable recipient evidence",
+        });
+      }
+      if (
+        resendMode === "resend_sandbox" &&
+        (environment.APP_ENV === "preview" ||
+          environment.APP_ENV === "production" ||
+          environment.NODE_ENV === "production")
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["EMAIL_PROVIDER_MODE"],
+          message: "resend_sandbox is forbidden in production runtimes",
+        });
+      }
+      if (
+        resendMode === "resend_contract" &&
+        (environment.APP_ENV !== "ci" ||
+          environment.NODE_ENV !== "production" ||
+          !isPhase33ProviderContractEndpoint(
+            environment.EMAIL_PROVIDER_CONTRACT_ENDPOINT,
+          ))
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["EMAIL_PROVIDER_CONTRACT_ENDPOINT"],
+          message:
+            "resend_contract requires the isolated CI production-contract endpoint",
+        });
+      }
+      if (
+        resendMode === "resend_live" &&
+        environment.APP_ENV !== "staging" &&
+        environment.APP_ENV !== "production"
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["EMAIL_PROVIDER_MODE"],
+          message: "resend_live is allowed only in staging or production",
+        });
+      }
+      if (
+        resendMode !== "resend_contract" &&
+        environment.EMAIL_PROVIDER_CONTRACT_ENDPOINT !== undefined
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["EMAIL_PROVIDER_CONTRACT_ENDPOINT"],
+          message: "must remain empty outside resend_contract",
+        });
+      }
+    } else if (
+      environment.EMAIL_PROVIDER_API_KEY !== undefined ||
+      environment.EMAIL_PROVIDER_CONTRACT_ENDPOINT !== undefined ||
+      environment.RESEND_WEBHOOK_SECRET !== undefined ||
+      environment.RESEND_SECRET_VERSION !== undefined ||
+      environment.RESEND_WEBHOOK_SECRET_VERSION !== undefined
+    ) {
       context.addIssue({
         code: "custom",
         path: ["EMAIL_PROVIDER_API_KEY"],
-        message: "must remain empty unless resend_sandbox is selected",
+        message: "must remain empty unless an explicit Resend mode is selected",
       });
     }
 
@@ -769,8 +996,11 @@ const rawEnvironmentSchema = z
       environment.PAID_SELF_SERVICE ||
       environment.FINANCE_REPAIR_ACTIONS ||
       environment.PAID_SERVICE_RECOVERY;
-    const stripeSandboxSelected =
-      environment.PAYMENT_PROVIDER_MODE === "stripe_sandbox";
+    const stripeMode = environment.PAYMENT_PROVIDER_MODE;
+    const stripeSelected = stripeMode !== "disabled";
+    const stripeContractSelected = stripeMode === "stripe_contract";
+    const stripeSandboxSelected = stripeMode === "stripe_sandbox";
+    const stripeLiveSelected = stripeMode === "stripe_live";
     if (
       stripeSandboxSelected &&
       !["local", "ci", "staging"].includes(environment.APP_ENV)
@@ -782,15 +1012,38 @@ const rawEnvironmentSchema = z
           "stripe_sandbox is forbidden in preview and production runtimes",
       });
     }
-    if (stripeSandboxSelected) {
+    if (
+      stripeContractSelected &&
+      (environment.APP_ENV !== "ci" ||
+        environment.NODE_ENV !== "production" ||
+        !isPhase33StripeContractEndpoint(environment.STRIPE_CONTRACT_ENDPOINT))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["STRIPE_CONTRACT_ENDPOINT"],
+        message:
+          "stripe_contract requires the isolated CI production-contract endpoint",
+      });
+    }
+    if (stripeLiveSelected && environment.APP_ENV !== "production") {
+      context.addIssue({
+        code: "custom",
+        path: ["PAYMENT_PROVIDER_MODE"],
+        message: "stripe_live is allowed only in production",
+      });
+    }
+    if (stripeSelected) {
+      const expectedKeyPattern = stripeLiveSelected
+        ? /^sk_live_[A-Za-z0-9]{8,}$/u
+        : /^sk_test_[A-Za-z0-9]{8,}$/u;
       if (
         environment.STRIPE_SECRET_KEY === undefined ||
-        !/^sk_test_[A-Za-z0-9]{8,}$/u.test(environment.STRIPE_SECRET_KEY)
+        !expectedKeyPattern.test(environment.STRIPE_SECRET_KEY)
       ) {
         context.addIssue({
           code: "custom",
           path: ["STRIPE_SECRET_KEY"],
-          message: "must be a Stripe test-mode secret for stripe_sandbox",
+          message: `must match the explicit ${stripeMode} credential class`,
         });
       }
       if (
@@ -811,7 +1064,7 @@ const rawEnvironmentSchema = z
         context.addIssue({
           code: "custom",
           path: ["STRIPE_ACCOUNT_ID"],
-          message: "is required and must identify the sandbox merchant account",
+          message: "is required and must identify the bound merchant account",
         });
       }
       if (
@@ -824,23 +1077,34 @@ const rawEnvironmentSchema = z
           message: "is required and must be a safe non-secret version label",
         });
       }
+      if (
+        !stripeContractSelected &&
+        environment.STRIPE_CONTRACT_ENDPOINT !== undefined
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["STRIPE_CONTRACT_ENDPOINT"],
+          message: "must remain empty outside stripe_contract",
+        });
+      }
     } else if (
       environment.STRIPE_SECRET_KEY !== undefined ||
       environment.STRIPE_WEBHOOK_SECRET !== undefined ||
       environment.STRIPE_ACCOUNT_ID !== undefined ||
-      environment.STRIPE_SECRET_VERSION !== undefined
+      environment.STRIPE_SECRET_VERSION !== undefined ||
+      environment.STRIPE_CONTRACT_ENDPOINT !== undefined
     ) {
       context.addIssue({
         code: "custom",
         path: ["PAYMENT_PROVIDER_MODE"],
-        message: "Stripe configuration requires stripe_sandbox mode",
+        message: "Stripe configuration requires an explicit Stripe mode",
       });
     }
-    if (paymentCapabilityEnabled && !stripeSandboxSelected) {
+    if (paymentCapabilityEnabled && !stripeSelected) {
       context.addIssue({
         code: "custom",
         path: ["REAL_PAYMENT_INGESTION"],
-        message: "payment capabilities require an explicit sandbox provider",
+        message: "payment capabilities require an explicit provider mode",
       });
     }
     if (
@@ -855,14 +1119,15 @@ const rawEnvironmentSchema = z
     }
     if (
       (environment.PAID_SELF_SERVICE || environment.PAID_SERVICE_RECOVERY) &&
+      !stripeLiveSelected &&
       (environment.PAYMENT_SANDBOX_COHORT !== "test" ||
-        (environment.APP_ENV !== "local" && environment.APP_ENV !== "ci"))
+        !["local", "ci"].includes(environment.APP_ENV))
     ) {
       context.addIssue({
         code: "custom",
         path: ["PAID_SELF_SERVICE"],
         message:
-          "paid actions remain limited to the isolated Local/CI test cohort until Phase 25 and 31 gates",
+          "non-live paid actions require the isolated Local/CI test cohort",
       });
     }
     if (environment.PAID_SELF_SERVICE && !environment.REAL_PAYMENT_PROJECTION) {
@@ -872,23 +1137,21 @@ const rawEnvironmentSchema = z
         message: "requires signed ingestion and sandbox projection",
       });
     }
-    if (environment.FINANCE_REPAIR_ACTIONS) {
+    if (stripeLiveSelected && environment.PAYMENT_SANDBOX_COHORT !== "none") {
       context.addIssue({
         code: "custom",
-        path: ["FINANCE_REPAIR_ACTIONS"],
-        message:
-          "must remain false until Phase-25 finance capability and step-up are complete",
+        path: ["PAYMENT_SANDBOX_COHORT"],
+        message: "must be none for stripe_live",
       });
     }
     if (
       environment.APP_ENV === "production" &&
-      (stripeSandboxSelected || paymentCapabilityEnabled)
+      (stripeContractSelected || stripeSandboxSelected)
     ) {
       context.addIssue({
         code: "custom",
         path: ["PAYMENT_PROVIDER_MODE"],
-        message:
-          "Phase-24 contains no LIVE adapter; production payments must remain disabled",
+        message: "production payment capabilities require stripe_live",
       });
     }
 
@@ -930,16 +1193,27 @@ const rawEnvironmentSchema = z
       });
     }
 
-    const documentSandboxSelected =
+    const documentFilesystemSelected =
       environment.DOCUMENT_STORAGE_MODE === "filesystem_sandbox" ||
       environment.DOCUMENT_SCANNER_MODE === "sandbox";
+    const documentContractSelected =
+      environment.DOCUMENT_STORAGE_MODE === "s3_contract" ||
+      environment.DOCUMENT_SCANNER_MODE === "clamav_contract";
+    const documentLiveSelected =
+      environment.DOCUMENT_STORAGE_MODE === "s3_live" ||
+      environment.DOCUMENT_SCANNER_MODE === "clamav_live";
+    const privacyS3Selected =
+      environment.PRIVACY_EXPORT_STORAGE_MODE === "s3_contract" ||
+      environment.PRIVACY_EXPORT_STORAGE_MODE === "s3_live";
+    const s3StorageSelected =
+      documentContractSelected || documentLiveSelected || privacyS3Selected;
     const documentCapabilityEnabled =
       environment.DOCUMENT_VAULT_WRITES ||
       environment.DOCUMENT_CLEAN_READS ||
       environment.DOCUMENT_RECONCILIATION !== "disabled";
 
     if (
-      documentSandboxSelected &&
+      documentFilesystemSelected &&
       environment.APP_ENV !== "local" &&
       environment.APP_ENV !== "ci"
     ) {
@@ -950,7 +1224,18 @@ const rawEnvironmentSchema = z
       });
     }
 
-    if (documentSandboxSelected) {
+    if (documentFilesystemSelected) {
+      if (
+        environment.DOCUMENT_STORAGE_MODE !== "filesystem_sandbox" ||
+        environment.DOCUMENT_SCANNER_MODE !== "sandbox"
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["DOCUMENT_STORAGE_MODE"],
+          message:
+            "filesystem_sandbox and sandbox scanner must be selected together",
+        });
+      }
       if (
         environment.DOCUMENT_STORAGE_ROOT === undefined ||
         !isAbsolutePathOutsideRepository(environment.DOCUMENT_STORAGE_ROOT)
@@ -971,17 +1256,121 @@ const rawEnvironmentSchema = z
       }
     }
 
+    if (documentContractSelected) {
+      if (
+        environment.DOCUMENT_STORAGE_MODE !== "s3_contract" ||
+        environment.DOCUMENT_SCANNER_MODE !== "clamav_contract" ||
+        environment.APP_ENV !== "ci" ||
+        environment.NODE_ENV !== "production" ||
+        !isPhase33StorageContractEndpoint(
+          environment.DOCUMENT_STORAGE_ENDPOINT,
+        ) ||
+        environment.DOCUMENT_STORAGE_BUCKET !== "phase33-documents" ||
+        !environment.DOCUMENT_STORAGE_FORCE_PATH_STYLE ||
+        environment.DOCUMENT_STORAGE_SSE !== "aes256" ||
+        environment.DOCUMENT_STORAGE_KMS_KEY_ID !== undefined ||
+        environment.DOCUMENT_SCANNER_HOST !== "scanner" ||
+        environment.DOCUMENT_SCANNER_PORT !== 3310 ||
+        environment.DOCUMENT_SCANNER_TLS
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["DOCUMENT_STORAGE_MODE"],
+          message:
+            "s3_contract/clamav_contract require the exact isolated Phase-33 CI production-contract topology",
+        });
+      }
+    }
+
+    if (documentLiveSelected) {
+      if (
+        environment.DOCUMENT_STORAGE_MODE !== "s3_live" ||
+        environment.DOCUMENT_SCANNER_MODE !== "clamav_live" ||
+        environment.APP_ENV !== "production" ||
+        !isLiveStorageEndpoint(environment.DOCUMENT_STORAGE_ENDPOINT) ||
+        !isLiveProviderHost(environment.DOCUMENT_SCANNER_HOST) ||
+        !environment.DOCUMENT_SCANNER_TLS ||
+        environment.DOCUMENT_STORAGE_SSE !== "aws_kms" ||
+        environment.DOCUMENT_STORAGE_KMS_KEY_ID === undefined
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["DOCUMENT_STORAGE_MODE"],
+          message:
+            "s3_live/clamav_live require production, TLS provider endpoints and KMS-backed storage",
+        });
+      }
+    }
+
+    if (s3StorageSelected) {
+      if (
+        environment.DOCUMENT_STORAGE_ENDPOINT === undefined ||
+        ((documentContractSelected || documentLiveSelected) &&
+          (environment.DOCUMENT_STORAGE_BUCKET === undefined ||
+            !isSafeBucketName(environment.DOCUMENT_STORAGE_BUCKET))) ||
+        (privacyS3Selected &&
+          (environment.PRIVACY_EXPORT_STORAGE_BUCKET === undefined ||
+            !isSafeBucketName(environment.PRIVACY_EXPORT_STORAGE_BUCKET))) ||
+        environment.DOCUMENT_STORAGE_ACCESS_KEY_ID === undefined ||
+        environment.DOCUMENT_STORAGE_SECRET_ACCESS_KEY === undefined ||
+        environment.DOCUMENT_STORAGE_ENCRYPTION_VERSION === undefined ||
+        !KEY_VERSION_PATTERN.test(
+          environment.DOCUMENT_STORAGE_ENCRYPTION_VERSION,
+        ) ||
+        environment.DOCUMENT_STORAGE_SECRET_VERSION === undefined ||
+        !KEY_VERSION_PATTERN.test(environment.DOCUMENT_STORAGE_SECRET_VERSION)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["DOCUMENT_STORAGE_ENDPOINT"],
+          message:
+            "S3 storage requires a safe bucket, explicit credential handles, encryption version and secret-version label",
+        });
+      }
+      if (environment.DOCUMENT_STORAGE_ROOT !== undefined) {
+        context.addIssue({
+          code: "custom",
+          path: ["DOCUMENT_STORAGE_ROOT"],
+          message:
+            "must remain empty for S3 storage; filesystem fallback is forbidden",
+        });
+      }
+    }
+
+    if (documentContractSelected || documentLiveSelected) {
+      if (
+        environment.DOCUMENT_SCANNER_HOST === undefined ||
+        environment.DOCUMENT_SCANNER_SECRET_VERSION === undefined ||
+        !KEY_VERSION_PATTERN.test(environment.DOCUMENT_SCANNER_SECRET_VERSION)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["DOCUMENT_SCANNER_HOST"],
+          message:
+            "ClamAV requires an explicit host and provider configuration-version label",
+        });
+      }
+    }
+
     if (
       documentCapabilityEnabled &&
-      (environment.DOCUMENT_STORAGE_MODE !== "filesystem_sandbox" ||
-        environment.DOCUMENT_SCANNER_MODE !== "sandbox" ||
-        environment.DOCUMENT_VAULT_COHORT !== "test")
+      !(
+        (environment.DOCUMENT_STORAGE_MODE === "filesystem_sandbox" &&
+          environment.DOCUMENT_SCANNER_MODE === "sandbox" &&
+          environment.DOCUMENT_VAULT_COHORT === "test") ||
+        (environment.DOCUMENT_STORAGE_MODE === "s3_contract" &&
+          environment.DOCUMENT_SCANNER_MODE === "clamav_contract" &&
+          environment.DOCUMENT_VAULT_COHORT === "test") ||
+        (environment.DOCUMENT_STORAGE_MODE === "s3_live" &&
+          environment.DOCUMENT_SCANNER_MODE === "clamav_live" &&
+          environment.DOCUMENT_VAULT_COHORT === "live")
+      )
     ) {
       context.addIssue({
         code: "custom",
         path: ["DOCUMENT_VAULT_WRITES"],
         message:
-          "document capabilities require the explicit filesystem/scanner test cohort",
+          "document capabilities require one exact storage/scanner/cohort mode pair",
       });
     }
 
@@ -992,7 +1381,7 @@ const rawEnvironmentSchema = z
       context.addIssue({
         code: "custom",
         path: ["DOCUMENT_CLEAN_READS"],
-        message: "requires document vault writes in the Phase-21 sandbox",
+        message: "requires document vault writes",
       });
     }
 
@@ -1005,15 +1394,12 @@ const rawEnvironmentSchema = z
       });
     }
 
-    if (
-      productionLike &&
-      (documentSandboxSelected || documentCapabilityEnabled)
-    ) {
+    if (productionLike && documentFilesystemSelected) {
       context.addIssue({
         code: "custom",
         path: ["DOCUMENT_STORAGE_MODE"],
         message:
-          "Phase-21 document bytes remain disabled in staging and production",
+          "filesystem and sandbox document providers are forbidden in production",
       });
     }
 
@@ -1031,6 +1417,10 @@ const rawEnvironmentSchema = z
     const privacySandboxSelected =
       environment.PRIVACY_EXPORT_STORAGE_MODE === "filesystem_sandbox" ||
       environment.PRIVACY_PROCESSING_MODE === "sandbox_command";
+    const privacyContractWorkerSelected =
+      environment.PRIVACY_PROCESSING_MODE === "contract_worker";
+    const privacyAutonomousWorkerSelected =
+      environment.PRIVACY_PROCESSING_MODE === "autonomous_worker";
 
     if (
       privacySandboxSelected &&
@@ -1045,22 +1435,68 @@ const rawEnvironmentSchema = z
     }
     if (
       privacyExecutionEnabled &&
-      (environment.PRIVACY_PROCESSING_MODE !== "sandbox_command" ||
-        environment.PRIVACY_PROCESSING_COHORT !== "test" ||
-        !environment.PRIVACY_PROVIDER_POSTGRES)
+      (environment.PRIVACY_PROCESSING_MODE === "disabled" ||
+        !environment.PRIVACY_PROVIDER_POSTGRES ||
+        !environment.PRIVACY_PROVIDER_DOCUMENTS ||
+        !environment.PRIVACY_PROVIDER_EMAIL ||
+        !environment.PRIVACY_PROVIDER_PAYMENT ||
+        !environment.PRIVACY_PROVIDER_ANALYTICS ||
+        ((environment.PRIVACY_CORRECTION_EXECUTION ||
+          environment.PRIVACY_ERASURE_EXECUTION) &&
+          !environment.PRIVACY_PROVIDER_BACKUP) ||
+        !environment.NOTIFICATION_OUTBOX_PRODUCERS ||
+        environment.NOTIFICATION_DELIVERY_KEYS === undefined ||
+        environment.NOTIFICATION_RECIPIENT_HASH_KEYS === undefined)
     ) {
       context.addIssue({
         code: "custom",
         path: ["PRIVACY_PROCESSING_MODE"],
         message:
-          "privacy execution requires sandbox_command, the test cohort and the PostgreSQL processor",
+          "privacy execution requires an explicit mode, every mapped processor flag and transactional notification outbox delivery",
       });
     }
     if (
-      (environment.PRIVACY_EXPORT_V2 ||
-        environment.PRIVACY_EXPORT_STORAGE_MODE === "filesystem_sandbox") &&
-      (environment.PRIVACY_EXPORT_STORAGE_MODE !== "filesystem_sandbox" ||
-        environment.PRIVACY_EXPORT_STORAGE_ROOT === undefined ||
+      environment.PRIVACY_PROCESSING_MODE === "sandbox_command" &&
+      environment.PRIVACY_PROCESSING_COHORT !== "test"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_PROCESSING_COHORT"],
+        message: "sandbox privacy execution is restricted to the test cohort",
+      });
+    }
+    if (
+      privacyContractWorkerSelected &&
+      (environment.APP_ENV !== "ci" ||
+        environment.NODE_ENV !== "production" ||
+        environment.PRIVACY_PROCESSING_COHORT !== "test" ||
+        environment.PRIVACY_EXPORT_STORAGE_MODE !== "s3_contract")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_PROCESSING_MODE"],
+        message:
+          "contract_worker is allowed only in the isolated CI production-contract profile with the test cohort and contract storage",
+      });
+    }
+    if (
+      privacyAutonomousWorkerSelected &&
+      (!productionLike ||
+        environment.NODE_ENV !== "production" ||
+        environment.PRIVACY_PROCESSING_COHORT !== "approved" ||
+        (environment.PRIVACY_EXPORT_V2 &&
+          environment.PRIVACY_EXPORT_STORAGE_MODE !== "s3_live"))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_PROCESSING_MODE"],
+        message:
+          "autonomous_worker requires staging/production, the externally approved cohort and live export storage when export is enabled",
+      });
+    }
+    if (
+      environment.PRIVACY_EXPORT_STORAGE_MODE === "filesystem_sandbox" &&
+      (environment.PRIVACY_EXPORT_STORAGE_ROOT === undefined ||
         !isAbsolutePathOutsideRepository(
           environment.PRIVACY_EXPORT_STORAGE_ROOT,
         ) ||
@@ -1074,6 +1510,52 @@ const rawEnvironmentSchema = z
       });
     }
     if (
+      environment.PRIVACY_EXPORT_STORAGE_MODE === "s3_contract" &&
+      (environment.APP_ENV !== "ci" ||
+        environment.NODE_ENV !== "production" ||
+        !isPhase33StorageContractEndpoint(
+          environment.DOCUMENT_STORAGE_ENDPOINT,
+        ) ||
+        environment.PRIVACY_EXPORT_STORAGE_BUCKET !== "phase33-privacy" ||
+        !environment.DOCUMENT_STORAGE_FORCE_PATH_STYLE ||
+        environment.DOCUMENT_STORAGE_SSE !== "aes256")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_EXPORT_STORAGE_MODE"],
+        message:
+          "privacy s3_contract requires the exact isolated Phase-33 contract bucket and endpoint",
+      });
+    }
+    if (
+      environment.PRIVACY_EXPORT_STORAGE_MODE === "s3_live" &&
+      (environment.APP_ENV !== "production" ||
+        !isLiveStorageEndpoint(environment.DOCUMENT_STORAGE_ENDPOINT) ||
+        environment.PRIVACY_EXPORT_STORAGE_BUCKET === undefined ||
+        !isSafeBucketName(environment.PRIVACY_EXPORT_STORAGE_BUCKET) ||
+        environment.PRIVACY_EXPORT_STORAGE_BUCKET ===
+          environment.DOCUMENT_STORAGE_BUCKET ||
+        environment.DOCUMENT_STORAGE_SSE !== "aws_kms" ||
+        environment.DOCUMENT_STORAGE_KMS_KEY_ID === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_EXPORT_STORAGE_MODE"],
+        message:
+          "privacy s3_live requires a dedicated safe bucket on the TLS/KMS storage provider",
+      });
+    }
+    if (
+      environment.PRIVACY_EXPORT_V2 &&
+      environment.PRIVACY_EXPORT_STORAGE_MODE === "disabled"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["PRIVACY_EXPORT_STORAGE_MODE"],
+        message: "export V2 requires an explicit encrypted storage provider",
+      });
+    }
+    if (
       privacyProviderEnabled &&
       environment.PRIVACY_PROCESSING_MODE === "disabled"
     ) {
@@ -1083,12 +1565,15 @@ const rawEnvironmentSchema = z
         message: "privacy providers require an explicit processing mode",
       });
     }
-    if (productionLike && (privacyExecutionEnabled || privacySandboxSelected)) {
+    if (
+      productionLike &&
+      (privacySandboxSelected || privacyContractWorkerSelected)
+    ) {
       context.addIssue({
         code: "custom",
         path: ["PRIVACY_PROCESSING_MODE"],
         message:
-          "Phase-22 execution remains disabled in staging and production until Phase-25 step-up and separated grants",
+          "sandbox and contract privacy modes are forbidden in staging and production",
       });
     }
     if (
@@ -1222,6 +1707,10 @@ export type ServerEnvironment = Readonly<
       searchLearningHash?: SecretHandle<"SEARCH_LEARNING_HASH_SECRET">;
       localMailbox?: SecretHandle<"DEV_MAILBOX_SECRET">;
       emailProvider?: SecretHandle<"EMAIL_PROVIDER_API_KEY">;
+      resendWebhook?: SecretHandle<"RESEND_WEBHOOK_SECRET">;
+      documentStorageAccessKeyId?: SecretHandle<"DOCUMENT_STORAGE_ACCESS_KEY_ID">;
+      documentStorageSecretAccessKey?: SecretHandle<"DOCUMENT_STORAGE_SECRET_ACCESS_KEY">;
+      documentStorageSessionToken?: SecretHandle<"DOCUMENT_STORAGE_SESSION_TOKEN">;
       stripeSecretKey?: SecretHandle<"STRIPE_SECRET_KEY">;
       stripeWebhookSecret?: SecretHandle<"STRIPE_WEBHOOK_SECRET">;
       keyrings: Readonly<{
@@ -1306,6 +1795,38 @@ export function parseEnvironment(
               result.data.EMAIL_PROVIDER_API_KEY,
             ),
           }),
+      ...(result.data.RESEND_WEBHOOK_SECRET === undefined
+        ? {}
+        : {
+            resendWebhook: createSecretHandle(
+              "RESEND_WEBHOOK_SECRET",
+              result.data.RESEND_WEBHOOK_SECRET,
+            ),
+          }),
+      ...(result.data.DOCUMENT_STORAGE_ACCESS_KEY_ID === undefined
+        ? {}
+        : {
+            documentStorageAccessKeyId: createSecretHandle(
+              "DOCUMENT_STORAGE_ACCESS_KEY_ID",
+              result.data.DOCUMENT_STORAGE_ACCESS_KEY_ID,
+            ),
+          }),
+      ...(result.data.DOCUMENT_STORAGE_SECRET_ACCESS_KEY === undefined
+        ? {}
+        : {
+            documentStorageSecretAccessKey: createSecretHandle(
+              "DOCUMENT_STORAGE_SECRET_ACCESS_KEY",
+              result.data.DOCUMENT_STORAGE_SECRET_ACCESS_KEY,
+            ),
+          }),
+      ...(result.data.DOCUMENT_STORAGE_SESSION_TOKEN === undefined
+        ? {}
+        : {
+            documentStorageSessionToken: createSecretHandle(
+              "DOCUMENT_STORAGE_SESSION_TOKEN",
+              result.data.DOCUMENT_STORAGE_SESSION_TOKEN,
+            ),
+          }),
       ...(result.data.STRIPE_SECRET_KEY === undefined
         ? {}
         : {
@@ -1377,8 +1898,7 @@ export function getSafeEnvironmentSummary(environment: ServerEnvironment) {
     paidSelfServiceEnabled: environment.PAID_SELF_SERVICE,
     financeRepairActionsEnabled: environment.FINANCE_REPAIR_ACTIONS,
     paidServiceRecoveryEnabled: environment.PAID_SERVICE_RECOVERY,
-    commercialProductionOffersEnabled:
-      environment.COMMERCIAL_PRODUCTION_OFFERS,
+    commercialProductionOffersEnabled: environment.COMMERCIAL_PRODUCTION_OFFERS,
     commercialManagedImportEnabled: environment.COMMERCIAL_MANAGED_IMPORT,
     commercialBoostEnabled: environment.COMMERCIAL_BOOST,
     commercialPaidRadarEnabled: environment.COMMERCIAL_PAID_RADAR,
@@ -1439,6 +1959,14 @@ function parseHttpOrigin(value: string) {
   } catch {
     return undefined;
   }
+}
+
+function isLoopbackHttpOrigin(value: string) {
+  const url = parseHttpOrigin(value);
+  return (
+    url?.protocol === "http:" &&
+    ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)
+  );
 }
 
 function validateTestDatabaseIsolation(
@@ -1532,6 +2060,107 @@ function isAbsolutePathOutsideRepository(value: string) {
   );
 }
 
+function isPhase33ProviderContractEndpoint(value: string | undefined) {
+  if (value === undefined) return false;
+  try {
+    const endpoint = new URL(value);
+    return (
+      endpoint.protocol === "http:" &&
+      endpoint.hostname === "provider-contract" &&
+      endpoint.port === "8080" &&
+      endpoint.pathname === "/resend/emails" &&
+      endpoint.username === "" &&
+      endpoint.password === "" &&
+      endpoint.search === "" &&
+      endpoint.hash === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isPhase33StripeContractEndpoint(value: string | undefined) {
+  if (value === undefined) return false;
+  try {
+    const endpoint = new URL(value);
+    return (
+      endpoint.protocol === "http:" &&
+      endpoint.hostname === "provider-contract" &&
+      endpoint.port === "8080" &&
+      endpoint.pathname === "/" &&
+      endpoint.username === "" &&
+      endpoint.password === "" &&
+      endpoint.search === "" &&
+      endpoint.hash === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isPhase33StorageContractEndpoint(value: string | undefined) {
+  if (value === undefined) return false;
+  try {
+    const endpoint = new URL(value);
+    return (
+      endpoint.protocol === "http:" &&
+      endpoint.hostname === "object-store" &&
+      endpoint.port === "9000" &&
+      endpoint.pathname === "/" &&
+      endpoint.username === "" &&
+      endpoint.password === "" &&
+      endpoint.search === "" &&
+      endpoint.hash === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isLiveStorageEndpoint(value: string | undefined) {
+  if (value === undefined) return false;
+  try {
+    const endpoint = new URL(value);
+    return (
+      endpoint.protocol === "https:" &&
+      endpoint.username === "" &&
+      endpoint.password === "" &&
+      (endpoint.pathname === "" || endpoint.pathname === "/") &&
+      endpoint.search === "" &&
+      endpoint.hash === "" &&
+      isLiveProviderHost(endpoint.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isLiveProviderHost(value: string | undefined) {
+  if (value === undefined) return false;
+  const normalized = value.toLowerCase().replace(/^\[|\]$/gu, "");
+  return (
+    /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/u.test(normalized) &&
+    normalized !== "localhost" &&
+    normalized !== "0.0.0.0" &&
+    normalized !== "::" &&
+    normalized !== "::1" &&
+    !normalized.endsWith(".localhost") &&
+    !normalized.endsWith(".local") &&
+    !normalized.endsWith(".invalid") &&
+    !/^127\./u.test(normalized)
+  );
+}
+
+function isSafeBucketName(value: string) {
+  return (
+    value.length >= 3 &&
+    value.length <= 63 &&
+    /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/u.test(value) &&
+    !value.includes("..") &&
+    !/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(value)
+  );
+}
+
 function validateBase64Secret(
   variable: string,
   value: string,
@@ -1603,6 +2232,17 @@ function parseKeyring(
       code: "custom",
       path: [variable],
       message: "must contain at least one key",
+    });
+  }
+  if (
+    (variable === "NOTIFICATION_DELIVERY_KEYS" ||
+      variable === "NOTIFICATION_RECIPIENT_HASH_KEYS") &&
+    entries.length > MAX_NOTIFICATION_DELIVERY_KEYRING_ENTRIES
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: [variable],
+      message: `must contain at most ${MAX_NOTIFICATION_DELIVERY_KEYRING_ENTRIES} retained keys`,
     });
   }
 

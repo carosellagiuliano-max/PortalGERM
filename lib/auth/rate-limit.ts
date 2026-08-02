@@ -19,6 +19,10 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
   "CANDIDATE_PROFILE_MUTATION",
   "JOB_ALERT_MUTATION",
   "MESSAGE_SEND",
+  "EMPLOYER_MESSAGE_SEND",
+  "INTERVIEW_PROPOSE",
+  "SUPPORT_CASE_CREATE",
+  "SUPPORT_CASE_REPLY",
   "PRIVACY_REQUEST",
   "PRIVACY_IDENTITY_CHALLENGE",
   "LEAD",
@@ -102,6 +106,35 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
     buckets: [
       { scope: "USER", limit: 60, windowMs: HOUR },
       { scope: "IP", limit: 120, windowMs: HOUR },
+    ],
+  },
+  EMPLOYER_MESSAGE_SEND: {
+    buckets: [
+      { scope: "USER", limit: 60, windowMs: HOUR },
+      { scope: "IP", limit: 120, windowMs: HOUR },
+      { scope: "COMPANY", limit: 120, windowMs: HOUR },
+      { scope: "ACTOR_OR_IP_TARGET", limit: 20, windowMs: HOUR },
+    ],
+  },
+  INTERVIEW_PROPOSE: {
+    buckets: [
+      { scope: "USER", limit: 30, windowMs: HOUR },
+      { scope: "IP", limit: 90, windowMs: HOUR },
+      { scope: "COMPANY", limit: 60, windowMs: HOUR },
+      { scope: "ACTOR_OR_IP_TARGET", limit: 10, windowMs: HOUR },
+    ],
+  },
+  SUPPORT_CASE_CREATE: {
+    buckets: [
+      { scope: "USER", limit: 10, windowMs: DAY },
+      { scope: "IP", limit: 20, windowMs: DAY },
+    ],
+  },
+  SUPPORT_CASE_REPLY: {
+    buckets: [
+      { scope: "USER", limit: 30, windowMs: HOUR },
+      { scope: "IP", limit: 60, windowMs: HOUR },
+      { scope: "ACTOR_OR_IP_TARGET", limit: 15, windowMs: HOUR },
     ],
   },
   PRIVACY_REQUEST: {

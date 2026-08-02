@@ -24,9 +24,18 @@ export const WORKER_HANDLER_CATALOG = Object.freeze([
   handler({
     handlerKey: "notifications.dispatch",
     owner: "Platform Engineering / Communications",
+    // This catalog value records the dispatcher's coarse email dependency.
+    // Runtime authority is intentionally narrower: the dispatcher resolves
+    // transactional or job-alert activation from each claimed template.
     providerUseCase: "email.transactional",
     schedule: "continuous-when-activated",
     sloRef: "codex-plan/20-identity-email-notifications.md",
+  }),
+  handler({
+    handlerKey: "notifications.retention",
+    owner: "Privacy / Platform Engineering",
+    schedule: "minute-boundary",
+    sloRef: "codex-plan/33-go-live-readiness-e2e-acceptance.md",
   }),
   handler({
     handlerKey: "candidate.job-alert-digest",
@@ -93,24 +102,21 @@ export const WORKER_HANDLER_CATALOG = Object.freeze([
     sloRef: "codex-plan/24-real-billing-finance.md#22",
   }),
   handler({
-    execution: "CATALOG_ONLY_REQUIRES_PHASE_25",
     handlerKey: "privacy.export",
     owner: "Privacy / Platform",
-    schedule: "continuous-when-approved",
+    schedule: "event-driven-after-dual-approval",
     sloRef: "codex-plan/22-privacy-legal-analytics.md",
   }),
   handler({
-    execution: "CATALOG_ONLY_REQUIRES_PHASE_25",
     handlerKey: "privacy.correction",
     owner: "Privacy / Platform",
-    schedule: "continuous-when-approved",
+    schedule: "event-driven-after-dual-approval",
     sloRef: "codex-plan/22-privacy-legal-analytics.md",
   }),
   handler({
-    execution: "CATALOG_ONLY_REQUIRES_PHASE_25",
     handlerKey: "privacy.erasure",
     owner: "Privacy / Platform",
-    schedule: "continuous-when-approved",
+    schedule: "event-driven-after-dual-approval",
     sloRef: "codex-plan/22-privacy-legal-analytics.md",
   }),
   handler({

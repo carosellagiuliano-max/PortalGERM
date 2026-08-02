@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PrivacyCaseActionForm } from "@/components/admin/privacy-case-action-form";
+import { StepUpGrantControl } from "@/components/security/step-up-grant-control";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -71,6 +72,34 @@ export default async function AdminPrivacyRequestDetailPage({
       erasureProofs: { orderBy: [{ processorKey: "asc" }, { entityKey: "asc" }] },
     },
   });
+  const executionApprovals = await getDatabase().privilegedApproval.findMany({
+    where: {
+      kind: "PRIVACY",
+      targetType: "PRIVACY_REQUEST",
+      targetId: privacyCase.id,
+      status: { in: ["PENDING", "CONSUMED"] },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+  const activeApproval = executionApprovals[0] ?? null;
+  const canProcess = hasAdminCapability(
+    {
+      userId: admin.id,
+      role: admin.role,
+      status: admin.status,
+      capabilities: admin.capabilities,
+    },
+    "PRIVACY_CASE_PROCESS",
+  );
+  const canApprove = hasAdminCapability(
+    {
+      userId: admin.id,
+      role: admin.role,
+      status: admin.status,
+      capabilities: admin.capabilities,
+    },
+    "PRIVACY_EXECUTION_APPROVE",
+  );
   const base = {
     requestId: privacyCase.id,
     version: privacyCase.version,
@@ -219,59 +248,75 @@ export default async function AdminPrivacyRequestDetailPage({
             </PrivacyCaseActionForm>
           ) : null}
 
-          {privacyCase.status === "IN_PROGRESS" && privacyCase.type === "EXPORT" ? (
+          {privacyCase.status === "IN_PROGRESS" &&
+          canProcess &&
+          activeApproval === null ? (
             <PrivacyCaseActionForm
-              operation="privacy-complete-export"
+              operation="privacy-request-execution-approval"
               {...base}
               idempotencyKey={randomUUID()}
-              label="Verschlüsseltes Exportartefakt erstellen"
+              label="Unabhängige Vollzugsfreigabe anfordern"
             >
               <p className="text-xs leading-5 text-muted-foreground">
-                Nur im freigegebenen Sandbox-Cohort. Execution-Actor,
-                unabhängiger Approval-Actor und frische Step-up-Evidence werden
-                gebunden; ohne Gate entsteht kein Mock-Abschluss.
+                Diese Bestätigung ist nur für diesen Fall und die beantragte
+                Aktion gültig. Danach muss eine zweite Privacy-Person die
+                persistierte Freigabe separat bestätigen; erst dann wird ein
+                Worker-Auftrag erzeugt.
               </p>
-              <input
-                name="approvalActorUserId"
-                className={INPUT_CLASS}
-                placeholder="UUID des unabhängigen Approval-Actors"
-                required
-              />
-              <input
-                name="approvalEvidenceRef"
-                className={INPUT_CLASS}
-                placeholder="sandbox:approval:evidence-reference"
-                required
-              />
-              <input
-                name="stepUpEvidenceRef"
-                className={INPUT_CLASS}
-                placeholder="sandbox:step-up:evidence-reference"
-                required
+              <StepUpGrantControl
+                action={`PRIVACY_${privacyCase.type}_EXECUTE`}
+                purpose="ADMIN_PRIVACY"
+                resourceId={privacyCase.id}
+                securityHref="/admin/security/authenticators"
               />
             </PrivacyCaseActionForm>
           ) : null}
 
-          {privacyCase.status === "IN_PROGRESS" && privacyCase.type === "DELETE" ? (
+          {privacyCase.status === "IN_PROGRESS" &&
+          activeApproval?.status === "PENDING" &&
+          activeApproval.requestedByUserId !== admin.id &&
+          canApprove ? (
             <PrivacyCaseActionForm
-              operation="privacy-complete-delete"
+              operation="privacy-approve-execution"
               {...base}
               idempotencyKey={randomUUID()}
-              label="Löschung/Anonymisierung ausführen"
+              label="Freigeben und genau einmal einreihen"
             >
-              <PrivacyExecutionApprovalFields />
+              <input
+                type="hidden"
+                name="approvalId"
+                value={activeApproval.id}
+              />
+              <p className="text-xs leading-5 text-muted-foreground">
+                Antrag von <span className="font-mono">{activeApproval.requestedByUserId}</span>.
+                Selbstfreigabe ist serverseitig ausgeschlossen. Die Freigabe
+                verfällt {formatDateTime(activeApproval.expiresAt)}.
+              </p>
+              <StepUpGrantControl
+                action={`PRIVACY_${privacyCase.type}_RELEASE`}
+                purpose="ADMIN_PRIVACY"
+                resourceId={activeApproval.id}
+                securityHref="/admin/security/authenticators"
+              />
             </PrivacyCaseActionForm>
           ) : null}
 
-          {privacyCase.status === "IN_PROGRESS" && privacyCase.type === "CORRECT" ? (
-            <PrivacyCaseActionForm
-              operation="privacy-complete-correction"
-              {...base}
-              idempotencyKey={randomUUID()}
-              label="Korrektur kanonisch ausführen"
-            >
-              <PrivacyExecutionApprovalFields />
-            </PrivacyCaseActionForm>
+          {privacyCase.status === "IN_PROGRESS" && activeApproval !== null ? (
+            <Card>
+              <CardHeader>
+                <CardTitle as="h2">Persistierte Vollzugsfreigabe</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-2 text-xs leading-5 text-muted-foreground">
+                <p className="break-all font-mono">{activeApproval.id}</p>
+                <p>
+                  {activeApproval.status === "CONSUMED"
+                    ? "Unabhängig freigegeben und atomar in die Worker-Queue gestellt."
+                    : activeApproval.requestedByUserId === admin.id
+                      ? "Wartet auf eine zweite unabhängige Privacy-Person. Du kannst den eigenen Antrag nicht freigeben."
+                      : "Wartet auf die getrennte Freigabe einer berechtigten Privacy-Person."}
+                </p>
+              </CardContent>
+            </Card>
           ) : null}
 
           {!terminal ? (
@@ -303,35 +348,6 @@ export default async function AdminPrivacyRequestDetailPage({
           </PrivacyCaseActionForm>
         </aside>
       </div>
-    </div>
-  );
-}
-
-function PrivacyExecutionApprovalFields() {
-  return (
-    <div className="grid gap-2">
-      <p className="text-xs leading-5 text-muted-foreground">
-        Ohne unabhängigen Approval-Actor, gültige Processing Approvals und
-        frische Step-up-Evidence bleibt der Fall offen.
-      </p>
-      <input
-        name="approvalActorUserId"
-        className={INPUT_CLASS}
-        placeholder="UUID des unabhängigen Approval-Actors"
-        required
-      />
-      <input
-        name="approvalEvidenceRef"
-        className={INPUT_CLASS}
-        placeholder="sandbox:approval:evidence-reference"
-        required
-      />
-      <input
-        name="stepUpEvidenceRef"
-        className={INPUT_CLASS}
-        placeholder="sandbox:step-up:evidence-reference"
-        required
-      />
     </div>
   );
 }

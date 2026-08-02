@@ -9,14 +9,14 @@
 
 ## 1. Geprüfte Planungsbaseline und historische Grenze
 
-| Feld | Wert |
-| --- | --- |
-| Repository | `carosellagiuliano-max/PortalGERM` |
-| geprüfter Branch | `codex/phase-18-release-audit` |
-| geprüfter Planungscommit | `e34262e3074565840e371c336a5d2ba5cf3efbac` |
-| `origin/main` bei Prüfungsbeginn | `e34262e3074565840e371c336a5d2ba5cf3efbac` |
-| Arbeitsbaum bei Prüfungsbeginn | sauber |
-| Auftragsscope | ausschliesslich Planung/Governance für Phase 19+ |
+| Feld                             | Wert                                             |
+| -------------------------------- | ------------------------------------------------ |
+| Repository                       | `carosellagiuliano-max/PortalGERM`               |
+| geprüfter Branch                 | `codex/phase-18-release-audit`                   |
+| geprüfter Planungscommit         | `e34262e3074565840e371c336a5d2ba5cf3efbac`       |
+| `origin/main` bei Prüfungsbeginn | `e34262e3074565840e371c336a5d2ba5cf3efbac`       |
+| Arbeitsbaum bei Prüfungsbeginn   | sauber                                           |
+| Auftragsscope                    | ausschliesslich Planung/Governance für Phase 19+ |
 
 Der Commit `eb9b45a` bleibt die unveränderliche Identität der früheren
 Remediation-Analyse. `e34262e` ist die aktuelle Planungsbaseline und enthält
@@ -37,14 +37,14 @@ Jede Priorität und jedes Gate ist gegen eine konkrete Launchklasse zu lesen.
 Eine höhere Klasse erbt alle Sicherheits-, Datenschutz-, Tenant-, Rechts- und
 Evidence-Garantien der niedrigeren Klassen.
 
-| Code | Launchklasse | Zulässiger Umfang | Mindestgrenze |
-| --- | --- | --- | --- |
-| LC1 | lokaler Demo-MVP | Fixtures, lokale Mocks, keine echten Personen- oder Zahlungsdaten | Production-Demo-Guard, klare Mock-Copy, reproduzierbare lokale Tests |
-| LC2 | beaufsichtigter Design-Partner-Test | kleine benannte Kohorte, Operator kontrolliert jeden kritischen Schritt | flowspezifische Legal-/Privacy-/AVG-/Tax-Freigabe, Incident Owner, reale Einwilligung, sichere manuelle Fallbacks |
-| LC3 | Invite-only Pilot | echte Nutzer in geschlossenem, begrenztem Cluster | produktive Provider für den Scope, getestete Kernworker oder ausdrücklich beaufsichtigte Ausnahmen, Trust-/Fraud-/Support-Gates |
-| LC4 | öffentlicher kostenloser Launch | öffentlicher Self-Service ohne Zahlung | autonome Kernprozesse, bestandene Cluster-/Search-/Freshness-/Trust-Gates, alle Kaufpfade fail-closed |
-| LC5 | bezahlter Self-Service | öffentlicher Geldfluss und selbstbediente bezahlte Leistungen | WTP-Go, Payment/Finance, Refund-/Service-Recovery, Reconciliation, Dunning, Tax/Legal und Paid-Support |
-| LC6 | skalierter Produktionsbetrieb | dauerhaftes Angebot mit wachsendem Volumen | SLO/RPO/RTO, On-call, Kapazitäts-/Lastnachweis, Trigger-Scale-Tracks, laufende Compliance und Incident-Übungen |
+| Code | Launchklasse                        | Zulässiger Umfang                                                       | Mindestgrenze                                                                                                                   |
+| ---- | ----------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| LC1  | lokaler Demo-MVP                    | Fixtures, lokale Mocks, keine echten Personen- oder Zahlungsdaten       | Production-Demo-Guard, klare Mock-Copy, reproduzierbare lokale Tests                                                            |
+| LC2  | beaufsichtigter Design-Partner-Test | kleine benannte Kohorte, Operator kontrolliert jeden kritischen Schritt | flowspezifische Legal-/Privacy-/AVG-/Tax-Freigabe, Incident Owner, reale Einwilligung, sichere manuelle Fallbacks               |
+| LC3  | Invite-only Pilot                   | echte Nutzer in geschlossenem, begrenztem Cluster                       | produktive Provider für den Scope, getestete Kernworker oder ausdrücklich beaufsichtigte Ausnahmen, Trust-/Fraud-/Support-Gates |
+| LC4  | öffentlicher kostenloser Launch     | öffentlicher Self-Service ohne Zahlung                                  | autonome Kernprozesse, bestandene Cluster-/Search-/Freshness-/Trust-Gates, alle Kaufpfade fail-closed                           |
+| LC5  | bezahlter Self-Service              | öffentlicher Geldfluss und selbstbediente bezahlte Leistungen           | WTP-Go, Payment/Finance, Refund-/Service-Recovery, Reconciliation, Dunning, Tax/Legal und Paid-Support                          |
+| LC6  | skalierter Produktionsbetrieb       | dauerhaftes Angebot mit wachsendem Volumen                              | SLO/RPO/RTO, On-call, Kapazitäts-/Lastnachweis, Trigger-Scale-Tracks, laufende Compliance und Incident-Übungen                  |
 
 Prioritäten bedeuten je Launchklasse:
 
@@ -79,9 +79,35 @@ launchklassenspezifischen externen Freigaben, Smoke-Tests und einen
 dokumentierten Go-Entscheid voraus. Ein fehlendes externes Gate darf einen
 technisch getesteten Sandbox-Stand nicht als LIVE ausgeben.
 
+Phase 33 ergänzt zwei zulässige technische Zwischenurteile:
+`TECHNICALLY_READY_FOR_LC4` und
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION`. Beide setzen den vollständigen
+Phase-33-Repository-, Production-Contract-, Provider-, Worker-, E2E- und
+Artefaktvertrag voraus, erteilen aber keine Aktivierung. Ohne sämtliche reale
+zielklassengültige External-/Approval-Evidence bleibt die vierte Dimension
+exakt `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`; das historische
+Phase-32-`NO_GO` wird nicht rückwirkend umgeschrieben. Während der Umsetzung
+verwendet Phase 33 das eindeutige Statusquartett Plan `IN_PROGRESS`, Technik
+`PENDING`, Quality `PENDING` und Aktivierung
+`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Die technischen Readinessurteile und
+`PASSED` dürfen erst nach dem exact-candidate-G4 erscheinen.
+
+Der Phase-33-Notificationvertrag ist Bestandteil dieses G4: getrennte
+`NOTIFICATION_DELIVERY_KEYS` (AES) und
+`NOTIFICATION_RECIPIENT_HASH_KEYS` (HMAC), unabhängige
+`RESEND_SECRET_VERSION`/`RESEND_WEBHOOK_SECRET_VERSION`, vollständiges
+Key-Version-Inventar, zeilengebundene AES-v2-Empfänger-Evidence normal 23 h
+und maximal 31 d, minutenbasierte providerunabhängige Maintenance sowie exakt
+`400 × 24 h` bis zur irreversiblen Attempt-PII/Receipt/Digest-Kompaktion bei
+erhaltener nicht-PII Auditkette. Unknown Outcomes (network, 408/5xx,
+malformed/oversized 2xx, concurrent idempotency) erhalten bounded Same-Key-
+Retry und danach `PAUSED`/manuelle Reconciliation, nie Blind-Resend oder
+blindes Dead Letter. Webhooks sperren die exakte Activation im selben TX;
+Inbox/Suppression bleiben append-only/monoton.
+
 ## 4. Pflichtaufbau jeder offenen Phase
 
-Jede Detailphase 19–32 muss in ihrer eigenen Datei phasenspezifisch alle
+Jede Detailphase 19–33 muss in ihrer eigenen Datei phasenspezifisch alle
 folgenden Punkte ausweisen:
 
 1. Status in den vier Dimensionen aus Abschnitt 3.
@@ -217,19 +243,34 @@ npm run test:e2e:hsts
 npm run test:release
 ```
 
+Phase 33 stellt einen eigenen unveränderten Abschlusslauf bereit:
+
+```powershell
+npm run test:phase33
+```
+
+Dieser Command orchestriert 38 fest definierte technische Prüfungen für
+LC4-/LC5-Konfigurationsreadiness, darunter Migration, Config, Provider,
+Worker, Route/Rolle, E2E und Standalone-/OCI-Runtime. Das daraus erzeugte
+Testreport wird anschließend durch `npm run phase33:manifest` an den Candidate
+und seine Artefaktdigests gebunden; `npm run phase33:release:technical` und das
+getrennte External-Gate-Ledger liefern zwei unterschiedliche Urteile. Der
+Vertrag darf den Phase-32-Orchestrator nicht abschwächen oder Contract-Stubs
+als Productionreceipts ausgeben.
+
 Der Release-Drill benötigt ausdrücklich isolierte Source-, Restore- und
 Production-Guard-Datenbanken sowie extern bereitgestellte Age-Secrets. Er
 darf nicht gegen eine persönliche oder gemeinsame Datenbank laufen.
 
 ## 7. Gate-Stufen und Golden Runs
 
-| Gate | Inhalt | Mindestanwendung |
-| --- | --- | --- |
-| G0 Plan | Plan-/Link-/Route-/Traceability-Audits, Diff- und Invariantenprüfung | Planänderungen und Phase 19 |
-| G1 Owning | gezielte Unit-, PostgreSQL-, Contract-, Rolle-/Tenant- und E2E-Tests plus Lint/Typecheck/Build | jede Phase |
-| G2 Track | vollständige Unit-/Integration-Suite und betroffene Browser-/Mobile-/A11y-Flows | Abschluss eines Teiltracks |
-| G3 Portal-Golden | vollständiges Repository-Gate, E2E-01–07, Security/Provider/Worker-Failure | Auth/RBAC, grosse Migration, Privacy, Payment, Worker, Trust, Search-Cutover sowie Ende zusammenhängender Tracks |
-| G4 Release-Golden | G3 plus clean clone, Migration/Seed, Backup/Restore, deploytes Artefakt, Vier-Rollen-/Mobile-/AT-Walkthrough | vor LC4, LC5, LC6 und Phase 32 |
+| Gate              | Inhalt                                                                                                                                                                                                         | Mindestanwendung                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| G0 Plan           | Plan-/Link-/Route-/Traceability-Audits, Diff- und Invariantenprüfung                                                                                                                                           | Planänderungen und Phase 19                                                                                      |
+| G1 Owning         | gezielte Unit-, PostgreSQL-, Contract-, Rolle-/Tenant- und E2E-Tests plus Lint/Typecheck/Build                                                                                                                 | jede Phase                                                                                                       |
+| G2 Track          | vollständige Unit-/Integration-Suite und betroffene Browser-/Mobile-/A11y-Flows                                                                                                                                | Abschluss eines Teiltracks                                                                                       |
+| G3 Portal-Golden  | vollständiges Repository-Gate, E2E-01–07, Security/Provider/Worker-Failure                                                                                                                                     | Auth/RBAC, grosse Migration, Privacy, Payment, Worker, Trust, Search-Cutover sowie Ende zusammenhängender Tracks |
+| G4 Release-Golden | G3 plus clean clone, Migration/Seed, Backup/Restore, deploytes Artefakt, Vier-Rollen-/Mobile-/AT-Walkthrough; Phase 33 ergänzt Production-Contract-, Provider-/Worker-/Config- und technische LC4-/LC5-Digests | vor LC4, LC5, LC6, Phase 32 und Phase 33                                                                         |
 
 G3 ist zwingend nach Phase 20, 22, 23, 25, 26, 27, 30A/30B und 24 bei
 Paid-Scope. Phase 21 benötigt G3, wenn interne Bewerbungen auf reale
@@ -237,29 +278,32 @@ Dokumentbytes umgestellt werden. Phase 27 benötigt wegen der ausdrücklichen
 technischen Owner-Aktivierung ein lokales G3; Demand-/Kohortenaktivierung
 benötigt erneut aktuelle zielklassengültige Evidence. Die optionalen
 Phase-28-Tracks benötigen G3 nur bei tatsächlicher Aktivierung. Phase 32
-besitzt G4.
+besitzt den historischen launchklassenspezifischen G4-Vertrag. Phase 33
+besitzt einen neuen technischen G4-Candidate; ein grüner Contractlauf ersetzt
+weder reales Staging noch Provider-, Legal-, Operations- oder
+Production-Approval-Evidence.
 
 ## 8. Akzeptanz-zu-Test-Matrix
 
 Jede Phase verwendet mindestens diese Spalten:
 
-| Feld | Pflichtinhalt |
-| --- | --- |
-| AC/Requirement | eindeutige Criterion-/`REQ-*`-/`STH-*`-ID |
-| Risiko | fachlicher Schaden und P0–P4 je relevanter Launchklasse |
-| Testart | Unit, PostgreSQL, Contract, Provider, E2E, Security, Last oder manuell |
-| Testfall | konkrete fachliche Reise, Transition, Migration oder Failure-Injektion |
-| Positiv | erlaubter Erfolg |
-| Negativ/Abuse | verbotener, fehlerhafter, konkurrierender oder missbräuchlicher Fall |
-| Rolle | konkreter Actor |
-| Portal/System | konkrete Oberfläche, API, Queue, Provider oder Datenbank |
-| Testdaten | konkrete Fixture, Bestandszustand, Tenant-/Canary- und Failure-Daten |
-| Umgebung | lokale/CI-PostgreSQL-Instanz, Sandbox/Staging/LIVE-Konsole, Browser/Viewport |
-| Befehl/Ablauf | existierender oder in der Phase anzulegender exakter Pfad |
+| Feld               | Pflichtinhalt                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| AC/Requirement     | eindeutige Criterion-/`REQ-*`-/`STH-*`-ID                                                     |
+| Risiko             | fachlicher Schaden und P0–P4 je relevanter Launchklasse                                       |
+| Testart            | Unit, PostgreSQL, Contract, Provider, E2E, Security, Last oder manuell                        |
+| Testfall           | konkrete fachliche Reise, Transition, Migration oder Failure-Injektion                        |
+| Positiv            | erlaubter Erfolg                                                                              |
+| Negativ/Abuse      | verbotener, fehlerhafter, konkurrierender oder missbräuchlicher Fall                          |
+| Rolle              | konkreter Actor                                                                               |
+| Portal/System      | konkrete Oberfläche, API, Queue, Provider oder Datenbank                                      |
+| Testdaten          | konkrete Fixture, Bestandszustand, Tenant-/Canary- und Failure-Daten                          |
+| Umgebung           | lokale/CI-PostgreSQL-Instanz, Sandbox/Staging/LIVE-Konsole, Browser/Viewport                  |
+| Befehl/Ablauf      | existierender oder in der Phase anzulegender exakter Pfad                                     |
 | Erwartung/Schwelle | erwarteter Zustand **und** numerische/objektive Pass-/Fail-Schwelle; nicht nur „funktioniert“ |
-| Evidence | Report/Manifest/Screenshot/Query Plan/Provider Receipt ohne Secrets |
-| Owner | Engineering plus Fach-/Security-/Ops-Owner, soweit nötig |
-| Status | `PLANNED`, `PASS`, `FAIL`, `N/A` mit Begründung |
+| Evidence           | Report/Manifest/Screenshot/Query Plan/Provider Receipt ohne Secrets                           |
+| Owner              | Engineering plus Fach-/Security-/Ops-Owner, soweit nötig                                      |
+| Status             | `PLANNED`, `PASS`, `FAIL`, `N/A` mit Begründung                                               |
 
 Ein Akzeptanzkriterium ohne Matrixzeile blockiert das Quality-Gate. Mehrere
 Tests dürfen ein Kriterium belegen; ein Test darf mehrere Kriterien nur dann
@@ -287,18 +331,18 @@ extern zugestellte Daten werden nicht durch ein Datenbank-Rollback
 
 ## 10. Geschützte Phase-01–18-Invarianten und Owning-Suites
 
-| Invariante | Mindestens erneut auszuführende bestehende Suites bei Berührung |
-| --- | --- |
-| Auth, Session, safe-next, Firmenkontext | `tests/unit/auth/*`, `tests/integration/auth/*`, `tests/integration/employer/team-invitations-postgres.test.ts`, E2E Journeys |
-| Tenant, Rolle, Assignment, Capability, sichere 404 | `tests/integration/security/authorized-repositories.test.ts`, `tests/unit/security/route-access.test.ts`, Admin-/Employer-PostgreSQL-Suites |
-| Candidate Apply, Status, Nachrichten, Alerts | `tests/integration/candidate/*`, `tests/integration/employer/applications-postgres.test.ts`, E2E Journeys |
-| Talent-Radar-Anonymität, Contact, Reveal | `tests/unit/talentradar/*`, `tests/integration/privacy/talent-radar-*-postgres.test.ts`, `phase17-talent-radar.spec.ts` |
-| Billing, Ledger, Entitlements, Boost | `tests/unit/billing/*`, `tests/integration/billing/*`, `phase17-billing.spec.ts` |
-| Job-Publish, Moderation, öffentliche Eligibility | `tests/integration/employer/jobs-postgres.test.ts`, `tests/integration/admin/phase11-operations-postgres.test.ts`, `tests/integration/jobs/*`, `phase17-employer-publish.spec.ts` |
-| Search, Sponsored-Relevanz, SEO/Sitemap | `tests/unit/search/*`, `tests/integration/jobs/public-read-model-postgres.test.ts`, `tests/unit/seo/*`, `phase17-security-search.spec.ts` |
-| Privacy Case, Consent, Export-Mock-Grenze | `tests/integration/privacy/privacy-*.test.ts`, `tests/unit/privacy/*` |
-| Audit, Rate Limit, Redaction, Cache/CSP | `tests/integration/audit/*`, `tests/integration/auth/rate-limit-postgres.test.ts`, `tests/unit/security/*`, HTTP/HSTS-Smoke |
-| Seed, Migration, Recovery | `tests/integration/schema/*`, `tests/integration/seed/*`, `npm run test:release` bei G4 |
+| Invariante                                         | Mindestens erneut auszuführende bestehende Suites bei Berührung                                                                                                                   |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth, Session, safe-next, Firmenkontext            | `tests/unit/auth/*`, `tests/integration/auth/*`, `tests/integration/employer/team-invitations-postgres.test.ts`, E2E Journeys                                                     |
+| Tenant, Rolle, Assignment, Capability, sichere 404 | `tests/integration/security/authorized-repositories.test.ts`, `tests/unit/security/route-access.test.ts`, Admin-/Employer-PostgreSQL-Suites                                       |
+| Candidate Apply, Status, Nachrichten, Alerts       | `tests/integration/candidate/*`, `tests/integration/employer/applications-postgres.test.ts`, E2E Journeys                                                                         |
+| Talent-Radar-Anonymität, Contact, Reveal           | `tests/unit/talentradar/*`, `tests/integration/privacy/talent-radar-*-postgres.test.ts`, `phase17-talent-radar.spec.ts`                                                           |
+| Billing, Ledger, Entitlements, Boost               | `tests/unit/billing/*`, `tests/integration/billing/*`, `phase17-billing.spec.ts`                                                                                                  |
+| Job-Publish, Moderation, öffentliche Eligibility   | `tests/integration/employer/jobs-postgres.test.ts`, `tests/integration/admin/phase11-operations-postgres.test.ts`, `tests/integration/jobs/*`, `phase17-employer-publish.spec.ts` |
+| Search, Sponsored-Relevanz, SEO/Sitemap            | `tests/unit/search/*`, `tests/integration/jobs/public-read-model-postgres.test.ts`, `tests/unit/seo/*`, `phase17-security-search.spec.ts`                                         |
+| Privacy Case, Consent, Export-Mock-Grenze          | `tests/integration/privacy/privacy-*.test.ts`, `tests/unit/privacy/*`                                                                                                             |
+| Audit, Rate Limit, Redaction, Cache/CSP            | `tests/integration/audit/*`, `tests/integration/auth/rate-limit-postgres.test.ts`, `tests/unit/security/*`, HTTP/HSTS-Smoke                                                       |
+| Seed, Migration, Recovery                          | `tests/integration/schema/*`, `tests/integration/seed/*`, `npm run test:release` bei G4                                                                                           |
 
 Die Phase nennt daraus eine konkrete Teilmenge und ergänzt ihre neuen
 Owning-Suites. Ein geänderter Altvertrag benötigt eine neue ADR-/Requirement-
@@ -326,6 +370,9 @@ nicht still umgedeutet.
 - Phase 29 poliert nur stabilisierte Fachverträge; moderierte Research startet
   früh und liefert Feedback an die besitzende Fachphase.
 - Phase 32 integriert keine neuen Features.
+- Phase 33 implementiert ausschließlich bestätigte technische LC4-/LC5-
+  Closure-Gaps. Optionaler Produktumfang bleibt deaktiviert; ein Auditbefund
+  rechtfertigt keinen ungezielten Feature- oder Broad-Refactor-Scope.
 
 Schema-, Auth-/RBAC-, Verschlüsselungs-/Keyring-, Payment- und Worker-Cutover
 dürfen nicht als unabhängige Grossmigrationen gleichzeitig aktiviert werden.
@@ -349,6 +396,12 @@ Jeder Phase-19+-Record enthält:
 - Migrationen auf den Zuständen aus Abschnitt 9;
 - Rollen-/Portale-/Tenant-/Security-/Abuse-/Failure-Ergebnisse;
 - E2E-, A11y-, Mobile-, Performance-/Load- und Providerartefakte;
+- für Phase 33 zusätzlich historische Migration-SHA, Mock-/Production-
+  Contract-Profile, Environment-/Provider-/Feature-/Workerinventare und
+  Config-/Standalone-/OCI-Digests; für Notification zusätzlich Key-/Secret-
+  Versionsinventar, 23-h-/31-d-/exakt-400×24-h-Grenzläufe,
+  providerunabhängige Maintenance, Unknown-Outcome-Reconciliation,
+  Activation-TX-Lock und monotone Inbox-/Suppression-Evidence;
 - manuelle/moderierte Prüfungen mit Protokoll und anonymisierten Ergebnissen;
 - offene externe Gates, Owner, Datum und Go/No-go;
 - bekannte Limitationen sowie Rollback-/Kill-Switch-Test.

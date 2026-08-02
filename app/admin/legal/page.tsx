@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import { forbidden } from "next/navigation";
 
 import { adminLegalAction } from "@/app/admin/legal/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { requireAdminPage } from "@/lib/auth/route-guards";
+import { requireAdminCapabilityPage } from "@/lib/auth/route-guards";
 import { getDatabase } from "@/lib/db/client";
+import { getAdminLegalControlPlane } from "@/lib/legal/admin-read";
 import { formatDateTime } from "@/lib/utils/format";
 
 export const metadata: Metadata = { title: "Legal & Processing Gates" };
@@ -20,24 +22,27 @@ const TEXTAREA =
 export default async function AdminLegalPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<{ result?: string }> }>) {
-  const [, query] = await Promise.all([requireAdminPage(), searchParams]);
-  const [documents, approvals, inventory] = await Promise.all([
-    getDatabase().legalDocument.findMany({
-      orderBy: [{ type: "asc" }, { locale: "asc" }],
-      include: {
-        revisions: { orderBy: { revisionNumber: "desc" } },
-        publications: { orderBy: { createdAt: "desc" } },
-      },
-    }),
-    getDatabase().processingApproval.findMany({
-      orderBy: [{ scope: "asc" }, { processorKey: "asc" }, { createdAt: "desc" }],
-      take: 100,
-    }),
-    getDatabase().privacyDataInventoryVersion.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { _count: { select: { entries: true } } },
-    }),
+  const [admin, query] = await Promise.all([
+    requireAdminCapabilityPage("ADMIN_LEGAL_READ"),
+    searchParams,
   ]);
+  const data = await getAdminLegalControlPlane({
+    actor: {
+      userId: admin.id,
+      email: admin.email,
+      role: admin.role,
+      status: admin.status,
+      capabilities: admin.capabilities,
+    },
+    correlationId: "admin-legal-read",
+    database: getDatabase(),
+    now: new Date(),
+  });
+  if (data === null) forbidden();
+  const { documents, approvals, inventory } = data;
+  const canDraft = admin.capabilities.includes("ADMIN_LEGAL_DRAFT");
+  const canReview = admin.capabilities.includes("ADMIN_LEGAL_REVIEW");
+  const canPublish = admin.capabilities.includes("ADMIN_LEGAL_PUBLISH");
 
   return (
     <div className="grid gap-6">
@@ -56,7 +61,7 @@ export default async function AdminLegalPage({
         ) : null}
       </header>
 
-      <Card>
+      {canDraft ? <Card>
         <CardHeader><CardTitle as="h2">Neuen Rechtsentwurf anlegen</CardTitle></CardHeader>
         <CardContent>
           <form action={adminLegalAction} className="grid gap-4">
@@ -95,7 +100,7 @@ export default async function AdminLegalPage({
             <Button type="submit" className="w-fit">Entwurf speichern</Button>
           </form>
         </CardContent>
-      </Card>
+      </Card> : null}
 
       <section className="grid gap-4" aria-labelledby="legal-documents-title">
         <h2 id="legal-documents-title" className="text-2xl font-semibold">Dokumente und Revisionen</h2>
@@ -115,7 +120,7 @@ export default async function AdminLegalPage({
                     <div className="flex flex-wrap gap-2"><Badge>{revision.status}</Badge><Badge variant="outline">{revision.versionLabel}</Badge>{publication ? <Badge variant="secondary">Publication {publication.status}</Badge> : null}</div>
                     <p className="text-sm">{revision.changeSummary}</p>
                     <p className="break-all font-mono text-xs text-muted-foreground">{revision.contentHash}</p>
-                    {["DRAFT", "IN_REVIEW"].includes(revision.status) ? (
+                    {canReview && ["DRAFT", "IN_REVIEW"].includes(revision.status) ? (
                       <div className="grid gap-3 md:grid-cols-2">
                         {["approve-revision", "reject-revision"].map((operation) => (
                           <form action={adminLegalAction} className="flex flex-wrap items-end gap-2" key={operation}>
@@ -129,7 +134,7 @@ export default async function AdminLegalPage({
                         ))}
                       </div>
                     ) : null}
-                    {revision.status === "APPROVED" && publication === undefined ? (
+                    {canPublish && revision.status === "APPROVED" && publication === undefined ? (
                       <form action={adminLegalAction} className="grid gap-3 md:grid-cols-3">
                         <input type="hidden" name="operation" value="publish-revision" />
                         <input type="hidden" name="revisionId" value={revision.id} />
@@ -145,7 +150,7 @@ export default async function AdminLegalPage({
                         <Button type="submit" className="w-fit">Als dritter Actor veröffentlichen</Button>
                       </form>
                     ) : null}
-                    {publication?.status === "CURRENT" ? (
+                    {canPublish && publication?.status === "CURRENT" ? (
                       <form action={adminLegalAction} className="flex flex-wrap items-end gap-2">
                         <input type="hidden" name="operation" value="revoke-publication" />
                         <input type="hidden" name="publicationId" value={publication.id} />

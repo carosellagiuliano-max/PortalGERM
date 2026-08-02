@@ -1,7 +1,7 @@
-## SwissTalentHub Phase 19–32 — Standing Execution Rule
+## SwissTalentHub Phase 19–33 — Standing Execution Rule
 
 This section activates automatically whenever the repository owner asks to
-check, implement, continue, finish or fix a phase from 19 through 32. The
+check, implement, continue, finish or fix a phase from 19 through 33. The
 owner does not need to repeat the planning, quality, evidence or completion
 rules in each request.
 
@@ -135,8 +135,11 @@ Run the exact tests from the phase matrix and the gates required by
 * G2 for a completed track and all affected downstream/protected regressions;
 * G3 for phase close, migrations, seed, recovery, browser/mobile/a11y and
   relevant provider/worker failure paths;
-* G4 for Phase 19 baseline and Phase 32 release on the exact same immutable
-  commit/artifact, including the required clean-clone Golden Run.
+* G4 for Phase 19 baseline, the historical Phase-32 release decision and the
+  Phase-33 technical LC4-/LC5-configuration candidate on the exact same
+  immutable commit/artifact, including the required clean-clone Golden Run.
+  Phase 33 may not rewrite the Phase-32-`NO_GO` or turn technical readiness
+  into a Production approval.
 
 Create a new
 `codex-plan/evidence/YYYY-MM-DD-phase-NN[-track].md` record from

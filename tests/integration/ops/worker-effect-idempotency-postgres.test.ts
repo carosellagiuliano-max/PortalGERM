@@ -8,6 +8,7 @@ import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import { executeRegisteredHandler } from "@/lib/ops/registered-handler-runtime";
 import {
   claimWorkBatch,
+  completeWorkItem,
   createWorkerRun,
   enqueueWorkItem,
   recordFencedEffectReceipt,
@@ -39,7 +40,14 @@ describe("Phase-23 crash-boundary effect idempotency", () => {
     const client = db();
     const item = await diagnostic("after-effect");
     const firstRun = await run("effect-worker-a", "build-a", NOW);
-    const [first] = await claim(client, item.id, firstRun.id, "effect-worker-a", "build-a", NOW);
+    const [first] = await claim(
+      client,
+      item.id,
+      firstRun.id,
+      "effect-worker-a",
+      "build-a",
+      NOW,
+    );
     const firstIdentity = identity(
       item.id,
       firstRun.id,
@@ -57,11 +65,7 @@ describe("Phase-23 crash-boundary effect idempotency", () => {
     ).resolves.toEqual({ status: "RECORDED" });
 
     const takeoverAt = new Date(NOW.getTime() + 6_001);
-    const secondRun = await run(
-      "effect-worker-b",
-      "build-b",
-      takeoverAt,
-    );
+    const secondRun = await run("effect-worker-b", "build-b", takeoverAt);
     const [second] = await claim(
       client,
       item.id,
@@ -103,14 +107,17 @@ describe("Phase-23 crash-boundary effect idempotency", () => {
     const client = db();
     const item = await diagnostic("before-effect");
     const firstRun = await run("before-worker-a", "build-a", NOW);
-    await claim(client, item.id, firstRun.id, "before-worker-a", "build-a", NOW);
+    await claim(
+      client,
+      item.id,
+      firstRun.id,
+      "before-worker-a",
+      "build-a",
+      NOW,
+    );
 
     const takeoverAt = new Date(NOW.getTime() + 6_001);
-    const secondRun = await run(
-      "before-worker-b",
-      "build-b",
-      takeoverAt,
-    );
+    const secondRun = await run("before-worker-b", "build-b", takeoverAt);
     const [second] = await claim(
       client,
       item.id,
@@ -138,6 +145,164 @@ describe("Phase-23 crash-boundary effect idempotency", () => {
       client.workEffectReceipt.count({ where: { workItemId: item.id } }),
     ).resolves.toBe(1);
   });
+
+  it("persists the stale activation generation when revoke lands after the effect", async () => {
+    const client = db();
+    const deploymentDigest = "build-revoke-boundary";
+    const item = await diagnostic("revoke-after-effect");
+    const activation = await client.workerHandlerActivation.create({
+      data: {
+        environment: "ci",
+        handlerKey: "ops.diagnostic-effect",
+        handlerVersion: "v1",
+        payloadVersion: "v1",
+        mode: "SANDBOX",
+        configurationDigest: "a".repeat(64),
+        deploymentDigest,
+        owner: "Platform Operations",
+        runbookRef: "codex-plan/runbooks/worker-operations.md",
+        sloRef: "codex-plan/33-go-live-readiness-e2e-acceptance.md#22",
+        evidenceDigest: "b".repeat(64),
+        providerUseCase: null,
+        leaseMilliseconds: 6_000,
+        heartbeatMilliseconds: 2_000,
+        batchSize: 1,
+        maxAttempts: 8,
+        maxConcurrency: 1,
+        killSwitchEngaged: false,
+        effectiveAt: NOW,
+      },
+    });
+    const workerRun = await run("effect-worker-revoked", deploymentDigest, NOW);
+    const [claimed] = await claimWorkBatch(client, {
+      deploymentDigest,
+      handlerKey: "ops.diagnostic-effect",
+      handlerVersion: "v1",
+      payloadVersion: "v1",
+      workerId: "effect-worker-revoked",
+      workerRunId: workerRun.id,
+      now: NOW,
+      policy: {
+        activationId: activation.id,
+        activationGeneration: activation.generation,
+        batchSize: 1,
+        leaseMilliseconds: 6_000,
+        heartbeatMilliseconds: 2_000,
+      },
+    });
+    expect(claimed?.id).toBe(item.id);
+    const leaseIdentity = identity(
+      item.id,
+      workerRun.id,
+      "effect-worker-revoked",
+      deploymentDigest,
+      claimed!.fencingToken,
+    );
+
+    await client.workerHandlerActivation.update({
+      where: { id: activation.id },
+      data: {
+        killSwitchEngaged: true,
+        revokedAt: new Date(NOW.getTime() + 10),
+        revokeReasonCode: "TEST_REVOKE_AFTER_EFFECT",
+      },
+    });
+    await expect(
+      recordFencedEffectReceipt(client, leaseIdentity, {
+        handlerKey: "ops.diagnostic-effect",
+        handlerVersion: "v1",
+        effectDigest: EFFECT_DIGEST,
+        now: new Date(NOW.getTime() + 20),
+      }),
+    ).resolves.toEqual({ status: "RECORDED" });
+    await expect(
+      completeWorkItem(client, leaseIdentity, {
+        now: new Date(NOW.getTime() + 30),
+      }),
+    ).resolves.toEqual({ status: "COMPLETED" });
+
+    await expect(
+      client.workEffectReceipt.findUniqueOrThrow({
+        where: { effectKey: claimed!.effectKey },
+        select: {
+          handlerActivationCurrentAtReceipt: true,
+          handlerActivationGeneration: true,
+          handlerActivationId: true,
+          leaseFencingToken: true,
+          leaseWorkerRunId: true,
+        },
+      }),
+    ).resolves.toEqual({
+      handlerActivationCurrentAtReceipt: false,
+      handlerActivationGeneration: activation.generation,
+      handlerActivationId: activation.id,
+      leaseFencingToken: claimed!.fencingToken,
+      leaseWorkerRunId: workerRun.id,
+    });
+    await expect(
+      client.workAttempt.findUniqueOrThrow({
+        where: {
+          workItemId_attemptNumber: {
+            workItemId: item.id,
+            attemptNumber: 1,
+          },
+        },
+        select: {
+          handlerActivationCurrentAtCompletion: true,
+          handlerActivationGeneration: true,
+          handlerActivationId: true,
+          outcome: true,
+        },
+      }),
+    ).resolves.toEqual({
+      handlerActivationCurrentAtCompletion: false,
+      handlerActivationGeneration: activation.generation,
+      handlerActivationId: activation.id,
+      outcome: "SUCCEEDED",
+    });
+    await expect(
+      client.workerHandlerActivation.findUniqueOrThrow({
+        where: { id: activation.id },
+        select: { generation: true },
+      }),
+    ).resolves.toEqual({ generation: activation.generation + 1 });
+
+    await expect(
+      client.workEffectReceipt.create({
+        data: {
+          workItemId: item.id,
+          effectKey: `effect:invalid-activation-evidence:${randomUUID()}`,
+          handlerKey: "ops.diagnostic-effect",
+          handlerVersion: "v1",
+          effectDigest: EFFECT_DIGEST,
+          handlerActivationId: activation.id,
+          handlerActivationGeneration: null,
+          handlerActivationCurrentAtReceipt: null,
+        },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      client.workAttempt.create({
+        data: {
+          workItemId: item.id,
+          workerRunId: workerRun.id,
+          handlerActivationId: activation.id,
+          handlerActivationGeneration: null,
+          handlerActivationCurrentAtCompletion: null,
+          attemptNumber: 2,
+          fencingToken: claimed!.fencingToken,
+          workerId: "effect-worker-revoked",
+          deploymentDigest,
+          outcome: "LEASE_LOST",
+          leaseClaimedAt: NOW,
+          leaseExpiresAt: new Date(NOW.getTime() + 6_000),
+          startedAt: NOW,
+          completedAt: new Date(NOW.getTime() + 40),
+          createdAt: new Date(NOW.getTime() + 40),
+        },
+      }),
+    ).rejects.toThrow();
+  });
 });
 
 async function diagnostic(suffix: string) {
@@ -155,11 +320,7 @@ async function diagnostic(suffix: string) {
   });
 }
 
-async function run(
-  workerId: string,
-  deploymentDigest: string,
-  now: Date,
-) {
+async function run(workerId: string, deploymentDigest: string, now: Date) {
   return createWorkerRun(db(), {
     workerId,
     environment: "ci",
@@ -220,6 +381,7 @@ function environment() {
 }
 
 function db() {
-  if (database === undefined) throw new Error("Effect test database unavailable.");
+  if (database === undefined)
+    throw new Error("Effect test database unavailable.");
   return database;
 }

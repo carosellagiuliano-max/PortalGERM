@@ -29,6 +29,42 @@ describe("Phase 25 action-bound step-up policy", () => {
     expect(decision.allowed).toBe(true);
   });
 
+  it("binds notification outcome reconciliation to one resolution and outbox", () => {
+    const resourceId = crypto.randomUUID();
+    expect(
+      resolveStepUpPolicy({
+        actorRole: "ADMIN",
+        purpose: "NOTIFICATION_RECONCILIATION",
+        action: "NOTIFICATION_OUTCOME_RECONCILE:ACCEPTED",
+        resourceId,
+      }).allowed,
+    ).toBe(true);
+    expect(
+      resolveStepUpPolicy({
+        actorRole: "ADMIN",
+        purpose: "NOTIFICATION_RECONCILIATION",
+        action: "NOTIFICATION_OUTCOME_RECONCILE:UNKNOWN",
+      }),
+    ).toEqual({ allowed: false, reason: "RESOURCE_REQUIRED" });
+    expect(
+      resolveStepUpPolicy({
+        actorRole: "ADMIN",
+        purpose: "NOTIFICATION_RECONCILIATION",
+        action: "NOTIFICATION_OUTCOME_RECONCILE:ACCEPTED",
+        resourceId,
+        tenantId: crypto.randomUUID(),
+      }),
+    ).toEqual({ allowed: false, reason: "TENANT_FORBIDDEN" });
+    expect(
+      resolveStepUpPolicy({
+        actorRole: "EMPLOYER",
+        purpose: "NOTIFICATION_RECONCILIATION",
+        action: "NOTIFICATION_OUTCOME_RECONCILE:ACCEPTED",
+        resourceId,
+      }),
+    ).toEqual({ allowed: false, reason: "ROLE_FORBIDDEN" });
+  });
+
   it("binds persona creation to the exact identity or invitation scope", () => {
     const identityId = crypto.randomUUID();
     const companyId = crypto.randomUUID();
@@ -122,13 +158,10 @@ describe("Phase 25 action-bound step-up policy", () => {
       },
       "RESOURCE_REQUIRED",
     ],
-  ] as const)(
-    "denies %s fail closed",
-    (_label, input, expectedReason) => {
-      expect(resolveStepUpPolicy(input)).toEqual({
-        allowed: false,
-        reason: expectedReason,
-      });
-    },
-  );
+  ] as const)("denies %s fail closed", (_label, input, expectedReason) => {
+    expect(resolveStepUpPolicy(input)).toEqual({
+      allowed: false,
+      reason: expectedReason,
+    });
+  });
 });

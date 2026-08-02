@@ -324,36 +324,12 @@ export async function applyToJob(
     return Object.freeze({ ok: false, code: "WRITE_FAILED" });
   }
 
-  let emailRecorded =
-    dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS;
-  if (!dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
-    try {
-      await dependencies.emailProvider.send({
-        to: committed.candidateEmail,
-        templateKey: "application_submitted",
-        subject: "Deine Bewerbung wurde erfasst",
-        data: {
-          jobTitle: committed.jobTitle,
-          companyName: committed.companyName,
-          idempotencyKey: `application-submitted:${committed.applicationId}`,
-        },
-      });
-      emailRecorded = true;
-    } catch (error) {
-      logger.error(
-        "candidate_application.email_retryable",
-        { error, applicationId: committed.applicationId },
-        dependencies.request.correlationId,
-      );
-    }
-  }
-
   return Object.freeze({
     ok: true,
     applicationId: committed.applicationId,
     conversationId: committed.conversationId,
     duplicate: committed.duplicate,
-    emailRecorded,
+    emailRecorded: true,
   });
 }
 
@@ -483,20 +459,18 @@ async function createApplicationTransaction(
       payload: { applicationId: application.id, status: "SUBMITTED" },
     });
   }
-  if (dependencies.environment.NOTIFICATION_OUTBOX_PRODUCERS) {
-    await enqueueNotification(transaction, {
-      recipient: { userId: dependencies.currentUser!.id },
-      templateKey: "application_submitted",
-      payloadSchemaVersion: "application-submitted-v1",
-      payload: {
-        applicationId: application.id,
-        jobTitle: context.projection.job.title,
-        companyName: context.projection.recipient.companyName,
-      },
-      dedupeKey: `application-submitted:${application.id}`,
-      availableAt: now,
-    });
-  }
+  await enqueueNotification(transaction, {
+    recipient: { userId: dependencies.currentUser!.id },
+    templateKey: "application_submitted",
+    payloadSchemaVersion: "application-submitted-v1",
+    payload: {
+      applicationId: application.id,
+      jobTitle: context.projection.job.title,
+      companyName: context.projection.recipient.companyName,
+    },
+    dedupeKey: `application-submitted:${application.id}`,
+    availableAt: now,
+  });
 
   await writeRequiredAudit(
     createPrismaTransactionAuditPort(transaction),

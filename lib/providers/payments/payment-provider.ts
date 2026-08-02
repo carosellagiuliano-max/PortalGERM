@@ -8,10 +8,23 @@ export interface CreatePaymentOperationInput {
     currency: "CHF";
     customerEmail: string;
     description: string;
+    /** Exact server-side checkout deadline mirrored into the hosted session. */
+    expiresAt: Date;
     quoteDigest: string;
     paymentAttemptId: string;
+    checkout:
+      | Readonly<{ kind: "ONE_TIME" }>
+      | Readonly<{
+          kind: "SUBSCRIPTION";
+          billingInterval: "MONTHLY";
+          providerPriceReference: string;
+        }>;
   }>;
 }
+
+export type PaymentRuntimeMode = "CONTRACT" | "SANDBOX" | "LIVE";
+export type StripePaymentAdapterKey =
+  "stripe_contract" | "stripe_sandbox" | "stripe_live";
 
 export interface CheckoutSession {
   orderId: string;
@@ -40,11 +53,19 @@ export type NormalizedPaymentProviderEvent = Readonly<{
   liveMode: boolean;
   orderId: string | null;
   paymentAttemptId: string | null;
+  refundId: string | null;
   providerAccountReference: string;
+  providerCancelAtPeriodEnd: boolean | null;
   providerEventId: string;
   providerObjectReference: string | null;
   providerPaymentReference: string | null;
   providerSessionReference: string | null;
+  providerCustomerReference: string | null;
+  providerInvoiceReference: string | null;
+  providerPriceReference: string | null;
+  providerSubscriptionReference: string | null;
+  providerPeriodStart: Date | null;
+  providerPeriodEnd: Date | null;
   providerStatus: string | null;
 }>;
 
@@ -55,8 +76,30 @@ export type ProviderRefundResult = Readonly<{
   status: "PENDING" | "SUCCEEDED" | "FAILED";
 }>;
 
+export type ProviderInvoicePaymentResolution = Readonly<{
+  amountRappen: number;
+  currency: "CHF";
+  evidenceDigest: string;
+  providerInvoicePaymentReference: string;
+  providerInvoiceReference: string;
+  providerPaymentReference: string;
+  source: "STRIPE_INVOICE_PAYMENTS_LIST_V1";
+}>;
+
 export interface HostedPaymentProvider extends PaymentProvider {
   readonly kind: "STRIPE";
+  readonly adapterKey: StripePaymentAdapterKey;
+  readonly adapterVersion: "v1";
+  readonly providerAccountReference: string;
+  readonly providerMode: PaymentRuntimeMode;
+  readonly expectedLiveMode: boolean;
+  expireCheckoutSession(
+    input: Readonly<{
+      idempotencyKey: string;
+      orderId: string;
+      providerSessionReference: string;
+    }>,
+  ): Promise<void>;
   createRefund(
     input: Readonly<{
       amountRappen: number;
@@ -65,8 +108,17 @@ export interface HostedPaymentProvider extends PaymentProvider {
       paymentAttemptId: string;
       providerPaymentReference: string;
       reasonCode: string;
+      refundId: string;
+      sourceKind: "INITIAL_ORDER" | "SUBSCRIPTION_PROVIDER_INVOICE";
     }>,
   ): Promise<ProviderRefundResult>;
+  resolveInvoicePayment(
+    input: Readonly<{
+      amountRappen: number;
+      currency: "CHF";
+      providerInvoiceReference: string;
+    }>,
+  ): Promise<ProviderInvoicePaymentResolution>;
   verifyWebhook(
     input: Readonly<{
       rawBody: string;

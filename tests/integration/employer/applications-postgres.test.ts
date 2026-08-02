@@ -26,8 +26,6 @@ import {
 } from "@/lib/employer/applications";
 import { revokeJobAssignment } from "@/lib/employer/team";
 import type { EmailProvider } from "@/lib/providers/email/email-provider";
-import { MockEmailProvider } from "@/lib/providers/email/mock-email-provider";
-import { PrismaEmailLogRepository } from "@/lib/providers/email/prisma-email-log-repository";
 import { createValidEnvironment } from "@/tests/fixtures/environment";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
@@ -295,10 +293,10 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
   });
 
   it("writes one status event, required audit and notification across a retry", async () => {
-    const emailProvider = new MockEmailProvider(
-      new PrismaEmailLogRepository(client()),
-    );
-    const sendSpy = vi.spyOn(emailProvider, "send");
+    const sendSpy = vi.fn(async () => {
+      throw new Error("legacy provider must not be called");
+    });
+    const emailProvider: EmailProvider = { send: sendSpy };
     const input = {
       applicationId: IDS.statusApplication,
       nextStatus: "IN_REVIEW" as const,
@@ -316,13 +314,7 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
     );
     expect(first).toEqual({ ok: true, duplicate: false });
     expect(retry).toEqual({ ok: true, duplicate: true });
-    expect(sendSpy).toHaveBeenCalledTimes(2);
-    expect(sendSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "candidate-phase10-applications@example.test",
-        templateKey: "application_status_changed",
-      }),
-    );
+    expect(sendSpy).not.toHaveBeenCalled();
 
     const [application, events, audits, notifications, emailLogs, responseAnalyticsCount] = await Promise.all([
       client().application.findUniqueOrThrow({
@@ -359,10 +351,11 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
         },
         select: { schemaVersion: true, payload: true },
       }),
-      client().emailLog.findMany({
+      client().notificationOutbox.findMany({
         where: {
-          recipient: "candidate-phase10-applications@example.test",
+          recipientUserId: IDS.candidate,
           templateKey: "application_status_changed",
+          payload: { path: ["applicationId"], equals: IDS.statusApplication },
         },
         select: {
           purpose: true,
@@ -407,13 +400,13 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
     ]);
     expect(emailLogs).toHaveLength(1);
     expect(emailLogs[0]).toMatchObject({
-      purpose: "application_status_changed",
+      purpose: "APPLICATION_STATUS_CHANGED",
       templateKey: "application_status_changed",
-      status: "MOCK_RECORDED",
+      status: "PENDING",
       payload: {
-        schemaVersion: "1",
-        deliveryStatus: "mock_recorded",
-        externalDeliveryClaimed: false,
+        applicationId: IDS.statusApplication,
+        jobTitle: expect.any(String),
+        statusLabel: expect.any(String),
       },
     });
     const serializedEmailLogs = JSON.stringify(emailLogs);
@@ -423,22 +416,12 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
     expect(responseAnalyticsCount).toBe(0);
   });
 
-  it("heals a transient status-email failure on an exact replay without duplicating domain artifacts", async () => {
-    const mockProvider = new MockEmailProvider(
-      new PrismaEmailLogRepository(client()),
-    );
-    let sendAttempts = 0;
-    const attemptedEnvelopes: Parameters<EmailProvider["send"]>[0][] = [];
+  it("keeps one durable status-email intent on an exact replay", async () => {
+    const legacySend = vi.fn(async () => {
+      throw new Error("legacy provider must not be called");
+    });
     const transientProvider: EmailProvider = {
-      async send(input) {
-        sendAttempts += 1;
-        attemptedEnvelopes.push(input);
-        const result = await mockProvider.send(input);
-        if (sendAttempts === 1) {
-          throw new Error("transient delivery acknowledgement failure");
-        }
-        return result;
-      },
+      send: legacySend,
     };
     const input = {
       applicationId: IDS.noteApplication,
@@ -484,24 +467,22 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
           dedupeKey: `EMPLOYER_RESPONSE:${IDS.noteApplication}`,
         },
       }),
-      client().emailLog.findMany({
+      client().notificationOutbox.findMany({
         where: {
-          recipient: "candidate-phase10-applications@example.test",
+          recipientUserId: IDS.candidate,
           templateKey: "application_status_changed",
+          payload: { path: ["applicationId"], equals: IDS.noteApplication },
         },
         select: { payload: true },
       }),
     ]);
-    const healedLogs = emailLogs.filter(({ payload }) =>
-      JSON.stringify(payload).includes("Private Arbeitgebernotiz"),
-    );
-    expect(sendAttempts).toBe(2);
-    expect(attemptedEnvelopes[1]).toEqual(attemptedEnvelopes[0]);
+    expect(legacySend).not.toHaveBeenCalled();
     expect(events).toBe(1);
     expect(audits).toBe(1);
     expect(notifications).toBe(1);
     expect(analytics).toBe(0);
-    expect(healedLogs).toHaveLength(1);
+    expect(emailLogs).toHaveLength(1);
+    expect(JSON.stringify(emailLogs)).not.toContain(PRIVATE_NOTE);
   });
 
   it("rejects missing, unknown and extraneous rejection reasons without writing artifacts", async () => {
@@ -756,21 +737,11 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
   });
 
   it("scopes messages to the application and deduplicates a legitimate replay", async () => {
-    const mockProvider = new MockEmailProvider(
-      new PrismaEmailLogRepository(client()),
-    );
-    let sendAttempts = 0;
-    const attemptedEnvelopes: Parameters<EmailProvider["send"]>[0][] = [];
+    const legacySend = vi.fn(async () => {
+      throw new Error("legacy provider must not be called");
+    });
     const transientProvider: EmailProvider = {
-      async send(envelope) {
-        sendAttempts += 1;
-        attemptedEnvelopes.push(envelope);
-        const result = await mockProvider.send(envelope);
-        if (sendAttempts === 1) {
-          throw new Error("transient message delivery acknowledgement failure");
-        }
-        return result;
-      },
+      send: legacySend,
     };
     const input = {
       applicationId: IDS.messageApplication,
@@ -843,10 +814,11 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
           properties: true,
         },
       }),
-      client().emailLog.findMany({
+      client().notificationOutbox.findMany({
         where: {
-          recipient: "candidate-phase10-applications@example.test",
+          recipientUserId: IDS.candidate,
           templateKey: "employer_message_received",
+          payload: { path: ["applicationId"], equals: IDS.messageApplication },
         },
         select: { payload: true },
       }),
@@ -874,11 +846,9 @@ describe.sequential("Phase-10 employer applications PostgreSQL contracts", () =>
         properties: {},
       },
     ]);
-    expect(sendAttempts).toBe(2);
-    expect(attemptedEnvelopes[1]).toEqual(attemptedEnvelopes[0]);
-    expect(emailLogs.filter(({ payload }) =>
-      JSON.stringify(payload).includes("Nachricht zur Bewerbung"),
-    )).toHaveLength(1);
+    expect(legacySend).not.toHaveBeenCalled();
+    expect(emailLogs).toHaveLength(1);
+    expect(JSON.stringify(emailLogs)).not.toContain(MESSAGE_BODY);
     expect(JSON.stringify(notifications)).not.toContain(MESSAGE_BODY);
     expect(JSON.stringify(audits)).not.toContain(MESSAGE_BODY);
     expect(JSON.stringify(analytics)).not.toContain(MESSAGE_BODY);

@@ -15,6 +15,7 @@ function providerWithStripe() {
   const stripe = new Stripe("sk_test_phase24testsecret");
   const provider = new StripePaymentProvider({
     accountId: ACCOUNT,
+    mode: "stripe_sandbox",
     secretKey: "sk_test_phase24testsecret",
     webhookSecret: SECRET,
     stripeClient: stripe,
@@ -35,6 +36,7 @@ describe("Phase-24 Stripe hosted provider contract", () => {
       >);
     const orderId = randomUUID();
     const paymentAttemptId = randomUUID();
+    const expiresAt = new Date(Date.now() + 35 * 60_000);
     const result = await provider.createCheckout({
       orderId,
       idempotencyKey: `checkout:${orderId}`,
@@ -45,8 +47,14 @@ describe("Phase-24 Stripe hosted provider contract", () => {
         currency: "CHF",
         customerEmail: "owner@example.ch",
         description: "Starter Monatsplan",
+        expiresAt,
         quoteDigest: "a".repeat(64),
         paymentAttemptId,
+        checkout: {
+          kind: "SUBSCRIPTION",
+          billingInterval: "MONTHLY",
+          providerPriceReference: "price_phase33starter",
+        },
       },
     });
     expect(result).toEqual({
@@ -57,7 +65,8 @@ describe("Phase-24 Stripe hosted provider contract", () => {
     });
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
-        mode: "payment",
+        mode: "subscription",
+        expires_at: Math.floor(expiresAt.getTime() / 1_000),
         client_reference_id: orderId,
         metadata: expect.objectContaining({
           order_id: orderId,
@@ -66,10 +75,7 @@ describe("Phase-24 Stripe hosted provider contract", () => {
         }),
         line_items: [
           expect.objectContaining({
-            price_data: expect.objectContaining({
-              currency: "chf",
-              unit_amount: 16_107,
-            }),
+            price: "price_phase33starter",
           }),
         ],
       }),
@@ -77,14 +83,15 @@ describe("Phase-24 Stripe hosted provider contract", () => {
     );
   });
 
-  it("verifies the exact raw body, timestamp and merchant account", () => {
+  it("verifies the exact raw body and timestamp for the bound merchant", () => {
     const { provider, stripe } = providerWithStripe();
     const signedAt = Math.floor(Date.now() / 1_000);
+    const orderId = randomUUID();
+    const paymentAttemptId = randomUUID();
     const payload = JSON.stringify({
       id: "evt_phase24valid",
       object: "event",
       api_version: "2026-06-30.basil",
-      account: ACCOUNT,
       created: signedAt,
       livemode: false,
       type: "checkout.session.completed",
@@ -94,11 +101,13 @@ describe("Phase-24 Stripe hosted provider contract", () => {
           object: "checkout.session",
           amount_total: 16_107,
           currency: "chf",
-          payment_intent: "pi_phase24payment",
           payment_status: "paid",
-          client_reference_id: randomUUID(),
+          customer: "cus_phase33customer",
+          subscription: "sub_phase33subscription",
+          client_reference_id: orderId,
           metadata: {
-            payment_attempt_id: randomUUID(),
+            payment_attempt_id: paymentAttemptId,
+            provider_price_reference: "price_phase33starter",
           },
         },
       },
@@ -121,6 +130,8 @@ describe("Phase-24 Stripe hosted provider contract", () => {
         amountRappen: 16_107,
         currency: "CHF",
         providerStatus: "paid",
+        providerPaymentReference: null,
+        providerSubscriptionReference: "sub_phase33subscription",
         liveMode: false,
       }),
     );
@@ -132,12 +143,163 @@ describe("Phase-24 Stripe hosted provider contract", () => {
     ).toThrow(StripePaymentProviderError);
   });
 
+  it("normalizes the paid PaymentIntent from a current subscription invoice payload", () => {
+    const { provider, stripe } = providerWithStripe();
+    const signedAt = Math.floor(Date.now() / 1_000);
+    const orderId = randomUUID();
+    const paymentAttemptId = randomUUID();
+    const payload = JSON.stringify({
+      id: "evt_phase33invoicepaid",
+      object: "event",
+      api_version: "2026-06-30.basil",
+      created: signedAt,
+      livemode: false,
+      type: "invoice.paid",
+      data: {
+        object: {
+          id: "in_phase33initial",
+          object: "invoice",
+          amount_paid: 16_107,
+          currency: "chf",
+          customer: "cus_phase33customer",
+          status: "paid",
+          parent: {
+            subscription_details: {
+              subscription: "sub_phase33subscription",
+              metadata: {
+                order_id: orderId,
+                payment_attempt_id: paymentAttemptId,
+                provider_price_reference: "price_phase33starter",
+              },
+            },
+          },
+          lines: {
+            data: [
+              {
+                period: { start: signedAt, end: signedAt + 2_592_000 },
+                pricing: {
+                  price_details: { price: "price_phase33starter" },
+                },
+              },
+            ],
+          },
+          payments: {
+            data: [
+              {
+                status: "paid",
+                payment: {
+                  type: "payment_intent",
+                  payment_intent: "pi_phase33initial",
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+    const signatureHeader = stripe.webhooks.generateTestHeaderString({
+      payload,
+      secret: SECRET,
+      timestamp: signedAt,
+    });
+
+    expect(
+      provider.verifyWebhook({ rawBody: payload, signatureHeader }),
+    ).toEqual(
+      expect.objectContaining({
+        amountRappen: 16_107,
+        currency: "CHF",
+        orderId,
+        paymentAttemptId,
+        providerCustomerReference: "cus_phase33customer",
+        providerInvoiceReference: "in_phase33initial",
+        providerPaymentReference: "pi_phase33initial",
+        providerPriceReference: "price_phase33starter",
+        providerSubscriptionReference: "sub_phase33subscription",
+        providerStatus: "paid",
+      }),
+    );
+  });
+
+  it("normalizes the immutable internal refund id and exact charge source", () => {
+    const { provider, stripe } = providerWithStripe();
+    const signedAt = Math.floor(Date.now() / 1_000);
+    const orderId = randomUUID();
+    const paymentAttemptId = randomUUID();
+    const refundId = randomUUID();
+    const payload = JSON.stringify({
+      id: "evt_phase33refund",
+      object: "event",
+      api_version: "2026-06-30.basil",
+      created: signedAt,
+      livemode: false,
+      type: "refund.updated",
+      data: {
+        object: {
+          id: "re_phase33refund",
+          object: "refund",
+          amount: 5_000,
+          currency: "chf",
+          payment_intent: "pi_phase33refundsource",
+          status: "succeeded",
+          metadata: {
+            order_id: orderId,
+            payment_attempt_id: paymentAttemptId,
+            refund_id: refundId,
+            source_kind: "SUBSCRIPTION_PROVIDER_INVOICE",
+          },
+        },
+      },
+    });
+    const signatureHeader = stripe.webhooks.generateTestHeaderString({
+      payload,
+      secret: SECRET,
+      timestamp: signedAt,
+    });
+
+    expect(
+      provider.verifyWebhook({ rawBody: payload, signatureHeader }),
+    ).toEqual(
+      expect.objectContaining({
+        amountRappen: 5_000,
+        currency: "CHF",
+        orderId,
+        paymentAttemptId,
+        providerObjectReference: "re_phase33refund",
+        providerPaymentReference: "pi_phase33refundsource",
+        providerStatus: "succeeded",
+        refundId,
+      }),
+    );
+  });
+
+  it("expires a stale hosted session with a distinct idempotency key", async () => {
+    const { provider, stripe } = providerWithStripe();
+    const expire = vi
+      .spyOn(stripe.checkout.sessions, "expire")
+      .mockResolvedValue({ id: "cs_test_phase24session" } as unknown as Awaited<
+        ReturnType<typeof stripe.checkout.sessions.expire>
+      >);
+    const orderId = randomUUID();
+
+    await provider.expireCheckoutSession({
+      idempotencyKey: `expire-checkout:${orderId}`,
+      orderId,
+      providerSessionReference: "cs_test_phase24session",
+    });
+
+    expect(expire).toHaveBeenCalledWith(
+      "cs_test_phase24session",
+      {},
+      { idempotencyKey: `expire-checkout:${orderId}` },
+    );
+  });
+
   it("forbids live events and direct real-payment confirmation", async () => {
     const { provider, stripe } = providerWithStripe();
     const payload = JSON.stringify({
       id: "evt_phase24live",
       object: "event",
-      account: ACCOUNT,
       created: Math.floor(Date.now() / 1_000),
       livemode: true,
       type: "checkout.session.completed",
@@ -149,7 +311,7 @@ describe("Phase-24 Stripe hosted provider contract", () => {
     });
     expect(() =>
       provider.verifyWebhook({ rawBody: payload, signatureHeader }),
-    ).toThrow(/Live Stripe events are forbidden/iu);
+    ).toThrow(/livemode/iu);
     await expect(
       provider.confirmPayment({
         orderId: randomUUID(),

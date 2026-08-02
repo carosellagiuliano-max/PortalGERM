@@ -301,7 +301,8 @@ export const PHASE22_DATA_INVENTORY_V1 = Object.freeze([
   }),
   row({
     entityKey: "NOTIFICATION_OUTBOX",
-    fieldScope: "delivery purpose, encrypted destination and delivery outcome",
+    fieldScope:
+      "delivery purpose/outcome; encrypted destination is short-lived, correlatable attempt evidence is compacted after 400 days",
     subjectClass: "USER",
     purposeCode: "TRANSACTIONAL_DELIVERY",
     processorKey: "notification-outbox",
@@ -313,7 +314,8 @@ export const PHASE22_DATA_INVENTORY_V1 = Object.freeze([
   }),
   row({
     entityKey: "EMAIL_PROVIDER_RECEIPT",
-    fieldScope: "transactional delivery receipt and bounded error class",
+    fieldScope:
+      "transactional provider receipt/digest for at most 400 days, then irreversible evidence compaction; bounded error class remains",
     subjectClass: "USER",
     purposeCode: "TRANSACTIONAL_DELIVERY",
     processorKey: "email-provider",

@@ -53,15 +53,18 @@ await run("duplicate", async () => {
 });
 
 await run("bounce", async () => {
-  const event = parseResendDeliveryEvent({
-    type: "email.bounced",
-    created_at: "2026-07-26T12:00:00.000Z",
-    data: {
-      email_id: "sandbox-bounce-receipt",
-      to: ["bounced@resend.dev"],
-      bounce: { type: "Permanent", subType: "MessageRejected" },
+  const event = parseResendDeliveryEvent(
+    {
+      type: "email.bounced",
+      created_at: "2026-07-26T12:00:00.000Z",
+      data: {
+        email_id: "sandbox-bounce-receipt",
+        to: ["bounced@resend.dev"],
+        bounce: { type: "Permanent", subType: "MessageRejected" },
+      },
     },
-  });
+    environment.secrets.keyrings.NOTIFICATION_RECIPIENT_HASH_KEYS,
+  );
   assert(event?.kind === "BOUNCED");
   assert(event.recipientHashes.length === 1);
   assert(!JSON.stringify(event).includes("bounced@resend.dev"));
@@ -194,6 +197,7 @@ function smokeEnvironment() {
     REVEAL_CONFIRMATION_KEYS: `confirm-v1:${key(5)}`,
     PII_REVEAL_KEYS: `reveal-v1:${key(6)}`,
     NOTIFICATION_DELIVERY_KEYS: `notification-v1:${key(7)}`,
+    NOTIFICATION_RECIPIENT_HASH_KEYS: `recipient-hash-v1:${key(8)}`,
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "0",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",

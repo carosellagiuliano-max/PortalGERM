@@ -9,14 +9,21 @@ feldgenauen Freigabe. Bezahlte Job-Boosts werden sichtbar gekennzeichnet und
 verändern niemals den Fair-Job-Score.
 
 Der aktuelle Stand ist **Demo-ready für lokale Vorführungen und kontrollierte
-interne Produkt-Evaluationen mit Mock-Providern**. Er ist **weder pilot-ready
-noch Production-ready**:
-externe Provider, AVG-/Rechts-/Datenschutz-/Steuerfreigaben, echte bezahlte
-Marktvalidierung, ein monatliches Cashflow-/Runway-Modell, ein fachlich
-freigegebener LIVE-Lohndatensatz, produktiver Worker-Betrieb,
-Incident-Prozesse und bestätigte Recovery-SLAs sind separate Go-live-Gates.
-Den reproduzierten Release- und Teststatus des Zielcommits dokumentiert
-[`BUILD_REPORT.md`](./BUILD_REPORT.md).
+interne Produkt-Evaluationen**. Er ist **weder pilot-ready noch
+Production-ready**. Phase 33 ergänzt technisch konfigurierbare Resend-,
+S3-/ClamAV- und Stripe-Adapter sowie getrennte lokale Mock- und
+Production-Contract-Runtimes; diese verwenden im Test ausschließlich lokale
+Stubs und sind nicht aktiviert. AVG-/Rechts-/Datenschutz-/Steuerfreigaben,
+echte Providerkonten und Zielumgebung, bezahlte Marktvalidierung, ein
+monatliches Cashflow-/Runway-Modell, ein fachlich freigegebener
+LIVE-Lohndatensatz, Pager/On-call, Incident-Prozesse und bestätigte
+Recovery-SLAs bleiben separate externe Go-live-Gates.
+
+[`BUILD_REPORT.md`](./BUILD_REPORT.md) dokumentiert unverändert den
+historischen Phase-18-Candidate; daraus folgt kein Testurteil für den aktuellen
+Phase-33-Baum. Der Phase-33-Abschluss erhält einen eigenen commit- und
+artefaktgebundenen Evidence-Record und ein getrenntes technisches/
+aktivierungsbezogenes Urteil.
 
 Phase 22 besitzt auf Candidate `0636a875` zusätzlich einen automatisiert
 G3-grünen, standardmäßig deaktivierten Local-/CI-Sandboxvertrag für
@@ -56,38 +63,38 @@ Die folgenden Konten existieren nur nach dem lokalen/CI-Demo-Seed. Das gemeinsam
 Passwort lautet `Demo12345!`. Diese Zugangsdaten dürfen niemals in Staging oder
 Production angelegt oder wiederverwendet werden.
 
-| Perspektive | E-Mail | Rolle / Fixture | Einstieg |
-|---|---|---|---|
-| Kandidat:in | `candidate@demo.ch` | `CANDIDATE` | `/candidate/dashboard` |
-| Arbeitgeber | `employer@demo.ch` | `EMPLOYER`, Owner von NovaRigi Digital AG, Pro | `/employer/dashboard` |
-| Recruiter | `recruiter@demo.ch` | `RECRUITER`, zugewiesene NovaRigi-Jobs | `/employer/dashboard` |
-| Plattform-/Operationsadmin | `admin@demo.ch` | `ADMIN` mit expliziten Platform-, Moderation-, Support-, Content-, Finance-, Privacy-Process- und Trust-Review-Rollen | `/admin` |
-| Security-Admin | `security-admin@demo.swisstalenthub.test` | `ADMIN`, Security und unabhängige Trust-Freigabe | `/admin/security` |
-| Privacy-Verifier | `privacy-verifier@demo.swisstalenthub.test` | `ADMIN`, getrennte Privacy-Verifikation | `/admin/privacy-requests` |
+| Perspektive                | E-Mail                                      | Rolle / Fixture                                                                                                       | Einstieg                  |
+| -------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Kandidat:in                | `candidate@demo.ch`                         | `CANDIDATE`                                                                                                           | `/candidate/dashboard`    |
+| Arbeitgeber                | `employer@demo.ch`                          | `EMPLOYER`, Owner von NovaRigi Digital AG, Pro                                                                        | `/employer/dashboard`     |
+| Recruiter                  | `recruiter@demo.ch`                         | `RECRUITER`, zugewiesene NovaRigi-Jobs                                                                                | `/employer/dashboard`     |
+| Plattform-/Operationsadmin | `admin@demo.ch`                             | `ADMIN` mit expliziten Platform-, Moderation-, Support-, Content-, Finance-, Privacy-Process- und Trust-Review-Rollen | `/admin`                  |
+| Security-Admin             | `security-admin@demo.swisstalenthub.test`   | `ADMIN`, Security und unabhängige Trust-Freigabe                                                                      | `/admin/security`         |
+| Privacy-Verifier           | `privacy-verifier@demo.swisstalenthub.test` | `ADMIN`, getrennte Privacy-Verifikation                                                                               | `/admin/privacy-requests` |
 
 Für Plan- und Entitlement-Vergleiche erzeugt derselbe Seed zusätzlich diese
 Arbeitgeber-Owner:
 
-| Plan | Firma | Login |
-|---|---|---|
-| Free Basic | Alpenfaden Atelier GmbH | `owner+alpenfaden-atelier@demo.swisstalenthub.test` |
-| Starter | Rheintal Werkbogen AG | `owner+rheintal-werkbogen@demo.swisstalenthub.test` |
-| Pro | NovaRigi Digital AG | `employer@demo.ch` |
-| Business | Carevia Quartiergesundheit AG | `owner+carevia-quartiergesundheit@demo.swisstalenthub.test` |
+| Plan                | Firma                          | Login                                                        |
+| ------------------- | ------------------------------ | ------------------------------------------------------------ |
+| Free Basic          | Alpenfaden Atelier GmbH        | `owner+alpenfaden-atelier@demo.swisstalenthub.test`          |
+| Starter             | Rheintal Werkbogen AG          | `owner+rheintal-werkbogen@demo.swisstalenthub.test`          |
+| Pro                 | NovaRigi Digital AG            | `employer@demo.ch`                                           |
+| Business            | Carevia Quartiergesundheit AG  | `owner+carevia-quartiergesundheit@demo.swisstalenthub.test`  |
 | Enterprise Contract | Quarzspindel Industriewerke AG | `owner+quarzspindel-industriewerke@demo.swisstalenthub.test` |
 
 ## Verbindliche Runtime und Tech-Stack
 
-| Bereich | Implementierung |
-|---|---|
-| Runtime | Node.js `24.18.0`, npm `11.16.0` |
-| Web | Next.js `16.2.11` App Router, React `19.2.7`, TypeScript `5.9.3` |
-| UI | Tailwind CSS `4.3.3`, shadcn CLI `4.13.1`, Base UI, Lucide |
-| Daten | PostgreSQL 16, Prisma ORM/Client `7.8.0` |
-| Validierung | Zod `4.4.3`, zusätzliche Domain- und SQL-Constraints |
-| Auth | Eigene E-Mail/Passwort-Authentifizierung mit `bcryptjs`, persistierten DB-Sessions, httpOnly-Cookie sowie WebAuthn/TOTP/Recovery und aktionsgebundenem Step-up; kein Auth.js |
-| Tests | Vitest `4.1.10`, Testing Library, Playwright `1.61.1`, axe-core |
-| Provider | Serverseitige Ports mit lokalen Mock-Adaptern sowie explizit gegatetem Stripe-Testadapter; kein LIVE-Paymentmodus |
+| Bereich     | Implementierung                                                                                                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime     | Node.js `24.18.0`, npm `11.16.0`                                                                                                                                             |
+| Web         | Next.js `16.2.11` App Router, React `19.2.7`, TypeScript `5.9.3`                                                                                                             |
+| UI          | Tailwind CSS `4.3.3`, shadcn CLI `4.13.1`, Base UI, Lucide                                                                                                                   |
+| Daten       | PostgreSQL 16, Prisma ORM/Client `7.9.1`                                                                                                                                     |
+| Validierung | Zod `4.4.3`, zusätzliche Domain- und SQL-Constraints                                                                                                                         |
+| Auth        | Eigene E-Mail/Passwort-Authentifizierung mit `bcryptjs`, persistierten DB-Sessions, httpOnly-Cookie sowie WebAuthn/TOTP/Recovery und aktionsgebundenem Step-up; kein Auth.js |
+| Tests       | Vitest `4.1.10`, Testing Library, Playwright `1.61.1`, axe-core                                                                                                              |
+| Provider    | Serverseitige Ports mit Local-Mocks sowie fail-closed Resend-, S3-/ClamAV- und Stripe-Contract/Sandbox/Live-Adaptern; Code oder Secrets allein aktivieren keinen Use Case    |
 
 Die Versionen sind in `.node-version`, `.nvmrc`,
 `package.json#packageManager` und `package.json#engines` festgelegt.
@@ -118,15 +125,15 @@ UI/Route
   -> redigierte Antwort und UI-Feedback
 ```
 
-| Verzeichnis | Verantwortung |
-|---|---|
-| [`app`](./app) | Next.js-Routen, Layouts, Server Actions und Route Handler |
-| [`components`](./components) | UI-Primitives und rollenbezogene Oberflächen |
-| [`lib`](./lib) | Domain-Policies, Auth, Billing, Search, Privacy, Provider-Ports und autorisierte Datenzugriffe |
-| [`prisma`](./prisma) | Schema, 57 committed Migrationen, deterministischer Seed |
-| [`tests`](./tests) | Unit-, PostgreSQL-Integration- und Playwright-E2E-Suiten |
-| [`scripts`](./scripts) | plattformneutrale Env-, DB-, Release-, Security- und Recovery-Werkzeuge |
-| [`codex-plan`](./codex-plan) | verbindlicher Plan, ADRs, Requirements und Evidence |
+| Verzeichnis                  | Verantwortung                                                                                                   |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [`app`](./app)               | Next.js-Routen, Layouts, Server Actions und Route Handler                                                       |
+| [`components`](./components) | UI-Primitives und rollenbezogene Oberflächen                                                                    |
+| [`lib`](./lib)               | Domain-Policies, Auth, Billing, Search, Privacy, Provider-Ports und autorisierte Datenzugriffe                  |
+| [`prisma`](./prisma)         | Schema, 68 committed Migrationen (67 historische plus eine additive Phase-33-Migration), deterministischer Seed |
+| [`tests`](./tests)           | Unit-, PostgreSQL-Integration- und Playwright-E2E-Suiten                                                        |
+| [`scripts`](./scripts)       | plattformneutrale Env-, DB-, Release-, Security- und Recovery-Werkzeuge                                         |
+| [`codex-plan`](./codex-plan) | verbindlicher Plan, ADRs, Requirements und Evidence                                                             |
 
 Weiterführende Verträge:
 
@@ -205,17 +212,17 @@ Logs.
 
 ### Anwendung und Datenbank
 
-| Variable | Pflicht / Scope | Beschreibung |
-|---|---|---|
-| `APP_ENV` | immer | `local`, `ci`, `preview`, `staging` oder `production`; steuert Sicherheits- und Seed-Gates |
-| `NODE_ENV` | immer | Node-Laufzeit `development`, `test` oder `production` |
-| `DATABASE_URL` | immer | Explizite PostgreSQL-URL; in CI muss der DB-Name `ci`/`test` enthalten |
-| `TEST_DATABASE_URL` | Local/CI | Getrennte, testbenannte PostgreSQL-DB; in CI Pflicht, in Staging/Production verboten |
-| `APP_URL` | immer | Absolute credential-, Query-, Fragment- und Pfad-freie HTTP(S)-Origin; Staging/Production nur HTTPS |
-| `NEXT_PUBLIC_APP_NAME` | immer | Öffentlicher Produktname, standardmäßig `SwissTalentHub` |
-| `APP_BUILD_ID` | Staging/Production | Nicht sensitiver, commit-eindeutiger Build-Identifier; lokal `local-development` |
-| `LOG_LEVEL` | immer | `debug`, `info`, `warn` oder `error` |
-| `TRUSTED_PROXY_HOPS` | immer | Lokal `0`; in Preview/Staging/Production exakt `1` bis `8` gemäß kontrollierter Ingress-Topologie; auf direktem Vercel-Ingress `1` |
+| Variable               | Pflicht / Scope    | Beschreibung                                                                                                                       |
+| ---------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`              | immer              | `local`, `ci`, `preview`, `staging` oder `production`; steuert Sicherheits- und Seed-Gates                                         |
+| `NODE_ENV`             | immer              | Node-Laufzeit `development`, `test` oder `production`                                                                              |
+| `DATABASE_URL`         | immer              | Explizite PostgreSQL-URL; in CI muss der DB-Name `ci`/`test` enthalten                                                             |
+| `TEST_DATABASE_URL`    | Local/CI           | Getrennte, testbenannte PostgreSQL-DB; in CI Pflicht, in Staging/Production verboten                                               |
+| `APP_URL`              | immer              | Absolute credential-, Query-, Fragment- und Pfad-freie HTTP(S)-Origin; Staging/Production nur HTTPS                                |
+| `NEXT_PUBLIC_APP_NAME` | immer              | Öffentlicher Produktname, standardmäßig `SwissTalentHub`                                                                           |
+| `APP_BUILD_ID`         | Staging/Production | Nicht sensitiver, commit-eindeutiger Build-Identifier; lokal `local-development`                                                   |
+| `LOG_LEVEL`            | immer              | `debug`, `info`, `warn` oder `error`                                                                                               |
+| `TRUSTED_PROXY_HOPS`   | immer              | Lokal `0`; in Preview/Staging/Production exakt `1` bis `8` gemäß kontrollierter Ingress-Topologie; auf direktem Vercel-Ingress `1` |
 
 Eine vollständig explizite Prozesskonfiguration muss mindestens `APP_ENV`,
 `DATABASE_URL` und `APP_URL` gemeinsam bereitstellen; sie wird nicht still mit
@@ -223,17 +230,19 @@ lokalen Env-Dateien ergänzt.
 
 ### Secrets, Rotation und lokale Mailbox
 
-| Variable | Pflicht / Scope | Beschreibung |
-|---|---|---|
-| `SESSION_SECRET` | immer | Kanonisches Base64 für exakt 32 zufällige Bytes |
-| `AUDIT_IP_HASH_KEYS` | immer | Versioniertes HMAC-Keyring für Audit-IP-Pseudonyme |
-| `RADAR_OPAQUE_LOOKUP_KEYS` | immer | Versioniertes HMAC-Keyring für opake Radar-Lookups |
-| `RADAR_OPAQUE_ENCRYPTION_KEYS` | immer | Versioniertes Verschlüsselungs-Keyring für Radar-Mappings |
-| `REVEAL_CONFIRMATION_KEYS` | immer | Versioniertes HMAC-Keyring für einmalige Reveal-Bestätigungen |
-| `PII_REVEAL_KEYS` | immer | Versioniertes Verschlüsselungs-Keyring für freigegebene Identitätswerte |
-| `ENABLE_LOCAL_MOCK_MAILBOX` | Local/Test | Standard `false`; in Production-Builds, Staging und Production zwingend `false` |
-| `DEV_MAILBOX_SECRET` | bei aktivierter lokaler Mailbox | Base64/Base64url für mindestens 32 zufällige Bytes |
-| `ABUSE_REPORT_ADMIN_EMAILS` | Staging/Production | Kommagetrennte, geprüfte Empfängerliste; `admin@demo.ch` ist nur der lokale Default |
+| Variable                       | Pflicht / Scope                 | Beschreibung                                                                        |
+| ------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------- |
+| `SESSION_SECRET`               | immer                           | Kanonisches Base64 für exakt 32 zufällige Bytes                                     |
+| `AUDIT_IP_HASH_KEYS`           | immer                           | Versioniertes HMAC-Keyring für Audit-IP-Pseudonyme                                  |
+| `RADAR_OPAQUE_LOOKUP_KEYS`     | immer                           | Versioniertes HMAC-Keyring für opake Radar-Lookups                                  |
+| `RADAR_OPAQUE_ENCRYPTION_KEYS` | immer                           | Versioniertes Verschlüsselungs-Keyring für Radar-Mappings                           |
+| `REVEAL_CONFIRMATION_KEYS`     | immer                           | Versioniertes HMAC-Keyring für einmalige Reveal-Bestätigungen                       |
+| `PII_REVEAL_KEYS`              | immer                           | Versioniertes Verschlüsselungs-Keyring für freigegebene Identitätswerte             |
+| `NOTIFICATION_DELIVERY_KEYS`   | immer                           | Eigenständiges AES-256-GCM-Keyring für eingefrorenes Provider-Requestmaterial und den zeilengebundenen expliziten Empfängerumschlag; niemals für Hashes verwenden |
+| `NOTIFICATION_RECIPIENT_HASH_KEYS` | immer                       | Davon getrenntes HMAC-Keyring für Empfänger-Lookup, Korrelation und Suppression; niemals als Verschlüsselungsschlüssel verwenden |
+| `ENABLE_LOCAL_MOCK_MAILBOX`    | Local/Test                      | Standard `false`; in Production-Builds, Staging und Production zwingend `false`     |
+| `DEV_MAILBOX_SECRET`           | bei aktivierter lokaler Mailbox | Base64/Base64url für mindestens 32 zufällige Bytes                                  |
+| `ABUSE_REPORT_ADMIN_EMAILS`    | Staging/Production              | Kommagetrennte, geprüfte Empfängerliste; `admin@demo.ch` ist nur der lokale Default |
 
 Alle `*_KEYS` verwenden kommaseparierte Einträge
 `version:base64-32-byte-key`. Der **erste** Eintrag ist der aktive Writer.
@@ -243,42 +252,85 @@ zwischen Keyrings noch mit `SESSION_SECRET` wiederverwendet werden.
 
 ### Rate-Limiting, Recovery und Provider
 
-| Variable | Pflicht / Scope | Beschreibung |
-|---|---|---|
-| `RATE_LIMIT_BACKEND` | immer | `postgres`; `memory` ist ausschließlich ein Local/Test-Adapter |
-| `BACKUP_AGE_RECIPIENT` | Recovery-Drill | Ein öffentlicher X25519-`age1...`-Empfänger |
-| `BACKUP_AGE_IDENTITY_FILE` | Restore-Drill | Absoluter, geschützter Secret-Mount außerhalb des Repositories; enthält nur den Pfad, nie das Keymaterial selbst |
-| `EMAIL_PROVIDER_API_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
-| `OPENAI_API_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
-| `STORAGE_ENDPOINT` | Platzhalter | Für den Mock-MVP leer lassen |
-| `JOBROOM_API_URL` | Platzhalter | Für den Mock-MVP leer lassen |
-| `MAPS_API_KEY` | Platzhalter | Für den Mock-MVP leer lassen |
+| Variable                                                                   | Pflicht / Scope        | Beschreibung                                                                                                                                         |
+| -------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RATE_LIMIT_BACKEND`                                                       | immer                  | `postgres`; `memory` ist ausschließlich ein Local/Test-Adapter                                                                                       |
+| `BACKUP_AGE_RECIPIENT`                                                     | Recovery-Drill         | Ein öffentlicher X25519-`age1...`-Empfänger                                                                                                          |
+| `BACKUP_AGE_IDENTITY_FILE`                                                 | Restore-Drill          | Absoluter, geschützter Secret-Mount außerhalb des Repositories; enthält nur den Pfad, nie das Keymaterial selbst                                     |
+| `EMAIL_PROVIDER_MODE`                                                      | immer                  | `disabled`, Local/CI `local_mock`, isoliert `resend_contract`, geprüftes Non-Production `resend_sandbox` oder Production `resend_live`               |
+| `EMAIL_PROVIDER_API_KEY`, `RESEND_WEBHOOK_SECRET`, `RESEND_SECRET_VERSION`, `RESEND_WEBHOOK_SECRET_VERSION` | Resend-Modus           | Getrennte Secret-Mounts und nicht geheime Versionsreferenzen für API- und Webhook-Authority; erteilen allein keine Autorität                           |
+| `DOCUMENT_STORAGE_MODE`                                                    | immer                  | `disabled`, Local/CI `filesystem_sandbox`, isoliert `s3_contract` oder Production `s3_live`                                                          |
+| `DOCUMENT_SCANNER_MODE`                                                    | immer                  | `disabled`, Local/CI `sandbox`, isoliert `clamav_contract` oder Production `clamav_live`; Production akzeptiert nur das freigegebene S3-/ClamAV-Paar |
+| `DOCUMENT_STORAGE_*`, `DOCUMENT_SCANNER_*`                                 | Storage-/Scanner-Modus | Endpoint, Bucket, Region, Verschlüsselung, Secret-Version und Scannertransport; exakte Ledgerbindung bleibt Pflicht                                  |
+| `OPENAI_API_KEY`                                                           | Platzhalter            | Für den Mock-MVP leer lassen                                                                                                                         |
+| `JOBROOM_API_URL`                                                          | Platzhalter            | Für den Mock-MVP leer lassen                                                                                                                         |
+| `MAPS_API_KEY`                                                             | Platzhalter            | Für den Mock-MVP leer lassen                                                                                                                         |
 
-Nicht leere Provider-Platzhalter werden bis zu einem expliziten
-Security-/Legal-/Ops-Gate abgelehnt. Ein Env-Wert aktiviert nie automatisch
-einen Real-Adapter.
+Jeder nicht deaktivierte Provider-Modus benötigt zusätzlich einen exakten,
+aktuellen `ProviderActivation`-Eintrag für Environment, Use Case, Adapter,
+Version, Mode, Config-/Evidence-Digest, Secret-Version, Health, Owner und Kill
+Switch. Ein Env-Wert oder Secret aktiviert nie automatisch einen Real-Adapter;
+Mock/Sandbox/Demo/`.invalid` und Live→Mock-Fallback sind in Production
+verboten.
+
+### Notification-Zustellmaterial und Empfänger-Evidence
+
+Der Phase-33-Vertrag trennt Verschlüsselung und pseudonyme Korrelation
+strukturell: `NOTIFICATION_DELIVERY_KEYS` verschlüsselt das eingefrorene
+Provider-Requestmaterial und den expliziten Empfängerumschlag;
+`NOTIFICATION_RECIPIENT_HASH_KEYS` erzeugt ausschließlich HMAC-basierte
+Empfänger-Hashes für Korrelation und Suppression. Die jeweiligen
+Schlüsselversionen werden am Datensatz inventarisiert. Das Resend-API-Secret
+und das Webhook-Secret rotieren ebenfalls unabhängig über
+`RESEND_SECRET_VERSION` beziehungsweise `RESEND_WEBHOOK_SECRET_VERSION` und
+dürfen keine Autorität füreinander ableiten.
+
+Der explizite Empfängerumschlag ist als zeilengebundene AES-v2-Evidence
+höchstens 31 Tage gültig. Im normalen Versandpfad verfallen Empfänger- und
+Provider-Requestmaterial nach 23 Stunden; eine minutenbasierte Maintenance
+löscht es providerunabhängig auch bei deaktiviertem oder widerrufenem
+Provider. Korrelierbare Attempt-Evidence (`providerReceipt`,
+`providerRequestDigest`, Empfänger-Hash und dessen Schlüsselversion) wird nach
+exakt `400 × 24 h` einmalig kompaktiert. Die nicht-PII Audit-/Timeline-Kette
+bleibt erhalten und unveränderlich.
+
+Netzwerkfehler, HTTP 408/5xx, malformed/oversized 2xx und konkurrierende
+Idempotency-Konflikte sind **unbekannte Provider-Ausgänge**, nicht sichere
+Fehlschläge. Sie erhalten nur bounded Retries mit demselben Idempotency-Key und
+wechseln danach auf `PAUSED` zur manuellen Reconciliation; weder Blind-Resend
+noch automatisches Dead Letter ist zulässig. Ein Resend-Webhook darf erst in
+derselben Transaktion nach einem Lock der exakten `ProviderActivation` Inbox-
+oder Suppression-Wirkung erzeugen. Inboxidentität und Suppressionsevidenz sind
+append-only/monoton; nur die ausdrücklich erlaubten einmaligen
+Status-/Release-Übergänge sind mutierbar.
+
+Diese technischen Lebenszyklen sind im Phase-33-Arbeitsbaum implementiert,
+aber noch keine Go-live-Evidence: Exact-candidate-G4 sowie reale Provider-,
+Privacy-/Legal-/DPA-/AVG-/SECO-/Tax-/Finance-/Operations-/Stagingfreigaben
+bleiben offen.
 
 ### Payment-Sandbox und Finance
 
 Alle Payment-Schalter sind standardmässig geschlossen. Der Stripe-Adapter
-akzeptiert in Phase 24 ausschliesslich Testmodus-Konfiguration in
-`local|ci|staging`; `production` und LIVE-Schlüssel werden abgelehnt.
-Environment-Werte allein genügen nie: zusätzlich ist ein aktuelles
-`ProviderActivation`-Ledger erforderlich.
+kennt getrennte Contract-, Sandbox- und Live-Modi. `stripe_contract` ist nur
+im isolierten Phase-33-Profil zulässig; `stripe_live` verwendet den festen
+Stripe-Endpunkt und verlangt Production-Credentials sowie die exakte
+Activation-Ledger-Bindung. Der vorhandene Live-Code und Environment-Werte
+allein sind keine Provider-, Finance-, Tax-, Legal- oder WTP-Freigabe.
 
-| Variable | Sicherer Default / Scope | Beschreibung |
-|---|---|---|
-| `PAYMENT_PROVIDER_MODE` | `disabled` | Optional `stripe_sandbox`; wählt keinen LIVE-Modus |
-| `PAYMENT_SANDBOX_COHORT` | `none` | `test` nur für eine ausdrücklich freigegebene Testkohorte |
-| `REAL_PAYMENT_INGESTION` | `false` | Erlaubt nach Provider-Gate nur signaturgeprüfte durable Inbox-Writes |
-| `REAL_PAYMENT_PROJECTION` | `false` | Projiziert Inbox-Ereignisse; setzt Ingestion voraus |
-| `PAID_SELF_SERVICE` | `false` | Checkout-Kill-Switch; benötigt zusätzlich WTP-Go, Providerledger und Step-up |
-| `FINANCE_REPAIR_ACTIONS` | `false` | Refund-/Repair-Mutationen; bleibt bis Phase 25A geschlossen |
-| `PAID_SERVICE_RECOVERY` | `false` | Führt genehmigte, policygebundene Remedies aus |
-| `STRIPE_ACCOUNT_ID` | leer | Exakte Test-Merchant-Account-ID aus dem Activation Ledger |
-| `STRIPE_SECRET_KEY` | leer | Nur secret-gemounteter `sk_test_…`-Schlüssel; nie committen oder loggen |
-| `STRIPE_WEBHOOK_SECRET` | leer | Secret-Mount für Raw-Body-Signaturprüfung |
-| `STRIPE_SECRET_VERSION` | leer | Nicht geheime Referenz auf die freigegebene Secret-Version |
+| Variable                  | Sicherer Default / Scope | Beschreibung                                                                                                                    |
+| ------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `PAYMENT_PROVIDER_MODE`   | `disabled`               | `stripe_contract`, `stripe_sandbox` oder `stripe_live` nur in der jeweils erlaubten Umgebung und mit passender Ledger-Autorität |
+| `PAYMENT_SANDBOX_COHORT`  | `none`                   | `test` nur für eine ausdrücklich freigegebene Testkohorte                                                                       |
+| `REAL_PAYMENT_INGESTION`  | `false`                  | Erlaubt nach Provider-Gate nur signaturgeprüfte durable Inbox-Writes                                                            |
+| `REAL_PAYMENT_PROJECTION` | `false`                  | Projiziert Inbox-Ereignisse; setzt Ingestion voraus                                                                             |
+| `PAID_SELF_SERVICE`       | `false`                  | Checkout-Kill-Switch; benötigt zusätzlich WTP-Go, Providerledger und Step-up                                                    |
+| `FINANCE_REPAIR_ACTIONS`  | `false`                  | Refund-/Repair-Mutationen; bleibt bis Phase 25A geschlossen                                                                     |
+| `PAID_SERVICE_RECOVERY`   | `false`                  | Führt genehmigte, policygebundene Remedies aus                                                                                  |
+| `STRIPE_ACCOUNT_ID`       | leer                     | Exakte Merchant-Account-ID aus dem Activation Ledger                                                                            |
+| `STRIPE_SECRET_KEY`       | leer                     | Nur secret-gemounteter, zum gewählten Sandbox-/Live-Modus passender Schlüssel; nie committen oder loggen                        |
+| `STRIPE_WEBHOOK_SECRET`   | leer                     | Secret-Mount für Raw-Body-Signaturprüfung                                                                                       |
+| `STRIPE_SECRET_VERSION`   | leer                     | Nicht geheime Referenz auf die freigegebene Secret-Version                                                                      |
 
 Die Aktivierungsreihenfolge und Incident-/Reconciliation-Abläufe stehen in
 [`codex-plan/runbooks/payment-operations.md`](./codex-plan/runbooks/payment-operations.md).
@@ -288,12 +340,12 @@ Die Aktivierungsreihenfolge und Incident-/Reconciliation-Abläufe stehen in
 Diese vier Phase-25-Schalter sind unabhängig von den Payment-Schaltern und
 standardmässig fail-closed:
 
-| Variable | Sicherer Default | Beschreibung |
-|---|---|---|
-| `ADMIN_MFA_REQUIRED` | `false` | Local/CI-Vertrag ohne globalen Cutover; in Preview/Staging/Production sperrt `false` den gesamten Adminbereich, `true` erzwingt den bestehenden AAL2-/Enrollment-Pfad |
-| `PRIVILEGED_STEP_UP_MODE` | `disabled` | `observe` protokolliert; `enforce` verlangt action-/actor-/session-/tenant-/resource-gebundene Single-use Grants |
-| `TRUST_RISK_MODE` | `observe` | Erlaubt erst nach Policyfreigabe den Modus `hold`; Observe allein widerruft keine Fachobjekte |
-| `BREAK_GLASS_ENABLED` | `false` | Öffnet nur zeitgebundene, incidentgebundene und auditierte Grants; nie einen globalen Admin-Fallback |
+| Variable                  | Sicherer Default | Beschreibung                                                                                                                                                          |
+| ------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ADMIN_MFA_REQUIRED`      | `false`          | Local/CI-Vertrag ohne globalen Cutover; in Preview/Staging/Production sperrt `false` den gesamten Adminbereich, `true` erzwingt den bestehenden AAL2-/Enrollment-Pfad |
+| `PRIVILEGED_STEP_UP_MODE` | `disabled`       | `observe` protokolliert; `enforce` verlangt action-/actor-/session-/tenant-/resource-gebundene Single-use Grants                                                      |
+| `TRUST_RISK_MODE`         | `observe`        | Erlaubt erst nach Policyfreigabe den Modus `hold`; Observe allein widerruft keine Fachobjekte                                                                         |
+| `BREAK_GLASS_ENABLED`     | `false`          | Öffnet nur zeitgebundene, incidentgebundene und auditierte Grants; nie einen globalen Admin-Fallback                                                                  |
 
 Die zulässige Aktivierungsreihenfolge, Kill Switches, Device-Loss-,
 Appeal-/Restore- und Worker-Failure-Abläufe stehen im
@@ -303,10 +355,10 @@ Appeal-/Restore- und Worker-Failure-Abläufe stehen im
 
 ### Lokale Dienste
 
-| Dienst | Zweck | Host-Port | Persistenz |
-|---|---|---:|---|
-| `postgres` | lokale Entwicklung | `127.0.0.1:5434` | Named Volume `swisstalenthub-postgres` |
-| `postgres-test` | isolierte Integrationstests | `127.0.0.1:5435` | flüchtiges `tmpfs` |
+| Dienst          | Zweck                       |        Host-Port | Persistenz                             |
+| --------------- | --------------------------- | ---------------: | -------------------------------------- |
+| `postgres`      | lokale Entwicklung          | `127.0.0.1:5434` | Named Volume `swisstalenthub-postgres` |
+| `postgres-test` | isolierte Integrationstests | `127.0.0.1:5435` | flüchtiges `tmpfs`                     |
 
 ```text
 docker compose up -d postgres
@@ -317,6 +369,29 @@ docker compose config --quiet
 Compose und Linux-CI verwenden PostgreSQL `16.13-alpine` mit festem
 Image-Digest. CI arbeitet ausschließlich mit kurzlebigen, testbenannten
 Service-Datenbanken.
+
+Phase 33 ergänzt in [`compose.phase33.yml`](./compose.phase33.yml) zwei davon
+getrennte Profile:
+
+- `local/mock`: gebaute App, Worker, Scheduler und PostgreSQL mit lokalen
+  Mailbox-, Filesystem- und Scanner-Doubles; Payment bleibt deaktiviert;
+- `production-contract`: dasselbe Standalone-/OCI-Artefakt mit separatem
+  Worker/Scheduler, PostgreSQL 16, TLS-Proxy, S3-kompatiblem Object Storage,
+  ClamAV und lokalen Resend-/Stripe-HTTP-Stubs. Es führt echten Adaptercode
+  aus, erzeugt aber keine externe Wirkung und ist keine Live-Evidence.
+
+```text
+npm run phase33:runtime:config:local
+npm run phase33:runtime:up:local
+npm run phase33:runtime:down:local
+npm run phase33:runtime:config:contract
+npm run phase33:runtime:smoke:contract
+npm run phase33:runtime:down:contract
+```
+
+`PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT=true` ist ausschließlich der enge,
+loopbackgebundene Startvertrag des lokalen Mock-Containers bei
+`APP_ENV=local`; Preview, Staging und Production lehnen ihn ab.
 
 ### Committed-Migration-Workflow
 
@@ -330,10 +405,13 @@ npm run db:smoke
 
 - `db:migrate` führt `prisma migrate deploy` gegen die ausdrücklich
   konfigurierte Ziel-DB aus.
-- Die **57 committed Migrationen** reichen von der Baseline über Domain-,
+- Die **68 committed Migrationen** bestehen aus 67 bytegenau geschützten
+  historischen Migrationen und einer additiven Phase-33-Migration. Sie reichen
+  von der Baseline über Domain-,
   Billing-, Radar-, Search- und Security-Verträge bis zu Phase-22-Privacy-,
   Legal-, Worker-, Phase-24-Payment-/Finance- und Phase-25-Assurance-/
-  Trust-&-Safety-Constraints.
+  Trust-&-Safety-Constraints sowie den Phase-33-Providerbindungen für
+  Subscriptions und Payment-Events.
 - `db:migrate:dev` und `db:studio` sind durch einen Local-/Loopback-Guard
   geschützt.
 - `prisma db push` ist für Production, Staging, Releases und
@@ -379,7 +457,12 @@ Production-Env-Default.
 
 Der maschinenlesbare Sollstand liegt in
 [`codex-plan/route-inventory.json`](./codex-plan/route-inventory.json) und wird
-gegen den App-Router geprüft:
+gegen den App-Router geprüft. Derselbe Audit bindet außerdem alle exportierten
+Server Actions und schema-definierten Laufzeitkontrollen an die exakten
+Quellen in
+[`codex-plan/server-action-inventory.json`](./codex-plan/server-action-inventory.json)
+und
+[`codex-plan/feature-flag-inventory.json`](./codex-plan/feature-flag-inventory.json):
 
 ```text
 npm run route:audit
@@ -388,17 +471,17 @@ npm run route:audit
 Die Tabelle gruppiert die implementierten Einstiege; dynamische Segmente stehen
 in eckigen Klammern.
 
-| Bereich | Implementierte Routen |
-|---|---|
-| Öffentlich | `/`, `/jobs`, `/jobs/[slug]`, `/jobs/kanton/[slug]`, `/jobs/kategorie/[slug]`, `/jobs/kanton/[slug]/kategorie/[category]`, `/companies`, `/companies/[slug]`, `/salary-radar`, `/guide`, `/guide/[slug]`, `/pricing` |
-| Arbeitgeber-Marketing | `/employers`, `/employers/demo`, `/employers/post-job`, `/employers/talent-radar`, `/employers/employer-branding`, `/employers/xml-import` |
-| Auth | `/login`, `/register`, `/register/candidate`, `/register/employer`, `/forgot-password`, `/reset-password`, `/invite/[token]`, `/invite/resume`, `/logout`, Session-Refresh/Clear |
-| Candidate | `/candidate/dashboard`, `/candidate/jobpass`, `/candidate/saved-jobs`, `/candidate/applications[/[id]]`, `/candidate/alerts`, `/candidate/messages[/[threadId]]`, `/candidate/talent-radar`, `/candidate/talent-radar/requests[/[id]]`, `/candidate/privacy`, Privacy-Request-Detail/Verify, `/candidate/settings/security`, `/candidate/support` |
-| Employer/Recruiter | `/employer/dashboard`, `/employer/company`, `/employer/team`, `/employer/jobs[/[id]]`, `/employer/jobs/new`, `/employer/jobs/[id]/boost`, `/employer/applicants[/[id]]`, `/employer/analytics`, `/employer/billing` inklusive Usage/Profile/Checkout/Invoices, `/employer/talent-radar/requests`, `/employer/settings/security` |
-| Admin | `/admin`, `/admin/jobs`, `/admin/companies`, `/admin/users`, `/admin/reports`, `/admin/imports`, `/admin/support`, `/admin/content`, `/admin/taxonomy`, `/admin/leads`, `/admin/billing`, `/admin/orders`, `/admin/invoices`, `/admin/plans`, `/admin/products`, `/admin/privacy-requests`, `/admin/analytics`, `/admin/business-cockpit`, `/admin/audit`, `/admin/system`, `/admin/security` einschließlich Roles/Grants/Authenticators/Break-glass sowie `/admin/trust-safety[/[id]]` |
-| Security-Flows | `/security/step-up`, `/security/account-recovery` |
-| Rollenübergreifend | `/support`, `/support/[id]`, `/alerts/unsubscribe/[token]`, `/forbidden` |
-| Betriebs-/Provider-Handler | `/health/live`, `/health/ready`, Local-only `/dev/mailbox`, Employer-only `/mock/checkout/[orderId]`, signaturgegatet `/api/webhooks/payments/[provider]`, `/sitemap.xml`, `/robots.txt` |
+| Bereich                    | Implementierte Routen                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Öffentlich                 | `/`, `/jobs`, `/jobs/[slug]`, `/jobs/kanton/[slug]`, `/jobs/kategorie/[slug]`, `/jobs/kanton/[slug]/kategorie/[category]`, `/companies`, `/companies/[slug]`, `/salary-radar`, `/guide`, `/guide/[slug]`, `/pricing`                                                                                                                                                                                                                                                                    |
+| Arbeitgeber-Marketing      | `/employers`, `/employers/demo`, `/employers/post-job`, `/employers/talent-radar`, `/employers/employer-branding`, `/employers/xml-import`                                                                                                                                                                                                                                                                                                                                              |
+| Auth                       | `/login`, `/register`, `/register/candidate`, `/register/employer`, `/forgot-password`, `/reset-password`, `/invite/[token]`, `/invite/resume`, `/logout`, Session-Refresh/Clear                                                                                                                                                                                                                                                                                                        |
+| Candidate                  | `/candidate/dashboard`, `/candidate/jobpass`, `/candidate/saved-jobs`, `/candidate/applications[/[id]]`, `/candidate/alerts`, `/candidate/messages[/[threadId]]`, `/candidate/talent-radar`, `/candidate/talent-radar/requests[/[id]]`, `/candidate/privacy`, Privacy-Request-Detail/Verify, `/candidate/settings/security`, `/candidate/support`                                                                                                                                       |
+| Employer/Recruiter         | `/employer/dashboard`, `/employer/company`, `/employer/team`, `/employer/jobs[/[id]]`, `/employer/jobs/new`, `/employer/jobs/[id]/boost`, `/employer/applicants[/[id]]`, `/employer/analytics`, `/employer/billing` inklusive Usage/Profile/Checkout/Invoices, `/employer/talent-radar/requests`, `/employer/settings/security`                                                                                                                                                         |
+| Admin                      | `/admin`, `/admin/jobs`, `/admin/companies`, `/admin/users`, `/admin/reports`, `/admin/imports`, `/admin/support`, `/admin/content`, `/admin/taxonomy`, `/admin/leads`, `/admin/billing`, `/admin/orders`, `/admin/invoices`, `/admin/plans`, `/admin/products`, `/admin/privacy-requests`, `/admin/analytics`, `/admin/business-cockpit`, `/admin/audit`, `/admin/system`, `/admin/security` einschließlich Roles/Grants/Authenticators/Break-glass sowie `/admin/trust-safety[/[id]]` |
+| Security-Flows             | `/security/step-up`, `/security/account-recovery`                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Rollenübergreifend         | `/support`, `/support/[id]`, `/alerts/unsubscribe/[token]`, `/forbidden`                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Betriebs-/Provider-Handler | `/health/live`, `/health/ready`, Local-only `/dev/mailbox`, Employer-only `/mock/checkout/[orderId]`, signaturgegatet `/api/webhooks/payments/[provider]` und `/api/webhooks/email/resend`, autorisierte Document-/Privacy-Export-Handler, `/sitemap.xml`, `/robots.txt`                                                                                                                                                                                                                |
 
 Routen schützen nicht nur die Navigation: Layouts, Server Actions und
 Repositories prüfen Rolle, Capability, Company-Mitgliedschaft,
@@ -406,18 +489,20 @@ Job-Zuweisung und Objekt-Ownership serverseitig. Fremde Objekt-IDs liefern eine
 sichere 404 beziehungsweise einen Rollen-403 ohne Datenleck.
 
 Bewusst **nicht verfügbar** sind eine öffentliche Partner-/ATS-API, SSO,
-LIVE-Payment-/E-Mail-Provider, echte Datei-Downloadrouten, ein automatischer
-Privacy-Export-Download und PDF-Rechnungen. Der vorhandene Payment-Webhook ist
-ein deaktivierter Testadaptervertrag und keine LIVE-Providerfreigabe.
+aktivierte LIVE-Provider und PDF-Rechnungen. Autorisierte Document-Reads und
+Privacy-Export-Downloads existieren, bleiben aber an aktuellen Owner/Grant,
+Quarantäne-/Scanstatus, Retention und den freigegebenen Storage-/Privacy-Modus
+gebunden. Resend-/Stripe-Webhooks und Live-Adaptercode sind ohne exakte
+Provider- und externe Aktivierung wirkungslos und keine LIVE-Freigabe.
 
 ## Rollen und Berechtigungen
 
-| Plattformrolle | Kernumfang |
-|---|---|
-| `CANDIDATE` | SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Nachrichten, Support, Privacy und eigener Talent-Radar-Consent/Reveal |
-| `EMPLOYER` | Firmen-, Team-, Job-, Bewerber-, Billing-, Analytics- und berechtigte Talent-Radar-Workflows im eigenen Tenant |
-| `RECRUITER` | Employer-Oberfläche, zusätzlich auf aktive Company-Mitgliedschaft und zugewiesene Jobs begrenzt |
-| `ADMIN` | Capability-basierte Moderation, Operations, Support, Content, Billing, Katalog, Privacy und Audit; kein pauschaler UI-Vertrauensbonus |
+| Plattformrolle | Kernumfang                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `CANDIDATE`    | SwissJobPass, Saved Jobs, Bewerbungen, Jobabos, Nachrichten, Support, Privacy und eigener Talent-Radar-Consent/Reveal                 |
+| `EMPLOYER`     | Firmen-, Team-, Job-, Bewerber-, Billing-, Analytics- und berechtigte Talent-Radar-Workflows im eigenen Tenant                        |
+| `RECRUITER`    | Employer-Oberfläche, zusätzlich auf aktive Company-Mitgliedschaft und zugewiesene Jobs begrenzt                                       |
+| `ADMIN`        | Capability-basierte Moderation, Operations, Support, Content, Billing, Katalog, Privacy und Audit; kein pauschaler UI-Vertrauensbonus |
 
 Die globale Plattformrolle `ADMIN` verleiht allein keine Capability. Zehn
 persistierte interne Rollen ordnen 50 explizite Capabilities und getrennte
@@ -452,13 +537,13 @@ dauerhafter Monatsretention erzeugen kann.
 
 ### Seed-Pläne
 
-| Plan | Netto/Monat | Aktive Jobs | Seats | Talent Radar | Kontakte/Periode | Boosts/Periode | Analytics | Self-Service |
-|---|---:|---:|---:|---|---:|---:|---|---|
-| Free Basic | CHF 0 | 1 | 1 | nein | 0 | 0 | None | kein Checkout |
-| Starter | CHF 149 | 3 | 2 | nein | 0 | 0 | Basic | ja |
-| Pro | CHF 399 | 10 | 5 | ja | 10 | 3 | Advanced | ja |
-| Business | CHF 899 | 30 | 15 | ja | 50 | 10 | Pro | Sales-Gate |
-| Enterprise Contract | privat verhandelt | 100 | 50 | ja | 100 | 20 | Pro | nicht öffentlich |
+| Plan                |       Netto/Monat | Aktive Jobs | Seats | Talent Radar | Kontakte/Periode | Boosts/Periode | Analytics | Self-Service     |
+| ------------------- | ----------------: | ----------: | ----: | ------------ | ---------------: | -------------: | --------- | ---------------- |
+| Free Basic          |             CHF 0 |           1 |     1 | nein         |                0 |              0 | None      | kein Checkout    |
+| Starter             |           CHF 149 |           3 |     2 | nein         |                0 |              0 | Basic     | ja               |
+| Pro                 |           CHF 399 |          10 |     5 | ja           |               10 |              3 | Advanced  | ja               |
+| Business            |           CHF 899 |          30 |    15 | ja           |               50 |             10 | Pro       | Sales-Gate       |
+| Enterprise Contract | privat verhandelt |         100 |    50 | ja           |              100 |             20 | Pro       | nicht öffentlich |
 
 Business, Enterprise und die inaktiven Jahresversionen sind nicht als
 Self-Service-Checkout freigegeben. Employer-Import ist in allen P0-Plänen
@@ -468,12 +553,12 @@ standardmäßig deaktiviert.
 
 Aktive Mock-Self-Service-Produkte:
 
-| Produkt | Netto | Wirkung |
-|---|---:|---|
-| Job Boost 7 Tage | CHF 79 | zeitgebundener, gekennzeichneter Boost |
-| Job Boost 30 Tage | CHF 199 | zeitgebundener, gekennzeichneter Boost |
-| Talent Radar Contact Pack 10 | CHF 99 | 10 `TALENT_CONTACT`-Credits |
-| Talent Radar Contact Pack 50 | CHF 299 | 50 `TALENT_CONTACT`-Credits |
+| Produkt                      |   Netto | Wirkung                                |
+| ---------------------------- | ------: | -------------------------------------- |
+| Job Boost 7 Tage             |  CHF 79 | zeitgebundener, gekennzeichneter Boost |
+| Job Boost 30 Tage            | CHF 199 | zeitgebundener, gekennzeichneter Boost |
+| Talent Radar Contact Pack 10 |  CHF 99 | 10 `TALENT_CONTACT`-Credits            |
+| Talent Radar Contact Pack 50 | CHF 299 | 50 `TALENT_CONTACT`-Credits            |
 
 Featured Job/Employer, Newsletter, Social Push, Import Setup und Zusatzstelle
 sind als inaktive P1/P2-Produkte gespeichert. `SUCCESS_FEE` ist für jede Rolle
@@ -495,19 +580,20 @@ sondern als explizite Admin-Mock-Aktion dokumentiert und auditiert.
 Die geprüften Business-, Cashflow-, AVG-, Salary- und Worker-Gates stehen in
 [`codex-plan/commercial-go-live-gates.md`](./codex-plan/commercial-go-live-gates.md).
 
-## Mock-Integrationen
+## Provider-Integrationen und lokale Test-Doubles
 
-Nur die folgenden sechs Verzeichnisse unter `lib/providers` sind externe
-Provider-Ports:
+Die folgenden Ports kapseln externe Providergrenzen. Local/CI bleibt
+mock-first; Phase 33 ergänzt für die LC4-/LC5-Pflichtpfade echte Adapter hinter
+derselben Composition Root und einer exakten Activation-Ledger-Bindung.
 
-| Port | Lokales Verhalten | Gate für einen Real-Adapter |
-|---|---|---|
-| `payments/PaymentProvider` | deterministische `/mock/checkout/...`-Operation; akzeptiert keinen Clientpreis und schreibt selbst keine Billing-Daten | Payment-/Legal-/Security-Review, Webhook-Signatur, Idempotenz, Reconciliation, Retry/Monitoring |
-| `email/EmailProvider` | rendert Templates und schreibt redigierte `EmailLog`-Zeilen; kein externer Versand | gewählter Mailanbieter, DPA, Absender-/Bounce-/Suppression-/Retry-Konzept, Delivery-Monitoring |
-| `ai/AiProvider` | deterministische regelbasierte Textverbesserung; kein Modellaufruf | Datenschutz-/Human-review-Policy, Timeouts, Limits, Redaction, Monitoring und freigegebener Modellanbieter |
-| `jobroom/JobroomProvider` | versionierter `OccupationCode`-Fixture-Lookup mit `REQUIRES_REPORTING`, `NOT_REQUIRED` oder `UNKNOWN`; kein arbeit.swiss-Aufruf | offizielle Schnittstelle/Lizenz, Datenversionierung, Auth, Cache/Retry und rechtliche Prüfung; kein Scraping |
-| `storage/StorageProvider` | validiert Dateimetadaten bis 5 MiB, speichert keine Bytes und liefert keine Read-URL | freigegebener S3/Supabase-kompatibler Speicher, Bucket/Region, Malware-Scan, signierte URLs, Retention/Deletion und DPA |
-| `commute/CommuteProvider` | deterministische Haversine-Luftlinie aus Seed-Koordinaten; keine Route/Fahrzeit und kein Netzwerk | freigegebener Kartenanbieter, Datenminimierung, Quoten, Cache, DPA und klare Distanz-/Fahrzeitsemantik |
+| Port                           | Implementierter technischer Stand                                                                                                                                     | Noch erforderliches Aktivierungsgate                                                                               |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `payments/PaymentProvider`     | deterministischer Mock plus Stripe Contract/Sandbox/Live HTTP-Adapter, hosted Checkout, signierte Inbox, Reconciliation, Refund/Dispute/Dunning und Providerbinding   | PSP-Konto/Vertrag, Account/Price/Webhook, WTP, Finance/Tax/Legal/Security, Monitoring und Incident-Evidence        |
+| `email/EmailProvider`          | lokale redigierte Mailbox plus Resend Contract/Sandbox/Live HTTP-Adapter, Templates, durable Outbox, Receipt-/Bounce-/Suppression-Inbox und Providerbinding           | Resend-Konto, DPA/Region, Absenderdomain/DNS, Secret-Version, Delivery-Monitoring und Pager                        |
+| `ai/AiProvider`                | deterministische regelbasierte Textverbesserung; kein Modellaufruf                                                                                                    | Datenschutz-/Human-review-Policy, Timeouts, Limits, Redaction, Monitoring und freigegebener Modellanbieter         |
+| `jobroom/JobroomProvider`      | versionierter `OccupationCode`-Fixture-Lookup mit `REQUIRES_REPORTING`, `NOT_REQUIRED` oder `UNKNOWN`; kein arbeit.swiss-Aufruf                                       | offizielle Schnittstelle/Lizenz, Datenversionierung, Auth, Cache/Retry und rechtliche Prüfung; kein Scraping       |
+| `storage` Object Store/Scanner | verschlüsselter Filesystem-Sandboxpfad plus S3-Contract/Live Object Store, ClamAV Contract/Live Scanner, Quarantäne, Grants und authority-bound Reads/Privacy Exports | freigegebener Bucket/Region/KMS, ClamAV-TLS, Credentials/Rotation, DPA/Retention/Deletion, Monitoring und Recovery |
+| `commute/CommuteProvider`      | deterministische Haversine-Luftlinie aus Seed-Koordinaten; keine Route/Fahrzeit und kein Netzwerk                                                                     | freigegebener Kartenanbieter, Datenminimierung, Quoten, Cache, DPA und klare Distanz-/Fahrzeitsemantik             |
 
 Analytics-Validierung/-Aggregation und der HTML-Invoice-Renderer sind interne
 Domain-/Application-Services. Es existieren bewusst weder ein
@@ -543,10 +629,13 @@ Domain-/Application-Services. Es existieren bewusst weder ein
 - Consent ist versioniert und append-only. Kandidat:innen können Radar
   deaktivieren und Reveals widerrufen; abhängige Mappings und offene Requests
   werden dabei geschlossen.
-- Privacy-Export, Korrektur und Löschung sind nachvollziehbare
-  **Mock-Verfahren**. Ein Export erzeugt ein Manifest, aber keine ausgelieferte
-  Datei; Löschung ist kein automatisches vollständiges Erasure.
-- Provider-Mocks führen keine HTTP-, TCP- oder TLS-Aufrufe aus. Die Anwendung
+- Privacy-Export, Korrektur und Löschung arbeiten auf einem inventarisierten,
+  versionierten Vollzugsvertrag mit Verifikation, Legal Hold, Audit und
+  autorisiertem Export-Download. Local/CI nutzt verschlüsselte Sandboxbytes;
+  S3-Exportcode bleibt bis Provider-, Retention- und Rechtsfreigabe deaktiviert.
+- Reine Provider-Mocks führen keine externen HTTP-, TCP- oder TLS-Aufrufe aus.
+  Das isolierte `production-contract`-Profil spricht nur seine lokalen
+  Resend-/Stripe-/S3-/ClamAV-Stubs an und ist keine Live-Evidence. Die Anwendung
   scrapt keine Websites und ruft insbesondere arbeit.swiss nicht automatisiert
   ab.
 - Logs und Nutzerfehler werden redigiert. E-Mail-/Reset-Fehler verraten nicht,
@@ -561,29 +650,35 @@ Steuerkonformitätszusage.
 
 ## Bekannte Limitationen des MVP
 
-1. **Payment-Sandbox:** kein LIVE-Stripe, keine reale Kartenbelastung und kein
-   Produktions-Settlement. Signierte Test-Webhooks, Dunning und
-   Reconciliation sind technisch vorhanden, belegen aber weder
+1. **Payment nicht aktiviert:** Stripe-Contract/Sandbox/Live-Code ist vorhanden,
+   aber es gibt kein freigegebenes Providerkonto, keine reale Kartenbelastung
+   und kein Production-Settlement. Signierte Webhooks, durable Inbox,
+   Reconciliation, Refund/Dispute und Dunning belegen weder
    Zahlungsbereitschaft noch PSP-/Tax-/Legal-/Finance-Freigabe.
-2. **Mock Email:** Nachrichten werden als redigiertes `EmailLog` erfasst; es
-   findet kein echter Versand statt. Die optionale lokale Mailbox ist kein
-   Delivery-System.
+2. **E-Mail nicht aktiviert:** Resend-Adapter, Webhook-Inbox, Bounce/
+   Suppression, getrennte Delivery-/Recipient-Hash-Keyrings, bounded
+   Unknown-Outcome-Reconciliation und durable Outbox sind vorhanden, laufen
+   lokal aber gegen Mock/Contract-Stubs. Der finale exact-candidate-
+   Retention-/Failure-Nachweis ist ausstehend. Ohne Domain/DNS, DPA,
+   Providerledger, Monitoring und Secrets findet kein echter Versand statt.
 3. **Mock AI:** deterministische Regeln statt eines Sprachmodells; Qualität und
    Fairness eines späteren Modells sind nicht vorweggenommen.
 4. **Mock Job-Room:** versionierter Fixture-Lookup; kein aktueller
    arbeit.swiss-Call. `UNKNOWN` ist ein absichtlicher, fail-closed Zustand.
-5. **Mock Storage:** nur Metadaten, keine Dateibytes, Download-URL oder
-   Malware-Prüfung.
+5. **Storage/Scanner nicht aktiviert:** Local/CI verarbeitet echte,
+   verschlüsselte Sandboxbytes mit Quarantäne/Scan/Grants; S3- und
+   ClamAV-Adapter existieren für Contract/Live-Modi. Ein echter Bucket,
+   KMS/Region/DPA, Scanner-TLS, Retention und Operations-Evidence fehlen.
 6. **Mock Commute:** ungefähre Luftlinie aus Seed-Koordinaten, keine Route oder
    Fahrzeit; bei fehlender Konfiguration kann die Funktion nicht als
    Kartenersatz dienen.
 7. **Subscription-Renewal:** keine automatische Verlängerung; nur eine
    explizite Admin-Mock-Aktion.
-8. **Worker nicht produktiv aktiviert:** Der persistierte Phase-23-Worker-,
-   Lease-, Retry-, DLQ-/Replay- und Handlervertrag ist lokal/CI vorhanden.
-   Ein deployter autonomer Scheduler, Pager/On-call und freigegebene
-   SLO/RPO/RTO fehlen weiterhin und blockieren unbeaufsichtigten öffentlichen
-   Self-Service.
+8. **Worker/Scheduler nicht auf einem Zielsystem aktiviert:** Separate
+   App-/Worker-/Scheduler-Prozesse, Lease, Heartbeat, Retry, DLQ/Replay und der
+   lokale Production-Contract sind vorhanden. Hosting, Zielsystem-Monitoring,
+   Pager/On-call sowie freigegebene SLO/RPO/RTO fehlen weiterhin und blockieren
+   unbeaufsichtigten öffentlichen Self-Service.
 9. **Search:** parameterisiertes PostgreSQL-SQL normalisiert Titel,
    Firmenname und Body und verwendet gewichtetes `LIKE` mit globaler
    DB-Rangfolge und signiertem Keyset-Cursor. Es gibt noch kein
@@ -603,9 +698,10 @@ Steuerkonformitätszusage.
     Launch-Schutz dargestellt.
 13. **Rechnungen:** internes HTML, kein PDF. Alle Beträge und Snapshots liegen
     in ganzen Rappen vor.
-14. **Privacy-Verfahren:** Export und Löschung bleiben kontrollierte
-    Case-/Manifest-Mocks ohne automatischen Download oder vollständige
-    Datenlöschung.
+14. **Privacy-Aktivierung:** inventarisierter Export, autorisierter Download,
+    Korrektur und Erasure sind technisch implementiert; reale Retention-/Legal-
+    Freigabe, Processor-/Zielstorage-Evidence, Nicht-Kontoinhaber-Identität und
+    Operations-Abnahme bleiben offen.
 15. **Betrieb und Recht:** keine bestätigte Incident-Response, DPA-Landschaft,
     AVG-/Rechts-/Steuerfreigabe oder produktive RPO/RTO-Zusage.
 16. **Salary Radar:** der vorhandene Datensatz ist ausdrücklich fiktiv und
@@ -613,20 +709,22 @@ Steuerkonformitätszusage.
     und fehlt in der Sitemap, bis ein versionierter, fachlich geprüfter
     LIVE-Snapshot mit ehrlichem Berufsgruppen-/Grossregionsmapping vorliegt.
 
-## Mock-Provider später ersetzen
+## Provider konfigurieren und freigeben
 
 Ein Providerwechsel beginnt immer am bestehenden Port und in der serverseitigen
-Composition Root. Das bloße Befüllen eines Platzhalters ist absichtlich
-wirkungslos und wird von der Env-Validierung abgelehnt.
+Composition Root. Das bloße Befüllen eines Secrets ist absichtlich wirkungslos;
+der freigegebene Modus, ein exakter `ProviderActivation`-Eintrag, Health,
+Config-/Evidence-Digest, Secret-Version und alle externen Gates müssen
+zusammenpassen.
 
-| Integration | Zu implementierender Port | Aktueller Platzhalter | Zusätzlich notwendige Arbeit |
-|---|---|---|---|
-| Stripe | `lib/providers/payments/payment-provider.ts` | `STRIPE_SECRET_KEY` | vorhandenen deaktivierten Testadapter nach WTP-/PSP-/Tax-/Legal-/Finance-/Security-Gate mit freigegebenen Secrets, Settlement-/3DS-, Monitoring- und Incident-Evidence aktivieren; LIVE bleibt gesondert |
-| Postmark/Mailgun/SendGrid | `lib/providers/email/email-provider.ts` | `EMAIL_PROVIDER_API_KEY` | Anbieterwahl, Absenderdomain, Bounce/Suppression, Templates, Retry/Outbox, Delivery-Monitoring und DPA |
-| OpenAI oder anderer Modellanbieter | `lib/providers/ai/ai-provider.ts` | `OPENAI_API_KEY` | freigegebene Modell-/Region-Konfiguration, Redaction, Moderation, Limits, Timeouts, Fallback und Human Review |
-| S3/Supabase-kompatibler Speicher | `lib/providers/storage/storage-provider.ts` | `STORAGE_ENDPOINT` | nach Freigabe Bucket/Region/Credentials ergänzen, Upload-Streaming, Malware-Scan, signierte URLs, Lifecycle/Deletion und DPA |
-| Offizielle Job-Room-Integration | `lib/providers/jobroom/jobroom-provider.ts` | `JOBROOM_API_URL` | offizieller Zugang/Auth, Lizenz, Versionierung, Retry/Cache, Monitoring und Audit; niemals Scraping als Ersatz |
-| Karten-/Commute-Service | `lib/providers/commute/commute-provider.ts` | `MAPS_API_KEY` | Anbieter/Endpoint, Routing-Semantik, Quoten, Cache, Datenschutz und Fallback |
+| Integration                        | Bestehender Port/Adapter                                                    | Konfiguration                                                                              | Zusätzlich notwendige Aktivierungsevidence                                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Stripe                             | `payments/payment-provider.ts` + `stripe-payment-provider.ts`               | `PAYMENT_PROVIDER_MODE`, Account, API-/Webhook-Secret und Secret-Version                   | WTP, PSP-/Tax-/Legal-/Finance-/Security-Gate, Price-/Accountbinding, Settlement/3DS, Monitoring, Incident und Zielsystemreceipt |
+| Resend                             | `email/email-provider.ts` + `resend-email-provider.ts`                      | `EMAIL_PROVIDER_MODE`, getrennte API-/Webhook-Secrets und `RESEND_SECRET_VERSION`/`RESEND_WEBHOOK_SECRET_VERSION`, From-Domain, `NOTIFICATION_DELIVERY_KEYS`, `NOTIFICATION_RECIPIENT_HASH_KEYS` | Anbieter/DPA/Region, Absenderdomain/DNS, Bounce/Suppression, Key-Version-Inventar, Retention/Compaction, Unknown-Outcome-Reconciliation, Delivery-Monitoring, Pager und Zielsystemreceipt |
+| OpenAI oder anderer Modellanbieter | `lib/providers/ai/ai-provider.ts`                                           | `OPENAI_API_KEY`                                                                           | freigegebene Modell-/Region-Konfiguration, Redaction, Moderation, Limits, Timeouts, Fallback und Human Review                   |
+| S3-kompatibler Speicher + ClamAV   | `storage/s3-document-object-store.ts` + `storage/clamav-malware-scanner.ts` | Storage-/Scanner-Modi, Endpoint, Bucket, Region, KMS/TLS, Credentials und Secret-Versionen | Bucket-/Netzpolicy, DPA, Retention/Deletion, Malware-/Outage-Monitoring, Backup/Restore und Zielsystemreceipt                   |
+| Offizielle Job-Room-Integration    | `lib/providers/jobroom/jobroom-provider.ts`                                 | `JOBROOM_API_URL`                                                                          | offizieller Zugang/Auth, Lizenz, Versionierung, Retry/Cache, Monitoring und Audit; niemals Scraping als Ersatz                  |
+| Karten-/Commute-Service            | `lib/providers/commute/commute-provider.ts`                                 | `MAPS_API_KEY`                                                                             | Anbieter/Endpoint, Routing-Semantik, Quoten, Cache, Datenschutz und Fallback                                                    |
 
 Jeder Real-Adapter benötigt Failure-Mode-, Security-, Datenschutz- und
 Operations-Tests sowie einen dokumentierten Fallback. Analytics bleibt intern;
@@ -680,6 +778,40 @@ verschlüsseltes Backup, isolierter Restore, Migration-/Manifest-/DB-Smoke,
 Vier-Rollen-/Password-Reset-Smoke und Cleanup. Tatsächliche Befehle,
 Exit-Codes, Commit, Checksummen, DB-Identifier, Zeiten und Blocker gehören in
 [`BUILD_REPORT.md`](./BUILD_REPORT.md), nicht als unbelegte Behauptung hierher.
+
+Der strengere Phase-33-Orchestrator führt 38 fest definierte Clean-Clone-
+Prüfungen einschließlich Scale-Observation, Provider-/Worker-Verträge, drei
+Browser, beide Dockerprofile und Dependency-Security aus:
+
+```text
+npm run phase33:audit
+npm run phase33:scale
+npm run phase33:providers
+npm run phase33:e2e
+npm run test:phase33
+```
+
+`npm run test:phase33` ist erst Evidence, wenn sein JSON-Report Exit `0`, alle
+38 Command-IDs genau einmal, alle technischen Gates `PASS`, fehlgeschlagene
+Commands und unerklärte Skips `0` sowie denselben unveränderlichen Candidate
+wie das technische Manifest ausweist. Nicht strukturiert gemessene Retry-,
+Console-, Leak- oder Secret-Metriken werden nicht als erfundene Nullwerte
+ausgegeben. Die nachgelagerte Activation-Auswertung bleibt bei fehlender
+externer Evidence erwartungsgemäß blockiert.
+
+Der read-only Workflow `.github/workflows/phase33-g4.yml` führt diesen Vertrag
+auf Pull Requests und `main` ohne Production-Secrets oder Deploymentwirkung
+aus. LC4- und LC5-Manifeste/Verdicts entstehen aus demselben Report und exakt
+dem darin gebundenen OCI-Image; Evidence wird erst nach vollständigem
+technischem Pass hochgeladen. Ein echter CI-Receipt entsteht erst nach Push.
+
+`npm run phase33:audit` besitzt 16 fail-closed Checks. Dazu gehören die
+klassifizierten Route-/Action-/Laufzeitkontroll-Inventare sowie
+`MIGRATION_BASELINE_ANCHORED_TO_GIT`: die 67 historischen Migrationen werden
+direkt aus Baseline-Commit
+`59ed81033d409aac847c55f1da3ecf5370f4f035` rekonstruiert. Das committed
+Baseline-JSON wird damit geprüft und nicht als alleinige Wahrheit akzeptiert,
+sowie `PHASE_33_CI_G4_WORKFLOW` für den statischen CI-Vertrag.
 
 ### Verschlüsselter Recovery-Drill
 
@@ -739,8 +871,10 @@ und freigegeben wurden.
    `APP_BUILD_ID`, Session-/Keyring-Secrets,
    `RATE_LIMIT_BACKEND=postgres`, die exakte `TRUSTED_PROXY_HOPS`-Zahl,
    `ENABLE_LOCAL_MOCK_MAILBOX=false` und eine geprüfte
-   `ABUSE_REPORT_ADMIN_EMAILS`-Liste. `TEST_DATABASE_URL` und alle
-   Real-Provider-Platzhalter bleiben leer.
+   `ABUSE_REPORT_ADMIN_EMAILS`-Liste. `TEST_DATABASE_URL` bleibt leer.
+   Provider-Modi bleiben `disabled`, bis die benötigten Secret-Mounts,
+   nicht geheimen Versions-/Configwerte und exakt passende Activation-Ledger-
+   Evidence im freigegebenen Zielsystem vorliegen.
 3. Der äußerste Ingress muss HTTPS terminieren, eingehende
    `X-Forwarded-For`-Werte verwerfen und selbst neu setzen. Nur unter echter
    HTTPS-Auslieferung darf der in `APP_ENV=production` gesetzte
@@ -763,12 +897,13 @@ und freigegeben wurden.
    erfolgreicher Migration aktivieren und `/health/live` sowie
    `/health/ready` überwachen. `ready` bestätigt neben Schema und Migration
    auch die effektiven serverseitigen Statement-/Idle-Transaction-Timeouts.
-7. Ein autonomer Worker/Outbox muss vor unbeaufsichtigtem öffentlichem
-   Self-Service Alerts, Renewal und fällige Projektionen mit Lease,
-   Idempotenz, Retry/Backoff, Dead-Letter und Monitoring betreiben. Ein
-   externer, serieller Scheduler müsste zusätzlich
-   `npm run security:maintenance` mindestens täglich ausführen. Beides gehört
-   nicht zum MVP und bleibt ein Go-live-Gate.
+7. App, Worker und Scheduler werden als getrennte Prozesse gestartet. Der
+   Worker/Outbox-Vertrag verarbeitet aktivierte Handler mit Lease, Heartbeat,
+   Idempotenz, Retry/Backoff, Dead-Letter und Replay; der Scheduler stößt die
+   erlaubten Maintenance-Schritte an. Vor unbeaufsichtigtem öffentlichem
+   Self-Service müssen Zielhost, Handler-/Providerledger, Monitoring,
+   Backpressure, Pager/On-call und Restart-/Outage-Drill auf dem deployten
+   Artefakt extern belegt werden.
 8. Rollback bedeutet nicht `db push` oder ein blindes Down-Script. Eine frühere
    App-Version darf nur bei bestätigter Schema-Kompatibilität zurückgesetzt
    werden; andernfalls ist der geprobte, verschlüsselte Restore in ein neues
@@ -806,6 +941,10 @@ grenzüberschreitende Tätigkeit zusätzlich eidgenössisch zu beurteilen:
   Worker-Gates;
 - [`codex-plan/18-documentation-final-audit.md`](./codex-plan/18-documentation-final-audit.md)
   — Phase-18-Vertrag;
+- [`codex-plan/33-go-live-readiness-e2e-acceptance.md`](./codex-plan/33-go-live-readiness-e2e-acceptance.md)
+  — technischer Phase-33-Closure-/E2E-Vertrag;
+- [`codex-plan/phase33-findings-ledger.md`](./codex-plan/phase33-findings-ledger.md)
+  — technische Blocker, externe Gates und erlaubte Statusübergänge;
 - [`codex-plan/evidence/README.md`](./codex-plan/evidence/README.md) —
   Evidence-Index einschließlich Phase 18;
 - [`BUILD_REPORT.md`](./BUILD_REPORT.md) — Zielcommit, tatsächlich ausgeführte

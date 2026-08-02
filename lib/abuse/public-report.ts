@@ -9,6 +9,9 @@ import type { AuthRequestContext } from "@/lib/auth/request-context";
 import type { CurrentUser } from "@/lib/auth/current-user";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
+import type { Prisma } from "@/lib/generated/prisma/client";
+import { enqueueNotification } from "@/lib/notifications/outbox";
+import { notificationRecipientMaterialExpiresAt } from "@/lib/notifications/retention";
 import type { EmailProvider } from "@/lib/providers/email";
 import { recordCandidateFreshnessReport } from "@/lib/jobs/freshness";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
@@ -222,6 +225,12 @@ export async function createResolvedAbuseReport(
               dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
           },
         );
+        await enqueueAbuseReportAdminNotifications(transaction, {
+          reportId: created.id,
+          reasonCode: parsed.data.reasonCode,
+          availableAt: now,
+          environment: dependencies.environment,
+        });
         return created;
       },
     );
@@ -230,11 +239,6 @@ export async function createResolvedAbuseReport(
       resolvedTarget,
       parsed.data.reasonCode,
       now,
-      dependencies,
-    ).catch(() => undefined);
-    await notifyAbuseReportAdmins(
-      report.id,
-      parsed.data.reasonCode,
       dependencies,
     ).catch(() => undefined);
     return Object.freeze({ ok: true, reportId: report.id });
@@ -291,42 +295,61 @@ async function recordTrustSignalForReport(
   );
 }
 
-async function notifyAbuseReportAdmins(
-  reportId: string,
-  reasonCode: AbuseReportContentInput["reasonCode"],
-  dependencies: AbuseReportDependencies,
+async function enqueueAbuseReportAdminNotifications(
+  transaction: Prisma.TransactionClient,
+  input: Readonly<{
+    reportId: string;
+    reasonCode: AbuseReportContentInput["reasonCode"];
+    availableAt: Date;
+    environment: ServerEnvironment;
+  }>,
 ): Promise<void> {
-  const provider = dependencies.emailProvider;
-  if (provider === undefined) return;
-  const configured = dependencies.environment.ABUSE_REPORT_ADMIN_EMAILS ?? [];
-  const fallback =
-    configured.length > 0
-      ? []
-      : await dependencies.database.user.findMany({
-          where: { role: "ADMIN", status: "ACTIVE" },
-          orderBy: [{ emailNormalized: "asc" }, { id: "asc" }],
-          select: { emailNormalized: true },
-          take: 20,
-        });
-  const recipients = [
-    ...new Set([
-      ...configured,
-      ...fallback.map(({ emailNormalized }) => emailNormalized),
-    ]),
-  ];
-  await Promise.allSettled(
-    recipients.map((to) =>
-      provider.send({
-        to,
-        templateKey: "abuse_report_received",
-        subject: "Neue Missbrauchsmeldung eingegangen",
-        data: {
-          categoryLabel: reasonLabel(reasonCode),
-          idempotencyKey: `abuse-report:${reportId}`,
+  const configured = input.environment.ABUSE_REPORT_ADMIN_EMAILS ?? [];
+  if (configured.length > 0) {
+    for (const [index, address] of configured.entries()) {
+      await enqueueNotification(transaction, {
+        recipient: {
+          address,
+          keyring:
+            input.environment.secrets.keyrings.NOTIFICATION_DELIVERY_KEYS,
+          hashKeyring:
+            input.environment.secrets.keyrings.NOTIFICATION_RECIPIENT_HASH_KEYS,
+          retentionUntil: notificationRecipientMaterialExpiresAt(
+            input.availableAt,
+          ),
         },
-      }),
-    ),
-  );
+        templateKey: "abuse_report_received",
+        payloadSchemaVersion: "abuse-report-v1",
+        payload: {
+          reportId: input.reportId,
+          categoryLabel: reasonLabel(input.reasonCode),
+        },
+        dedupeKey: `abuse-report:${input.reportId}:configured:${index}`,
+        availableAt: input.availableAt,
+      });
+    }
+    return;
+  }
+
+  const fallback = await transaction.user.findMany({
+    where: { role: "ADMIN", status: "ACTIVE" },
+    orderBy: [{ emailNormalized: "asc" }, { id: "asc" }],
+    select: { id: true },
+    take: 20,
+  });
+  for (const admin of fallback) {
+    await enqueueNotification(transaction, {
+      recipient: { userId: admin.id },
+      templateKey: "abuse_report_received",
+      payloadSchemaVersion: "abuse-report-v1",
+      payload: {
+        reportId: input.reportId,
+        categoryLabel: reasonLabel(input.reasonCode),
+      },
+      dedupeKey: `abuse-report:${input.reportId}:admin:${admin.id}`,
+      availableAt: input.availableAt,
+    });
+  }
 }
 
 function reasonLabel(reason: AbuseReportContentInput["reasonCode"]): string {

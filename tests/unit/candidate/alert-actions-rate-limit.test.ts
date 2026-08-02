@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   isValidAuthMutationOrigin: vi.fn(),
   recordRateLimitDenial: vi.fn(),
   requireCandidatePage: vi.fn(),
+  runJobAlertDigestMock: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -35,7 +36,7 @@ vi.mock("@/lib/candidate/job-alerts", () => ({
   pauseJobAlert: vi.fn(),
   resumeJobAlert: vi.fn(),
   revokeJobAlertDeliveryConsentGlobally: vi.fn(),
-  runJobAlertDigestMock: vi.fn(),
+  runJobAlertDigestMock: mocks.runJobAlertDigestMock,
   updateJobAlert: vi.fn(),
 }));
 vi.mock("@/lib/config/env", () => ({
@@ -47,7 +48,10 @@ vi.mock("@/lib/security/rate-limit-audit", () => ({
 }));
 
 import { INITIAL_JOB_ALERT_ACTION_STATE } from "@/app/candidate/alerts/action-state";
-import { deleteJobAlertAction } from "@/app/candidate/alerts/actions";
+import {
+  deleteJobAlertAction,
+  runJobAlertDigestMockAction,
+} from "@/app/candidate/alerts/actions";
 
 const USER_ID = "91000000-0000-4000-8000-000000000001";
 const REQUEST = Object.freeze({
@@ -111,5 +115,25 @@ describe("candidate alert rate-limit denial", () => {
       },
     );
     expect(mocks.deleteJobAlert).not.toHaveBeenCalled();
+  });
+
+  it("does not expose the manual mailbox effect outside local/ci local_mock", async () => {
+    mocks.consumeRequestRateLimit.mockResolvedValue({ allowed: true });
+    mocks.getServerEnvironment.mockReturnValue({
+      APP_ENV: "production",
+      EMAIL_PROVIDER_MODE: "resend_live",
+    });
+
+    const result = await runJobAlertDigestMockAction(
+      "91000000-0000-4000-8000-000000000003",
+      INITIAL_JOB_ALERT_ACTION_STATE,
+      new FormData(),
+    );
+
+    expect(result).toMatchObject({
+      status: "error",
+      message: expect.stringContaining("lokalen Testumgebung"),
+    });
+    expect(mocks.runJobAlertDigestMock).not.toHaveBeenCalled();
   });
 });

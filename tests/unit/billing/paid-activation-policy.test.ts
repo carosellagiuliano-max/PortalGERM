@@ -34,6 +34,7 @@ describe("Phase-24 paid activation policy", () => {
         packageCode: "STARTER",
         paidSelfServiceEnabled: true,
         provider: PROVIDER,
+        providerMode: "SANDBOX",
         sandboxCohort: "test",
         scopeDecision: GO,
       }),
@@ -62,7 +63,6 @@ describe("Phase-24 paid activation policy", () => {
       },
       "WTP_EXPIRED",
     ],
-    ["staging", { environment: "staging" }, "ENVIRONMENT_FORBIDDEN"],
     [
       "provider inactive",
       {
@@ -78,6 +78,7 @@ describe("Phase-24 paid activation policy", () => {
         packageCode: "STARTER",
         paidSelfServiceEnabled: true,
         provider: PROVIDER,
+        providerMode: "SANDBOX",
         sandboxCohort: "test",
         scopeDecision: GO,
         ...override,
@@ -92,6 +93,13 @@ describe("Phase-24 paid activation policy", () => {
       currency: "CHF" as const,
       description: "Starter Monatsplan",
       orderId: "00000000-0000-4000-8000-000000000002",
+      adapterKey: "stripe_sandbox" as const,
+      checkoutKind: "SUBSCRIPTION" as const,
+      paymentPriceBindingId: "00000000-0000-4000-8000-000000000004",
+      planVersionId: "00000000-0000-4000-8000-000000000005",
+      providerAccountReference: "acct_phase33test",
+      providerMode: "SANDBOX" as const,
+      providerPriceReference: "price_phase33starter",
     };
     const digest = realPaymentQuoteDigest(base);
     expect(digest).toMatch(/^[a-f0-9]{64}$/u);
@@ -105,5 +113,67 @@ describe("Phase-24 paid activation policy", () => {
         companyId: "00000000-0000-4000-8000-000000000003",
       }),
     ).not.toBe(digest);
+  });
+
+  it("keeps contract, sandbox and live activation modes distinct", () => {
+    expect(
+      resolvePaidCheckoutActivation({
+        environment: "production",
+        now: NOW,
+        packageCode: "STARTER",
+        paidSelfServiceEnabled: true,
+        provider: {
+          active: true,
+          adapterKey: "stripe_contract",
+          adapterVersion: "v1",
+          mode: "ALLOWLIST",
+        },
+        providerMode: "CONTRACT",
+        sandboxCohort: "test",
+        scopeDecision: { ...GO, maximumMode: "ALLOWLIST" },
+      }),
+    ).toEqual({
+      active: true,
+      mode: "CONTRACT",
+      paidScopeDecisionId: GO.id,
+    });
+    expect(
+      resolvePaidCheckoutActivation({
+        environment: "production",
+        now: NOW,
+        packageCode: "STARTER",
+        paidSelfServiceEnabled: true,
+        provider: {
+          active: true,
+          adapterKey: "stripe_live",
+          adapterVersion: "v1",
+          mode: "LIVE",
+        },
+        providerMode: "LIVE",
+        sandboxCohort: "none",
+        scopeDecision: { ...GO, maximumMode: "LIVE" },
+      }),
+    ).toEqual({
+      active: true,
+      mode: "LIVE",
+      paidScopeDecisionId: GO.id,
+    });
+    expect(
+      resolvePaidCheckoutActivation({
+        environment: "production",
+        now: NOW,
+        packageCode: "STARTER",
+        paidSelfServiceEnabled: true,
+        provider: {
+          active: true,
+          adapterKey: "stripe_live",
+          adapterVersion: "v1",
+          mode: "LIVE",
+        },
+        providerMode: "CONTRACT",
+        sandboxCohort: "test",
+        scopeDecision: { ...GO, maximumMode: "LIVE" },
+      }),
+    ).toEqual({ active: false, reason: "PROVIDER_MODE_MISMATCH" });
   });
 });
