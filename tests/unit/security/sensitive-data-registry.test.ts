@@ -59,10 +59,13 @@ describe("Phase 33 sensitive evidence registry", () => {
       DOCUMENT_STORAGE_SECRET_ACCESS_KEY:
         "phase33-storage-secret-canary-000000000001",
     } satisfies Readonly<Record<string, string | undefined>>;
+    const liveProviderToken = ["sk", "live", "phase33providersecret"].join(
+      "_",
+    );
     const output = redactSensitiveEvidenceText(
       [
         environment.DOCUMENT_STORAGE_SECRET_ACCESS_KEY,
-        "sk_live_phase33providersecret",
+        liveProviderToken,
         "re_phase33ResendProviderSecret000001",
         "PII_EMAIL_CANARY@example.invalid",
       ].join(" "),
@@ -71,7 +74,7 @@ describe("Phase 33 sensitive evidence registry", () => {
     expect(output).not.toContain(
       environment.DOCUMENT_STORAGE_SECRET_ACCESS_KEY,
     );
-    expect(output).not.toContain("sk_live_phase33providersecret");
+    expect(output).not.toContain(liveProviderToken);
     expect(output).not.toContain("re_phase33ResendProviderSecret000001");
     expect(output).not.toContain("PII_EMAIL_CANARY@example.invalid");
     expect(findSensitiveEvidenceFinding(output, environment)).toBeNull();
