@@ -55,19 +55,6 @@ const postgresImage =
   "postgres:16.13-alpine@sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50";
 const gateTimeoutMilliseconds = 45 * 60_000;
 
-try {
-  await run(parseArguments(process.argv.slice(2)));
-} catch (error) {
-  process.stderr.write(
-    `${JSON.stringify({
-      command: "phase33-test-report",
-      status: "FAIL",
-      error: safeError(error),
-    })}\n`,
-  );
-  process.exitCode = 1;
-}
-
 async function run(command: ReturnType<typeof parseArguments>) {
   for (const basename of PHASE33_GENERATED_EVIDENCE_BASENAMES) {
     await invalidatePhase33EvidenceOutput(
@@ -1305,4 +1292,17 @@ function safeError(error: unknown) {
     .replaceAll(/postgres(?:ql)?:\/\/[^\s"']+/giu, "[REDACTED_DATABASE_URL]")
     .replaceAll(/[^A-Za-z0-9_:,./-]/gu, "_")
     .slice(0, 1_024);
+}
+
+try {
+  await run(parseArguments(process.argv.slice(2)));
+} catch (error) {
+  process.stderr.write(
+    `${JSON.stringify({
+      command: "phase33-test-report",
+      status: "FAIL",
+      error: safeError(error),
+    })}\n`,
+  );
+  process.exitCode = 1;
 }

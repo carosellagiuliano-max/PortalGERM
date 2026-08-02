@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,6 +10,20 @@ import {
 } from "@/lib/release/phase33-process-invocation";
 
 describe("Phase 33 npm process invocation", () => {
+  it("initializes module-level command policy before starting the asynchronous gate", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/phase33-test-report.ts"),
+      "utf8",
+    );
+    const policyInitialization = source.indexOf("const TEST_COMMAND_IDS");
+    const gateInvocation = source.lastIndexOf(
+      "await run(parseArguments(process.argv.slice(2)))",
+    );
+
+    expect(policyInitialization).toBeGreaterThan(-1);
+    expect(gateInvocation).toBeGreaterThan(policyInitialization);
+  });
+
   it("excludes the owner-controlled .vercel tree without weakening other untracked checks", () => {
     expect(PHASE33_CLEAN_TREE_GIT_ARGUMENTS).toEqual([
       "status",
