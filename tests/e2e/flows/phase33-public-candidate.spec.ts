@@ -93,6 +93,12 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
       page.getByRole("heading", { level: 2, name: "Stelle speichern" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Jetzt speichern" }).click();
+    await expect(page).toHaveURL(new RegExp(`/jobs/${job.slug}\\?saved=1`, "u"));
+    await expect(
+      page.getByRole("status").filter({
+        hasText: "Die Stelle wurde in deiner privaten Merkliste gespeichert.",
+      }),
+    ).toBeVisible();
     expect(
       await database.savedJob.count({
         where: {

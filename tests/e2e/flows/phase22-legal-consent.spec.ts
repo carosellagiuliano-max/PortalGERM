@@ -49,10 +49,9 @@ test("[22-AC-05/06] @journey legal publication and optional analytics remain fai
     await expect(page).toHaveURL(/result=saved/u);
     await expect(page.getByText("DRAFT", { exact: true })).toBeVisible();
 
-    await page
-      .getByRole("button", { name: "Unabhängig freigeben" })
-      .click();
-    await expect(page).toHaveURL(/result=forbidden/u);
+    await expect(
+      page.getByRole("button", { name: "Unabhängig freigeben" }),
+    ).toHaveCount(0);
     const revision = await database.legalRevision.findFirstOrThrow({
       where: { versionLabel: "phase22-browser-v1" },
       select: { status: true, reviewedByUserId: true },

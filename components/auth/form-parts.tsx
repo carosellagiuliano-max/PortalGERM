@@ -112,8 +112,11 @@ export function NativeCheckboxField({
           aria-describedby={describedBy}
           className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
         />
-        <div className="grid gap-1">
-          <Label htmlFor={id} className="text-sm leading-6 font-normal">
+        <div className="grid min-w-0 gap-1">
+          <Label
+            htmlFor={id}
+            className="block min-w-0 text-sm leading-6 font-normal"
+          >
             {label}
           </Label>
           {description === undefined ? null : (

@@ -20,6 +20,17 @@ import type { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { parseEnvironment } from "@/lib/config/env-schema";
+import { createDatabaseClient } from "@/lib/db/factory";
+import {
+  documentObjectStoreActivationBinding,
+  documentScannerActivationBinding,
+  type DocumentProviderActivationBinding,
+} from "@/lib/documents/provider-activation-binding";
+import {
+  ensurePhase33LocalProviderActivation,
+  type Phase33LocalProviderBinding,
+} from "@/lib/ops/phase33-contract-activation";
+import { refreshConfiguredProviderHealth } from "@/lib/ops/provider-health-monitor";
 import { candidateWorkflowSeedCryptoFromEnvironment } from "@/prisma/seed/blocks/candidate-workflows";
 import { runDemoSeed } from "@/prisma/seed/orchestrator";
 import { loadLocalEnvironment } from "@/scripts/load-local-environment";
@@ -37,6 +48,7 @@ import {
 
 const HOST = "127.0.0.1";
 const SERVER_TIMEOUT_MILLISECONDS = 90_000;
+const PROVIDER_HEALTH_REFRESH_MILLISECONDS = 30_000;
 const MAXIMUM_DIAGNOSTIC_CHARACTERS = 24_000;
 const PHASE17_BUILD_ID = process.env.APP_BUILD_ID ?? "phase17-browser-gate";
 const PHASE17_SOURCE_ROOT = process.cwd();
@@ -152,6 +164,7 @@ async function main() {
             LOGIN_EMAIL_CHANGE: "true",
             PRIVILEGED_STEP_UP_MODE: phase25SecurityMode,
             NOTIFICATION_OUTBOX_PRODUCERS: "true",
+            WORKER_RUNTIME: "sandbox_command",
             EMAIL_PROVIDER_MODE: "disabled",
             NOTIFICATION_DISPATCH: "paused",
             OPTIONAL_EMAIL: "false",
@@ -179,6 +192,12 @@ async function main() {
           candidateWorkflowSeedCryptoFromEnvironment(runtimeEnvironment),
       },
     );
+    const providerHealth = phase32Lc1Mode
+      ? noProviderHealthControl()
+      : await startDocumentProviderHealth(
+          database.connectionString,
+          runtimeEnvironment,
+        );
     const runtime = await startServer(
       database.connectionString,
       baseUrl,
@@ -188,7 +207,10 @@ async function main() {
       documentStorageKeys,
       documentStorageRoot,
       phase25SecurityMode,
-    );
+    ).catch(async (error: unknown) => {
+      await providerHealth.stop();
+      throw error;
+    });
     let playwrightExit: ChildExit;
     try {
       await waitUntilReady(baseUrl, runtime);
@@ -198,7 +220,11 @@ async function main() {
         runIdentity,
       });
     } finally {
-      await stopChild(runtime.child, runtime.exit);
+      try {
+        await stopChild(runtime.child, runtime.exit);
+      } finally {
+        await providerHealth.stop();
+      }
     }
 
     if (playwrightExit.code !== 0) {
@@ -225,6 +251,98 @@ async function main() {
     await database.dispose();
     rmSync(documentStorageRoot, { recursive: true, force: true });
   }
+}
+
+type ProviderHealthControl = Readonly<{
+  stop: () => Promise<void>;
+}>;
+
+function noProviderHealthControl(): ProviderHealthControl {
+  return Object.freeze({ stop: async () => undefined });
+}
+
+async function startDocumentProviderHealth(
+  databaseUrl: string,
+  environment: ReturnType<typeof parseEnvironment>,
+): Promise<ProviderHealthControl> {
+  const database = createDatabaseClient(databaseUrl);
+  try {
+    const deploymentDigest = environment.APP_BUILD_ID;
+    if (deploymentDigest === undefined) {
+      throw new Error("PHASE17_DOCUMENT_PROVIDER_BUILD_ID_MISSING");
+    }
+    const bindings = [
+      localDocumentProviderBinding(
+        documentObjectStoreActivationBinding(environment),
+      ),
+      localDocumentProviderBinding(documentScannerActivationBinding(environment)),
+    ];
+    const now = new Date();
+    for (const binding of bindings) {
+      await ensurePhase33LocalProviderActivation(database, {
+        binding,
+        deploymentDigest,
+        environment,
+        now,
+      });
+    }
+
+    const abort = new AbortController();
+    let monitorFailure: unknown;
+    const monitor = (async () => {
+      while (!abort.signal.aborted) {
+        try {
+          await delay(PROVIDER_HEALTH_REFRESH_MILLISECONDS, undefined, {
+            signal: abort.signal,
+          });
+        } catch (error) {
+          if (abort.signal.aborted) return;
+          throw error;
+        }
+        const summary = await refreshConfiguredProviderHealth({
+          database,
+          environment,
+          now: new Date(),
+        });
+        if (summary.degraded > 0) {
+          throw new Error("PHASE17_DOCUMENT_PROVIDER_HEALTH_DEGRADED");
+        }
+      }
+    })().catch((error: unknown) => {
+      monitorFailure = error;
+    });
+    let stopped = false;
+    return Object.freeze({
+      async stop() {
+        if (stopped) return;
+        stopped = true;
+        abort.abort();
+        await monitor;
+        await database.$disconnect();
+        if (monitorFailure !== undefined) throw monitorFailure;
+      },
+    });
+  } catch (error) {
+    await database.$disconnect();
+    throw error;
+  }
+}
+
+function localDocumentProviderBinding(
+  binding: DocumentProviderActivationBinding | null,
+): Phase33LocalProviderBinding {
+  if (binding === null || binding.expectedMode !== "SANDBOX") {
+    throw new Error("PHASE17_DOCUMENT_PROVIDER_BINDING_INVALID");
+  }
+  return Object.freeze({
+    adapterKey: binding.adapterKey,
+    adapterVersion: binding.adapterVersion,
+    expectedConfigurationDigest: binding.expectedConfigurationDigest,
+    expectedMode: "SANDBOX",
+    expectedSecretVersionRef: binding.expectedSecretVersionRef,
+    region: binding.region,
+    useCase: binding.useCase,
+  });
 }
 
 async function startServer(
@@ -304,6 +422,7 @@ async function startServer(
               LOGIN_EMAIL_CHANGE: "true",
               PRIVILEGED_STEP_UP_MODE: privilegedStepUpMode,
               NOTIFICATION_OUTBOX_PRODUCERS: "true",
+              WORKER_RUNTIME: "sandbox_command",
               EMAIL_PROVIDER_MODE: "disabled",
               NOTIFICATION_DISPATCH: "paused",
               OPTIONAL_EMAIL: "false",

@@ -6,6 +6,7 @@ import {
   phase17Database,
   test,
 } from "@/tests/e2e/fixtures/phase17-test";
+import { hashSessionToken, SESSION_POLICY_V1 } from "@/lib/auth/session";
 import { enrollTotp } from "@/tests/e2e/fixtures/phase25-security";
 
 test.describe.configure({ mode: "serial" });
@@ -16,15 +17,27 @@ test("[P25A-AC-02] @journey enrolls TOTP and consumes recovery evidence once", a
   const database = phase17Database();
   try {
     await login(page, DEMO_ACCOUNTS.admin, DEMO_PASSWORD);
+    const admin = await database.user.findUniqueOrThrow({
+      where: { emailNormalized: DEMO_ACCOUNTS.admin },
+      select: { id: true },
+    });
+    const sessionCookie = (await page.context().cookies()).find(
+      ({ name }) => name === SESSION_POLICY_V1.cookieName,
+    );
+    if (sessionCookie === undefined) {
+      throw new Error("The authenticated admin session cookie is missing.");
+    }
+    const adminSession = await database.session.findUniqueOrThrow({
+      where: { tokenHash: hashSessionToken(sessionCookie.value) },
+      select: { id: true, userId: true, revokedAt: true },
+    });
+    expect(adminSession.userId).toBe(admin.id);
+    expect(adminSession.revokedAt).toBeNull();
     const enrolled = await enrollTotp(
       page,
       "/admin/security/authenticators",
       "Phase 25 Admin TOTP",
     );
-    const admin = await database.user.findUniqueOrThrow({
-      where: { emailNormalized: DEMO_ACCOUNTS.admin },
-      select: { id: true },
-    });
     const factor = await database.authenticator.findFirstOrThrow({
       where: {
         userId: admin.id,
@@ -34,16 +47,28 @@ test("[P25A-AC-02] @journey enrolls TOTP and consumes recovery evidence once", a
       },
       include: { totp: true },
     });
+    const currentRecoveryCodes = await database.recoveryCode.findMany({
+      where: {
+        userId: admin.id,
+        usedAt: null,
+        revokedAt: null,
+      },
+      select: { batchId: true },
+    });
+    expect(currentRecoveryCodes).toHaveLength(10);
+    const currentRecoveryBatchId = currentRecoveryCodes[0]?.batchId;
+    if (currentRecoveryBatchId === undefined) {
+      throw new Error("The active recovery-code batch is missing.");
+    }
     expect(
-      await database.recoveryCode.count({
-        where: { userId: admin.id },
-      }),
-    ).toBe(10);
+      new Set(currentRecoveryCodes.map(({ batchId }) => batchId)),
+    ).toEqual(new Set([currentRecoveryBatchId]));
     expect(factor.totp?.lastAcceptedStep).not.toBeNull();
     expect(
       await database.sessionAssurance.count({
         where: {
           userId: admin.id,
+          sessionId: adminSession.id,
           level: "AAL2",
           revokedAt: null,
         },
@@ -80,7 +105,29 @@ test("[P25A-AC-02] @journey enrolls TOTP and consumes recovery evidence once", a
       await database.recoveryCode.count({
         where: {
           userId: admin.id,
+          batchId: currentRecoveryBatchId,
           usedAt: { not: null },
+          revokedAt: null,
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await database.recoveryCode.count({
+        where: {
+          userId: admin.id,
+          batchId: currentRecoveryBatchId,
+          usedAt: null,
+          revokedAt: null,
+        },
+      }),
+    ).toBe(9);
+    expect(
+      await database.auditLog.count({
+        where: {
+          actorUserId: admin.id,
+          action: "AUTHENTICATOR_ACTIVATED",
+          targetType: "AUTHENTICATOR",
+          targetId: factor.id,
         },
       }),
     ).toBe(1);
@@ -88,15 +135,12 @@ test("[P25A-AC-02] @journey enrolls TOTP and consumes recovery evidence once", a
       await database.auditLog.count({
         where: {
           actorUserId: admin.id,
-          action: {
-            in: [
-              "AUTHENTICATOR_ACTIVATED",
-              "RECOVERY_CODE_USED",
-            ],
-          },
+          action: "RECOVERY_CODE_USED",
+          targetType: "SESSION_ASSURANCE",
+          targetId: adminSession.id,
         },
       }),
-    ).toBeGreaterThanOrEqual(2);
+    ).toBe(1);
   } finally {
     await database.$disconnect();
   }

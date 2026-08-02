@@ -29,14 +29,14 @@ test.beforeAll(async () => {
 test("[P29-AC-05] @journey public search, job and legal trust path works in the released engine", async ({
   page,
 }) => {
-  await openJourneyPage(page, "/jobs");
+  await openAnalyticsJourneyPage(page, "/jobs");
   await expect(
     page.getByRole("heading", { name: "Finde deinen nächsten fairen Job." }),
   ).toBeVisible();
   await expect(page.getByRole("main")).toBeVisible();
   await assertNoViewportClipping(page);
 
-  await openJourneyPage(page, `/jobs/${publishedJobSlug}`);
+  await openAnalyticsJourneyPage(page, `/jobs/${publishedJobSlug}`);
   await expect(page.getByRole("main")).toBeVisible();
   await expect(page.locator("h1")).toBeVisible();
   await assertNoViewportClipping(page);
@@ -109,6 +109,21 @@ async function openResponsiveOperationsPage(
 async function openJourneyPage(page: Page, path: string) {
   await page.goto(path);
   await settleJourneyPage(page);
+}
+
+async function openAnalyticsJourneyPage(page: Page, path: string) {
+  const analyticsResponse = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === "POST" &&
+      request.headers()["next-action"] !== undefined &&
+      new URL(response.url()).pathname === path
+    );
+  });
+  await openJourneyPage(page, path);
+  const response = await analyticsResponse;
+  expect(response.ok()).toBe(true);
+  await response.finished();
 }
 
 async function settleJourneyPage(page: Page) {

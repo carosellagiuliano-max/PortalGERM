@@ -22,6 +22,10 @@ test("[P33-AC-12][P33-AC-14] @journey support triage persists once while an unre
   browser,
   page,
 }) => {
+  // This scenario deliberately crosses three authenticated actors and verifies
+  // accessibility, persistence, notification, and audit evidence in one run.
+  // WebKit needs slightly more than the suite-wide 120-second journey budget.
+  test.setTimeout(180_000);
   const database = phase17Database();
   let operator: Awaited<ReturnType<typeof openActor>> | undefined;
   let unrelatedAdmin: Awaited<ReturnType<typeof openActor>> | undefined;

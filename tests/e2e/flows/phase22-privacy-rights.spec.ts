@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import {
   DEMO_ACCOUNTS,
   DEMO_PASSWORD,
@@ -9,6 +7,7 @@ import {
   phase17Database,
   test,
 } from "@/tests/e2e/fixtures/phase17-test";
+import { enrollTotp } from "@/tests/e2e/fixtures/phase25-security";
 
 test.describe.configure({ mode: "serial" });
 
@@ -23,20 +22,6 @@ test("[E2E-22] @journey privacy rights stay owner-only and fail closed while Pha
       where: { emailNormalized: DEMO_ACCOUNTS.admin },
       select: { id: true },
     });
-    const approvalEmail = `phase22-approval-${randomUUID()}@example.test`;
-    const approvalAdmin = await database.user.create({
-      data: {
-        email: approvalEmail,
-        emailNormalized: approvalEmail,
-        role: "ADMIN",
-        name: "Phase 22 Approval Actor",
-        status: "ACTIVE",
-        dataProvenance: "TEST",
-        emailVerifiedAt: new Date(),
-        identityAssurance: "VERIFIED_EMAIL",
-      },
-    });
-
     await login(page, candidate.email, DEMO_PASSWORD);
     await page.goto("/candidate/privacy");
     await expect(
@@ -104,34 +89,45 @@ test("[E2E-22] @journey privacy rights stay owner-only and fail closed while Pha
       DEMO_PASSWORD,
     );
     try {
+      await enrollTotp(
+        adminActor.page,
+        "/admin/security/authenticators",
+        "Phase 22 Privacy Processor TOTP",
+      );
       await adminActor.page.goto(`/admin/privacy-requests/${request.id}`);
       await expect(
         adminActor.page.getByRole("button", {
-          name: "Verschlüsseltes Exportartefakt erstellen",
+          name: "Unabhängige Vollzugsfreigabe anfordern",
         }),
       ).toBeVisible();
       await adminActor.page
-        .getByPlaceholder("UUID des unabhängigen Approval-Actors")
-        .fill(approvalAdmin.id);
-      await adminActor.page
-        .getByPlaceholder("sandbox:approval:evidence-reference")
-        .fill("sandbox:phase22-browser-approval-evidence");
-      await adminActor.page
-        .getByPlaceholder("sandbox:step-up:evidence-reference")
-        .fill("sandbox:phase22-browser-step-up-evidence");
+        .getByRole("button", { name: "Sicherheitsbestätigung ausstellen" })
+        .click();
+      await expect(
+        adminActor.page.getByText(/Bestätigung ausgestellt; einmalig gültig/u),
+      ).toBeVisible();
       await adminActor.page
         .getByRole("button", {
-          name: "Verschlüsseltes Exportartefakt erstellen",
+          name: "Unabhängige Vollzugsfreigabe anfordern",
         })
         .click();
       await expect(
         adminActor.page.getByText(
-          "Export V2 ist serverseitig gesperrt. Es wird kein Mock-Abschluss erzeugt.",
+          "Der autonome Privacy-Vollzug ist serverseitig deaktiviert oder seine Provider-/Outbox-Konfiguration ist unvollständig.",
         ),
       ).toBeVisible();
     } finally {
       await adminActor.close();
     }
+    expect(
+      await database.privilegedApproval.count({
+        where: {
+          kind: "PRIVACY",
+          targetType: "PRIVACY_REQUEST",
+          targetId: request.id,
+        },
+      }),
+    ).toBe(0);
     expect(
       await database.privacyExecution.count({
         where: { privacyRequestId: request.id },

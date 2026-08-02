@@ -21,6 +21,9 @@ export const PHASE32_LC1_BROWSER_PROJECTS = Object.freeze([
 export const PHASE17_QUALITY_FILE = "quality/critical-routes.spec.ts" as const;
 export const PHASE18_ALL_ROUTES_QUALITY_FILE =
   "quality/all-routes.spec.ts" as const;
+export const PHASE18_ALL_ROUTES_PAGE_COUNT = 130;
+export const PHASE18_ALL_ROUTES_QUALITY_RESULT_COUNT =
+  PHASE18_ALL_ROUTES_PAGE_COUNT + 1;
 export const PHASE20_IDENTITY_FLOW_FILE =
   "flows/phase20-identity-email.spec.ts" as const;
 export const PHASE20_IDENTITY_QUALITY_FILE =
@@ -127,13 +130,13 @@ export const PHASE17_QUALITY_CONTRACT = Object.freeze([
     project: PHASE17_JOURNEY_PROJECT,
     tag: "@quality-desktop",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 130,
+    expectedCount: PHASE18_ALL_ROUTES_QUALITY_RESULT_COUNT,
   }),
   Object.freeze({
     project: PHASE17_MOBILE_PROJECT,
     tag: "@quality-mobile",
     file: PHASE18_ALL_ROUTES_QUALITY_FILE,
-    expectedCount: 130,
+    expectedCount: PHASE18_ALL_ROUTES_QUALITY_RESULT_COUNT,
   }),
   Object.freeze({
     project: PHASE17_JOURNEY_PROJECT,

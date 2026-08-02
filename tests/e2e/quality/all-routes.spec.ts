@@ -20,8 +20,9 @@ import {
   test,
   type PageObservation,
 } from "@/tests/e2e/fixtures/phase17-test";
+import { PHASE18_ALL_ROUTES_PAGE_COUNT } from "@/tests/e2e/manifest-contract";
 
-const EXPECTED_PAGE_COUNT = 129;
+const EXPECTED_PAGE_COUNT = PHASE18_ALL_ROUTES_PAGE_COUNT;
 const EXPECTED_HANDLER_COUNT = 21;
 const EXPECTED_METADATA_COUNT = 2;
 const ROUTE_TEST_TIMEOUT_MILLISECONDS = 90_000;
@@ -40,15 +41,21 @@ const RAW_ERROR_PATTERNS = Object.freeze([
 ]);
 
 type RouteKind = "page" | "handler" | "metadata";
-type RouteRole =
-  | "PUBLIC"
-  | "PUBLIC_OPERATIONS"
-  | "LOCAL_OPS_TOKEN"
-  | "AUTHENTICATED"
-  | "CANDIDATE"
-  | "EMPLOYER"
-  | "RECRUITER"
-  | "ADMIN";
+const ROUTE_ROLES = Object.freeze([
+  "PUBLIC",
+  "PUBLIC_OPERATIONS",
+  "PUBLIC_TOKEN",
+  "LOCAL_OPS_TOKEN",
+  "EMAIL_PROVIDER_SIGNATURE",
+  "PAYMENT_PROVIDER_SIGNATURE",
+  "AUTHENTICATED",
+  "CANDIDATE",
+  "EMPLOYER",
+  "RECRUITER",
+  "ADMIN",
+] as const);
+const ROUTE_ROLE_SET: ReadonlySet<string> = new Set(ROUTE_ROLES);
+type RouteRole = (typeof ROUTE_ROLES)[number];
 type InventoryRoute = Readonly<{
   kind: RouteKind;
   path: string;
@@ -373,17 +380,5 @@ function parseRouteInventory(value: unknown): readonly InventoryRoute[] {
 }
 
 function isRouteRole(value: unknown): value is RouteRole {
-  return (
-    typeof value === "string" &&
-    [
-      "PUBLIC",
-      "PUBLIC_OPERATIONS",
-      "LOCAL_OPS_TOKEN",
-      "AUTHENTICATED",
-      "CANDIDATE",
-      "EMPLOYER",
-      "RECRUITER",
-      "ADMIN",
-    ].includes(value)
-  );
+  return typeof value === "string" && ROUTE_ROLE_SET.has(value);
 }

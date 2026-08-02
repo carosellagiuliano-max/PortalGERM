@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import routeInventoryJson from "@/codex-plan/route-inventory.json" with {
+  type: "json",
+};
 import {
   PHASE17_CASES,
   PHASE17_FIXTURE_VERSION,
@@ -13,6 +16,8 @@ import {
   PHASE17_NETWORK_POLICY,
   PHASE17_QUALITY_CONTRACT,
   PHASE18_ALL_ROUTES_QUALITY_FILE,
+  PHASE18_ALL_ROUTES_PAGE_COUNT,
+  PHASE18_ALL_ROUTES_QUALITY_RESULT_COUNT,
   PHASE26_COMPANY_TRUST_QUALITY_FILE,
   PHASE32_LC1_BROWSER_PROJECTS,
   PHASE33_EMPLOYER_RECRUITER_FLOW_FILE,
@@ -29,6 +34,29 @@ const FULL_QUALITY_RESULT_COUNT = PHASE17_QUALITY_CONTRACT.reduce(
 const FULL_RESULT_COUNT = PHASE17_CASES.length + FULL_QUALITY_RESULT_COUNT;
 
 describe("Phase 17 manifest contract", () => {
+  it("counts the route-inventory assertion in addition to every page", () => {
+    expect(
+      routeInventoryJson.filter(({ kind }) => kind === "page"),
+    ).toHaveLength(PHASE18_ALL_ROUTES_PAGE_COUNT);
+    expect(PHASE18_ALL_ROUTES_QUALITY_RESULT_COUNT).toBe(
+      PHASE18_ALL_ROUTES_PAGE_COUNT + 1,
+    );
+    expect(
+      PHASE17_QUALITY_CONTRACT.filter(
+        ({ file }) => file === PHASE18_ALL_ROUTES_QUALITY_FILE,
+      ).map(({ project, expectedCount }) => ({ project, expectedCount })),
+    ).toEqual([
+      {
+        project: PHASE17_JOURNEY_PROJECT,
+        expectedCount: PHASE18_ALL_ROUTES_QUALITY_RESULT_COUNT,
+      },
+      {
+        project: PHASE17_MOBILE_PROJECT,
+        expectedCount: PHASE18_ALL_ROUTES_QUALITY_RESULT_COUNT,
+      },
+    ]);
+  });
+
   it("accepts the exact retry-free full journey and quality inventory", () => {
     const manifest = validFullManifest();
     expect(() =>

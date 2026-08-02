@@ -54,7 +54,7 @@ export function CandidateRegistrationForm({ next }: Readonly<{ next?: string }>)
         required
         label={
           <>
-            Ich akzeptiere die{" "}
+            Ich akzeptiere die aktuellen{" "}
             <Link className="underline" href="/legal/terms">
               Nutzungsbedingungen
             </Link>{" "}
