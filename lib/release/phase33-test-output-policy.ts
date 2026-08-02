@@ -11,7 +11,11 @@ const VITEST_INFRASTRUCTURE_FAILURES = Object.freeze([
   /UnhandledPromiseRejection|Unhandled Rejection|Uncaught Exception/iu,
 ]);
 
-export const UNIT_TEST_SHARD_COUNT = 16;
+// Vitest's isolated forks are recreated for every file. On Windows, a clean
+// candidate clone can exhaust worker-start capacity after roughly twenty files
+// even with maxWorkers=1. Keep each deterministic shard small enough that the
+// outer runner regularly tears down the complete pool and releases resources.
+export const UNIT_TEST_SHARD_COUNT = 64;
 
 export function assertVitestOutputHasNoInfrastructureFailures(
   output: string,

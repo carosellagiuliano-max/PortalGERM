@@ -43,13 +43,13 @@ describe("Phase 33 test output policy", () => {
       "run",
       "--config",
       "vitest.config.ts",
-      "--shard=1/16",
+      "--shard=1/64",
     ]);
     expect(full.at(-1)).toEqual([
       "run",
       "--config",
       "vitest.config.ts",
-      "--shard=16/16",
+      "--shard=64/64",
     ]);
   });
 });
