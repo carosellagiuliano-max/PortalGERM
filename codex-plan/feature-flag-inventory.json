@@ -49,6 +49,7 @@
       "lib/companies/public-read-model.ts",
       "lib/companies/verification/composition.ts",
       "lib/companies/verification/read-model.ts",
+      "lib/config/application-environment.ts",
       "lib/documents/provider-activation-guard.ts",
       "lib/documents/runtime-policy.ts",
       "lib/notifications/dispatcher.ts",
