@@ -1,12 +1,13 @@
 import type { OperationsActivationMode } from "@/lib/generated/prisma/client";
+import {
+  environmentClass,
+  type ApplicationEnvironment,
+} from "@/lib/config/application-environment";
 import type { WorkerHandlerCatalogEntry } from "@/lib/ops/handler-catalog";
 
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
 
-export type WorkerRuntimeMode =
-  | "paused"
-  | "sandbox_command"
-  | "autonomous";
+export type WorkerRuntimeMode = "paused" | "sandbox_command" | "autonomous";
 
 export type WorkerHandlerActivationRecord = Readonly<{
   id: string;
@@ -65,14 +66,16 @@ export type WorkerHandlerActivationDecision =
         | "ENVIRONMENT_MODE_FORBIDDEN";
     }>;
 
-export function resolveWorkerHandlerActivation(input: Readonly<{
-  activation: WorkerHandlerActivationRecord | null;
-  deploymentDigest: string;
-  environment: string;
-  handler: WorkerHandlerCatalogEntry;
-  now: Date;
-  runtimeMode: WorkerRuntimeMode;
-}>): WorkerHandlerActivationDecision {
+export function resolveWorkerHandlerActivation(
+  input: Readonly<{
+    activation: WorkerHandlerActivationRecord | null;
+    deploymentDigest: string;
+    environment: ApplicationEnvironment;
+    handler: WorkerHandlerCatalogEntry;
+    now: Date;
+    runtimeMode: WorkerRuntimeMode;
+  }>,
+): WorkerHandlerActivationDecision {
   if (input.runtimeMode === "paused") return inactive("RUNTIME_PAUSED");
   if (input.handler.execution !== "IMPLEMENTED") {
     return inactive("HANDLER_NOT_EXECUTABLE");
@@ -120,13 +123,7 @@ export function resolveWorkerHandlerActivation(input: Readonly<{
   ) {
     return inactive("INCOMPLETE_EVIDENCE");
   }
-  if (
-    !isModeAllowed(
-      activation.mode,
-      input.environment,
-      input.runtimeMode,
-    )
-  ) {
+  if (!isModeAllowed(activation.mode, input.environment, input.runtimeMode)) {
     return inactive("ENVIRONMENT_MODE_FORBIDDEN");
   }
   return Object.freeze({
@@ -152,23 +149,29 @@ function inactive(
 
 function isModeAllowed(
   mode: Exclude<OperationsActivationMode, "DISABLED">,
-  environment: string,
+  environment: ApplicationEnvironment,
   runtimeMode: Exclude<WorkerRuntimeMode, "paused">,
 ) {
+  const applicationEnvironment = environmentClass(environment);
   if (runtimeMode === "sandbox_command") {
     return (
-      mode === "SANDBOX" && (environment === "local" || environment === "ci")
+      mode === "SANDBOX" &&
+      (applicationEnvironment === "LOCAL_DEVELOPMENT" ||
+        applicationEnvironment === "CI_VERIFICATION")
     );
   }
   if (mode === "SANDBOX") {
     return (
-      environment === "local" ||
-      environment === "ci" ||
-      environment === "staging"
+      applicationEnvironment === "LOCAL_DEVELOPMENT" ||
+      applicationEnvironment === "CI_VERIFICATION" ||
+      applicationEnvironment === "CONTROLLED_STAGING"
     );
   }
   if (mode === "ALLOWLIST") {
-    return environment === "staging" || environment === "production";
+    return (
+      applicationEnvironment === "CONTROLLED_STAGING" ||
+      applicationEnvironment === "LIVE_PRODUCTION"
+    );
   }
-  return environment === "production";
+  return applicationEnvironment === "LIVE_PRODUCTION";
 }

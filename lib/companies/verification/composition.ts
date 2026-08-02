@@ -1,6 +1,8 @@
 import "server-only";
 
+import type { ServerEnvironment } from "@/lib/config/env-schema";
 import { getServerEnvironment } from "@/lib/config/env";
+import { isIsolatedSandboxEnvironment } from "@/lib/config/application-environment";
 import {
   createDeterministicDomainChallengeProvider,
   createDeterministicRegisterProvider,
@@ -19,14 +21,11 @@ export function createCompanyVerificationProviders(
   fixtures: readonly CompanyRegisterSandboxFixture[] = [],
 ) {
   const environment = getServerEnvironment();
-  const sandboxAllowed =
-    (environment.APP_ENV === "local" || environment.APP_ENV === "ci") &&
-    environment.COMPANY_VERIFICATION_COHORT === "test";
+  const sandboxAllowed = isCompanyVerificationSandboxAllowed(environment);
   return Object.freeze({
     register:
       sandboxAllowed &&
-      environment.COMPANY_REGISTER_PROVIDER_MODE ===
-        "deterministic_sandbox"
+      environment.COMPANY_REGISTER_PROVIDER_MODE === "deterministic_sandbox"
         ? createDeterministicRegisterProvider(fixtures)
         : createDisabledRegisterProvider(),
     domain:
@@ -35,6 +34,18 @@ export function createCompanyVerificationProviders(
         ? createDeterministicDomainChallengeProvider()
         : createDisabledDomainChallengeProvider(),
   });
+}
+
+export function isCompanyVerificationSandboxAllowed(
+  environment: Pick<
+    ServerEnvironment,
+    "APP_ENV" | "COMPANY_VERIFICATION_COHORT"
+  >,
+): boolean {
+  return (
+    isIsolatedSandboxEnvironment(environment.APP_ENV) &&
+    environment.COMPANY_VERIFICATION_COHORT === "test"
+  );
 }
 
 export function companyVerificationRuntimeFlags() {

@@ -1,4 +1,8 @@
 import type { ServerEnvironment } from "@/lib/config/env-schema";
+import {
+  environmentClass,
+  isIsolatedSandboxEnvironment,
+} from "@/lib/config/application-environment";
 
 export type DocumentRuntimeDecision =
   | Readonly<{
@@ -17,8 +21,9 @@ export type DocumentRuntimeDecision =
 export function resolveDocumentRuntime(
   environment: ServerEnvironment,
 ): DocumentRuntimeDecision {
+  const applicationEnvironment = environmentClass(environment.APP_ENV);
   if (
-    (environment.APP_ENV === "local" || environment.APP_ENV === "ci") &&
+    isIsolatedSandboxEnvironment(environment.APP_ENV) &&
     environment.DOCUMENT_STORAGE_MODE === "filesystem_sandbox" &&
     environment.DOCUMENT_SCANNER_MODE === "sandbox" &&
     environment.DOCUMENT_VAULT_COHORT === "test" &&
@@ -28,7 +33,7 @@ export function resolveDocumentRuntime(
     return available(environment, "SANDBOX");
   }
   if (
-    environment.APP_ENV === "ci" &&
+    applicationEnvironment === "CI_VERIFICATION" &&
     environment.NODE_ENV === "production" &&
     environment.DOCUMENT_STORAGE_MODE === "s3_contract" &&
     environment.DOCUMENT_SCANNER_MODE === "clamav_contract" &&
@@ -38,7 +43,7 @@ export function resolveDocumentRuntime(
     return available(environment, "CONTRACT_ONLY");
   }
   if (
-    environment.APP_ENV === "production" &&
+    applicationEnvironment === "LIVE_PRODUCTION" &&
     environment.NODE_ENV === "production" &&
     environment.DOCUMENT_STORAGE_MODE === "s3_live" &&
     environment.DOCUMENT_SCANNER_MODE === "clamav_live" &&
