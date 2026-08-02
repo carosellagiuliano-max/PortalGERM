@@ -97,9 +97,9 @@ try {
     const claimed = batches.flat();
     if (claimed.length === 0) break;
     await Promise.all(
-      batches.flatMap((batch, workerIndex) =>
-        batch.map((item) =>
-          completeWorkItem(
+      batches.map(async (batch, workerIndex) => {
+        for (const item of batch) {
+          await completeWorkItem(
             database,
             identity(
               item.id,
@@ -109,9 +109,9 @@ try {
               item.fencingToken,
             ),
             { now: new Date(claimAt.getTime() + 1) },
-          ),
-        ),
-      ),
+          );
+        }
+      }),
     );
     terminalCount += claimed.length;
     rounds += 1;
