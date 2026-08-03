@@ -28,24 +28,23 @@ describe("route handler policy", () => {
       Object.values({
         ...ROUTE_HANDLER_ROLES,
         ...RESERVED_ROUTE_HANDLER_ROLES,
-      }).some((roles) =>
-        (roles as readonly string[]).includes("PUBLIC"),
-      ),
+      }).some((roles) => (roles as readonly string[]).includes("PUBLIC")),
     ).toBe(false);
   });
 
-  it("records the three non-heuristic authority boundaries explicitly", () => {
+  it("records the four non-heuristic authority boundaries explicitly", () => {
+    expect(ROUTE_HANDLER_ROLES["/api/analytics/public-jobs"]).toEqual([
+      "PUBLIC_ANALYTICS_ORIGIN",
+    ]);
     expect(
-      ROUTE_HANDLER_ROLES[
-        "/api/company-verification/documents/upload-intents"
-      ],
+      ROUTE_HANDLER_ROLES["/api/company-verification/documents/upload-intents"],
     ).toEqual(["EMPLOYER", "RECRUITER"]);
     expect(
       ROUTE_HANDLER_ROLES["/api/recruiting/interviews/[id]/calendar"],
     ).toEqual(["CANDIDATE", "EMPLOYER", "RECRUITER"]);
-    expect(
-      ROUTE_HANDLER_ROLES["/api/webhooks/payments/[provider]"],
-    ).toEqual(["PAYMENT_PROVIDER_SIGNATURE"]);
+    expect(ROUTE_HANDLER_ROLES["/api/webhooks/payments/[provider]"]).toEqual([
+      "PAYMENT_PROVIDER_SIGNATURE",
+    ]);
     expect(RESERVED_ROUTE_HANDLER_ROLES).toEqual({
       "/api/webhooks/email/resend": ["EMAIL_PROVIDER_SIGNATURE"],
     });
