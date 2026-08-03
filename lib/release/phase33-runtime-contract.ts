@@ -308,7 +308,7 @@ export function validatePhase33RuntimeContract(
   }
 
   requireInternalNetwork(networks, "database", issues);
-  requireInternalNetwork(networks, "front", issues);
+  requireHostIngressNetwork(networks, "front", issues);
   if (profile === "production-contract") {
     requireInternalNetwork(networks, "edge", issues);
     requireInternalNetwork(networks, "providers", issues);
@@ -558,6 +558,21 @@ function requireInternalNetwork(
 ) {
   if (asRecord(networks[name])?.internal !== true) {
     issues.push(`INTERNAL_NETWORK_REQUIRED:${name}`);
+  }
+}
+
+function requireHostIngressNetwork(
+  networks: Record<string, unknown>,
+  name: string,
+  issues: string[],
+) {
+  const network = asRecord(networks[name]);
+  if (
+    network === undefined ||
+    network.internal === true ||
+    network.driver !== "bridge"
+  ) {
+    issues.push(`HOST_INGRESS_NETWORK_REQUIRED:${name}`);
   }
 }
 

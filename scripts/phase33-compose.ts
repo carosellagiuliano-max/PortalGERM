@@ -13,6 +13,12 @@ import {
   type Phase33RuntimeProfile,
   type Phase33RuntimeStabilityReceipt,
 } from "@/lib/release/phase33-runtime-contract";
+import {
+  normalizePhase33ComposeError,
+  PHASE33_CONTRACT_HOST,
+  PHASE33_CONTRACT_HOST_HEADER,
+  waitForPhase33ContractHost,
+} from "@/lib/release/phase33-compose-host";
 import { findSensitiveEvidenceFinding } from "@/lib/security/sensitive-data-registry";
 
 type Action = "config" | "down" | "ps" | "smoke" | "up";
@@ -563,23 +569,10 @@ async function verifyProductionContractHost(
   }>,
 ) {
   const port = parsePort(input.environment.PHASE33_TLS_PORT ?? "3443");
-  const [live, ready] = await Promise.all([
-    requestContractHealth(port, "/health/live"),
-    requestContractHealth(port, "/health/ready"),
-  ]);
-  const expectedHsts = "max-age=63072000; includeSubDomains";
-  if (
-    live.status !== 200 ||
-    live.headers["strict-transport-security"] !== expectedHsts ||
-    live.headers.server !== undefined ||
-    live.json.status !== "ok" ||
-    live.json.buildId !== input.environment.PHASE33_APP_BUILD_ID ||
-    ready.status !== 200 ||
-    ready.headers["strict-transport-security"] !== expectedHsts ||
-    ready.json.status !== "ready"
-  ) {
-    throw new Error("PRODUCTION_CONTRACT_HTTPS_HEALTH_FAILED");
-  }
+  await waitForPhase33ContractHost({
+    buildId: input.environment.PHASE33_APP_BUILD_ID ?? "",
+    request: (path) => requestContractHealth(port, path),
+  });
 
   const renderedState = runCaptured(
     "docker",
@@ -623,12 +616,13 @@ function requestContractHealth(
   return new Promise((resolveRequest, rejectRequest) => {
     const request = httpsRequest(
       {
-        hostname: "localhost",
+        hostname: PHASE33_CONTRACT_HOST,
+        headers: { host: PHASE33_CONTRACT_HOST_HEADER },
         method: "GET",
         path,
         port,
         rejectUnauthorized: false,
-        servername: "localhost",
+        servername: PHASE33_CONTRACT_HOST_HEADER,
         timeout: 5_000,
       },
       (response) => {
@@ -817,9 +811,5 @@ function writeResult(
 }
 
 function safeError(error: unknown) {
-  const value = error instanceof Error ? error.message : "UNKNOWN_FAILURE";
-  return value
-    .replaceAll(/postgres(?:ql)?:\/\/[^\s"']+/giu, "[REDACTED_DATABASE_URL]")
-    .replaceAll(/[^A-Za-z0-9_:,.-]/gu, "_")
-    .slice(0, 1_024);
+  return normalizePhase33ComposeError(error);
 }

@@ -749,7 +749,8 @@ networks:
   edge:
     internal: true
   front:
-    internal: true
+    driver: bridge
+    internal: false
   providers:
     internal: true
   storage:

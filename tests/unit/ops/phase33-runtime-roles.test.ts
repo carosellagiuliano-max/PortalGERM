@@ -211,14 +211,22 @@ describe("Phase 33 runtime-role contract", () => {
     );
   });
 
-  it("rejects an internet-routable front network in both isolated profiles", () => {
+  it("requires a host-ingress bridge while all sensitive networks remain internal", () => {
     for (const profile of ["local-mock", "production-contract"] as const) {
       const input = model(profile);
-      input.networks.front = {};
+      input.networks.front = { driver: "bridge", internal: true };
 
       expect(validatePhase33RuntimeContract(input, profile).issues).toContain(
-        "INTERNAL_NETWORK_REQUIRED:front",
+        "HOST_INGRESS_NETWORK_REQUIRED:front",
       );
+      input.networks.front = { driver: "host", internal: false };
+      expect(validatePhase33RuntimeContract(input, profile).issues).toContain(
+        "HOST_INGRESS_NETWORK_REQUIRED:front",
+      );
+      input.networks.front = { driver: "bridge", internal: false };
+      expect(
+        validatePhase33RuntimeContract(input, profile).issues,
+      ).not.toContain("HOST_INGRESS_NETWORK_REQUIRED:front");
     }
   });
 
@@ -393,10 +401,10 @@ function model(profile: Phase33RuntimeProfile) {
     networks: {
       database: { internal: true },
       edge: { internal: true },
-      front: { internal: true },
+      front: { driver: "bridge", internal: false },
       providers: { internal: true },
       storage: { internal: true },
-    } as Record<string, { internal?: boolean }>,
+    } as Record<string, { driver?: string; internal?: boolean }>,
   };
 }
 
