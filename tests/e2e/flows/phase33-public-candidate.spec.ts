@@ -16,6 +16,11 @@ import {
 
 test.describe.configure({ mode: "serial" });
 
+// The database contract permits 10 seconds of pool wait plus a 15-second
+// transaction. Keep one click and one bounded observation window so a slow
+// terminal result is not mistaken for failure under the exhaustive gate.
+const SAVE_CONFIRMATION_TIMEOUT_MILLISECONDS = 30_000;
+
 test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save and an owned alert without role leakage", async ({
   browser,
   page,
@@ -57,8 +62,7 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
     await expect(
       page.getByRole("heading", { level: 2, name: "Stelle speichern" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Jetzt speichern" }).click();
-    await expect(page).toHaveURL(new RegExp(`/jobs/${job.slug}\\?saved=1`, "u"));
+    await confirmSaveAndExpectTerminalState(page, job.slug);
     await expect(
       page.getByRole("status").filter({
         hasText: "Die Stelle wurde in deiner privaten Merkliste gespeichert.",
@@ -92,8 +96,7 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
     await expect(
       page.getByRole("heading", { level: 2, name: "Stelle speichern" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Jetzt speichern" }).click();
-    await expect(page).toHaveURL(new RegExp(`/jobs/${job.slug}\\?saved=1`, "u"));
+    await confirmSaveAndExpectTerminalState(page, job.slug);
     await expect(
       page.getByRole("status").filter({
         hasText: "Die Stelle wurde in deiner privaten Merkliste gespeichert.",
@@ -129,12 +132,8 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
       has: page.getByRole("button", { name: "Jobabo erstellen" }),
     });
     await alertForm.getByLabel("Suchbegriff").fill(alertKeyword);
-    await alertForm
-      .getByLabel("Dieses Jobabo ausdrücklich aktivieren")
-      .check();
-    await alertForm
-      .getByLabel(/per Service-E-Mail erhalten/u)
-      .check();
+    await alertForm.getByLabel("Dieses Jobabo ausdrücklich aktivieren").check();
+    await alertForm.getByLabel(/per Service-E-Mail erhalten/u).check();
     await alertForm.getByRole("button", { name: "Jobabo erstellen" }).click();
     await expect(
       page.getByRole("status").filter({
@@ -190,10 +189,7 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
   }
 });
 
-async function findPublicUnsavedJob(
-  page: Page,
-  candidateProfileId: string,
-) {
+async function findPublicUnsavedJob(page: Page, candidateProfileId: string) {
   const database = phase17Database();
   try {
     const candidates = await database.job.findMany({
@@ -216,7 +212,10 @@ async function findPublicUnsavedJob(
       const response = await page.request.get(`/jobs/${candidate.slug}`, {
         failOnStatusCode: false,
       });
-      if (response.status() === 200 && (await response.text()).includes(title)) {
+      if (
+        response.status() === 200 &&
+        (await response.text()).includes(title)
+      ) {
         return Object.freeze({
           id: candidate.id,
           slug: candidate.slug,
@@ -224,7 +223,9 @@ async function findPublicUnsavedJob(
         });
       }
     }
-    throw new Error("Phase 33 requires one publicly visible unsaved seeded Job.");
+    throw new Error(
+      "Phase 33 requires one publicly visible unsaved seeded Job.",
+    );
   } finally {
     await database.$disconnect();
   }
@@ -241,6 +242,39 @@ function saveButton(page: Page, jobSlug: string) {
   return page.locator(
     `form:has(input[name="jobSlug"][value="${jobSlug}"]):has(input[name="action"][value="SAVE"]) button[type="submit"]`,
   );
+}
+
+async function confirmSaveAndExpectTerminalState(page: Page, jobSlug: string) {
+  const confirmationForm = page.locator('form:has(input[name="signedIntent"])');
+  await confirmationForm
+    .getByRole("button", { name: "Jetzt speichern" })
+    .click();
+
+  const savedUrl = new RegExp(`/jobs/${jobSlug}\\?saved=1(?:&|$)`, "u");
+  const actionAlert = confirmationForm.getByRole("alert").first();
+  await expect
+    .poll(
+      async () => {
+        if (savedUrl.test(page.url())) return "SAVED";
+        if (await actionAlert.isVisible().catch(() => false)) {
+          const message = (await actionAlert.textContent())
+            ?.replaceAll(/\s+/gu, " ")
+            .trim()
+            .slice(0, 240);
+          return `REJECTED:${message ?? "GENERIC_ACTION_ERROR"}`;
+        }
+        const pending = await confirmationForm
+          .getByRole("button", { name: "Wird gespeichert …" })
+          .isVisible()
+          .catch(() => false);
+        return pending ? "PENDING" : "AWAITING_ACTION_RESULT";
+      },
+      {
+        message: `Save confirmation did not reach a terminal state for ${jobSlug}.`,
+        timeout: SAVE_CONFIRMATION_TIMEOUT_MILLISECONDS,
+      },
+    )
+    .toBe("SAVED");
 }
 
 async function assertAccessibleAndOperable(page: Page) {
