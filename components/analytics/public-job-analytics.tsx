@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
-import { recordPublicJobAnalyticsAction } from "@/app/(public)/jobs/actions";
-
 const SESSION_STORAGE_KEY = "swisstalenthub.product-analytics-session.v1";
+const PUBLIC_JOB_ANALYTICS_ENDPOINT = "/api/analytics/public-jobs";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const subscribeToStableSession = () => () => undefined;
@@ -71,7 +70,7 @@ export function PublicSearchResultsAnalytics({
         id: globalThis.crypto.randomUUID(),
       });
     }
-    void recordPublicJobAnalyticsAction({
+    recordPublicJobAnalytics({
       kind: "SEARCH_RESULTS_VIEWED",
       eventId: event.current.id,
       analyticsSessionId,
@@ -81,7 +80,7 @@ export function PublicSearchResultsAnalytics({
       categorySlug,
       searchQuery,
       searchFilters,
-    }).catch(() => undefined);
+    });
   }, [
     analyticsSessionId,
     cantonCode,
@@ -107,12 +106,27 @@ export function PublicJobDetailAnalytics({
         id: globalThis.crypto.randomUUID(),
       });
     }
-    void recordPublicJobAnalyticsAction({
+    recordPublicJobAnalytics({
       kind: "JOB_DETAIL_VIEWED",
       eventId: event.current.id,
       analyticsSessionId,
       jobSlug,
-    }).catch(() => undefined);
+    });
   }, [analyticsSessionId, jobSlug]);
   return null;
+}
+
+function recordPublicJobAnalytics(
+  event: Readonly<Record<string, unknown>>,
+): void {
+  const body = JSON.stringify(event);
+  void fetch(PUBLIC_JOB_ANALYTICS_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    cache: "no-store",
+    credentials: "same-origin",
+    keepalive: true,
+    mode: "same-origin",
+  }).catch(() => undefined);
 }

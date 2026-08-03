@@ -126,6 +126,33 @@ describe("public search analytics producer provenance", () => {
     },
   );
 
+  it("drops demo analytics when the public IP bucket is exhausted", async () => {
+    const environment = { APP_ENV: "preview" };
+    mocks.getServerEnvironment.mockReturnValue(environment);
+    mocks.rateLimit.mockResolvedValue({
+      allowed: false,
+      status: 429,
+      code: "RATE_LIMITED",
+      retryAfterSeconds: 60,
+      audit: {
+        action: "RATE_LIMITED",
+        preset: "PUBLIC_ANALYTICS",
+        scope: "IP",
+      },
+    });
+
+    await recordPublicJobAnalyticsAction(INPUT);
+
+    expect(mocks.rateLimit).toHaveBeenCalledWith(
+      "PUBLIC_ANALYTICS",
+      {},
+      expect.objectContaining({ sourceIp: "192.0.2.10" }),
+      expect.any(Date),
+      expect.objectContaining({ environment }),
+    );
+    expect(mocks.analyticsCreate).not.toHaveBeenCalled();
+  });
+
   it("collects a zero-result query through the gated privacy-safe learning path", async () => {
     mocks.getServerEnvironment.mockReturnValue({
       APP_ENV: "production",

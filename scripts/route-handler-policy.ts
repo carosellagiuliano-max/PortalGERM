@@ -1,4 +1,5 @@
 export const ROUTE_HANDLER_ROLES = Object.freeze({
+  "/api/analytics/public-jobs": ["PUBLIC_ANALYTICS_ORIGIN"],
   "/api/company-verification/documents/upload-intents": [
     "EMPLOYER",
     "RECRUITER",

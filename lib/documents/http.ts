@@ -20,16 +20,37 @@ export async function readBoundedJson(
   request: Request,
   maximumBytes = 4_096,
 ): Promise<unknown | null> {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) return null;
   const contentLength = request.headers.get("content-length");
   if (
     contentLength !== null &&
-    (!/^\d{1,7}$/u.test(contentLength) ||
-      Number(contentLength) > maximumBytes)
+    (!/^\d{1,7}$/u.test(contentLength) || Number(contentLength) > maximumBytes)
   ) {
     return null;
   }
-  const text = await request.text();
-  if (Buffer.byteLength(text, "utf8") > maximumBytes) return null;
+  if (request.body === null) return null;
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      totalBytes += result.value.byteLength;
+      if (totalBytes > maximumBytes) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(result.value);
+    }
+  } catch {
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+
+  const text = Buffer.concat(chunks, totalBytes).toString("utf8");
   try {
     return JSON.parse(text) as unknown;
   } catch {

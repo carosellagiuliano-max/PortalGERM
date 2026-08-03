@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { Page } from "@playwright/test";
+import type { Page, Request, Route } from "@playwright/test";
 
 import {
   assertCriticalAccessibility,
@@ -16,10 +16,10 @@ import {
 
 test.describe.configure({ mode: "serial" });
 
-// The database contract permits 10 seconds of pool wait plus a 15-second
-// transaction. Keep one click and one bounded observation window so a slow
-// terminal result is not mistaken for failure under the exhaustive gate.
+// A user-visible Save must reach a terminal UI state within one bounded
+// interaction window. Backend retries never authorize a second browser click.
 const SAVE_CONFIRMATION_TIMEOUT_MILLISECONDS = 30_000;
+const PUBLIC_JOB_ANALYTICS_ROUTE = "**/api/analytics/public-jobs";
 
 test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save and an owned alert without role leakage", async ({
   browser,
@@ -92,16 +92,28 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
     // A second signed confirmation is a real replay through the public UI. The
     // database uniqueness contract must still represent exactly one private
     // save, while privacy-safe analytics remain absent.
-    await saveButton(page, job.slug).click();
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Stelle speichern" }),
-    ).toBeVisible();
-    await confirmSaveAndExpectTerminalState(page, job.slug);
-    await expect(
-      page.getByRole("status").filter({
-        hasText: "Die Stelle wurde in deiner privaten Merkliste gespeichert.",
-      }),
-    ).toBeVisible();
+    await page.goto("/candidate/saved-jobs");
+    const analyticsHold = await holdNextJobDetailAnalytics(page);
+    try {
+      await page.goto(`/jobs/${job.slug}`);
+      await expect(
+        page.getByRole("heading", { level: 1, name: job.title }),
+      ).toBeVisible();
+      await analyticsHold.waitUntilBlocked();
+      await saveButton(page, job.slug).click();
+      await expect(
+        page.getByRole("heading", { level: 2, name: "Stelle speichern" }),
+      ).toBeVisible();
+      await confirmSaveAndExpectTerminalState(page, job.slug);
+      await expect(
+        page.getByRole("status").filter({
+          hasText: "Die Stelle wurde in deiner privaten Merkliste gespeichert.",
+        }),
+      ).toBeVisible();
+      expect(analyticsHold.isBlocked()).toBe(true);
+    } finally {
+      await analyticsHold.releaseAndRemove();
+    }
     expect(
       await database.savedJob.count({
         where: {
@@ -252,29 +264,103 @@ async function confirmSaveAndExpectTerminalState(page: Page, jobSlug: string) {
 
   const savedUrl = new RegExp(`/jobs/${jobSlug}\\?saved=1(?:&|$)`, "u");
   const actionAlert = confirmationForm.getByRole("alert").first();
-  await expect
-    .poll(
-      async () => {
-        if (savedUrl.test(page.url())) return "SAVED";
-        if (await actionAlert.isVisible().catch(() => false)) {
-          const message = (await actionAlert.textContent())
-            ?.replaceAll(/\s+/gu, " ")
-            .trim()
-            .slice(0, 240);
-          return `REJECTED:${message ?? "GENERIC_ACTION_ERROR"}`;
-        }
-        const pending = await confirmationForm
-          .getByRole("button", { name: "Wird gespeichert …" })
-          .isVisible()
-          .catch(() => false);
-        return pending ? "PENDING" : "AWAITING_ACTION_RESULT";
-      },
-      {
-        message: `Save confirmation did not reach a terminal state for ${jobSlug}.`,
-        timeout: SAVE_CONFIRMATION_TIMEOUT_MILLISECONDS,
-      },
-    )
-    .toBe("SAVED");
+  const deadline = Date.now() + SAVE_CONFIRMATION_TIMEOUT_MILLISECONDS;
+  let lastState = "AWAITING_ACTION_RESULT";
+  while (Date.now() < deadline) {
+    if (savedUrl.test(page.url())) return;
+    if (await actionAlert.isVisible().catch(() => false)) {
+      const message = (await actionAlert.textContent())
+        ?.replaceAll(/\s+/gu, " ")
+        .trim()
+        .slice(0, 240);
+      throw new Error(
+        `Save confirmation was rejected for ${jobSlug}: ${message ?? "GENERIC_ACTION_ERROR"}.`,
+      );
+    }
+    const pending = await confirmationForm
+      .getByRole("button", { name: "Wird gespeichert …" })
+      .isVisible()
+      .catch(() => false);
+    lastState = pending ? "PENDING" : "AWAITING_ACTION_RESULT";
+    await page.waitForTimeout(100);
+  }
+  throw new Error(
+    `Save confirmation did not reach a terminal state for ${jobSlug}; last state ${lastState}.`,
+  );
+}
+
+async function holdNextJobDetailAnalytics(page: Page) {
+  let blocked = false;
+  let releasedRequest = false;
+  let completionError: unknown;
+  let releaseRequest: (() => void) | undefined;
+  let signalBlocked: (() => void) | undefined;
+  let signalHandlerCompleted: (() => void) | undefined;
+  const blockedRequest = new Promise<void>((resolveBlocked) => {
+    signalBlocked = resolveBlocked;
+  });
+  const released = new Promise<void>((resolveReleased) => {
+    releaseRequest = resolveReleased;
+  });
+  const handlerCompleted = new Promise<void>((resolveCompleted) => {
+    signalHandlerCompleted = resolveCompleted;
+  });
+
+  const handler = async (route: Route, request: Request) => {
+    let kind: unknown;
+    try {
+      kind = (request.postDataJSON() as { kind?: unknown }).kind;
+    } catch {
+      await route.continue();
+      return;
+    }
+    if (blocked || kind !== "JOB_DETAIL_VIEWED") {
+      await route.continue();
+      return;
+    }
+    blocked = true;
+    signalBlocked?.();
+    await released;
+    try {
+      await route.fulfill({
+        status: 204,
+        headers: { "Cache-Control": "private, no-store, max-age=0" },
+      });
+    } catch (error) {
+      completionError = error;
+    } finally {
+      signalHandlerCompleted?.();
+    }
+  };
+  await page.route(PUBLIC_JOB_ANALYTICS_ROUTE, handler);
+
+  return Object.freeze({
+    isBlocked() {
+      return blocked && !releasedRequest;
+    },
+    async releaseAndRemove() {
+      releasedRequest = true;
+      releaseRequest?.();
+      if (blocked) await handlerCompleted;
+      await page.unroute(PUBLIC_JOB_ANALYTICS_ROUTE, handler);
+      if (completionError !== undefined) throw completionError;
+    },
+    async waitUntilBlocked() {
+      await new Promise<void>((resolveBlocked, rejectBlocked) => {
+        const timeout = setTimeout(
+          () =>
+            rejectBlocked(
+              new Error("Job-detail analytics request did not start."),
+            ),
+          10_000,
+        );
+        void blockedRequest.then(() => {
+          clearTimeout(timeout);
+          resolveBlocked();
+        });
+      });
+    },
+  });
 }
 
 async function assertAccessibleAndOperable(page: Page) {

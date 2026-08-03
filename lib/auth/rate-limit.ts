@@ -31,6 +31,7 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
   "ABUSE_INTAKE_PRECHECK",
   "ABUSE_INTAKE",
   "SEARCH_LEARNING",
+  "PUBLIC_ANALYTICS",
   "CONTACT_REQUEST",
   "RADAR_LIST",
   "DOCUMENT_UPLOAD_INTENT",
@@ -164,6 +165,9 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
   },
   SEARCH_LEARNING: {
     buckets: [{ scope: "IP", limit: 60, windowMs: HOUR }],
+  },
+  PUBLIC_ANALYTICS: {
+    buckets: [{ scope: "IP", limit: 600, windowMs: HOUR }],
   },
   CONTACT_REQUEST: {
     buckets: [

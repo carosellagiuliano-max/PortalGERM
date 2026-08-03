@@ -159,6 +159,9 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
       SEARCH_LEARNING: {
         buckets: [{ scope: "IP", limit: 60, windowMs: HOUR }],
       },
+      PUBLIC_ANALYTICS: {
+        buckets: [{ scope: "IP", limit: 600, windowMs: HOUR }],
+      },
       CONTACT_REQUEST: {
         buckets: [
           { scope: "COMPANY", limit: 20, windowMs: HOUR },

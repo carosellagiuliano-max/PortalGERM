@@ -264,6 +264,15 @@ export async function recordPublicJobAnalyticsAction(
       }
     }
     if (runtimeProvenance === null) return;
+    const analyticsDatabase = getDatabase();
+    const analyticsRate = await consumeRequestRateLimit(
+      "PUBLIC_ANALYTICS",
+      {},
+      request,
+      now,
+      { database: analyticsDatabase, environment },
+    );
+    if (!analyticsRate.allowed) return;
     await trackAnalyticsEventV1(
       {
         schemaVersion: "1",
@@ -289,11 +298,20 @@ export async function recordPublicJobAnalyticsAction(
         productAnalyticsEnabled: true,
         provenance: { actor: runtimeProvenance },
       },
-      createPrismaAnalyticsWriter(getDatabase()),
+      createPrismaAnalyticsWriter(analyticsDatabase),
     );
     return;
   }
   if (runtimeProvenance === null) return;
+  const analyticsDatabase = getDatabase();
+  const analyticsRate = await consumeRequestRateLimit(
+    "PUBLIC_ANALYTICS",
+    {},
+    request,
+    now,
+    { database: analyticsDatabase, environment },
+  );
+  if (!analyticsRate.allowed) return;
   const job = await getPublicJobBySlug(parsed.data.jobSlug, { now });
   if (job === null) return;
   const provenance = await loadPublicJobAnalyticsProvenance(
@@ -321,7 +339,7 @@ export async function recordPublicJobAnalyticsAction(
       productAnalyticsEnabled: true,
       provenance,
     },
-    createPrismaAnalyticsWriter(getDatabase()),
+    createPrismaAnalyticsWriter(analyticsDatabase),
   );
 }
 

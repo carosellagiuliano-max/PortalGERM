@@ -337,6 +337,13 @@
   },
   {
     "kind": "handler",
+    "path": "/api/analytics/public-jobs",
+    "roles": [
+      "PUBLIC_ANALYTICS_ORIGIN"
+    ]
+  },
+  {
+    "kind": "handler",
     "path": "/api/company-verification/documents/upload-intents",
     "roles": [
       "EMPLOYER",

@@ -59,7 +59,6 @@ export async function confirmSaveJobAction(
     );
   }
   revalidatePath("/candidate/saved-jobs");
-  revalidatePath(`/jobs/${result.jobSlug}`);
   redirect(`/jobs/${result.jobSlug}?saved=1`);
 }
 

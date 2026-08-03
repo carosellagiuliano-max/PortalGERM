@@ -1,6 +1,6 @@
 # Route- und Rollenmatrix
 
-> **Stand:** Phase-33-Technikbaum, 129 Seiten, 21 Route Handler und zwei
+> **Stand:** Phase-33-Technikbaum, 130 Seiten, 22 Route Handler und zwei
 > öffentliche Metadata-Endpunkte (`/robots.txt`, `/sitemap.xml`). Die
 > maschinenlesbare Inventarbasis ist
 > [`route-inventory.json`](./route-inventory.json); `npm run route:audit`
@@ -23,6 +23,7 @@
 | Public Operations                    | absichtlich minimale Health-Antwort ohne Secrets/Daten                                                                                                                                                                                                   |
 | Local Ops Token                      | nur Local/CI, geheimes Bearer-Token; in Production 404                                                                                                                                                                                                   |
 | Public Token                         | keine Session, aber ein begrenzter, nicht im Klartext persistierter Capability-Token                                                                                                                                                                     |
+| Public Analytics Origin              | keine Session; nur begrenztes JSON aus einer gültigen Same-Origin-Mutation, generische no-store-Antwort und keinerlei Berechtigung für fachliche Daten                                                                                                   |
 | Payment Provider Signature           | keine Userrolle; Raw Body, Providerkennung, Account, Environment und Signatur werden gemeinsam geprüft                                                                                                                                                   |
 | Email Provider Signature             | keine Userrolle; `/api/webhooks/email/resend` akzeptiert ausschließlich einen aktivierten, versionsgebundenen Resend-Adapter sowie einen begrenzten Roh-Body mit gültiger Svix-Signatur; Replay/Out-of-order werden über die PII-freie Inbox verarbeitet |
 
@@ -71,6 +72,12 @@ Root-Error und Root-404 bleiben generisch.
 | `/invite/resume`                           | Public        | kurzlebiger geschützter Resume-Cookie, Revalidierung                                                                           |
 | `/alerts/unsubscribe/[token]`              | Public Token  | gehashter, begrenzter Token; no-store/noindex                                                                                  |
 | `/forbidden`                               | Public        | generische 403-Oberfläche ohne Objektdetail                                                                                    |
+
+## Öffentlicher Analytics-Handler — 1
+
+| Handler                      | Rolle                   | Grenze                                                                                                                  |
+| ---------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `/api/analytics/public-jobs` | Public Analytics Origin | maximal 4 KiB JSON, Origin-/Schema-/Provenienzprüfung, no-store und best-effort; blockiert keine fachliche Nutzeraktion |
 
 ## Auth-/Session-Handler — 4
 
