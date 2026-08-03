@@ -18,6 +18,7 @@ import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 import { createDatabaseClient } from "@/lib/db/factory";
 import { createSession } from "@/lib/auth/session";
 import { createPrismaSessionStore } from "@/lib/auth/session-store";
+import { createProductionHstsEnvironment } from "@/scripts/ops/production-hsts-environment";
 
 const HOST = "127.0.0.1";
 const DEFAULT_START_TIMEOUT_MS = 60_000;
@@ -253,32 +254,12 @@ function productionHstsEnvironment(
   databaseUrl: string,
   secretCanary?: string,
 ): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    APP_ENV: "production",
-    NODE_ENV: "production",
-    APP_URL: "https://hsts-smoke.invalid",
-    APP_BUILD_ID: HTTP_SMOKE_BUILD_ID,
-    DATABASE_URL: databaseUrl,
-    TEST_DATABASE_URL: "",
-    RATE_LIMIT_BACKEND: "postgres",
-    TRUSTED_PROXY_HOPS: "1",
-    ENABLE_LOCAL_MOCK_MAILBOX: "false",
-    DEV_MAILBOX_SECRET: "",
-    ABUSE_REPORT_ADMIN_EMAILS: "security-smoke@example.test",
-    BACKUP_AGE_RECIPIENT: "",
-    BACKUP_AGE_IDENTITY_FILE: "",
-    STRIPE_SECRET_KEY: "",
-    EMAIL_PROVIDER_API_KEY: "",
-    OPENAI_API_KEY: "",
-    STORAGE_ENDPOINT: "",
-    JOBROOM_API_URL: "",
-    MAPS_API_KEY: "",
-    ...(secretCanary === undefined
-      ? {}
-      : { HTTP_SMOKE_SECRET_CANARY: secretCanary }),
-    NEXT_TELEMETRY_DISABLED: "1",
-  };
+  return createProductionHstsEnvironment({
+    sourceEnvironment: process.env,
+    databaseUrl,
+    buildId: HTTP_SMOKE_BUILD_ID,
+    secretCanary,
+  });
 }
 
 async function verifyProductionHsts(baseUrl: string, secretCanary: string) {
