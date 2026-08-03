@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import { safeToolEnvironment } from "@/scripts/ops/process-tools";
 
 type ProductionHstsEnvironmentInput = Readonly<{
@@ -6,6 +8,27 @@ type ProductionHstsEnvironmentInput = Readonly<{
   buildId: string;
   secretCanary?: string;
 }>;
+
+type HttpSmokeRuntimeRootInput = Readonly<{
+  sourceRoot: string;
+  configuredArtifactRoot?: string;
+  mode: "local-full" | "production-hsts";
+}>;
+
+/**
+ * HSTS owns a fresh production-like build in the source clone. A caller may
+ * provide APP_ARTIFACT_ROOT for the ordinary HTTP/browser gates, but that
+ * Local artifact must never replace the production build that HSTS just made.
+ */
+export function resolveHttpSmokeRuntimeRoot({
+  sourceRoot,
+  configuredArtifactRoot,
+  mode,
+}: HttpSmokeRuntimeRootInput) {
+  return mode === "production-hsts" || configuredArtifactRoot === undefined
+    ? resolve(sourceRoot)
+    : resolve(configuredArtifactRoot);
+}
 
 /**
  * Builds the deliberately minimal production profile used by the HSTS smoke.

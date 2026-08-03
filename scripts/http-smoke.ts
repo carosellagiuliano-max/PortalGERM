@@ -18,7 +18,10 @@ import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 import { createDatabaseClient } from "@/lib/db/factory";
 import { createSession } from "@/lib/auth/session";
 import { createPrismaSessionStore } from "@/lib/auth/session-store";
-import { createProductionHstsEnvironment } from "@/scripts/ops/production-hsts-environment";
+import {
+  createProductionHstsEnvironment,
+  resolveHttpSmokeRuntimeRoot,
+} from "@/scripts/ops/production-hsts-environment";
 
 const HOST = "127.0.0.1";
 const DEFAULT_START_TIMEOUT_MS = 60_000;
@@ -30,10 +33,6 @@ const EXPECT_STATIC_PUBLIC_INDEXING =
   process.env.HTTP_SMOKE_STATIC_PUBLIC_INDEXING === "true";
 const HTTP_SMOKE_BUILD_ID = process.env.APP_BUILD_ID ?? "phase16-http-smoke";
 const HTTP_SMOKE_SOURCE_ROOT = process.cwd();
-const HTTP_SMOKE_RUNTIME_ROOT =
-  process.env.APP_ARTIFACT_ROOT === undefined
-    ? HTTP_SMOKE_SOURCE_ROOT
-    : resolve(process.env.APP_ARTIFACT_ROOT);
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -45,11 +44,18 @@ type ChildExit = Readonly<{
 type SmokeChild = ChildProcessByStdio<null, Readable, Readable>;
 type SmokeMode = "local-full" | "production-hsts";
 
-await main(resolveSmokeMode());
+const smokeMode = resolveSmokeMode();
+const smokeRuntimeRoot = resolveHttpSmokeRuntimeRoot({
+  sourceRoot: HTTP_SMOKE_SOURCE_ROOT,
+  configuredArtifactRoot: process.env.APP_ARTIFACT_ROOT,
+  mode: smokeMode,
+});
 
-async function main(mode: SmokeMode) {
+await main(smokeMode, smokeRuntimeRoot);
+
+async function main(mode: SmokeMode, runtimeRoot: string) {
   try {
-    const result = await runSmoke(mode);
+    const result = await runSmoke(mode, runtimeRoot);
     console.info(
       mode === "production-hsts"
         ? `Production-like HSTS smoke passed on ${result.baseUrl}: next start emitted Strict-Transport-Security exactly as configured. The loopback request is intentionally plain HTTP and proves header emission only, not browser-side TLS/HSTS enforcement.`
@@ -63,8 +69,8 @@ async function main(mode: SmokeMode) {
   }
 }
 
-async function runSmoke(mode: SmokeMode) {
-  const buildIdPath = resolve(HTTP_SMOKE_RUNTIME_ROOT, ".next", "BUILD_ID");
+async function runSmoke(mode: SmokeMode, runtimeRoot: string) {
+  const buildIdPath = resolve(runtimeRoot, ".next", "BUILD_ID");
   if (mode === "local-full" && !existsSync(buildIdPath)) {
     throw new Error(
       "No production build found in the selected runtime artifact. Run `npm run build` before the HTTP smoke.",
@@ -81,13 +87,17 @@ async function runSmoke(mode: SmokeMode) {
     if (mode === "production-hsts") {
       await buildProductionHstsArtifact(database.connectionString);
     }
-    return await runHttpSmoke(database.connectionString, mode);
+    return await runHttpSmoke(database.connectionString, mode, runtimeRoot);
   } finally {
     await database.dispose();
   }
 }
 
-async function runHttpSmoke(databaseUrl: string, mode: SmokeMode) {
+async function runHttpSmoke(
+  databaseUrl: string,
+  mode: SmokeMode,
+  runtimeRoot: string,
+) {
   const port = await resolvePort();
   const baseUrl = `http://${HOST}:${port}`;
   const secretCanary =
@@ -111,8 +121,8 @@ async function runHttpSmoke(databaseUrl: string, mode: SmokeMode) {
     "bin",
     "next",
   );
-  const standaloneEntrypoint = resolve(HTTP_SMOKE_RUNTIME_ROOT, "server.js");
-  const standaloneRuntime = HTTP_SMOKE_RUNTIME_ROOT !== HTTP_SMOKE_SOURCE_ROOT;
+  const standaloneEntrypoint = resolve(runtimeRoot, "server.js");
+  const standaloneRuntime = runtimeRoot !== HTTP_SMOKE_SOURCE_ROOT;
   if (!standaloneRuntime && !existsSync(nextBinary)) {
     throw new Error("The local Next.js CLI was not found. Run `npm ci` first.");
   }
@@ -146,7 +156,7 @@ async function runHttpSmoke(databaseUrl: string, mode: SmokeMode) {
       ? [standaloneEntrypoint]
       : [nextBinary, "start", "--hostname", HOST, "--port", String(port)],
     {
-      cwd: HTTP_SMOKE_RUNTIME_ROOT,
+      cwd: runtimeRoot,
       env: {
         ...childEnvironment,
         ...(standaloneRuntime ? { HOSTNAME: HOST, PORT: String(port) } : {}),

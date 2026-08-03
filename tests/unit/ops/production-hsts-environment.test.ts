@@ -1,10 +1,35 @@
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { parseEnvironment } from "@/lib/config/env-schema";
-import { createProductionHstsEnvironment } from "@/scripts/ops/production-hsts-environment";
+import {
+  createProductionHstsEnvironment,
+  resolveHttpSmokeRuntimeRoot,
+} from "@/scripts/ops/production-hsts-environment";
 import { createValidEnvironment } from "@/tests/fixtures/environment";
 
 describe("production HSTS smoke environment", () => {
+  it("ignores a Local artifact root for the owned production build", () => {
+    const sourceRoot = resolve("source-candidate");
+    const configuredArtifactRoot = resolve("local-artifact");
+
+    expect(
+      resolveHttpSmokeRuntimeRoot({
+        sourceRoot,
+        configuredArtifactRoot,
+        mode: "production-hsts",
+      }),
+    ).toBe(sourceRoot);
+    expect(
+      resolveHttpSmokeRuntimeRoot({
+        sourceRoot,
+        configuredArtifactRoot,
+        mode: "local-full",
+      }),
+    ).toBe(configuredArtifactRoot);
+  });
+
   it("does not inherit Local/CI sandbox capabilities", () => {
     const sourceEnvironment = createValidEnvironment({
       WORKER_RUNTIME: "sandbox_command",

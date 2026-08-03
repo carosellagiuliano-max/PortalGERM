@@ -233,9 +233,7 @@ async function run(command: ReturnType<typeof parseArguments>) {
     await runNpm("http", ["run", "test:e2e:http"], {
       environment: artifactRuntimeEnvironment,
     });
-    await runNpm("hsts", ["run", "test:e2e:hsts"], {
-      environment: artifactRuntimeEnvironment,
-    });
+    await runNpm("hsts", ["run", "test:e2e:hsts"]);
     await runNpm("phase33-e2e", ["run", "phase33:e2e"], {
       environment: artifactRuntimeEnvironment,
     });
