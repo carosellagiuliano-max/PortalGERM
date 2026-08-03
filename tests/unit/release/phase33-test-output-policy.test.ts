@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertPhase33TestCommandOutput,
   assertVitestOutputHasNoInfrastructureFailures,
-  UNIT_TEST_SHARD_COUNT,
+  UNIT_TEST_FILES_PER_INVOCATION,
   unitTestInvocations,
 } from "@/lib/release/phase33-test-output-policy";
 
@@ -33,23 +33,51 @@ describe("Phase 33 test output policy", () => {
     ).toThrow("PHASE33_UNEXPLAINED_SKIP:unit");
   });
 
-  it("runs targeted arguments once and the complete suite in bounded shards", () => {
+  it("runs targeted arguments once and the complete suite in bounded file batches", () => {
     expect(unitTestInvocations(["tests/unit/example.test.ts"])).toEqual([
       ["run", "--config", "vitest.config.ts", "tests/unit/example.test.ts"],
     ]);
-    const full = unitTestInvocations([]);
-    expect(full).toHaveLength(UNIT_TEST_SHARD_COUNT);
+    const files = [
+      "tests/unit/z-last.test.ts",
+      "tests/unit/a-first.test.ts",
+      "tests/unit/c-third.test.tsx",
+      "tests/unit/b-second.test.ts",
+      "tests/unit/d-fourth.test.ts",
+      "tests/unit/e-fifth.test.ts",
+      "tests/unit/f-sixth.test.ts",
+    ];
+    const full = unitTestInvocations([], files);
+    expect(UNIT_TEST_FILES_PER_INVOCATION).toBe(3);
+    expect(full).toHaveLength(3);
     expect(full[0]).toEqual([
       "run",
       "--config",
       "vitest.config.ts",
-      "--shard=1/64",
+      "tests/unit/a-first.test.ts",
+      "tests/unit/b-second.test.ts",
+      "tests/unit/c-third.test.tsx",
     ]);
     expect(full.at(-1)).toEqual([
       "run",
       "--config",
       "vitest.config.ts",
-      "--shard=64/64",
+      "tests/unit/z-last.test.ts",
     ]);
+    expect(full.flatMap((invocation) => invocation.slice(3))).toEqual(
+      [...files].sort((left, right) => left.localeCompare(right, "en")),
+    );
+  });
+
+  it("fails closed for an empty, invalid, or duplicate discovered inventory", () => {
+    expect(() => unitTestInvocations([])).toThrow("UNIT_TEST_INVENTORY_EMPTY");
+    expect(() => unitTestInvocations([], ["tests/integration/nope.test.ts"])).toThrow(
+      "UNIT_TEST_FILE_INVALID",
+    );
+    expect(() =>
+      unitTestInvocations([], [
+        "tests/unit/duplicate.test.ts",
+        "tests/unit/duplicate.test.ts",
+      ]),
+    ).toThrow("UNIT_TEST_FILE_DUPLICATE");
   });
 });

@@ -11,11 +11,12 @@ const VITEST_INFRASTRUCTURE_FAILURES = Object.freeze([
   /UnhandledPromiseRejection|Unhandled Rejection|Uncaught Exception/iu,
 ]);
 
-// Vitest's isolated forks are recreated for every file. On Windows, a clean
-// candidate clone can exhaust worker-start capacity after roughly twenty files
-// even with maxWorkers=1. Keep each deterministic shard small enough that the
-// outer runner regularly tears down the complete pool and releases resources.
-export const UNIT_TEST_SHARD_COUNT = 64;
+// Vitest recreates an isolated worker for every file. On Windows, repeatedly
+// starting workers inside one pool can time out even with maxWorkers=1. The
+// outer runner therefore supplies an explicit, small file batch to each fresh
+// Vitest process instead of relying on a static shard count that silently grows
+// as the suite gains files.
+export const UNIT_TEST_FILES_PER_INVOCATION = 3;
 
 export function assertVitestOutputHasNoInfrastructureFailures(
   output: string,
@@ -41,17 +42,41 @@ export function assertPhase33TestCommandOutput(
 
 export function unitTestInvocations(
   forwardedArguments: readonly string[],
+  discoveredUnitTestFiles: readonly string[] = [],
 ): readonly (readonly string[])[] {
   const base = ["run", "--config", "vitest.config.ts"] as const;
   if (forwardedArguments.length > 0) {
     return [Object.freeze([...base, ...forwardedArguments])];
   }
+  if (discoveredUnitTestFiles.length === 0) {
+    throw new Error("UNIT_TEST_INVENTORY_EMPTY");
+  }
+  const files = [...discoveredUnitTestFiles].sort((left, right) =>
+    left.localeCompare(right, "en"),
+  );
+  const unique = new Set<string>();
+  for (const file of files) {
+    if (!/^tests\/unit\/.+\.test\.tsx?$/u.test(file)) {
+      throw new Error(`UNIT_TEST_FILE_INVALID:${file}`);
+    }
+    if (unique.has(file)) {
+      throw new Error(`UNIT_TEST_FILE_DUPLICATE:${file}`);
+    }
+    unique.add(file);
+  }
   return Object.freeze(
-    Array.from({ length: UNIT_TEST_SHARD_COUNT }, (_, index) =>
-      Object.freeze([
-        ...base,
-        `--shard=${String(index + 1)}/${String(UNIT_TEST_SHARD_COUNT)}`,
-      ]),
+    Array.from(
+      {
+        length: Math.ceil(files.length / UNIT_TEST_FILES_PER_INVOCATION),
+      },
+      (_, index) =>
+        Object.freeze([
+          ...base,
+          ...files.slice(
+            index * UNIT_TEST_FILES_PER_INVOCATION,
+            (index + 1) * UNIT_TEST_FILES_PER_INVOCATION,
+          ),
+        ]),
     ),
   );
 }
