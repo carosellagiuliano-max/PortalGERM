@@ -69,19 +69,29 @@ export function parsePhase33ComposeImageBinding(
   const service = isRecord(labels)
     ? labels["com.docker.compose.service"]
     : undefined;
+  const expectedReference = `${input.projectName}-${input.service}`;
+  const canonicalReference =
+    reference === expectedReference
+      ? `${expectedReference}:latest`
+      : reference === `${expectedReference}:latest`
+        ? reference
+        : undefined;
   if (
     typeof containerId !== "string" ||
     !/^[a-f0-9]{64}$/u.test(containerId) ||
     typeof imageId !== "string" ||
     !/^sha256:[a-f0-9]{64}$/u.test(imageId) ||
-    typeof reference !== "string" ||
-    reference.trim() === "" ||
+    canonicalReference === undefined ||
     project !== input.projectName ||
     service !== input.service
   ) {
     throw new Error("PHASE33_COMPOSE_IMAGE_BINDING_INVALID");
   }
-  return Object.freeze({ containerId, imageId, reference });
+  return Object.freeze({
+    containerId,
+    imageId,
+    reference: canonicalReference,
+  });
 }
 
 export function assertPhase33OciImageMatchesReceipt(

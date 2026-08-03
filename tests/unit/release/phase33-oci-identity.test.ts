@@ -60,6 +60,29 @@ describe("Phase-33 OCI image identity", () => {
       reference,
     });
 
+    expect(
+      parsePhase33ComposeImageBinding(
+        [
+          {
+            Id: "d".repeat(64),
+            Image: imageId,
+            Config: {
+              Image: `${projectName}-app-contract`,
+              Labels: {
+                "com.docker.compose.project": projectName,
+                "com.docker.compose.service": "app-contract",
+              },
+            },
+          },
+        ],
+        { projectName, service: "app-contract" },
+      ),
+    ).toEqual({
+      containerId: "d".repeat(64),
+      imageId,
+      reference,
+    });
+
     expect(() =>
       parsePhase33ComposeImageBinding(
         [
@@ -70,6 +93,25 @@ describe("Phase-33 OCI image identity", () => {
               Image: reference,
               Labels: {
                 "com.docker.compose.project": "wrong-project",
+                "com.docker.compose.service": "app-contract",
+              },
+            },
+          },
+        ],
+        { projectName, service: "app-contract" },
+      ),
+    ).toThrow("PHASE33_COMPOSE_IMAGE_BINDING_INVALID");
+
+    expect(() =>
+      parsePhase33ComposeImageBinding(
+        [
+          {
+            Id: "d".repeat(64),
+            Image: imageId,
+            Config: {
+              Image: "unrelated:latest",
+              Labels: {
+                "com.docker.compose.project": projectName,
                 "com.docker.compose.service": "app-contract",
               },
             },
