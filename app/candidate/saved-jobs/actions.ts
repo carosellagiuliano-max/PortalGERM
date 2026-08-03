@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { hasVerifiedEmailIdentity } from "@/lib/auth/email-verification-policy";
@@ -58,8 +57,11 @@ export async function confirmSaveJobAction(
         : GENERIC_SAVE_ERROR,
     );
   }
-  revalidatePath("/candidate/saved-jobs");
-  redirect(`/jobs/${result.jobSlug}?saved=1`);
+  return Object.freeze({
+    status: "success",
+    message: "Die Stelle wurde in deiner privaten Merkliste gespeichert.",
+    jobSlug: result.jobSlug,
+  });
 }
 
 export async function removeSavedJobAction(formData: FormData): Promise<void> {
@@ -75,13 +77,11 @@ export async function removeSavedJobAction(formData: FormData): Promise<void> {
       assurance: user.identityAssurance,
       emailVerifiedAt: user.emailVerifiedAt,
     })
-  ) return;
+  )
+    return;
   const savedJobId = formData.get("savedJobId");
   if (typeof savedJobId !== "string") return;
-  await removeSavedJob(
-    { savedJobId, candidateUserId: user.id },
-    getDatabase(),
-  );
+  await removeSavedJob({ savedJobId, candidateUserId: user.id }, getDatabase());
   revalidatePath("/candidate/saved-jobs");
 }
 

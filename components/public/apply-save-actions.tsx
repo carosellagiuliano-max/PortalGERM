@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import Link from "@/components/shared/app-link";
 import { BookmarkIcon, SendIcon } from "lucide-react";
 
@@ -10,9 +10,7 @@ import { confirmSaveJobAction } from "@/app/candidate/saved-jobs/actions";
 import { useProductAnalyticsSessionId } from "@/components/analytics/public-job-analytics";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  INITIAL_APPLICATION_ACTION_STATE,
-} from "@/lib/applications/action-state";
+import { INITIAL_APPLICATION_ACTION_STATE } from "@/lib/applications/action-state";
 import type { ApplicationConfirmationProjection } from "@/lib/applications/confirmation";
 import { INITIAL_SAVED_JOB_ACTION_STATE } from "@/lib/candidate/saved-job-action-state";
 
@@ -55,17 +53,47 @@ export function SaveIntentConfirmation({
     confirmSaveJobAction,
     INITIAL_SAVED_JOB_ACTION_STATE,
   );
+  useEffect(() => {
+    if (state.status !== "success") return;
+    globalThis.history.replaceState(
+      null,
+      "",
+      `/jobs/${encodeURIComponent(state.jobSlug)}?saved=1`,
+    );
+  }, [state]);
+
+  if (state.status === "success") {
+    return (
+      <div className="grid gap-3">
+        <p
+          role="status"
+          className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-950"
+        >
+          {state.message}
+        </p>
+        <Link
+          href="/candidate/saved-jobs"
+          className={buttonVariants({ variant: "outline" })}
+        >
+          Private Merkliste öffnen
+        </Link>
+      </div>
+    );
+  }
   return (
     <form action={action} className="grid gap-3">
       <input type="hidden" name="signedIntent" value={signedIntent} />
       {state.status === "error" ? (
-        <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+        <p
+          role="alert"
+          className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+        >
           {state.message}
         </p>
       ) : null}
       <p className="text-sm leading-6 text-muted-foreground">
-        Bestätige, dass du diese aktuell veröffentlichte Stelle in deiner privaten
-        Merkliste speichern möchtest.
+        Bestätige, dass du diese aktuell veröffentlichte Stelle in deiner
+        privaten Merkliste speichern möchtest.
       </p>
       <Button type="submit" variant="outline" disabled={pending}>
         <BookmarkIcon aria-hidden="true" />
@@ -125,7 +153,10 @@ export function ApplyIntentConfirmation({
         value={projection.confirmationSnapshotHash}
       />
       {state.status === "error" ? (
-        <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+        <p
+          role="alert"
+          className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+        >
           {state.message}
         </p>
       ) : null}
@@ -156,12 +187,15 @@ export function ApplyIntentConfirmation({
           <legend className="text-sm font-medium">Lebenslauf auswählen</legend>
           {documents.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Kein aktives, geprüftes CV vorhanden. Füge im SwissJobPass
-              zuerst ein CV im sicheren Dokumentenbereich hinzu.
+              Kein aktives, geprüftes CV vorhanden. Füge im SwissJobPass zuerst
+              ein CV im sicheren Dokumentenbereich hinzu.
             </p>
           ) : (
             documents.map((document, index) => (
-              <label key={document.id} className="flex gap-3 rounded-lg border p-3 text-sm">
+              <label
+                key={document.id}
+                className="flex gap-3 rounded-lg border p-3 text-sm"
+              >
                 <input
                   type="radio"
                   name="selectedDocumentIds"
@@ -181,7 +215,8 @@ export function ApplyIntentConfirmation({
         </fieldset>
       ) : null}
       <label className="grid gap-2 text-sm font-medium">
-        Motivationsschreiben {requiresCoverLetter ? "(erforderlich)" : "(optional)"}
+        Motivationsschreiben{" "}
+        {requiresCoverLetter ? "(erforderlich)" : "(optional)"}
         <Textarea
           key={state.nextIdempotencyKey ?? "initial-cover-letter"}
           name="coverLetter"

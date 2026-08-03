@@ -68,6 +68,14 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
         hasText: "Die Stelle wurde in deiner privaten Merkliste gespeichert.",
       }),
     ).toBeVisible();
+    assertScrubbedSavedJobUrl(page, job.slug);
+    await page.getByRole("link", { name: "Private Merkliste öffnen" }).click();
+    await expect(page).toHaveURL(/\/candidate\/saved-jobs(?:\?|$)/u);
+    await page.goBack();
+    await expect(
+      page.getByRole("heading", { level: 1, name: job.title }),
+    ).toBeVisible();
+    assertScrubbedSavedJobUrl(page, job.slug);
 
     const saved = await database.savedJob.findUniqueOrThrow({
       where: {
@@ -263,11 +271,23 @@ async function confirmSaveAndExpectTerminalState(page: Page, jobSlug: string) {
     .click();
 
   const savedUrl = new RegExp(`/jobs/${jobSlug}\\?saved=1(?:&|$)`, "u");
+  const successStatus = page.getByRole("status").filter({
+    hasText: "Die Stelle wurde in deiner privaten Merkliste gespeichert.",
+  });
   const actionAlert = confirmationForm.getByRole("alert").first();
   const deadline = Date.now() + SAVE_CONFIRMATION_TIMEOUT_MILLISECONDS;
   let lastState = "AWAITING_ACTION_RESULT";
   while (Date.now() < deadline) {
-    if (savedUrl.test(page.url())) return;
+    if (
+      savedUrl.test(page.url()) &&
+      (await successStatus.isVisible().catch(() => false))
+    )
+      return;
+    if (await successStatus.isVisible().catch(() => false)) {
+      lastState = "SUCCESS_WITH_UNSCRUBBED_URL";
+      await page.waitForTimeout(100);
+      continue;
+    }
     if (await actionAlert.isVisible().catch(() => false)) {
       const message = (await actionAlert.textContent())
         ?.replaceAll(/\s+/gu, " ")
@@ -287,6 +307,14 @@ async function confirmSaveAndExpectTerminalState(page: Page, jobSlug: string) {
   throw new Error(
     `Save confirmation did not reach a terminal state for ${jobSlug}; last state ${lastState}.`,
   );
+}
+
+function assertScrubbedSavedJobUrl(page: Page, jobSlug: string) {
+  const url = new URL(page.url());
+  expect(url.pathname).toBe(`/jobs/${jobSlug}`);
+  expect(url.searchParams.get("saved")).toBe("1");
+  expect(url.searchParams.has("intent")).toBe(false);
+  expect(url.searchParams.has("signedIntent")).toBe(false);
 }
 
 async function holdNextJobDetailAnalytics(page: Page) {
