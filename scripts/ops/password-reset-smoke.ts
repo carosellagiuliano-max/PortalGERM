@@ -10,6 +10,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { chromium, type Page } from "@playwright/test";
 
+import { getPasswordResetDeliveryFeedback } from "@/lib/notifications/delivery-state";
 import { resolveReleaseSmokeDatabase } from "@/lib/ops/recovery-contract";
 import { loadLocalEnvironment } from "@/scripts/load-local-environment";
 import { redact } from "@/scripts/ops/process-tools";
@@ -20,6 +21,8 @@ const EMAIL = "candidate@demo.ch";
 const OLD_PASSWORD = "Demo12345!";
 const NEW_PASSWORD = "Phase18!Reset987";
 const MAX_DIAGNOSTIC_CHARACTERS = 16_000;
+const LOCAL_MAILBOX_RESET_FEEDBACK =
+  getPasswordResetDeliveryFeedback("local_mailbox").message;
 
 type RuntimeChild = ChildProcessByStdio<null, Readable, Readable>;
 
@@ -83,7 +86,10 @@ function startDevelopmentServer(
         TEST_DATABASE_URL: "",
         RATE_LIMIT_BACKEND: "postgres",
         TRUSTED_PROXY_HOPS: "0",
+        EMAIL_PROVIDER_MODE: "local_mock",
         ENABLE_LOCAL_MOCK_MAILBOX: "true",
+        NOTIFICATION_OUTBOX_PRODUCERS: "false",
+        NOTIFICATION_DISPATCH: "paused",
         DEV_MAILBOX_SECRET: mailboxSecret,
         NEXT_TELEMETRY_DISABLED: "1",
       },
@@ -144,9 +150,8 @@ async function runPasswordResetJourney(
       .getByRole("button", { name: "Zurücksetzlink anfordern" })
       .click();
     await page
-      .getByText(
-        "Falls ein passendes Konto existiert, wurde eine Nachricht zum Zurücksetzen vorbereitet.",
-      )
+      .getByRole("alert")
+      .filter({ hasText: LOCAL_MAILBOX_RESET_FEEDBACK })
       .waitFor();
 
     const mailbox = await fetch(`${baseUrl}/dev/mailbox`, {

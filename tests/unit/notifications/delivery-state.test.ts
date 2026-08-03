@@ -19,6 +19,11 @@ describe("transactional email delivery state", () => {
     expect(getTransactionalEmailDeliveryState({
       ...BASE,
       ENABLE_LOCAL_MOCK_MAILBOX: true,
+    })).toBe("record_only");
+    expect(getTransactionalEmailDeliveryState({
+      ...BASE,
+      EMAIL_PROVIDER_MODE: "local_mock",
+      ENABLE_LOCAL_MOCK_MAILBOX: true,
     })).toBe("local_mailbox");
     expect(getTransactionalEmailDeliveryState({
       ...BASE,
@@ -55,6 +60,10 @@ describe("transactional email delivery state", () => {
     });
     expect(getPasswordResetDeliveryFeedback("external_dispatch")).toMatchObject({
       status: "success",
+    });
+    expect(getPasswordResetDeliveryFeedback("local_mailbox")).toEqual({
+      status: "success",
+      message: expect.stringContaining("geschützten lokalen Test-Mailbox"),
     });
   });
 });

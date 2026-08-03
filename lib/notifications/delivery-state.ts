@@ -32,7 +32,8 @@ export function getTransactionalEmailDeliveryState(
     }
     return "record_only";
   }
-  return environment.ENABLE_LOCAL_MOCK_MAILBOX
+  return environment.EMAIL_PROVIDER_MODE === "local_mock" &&
+    environment.ENABLE_LOCAL_MOCK_MAILBOX
     ? "local_mailbox"
     : "record_only";
 }
