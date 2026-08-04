@@ -20,8 +20,6 @@ jobs:
     env:
       APP_ENV: ci
       NODE_ENV: test
-      DATABASE_URL: postgresql://swisstalenthub_ci:ci-only-password@127.0.0.1:5432/swisstalenthub_ci?schema=public
-      TEST_DATABASE_URL: postgresql://swisstalenthub_ci:ci-only-password@127.0.0.1:5432/swisstalenthub_ci_test?schema=public
       APP_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_APP_NAME: SwissTalentHub CI
       APP_BUILD_ID: ${{ github.sha }}
@@ -75,6 +73,12 @@ jobs:
           radar_encryption_key=$(new_key)
           reveal_confirmation_key=$(new_key)
           pii_reveal_key=$(new_key)
+          db_scheme=postgresql
+          db_user=swisstalenthub_ci
+          db_password=ci-only-password
+          db_endpoint=127.0.0.1:5432
+          database_url="${db_scheme}://${db_user}:${db_password}@${db_endpoint}/${db_user}?schema=public"
+          test_database_url="${db_scheme}://${db_user}:${db_password}@${db_endpoint}/${db_user}_test?schema=public"
 
           for secret_value in \
             "$session_secret" \
@@ -82,7 +86,9 @@ jobs:
             "$radar_lookup_key" \
             "$radar_encryption_key" \
             "$reveal_confirmation_key" \
-            "$pii_reveal_key"; do
+            "$pii_reveal_key" \
+            "$database_url" \
+            "$test_database_url"; do
             echo "::add-mask::$secret_value"
           done
 
@@ -93,6 +99,8 @@ jobs:
             echo "RADAR_OPAQUE_ENCRYPTION_KEYS=v1:$radar_encryption_key"
             echo "REVEAL_CONFIRMATION_KEYS=v1:$reveal_confirmation_key"
             echo "PII_REVEAL_KEYS=v1:$pii_reveal_key"
+            echo "DATABASE_URL=$database_url"
+            echo "TEST_DATABASE_URL=$test_database_url"
           } >> "$GITHUB_ENV"
 
       - name: Abhängigkeiten reproduzierbar installieren
@@ -185,8 +193,6 @@ jobs:
     env:
       APP_ENV: ci
       NODE_ENV: test
-      DATABASE_URL: postgresql://phase01_ci:ci-only-password@127.0.0.1:65535/phase01_ci?schema=public
-      TEST_DATABASE_URL: postgresql://phase01_ci:ci-only-password@127.0.0.1:65535/phase01_ci_test?schema=public
       APP_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_APP_NAME: SwissTalentHub CI
       APP_BUILD_ID: ${{ github.sha }}
@@ -232,6 +238,12 @@ jobs:
           $radarEncryptionKey = New-TestKey
           $revealConfirmationKey = New-TestKey
           $piiRevealKey = New-TestKey
+          $dbScheme = "postgresql"
+          $dbUser = "phase01_ci"
+          $dbPassword = "ci-only-password"
+          $dbEndpoint = "127.0.0.1:65535"
+          $databaseUrl = "${dbScheme}://${dbUser}:${dbPassword}@${dbEndpoint}/${dbUser}?schema=public"
+          $testDatabaseUrl = "${dbScheme}://${dbUser}:${dbPassword}@${dbEndpoint}/${dbUser}_test?schema=public"
 
           @(
             $sessionSecret,
@@ -239,7 +251,9 @@ jobs:
             $radarLookupKey,
             $radarEncryptionKey,
             $revealConfirmationKey,
-            $piiRevealKey
+            $piiRevealKey,
+            $databaseUrl,
+            $testDatabaseUrl
           ) | ForEach-Object { Write-Output "::add-mask::$_" }
 
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "SESSION_SECRET=$sessionSecret"
@@ -248,6 +262,8 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "RADAR_OPAQUE_ENCRYPTION_KEYS=v1:$radarEncryptionKey"
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "REVEAL_CONFIRMATION_KEYS=v1:$revealConfirmationKey"
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "PII_REVEAL_KEYS=v1:$piiRevealKey"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "DATABASE_URL=$databaseUrl"
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "TEST_DATABASE_URL=$testDatabaseUrl"
 
       - name: Abhängigkeiten reproduzierbar installieren
         run: npm ci

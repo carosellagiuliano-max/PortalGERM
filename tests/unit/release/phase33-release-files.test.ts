@@ -55,6 +55,7 @@ describe("Phase-33 release evidence files", () => {
     const repository = await temporaryRepository();
     for (const path of [
       "test-results/phase33/nested/test-report.json",
+      "test-results/PHASE33/test-report.json",
       "test-results/phase33/report.json",
       "../test-report.json",
     ]) {
@@ -79,7 +80,7 @@ describe("Phase-33 release evidence files", () => {
     );
   });
 
-  it("denies an evidence-file symlink and a junction-backed evidence root", async () => {
+  it("denies an evidence-file symlink and a junction-backed test-results root", async () => {
     const repository = await temporaryRepository();
     const evidenceRoot = resolve(repository, "test-results", "phase33");
     await mkdir(evidenceRoot, { recursive: true });
@@ -102,6 +103,25 @@ describe("Phase-33 release evidence files", () => {
       resolve(repository, "test-results"),
       process.platform === "win32" ? "junction" : "dir",
     );
+    await expect(
+      readPhase33EvidenceFile(
+        repository,
+        resolve(repository, "test-results", "phase33", "test-report.json"),
+      ),
+    ).rejects.toThrow("PHASE33_EVIDENCE_DIRECTORY_SYMLINK_DENIED");
+  });
+
+  it("denies a junction-backed phase33 evidence root", async () => {
+    const repository = await temporaryRepository();
+    const externalRoot = resolve(repository, "external-phase33");
+    await mkdir(externalRoot, { recursive: true });
+    await mkdir(resolve(repository, "test-results"), { recursive: true });
+    await symlink(
+      externalRoot,
+      resolve(repository, "test-results", "phase33"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+
     await expect(
       readPhase33EvidenceFile(
         repository,
@@ -137,6 +157,50 @@ describe("Phase-33 release evidence files", () => {
     ).toThrow("PHASE33_COMMAND_LOG_PATH_OUT_OF_SCOPE");
   });
 
+  it("denies a junction-backed log root and a direct command-log symlink", async () => {
+    const junctionRepository = await temporaryRepository();
+    const externalLogs = resolve(junctionRepository, "external-logs");
+    await mkdir(externalLogs, { recursive: true });
+    await writeFile(resolve(externalLogs, "unit.log"), "outside", "utf8");
+    await mkdir(resolve(junctionRepository, "test-results", "phase33"), {
+      recursive: true,
+    });
+    const linkedLogRoot = resolve(
+      junctionRepository,
+      "test-results",
+      "phase33",
+      "logs",
+    );
+    await symlink(
+      externalLogs,
+      linkedLogRoot,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    await expect(
+      readPhase33CommandLogFile(
+        junctionRepository,
+        resolve(linkedLogRoot, "unit.log"),
+        64,
+      ),
+    ).rejects.toThrow("PHASE33_EVIDENCE_DIRECTORY_SYMLINK_DENIED");
+
+    const symlinkRepository = await temporaryRepository();
+    const logRoot = resolve(
+      symlinkRepository,
+      "test-results",
+      "phase33",
+      "logs",
+    );
+    await mkdir(logRoot, { recursive: true });
+    const target = resolve(symlinkRepository, "direct-log-target.txt");
+    await writeFile(target, "inside", "utf8");
+    const linkedLog = resolve(logRoot, "unit.log");
+    await symlink(target, linkedLog, "file");
+    await expect(
+      readPhase33CommandLogFile(symlinkRepository, linkedLog, 64),
+    ).rejects.toThrow("PHASE33_EVIDENCE_INPUT_SYMLINK_DENIED");
+  });
+
   it("reads an external ledger only as a bounded stable regular file", async () => {
     const repository = await temporaryRepository();
     const ledger = resolve(repository, "external-ledger.json");
@@ -155,6 +219,54 @@ describe("Phase-33 release evidence files", () => {
     await symlink(ledger, linked, "file");
     await expect(readPhase33ExternalLedgerFile(linked)).rejects.toThrow(
       "PHASE33_EVIDENCE_INPUT_SYMLINK_DENIED",
+    );
+  });
+
+  it("accepts an ancestor workspace link for direct evidence inputs", async () => {
+    const realRepository = await temporaryRepository();
+    const aliasRoot = await mkdtemp(
+      resolve(tmpdir(), "phase33-evidence-alias-test-"),
+    );
+    temporaryRoots.push(aliasRoot);
+    const repositoryAlias = resolve(aliasRoot, "repository");
+    await symlink(
+      realRepository,
+      repositoryAlias,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+
+    const evidence = resolvePhase33EvidencePath(
+      repositoryAlias,
+      "test-results/phase33/test-report.json",
+      ["test-report.json"],
+    );
+    await invalidatePhase33EvidenceOutput(repositoryAlias, evidence);
+    await writePhase33EvidenceAtomic(
+      repositoryAlias,
+      evidence,
+      '{"status":"PASS"}\n',
+    );
+    await expect(
+      readPhase33EvidenceFile(repositoryAlias, evidence),
+    ).resolves.toEqual(Buffer.from('{"status":"PASS"}\n'));
+
+    const log = resolvePhase33CommandLogPath(
+      repositoryAlias,
+      "test-results/phase33/logs/unit.log",
+      ["unit.log"],
+    );
+    await mkdir(resolve(repositoryAlias, "test-results/phase33/logs"), {
+      recursive: true,
+    });
+    await writeFile(log, "bounded output", "utf8");
+    await expect(
+      readPhase33CommandLogFile(repositoryAlias, log, 64),
+    ).resolves.toEqual(Buffer.from("bounded output"));
+
+    const ledger = resolve(repositoryAlias, "external-ledger.json");
+    await writeFile(ledger, '{"status":"PENDING"}', "utf8");
+    await expect(readPhase33ExternalLedgerFile(ledger, 64)).resolves.toEqual(
+      Buffer.from('{"status":"PENDING"}'),
     );
   });
 });

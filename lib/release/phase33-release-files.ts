@@ -134,14 +134,23 @@ export async function readPhase33CommandLogFile(
     "test-report.json",
   );
   await assertSafeEvidenceLocation(repository, evidenceSentinel);
-  const repositoryRoot = await realpath(resolve(repository));
-  const logRoot = resolve(repositoryRoot, PHASE33_EVIDENCE_LOG_DIRECTORY);
-  if (!samePath(dirname(resolve(inputPath)), logRoot)) {
+  const lexicalRepositoryRoot = resolve(repository);
+  const lexicalLogRoot = resolve(
+    lexicalRepositoryRoot,
+    PHASE33_EVIDENCE_LOG_DIRECTORY,
+  );
+  if (dirname(resolve(inputPath)) !== lexicalLogRoot) {
     throw new Error("PHASE33_COMMAND_LOG_PATH_OUT_OF_SCOPE");
   }
-  await denySymlinkIfPresent(logRoot);
-  const realLogRoot = await realpath(logRoot);
-  if (!samePath(realLogRoot, logRoot)) {
+  await denySymlinkIfPresent(lexicalLogRoot);
+  const repositoryRoot = await realpath(lexicalRepositoryRoot);
+  const realLogRoot = await realpath(lexicalLogRoot);
+  const fromRepository = relative(repositoryRoot, realLogRoot);
+  if (
+    fromRepository === "" ||
+    fromRepository.startsWith("..") ||
+    isAbsolute(fromRepository)
+  ) {
     throw new Error("PHASE33_COMMAND_LOG_ROOT_ESCAPE");
   }
   return readStableRegularFile(resolve(inputPath), maxBytes);
@@ -173,8 +182,10 @@ async function readStableRegularFile(resolvedInput: string, maxBytes: number) {
   if (before.size > maxBytes) {
     throw new Error("PHASE33_EVIDENCE_INPUT_TOO_LARGE");
   }
+  const realParent = await realpath(dirname(resolvedInput));
+  const expectedRealInput = resolve(realParent, basename(resolvedInput));
   const realInput = await realpath(resolvedInput);
-  if (!samePath(realInput, resolvedInput)) {
+  if (!samePath(realInput, expectedRealInput)) {
     throw new Error("PHASE33_EVIDENCE_INPUT_LINK_ESCAPE");
   }
   const handle = await open(resolvedInput, "r");
@@ -217,16 +228,20 @@ async function assertSafeEvidenceLocation(
   repository: string,
   outputPath: string,
 ) {
-  const repositoryRoot = await realpath(resolve(repository));
-  const evidenceRoot = resolve(repositoryRoot, PHASE33_EVIDENCE_DIRECTORY);
-  if (!samePath(dirname(resolve(outputPath)), evidenceRoot)) {
+  const lexicalRepositoryRoot = resolve(repository);
+  const lexicalEvidenceRoot = resolve(
+    lexicalRepositoryRoot,
+    PHASE33_EVIDENCE_DIRECTORY,
+  );
+  if (dirname(resolve(outputPath)) !== lexicalEvidenceRoot) {
     throw new Error("PHASE33_EVIDENCE_PATH_OUT_OF_SCOPE");
   }
-  const testResultsRoot = resolve(repositoryRoot, "test-results");
-  await denySymlinkIfPresent(testResultsRoot);
-  await mkdir(evidenceRoot, { recursive: true });
-  await denySymlinkIfPresent(evidenceRoot);
-  const realEvidenceRoot = await realpath(evidenceRoot);
+  const lexicalTestResultsRoot = resolve(lexicalRepositoryRoot, "test-results");
+  await denySymlinkIfPresent(lexicalTestResultsRoot);
+  await mkdir(lexicalEvidenceRoot, { recursive: true });
+  await denySymlinkIfPresent(lexicalEvidenceRoot);
+  const repositoryRoot = await realpath(lexicalRepositoryRoot);
+  const realEvidenceRoot = await realpath(lexicalEvidenceRoot);
   const fromRepository = relative(repositoryRoot, realEvidenceRoot);
   if (
     fromRepository === "" ||
