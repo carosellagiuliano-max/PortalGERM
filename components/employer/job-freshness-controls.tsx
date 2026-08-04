@@ -47,6 +47,7 @@ export function JobFreshnessControls({
   const formattedDue = new Intl.DateTimeFormat("de-CH", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Europe/Zurich",
   }).format(new Date(dueAt));
 
   return (
