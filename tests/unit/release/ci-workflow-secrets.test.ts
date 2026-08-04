@@ -19,4 +19,13 @@ describe("CI workflow secret materialization", () => {
     expect(workflow).toContain("$databaseUrl,");
     expect(workflow).toContain("$testDatabaseUrl");
   });
+
+  it("installs every browser engine exercised by the full browser gate", () => {
+    expect(workflow).toMatch(
+      /playwright\/test\/cli\.js install --with-deps\s+chromium firefox webkit/u,
+    );
+    expect(workflow.indexOf("chromium firefox webkit")).toBeLessThan(
+      workflow.indexOf("npm run test:e2e:browser"),
+    );
+  });
 });

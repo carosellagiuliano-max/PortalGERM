@@ -166,8 +166,10 @@ jobs:
       - name: Production-HTTP-Smoke
         run: npm run test:e2e:http
 
-      - name: Playwright Chromium 1.61.1 mit Systemabhängigkeiten installieren
-        run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - name: Playwright Chromium, Firefox und WebKit 1.61.1 mit Systemabhängigkeiten installieren
+        run: >-
+          node node_modules/@playwright/test/cli.js install --with-deps
+          chromium firefox webkit
 
       - name: Phase-17-Browser-Gate
         run: npm run test:e2e:browser
