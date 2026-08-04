@@ -2254,6 +2254,10 @@ model Session {
   id                      String                   @id @default(uuid()) @db.Uuid
   userId                  String                   @db.Uuid
   tokenHash               String                   @unique @db.VarChar(64)
+  pendingTokenHash        String?                  @db.VarChar(64)
+  pendingTokenExpiresAt   DateTime?                @db.Timestamptz(3)
+  previousTokenHash       String?                  @db.VarChar(64)
+  previousTokenExpiresAt  DateTime?                @db.Timestamptz(3)
   expiresAt               DateTime                 @db.Timestamptz(3)
   absoluteExpiresAt       DateTime                 @db.Timestamptz(3)
   createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
@@ -2274,6 +2278,8 @@ model Session {
 
   @@index([userId])
   @@index([tokenHash])
+  @@index([pendingTokenHash, pendingTokenExpiresAt])
+  @@index([previousTokenHash, previousTokenExpiresAt])
   @@index([expiresAt])
   @@index([userId, activePortal, revokedAt])
   @@index([activeCompanyId, revokedAt])
@@ -4056,48 +4062,48 @@ model AuthAssuranceEvidence {
 }
 
 model NotificationOutbox {
-  id                          String                        @id @default(uuid()) @db.Uuid
-  recipientUserId             String?                       @db.Uuid
-  recipientAddressCiphertext  Bytes?
-  recipientAddressNonce       Bytes?
-  recipientAddressTag         Bytes?
-  recipientAddressKeyVersion  String?                       @db.VarChar(32)
-  recipientAddressBindingVersion String?                    @db.VarChar(16)
-  recipientAddressDigest      String?                       @db.Char(64)
-  recipientAddressDigestKeyVersion String?                  @db.VarChar(32)
-  recipientAddressExpiresAt   DateTime?                     @db.Timestamptz(3)
-  recipientAddressDestroyedAt DateTime?                     @db.Timestamptz(3)
-  purpose                     NotificationPurpose
-  purposeClass                NotificationPurposeClass
-  channel                     NotificationChannel           @default(EMAIL)
-  templateKey                 String                        @db.VarChar(64)
-  payloadSchemaVersion        String                        @db.VarChar(32)
-  payload                     Json
-  dedupeKey                   String                        @unique @db.VarChar(160)
-  providerDedupeKey           String                        @unique @db.VarChar(160)
-  providerRequestActivationId String?                       @db.Uuid
-  providerRequestCiphertext   Bytes?
-  providerRequestNonce        Bytes?
-  providerRequestTag          Bytes?
-  providerRequestKeyVersion   String?                       @db.VarChar(32)
-  providerRequestDigest       String?                       @db.Char(64)
-  providerRequestCreatedAt    DateTime?                     @db.Timestamptz(3)
-  providerRequestDestroyedAt  DateTime?                     @db.Timestamptz(3)
-  status                      NotificationDeliveryStatus    @default(PENDING)
-  availableAt                 DateTime                      @db.Timestamptz(3)
-  leaseOwner                  String?                       @db.VarChar(96)
-  leaseExpiresAt              DateTime?                     @db.Timestamptz(3)
-  attemptCount                Int                           @default(0)
-  maxAttempts                 Int                           @default(5)
-  lastErrorCode               String?                       @db.VarChar(64)
-  deliveredAt                 DateTime?                     @db.Timestamptz(3)
-  suppressedAt                DateTime?                     @db.Timestamptz(3)
-  deadLetteredAt              DateTime?                     @db.Timestamptz(3)
-  createdAt                   DateTime                      @default(now()) @db.Timestamptz(3)
-  updatedAt                   DateTime                      @updatedAt @db.Timestamptz(3)
-  recipient                   User?                         @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
-  providerRequestActivation   ProviderActivation?           @relation("NotificationProviderRequestActivation", fields: [providerRequestActivationId], references: [id], onDelete: Restrict)
-  attempts                    NotificationDeliveryAttempt[]
+  id                               String                        @id @default(uuid()) @db.Uuid
+  recipientUserId                  String?                       @db.Uuid
+  recipientAddressCiphertext       Bytes?
+  recipientAddressNonce            Bytes?
+  recipientAddressTag              Bytes?
+  recipientAddressKeyVersion       String?                       @db.VarChar(32)
+  recipientAddressBindingVersion   String?                       @db.VarChar(16)
+  recipientAddressDigest           String?                       @db.Char(64)
+  recipientAddressDigestKeyVersion String?                       @db.VarChar(32)
+  recipientAddressExpiresAt        DateTime?                     @db.Timestamptz(3)
+  recipientAddressDestroyedAt      DateTime?                     @db.Timestamptz(3)
+  purpose                          NotificationPurpose
+  purposeClass                     NotificationPurposeClass
+  channel                          NotificationChannel           @default(EMAIL)
+  templateKey                      String                        @db.VarChar(64)
+  payloadSchemaVersion             String                        @db.VarChar(32)
+  payload                          Json
+  dedupeKey                        String                        @unique @db.VarChar(160)
+  providerDedupeKey                String                        @unique @db.VarChar(160)
+  providerRequestActivationId      String?                       @db.Uuid
+  providerRequestCiphertext        Bytes?
+  providerRequestNonce             Bytes?
+  providerRequestTag               Bytes?
+  providerRequestKeyVersion        String?                       @db.VarChar(32)
+  providerRequestDigest            String?                       @db.Char(64)
+  providerRequestCreatedAt         DateTime?                     @db.Timestamptz(3)
+  providerRequestDestroyedAt       DateTime?                     @db.Timestamptz(3)
+  status                           NotificationDeliveryStatus    @default(PENDING)
+  availableAt                      DateTime                      @db.Timestamptz(3)
+  leaseOwner                       String?                       @db.VarChar(96)
+  leaseExpiresAt                   DateTime?                     @db.Timestamptz(3)
+  attemptCount                     Int                           @default(0)
+  maxAttempts                      Int                           @default(5)
+  lastErrorCode                    String?                       @db.VarChar(64)
+  deliveredAt                      DateTime?                     @db.Timestamptz(3)
+  suppressedAt                     DateTime?                     @db.Timestamptz(3)
+  deadLetteredAt                   DateTime?                     @db.Timestamptz(3)
+  createdAt                        DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                        DateTime                      @updatedAt @db.Timestamptz(3)
+  recipient                        User?                         @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
+  providerRequestActivation        ProviderActivation?           @relation("NotificationProviderRequestActivation", fields: [providerRequestActivationId], references: [id], onDelete: Restrict)
+  attempts                         NotificationDeliveryAttempt[]
 
   @@index([status, availableAt, createdAt])
   @@index([leaseExpiresAt])
@@ -4108,27 +4114,27 @@ model NotificationOutbox {
 }
 
 model NotificationDeliveryAttempt {
-  id                    String                      @id @default(uuid()) @db.Uuid
-  outboxId              String                      @db.Uuid
-  attemptNumber         Int
-  leaseOwner            String                      @db.VarChar(96)
-  leaseExpiresAt        DateTime                    @db.Timestamptz(3)
-  providerClass         String                      @db.VarChar(64)
-  outcome               NotificationDeliveryOutcome
-  providerReceipt       String?                     @db.VarChar(255)
-  providerActivationId  String?                     @db.Uuid
-  providerRequestDigest String?                     @db.Char(64)
-  recipientHash         String?                     @db.Char(64)
-  recipientHashKeyVersion String?                   @db.VarChar(32)
-  recipientEvidenceRetainUntil DateTime             @db.Timestamptz(3)
-  recipientEvidenceWipedAt DateTime?                @db.Timestamptz(3)
-  errorCode             String?                     @db.VarChar(64)
-  nextAvailableAt       DateTime?                   @db.Timestamptz(3)
-  startedAt             DateTime                    @db.Timestamptz(3)
-  completedAt           DateTime                    @db.Timestamptz(3)
-  createdAt             DateTime                    @default(now()) @db.Timestamptz(3)
-  outbox                NotificationOutbox          @relation(fields: [outboxId], references: [id], onDelete: Restrict)
-  providerActivation    ProviderActivation?         @relation("NotificationAttemptProviderActivation", fields: [providerActivationId], references: [id], onDelete: Restrict)
+  id                           String                      @id @default(uuid()) @db.Uuid
+  outboxId                     String                      @db.Uuid
+  attemptNumber                Int
+  leaseOwner                   String                      @db.VarChar(96)
+  leaseExpiresAt               DateTime                    @db.Timestamptz(3)
+  providerClass                String                      @db.VarChar(64)
+  outcome                      NotificationDeliveryOutcome
+  providerReceipt              String?                     @db.VarChar(255)
+  providerActivationId         String?                     @db.Uuid
+  providerRequestDigest        String?                     @db.Char(64)
+  recipientHash                String?                     @db.Char(64)
+  recipientHashKeyVersion      String?                     @db.VarChar(32)
+  recipientEvidenceRetainUntil DateTime                    @db.Timestamptz(3)
+  recipientEvidenceWipedAt     DateTime?                   @db.Timestamptz(3)
+  errorCode                    String?                     @db.VarChar(64)
+  nextAvailableAt              DateTime?                   @db.Timestamptz(3)
+  startedAt                    DateTime                    @db.Timestamptz(3)
+  completedAt                  DateTime                    @db.Timestamptz(3)
+  createdAt                    DateTime                    @default(now()) @db.Timestamptz(3)
+  outbox                       NotificationOutbox          @relation(fields: [outboxId], references: [id], onDelete: Restrict)
+  providerActivation           ProviderActivation?         @relation("NotificationAttemptProviderActivation", fields: [providerActivationId], references: [id], onDelete: Restrict)
 
   @@unique([outboxId, attemptNumber])
   @@index([outboxId, startedAt])
@@ -4138,13 +4144,13 @@ model NotificationDeliveryAttempt {
 }
 
 model NotificationSuppression {
-  id            String                        @id @default(uuid()) @db.Uuid
-  recipientHash String                        @db.VarChar(64)
-  recipientHashKeyVersion String?             @db.VarChar(32)
-  reason        NotificationSuppressionReason
-  source        String                        @db.VarChar(64)
-  createdAt     DateTime                      @default(now()) @db.Timestamptz(3)
-  releasedAt    DateTime?                     @db.Timestamptz(3)
+  id                      String                        @id @default(uuid()) @db.Uuid
+  recipientHash           String                        @db.VarChar(64)
+  recipientHashKeyVersion String?                       @db.VarChar(32)
+  reason                  NotificationSuppressionReason
+  source                  String                        @db.VarChar(64)
+  createdAt               DateTime                      @default(now()) @db.Timestamptz(3)
+  releasedAt              DateTime?                     @db.Timestamptz(3)
 
   @@index([recipientHash, releasedAt])
 }

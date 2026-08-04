@@ -19,11 +19,12 @@ import {
   type AdminDutyV2,
 } from "@/lib/admin/role-policy";
 import { hasCurrentAal2 } from "@/lib/auth/assurance/mfa-service";
+import { getSessionRotationDueAt } from "@/lib/auth/session";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 
 export type AuthenticatedPageUser = CurrentUser &
-  Readonly<{ sessionId: string }>;
+  Readonly<{ sessionId: string; sessionRotationDelayMilliseconds: number }>;
 
 export type AdminPageUser = AuthenticatedPageUser &
   Readonly<{
@@ -157,7 +158,14 @@ async function requirePageRole(
       );
     }
   }
-  return Object.freeze({ ...user, sessionId: context.session.id });
+  return Object.freeze({
+    ...user,
+    sessionId: context.session.id,
+    sessionRotationDelayMilliseconds: Math.max(
+      0,
+      getSessionRotationDueAt(context.session).getTime() - Date.now(),
+    ),
+  });
 }
 
 function isLowAssurancePage(path: string | null) {
@@ -170,7 +178,9 @@ function isLowAssurancePage(path: string | null) {
   );
 }
 
-export function sanitizePrivateRequestPath(value: string | null): string | null {
+export function sanitizePrivateRequestPath(
+  value: string | null,
+): string | null {
   if (
     value === null ||
     value.length === 0 ||

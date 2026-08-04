@@ -12,7 +12,11 @@ import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { writeAuthSecurityEvent } from "@/lib/auth/security-events";
 import { revokeUserStepUpState } from "@/lib/auth/assurance/step-up-service";
 import { issueSession } from "@/lib/auth/session-issuance";
-import { hashSessionToken, type CreatedSession } from "@/lib/auth/session";
+import {
+  activeSessionTokenHashWhere,
+  hashSessionToken,
+  type CreatedSession,
+} from "@/lib/auth/session";
 import {
   createVerificationToken,
   hashVerificationTarget,
@@ -320,10 +324,10 @@ export async function consumeEmailVerification(
             where: {
               id: pending.initiatedBySessionId,
               userId: challenge.userId,
-              tokenHash: hashSessionToken(sessionToken),
-              revokedAt: null,
-              expiresAt: { gt: now },
-              absoluteExpiresAt: { gt: now },
+              ...activeSessionTokenHashWhere(
+                hashSessionToken(sessionToken),
+                now,
+              ),
             },
             select: { id: true },
           });
@@ -521,10 +525,10 @@ export async function consumeEmailVerification(
             : await transaction.session.findFirst({
                 where: {
                   userId: challenge.userId,
-                  tokenHash: hashSessionToken(sessionToken),
-                  revokedAt: null,
-                  expiresAt: { gt: now },
-                  absoluteExpiresAt: { gt: now },
+                  ...activeSessionTokenHashWhere(
+                    hashSessionToken(sessionToken),
+                    now,
+                  ),
                 },
                 select: { id: true },
               });

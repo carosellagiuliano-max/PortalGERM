@@ -63,6 +63,65 @@ ALTER TABLE "WorkItem"
   ADD COLUMN "leaseHandlerActivationId" UUID,
   ADD COLUMN "leaseHandlerActivationGeneration" INTEGER;
 
+-- Session rotation is a two-step hand-off. A freshly issued token is staged
+-- without invalidating the browser's current token, and only a subsequent
+-- authenticated request promotes it. The short previous-token overlap keeps
+-- in-flight requests valid while logout can resolve and revoke the stable
+-- session row through any token involved in the hand-off.
+ALTER TABLE "Session"
+  ADD COLUMN "pendingTokenHash" VARCHAR(64),
+  ADD COLUMN "pendingTokenExpiresAt" TIMESTAMPTZ(3),
+  ADD COLUMN "previousTokenHash" VARCHAR(64),
+  ADD COLUMN "previousTokenExpiresAt" TIMESTAMPTZ(3),
+  ADD CONSTRAINT "session_pending_token_shape_check" CHECK (
+    ("pendingTokenHash" IS NULL) = ("pendingTokenExpiresAt" IS NULL)
+    AND (
+      "pendingTokenHash" IS NULL
+      OR (
+        "pendingTokenHash" ~ '^[a-f0-9]{64}$'
+        AND "pendingTokenHash" <> "tokenHash"
+        AND (
+          "previousTokenHash" IS NULL
+          OR "pendingTokenHash" <> "previousTokenHash"
+        )
+        AND isfinite("pendingTokenExpiresAt")
+        AND "pendingTokenExpiresAt" <= "expiresAt"
+        AND "pendingTokenExpiresAt" <= "absoluteExpiresAt"
+      )
+    )
+  ),
+  ADD CONSTRAINT "session_previous_token_shape_check" CHECK (
+    ("previousTokenHash" IS NULL) = ("previousTokenExpiresAt" IS NULL)
+    AND (
+      "previousTokenHash" IS NULL
+      OR (
+        "previousTokenHash" ~ '^[a-f0-9]{64}$'
+        AND "previousTokenHash" <> "tokenHash"
+        AND (
+          "pendingTokenHash" IS NULL
+          OR "previousTokenHash" <> "pendingTokenHash"
+        )
+        AND isfinite("previousTokenExpiresAt")
+        AND "previousTokenExpiresAt" <= "expiresAt"
+        AND "previousTokenExpiresAt" <= "absoluteExpiresAt"
+      )
+    )
+  ),
+  ADD CONSTRAINT "session_current_token_hash_shape_check" CHECK (
+    "tokenHash" ~ '^[a-f0-9]{64}$'
+  );
+
+CREATE UNIQUE INDEX "session_pending_token_hash_key"
+  ON "Session"("pendingTokenHash")
+  WHERE "pendingTokenHash" IS NOT NULL;
+CREATE UNIQUE INDEX "session_previous_token_hash_key"
+  ON "Session"("previousTokenHash")
+  WHERE "previousTokenHash" IS NOT NULL;
+CREATE INDEX "Session_pendingTokenHash_pendingTokenExpiresAt_idx"
+  ON "Session"("pendingTokenHash", "pendingTokenExpiresAt");
+CREATE INDEX "Session_previousTokenHash_previousTokenExpiresAt_idx"
+  ON "Session"("previousTokenHash", "previousTokenExpiresAt");
+
 -- Every historical hosted attempt was produced by the Phase-24 one-time test
 -- adapter. This explicit compatibility backfill does not promote it to a
 -- recurring subscription or to LIVE evidence.

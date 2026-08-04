@@ -15,6 +15,7 @@ export function PrivateShell({
   navigationVariant = "top",
   identity,
   contextControl,
+  sessionRotationDelayMilliseconds,
   children,
 }: Readonly<{
   area: string;
@@ -22,20 +23,26 @@ export function PrivateShell({
   navigationVariant?: "top" | "sidebar";
   identity?: Readonly<{ displayName: string; secondaryLabel?: string }>;
   contextControl?: React.ReactNode;
+  sessionRotationDelayMilliseconds?: number;
   children: React.ReactNode;
 }>) {
-  const initials = identity?.displayName
-    .split(/\s+/u)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "ST";
+  const initials =
+    identity?.displayName
+      .split(/\s+/u)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "ST";
 
   return (
     <>
       <SkipLink />
       <main id="main-content" tabIndex={-1} className="page-shell py-6 sm:py-9">
-        <SessionRefresh />
+        {sessionRotationDelayMilliseconds === undefined ? null : (
+          <SessionRefresh
+            initialDelayMilliseconds={sessionRotationDelayMilliseconds}
+          />
+        )}
         <div className="mb-7 flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="eyebrow">Geschützter Bereich</p>
@@ -49,7 +56,9 @@ export function PrivateShell({
                   <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{identity.displayName}</p>
+                  <p className="truncate text-sm font-medium">
+                    {identity.displayName}
+                  </p>
                   {identity.secondaryLabel === undefined ? null : (
                     <p className="truncate text-xs text-muted-foreground">
                       {identity.secondaryLabel}

@@ -22,7 +22,31 @@ export default async function AdminLayout({
   const user = await requireAdminPage();
   const personaOverview = await getCurrentPersonaContextOverview();
   return (
-    <PrivateShell area="Administration" navigation={getAdminNavigation(user.capabilities)} navigationVariant="sidebar" identity={{ displayName: user.name ?? "Platform Admin", secondaryLabel: user.email }} contextControl={<div className="grid min-w-0 gap-3">{personaOverview === null ? null : <PersonaContextSwitcher activePortal={personaOverview.activePortal} portals={personaOverview.portals} companies={personaOverview.companies} compact />}<AdminGlobalSearch enabled={user.capabilities.includes("ADMIN_GLOBAL_SEARCH")} /></div>}>
+    <PrivateShell
+      area="Administration"
+      navigation={getAdminNavigation(user.capabilities)}
+      navigationVariant="sidebar"
+      identity={{
+        displayName: user.name ?? "Platform Admin",
+        secondaryLabel: user.email,
+      }}
+      sessionRotationDelayMilliseconds={user.sessionRotationDelayMilliseconds}
+      contextControl={
+        <div className="grid min-w-0 gap-3">
+          {personaOverview === null ? null : (
+            <PersonaContextSwitcher
+              activePortal={personaOverview.activePortal}
+              portals={personaOverview.portals}
+              companies={personaOverview.companies}
+              compact
+            />
+          )}
+          <AdminGlobalSearch
+            enabled={user.capabilities.includes("ADMIN_GLOBAL_SEARCH")}
+          />
+        </div>
+      }
+    >
       {children}
     </PrivateShell>
   );

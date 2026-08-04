@@ -52,6 +52,7 @@ export default async function EmployerLayout({
           },
         ]}
         navigationVariant="top"
+        sessionRotationDelayMilliseconds={user.sessionRotationDelayMilliseconds}
         identity={{
           displayName: user.name ?? user.email,
           secondaryLabel: "E-Mail-Bestätigung ausstehend",
@@ -86,17 +87,23 @@ export default async function EmployerLayout({
   return (
     <PrivateShell
       area="Arbeitgeberportal"
-      navigation={context === null || context.memberships.length === 0 ? [] : visibleNavigation}
-      navigationVariant={context === null || context.memberships.length === 0 ? "top" : "sidebar"}
+      navigation={
+        context === null || context.memberships.length === 0
+          ? []
+          : visibleNavigation
+      }
+      navigationVariant={
+        context === null || context.memberships.length === 0 ? "top" : "sidebar"
+      }
+      sessionRotationDelayMilliseconds={user.sessionRotationDelayMilliseconds}
       identity={{
         displayName: user.name ?? user.email,
         secondaryLabel: current?.membershipRole ?? user.role,
       }}
       contextControl={
         context === null ||
-        (context.memberships.length === 0 && personaOverview === null) ? (
-          undefined
-        ) : (
+        (context.memberships.length === 0 &&
+          personaOverview === null) ? undefined : (
           <div className="grid min-w-0 gap-3">
             {personaOverview === null ? null : (
               <PersonaContextSwitcher

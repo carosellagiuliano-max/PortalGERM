@@ -4,7 +4,11 @@ import { cookies } from "next/headers";
 
 import { getDatabase } from "@/lib/db/client";
 import { createPrismaSessionStore } from "@/lib/auth/session-store";
-import { hashSessionToken, readSession, SESSION_POLICY_V1 } from "@/lib/auth/session";
+import {
+  hashSessionToken,
+  readSession,
+  SESSION_POLICY_V1,
+} from "@/lib/auth/session";
 import {
   effectiveLegacyRoleForContext,
   legacyPortalForRole,
@@ -35,10 +39,7 @@ export type CurrentUser = Readonly<{
   status: "ACTIVE";
   emailVerifiedAt: Date | null;
   emailAddressEpoch: number;
-  identityAssurance:
-    | "LOW_ASSURANCE"
-    | "VERIFIED_EMAIL"
-    | "LEGACY_ASSURANCE";
+  identityAssurance: "LOW_ASSURANCE" | "VERIFIED_EMAIL" | "LEGACY_ASSURANCE";
 }>;
 
 export type CurrentAuthContext = Readonly<{
@@ -46,7 +47,9 @@ export type CurrentAuthContext = Readonly<{
   session: Readonly<{
     id: string;
     userId: string;
+    presentedTokenState: "CURRENT" | "PREVIOUS";
     createdAt: Date;
+    rotatedAt: Date | null;
     expiresAt: Date;
     absoluteExpiresAt: Date;
     activePortal: PortalContextV2;
@@ -57,7 +60,10 @@ export type CurrentAuthContext = Readonly<{
 }>;
 
 export interface CurrentUserRepository {
-  findBySessionTokenHash(tokenHash: string, now: Date): Promise<CurrentUser | null>;
+  findBySessionTokenHash(
+    tokenHash: string,
+    now: Date,
+  ): Promise<CurrentUser | null>;
 }
 
 export async function getCurrentUserFromToken(
@@ -143,7 +149,10 @@ export async function getCurrentAuthContext(): Promise<CurrentAuthContext | null
     session: Object.freeze({
       id: session.id,
       userId: session.userId,
+      presentedTokenState:
+        session.tokenHash === hashSessionToken(token) ? "CURRENT" : "PREVIOUS",
       createdAt: session.createdAt,
+      rotatedAt: session.rotatedAt,
       expiresAt: session.expiresAt,
       absoluteExpiresAt: session.absoluteExpiresAt,
       activePortal,

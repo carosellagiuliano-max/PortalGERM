@@ -1,13 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const logoutRuntime = vi.hoisted(() => ({
   database: null as unknown,
@@ -64,10 +57,7 @@ import {
   parseEnvironment,
   type ServerEnvironment,
 } from "@/lib/config/env-schema";
-import {
-  createDatabaseClient,
-  type DatabaseClient,
-} from "@/lib/db/factory";
+import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import { createValidEnvironment } from "@/tests/fixtures/environment";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
@@ -114,10 +104,11 @@ afterAll(async () => {
 });
 
 describe.sequential("Phase-16 auth and company workflow audit evidence", () => {
-  it("logs out through the owning service, deletes the real session and persists USER_LOGOUT", async () => {
+  it("revokes a pending-token session with FK evidence and persists USER_LOGOUT", async () => {
     const userId = randomUUID();
     const sessionId = randomUUID();
     const token = randomBytes(32).toString("base64url");
+    const pendingToken = randomBytes(32).toString("base64url");
     await db().user.create({
       data: {
         id: userId,
@@ -131,6 +122,8 @@ describe.sequential("Phase-16 auth and company workflow audit evidence", () => {
           create: {
             id: sessionId,
             tokenHash: hashSessionToken(token),
+            pendingTokenHash: hashSessionToken(pendingToken),
+            pendingTokenExpiresAt: new Date(NOW.getTime() + 60 * 60 * 1_000),
             createdAt: NOW,
             expiresAt: new Date(NOW.getTime() + 60 * 60 * 1_000),
             absoluteExpiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1_000),
@@ -139,14 +132,35 @@ describe.sequential("Phase-16 auth and company workflow audit evidence", () => {
         },
       },
     });
-    logoutRuntime.sessionToken = token;
+    await db().sessionAssurance.create({
+      data: {
+        sessionId,
+        userId,
+        level: "AAL2",
+        method: "WEBAUTHN",
+        policyVersion: "ADMIN_MFA_POLICY_V1",
+        verifiedAt: NOW,
+        expiresAt: new Date(NOW.getTime() + 12 * 60 * 60 * 1_000),
+        createdAt: NOW,
+      },
+    });
+    logoutRuntime.sessionToken = pendingToken;
     logoutRuntime.deletedCookies.length = 0;
 
     await expect(logoutCurrentSession()).resolves.toBeUndefined();
 
     await expect(
-      db().session.findUnique({ where: { id: sessionId } }),
-    ).resolves.toBeNull();
+      db().session.findUnique({
+        where: { id: sessionId },
+        select: {
+          revokedAt: true,
+          assuranceLevels: { select: { id: true } },
+        },
+      }),
+    ).resolves.toEqual({
+      revokedAt: expect.any(Date),
+      assuranceLevels: [{ id: expect.any(String) }],
+    });
     await expect(
       db().auditLog.findFirstOrThrow({
         where: {
@@ -204,11 +218,7 @@ describe.sequential("Phase-16 auth and company workflow audit evidence", () => {
           evidenceRef: "case://phase16/claim/evidence",
           idempotencyKey: randomUUID(),
         },
-        adminDependencies(
-          fixture.adminUserId,
-          claimEvidenceCorrelation,
-          1,
-        ),
+        adminDependencies(fixture.adminUserId, claimEvidenceCorrelation, 1),
       ),
     );
     requireSuccess(
@@ -219,11 +229,7 @@ describe.sequential("Phase-16 auth and company workflow audit evidence", () => {
           reasonCode: "CLAIM_EVIDENCE_INSUFFICIENT",
           idempotencyKey: randomUUID(),
         },
-        adminDependencies(
-          fixture.adminUserId,
-          claimRejectCorrelation,
-          2,
-        ),
+        adminDependencies(fixture.adminUserId, claimRejectCorrelation, 2),
       ),
     );
     requireSuccess(
@@ -495,10 +501,7 @@ function adminDependencies(
       email: "phase16-company-audit-admin@fixture.example.test",
       role: "ADMIN",
       status: "ACTIVE",
-      capabilities: [
-        "ADMIN_CLAIM_REVIEW",
-        "ADMIN_COMPANY_REVIEW",
-      ] as const,
+      capabilities: ["ADMIN_CLAIM_REVIEW", "ADMIN_COMPANY_REVIEW"] as const,
     },
     correlationId,
     database: db(),
@@ -508,8 +511,7 @@ function adminDependencies(
 
 function requireSuccess<T>(
   result:
-    | Readonly<{ ok: true; value: T }>
-    | Readonly<{ ok: false; code: string }>,
+    Readonly<{ ok: true; value: T }> | Readonly<{ ok: false; code: string }>,
 ) {
   if (!result.ok) {
     throw new Error(`Expected workflow success, received ${result.code}.`);
@@ -517,22 +519,24 @@ function requireSuccess<T>(
   return result.value;
 }
 
-function expectedAdminAudit(input: Readonly<{
-  action:
-    | "COMPANY_CLAIM_EVIDENCE_REQUESTED"
-    | "COMPANY_CLAIM_REJECTED"
-    | "COMPANY_VERIFICATION_CHANGES_REQUESTED"
-    | "COMPANY_VERIFIED"
-    | "COMPANY_VERIFICATION_REJECTED"
-    | "COMPANY_VERIFICATION_REVOKED";
-  adminUserId: string;
-  capability: "ADMIN_CLAIM_REVIEW" | "ADMIN_COMPANY_REVIEW";
-  companyId: string;
-  correlationId: string;
-  reasonCode: string;
-  targetId: string;
-  targetType: "CLAIM_REQUEST" | "VERIFICATION_REQUEST";
-}>) {
+function expectedAdminAudit(
+  input: Readonly<{
+    action:
+      | "COMPANY_CLAIM_EVIDENCE_REQUESTED"
+      | "COMPANY_CLAIM_REJECTED"
+      | "COMPANY_VERIFICATION_CHANGES_REQUESTED"
+      | "COMPANY_VERIFIED"
+      | "COMPANY_VERIFICATION_REJECTED"
+      | "COMPANY_VERIFICATION_REVOKED";
+    adminUserId: string;
+    capability: "ADMIN_CLAIM_REVIEW" | "ADMIN_COMPANY_REVIEW";
+    companyId: string;
+    correlationId: string;
+    reasonCode: string;
+    targetId: string;
+    targetType: "CLAIM_REQUEST" | "VERIFICATION_REQUEST";
+  }>,
+) {
   return {
     action: input.action,
     actorKind: "USER" as const,

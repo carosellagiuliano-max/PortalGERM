@@ -8,7 +8,10 @@ import { verifyPassword } from "@/lib/auth/password";
 import { consumeStepUpGrant } from "@/lib/auth/assurance/step-up-service";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
-import { hashSessionToken } from "@/lib/auth/session";
+import {
+  activeSessionTokenHashWhere,
+  hashSessionToken,
+} from "@/lib/auth/session";
 import { writeAuthSecurityEvent } from "@/lib/auth/security-events";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -34,11 +37,7 @@ export type EmailChangeRequestResult =
     }>
   | Readonly<{
       ok: false;
-      status:
-        | "LOCKED"
-        | "INVALID_CREDENTIALS"
-        | "CONFLICT"
-        | "RATE_LIMITED";
+      status: "LOCKED" | "INVALID_CREDENTIALS" | "CONFLICT" | "RATE_LIMITED";
       retryAfterSeconds?: number;
     }>;
 
@@ -102,10 +101,10 @@ export async function requestLoginEmailChange(
       credential: { select: { passwordHash: true } },
       sessions: {
         where: {
-          tokenHash: hashSessionToken(input.sessionToken),
-          revokedAt: null,
-          expiresAt: { gt: now },
-          absoluteExpiresAt: { gt: now },
+          ...activeSessionTokenHashWhere(
+            hashSessionToken(input.sessionToken),
+            now,
+          ),
         },
         take: 1,
         select: { id: true },
@@ -175,20 +174,17 @@ export async function requestLoginEmailChange(
            FOR UPDATE
         `;
         const user = locked[0];
-        if (
-          user === undefined ||
-          user.emailNormalized === target.data
-        ) {
+        if (user === undefined || user.emailNormalized === target.data) {
           return null;
         }
         const liveSession = await transaction.session.findFirst({
           where: {
             id: current.sessions[0]!.id,
             userId: input.userId,
-            tokenHash: hashSessionToken(input.sessionToken),
-            revokedAt: null,
-            expiresAt: { gt: now },
-            absoluteExpiresAt: { gt: now },
+            ...activeSessionTokenHashWhere(
+              hashSessionToken(input.sessionToken),
+              now,
+            ),
           },
           select: { id: true },
         });
@@ -324,10 +320,10 @@ export async function cancelLoginEmailChange(
       const session = await transaction.session.findFirst({
         where: {
           userId: input.userId,
-          tokenHash: hashSessionToken(input.sessionToken),
-          revokedAt: null,
-          expiresAt: { gt: now },
-          absoluteExpiresAt: { gt: now },
+          ...activeSessionTokenHashWhere(
+            hashSessionToken(input.sessionToken),
+            now,
+          ),
         },
         select: { id: true },
       });
@@ -354,22 +350,17 @@ export async function cancelLoginEmailChange(
         },
         data: { supersededAt: now },
       });
-      await writeRequiredAudit(
-        createPrismaTransactionAuditPort(transaction),
-        {
-          action: "LOGIN_EMAIL_CHANGE_CANCELLED",
-          actorKind: "USER",
-          actorUserId: input.userId,
-          capability: "AUTH_LOGIN_EMAIL_CHANGE",
-          correlationId: dependencies.request.correlationId,
-          result: "SUCCEEDED",
-          retainUntil: new Date(
-            now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-          ),
-          targetId: pending.id,
-          targetType: "VERIFICATION_REQUEST",
-        },
-      );
+      await writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
+        action: "LOGIN_EMAIL_CHANGE_CANCELLED",
+        actorKind: "USER",
+        actorUserId: input.userId,
+        capability: "AUTH_LOGIN_EMAIL_CHANGE",
+        correlationId: dependencies.request.correlationId,
+        result: "SUCCEEDED",
+        retainUntil: new Date(now.getTime() + AUDIT_RETENTION_MILLISECONDS),
+        targetId: pending.id,
+        targetType: "VERIFICATION_REQUEST",
+      });
       return true;
     },
   );

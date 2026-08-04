@@ -47,6 +47,7 @@ export default async function CandidateLayout({
           },
         ]}
         navigationVariant="top"
+        sessionRotationDelayMilliseconds={user.sessionRotationDelayMilliseconds}
         identity={{
           displayName: user.name ?? user.email,
           secondaryLabel: "E-Mail-Bestätigung ausstehend",
@@ -57,8 +58,12 @@ export default async function CandidateLayout({
     );
   }
   const database = getDatabase();
-  const [profile, personaOverview, externalHistoryCount, interviewHistoryCount] =
-    await Promise.all([
+  const [
+    profile,
+    personaOverview,
+    externalHistoryCount,
+    interviewHistoryCount,
+  ] = await Promise.all([
     database.candidateProfile.findUnique({
       where: { userId: user.id },
       select: { firstName: true, lastName: true, publicDisplayName: true },
@@ -76,8 +81,11 @@ export default async function CandidateLayout({
       },
     }),
   ]);
-  const legalName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ");
-  const displayName = profile?.publicDisplayName?.trim() || legalName || user.name || user.email;
+  const legalName = [profile?.firstName, profile?.lastName]
+    .filter(Boolean)
+    .join(" ");
+  const displayName =
+    profile?.publicDisplayName?.trim() || legalName || user.name || user.email;
   const visibleNavigation = navigation.flatMap((item) =>
     item.href !== "/candidate/applications"
       ? [item]
@@ -107,6 +115,7 @@ export default async function CandidateLayout({
       area="Kandidatenportal"
       navigation={visibleNavigation}
       navigationVariant="sidebar"
+      sessionRotationDelayMilliseconds={user.sessionRotationDelayMilliseconds}
       identity={{ displayName, secondaryLabel: "Kandidat/in" }}
       contextControl={
         personaOverview === null ? undefined : (

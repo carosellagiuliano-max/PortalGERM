@@ -32,44 +32,57 @@ export async function logoutCurrentSession(): Promise<void> {
       const database = getDatabase();
       const tokenHash = hashSessionToken(token);
       const now = new Date();
-      const environment = getServerEnvironment();
       const session = await database.$transaction(async (transaction) => {
-        const current = await transaction.session.findUnique({
-          where: { tokenHash },
+        const current = await transaction.session.findFirst({
+          where: {
+            OR: [
+              { tokenHash },
+              { pendingTokenHash: tokenHash },
+              { previousTokenHash: tokenHash },
+            ],
+          },
           select: { id: true, userId: true },
         });
         if (current === null) return null;
-        await transaction.session.delete({
-          where: { id: current.id },
-          select: { id: true },
+        const revoked = await transaction.session.updateMany({
+          where: { id: current.id, revokedAt: null },
+          data: { revokedAt: now },
         });
-        return current;
+        return revoked.count === 1 ? current : null;
       });
       if (session !== null) {
         // Session invalidation is the security boundary. Audit is deliberately
         // attempted afterwards so an unavailable audit sink can never roll the
-        // deletion back and leave a copied bearer token usable.
-        await writeBestEffortAudit(
-          createPrismaAuditPort(database),
-          {
-            action: "USER_LOGOUT",
-            actorKind: "USER",
-            actorUserId: session.userId,
-            capability: "AUTH_LOGOUT",
-            correlationId: request.correlationId,
-            result: "SUCCEEDED",
-            retainUntil: new Date(
-              now.getTime() + AUDIT_RETENTION_MILLISECONDS,
-            ),
-            targetId: session.id,
-            targetType: "SESSION",
-          },
-          undefined,
-          {
-            sourceIp: request.sourceIp,
-            keyring: environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
-          },
-        );
+        // revocation back and leave a copied bearer token usable. Revocation,
+        // rather than deletion, also preserves MFA and assurance evidence that
+        // references the stable session lineage through restrictive FKs.
+        try {
+          const environment = getServerEnvironment();
+          await writeBestEffortAudit(
+            createPrismaAuditPort(database),
+            {
+              action: "USER_LOGOUT",
+              actorKind: "USER",
+              actorUserId: session.userId,
+              capability: "AUTH_LOGOUT",
+              correlationId: request.correlationId,
+              result: "SUCCEEDED",
+              retainUntil: new Date(
+                now.getTime() + AUDIT_RETENTION_MILLISECONDS,
+              ),
+              targetId: session.id,
+              targetType: "SESSION",
+            },
+            undefined,
+            {
+              sourceIp: request.sourceIp,
+              keyring: environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
+            },
+          );
+        } catch {
+          // Revocation is already durable. Audit/configuration failure must
+          // never resurrect the bearer or turn logout into a false success.
+        }
       }
     }
   } finally {

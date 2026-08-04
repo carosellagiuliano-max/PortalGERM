@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { Page, Request, Route } from "@playwright/test";
+import type { Page, Request, Response, Route } from "@playwright/test";
 
 import {
   assertCriticalAccessibility,
@@ -13,6 +13,17 @@ import {
   phase17Database,
   test,
 } from "@/tests/e2e/fixtures/phase17-test";
+import { createPrismaSessionStore } from "@/lib/auth/session-store";
+import {
+  hashSessionToken,
+  rotateSession,
+  SESSION_POLICY_V1,
+} from "@/lib/auth/session";
+import type { SecretHandle } from "@/lib/config/env-schema";
+import {
+  SESSION_REFRESH_STATE_HEADER,
+  SESSION_REFRESH_STATES,
+} from "@/lib/auth/session-refresh-contract";
 
 test.describe.configure({ mode: "serial" });
 
@@ -25,7 +36,14 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
   browser,
   page,
 }) => {
+  test.setTimeout(180_000);
   const database = phase17Database();
+  let sessionRefreshRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/session/refresh") {
+      sessionRefreshRequests += 1;
+    }
+  });
   let wrongRole: Awaited<ReturnType<typeof openActor>> | undefined;
   try {
     const candidate = await database.user.findUniqueOrThrow({
@@ -76,6 +94,144 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
       page.getByRole("heading", { level: 1, name: job.title }),
     ).toBeVisible();
     assertScrubbedSavedJobUrl(page, job.slug);
+    expect(sessionRefreshRequests).toBe(0);
+
+    const sessionCookie = (await page.context().cookies()).find(
+      (cookie) => cookie.name === SESSION_POLICY_V1.cookieName,
+    );
+    if (sessionCookie === undefined) {
+      throw new Error("The authenticated candidate session cookie is missing.");
+    }
+    const originalTokenHash = hashSessionToken(sessionCookie.value);
+    const originalSession = await database.session.findUniqueOrThrow({
+      where: { tokenHash: originalTokenHash },
+      select: {
+        id: true,
+        userId: true,
+        pendingTokenHash: true,
+        absoluteExpiresAt: true,
+      },
+    });
+    expect(originalSession).toMatchObject({
+      userId: candidate.id,
+      pendingTokenHash: null,
+    });
+    const dueClock = new Date();
+    await database.session.update({
+      where: { id: originalSession.id },
+      data: {
+        createdAt: new Date(
+          dueClock.getTime() -
+            SESSION_POLICY_V1.rotationAgeMilliseconds -
+            1_000,
+        ),
+        rotatedAt: null,
+      },
+    });
+
+    // Stage the successor without writing it into the browser cookie jar. This
+    // models a lost Set-Cookie response without putting the raw HttpOnly bearer
+    // into Playwright request traces. The real browser route must idempotently
+    // re-stage that same successor and immediately confirm it.
+    const staged = await rotateSession(sessionCookie.value, {
+      store: createPrismaSessionStore(database),
+      clock: { now: dueClock },
+      rotationKey: sessionRotationKey(),
+    });
+    if (staged === null) {
+      throw new Error("The due candidate session was not staged for rotation.");
+    }
+    const stagedTokenHash = hashSessionToken(staged.token);
+    await expect(
+      database.session.findUniqueOrThrow({
+        where: { id: originalSession.id },
+        select: { tokenHash: true, pendingTokenHash: true, rotatedAt: true },
+      }),
+    ).resolves.toEqual({
+      tokenHash: originalTokenHash,
+      pendingTokenHash: stagedTokenHash,
+      rotatedAt: null,
+    });
+    const unchangedBrowserCookie = (await page.context().cookies()).find(
+      (cookie) => cookie.name === SESSION_POLICY_V1.cookieName,
+    );
+    expect(
+      unchangedBrowserCookie === undefined
+        ? null
+        : hashSessionToken(unchangedBrowserCookie.value),
+    ).toBe(originalTokenHash);
+
+    const refreshDuringNavigation = await holdNextSessionRefresh(page);
+    try {
+      await page.goto("/candidate/saved-jobs");
+      await refreshDuringNavigation.waitUntilBlocked();
+      await page.goto(`/jobs/${job.slug}`);
+      await expect(
+        page.getByRole("heading", { level: 1, name: job.title }),
+      ).toBeVisible();
+    } finally {
+      await refreshDuringNavigation.releaseAndRemove();
+    }
+    expect(sessionRefreshRequests).toBe(1);
+    const cookieAfterPageHide = (await page.context().cookies()).find(
+      (cookie) => cookie.name === SESSION_POLICY_V1.cookieName,
+    );
+    expect(
+      cookieAfterPageHide === undefined
+        ? null
+        : hashSessionToken(cookieAfterPageHide.value),
+    ).toBe(originalTokenHash);
+
+    const refreshResponses: string[] = [];
+    const observeRefreshResponse = (response: Response) => {
+      if (new URL(response.url()).pathname !== "/session/refresh") return;
+      const headers = response.headers();
+      refreshResponses.push(
+        `${response.status()}:${headers[SESSION_REFRESH_STATE_HEADER.toLowerCase()] ?? "NONE"}`,
+      );
+    };
+    page.on("response", observeRefreshResponse);
+    await page.goto("/candidate/saved-jobs");
+    await expect(page).toHaveURL(/\/candidate\/saved-jobs(?:\?|$)/u);
+    await expect
+      .poll(() => refreshResponses, { timeout: 15_000 })
+      .toEqual([
+        `204:${SESSION_REFRESH_STATES.staged}`,
+        `204:${SESSION_REFRESH_STATES.current}`,
+      ]);
+    page.off("response", observeRefreshResponse);
+
+    const currentBrowserCookie = (await page.context().cookies()).find(
+      (cookie) => cookie.name === SESSION_POLICY_V1.cookieName,
+    );
+    if (currentBrowserCookie === undefined) {
+      throw new Error("The confirmed candidate session cookie is missing.");
+    }
+    const currentTokenHash = hashSessionToken(currentBrowserCookie.value);
+    expect(currentTokenHash).toBe(stagedTokenHash);
+    expect(currentTokenHash).not.toBe(originalTokenHash);
+    await expect(
+      database.session.findUniqueOrThrow({
+        where: { id: originalSession.id },
+        select: {
+          tokenHash: true,
+          pendingTokenHash: true,
+          previousTokenHash: true,
+          rotatedAt: true,
+        },
+      }),
+    ).resolves.toEqual({
+      tokenHash: currentTokenHash,
+      pendingTokenHash: null,
+      previousTokenHash: originalTokenHash,
+      rotatedAt: expect.any(Date),
+    });
+    expect(sessionRefreshRequests).toBe(3);
+    await page.goBack();
+    await expect(
+      page.getByRole("heading", { level: 1, name: job.title }),
+    ).toBeVisible();
+    expect(sessionRefreshRequests).toBe(3);
 
     const saved = await database.savedJob.findUniqueOrThrow({
       where: {
@@ -101,6 +257,10 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
     // database uniqueness contract must still represent exactly one private
     // save, while privacy-safe analytics remain absent.
     await page.goto("/candidate/saved-jobs");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Gespeicherte Jobs" }),
+    ).toBeVisible();
+    expect(sessionRefreshRequests).toBe(3);
     const analyticsHold = await holdNextJobDetailAnalytics(page);
     try {
       await page.goto(`/jobs/${job.slug}`);
@@ -391,6 +551,72 @@ async function holdNextJobDetailAnalytics(page: Page) {
   });
 }
 
+async function holdNextSessionRefresh(page: Page) {
+  let blocked = false;
+  let releaseRequest: (() => void) | undefined;
+  let signalBlocked: (() => void) | undefined;
+  let signalHandlerCompleted: (() => void) | undefined;
+  const blockedRequest = new Promise<void>((resolveBlocked) => {
+    signalBlocked = resolveBlocked;
+  });
+  const released = new Promise<void>((resolveReleased) => {
+    releaseRequest = resolveReleased;
+  });
+  const handlerCompleted = new Promise<void>((resolveCompleted) => {
+    signalHandlerCompleted = resolveCompleted;
+  });
+  const routePattern = "**/session/refresh";
+  const handler = async (route: Route) => {
+    if (blocked) {
+      await route.continue();
+      return;
+    }
+    blocked = true;
+    signalBlocked?.();
+    await released;
+    try {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          "Cache-Control": "private, no-store, max-age=0",
+          [SESSION_REFRESH_STATE_HEADER]: SESSION_REFRESH_STATES.current,
+        },
+      });
+    } catch {
+      // Navigation may already have cancelled the old document's request. The
+      // browser observation asserts that this produces no uncaught page error.
+    } finally {
+      signalHandlerCompleted?.();
+    }
+  };
+  await page.route(routePattern, handler);
+
+  return Object.freeze({
+    async releaseAndRemove() {
+      releaseRequest?.();
+      if (blocked) await handlerCompleted;
+      await page.unroute(routePattern, handler);
+    },
+    async waitUntilBlocked() {
+      await new Promise<void>((resolveBlocked, rejectBlocked) => {
+        const timeout = setTimeout(
+          () =>
+            rejectBlocked(
+              new Error(
+                "Session refresh request did not start before navigation.",
+              ),
+            ),
+          10_000,
+        );
+        void blockedRequest.then(() => {
+          clearTimeout(timeout);
+          resolveBlocked();
+        });
+      });
+    },
+  });
+}
+
 async function assertAccessibleAndOperable(page: Page) {
   const accessibility = await assertCriticalAccessibility(page);
   expect(
@@ -399,4 +625,16 @@ async function assertAccessibleAndOperable(page: Page) {
   ).toBe(0);
   await assertNoViewportClipping(page);
   await assertKeyboardFocusVisible(page);
+}
+
+function sessionRotationKey(): SecretHandle<"SESSION_SECRET"> {
+  const encodedKey = process.env.SESSION_SECRET;
+  if (encodedKey === undefined || encodedKey.length === 0) {
+    throw new Error(
+      "SESSION_SECRET is required for the session rotation proof.",
+    );
+  }
+  return {
+    withValue: <T>(consumer: (value: string) => T) => consumer(encodedKey),
+  } as SecretHandle<"SESSION_SECRET">;
 }

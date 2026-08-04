@@ -3,16 +3,18 @@ import Link from "@/components/shared/app-link";
 import { cookies } from "next/headers";
 
 import { AuthCard, AuthTextLink } from "@/components/auth/auth-card";
+import { SessionRefresh } from "@/components/auth/session-refresh";
 import { InvitationAcceptance } from "@/components/employer/invitation-acceptance";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentAuthContext } from "@/lib/auth/current-user";
 import {
   INVITE_RESUME_COOKIE_POLICY_V1,
   INVITE_RESUME_PATH,
   readInviteResumeToken,
 } from "@/lib/auth/invite-resume";
 import { resolveRegistrationLegalGate } from "@/lib/auth/registration-legal-gate";
+import { getSessionRotationDueAt } from "@/lib/auth/session";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { inspectCompanyInvitation } from "@/lib/employer/team";
@@ -26,12 +28,17 @@ export const revalidate = 0;
 export const runtime = "nodejs";
 
 export default async function InviteResumePage() {
-  const [cookieStore, user] = await Promise.all([cookies(), getCurrentUser()]);
+  const [cookieStore, authContext] = await Promise.all([
+    cookies(),
+    getCurrentAuthContext(),
+  ]);
+  const user = authContext?.user ?? null;
+  const now = new Date();
   const environment = getServerEnvironment();
   const database = getDatabase();
   const token = readInviteResumeToken(
     cookieStore.get(INVITE_RESUME_COOKIE_POLICY_V1.cookieName)?.value,
-    new Date(),
+    now,
     environment.secrets.session,
   );
   const invitation =
@@ -41,42 +48,48 @@ export default async function InviteResumePage() {
           token,
           database,
           user,
-          new Date(),
+          now,
           environment.EXISTING_IDENTITY_INVITATION,
         );
 
   if (invitation.state === "READY") {
     return (
-      <AuthCard
-        eyebrow="Teameinladung"
-        title="Unternehmen beitreten"
-        description="Rolle, E-Mail und Sitzplatz werden beim Annehmen erneut atomar geprüft."
-      >
-        <InvitationAcceptance
-          authenticated
-          companyName={invitation.companyName}
-          intendedRole={invitation.intendedRole}
-          personaStepUp={
-            invitation.requiresPersonaStepUp
-              ? {
-                  companyId: invitation.companyId,
-                  invitationId: invitation.invitationId,
-                  securityHref:
-                    user === null
-                      ? "/login"
-                      : securityHrefForRole(user.role),
-                }
-              : undefined
-          }
-        />
-      </AuthCard>
+      <>
+        {authContext === null ? null : (
+          <SessionRefresh
+            initialDelayMilliseconds={Math.max(
+              0,
+              getSessionRotationDueAt(authContext.session).getTime() -
+                now.getTime(),
+            )}
+          />
+        )}
+        <AuthCard
+          eyebrow="Teameinladung"
+          title="Unternehmen beitreten"
+          description="Rolle, E-Mail und Sitzplatz werden beim Annehmen erneut atomar geprüft."
+        >
+          <InvitationAcceptance
+            authenticated
+            companyName={invitation.companyName}
+            intendedRole={invitation.intendedRole}
+            personaStepUp={
+              invitation.requiresPersonaStepUp
+                ? {
+                    companyId: invitation.companyId,
+                    invitationId: invitation.invitationId,
+                    securityHref:
+                      user === null ? "/login" : securityHrefForRole(user.role),
+                  }
+                : undefined
+            }
+          />
+        </AuthCard>
+      </>
     );
   }
   if (invitation.state === "AUTH_REQUIRED") {
-    const legalGate = await resolveRegistrationLegalGate(
-      environment,
-      database,
-    );
+    const legalGate = await resolveRegistrationLegalGate(environment, database);
     return (
       <AuthCard
         eyebrow="Teameinladung"
@@ -129,8 +142,7 @@ function stateMessage(state: string) {
     REVOKED: "Diese Einladung wurde widerrufen.",
     EXPIRED:
       "Diese Einladung ist abgelaufen. Bitte fordere einen neuen Link an.",
-    COMPANY_INACTIVE:
-      "Das Unternehmen kann aktuell keine Einladung annehmen.",
+    COMPANY_INACTIVE: "Das Unternehmen kann aktuell keine Einladung annehmen.",
     EMAIL_MISMATCH:
       "Diese Einladung ist nicht für das angemeldete Konto bestimmt.",
     ACCOUNT_TYPE_UNSUPPORTED:

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { PersonaContextSwitcher } from "@/components/auth/persona-context-switcher";
 import { CandidatePersonaCreation } from "@/components/auth/candidate-persona-creation";
+import { SessionRefresh } from "@/components/auth/session-refresh";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentPersonaContextOverview } from "@/lib/auth/persona-page";
 import { requireAuthenticatedPage } from "@/lib/auth/route-guards";
@@ -24,6 +25,9 @@ export default async function PortalSelectionPage() {
 
   return (
     <main className="page-shell py-10 sm:py-16">
+      <SessionRefresh
+        initialDelayMilliseconds={user.sessionRotationDelayMilliseconds}
+      />
       <div className="mx-auto grid max-w-2xl gap-6">
         <header className="grid gap-3">
           <Badge className="w-fit" variant="outline">
@@ -46,8 +50,7 @@ export default async function PortalSelectionPage() {
         />
 
         {overview.portals.some(
-          ({ portal, state }) =>
-            portal === "CANDIDATE" && state === "MISSING",
+          ({ portal, state }) => portal === "CANDIDATE" && state === "MISSING",
         ) ? (
           <CandidatePersonaCreation
             securityHref={securityHref(user.role)}
@@ -65,9 +68,7 @@ export default async function PortalSelectionPage() {
   );
 }
 
-function securityHref(
-  role: "CANDIDATE" | "EMPLOYER" | "RECRUITER" | "ADMIN",
-) {
+function securityHref(role: "CANDIDATE" | "EMPLOYER" | "RECRUITER" | "ADMIN") {
   if (role === "ADMIN") return "/admin/security/authenticators";
   if (role === "CANDIDATE") return "/candidate/settings/security";
   return "/employer/settings/security";

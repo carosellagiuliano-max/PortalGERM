@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   cookieDelete: vi.fn(),
-  sessionDelete: vi.fn(),
+  getServerEnvironment: vi.fn(),
+  sessionRevoke: vi.fn(),
   sessionFind: vi.fn(),
 }));
 
@@ -28,9 +29,7 @@ vi.mock("@/lib/auth/request-context", () => ({
   isValidAuthMutationOrigin: vi.fn(() => true),
 }));
 vi.mock("@/lib/config/env", () => ({
-  getServerEnvironment: vi.fn(() => ({
-    secrets: { keyrings: { AUDIT_IP_HASH_KEYS: [] } },
-  })),
+  getServerEnvironment: mocks.getServerEnvironment,
 }));
 vi.mock("@/lib/audit/log", () => ({
   writeBestEffortAudit: mocks.audit,
@@ -40,11 +39,13 @@ vi.mock("@/lib/audit/prisma-port", () => ({
 }));
 vi.mock("@/lib/db/client", () => ({
   getDatabase: vi.fn(() => ({
-    $transaction: async (operation: (transaction: unknown) => Promise<unknown>) =>
+    $transaction: async (
+      operation: (transaction: unknown) => Promise<unknown>,
+    ) =>
       operation({
         session: {
-          findUnique: mocks.sessionFind,
-          delete: mocks.sessionDelete,
+          findFirst: mocks.sessionFind,
+          updateMany: mocks.sessionRevoke,
         },
       }),
   })),
@@ -59,21 +60,37 @@ describe("logout session invalidation", () => {
       code: "AUDIT_WRITE_FAILED",
     });
     mocks.cookieDelete.mockReset();
-    mocks.sessionDelete.mockReset().mockResolvedValue({ id: "session" });
+    mocks.getServerEnvironment.mockReset().mockReturnValue({
+      secrets: { keyrings: { AUDIT_IP_HASH_KEYS: [] } },
+    });
+    mocks.sessionRevoke.mockReset().mockResolvedValue({ count: 1 });
     mocks.sessionFind.mockReset().mockResolvedValue({
       id: "06000000-0000-4000-8000-000000000097",
       userId: "06000000-0000-4000-8000-000000000096",
     });
   });
 
-  it("keeps the DB session deleted even when the best-effort audit sink fails", async () => {
+  it("keeps the DB session revoked even when the best-effort audit sink fails", async () => {
     await expect(logoutCurrentSession()).resolves.toBeUndefined();
 
-    expect(mocks.sessionDelete).toHaveBeenCalledOnce();
+    expect(mocks.sessionRevoke).toHaveBeenCalledOnce();
     expect(mocks.audit).toHaveBeenCalledOnce();
-    expect(mocks.sessionDelete.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mocks.sessionRevoke.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.audit.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
     );
+    expect(mocks.cookieDelete).toHaveBeenCalledWith("session");
+    expect(mocks.cookieDelete).toHaveBeenCalledWith("company_context");
+  });
+
+  it("revokes and clears the session even when audit configuration cannot load", async () => {
+    mocks.getServerEnvironment.mockImplementation(() => {
+      throw new Error("AUDIT_CONFIGURATION_UNAVAILABLE");
+    });
+
+    await expect(logoutCurrentSession()).resolves.toBeUndefined();
+
+    expect(mocks.sessionRevoke).toHaveBeenCalledOnce();
+    expect(mocks.audit).not.toHaveBeenCalled();
     expect(mocks.cookieDelete).toHaveBeenCalledWith("session");
     expect(mocks.cookieDelete).toHaveBeenCalledWith("company_context");
   });

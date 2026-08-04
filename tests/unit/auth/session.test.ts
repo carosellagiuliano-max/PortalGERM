@@ -2,13 +2,15 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { KeyringEntry } from "@/lib/config/env-schema";
+import type { KeyringEntry, SecretHandle } from "@/lib/config/env-schema";
 
 import {
   clearSessionCookie,
   createSession,
+  deriveRotatedSessionToken,
   destroySession,
   getSessionCookieOptions,
+  getSessionRotationDueAt,
   hashSessionToken,
   isSessionRotationDue,
   readSession,
@@ -31,6 +33,10 @@ class MemorySessionStore implements SessionStore {
     const record: SessionRecord = {
       ...input,
       id: `session-${this.counter}`,
+      pendingTokenHash: null,
+      pendingTokenExpiresAt: null,
+      previousTokenHash: null,
+      previousTokenExpiresAt: null,
       rotatedAt: null,
       revokedAt: null,
     };
@@ -38,10 +44,20 @@ class MemorySessionStore implements SessionStore {
     return record;
   }
 
-  async findByTokenHash(tokenHash: string) {
+  async findByTokenHash(tokenHash: string, now: Date) {
     return (
       [...this.records.values()].find(
-        (record) => record.tokenHash === tokenHash,
+        (record) =>
+          !record.revokedAt &&
+          record.expiresAt > now &&
+          record.absoluteExpiresAt > now &&
+          (record.tokenHash === tokenHash ||
+            (record.pendingTokenHash === tokenHash &&
+              record.pendingTokenExpiresAt !== null &&
+              record.pendingTokenExpiresAt > now) ||
+            (record.previousTokenHash === tokenHash &&
+              record.previousTokenExpiresAt !== null &&
+              record.previousTokenExpiresAt > now)),
       ) ?? null
     );
   }
@@ -51,27 +67,82 @@ class MemorySessionStore implements SessionStore {
     if (record) this.records.set(id, { ...record, expiresAt });
   }
 
-  async rotate(
+  async stageRotation(
     id: string,
-    oldTokenHash: string,
-    newTokenHash: string,
-    rotatedAt: Date,
+    currentTokenHash: string,
+    pendingTokenHash: string,
+    stagedAt: Date,
+    pendingTokenExpiresAt: Date,
     expiresAt: Date,
   ) {
     const record = this.records.get(id);
-    if (!record || record.tokenHash !== oldTokenHash || record.revokedAt)
-      return false;
-    this.records.set(id, {
+    if (
+      record?.tokenHash === currentTokenHash &&
+      record.pendingTokenHash === pendingTokenHash &&
+      record.pendingTokenExpiresAt !== null &&
+      record.pendingTokenExpiresAt > stagedAt &&
+      !record.revokedAt
+    ) {
+      return record;
+    }
+    if (
+      !record ||
+      record.tokenHash !== currentTokenHash ||
+      record.revokedAt ||
+      (record.pendingTokenHash !== null &&
+        record.pendingTokenExpiresAt !== null &&
+        record.pendingTokenExpiresAt > stagedAt)
+    ) {
+      return null;
+    }
+    const staged = {
       ...record,
-      tokenHash: newTokenHash,
-      rotatedAt,
+      pendingTokenHash,
+      pendingTokenExpiresAt,
       expiresAt,
-    });
-    return true;
+    };
+    this.records.set(id, staged);
+    return staged;
+  }
+
+  async promotePendingToken(
+    id: string,
+    pendingTokenHash: string,
+    promotedAt: Date,
+    previousTokenExpiresAt: Date,
+    expiresAt: Date,
+  ) {
+    const record = this.records.get(id);
+    if (
+      !record ||
+      record.pendingTokenHash !== pendingTokenHash ||
+      record.pendingTokenExpiresAt === null ||
+      record.pendingTokenExpiresAt <= promotedAt ||
+      record.revokedAt
+    ) {
+      return null;
+    }
+    const promoted = {
+      ...record,
+      tokenHash: pendingTokenHash,
+      pendingTokenHash: null,
+      pendingTokenExpiresAt: null,
+      previousTokenHash: record.tokenHash,
+      previousTokenExpiresAt,
+      rotatedAt: promotedAt,
+      expiresAt,
+    };
+    this.records.set(id, promoted);
+    return promoted;
   }
 
   async revokeByTokenHash(tokenHash: string, revokedAt: Date) {
-    const record = await this.findByTokenHash(tokenHash);
+    const record = [...this.records.values()].find(
+      (candidate) =>
+        candidate.tokenHash === tokenHash ||
+        candidate.pendingTokenHash === tokenHash ||
+        candidate.previousTokenHash === tokenHash,
+    );
     if (record) this.records.set(record.id, { ...record, revokedAt });
   }
 
@@ -85,6 +156,10 @@ class MemorySessionStore implements SessionStore {
 }
 
 const NOW = new Date("2026-07-19T10:00:00.000Z");
+const SESSION_ROTATION_KEY = {
+  withValue: <T>(consumer: (value: string) => T) =>
+    consumer(Buffer.alloc(32, 0x5a).toString("base64")),
+} as unknown as SecretHandle<"SESSION_SECRET">;
 const SESSION_IP_KEYRING = [
   {
     version: "audit-test-v1",
@@ -96,6 +171,20 @@ const SESSION_IP_KEYRING = [
 ] as unknown as readonly KeyringEntry<"AUDIT_IP_HASH_KEYS">[];
 
 describe("opaque session lifecycle", () => {
+  it("derives a stable domain-separated successor without exposing key material", () => {
+    const token = "A".repeat(43);
+    const successor = deriveRotatedSessionToken(token, SESSION_ROTATION_KEY);
+
+    expect(successor).toHaveLength(43);
+    expect(successor).toBe(
+      deriveRotatedSessionToken(token, SESSION_ROTATION_KEY),
+    );
+    expect(successor).not.toBe(token);
+    expect(
+      deriveRotatedSessionToken("B".repeat(43), SESSION_ROTATION_KEY),
+    ).not.toBe(successor);
+  });
+
   it("stores only a token hash and returns secure cookie metadata", async () => {
     const store = new MemorySessionStore();
     const created = await createSession(
@@ -194,7 +283,7 @@ describe("opaque session lifecycle", () => {
     ).toBeNull();
   });
 
-  it("rotates atomically and revokes old or destroyed tokens", async () => {
+  it("stages, promotes and briefly overlaps a rotated token", async () => {
     const store = new MemorySessionStore();
     const created = await createSession(
       { userId: "user-1", production: false },
@@ -210,6 +299,7 @@ describe("opaque session lifecycle", () => {
       rotateSession(created.token, {
         store,
         clock: { now: beforeRotation },
+        rotationKey: SESSION_ROTATION_KEY,
       }),
     ).resolves.toBeNull();
 
@@ -217,22 +307,113 @@ describe("opaque session lifecycle", () => {
       created.record.createdAt.getTime() +
         SESSION_POLICY_V1.rotationAgeMilliseconds,
     );
+    expect(getSessionRotationDueAt(created.record)).toEqual(later);
     expect(isSessionRotationDue(created.record, later)).toBe(true);
     const rotated = await rotateSession(created.token, {
       store,
       clock: { now: later },
+      rotationKey: SESSION_ROTATION_KEY,
     });
     expect(rotated).not.toBeNull();
+    if (rotated === null) throw new Error("Expected staged rotation.");
+    expect(rotated.record).toMatchObject({
+      tokenHash: hashSessionToken(created.token),
+      pendingTokenHash: hashSessionToken(rotated.token),
+      rotatedAt: null,
+    });
     expect(
       await readSession(created.token, { store, clock: { now: later } }),
-    ).toBeNull();
-    expect(
-      await readSession(rotated?.token, { store, clock: { now: later } }),
     ).not.toBeNull();
-    await destroySession(rotated?.token, { store, clock: { now: later } });
     expect(
-      await readSession(rotated?.token, { store, clock: { now: later } }),
+      await readSession(rotated.token, { store, clock: { now: later } }),
+    ).not.toBeNull();
+    expect(
+      await readSession(created.token, { store, clock: { now: later } }),
+    ).not.toBeNull();
+    const afterTransition = new Date(
+      later.getTime() + SESSION_POLICY_V1.rotationTransitionMilliseconds,
+    );
+    expect(
+      await readSession(created.token, {
+        store,
+        clock: { now: afterTransition },
+      }),
     ).toBeNull();
+    expect(
+      await readSession(rotated.token, {
+        store,
+        clock: { now: afterTransition },
+      }),
+    ).not.toBeNull();
+    await destroySession(rotated.token, {
+      store,
+      clock: { now: afterTransition },
+    });
+    expect(
+      await readSession(rotated.token, {
+        store,
+        clock: { now: afterTransition },
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps the current token valid when a staged rotation response is lost", async () => {
+    const store = new MemorySessionStore();
+    const created = await createSession(
+      { userId: "user-1", production: false },
+      { store, clock: { now: NOW } },
+    );
+    const dueAt = getSessionRotationDueAt(created.record);
+    const staged = await rotateSession(created.token, {
+      store,
+      clock: { now: dueAt },
+      rotationKey: SESSION_ROTATION_KEY,
+    });
+    expect(staged).not.toBeNull();
+    if (staged === null) throw new Error("Expected staged rotation.");
+    const repeated = await rotateSession(created.token, {
+      store,
+      clock: { now: new Date(dueAt.getTime() + 1) },
+      rotationKey: SESSION_ROTATION_KEY,
+    });
+    expect(repeated?.token).toBe(staged.token);
+    expect(repeated?.record.pendingTokenHash).toBe(
+      staged.record.pendingTokenHash,
+    );
+
+    const afterTransitionWindow = new Date(
+      dueAt.getTime() + SESSION_POLICY_V1.rotationTransitionMilliseconds + 1,
+    );
+    expect(staged.record.pendingTokenExpiresAt).toEqual(
+      staged.record.expiresAt,
+    );
+    await expect(
+      readSession(created.token, {
+        store,
+        clock: { now: afterTransitionWindow },
+      }),
+    ).resolves.not.toBeNull();
+  });
+
+  it("revokes a staged successor when logout races with rotation", async () => {
+    const store = new MemorySessionStore();
+    const created = await createSession(
+      { userId: "user-1", production: false },
+      { store, clock: { now: NOW } },
+    );
+    const dueAt = getSessionRotationDueAt(created.record);
+    const staged = await rotateSession(created.token, {
+      store,
+      clock: { now: dueAt },
+      rotationKey: SESSION_ROTATION_KEY,
+    });
+    expect(staged).not.toBeNull();
+    if (staged === null) throw new Error("Expected staged rotation.");
+
+    await destroySession(created.token, { store, clock: { now: dueAt } });
+    await expect(
+      readSession(staged.token, { store, clock: { now: dueAt } }),
+    ).resolves.toBeNull();
   });
 
   it("reads, writes and clears the canonical cookie through a narrow port", async () => {

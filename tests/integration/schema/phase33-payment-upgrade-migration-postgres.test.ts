@@ -9,6 +9,9 @@ type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
 const PRE_PHASE33_MIGRATION = "20260730120000_phase_31_commercial_validation";
 const LEGACY_EVENT_ID = "evt_phase33_upgrade_legacy";
+const LEGACY_USER_ID = "33000000-0000-4000-8000-000000000001";
+const LEGACY_SESSION_ID = "33000000-0000-4000-8000-000000000002";
+const LEGACY_SESSION_HASH = "1".repeat(64);
 
 let migrated: MigratedDatabase | undefined;
 
@@ -56,6 +59,30 @@ describe("Phase-33 additive payment upgrade migration", () => {
       `,
       [LEGACY_EVENT_ID, "a".repeat(64), "b".repeat(64)],
     );
+    await fixture.pool.query(
+      `
+        INSERT INTO "User" (
+          "id", "email", "emailNormalized", "role", "updatedAt"
+        ) VALUES (
+          $1, 'phase33-session-upgrade@example.test',
+          'phase33-session-upgrade@example.test', 'CANDIDATE',
+          '2026-07-31T10:00:00.000Z'
+        )
+      `,
+      [LEGACY_USER_ID],
+    );
+    await fixture.pool.query(
+      `
+        INSERT INTO "Session" (
+          "id", "userId", "tokenHash", "createdAt", "expiresAt",
+          "absoluteExpiresAt"
+        ) VALUES (
+          $2, $1, $3, '2026-07-31T10:00:00.000Z',
+          '2026-08-07T10:00:00.000Z', '2026-08-30T10:00:00.000Z'
+        )
+      `,
+      [LEGACY_USER_ID, LEGACY_SESSION_ID, LEGACY_SESSION_HASH],
+    );
 
     const migrationPath = resolve(
       process.cwd(),
@@ -82,20 +109,31 @@ describe("Phase-33 additive payment upgrade migration", () => {
       event_count: string;
       payment_mode: string | null;
       price_binding: string | null;
+      session_count: string;
+      session_pending_column: boolean;
     }>(
       `
         SELECT
           (SELECT COUNT(*)::text FROM "ProviderEventInbox" WHERE "providerEventId" = $1) AS event_count,
           to_regtype('"PaymentRuntimeMode"')::text AS payment_mode,
-          to_regclass('"PaymentPriceBinding"')::text AS price_binding
+          to_regclass('"PaymentPriceBinding"')::text AS price_binding,
+          (SELECT COUNT(*)::text FROM "Session" WHERE "id" = $2) AS session_count,
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'Session'
+              AND column_name = 'pendingTokenHash'
+          ) AS session_pending_column
       `,
-      [LEGACY_EVENT_ID],
+      [LEGACY_EVENT_ID, LEGACY_SESSION_ID],
     );
     expect(afterInterruptedDeploy.rows).toEqual([
       {
         event_count: "1",
         payment_mode: null,
         price_binding: null,
+        session_count: "1",
+        session_pending_column: false,
       },
     ]);
 
@@ -148,6 +186,126 @@ describe("Phase-33 additive payment upgrade migration", () => {
     });
     expect(installed.rows[0]!.event_kind).toContain("RENEWAL_PAID");
     expect(installed.rows[0]!.event_kind).toContain("RENEWAL_FAILED");
+
+    const upgradedSession = await fixture.pool.query<{
+      pendingTokenExpiresAt: Date | null;
+      pendingTokenHash: string | null;
+      previousTokenExpiresAt: Date | null;
+      previousTokenHash: string | null;
+      tokenHash: string;
+    }>(
+      `
+        SELECT "tokenHash", "pendingTokenHash", "pendingTokenExpiresAt",
+               "previousTokenHash", "previousTokenExpiresAt"
+        FROM "Session"
+        WHERE "id" = $1
+      `,
+      [LEGACY_SESSION_ID],
+    );
+    expect(upgradedSession.rows).toEqual([
+      {
+        tokenHash: LEGACY_SESSION_HASH,
+        pendingTokenHash: null,
+        pendingTokenExpiresAt: null,
+        previousTokenHash: null,
+        previousTokenExpiresAt: null,
+      },
+    ]);
+
+    const sessionBackstops = await fixture.pool.query<{ name: string }>(`
+      SELECT conname AS name
+      FROM pg_constraint
+      WHERE conrelid = '"Session"'::regclass
+        AND conname IN (
+          'session_current_token_hash_shape_check',
+          'session_pending_token_shape_check',
+          'session_previous_token_shape_check'
+        )
+      UNION ALL
+      SELECT indexname AS name
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'Session'
+        AND indexname IN (
+          'session_pending_token_hash_key',
+          'session_previous_token_hash_key',
+          'Session_pendingTokenHash_pendingTokenExpiresAt_idx',
+          'Session_previousTokenHash_previousTokenExpiresAt_idx'
+        )
+      ORDER BY name
+    `);
+    expect(sessionBackstops.rows.map(({ name }) => name)).toEqual([
+      "Session_pendingTokenHash_pendingTokenExpiresAt_idx",
+      "Session_previousTokenHash_previousTokenExpiresAt_idx",
+      "session_current_token_hash_shape_check",
+      "session_pending_token_hash_key",
+      "session_pending_token_shape_check",
+      "session_previous_token_hash_key",
+      "session_previous_token_shape_check",
+    ]);
+
+    await expect(
+      fixture.pool.query(
+        `UPDATE "Session" SET "pendingTokenHash" = $2 WHERE "id" = $1`,
+        [LEGACY_SESSION_ID, "2".repeat(64)],
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
+    await expect(
+      fixture.pool.query(
+        `
+          UPDATE "Session"
+          SET "pendingTokenHash" = "tokenHash",
+              "pendingTokenExpiresAt" = "expiresAt"
+          WHERE "id" = $1
+        `,
+        [LEGACY_SESSION_ID],
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
+    await expect(
+      fixture.pool.query(
+        `
+          UPDATE "Session"
+          SET "pendingTokenHash" = $2,
+              "pendingTokenExpiresAt" = "absoluteExpiresAt"
+          WHERE "id" = $1
+        `,
+        [LEGACY_SESSION_ID, "2".repeat(64)],
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
+
+    await fixture.pool.query(
+      `
+        UPDATE "Session"
+        SET "pendingTokenHash" = $2,
+            "pendingTokenExpiresAt" = "expiresAt"
+        WHERE "id" = $1
+      `,
+      [LEGACY_SESSION_ID, "2".repeat(64)],
+    );
+    await fixture.pool.query(
+      `
+        INSERT INTO "Session" (
+          "id", "userId", "tokenHash", "createdAt", "expiresAt",
+          "absoluteExpiresAt"
+        ) VALUES (
+          '33000000-0000-4000-8000-000000000003', $1, $2,
+          '2026-07-31T10:00:00.000Z', '2026-08-07T10:00:00.000Z',
+          '2026-08-30T10:00:00.000Z'
+        )
+      `,
+      [LEGACY_USER_ID, "3".repeat(64)],
+    );
+    await expect(
+      fixture.pool.query(
+        `
+          UPDATE "Session"
+          SET "pendingTokenHash" = $1,
+              "pendingTokenExpiresAt" = "expiresAt"
+          WHERE "id" = '33000000-0000-4000-8000-000000000003'
+        `,
+        ["2".repeat(64)],
+      ),
+    ).rejects.toMatchObject({ code: "23505" });
 
     const orderingBackstops = await fixture.pool.query<{ name: string }>(`
       SELECT conname AS name

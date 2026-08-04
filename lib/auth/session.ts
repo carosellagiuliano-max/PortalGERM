@@ -1,6 +1,6 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 
-import type { KeyringEntry } from "@/lib/config/env-schema";
+import type { KeyringEntry, SecretHandle } from "@/lib/config/env-schema";
 import { hashIpWithFirstKey } from "@/lib/utils/hash";
 import type { PortalContextV2 } from "@/lib/auth/persona-policy";
 
@@ -9,6 +9,7 @@ export const SESSION_POLICY_V1 = Object.freeze({
   idleTtlMilliseconds: 7 * 24 * 60 * 60 * 1_000,
   absoluteTtlMilliseconds: 30 * 24 * 60 * 60 * 1_000,
   rotationAgeMilliseconds: 24 * 60 * 60 * 1_000,
+  rotationTransitionMilliseconds: 2 * 60 * 1_000,
   tokenBytes: 32,
 });
 
@@ -16,6 +17,10 @@ export type SessionRecord = Readonly<{
   id: string;
   userId: string;
   tokenHash: string;
+  pendingTokenHash: string | null;
+  pendingTokenExpiresAt: Date | null;
+  previousTokenHash: string | null;
+  previousTokenExpiresAt: Date | null;
   expiresAt: Date;
   absoluteExpiresAt: Date;
   createdAt: Date;
@@ -31,20 +36,34 @@ export type SessionRecord = Readonly<{
 
 export type SessionCreateRecord = Omit<
   SessionRecord,
-  "id" | "rotatedAt" | "revokedAt"
+  | "id"
+  | "pendingTokenHash"
+  | "pendingTokenExpiresAt"
+  | "previousTokenHash"
+  | "previousTokenExpiresAt"
+  | "rotatedAt"
+  | "revokedAt"
 >;
 
 export interface SessionStore {
   create(input: SessionCreateRecord): Promise<SessionRecord>;
-  findByTokenHash(tokenHash: string): Promise<SessionRecord | null>;
+  findByTokenHash(tokenHash: string, now: Date): Promise<SessionRecord | null>;
   touch(id: string, expiresAt: Date): Promise<void>;
-  rotate(
+  stageRotation(
     id: string,
-    oldTokenHash: string,
-    newTokenHash: string,
-    rotatedAt: Date,
+    currentTokenHash: string,
+    pendingTokenHash: string,
+    stagedAt: Date,
+    pendingTokenExpiresAt: Date,
     expiresAt: Date,
-  ): Promise<boolean>;
+  ): Promise<SessionRecord | null>;
+  promotePendingToken(
+    id: string,
+    pendingTokenHash: string,
+    promotedAt: Date,
+    previousTokenExpiresAt: Date,
+    expiresAt: Date,
+  ): Promise<SessionRecord | null>;
   revokeByTokenHash(tokenHash: string, revokedAt: Date): Promise<void>;
   revokeAllForUser(userId: string, revokedAt: Date): Promise<void>;
 }
@@ -94,6 +113,29 @@ export function hashSessionToken(token: string): string {
     throw new TypeError("Session token is malformed.");
   }
   return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+export function activeSessionTokenHashWhere(tokenHash: string, now: Date) {
+  if (!/^[a-f0-9]{64}$/u.test(tokenHash)) {
+    throw new TypeError("Session token hash is malformed.");
+  }
+  assertValidDate(now, "now");
+  return {
+    revokedAt: null,
+    expiresAt: { gt: now },
+    absoluteExpiresAt: { gt: now },
+    OR: [
+      { tokenHash },
+      {
+        pendingTokenHash: tokenHash,
+        pendingTokenExpiresAt: { gt: now },
+      },
+      {
+        previousTokenHash: tokenHash,
+        previousTokenExpiresAt: { gt: now },
+      },
+    ],
+  };
 }
 
 export function getSessionCookieOptions(
@@ -169,16 +211,41 @@ export async function readSession(
     return null;
   }
   const nowMs = dependencies.clock.now.getTime();
-  const record = await dependencies.store.findByTokenHash(
-    hashSessionToken(token),
+  const presentedTokenHash = hashSessionToken(token);
+  let record = await dependencies.store.findByTokenHash(
+    presentedTokenHash,
+    dependencies.clock.now,
   );
-  if (
-    record === null ||
-    record.revokedAt !== null ||
-    nowMs >= record.expiresAt.getTime() ||
-    nowMs >= record.absoluteExpiresAt.getTime()
-  ) {
+  if (!isActiveSessionRecord(record, nowMs)) {
     return null;
+  }
+
+  if (record.pendingTokenHash === presentedTokenHash) {
+    const expiresAt = new Date(
+      Math.min(
+        nowMs + SESSION_POLICY_V1.idleTtlMilliseconds,
+        record.absoluteExpiresAt.getTime(),
+      ),
+    );
+    record = await dependencies.store.promotePendingToken(
+      record.id,
+      presentedTokenHash,
+      dependencies.clock.now,
+      new Date(
+        Math.min(
+          nowMs + SESSION_POLICY_V1.rotationTransitionMilliseconds,
+          record.absoluteExpiresAt.getTime(),
+        ),
+      ),
+      expiresAt,
+    );
+    if (record === null) {
+      record = await dependencies.store.findByTokenHash(
+        presentedTokenHash,
+        dependencies.clock.now,
+      );
+      if (!isActiveSessionRecord(record, nowMs)) return null;
+    }
   }
 
   const extendedIdle = Math.min(
@@ -192,20 +259,36 @@ export async function readSession(
   return record;
 }
 
+function isActiveSessionRecord(
+  record: SessionRecord | null,
+  nowMilliseconds: number,
+): record is SessionRecord {
+  return (
+    record !== null &&
+    record.revokedAt === null &&
+    nowMilliseconds < record.expiresAt.getTime() &&
+    nowMilliseconds < record.absoluteExpiresAt.getTime()
+  );
+}
+
 export async function rotateSession(
   token: string,
-  dependencies: Readonly<{ store: SessionStore; clock: SessionClock }>,
+  dependencies: Readonly<{
+    store: SessionStore;
+    clock: SessionClock;
+    rotationKey: SecretHandle<"SESSION_SECRET">;
+  }>,
 ): Promise<Readonly<{ token: string; record: SessionRecord }> | null> {
   const record = await readSession(token, dependencies);
+  const currentTokenHash = hashSessionToken(token);
   if (
     record === null ||
+    record.tokenHash !== currentTokenHash ||
     !isSessionRotationDue(record, dependencies.clock.now)
   ) {
     return null;
   }
-  const nextToken = randomBytes(SESSION_POLICY_V1.tokenBytes).toString(
-    "base64url",
-  );
+  const nextToken = deriveRotatedSessionToken(token, dependencies.rotationKey);
   const nextHash = hashSessionToken(nextToken);
   const expiresAt = new Date(
     Math.min(
@@ -213,24 +296,34 @@ export async function rotateSession(
       record.absoluteExpiresAt.getTime(),
     ),
   );
-  const rotated = await dependencies.store.rotate(
+  const stagedAt = dependencies.clock.now;
+  const staged = await dependencies.store.stageRotation(
     record.id,
-    record.tokenHash,
+    currentTokenHash,
     nextHash,
-    dependencies.clock.now,
+    stagedAt,
+    expiresAt,
     expiresAt,
   );
-  return rotated
+  return staged
     ? Object.freeze({
         token: nextToken,
-        record: Object.freeze({
-          ...record,
-          tokenHash: nextHash,
-          rotatedAt: new Date(dependencies.clock.now),
-          expiresAt,
-        }),
+        record: staged,
       })
     : null;
+}
+
+export function deriveRotatedSessionToken(
+  token: string,
+  rotationKey: SecretHandle<"SESSION_SECRET">,
+): string {
+  if (token.length < 32) throw new TypeError("Session token is malformed.");
+  return rotationKey.withValue((encodedKey) =>
+    createHmac("sha256", Buffer.from(encodedKey, "base64"))
+      .update("SwissTalentHub/session-rotation/v1\0", "utf8")
+      .update(token, "utf8")
+      .digest("base64url"),
+  );
 }
 
 export function isSessionRotationDue(
@@ -238,11 +331,16 @@ export function isSessionRotationDue(
   now: Date,
 ): boolean {
   assertValidDate(now, "now");
+  return now.getTime() >= getSessionRotationDueAt(record).getTime();
+}
+
+export function getSessionRotationDueAt(
+  record: Pick<SessionRecord, "createdAt" | "rotatedAt">,
+): Date {
   const rotationBase = record.rotatedAt ?? record.createdAt;
   assertValidDate(rotationBase, "session rotation timestamp");
-  return (
-    now.getTime() >=
-    rotationBase.getTime() + SESSION_POLICY_V1.rotationAgeMilliseconds
+  return new Date(
+    rotationBase.getTime() + SESSION_POLICY_V1.rotationAgeMilliseconds,
   );
 }
 

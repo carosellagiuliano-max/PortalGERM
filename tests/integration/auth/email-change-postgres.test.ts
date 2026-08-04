@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -14,12 +7,15 @@ import {
   requestLoginEmailChange,
 } from "@/lib/auth/email-change-service";
 import { consumeEmailVerification } from "@/lib/auth/email-verification-service";
+import { createPrismaSessionStore } from "@/lib/auth/session-store";
+import {
+  readSession,
+  rotateSession,
+  SESSION_POLICY_V1,
+} from "@/lib/auth/session";
 import { createVerificationToken } from "@/lib/auth/verification-token";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
-import {
-  createDatabaseClient,
-  type DatabaseClient,
-} from "@/lib/db/factory";
+import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 import {
   PHASE20_NOW,
@@ -134,16 +130,12 @@ describe.sequential("Phase 20 login e-mail change", () => {
       await db().user.findUniqueOrThrow({ where: { id: user.id } }),
     ).toMatchObject({ emailNormalized: oldEmail, emailAddressEpoch: 1 });
 
-    const completed = await consumeEmailVerification(
-      token,
-      initiating.token,
-      {
-        database: db(),
-        environment: env(),
-        request: phase20Request(5),
-        now: new Date(PHASE20_NOW.getTime() + 2_000),
-      },
-    );
+    const completed = await consumeEmailVerification(token, initiating.token, {
+      database: db(),
+      environment: env(),
+      request: phase20Request(5),
+      now: new Date(PHASE20_NOW.getTime() + 2_000),
+    });
     expect(completed).toMatchObject({
       ok: true,
       status: "VERIFIED",
@@ -369,6 +361,94 @@ describe.sequential("Phase 20 login e-mail change", () => {
     });
     expect(pending.cancelledAt).not.toBeNull();
     expect(pending.challenge.supersededAt).not.toBeNull();
+  });
+
+  it("keeps e-mail verification bound to one session across pending promotion and rejects the expired predecessor", async () => {
+    const oldEmail = "email-change-lineage@example.test";
+    const newEmail = "email-change-lineage-target@example.test";
+    const user = await createPhase20User(db(), {
+      email: oldEmail,
+      verified: true,
+    });
+    const issued = await issuePhase20Session(
+      db(),
+      env(),
+      user.id,
+      phase20Request(60),
+    );
+    const dueAt = new Date(
+      PHASE20_NOW.getTime() + SESSION_POLICY_V1.rotationAgeMilliseconds,
+    );
+    const staged = await rotateSession(issued.token, {
+      store: createPrismaSessionStore(db()),
+      clock: { now: dueAt },
+      rotationKey: env().secrets.session,
+    });
+    if (staged === null) throw new Error("Expected a staged session token.");
+
+    await expect(
+      requestLoginEmailChange(
+        {
+          userId: user.id,
+          sessionToken: staged.token,
+          targetEmail: newEmail,
+          password: PHASE20_PASSWORD,
+        },
+        {
+          database: db(),
+          environment: env(),
+          request: phase20Request(61),
+          now: new Date(dueAt.getTime() + 100),
+        },
+      ),
+    ).resolves.toMatchObject({ ok: true, status: "PENDING" });
+    const pending = await db().pendingEmailChange.findFirstOrThrow({
+      where: { userId: user.id },
+      include: { challenge: true },
+    });
+    expect(pending.initiatedBySessionId).toBe(issued.record.id);
+
+    await expect(
+      readSession(staged.token, {
+        store: createPrismaSessionStore(db()),
+        clock: { now: new Date(dueAt.getTime() + 200) },
+      }),
+    ).resolves.toMatchObject({ id: issued.record.id });
+    const previousBoundary = new Date(
+      dueAt.getTime() + 200 + SESSION_POLICY_V1.rotationTransitionMilliseconds,
+    );
+    await expect(
+      cancelLoginEmailChange(
+        { userId: user.id, sessionToken: issued.token },
+        {
+          database: db(),
+          environment: env(),
+          request: phase20Request(62),
+          now: previousBoundary,
+        },
+      ),
+    ).resolves.toEqual({ ok: false });
+
+    const verificationToken = createVerificationToken(
+      pending.challenge.id,
+      pending.challenge.purpose,
+      pending.challenge.addressEpoch,
+      env().secrets.session,
+    );
+    await expect(
+      consumeEmailVerification(verificationToken, staged.token, {
+        database: db(),
+        environment: env(),
+        request: phase20Request(63),
+        now: new Date(previousBoundary.getTime() + 1),
+      }),
+    ).resolves.toMatchObject({ ok: true, status: "VERIFIED" });
+    await expect(
+      db().user.findUniqueOrThrow({ where: { id: user.id } }),
+    ).resolves.toMatchObject({
+      emailNormalized: newEmail,
+      emailAddressEpoch: 2,
+    });
   });
 });
 
