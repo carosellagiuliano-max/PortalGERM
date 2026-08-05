@@ -202,15 +202,15 @@ Diese Punkte dürfen nicht durch einen lokalen Test auf `[x]` wechseln:
 
 ### Zusätzlich vor einem technischen Phase-33-Readinessurteil
 
-- [ ] Notification-Verschlüsselung und Empfänger-Korrelation verwenden
+- [x] Notification-Verschlüsselung und Empfänger-Korrelation verwenden
       getrennte Delivery-AES-/Recipient-HMAC-Keyrings mit vollständigem
       Key-Version-Inventar; Resend API und Webhook binden unabhängige
       Secret-Versionen.
-- [ ] Der exact-candidate-G4 belegt normalen 23-h- und maximalen 31-d-
+- [x] Der exact-candidate-G4 belegt normalen 23-h- und maximalen 31-d-
       Empfänger-/Request-Wipe sowie exakt `400 × 24 h` bis zur one-way Attempt-
       PII/Receipt/Digest-Kompaktion bei unveränderlicher nicht-PII Auditkette;
       die Minuten-Maintenance läuft providerunabhängig auch nach Revoke.
-- [ ] Network/5xx/408/malformed-2xx/concurrent-idempotency endet nach bounded
+- [x] Network/5xx/408/malformed-2xx/concurrent-idempotency endet nach bounded
       Same-Key-Retry `PAUSED` und wird manuell reconciliert, nie blind erneut
       gesendet oder dead-lettered. Resend-Webhooks sperren die exakte
       Activation im selben TX; Inbox/Suppression sind append-only/monoton.
@@ -248,6 +248,7 @@ AVG-/SECO-, Tax-/Finance-, Operations- oder Stagingfreigabe.
 | Staging oder externe Gates fehlen                                    | **nicht** „pilot-ready“ und **nicht** „production-ready“                                                                                         |
 | ein P0-, Security-, Privacy-, Tenant-, Backup- oder Cleanup-Gate rot | Phase 18 bleibt offen                                                                                                                            |
 
-Der Phase-33-Arbeitsbaum ist derzeit `IN_PROGRESS`; Technik und Quality sind
-`PENDING`. Die zusätzliche Zeile ist eine zulässige spätere Urteilsform, keine
-vorweggenommene Evidence oder Checkbox-Freigabe.
+Phase 33 ist technisch `COMPLETED`, Quality ist `PASSED`; die
+[Phase-33-Evidence](./evidence/2026-08-05-phase-33.md) belegt beide zulässigen
+Technikurteile. Die weiterhin offenen allgemeinen und externen Checkboxen
+verhindern unverändert jede Production-Aktivierung.

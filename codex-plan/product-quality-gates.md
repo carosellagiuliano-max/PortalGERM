@@ -337,7 +337,7 @@ Use one record for every important page before checking its route deliverable:
 - [ ] Accept, decline, exact 14-day expiry, pending duplicate, 30-day recontact, Company trust revocation and no-auto-refund/Admin exact-reversal policies are explicit and clock/DB tested.
 - [ ] Reveal identifies recipient Company, accepted request/conversation, one grant per accepted request, closed append-only `RevealField` rows and immutable notice/confirmation evidence. Each field stores its exact confirmed value as an AES-256-GCM encrypted, versioned, typed snapshot under a dedicated PII keyring; Radar reads decrypt that snapshot only after the current trust/grant guard and never reread live profile identity or generic JSON. Employer cannot trigger it.
 - [ ] Candidate revocation is idempotent and blocks the next identity read; opt-out/suspension cancels pending requests under the canonical transaction, cancelled requests are read-only/reportable, and already accepted history is retained.
-- [ ] EXPORT/DELETE/CORRECT intake is bounded and owner-scoped; Admin privacy routes use named read/verify/process capabilities, two independent action-/resource-bound approvals and the closed status/command matrix. Local/mock remains visibly synthetic; Phase 33 additionally exercises the real encrypted Approval→WorkItem→Worker→Artifact/Outbox contract against isolated production-contract storage without claiming external processing.
+- [x] EXPORT/DELETE/CORRECT intake is bounded and owner-scoped; Admin privacy routes use named read/verify/process capabilities, two independent action-/resource-bound approvals and the closed status/command matrix. Local/mock remains visibly synthetic; Phase 33 additionally exercises the real encrypted Approval→WorkItem→Worker→Artifact/Outbox contract against isolated production-contract storage without claiming external processing.
 - [ ] Candidate UI explains that already delivered identity cannot technically be taken back.
 - [ ] Export/delete/retention behavior is honestly classified as local mock,
       `CONTRACT_ONLY` or externally reviewed/activated; no contract stub is labelled
@@ -345,18 +345,22 @@ Use one record for every important page before checking its route deliverable:
 
 ## Release and Operations Gate
 
-- [ ] Clean clone, install, migration, seed, lint, typecheck, all tests and production build pass on the release commit.
+Die in diesem Dokument geschlossenen technischen Phase-33-Checkboxen sind im
+[Phase-33-Evidence-Record](./evidence/2026-08-05-phase-33.md) auf demselben
+Candidate belegt. Offene externe Checkboxen bleiben davon unberührt.
+
+- [x] Clean clone, install, migration, seed, lint, typecheck, all tests and production build pass on the release commit.
 - [ ] CI, Preview, Staging and Production have separate secrets/databases and fail-fast env validation.
-- [ ] Private pages are both `noindex` and no-store/dynamic as required.
-- [ ] Live/readiness checks, structured redacted logs and correlation IDs work.
+- [x] Private pages are both `noindex` and no-store/dynamic as required.
+- [x] Live/readiness checks, structured redacted logs and correlation IDs work.
 - [ ] Alerts/runbooks cover auth, database, ledger/payment, import and suspected cross-tenant/privacy incidents.
-- [ ] Unattended public self-service has a durable worker/outbox with lease/singleton, idempotency, retry/backoff, dead-letter, monitoring and restart/concurrency/failure-recovery evidence.
+- [x] Unattended public self-service has a durable worker/outbox with lease/singleton, idempotency, retry/backoff, dead-letter, monitoring and restart/concurrency/failure-recovery evidence.
 - [ ] Backup retention and business-approved RPO/RTO exist; an isolated restore was actually tested.
-- [ ] Dependency, license and secret scans have no unresolved critical finding.
+- [x] Dependency, license and secret scans have no unresolved critical finding.
 - [ ] Legal/privacy/tax/provider Go-live blockers are named and signed off separately from technical tests.
-- [ ] Production accepts no Mock/Sandbox/Demo/`.invalid`, local-filesystem or
+- [x] Production accepts no Mock/Sandbox/Demo/`.invalid`, local-filesystem or
       secret-only provider activation and has no Live→Mock fallback.
-- [ ] Phase-33 E-Mail-Evidence trennt Delivery-AES-/Recipient-HMAC-Keyring und
+- [x] Phase-33 E-Mail-Evidence trennt Delivery-AES-/Recipient-HMAC-Keyring und
       Resend-API-/Webhook-Secret-Version samt vollständigem Key-Version-
       Inventar; belegt normalen 23-h-Wipe, AES-v2 maximal 31 d und exakt
       `400 × 24 h` bis zur one-way Attempt-PII/Receipt/Digest-Kompaktion bei
@@ -364,20 +368,20 @@ Use one record for every important page before checking its route deliverable:
       Provider-Revoke. Unknown Outcomes enden nach bounded Same-Key-Retry
       `PAUSED`/manuell reconciliert, nie Blind-Resend/Dead Letter; Webhook-
       Activation ist im TX gelockt und Inbox/Suppression sind monoton.
-- [ ] A pinned, isolated `local/mock` profile preserves labelled demo behavior
+- [x] A pinned, isolated `local/mock` profile preserves labelled demo behavior
       without external effects.
-- [ ] A pinned, isolated `production-contract` profile runs the built
+- [x] A pinned, isolated `production-contract` profile runs the built
       Standalone/OCI app, separate worker, scheduler, PostgreSQL 16, TLS proxy,
       S3-compatible storage, scanner and provider HTTP stubs with healthchecks,
       network boundaries and failure injection. Stubreceipts are marked
       `CONTRACT_ONLY`, never Live evidence.
-- [ ] Historical migration SQL SHA-256 values are identical before/after;
+- [x] Historical migration SQL SHA-256 values are identical before/after;
       Fresh/Upgrade/Legacy/Partial/Restart/Concurrency states are tested with
       `migrate deploy`, never `db push` as evidence.
-- [ ] Final candidate binds Tree, Lockfile, migration, runtime/feature/provider/
+- [x] Final candidate binds Tree, Lockfile, migration, runtime/feature/provider/
       worker inventories, configuration, Standalone/OCI artifact and Evidence
       digests; any post-freeze fix restarts the complete gate.
-- [ ] Chromium, Firefox and WebKit cover launch-critical journeys on Desktop,
+- [x] Chromium, Firefox and WebKit cover launch-critical journeys on Desktop,
       360 px and critical 320 px with Keyboard, focus, Zoom/Reflow, Reduced
       Motion and Axe; Fail, unexplained Skip, Retry, Console/Network error,
       cross-tenant leak and Secret/PII finding are all zero.

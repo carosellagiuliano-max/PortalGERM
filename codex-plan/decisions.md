@@ -429,8 +429,9 @@ Referenced by: Phase 19–32,
 
 **Status:** accepted and technically implemented for Phase 20; activation
 remains `DISABLED` beziehungsweise isolated `SANDBOX`. Der additive
-Phase-33-Provider-/Retentionvertrag liegt im Arbeitsbaum vor, sein
-exact-candidate-G4-/Quality-Nachweis ist `PENDING`. Supersedes ADR-014 only for
+Phase-33-Provider-/Retentionvertrag ist auf Candidate `d5f4646…` technisch
+`PASSED`; sein exact-candidate-G4 ist in der
+[Phase-33-Evidence](./evidence/2026-08-05-phase-33.md) gebunden. Supersedes ADR-014 only for
 the explicitly approved Phase-20/23 scope. The historical Mock-MVP decision
 remains true for nicht umgestellte Altpfade.
 
@@ -950,9 +951,9 @@ Referenced by: Phase 24/25/29/30/31/32;
 
 ## ADR-043 — Production-Contract prüft Live-Adaptercode, ist aber keine Live-Evidence
 
-**Status:** accepted als Phase-33-Architekturvertrag; die Implementierung liegt
-im Phase-33-Arbeitsbaum vor, ihr unveränderlicher Candidate-/Quality-Nachweis
-ist `PENDING`. Production-Aktivierung bleibt
+**Status:** accepted und technisch `PASSED`; der unveränderliche Candidate-
+und Quality-Nachweis steht in der
+[Phase-33-Evidence](./evidence/2026-08-05-phase-33.md). Production-Aktivierung bleibt
 `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`.
 
 **Decision:** Phase 33 führt zwei strikt getrennte lokale Profile. `local/mock`

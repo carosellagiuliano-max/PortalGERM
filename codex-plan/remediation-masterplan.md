@@ -1,11 +1,11 @@
 # SwissTalentHub — Remediation-Masterplan
 
-> **Planungsstand:** 1. August 2026. Dieses Dokument steuert die
+> **Planungsstand:** 5. August 2026. Dieses Dokument steuert die
 > Remediation-Phasen 19 bis 33. Die datierten Records der Phasen 19–31
 > definieren ihren jeweiligen technischen, Quality- und Aktivierungsstand.
 > Phase 32 besitzt einen technischen LC1-Orchestrator, endet aber historisch
-> korrekt mit `NO_GO`; LC2–LC6 sind `NOT APPROVED`. Phase 33 ist
-> `IN_PROGRESS`, technisch/qualitativ `PENDING` und aktivierungsseitig
+> korrekt mit `NO_GO`; LC2–LC6 sind `NOT APPROVED`. Phase 33 ist technisch
+> `COMPLETED`, quality-seitig `PASSED` und aktivierungsseitig
 > `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Daraus folgt weder Pilot- noch
 > Produktionsfreigabe. Die Phasen 01 bis 18 und alle bestehenden Evidence-
 > Records werden nicht rückwirkend umgedeutet.
@@ -338,7 +338,8 @@ Infrastruktur, benannte Owner und bestätigte Betriebsziele.
 
 Jede Phase 19–33 besitzt ihren datierten, getrennten Technik-/Quality-/
 Aktivierungsstand. Phase 32 bleibt wegen ihres historischen `NO_GO` ungehakt;
-Phase 33 ist die aktuelle technische Closure und ebenfalls offen. Ein
+Phase 33 ist als technische Closure abgeschlossen, während ihre reale
+Aktivierung extern blockiert bleibt. Ein
 Planartefakt oder ein vorhandener Teilmechanismus schliesst keine weitere
 Phase. Bei
 gemischt priorisierten
@@ -363,7 +364,7 @@ Headroom, Forecast, Alert und Owner.
 | [ ] 30 | [Startcluster-Suche, Freshness und Scale Operations](./30-search-scale-operations.md)           | 30A: `STH-019`, `STH-036`; 30B: `STH-020/021`; 30C: `STH-027`; 30D: `STH-032`                                    | technische Concept-/Learning-/Cluster-V2- und Freshness-/Consumerbasis lokal `PASS`; Recommendation-Trigger mitigiert, Admin-Scale und Sitemap-Shards unter Trigger deferred; Pflegefachreview, Zielalerts, Moderationskapazität, Staging/LIVE offen, siehe [Evidence](./evidence/2026-07-29-phase-30.md)                                  |
 | [ ] 31 | [Monetarisierung und Marktvalidierung](./31-monetization-market-validation.md)                  | `STH-018`, `STH-022`, `STH-028`, `STH-034`, `STH-035`, `STH-037`                                                 | technische fail-closed Commercial-/Cluster-/Offer-/Capacity-/Cashflow-/Recovery-/Importbasis lokal `PASS`; reale 31A-WTP/Delivery, Fachreviews, Cluster-/Legal-/Tax-/AVG-/Finance-/Ops-Entscheide, Zielumgebung und Aktivierung offen, siehe [Evidence](./evidence/2026-07-30-phase-31.md)                                                 |
 | [ ] 32 | [Finaler Production-Release-Audit](./32-production-release-audit.md)                            | `STH-024` und Abschluss aller `STH-001`–`STH-037`                                                                | technischer LC1-Orchestrator vorhanden; [Evidence](./evidence/2026-07-30-phase-32.md) endet korrekt `LC1 / NO_GO`, LC2–LC6 `NOT APPROVED`; kein rückwirkender Pass                                                                                                                                                                         |
-| [ ] 33 | [Technische Go-live-Härtung und E2E-Abnahme](./33-go-live-readiness-e2e-acceptance.md)          | technische LC4-/LC5-Closure für `STH-003/004/005/006/008/009/013/023/024` und Regression aller Zielklassen-P0/P1 | `IN_PROGRESS`: Live-Adaptercode, Production-Contract-Runtime, vollständige Rollen-/Failure-/Browsermatrix und neuer technischer Candidate; Aktivierung bleibt [extern blockiert](./phase33-findings-ledger.md)                                                                                                                             |
+| [x] 33 | [Technische Go-live-Härtung und E2E-Abnahme](./33-go-live-readiness-e2e-acceptance.md)          | technische LC4-/LC5-Closure für `STH-003/004/005/006/008/009/013/023/024` und Regression aller Zielklassen-P0/P1 | `COMPLETED`: `TECHNICALLY_READY_FOR_LC4`, `TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, Quality `PASSED`; Aktivierung bleibt [extern blockiert](./phase33-findings-ledger.md); [Evidence](./evidence/2026-08-05-phase-33.md)                                                                                                                             |
 
 ## 7. Ausführungsplan je Phase
 
@@ -1047,10 +1048,10 @@ Request-, Recipient-Envelope-, Attempt-Retention-, Resend-Inbox- und Outbox-
 Tests zum Pflichtlauf. Ihre Existenz oder ein gezielter Arbeitsbaumlauf ersetzt
 den finalen exact-candidate-G4 nicht.
 
-**Aktueller Status:** Plan `IN_PROGRESS`; Technik `PENDING`; Quality-Gate
-`PENDING`; Aktivierung `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Ein späterer technischer
-Pass darf nur `TECHNICALLY_READY_FOR_LC4` beziehungsweise
-`TECHNICALLY_READY_FOR_LC5_CONFIGURATION` ausgeben. `GO_LIVE_APPROVED` bleibt
+**Aktueller Status:** Plan `COMPLETED`; Technik
+`TECHNICALLY_READY_FOR_LC4` und
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION`; Quality-Gate `PASSED`; Aktivierung
+`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. `GO_LIVE_APPROVED` bleibt
 ohne reale Provider-, Legal-, Privacy-, AVG-, Tax-, Finance-, Operations-,
 Staging-, Rollback-, Monitoring-, Markt- und unabhängige Approval-Evidence
 unzulässig.

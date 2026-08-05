@@ -604,7 +604,8 @@ Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert u
 > Quality- und Aktivierungsstand. Phase 32 implementierte den LC1-
 > Releasevertrag, entschied jedoch korrekt `NO_GO`; LC2–LC6 blieben
 > `NOT APPROVED`. Phase 33 ist als technische LC4-/LC5-Closure
-> `IN_PROGRESS`; Technik/Quality sind `PENDING`, Aktivierung ist
+> `COMPLETED`; Technik ist `TECHNICALLY_READY_FOR_LC4` und
+> `TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, Quality ist `PASSED`, Aktivierung ist
 > `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`.
 > Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
 > Folgephasengate-Vertrag aus
@@ -713,7 +714,7 @@ flowchart TD
 12. **Phase 32 — historischer Stand:** technischer LC1-Orchestrator; der
     Candidate blieb wegen fehlendem Walkthrough, Rollback und unabhängigen
     Approvals korrekt `NO_GO`, LC2–LC6 `NOT APPROVED`.
-13. **Phase 33 — `IN_PROGRESS`:** 33A vollständiger Audit; 33B Mock-/Sandbox-/
+13. **Phase 33 — `COMPLETED`:** 33A vollständiger Audit; 33B Mock-/Sandbox-/
     Live-Parität; 33C Production-Contract-App/Worker/Scheduler/TLS/S3/Scanner/
     Provider-Stubs; 33D Rollen-/Journey-/Failure-/3-Browser-/A11y-Abnahme;
     33E Remediation, Freeze, Digests und getrenntes technisches/
@@ -724,7 +725,9 @@ flowchart TD
     Recipient-HMAC-Keyrings, getrennte Resend-API-/Webhook-Secret-Versionen,
     providerunabhängige 23-h-/31-d-/exakt-400×24-h-Retention, monotone
     Inbox/Suppression, Activation-TX-Lock und Unknown-Outcome→`PAUSED`-
-    Reconciliation. Sein exact-candidate-G4 bleibt `PENDING`.
+    Reconciliation. Sein exact-candidate-G4 ist `PASSED`; siehe
+    [Phase-33-Evidence](./evidence/2026-08-05-phase-33.md). Reale Aktivierung
+    bleibt `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`.
 
 ### Parallel zulässig
 

@@ -87,10 +87,11 @@ Artefaktvertrag voraus, erteilen aber keine Aktivierung. Ohne sämtliche reale
 zielklassengültige External-/Approval-Evidence bleibt die vierte Dimension
 exakt `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`; das historische
 Phase-32-`NO_GO` wird nicht rückwirkend umgeschrieben. Während der Umsetzung
-verwendet Phase 33 das eindeutige Statusquartett Plan `IN_PROGRESS`, Technik
-`PENDING`, Quality `PENDING` und Aktivierung
-`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Die technischen Readinessurteile und
-`PASSED` dürfen erst nach dem exact-candidate-G4 erscheinen.
+verwendet Phase 33 nach dem Abschluss das eindeutige Statusquartett Plan
+`COMPLETED`, Technik `TECHNICALLY_READY_FOR_LC4` und
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, Quality `PASSED` und Aktivierung
+`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Der exact-candidate-G4 ist in der
+[Phase-33-Evidence](./evidence/2026-08-05-phase-33.md) gebunden.
 
 Der Phase-33-Notificationvertrag ist Bestandteil dieses G4: getrennte
 `NOTIFICATION_DELIVERY_KEYS` (AES) und

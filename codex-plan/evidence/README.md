@@ -52,12 +52,12 @@ gelten nicht als Nachweis.
 - [`2026-07-30-phase-32.md`](./2026-07-30-phase-32.md) — candidate-gebundener LC1-G4-Orchestrator, sechs Launchklassen, 37-Findingsledger und striktes Release-Manifest; Walkthrough, Rollback und unabhängige Approvals fehlen, daher Release `NO_GO` und LC2–LC6 `NOT APPROVED`.
 - [`2026-08-01-runtime-findings-follow-up.md`](./2026-08-01-runtime-findings-follow-up.md) — unabhängig klassifizierte Runtime-/Nutzerweg-/Security-/Betriebsbefunde; bestätigte Codefehler geschlossen, bewusste Fail-closed-Verträge abgegrenzt und externe Legal-/Provider-/Scale-Gates weiterhin offen.
 
-Phase 33 ist `IN_PROGRESS`. Ihr geplanter Record
-`YYYY-MM-DD-phase-33.md` wird bewusst erst angelegt beziehungsweise hier
-verlinkt, wenn Basis-/Endcommit, vollständige Commandmatrix und Resultate
-tatsächlich vorliegen. Die Existenz der
-[Phasendatei](../33-go-live-readiness-e2e-acceptance.md) oder des
-[Findings Ledgers](../phase33-findings-ledger.md) ist keine Evidence.
+- [`2026-08-05-phase-33.md`](./2026-08-05-phase-33.md) — technischer
+  exact-candidate-G4 für LC4 Public Free und LC5 Paid Self-Service
+  Configuration mit 38/38 Pflichtbefehlen, 11/11 Gates, drei Browsern,
+  Production-Contract-, Provider-, Worker-, Recovery- und Artefaktbindung.
+  Technik und Quality sind bestanden; reale Aktivierung bleibt
+  `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`.
 
 ## Pflichtfelder eines Records
 

@@ -254,7 +254,15 @@ besitzt einen eigenen atomaren Migrations-, Provider-/Worker-, Runtime-,
 Release- und exact-candidate-G4-Vertrag. Verbindlich sind die
 [Phase-33-Detailphase](./33-go-live-readiness-e2e-acceptance.md), ihr
 [Findings Ledger](./phase33-findings-ledger.md) und die höher priorisierten
-aktuellen Requirements/ADRs. Ihr Status bleibt `IN_PROGRESS`, technisch und
-qualitativ `PENDING`; die Aktivierung bleibt
-`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Dieser Nachtrag ist Planabgrenzung,
-keine technische Evidence und keine Go-live-Freigabe.
+aktuellen Requirements/ADRs.
+
+### Phase-33-Abschlussaddendum — 5. August 2026
+
+Phase 33 ist technisch `COMPLETED`, Quality ist `PASSED`; 17/17 AC-Zeilen,
+38/38 Pflichtbefehle und 11/11 Gates wurden lokal sowie in GitHub-CI
+31029349214 und G4 31029349476 auf Candidate `d5f4646…` belegt. Die
+[Phase-33-Evidence](./evidence/2026-08-05-phase-33.md) ist der additive
+Abschlussrecord. Die historische Auditbegründung und Phase-32-Entscheidung
+bleiben unverändert. Aktivierung bleibt
+`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`; dieser Nachtrag ist keine
+Go-live-Freigabe.

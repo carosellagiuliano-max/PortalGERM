@@ -11,8 +11,10 @@
 > Remediation-Phasen 20–31 besitzen inzwischen ihre jeweils datierten
 > technischen Local-/CI-Verträge; externe Fach-, Provider-, Staging- und
 > LIVE-Gates bleiben davon getrennt. Phase 32 endet historisch `LC1 / NO_GO`.
-> Phase 33 ist als technische LC4-/LC5-Closure `IN_PROGRESS`; Technik/Quality
-> sind `PENDING`, Aktivierung ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Abschnitte 1–16
+> Phase 33 ist als technische LC4-/LC5-Closure `COMPLETED`; Technik ist
+> `TECHNICALLY_READY_FOR_LC4` und
+> `TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, Quality ist `PASSED`, Aktivierung
+> ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Abschnitte 1–16
 > beschreiben den geschützten MVP-Kern, die
 > Remediation-Architektur steht ab Abschnitt 17. Ist-Routen kommen aus
 > `route-inventory.json`; Server Actions und schema-definierte
@@ -905,6 +907,7 @@ tenant, privacy, security, payment or evidence requirements.
 
 Phase 33 ergänzt 17 messbare AC-Zeilen, ein statusgebundenes Findings Ledger,
 historische Migration-SHA sowie Mock-/Production-Contract-, Provider-/Worker-/
-E2E-/Artefaktdigests. Die Architektur bleibt bis zum vollständigen Lauf
-`PENDING`; die Existenz dieses Zielbilds ist keine Implementierungs- oder
-Activation-Evidence.
+E2E-/Artefaktdigests. Der vollständige Lauf ist mit 17/17 ACs, 38/38
+Pflichtbefehlen und 11/11 Gates `PASSED`; siehe
+[Phase-33-Evidence](./evidence/2026-08-05-phase-33.md). Diese technische
+Evidence ist weiterhin keine Activation-Evidence.

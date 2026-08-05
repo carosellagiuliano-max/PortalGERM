@@ -1,10 +1,10 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** Stand 1. August 2026. Phasen 01–32 besitzen jeweils ihren
+> **Planstatus:** Stand 5. August 2026. Phasen 01–32 besitzen jeweils ihren
 > datierten, commitgebundenen Technik-, Quality- und Aktivierungsstand. Die
 > Phase-32-Evidence bewertet ausschließlich LC1 und endet ehrlich mit
-> `NO_GO`; LC2–LC6 sind dort `NOT APPROVED`. Phase 33 ist `IN_PROGRESS`,
-> technisch und im Quality-Gate `PENDING` sowie aktivierungsseitig
+> `NO_GO`; LC2–LC6 sind dort `NOT APPROVED`. Phase 33 ist technisch
+> `COMPLETED`, quality-seitig `PASSED` und aktivierungsseitig
 > `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Sie soll LC4 Public Free und LC5 Paid
 > Self-Service technisch ohne weiteren Codewechsel konfigurierbar machen,
 > darf aber weder Phase 32 rückwirkend umdeuten noch reale Staging-, Provider-,
@@ -327,18 +327,21 @@ technische LC1-Orchestrator und die Releasepolicies sind implementiert; die
 Rollback- und unabhängiger Approval-Evidence korrekt mit `LC1 / NO_GO` und
 `LC2–LC6 NOT APPROVED`. Dieser historische Entscheid bleibt unverändert.
 
-### [ ] 33 — Technische Go-live-Härtung und End-to-End-Abnahme
+### [x] 33 — Technische Go-live-Härtung und End-to-End-Abnahme
 
 [`33-go-live-readiness-e2e-acceptance.md`](./33-go-live-readiness-e2e-acceptance.md) ·
-`IN_PROGRESS`: vollständiger Audit, Mock-/Sandbox-/Live-Parität,
+`COMPLETED`: vollständiger Audit, Mock-/Sandbox-/Live-Parität,
 isolierte `local/mock`- und `production-contract`-Runtime, rollenübergreifende
 Wirkungs-/Failure-/Browser-Matrix sowie neuer commit-/artefaktgebundener
 technischer LC4-/LC5-Konfigurationscandidate. Der laufende Vertrag umfasst
 zusätzlich getrennte Notification-Delivery-/Recipient-Hash-Keyrings und
 Resend-API-/Webhook-Secret-Versionen, providerunabhängige 23-h-/31-d-/
 400×24-h-Lebenszyklen, monotone Inbox-/Suppression-Evidence und sichere
-Reconciliation unbekannter Provider-Ausgänge. Technik und Quality sind
-`PENDING`; Aktivierung ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Siehe
+Reconciliation unbekannter Provider-Ausgänge. Technik ist
+`TECHNICALLY_READY_FOR_LC4` und
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, Quality ist `PASSED`; Aktivierung
+ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Siehe
+[Evidence](./evidence/2026-08-05-phase-33.md) und
 [Findings Ledger](./phase33-findings-ledger.md).
 
 Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in
@@ -503,12 +506,14 @@ Phase 32 hat den LC1-Releasevertrag technisch implementiert, aber auf ihrem
 Candidate wegen fehlendem Walkthrough, Rollback und unabhängigen Approvals
 korrekt `NO_GO` entschieden; LC2–LC6 wurden nicht freigegeben.
 
-Phase 33 beginnt deshalb nicht bei null und wiederholt keine optionalen
+Phase 33 begann deshalb nicht bei null und wiederholte keine optionalen
 Produktphasen. Sie auditiert den aktuellen `main` vollständig, schützt alle
 historischen Invarianten, schließt ausschließlich bestätigte repository-
 interne LC4-/LC5-Techniklücken und baut eine realistische isolierte
-Production-Contract-Evidence. Ausgangsstatus ist `IN_PROGRESS`, Technik und
-Quality `PENDING`, Aktivierung `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Kein Provider,
+Production-Contract-Evidence. Abschlussstatus ist `COMPLETED`, Technik
+`TECHNICALLY_READY_FOR_LC4` und
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, Quality `PASSED`, Aktivierung
+`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Kein Provider,
 Paid Offer, Cluster, Salary-, Tracker-, Scheduler-, Persona- oder Public-Trust-
 Scope wird durch die Existenz der Phase automatisch aktiviert.
 
