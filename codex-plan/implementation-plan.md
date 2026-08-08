@@ -606,6 +606,9 @@ Schritte 01 bis 18 sind gemäss ihren datierten Evidence-Records implementiert u
 > `NOT APPROVED`. Phase 33 ist als technische LC4-/LC5-Closure
 > `COMPLETED`; Technik ist `TECHNICALLY_READY_FOR_LC4` und
 > `TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, Quality ist `PASSED`, Aktivierung ist
+> `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Der unabhängige Phase-34-Re-Audit
+> bestätigt und härtet diesen Stand auf einem neuen Candidate: Plan
+> `COMPLETED`, Technik `GO`, Quality `PASSED`; die Aktivierung bleibt
 > `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`.
 > Jede Phase instanziiert den 28-Punkte-, Test-, Evidence- und
 > Folgephasengate-Vertrag aus

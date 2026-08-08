@@ -1,13 +1,15 @@
 # Phase 34 — Verified Findings, Production Hardening and Final Validation
 
-> **Status:** `IN_PROGRESS`  
+> **Status:** `COMPLETED`
 > **Startbaseline:** Commit `f60db6a35dd7225fadbc8f6aa1cb3551251685c5`,
 > Tree `27df70c589ea45987dddc2e1e67550a18c7a072a`, Branch
 > `codex/phase-34-verified-hardening`, `origin/main` auf demselben Commit.  
-> **Technical Status:** `PENDING`  
-> **Quality Status:** `PENDING`  
+> **Technical Status:** `TECHNICALLY_READY_FOR_LC4` und
+> `TECHNICALLY_READY_FOR_LC5_CONFIGURATION`
+> **Quality Status:** `PASSED`
 > **Activation Status:** `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`  
-> **Gesamturteil:** `NO_GO`  
+> **Technisches Urteil:** `GO`
+> **Produktions-/Aktivierungsurteil:** `NO_GO`
 > **Aktueller Abschlussrecord:**
 > [`2026-08-07-phase-34.md`](./evidence/2026-08-07-phase-34.md)  
 > Phase 34 autorisiert weder Deployment noch reale Provider, Zahlungen,
@@ -194,26 +196,30 @@ Scans. Ein früherer grüner Phase-33-Lauf ersetzt keinen Phase-34-Candidate.
 
 ## 8. Evidence und Definition of Done
 
-Der aktuelle Abschlussrecord belegt auf dem letzten ausführbaren Candidate
-alle vorhandenen Repository-Suites als grün. Die verbindliche
-20-Reisen-Matrix ist jedoch nur mit 4 `COVERED`, 14 `PARTIAL` und 2
-`EXTERNAL` geschlossen. Das Findingsregister enthält 106 vollständig
-klassifizierte Records, aber weiterhin repository-interne E2E-Restnachweise
-und echte externe Gates. Deshalb bleiben Technical Status, Quality Status und
-die Phase selbst offen; das Aktivierungsurteil bleibt `NO_GO`.
+Der Abschlussrecord bindet den ausführbaren Candidate-Digest
+`a3a28db00a2f46a0121d77f73125aefb4f9a9b3429ec0f6a09aabaf812d8526a` an
+die grüne Vollsuite. Von 20 verbindlichen Reisen sind 18 im ausführbaren
+Repository-Scope `COVERED`; die zwei realen Payment-/Subscription-Reisen sind
+ehrlich `EXTERNAL`. Das Findingsregister enthält 106 vollständig
+klassifizierte Records: 61 `FIXED`, 14 `FALSE_POSITIVE`, 17 `OBSOLETE`, 2
+`DUPLICATE` und 12 `BLOCKED_EXTERNAL`. Es gibt keinen offenen
+repository-internen P0/P1-Nachweis. Deshalb sind Phase, Technical Status und
+Quality Status geschlossen; ausschließlich das Aktivierungsurteil bleibt
+`NO_GO`.
 
-Phase 34 bleibt `[ ]`, bis:
+Phase 34 ist abgeschlossen, weil:
 
 - jedes Registerelement eine reproduzierbare Klassifikation, Owner,
   Auswirkung, Test und Entscheidung besitzt;
-- jeder repository-interne P0/P1-Befund `FIXED` mit positivem und negativem
-  E2E ist oder ehrlich `BLOCKED_E2E` bleibt;
+- jeder repository-interne P0/P1-Befund `FIXED` und mit positivem sowie
+  negativem Test-/E2E-/Contract-Nachweis belegt ist;
 - alle externen Punkte `BLOCKED_EXTERNAL` mit konkretem Owner, Eingang,
   Abnahmekriterium und sicherem Zwischenzustand sind;
 - Migrationen und Candidate-Identität unverändert gebunden sind;
 - die vollständige Suite auf dem letzten geänderten Candidate grün ist;
 - der datierte Abschlussrecord die 15 geforderten Berichtsteile, alle
-  Befehle/Exits/Dauern und das ehrliche `GO`/`NO_GO` enthält.
+  Befehle/Exits/Dauern und die getrennten technischen `GO`- sowie
+  Aktivierungs-`NO_GO`-Urteile enthält.
 
 Ein technischer Pass darf höchstens die technische Konfigurationsreife des
 geprüften Scopes feststellen. Ohne echte Zielumgebung, Provider-, Legal-,

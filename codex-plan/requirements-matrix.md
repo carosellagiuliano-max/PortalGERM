@@ -164,7 +164,10 @@ Neue oder geänderte Anforderungen erhalten eine stabile ID, Owner, Priorität u
 > Phase 32 historisch `LC1 / NO_GO`. Phase 33 ist `COMPLETED`, technisch
 > `TECHNICALLY_READY_FOR_LC4` und
 > `TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, quality-seitig `PASSED` und
-> aktivierungsseitig `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Diese
+> aktivierungsseitig `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Phase 34 hat die
+> vorhandenen Requirements ohne neue Produkt-ID unabhängig re-auditiert und
+> den repository-internen Technik-/Quality-Scope erneut als `GO`/`PASSED`
+> bestätigt; die externen Aktivierungsgates bleiben unverändert. Diese
 > Requirements erweitern den
 > historischen Phase-01–18-Vertrag, ohne dessen Evidence rückwirkend zu
 > verändern. Prioritäten sind launchklassenspezifisch; die vollständige

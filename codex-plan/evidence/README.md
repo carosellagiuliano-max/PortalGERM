@@ -58,13 +58,12 @@ gelten nicht als Nachweis.
   Production-Contract-, Provider-, Worker-, Recovery- und Artefaktbindung.
   Technik und Quality sind bestanden; reale Aktivierung bleibt
   `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`.
-- [`2026-08-07-phase-34.md`](./2026-08-07-phase-34.md) — `IN_PROGRESS`-/
-  `NO_GO`-Zwischenrecord eines unabhängigen
-  Re-Audit mit 106 klassifizierten Findings, 74/74 Migrationen und grünen
-  Unit-, PostgreSQL-, Build-, Runtime-, Security- und Browser-Suites. Die
-  verbindliche E2E-Matrix bleibt bei 4 `COVERED`, 14 `PARTIAL` und 2
-  `EXTERNAL`; Phase sowie Technical/Quality Status bleiben offen und die
-  Aktivierung bleibt `NO_GO`.
+- [`2026-08-07-phase-34.md`](./2026-08-07-phase-34.md) — abgeschlossener,
+  Digest- und commitgebundener unabhängiger Re-Audit mit 106 final
+  klassifizierten Findings, 74/74 Migrationen, 18 `COVERED`-/2
+  `EXTERNAL`-Pflichtreisen und grünen Unit-, PostgreSQL-, Build-, Runtime-,
+  Security-, Supply-Chain- und Browser-Suites. Technik lautet `GO`, Quality
+  `PASSED`; die Aktivierung bleibt wegen echter externer Gates `NO_GO`.
 
 ## Pflichtfelder eines Records
 

@@ -1,13 +1,17 @@
 # Phase-34-Findingsregister
 
-> **Arbeitsstand:** technische Abschlussverifikation auf Startbaseline
+> **Arbeitsstand:** technisch abgeschlossene Verifikation auf Startbaseline
 > `f60db6a35dd7225fadbc8f6aa1cb3551251685c5` und dem technisch geprüften
 > Phase-34-Candidate-Digest
-> `0c3fdc6790423e9e9f429689b504c019090503b77a5426626386de76c373bffa`.
+> `a3a28db00a2f46a0121d77f73125aefb4f9a9b3429ec0f6a09aabaf812d8526a`.
 > `FIXED` bezeichnet einen positiven und negativen Nachweis auf genau diesem
 > Candidate. Der [datierte Abschlussrecord](./evidence/2026-08-07-phase-34.md)
 > hält die vollständigen Befehle und Grenzen fest; die Aktivierung bleibt
 > wegen der externen Gates ausdrücklich `NO_GO`.
+> Die Detailrecords bewahren ihre anfängliche und zwischenzeitliche
+> Klassifikation als Auditspur. Der aktuelle Endstatus jedes Findings steht
+> im Index und in Abschnitt 14; er ersetzt dortige Zwischenformulierungen wie
+> „ausstehend“ oder `IMPLEMENTED_E2E_PENDING`.
 
 ## 1. Quellen, Leseregeln und Status
 
@@ -32,70 +36,70 @@
 | ID                | Kurzbezeichnung                                                                | Risiko          | Prüfstatus                |
 | ----------------- | ------------------------------------------------------------------------------ | --------------- | ------------------------- |
 | `F34-BASE-001`    | Review-Zahlen und Deployment-Snapshot                                          | P2              | `OBSOLETE`                |
-| `F34-BASE-002`    | Produkt-, Rollen- und Featurebeschreibung                                      | P1 Activation   | `PARTIALLY_CONFIRMED`     |
+| `F34-BASE-002`    | Produkt-, Rollen- und Featurebeschreibung                                      | P1 Activation   | `FIXED`                   |
 | `F34-ARCH-001`    | fail-closed Doppelprüfung ist Absicht, Drift nicht                             | P0 Runtime      | `FIXED`                   |
 | `F34-GOV-001`     | abgeschnittene Phase-33-AC-Matrix                                              | P0 Governance   | `FIXED`                   |
 | `F34-GOV-002`     | Plan-Audit akzeptierte beschädigte Evidence                                    | P0 Governance   | `FIXED`                   |
 | `F34-GOV-003`     | weitere fehlerhafte normative Tabellen                                         | P1 Governance   | `FIXED`                   |
-| `F34-GOV-004`     | aktuelles Routen-/Handlerinventar driftete                                     | P1 Governance   | `CONFIRMED`               |
+| `F34-GOV-004`     | aktuelles Routen-/Handlerinventar driftete                                     | P1 Governance   | `FIXED`                   |
 | `F34-GOV-005`     | geschlossenes Ledger versus aktuelles Inventar                                 | P1 Governance   | `DUPLICATE`               |
 | `F34-GOV-006`     | freie String-Statusfelder verletzen ADR-007                                    | P1              | `FALSE_POSITIVE`          |
-| `F34-GOV-007`     | ältere und neuere Provider-/Worker-ADRs widersprechen sich                     | P1 Governance   | `IMPLEMENTED_E2E_PENDING` |
+| `F34-GOV-007`     | ältere und neuere Provider-/Worker-ADRs widersprechen sich                     | P1 Governance   | `FIXED`                   |
 | `F34-GOV-008`     | Phase 32/33 seien abgeschlossen oder go-live-fähig                             | P0 Activation   | `FALSE_POSITIVE`          |
-| `F34-REPO-001`    | lokale `.vercel/`-Metadaten im Worktree                                        | P2 Governance   | `IMPLEMENTED_E2E_PENDING` |
-| `F34-COM-001`     | Commercial-Gates werden nicht von Runtime konsumiert                           | P1 Product      | `CONFIRMED`               |
+| `F34-REPO-001`    | lokale `.vercel/`-Metadaten im Worktree                                        | P2 Governance   | `FIXED`                   |
+| `F34-COM-001`     | Commercial-Gates werden nicht von Runtime konsumiert                           | P1 Product      | `FIXED`                   |
 | `F34-LEG-001`     | unveröffentlichte Rechtstexte bei offener Registrierung                        | P0 Legal        | `OBSOLETE`                |
-| `F34-LEG-002`     | AVG-/AVV-Entscheid fehlt im Talent-Radar-Runtimepfad                           | P0 Legal        | `IMPLEMENTED_E2E_PENDING` |
+| `F34-LEG-002`     | AVG-/AVV-Entscheid fehlt im Talent-Radar-Runtimepfad                           | P0 Legal        | `FIXED`                   |
 | `F34-LEG-003`     | Stellenmeldepflicht pauschal fünf Arbeitstage                                  | P0 Legal        | `BLOCKED_EXTERNAL`        |
 | `F34-LEG-004`     | Minderjährigenschutz bei Lehrstellen nicht freigegeben                         | P0 Legal        | `BLOCKED_EXTERNAL`        |
 | `F34-LEG-005`     | Moderation ohne verbindliche Rechts-/Policykriterien                           | P1 Legal        | `BLOCKED_EXTERNAL`        |
 | `F34-LEG-006`     | Retention, DSFA, Auslandtransfers und DPA offen                                | P0 Privacy      | `BLOCKED_EXTERNAL`        |
 | `F34-LEG-007`     | öffentliche Lead-/Abuse-Erfassung ohne aktuelle Publikationsbindung            | P1 Privacy      | `FIXED`                   |
-| `F34-LEG-008`     | Impressum/AGB/PBV-Anforderungen seien pauschal abschließend bekannt            | P1 Legal        | `PARTIALLY_CONFIRMED`     |
+| `F34-LEG-008`     | Impressum/AGB/PBV-Anforderungen seien pauschal abschließend bekannt            | P1 Legal        | `BLOCKED_EXTERNAL`        |
 | `F34-TAX-001`     | MWST-Rechnung sei allein durch 8,1 % rechtlich freigegeben                     | P0 Finance      | `BLOCKED_EXTERNAL`        |
 | `F34-COMPANY-001` | `CompanyStatus.CLOSED` ohne ausführbaren Offboardingpfad                       | P1 Runtime      | `FIXED`                   |
 | `F34-A11Y-001`    | WCAG-Version/-Stufe und reale AT-Abnahme                                       | P1 Quality      | `BLOCKED_EXTERNAL`        |
-| `F34-PAY-001`     | Payment-/Incident-Runbooks sind historisch unvollständig                       | P1 Operations   | `CONFIRMED`               |
-| `F34-PAY-002`     | Mock-Checkout kann außerhalb Local/CI Rechte erteilen                          | P0 Runtime      | `IMPLEMENTED_E2E_PENDING` |
-| `F34-PAY-003`     | Abo und Einmalkauf besitzen versteckte, divergente Composition Roots           | P0 Runtime      | `PARTIALLY_CONFIRMED`     |
+| `F34-PAY-001`     | Payment-/Incident-Runbooks sind historisch unvollständig                       | P1 Operations   | `FIXED`                   |
+| `F34-PAY-002`     | Mock-Checkout kann außerhalb Local/CI Rechte erteilen                          | P0 Runtime      | `FIXED`                   |
+| `F34-PAY-003`     | Abo und Einmalkauf besitzen versteckte, divergente Composition Roots           | P0 Runtime      | `FIXED`                   |
 | `F34-PAY-004`     | Mock- und Live-Finanzereignisse können vermischt werden                        | P0 Finance      | `FALSE_POSITIVE`          |
 | `F34-PAY-005`     | globaler Mock-Mailer wird in echten Billing-Flows benutzt                      | P1 Runtime      | `OBSOLETE`                |
-| `F34-PAY-006`     | Environment, Adapter und Activation Ledger sind nicht zentral gebunden         | P0 Runtime      | `PARTIALLY_CONFIRMED`     |
+| `F34-PAY-006`     | Environment, Adapter und Activation Ledger sind nicht zentral gebunden         | P0 Runtime      | `FIXED`                   |
 | `F34-PAY-007`     | unklare Providerantworten oder Retries erzeugen Doppelwirkung                  | P0 Finance      | `FALSE_POSITIVE`          |
-| `F34-PAY-008`     | Contract-/Sandbox-Zahlung sei als reale Kauf-Evidence belegt                   | P0 Activation   | `BLOCKED_E2E`             |
-| `F34-PAY-009`     | Entitlements können ohne gültiges Zahlungsereignis entstehen                   | P0 Finance      | `PARTIALLY_CONFIRMED`     |
+| `F34-PAY-008`     | Contract-/Sandbox-Zahlung sei als reale Kauf-Evidence belegt                   | P0 Activation   | `BLOCKED_EXTERNAL`        |
+| `F34-PAY-009`     | Entitlements können ohne gültiges Zahlungsereignis entstehen                   | P0 Finance      | `FIXED`                   |
 | `F34-SEARCH-001`  | SQL- und kanonische Trust-Prüfung driften                                      | P0 Runtime      | `FIXED`                   |
-| `F34-SEARCH-002`  | Startseite lädt 2.001 Jobs für sechs Karten                                    | P1 Scale        | `IMPLEMENTED_E2E_PENDING` |
-| `F34-SEARCH-003`  | Clusterzählung scannt alle Jobs in Batches                                     | P1 Scale        | `IMPLEMENTED_E2E_PENDING` |
-| `F34-SEARCH-004`  | Startseite erschöpft durch Fan-out den DB-Pool                                 | P1 Scale        | `PARTIALLY_CONFIRMED`     |
-| `F34-SEARCH-005`  | Stichwortsuche hat keinen nutzbaren Index                                      | P1 Scale        | `IMPLEMENTED_E2E_PENDING` |
-| `F34-SEARCH-006`  | jede Suchseite führt einen unbounded `COUNT(*)` aus                            | P2 Scale        | `PARTIALLY_CONFIRMED`     |
+| `F34-SEARCH-002`  | Startseite lädt 2.001 Jobs für sechs Karten                                    | P1 Scale        | `FIXED`                   |
+| `F34-SEARCH-003`  | Clusterzählung scannt alle Jobs in Batches                                     | P1 Scale        | `FIXED`                   |
+| `F34-SEARCH-004`  | Startseite erschöpft durch Fan-out den DB-Pool                                 | P1 Scale        | `FIXED`                   |
+| `F34-SEARCH-005`  | Stichwortsuche hat keinen nutzbaren Index                                      | P1 Scale        | `FIXED`                   |
+| `F34-SEARCH-006`  | jede Suchseite führt einen unbounded `COUNT(*)` aus                            | P2 Scale        | `FIXED`                   |
 | `F34-SEARCH-007`  | Pooler verwirft Timeout-Optionen oder PG17 ändert Semantik                     | P1 Operations   | `BLOCKED_EXTERNAL`        |
 | `F34-SEARCH-008`  | `force-dynamic` und tote Modelle verursachen belegten Defekt                   | P2              | `FALSE_POSITIVE`          |
 | `F34-SEARCH-009`  | fehlende Error Boundary legt Suchoberfläche vollständig lahm                   | P1 UX           | `FIXED`                   |
 | `F34-SEARCH-010`  | Trust-Ablauf/Revoke verursacht globalen Suchausfall                            | P0 Runtime      | `FIXED`                   |
 | `F34-DATA-001`    | öffentliche Antwortquoten stammen aus nie gepflegten Seed-Feldern              | P1 Truth        | `FIXED`                   |
-| `F34-OPS-001`     | Worker-Runbook nennt falschen HMAC-Keyring                                     | P0 Operations   | `CONFIRMED`               |
-| `F34-OPS-002`     | Worker-Readiness bleibt nach Hänger grün                                       | P1 Runtime      | `IMPLEMENTED_E2E_PENDING` |
-| `F34-OPS-003`     | Provider-Inbox-Age/Projector-Health fehlten                                    | P1 Runtime      | `IMPLEMENTED_E2E_PENDING` |
-| `F34-OPS-004`     | Payment-Recovery scannt fremde Environments                                    | P1 Isolation    | `IMPLEMENTED_E2E_PENDING` |
+| `F34-OPS-001`     | Worker-Runbook nennt falschen HMAC-Keyring                                     | P0 Operations   | `FIXED`                   |
+| `F34-OPS-002`     | Worker-Readiness bleibt nach Hänger grün                                       | P1 Runtime      | `FIXED`                   |
+| `F34-OPS-003`     | Provider-Inbox-Age/Projector-Health fehlten                                    | P1 Runtime      | `FIXED`                   |
+| `F34-OPS-004`     | Payment-Recovery scannt fremde Environments                                    | P1 Isolation    | `FIXED`                   |
 | `F34-OPS-005`     | Deploy führt Migrationen nicht aus und Readiness wird nicht abgefragt          | P0 Operations   | `BLOCKED_EXTERNAL`        |
 | `F34-OPS-006`     | es existiert kein Worker-/Scheduler-Artefakt                                   | P0 Runtime      | `OBSOLETE`                |
 | `F34-OPS-007`     | es existiert kein Live-E-Mail-Adapter                                          | P0 Runtime      | `OBSOLETE`                |
 | `F34-OPS-008`     | Monitoring/Pager fehlen, Fehlerursachen sind unsichtbar                        | P0 Operations   | `BLOCKED_EXTERNAL`        |
 | `F34-OPS-009`     | `/health/live` und `/health/ready` fehlen                                      | P1 Operations   | `FALSE_POSITIVE`          |
 | `F34-OPS-010`     | Backup/Restore, Ziel-PG und Staging sind nicht real belegt                     | P0 Operations   | `BLOCKED_EXTERNAL`        |
-| `F34-OPS-011`     | historische/destruktive Migrationen und Expand/Contract                        | P1 Data         | `PARTIALLY_CONFIRMED`     |
+| `F34-OPS-011`     | historische/destruktive Migrationen und Expand/Contract                        | P1 Data         | `FIXED`                   |
 | `F34-OPS-012`     | Scans, Retention und Abläufe laufen nirgends                                   | P0 Runtime      | `OBSOLETE`                |
-| `F34-OPS-013`     | Resend-Event-Inbox hatte keinen autonomen Retry-/DLQ-Handler                   | P1 Runtime      | `IMPLEMENTED_E2E_PENDING` |
+| `F34-OPS-013`     | Resend-Event-Inbox hatte keinen autonomen Retry-/DLQ-Handler                   | P1 Runtime      | `FIXED`                   |
 | `F34-OPS-014`     | Production-HSTS-Smoke erzeugte eine vom aktuellen Auth-Vertrag abgelehnte Env | P1 Operations   | `FIXED`                   |
-| `F34-OPS-015`     | bekannte Eligibility-/Alert-Fan-outs nutzten die pg-Queue; breitere Warnungen offen | P1 Runtime | `PARTIALLY_CONFIRMED` |
+| `F34-OPS-015`     | bekannte Eligibility-/Alert-Fan-outs nutzten die pg-Queue; breitere Warnungen offen | P1 Runtime | `FIXED` |
 | `F34-DOC-001`     | CV-/Document-Vault ist in Preview grundsätzlich tot                            | P1 Runtime      | `OBSOLETE`                |
-| `F34-SEC-001`     | Auth-Flows haben kein IP-unabhängiges Zielbudget                               | P1 Security     | `IMPLEMENTED_E2E_PENDING` |
-| `F34-SEC-002`     | Reset-Consume erlaubt unbounded Lookup/Hashing                                 | P2 Security     | `IMPLEMENTED_E2E_PENDING` |
+| `F34-SEC-001`     | Auth-Flows haben kein IP-unabhängiges Zielbudget                               | P1 Security     | `FIXED`                   |
+| `F34-SEC-002`     | Reset-Consume erlaubt unbounded Lookup/Hashing                                 | P2 Security     | `FIXED`                   |
 | `F34-SEC-003`     | ungültige Forwarded-Ketten fallen auf Loopback zurück                          | P1 Security     | `FIXED`                   |
-| `F34-SEC-004`     | Bewerbung ist ohne ausreichende Identität möglich                              | P1 Security     | `IMPLEMENTED_E2E_PENDING` |
-| `F34-SEC-005`     | fehlgeschlagene Audit-/Risk-Signale bleiben unsichtbar                         | P1 Forensics    | `IMPLEMENTED_E2E_PENDING` |
+| `F34-SEC-004`     | Bewerbung ist ohne ausreichende Identität möglich                              | P1 Security     | `FIXED`                   |
+| `F34-SEC-005`     | fehlgeschlagene Audit-/Risk-Signale bleiben unsichtbar                         | P1 Forensics    | `FIXED`                   |
 | `F34-SEC-006`     | Prefetch überspringt Proxy und erlaubt IP-Spoofing                             | P0 Security     | `FALSE_POSITIVE`          |
 | `F34-SEC-007`     | Preview teilt zwingend einen globalen Rate-Limit-Bucket                        | P0 Availability | `OBSOLETE`                |
 | `F34-SEC-008`     | Admin-MFA sei standardmäßig aus und nicht erzwungen                            | P0 Security     | `OBSOLETE`                |
@@ -116,16 +120,16 @@
 | `F34-NOT-005`     | Outbox-basierte lokale Mailbox wurde vor Worker-Erfolg als erfasst dargestellt | P1 Truth        | `FIXED`                   |
 | `F34-AUTH-001`    | Login-E-Mail kann nicht geändert werden                                        | P1 UX/Security  | `OBSOLETE`                |
 | `F34-UX-002`      | Anschreiben geht bei abgelehntem Submit verloren                               | P1 UX           | `OBSOLETE`                |
-| `F34-NOT-001`     | `resend_live` erscheint als `record_only`                                      | P2 Truth        | `IMPLEMENTED_E2E_PENDING` |
-| `F34-UX-003`      | rohe Enums, Codes und interne Mock-/Phasentexte                                | P1 UX           | `IMPLEMENTED_E2E_PENDING` |
-| `F34-UX-004`      | Responsive, Fokus, Tastatur und WCAG-Regressionsschutz                         | P1 Quality      | `PARTIALLY_CONFIRMED`     |
-| `F34-SEO-001`     | Canonical/noindex/Sitemap/Robots schützen Demo nicht                           | P1 SEO          | `PARTIALLY_CONFIRMED`     |
-| `F34-AI-001`      | Mock-AI kann in Production-like als echte Funktion erscheinen                  | P1 Truth        | `IMPLEMENTED_E2E_PENDING` |
-| `F34-JOBROOM-001` | Mock-Stellenmeldepflicht kann in Production-like als real gelten               | P0 Legal        | `IMPLEMENTED_E2E_PENDING` |
+| `F34-NOT-001`     | `resend_live` erscheint als `record_only`                                      | P2 Truth        | `FIXED`                   |
+| `F34-UX-003`      | rohe Enums, Codes und interne Mock-/Phasentexte                                | P1 UX           | `FIXED`                   |
+| `F34-UX-004`      | Responsive, Fokus, Tastatur und WCAG-Regressionsschutz                         | P1 Quality      | `FIXED`                   |
+| `F34-SEO-001`     | Canonical/noindex/Sitemap/Robots schützen Demo nicht                           | P1 SEO          | `FIXED`                   |
+| `F34-AI-001`      | Mock-AI kann in Production-like als echte Funktion erscheinen                  | P1 Truth        | `FIXED`                   |
+| `F34-JOBROOM-001` | Mock-Stellenmeldepflicht kann in Production-like als real gelten               | P0 Legal        | `FIXED`                   |
 | `F34-RADAR-001`   | Talent-Radar leakt Identität vor Freigabe                                      | P0 Privacy      | `FALSE_POSITIVE`          |
 | `F34-QA-001`      | fixes Fixture-Datum macht Search-Test zeitabhängig rot                         | P1 QA           | `FIXED`                   |
-| `F34-QA-002`      | alte/feste Testzahlen und Phase-33-Evidence gelten weiter                      | P1 Governance   | `CONFIRMED`               |
-| `F34-QA-003`      | Preview/prod-like und erlaubter Aktivpfad sind unzureichend E2E-geprüft        | P0 QA           | `IMPLEMENTED_E2E_PENDING` |
+| `F34-QA-002`      | alte/feste Testzahlen und Phase-33-Evidence gelten weiter                      | P1 Governance   | `FIXED`                   |
+| `F34-QA-003`      | Preview/prod-like und erlaubter Aktivpfad sind unzureichend E2E-geprüft        | P0 QA           | `FIXED`                   |
 | `F34-QA-004`      | Browser-Gate akzeptierte stale Builds und unvollständige Erfolgsmanifeste      | P0 QA           | `FIXED`                   |
 | `F34-QA-005`      | Browserprojekte kollidierten in gemeinsamen Login-Rate-Limit-Buckets           | P1 QA           | `FIXED`                   |
 | `F34-QA-006`      | Live-Payment-Fixture verletzte den aktuellen Identity-/Outbox-Vertrag          | P2 QA           | `FIXED`                   |
@@ -136,7 +140,7 @@
 | `F34-QA-011`      | Browserverträge erwarteten rohe Enums und vor Phase 34 erlaubte Zustellung     | P1 QA           | `FIXED`                   |
 | `F34-QA-012`      | Retentionstest verglich PostgreSQL- und Host-Uhr an der Millisekundengrenze    | P1 QA           | `FIXED`                   |
 | `F34-SUPPLY-001`  | verwundbare transitive YAML-Version im Build-/Lint-Tooling                     | P2 Supply Chain | `FIXED`                   |
-| `F34-MIG-001`     | Generated Search-Spalte brach Revision-Immutability-Trigger                    | P1 Data         | `IMPLEMENTED_E2E_PENDING` |
+| `F34-MIG-001`     | Generated Search-Spalte brach Revision-Immutability-Trigger                    | P1 Data         | `FIXED`                   |
 
 ### 2.1 Verbindliche Ownership
 
@@ -3404,30 +3408,31 @@ aus Abschnitt 11 zählen nicht zu dieser Verteilung.
 
 | Prüfstatus                    | Anzahl |
 | ----------------------------- | -----: |
-| `FIXED`                       |     25 |
+| `FIXED`                       |     61 |
 | `FALSE_POSITIVE`              |     14 |
 | `OBSOLETE`                    |     17 |
 | `DUPLICATE`                   |      2 |
-| `BLOCKED_EXTERNAL`            |     10 |
-| `BLOCKED_E2E`                 |      1 |
-| `CONFIRMED`                   |      5 |
-| `PARTIALLY_CONFIRMED`         |     11 |
-| `IMPLEMENTED_E2E_PENDING`     |     21 |
+| `BLOCKED_EXTERNAL`            |     12 |
+| `BLOCKED_E2E`                 |      0 |
+| `CONFIRMED`                   |      0 |
+| `PARTIALLY_CONFIRMED`         |      0 |
+| `IMPLEMENTED_E2E_PENDING`     |      0 |
 | `UNVERIFIED`                  |      0 |
 | **Gesamt**                    | **106** |
 
-`NO_GO`. Der technische Candidate bestand Unit 2834/2834, Integration
-756/756, das allgemeine Browsergate 354/354, `phase33:e2e` 9/9 und das
-Digest-gebundene Phase-34-Browsergate 45/45. Diese Evidence schließt die oben
-als `FIXED` klassifizierten repository-internen Defekte, ersetzt aber weder
-den offenen Crosswalk aller 20 übergreifenden Journeys noch echte Provider-,
-Deployment- oder Fachfreigaben.
+**Technisches Urteil: `GO`; Aktivierungsurteil: `NO_GO`.** Der ausführbare
+Candidate bestand die vollständige Unit-Suite, Integration 756/756, das
+allgemeine Browsergate 354/354, `phase33:e2e` 9/9 und das Digest-gebundene
+Phase-34-Browsergate 51/51 in Chromium, Firefox, WebKit und einem isolierten
+Chromium-Trust-Sandbox-Projekt. Der Digest lautet
+`a3a28db00a2f46a0121d77f73125aefb4f9a9b3429ec0f6a09aabaf812d8526a`.
+Damit sind sämtliche repository-internen P0/P1-Defekte geschlossen; 18 der
+20 übergreifenden Reisen sind im ausführbaren Scope `COVERED`.
 
-Bewusst offen bleiben insbesondere Real-/Contract-Payment und die lokale
-Mock-Positiv-Evidence, Search-Scale/Index/Zielpool, das Talent-Radar-Legal-
-Gate, Provider-Inbox/Resend-Worker, Auth-Ziel-/Reset-Budgets, stille Audit-/
-Risk-Signal-Fehler, Bewerberidentität, Migration-Restart/Zielplattform sowie
-alle zehn externen Legal-/Privacy-/Tax-/Accessibility-/Operations-Gates.
-Der sichere Zwischenzustand bleibt fail-closed. Daher behauptet dieses
-Dokument weder Produktionsreife noch technische Gesamtfreigabe; maßgeblich
-ist der [Phase-34-Abschlussrecord](./evidence/2026-08-07-phase-34.md).
+Bewusst offen bleiben ausschließlich zwölf echte externe Legal-/Privacy-/
+Tax-/Accessibility-/Payment-/Operations-/Staging-Gates, darunter die beiden
+realen PSP-Reisen `E2E-34-06` und `E2E-34-07`. Sie sind mit Owner,
+Abnahmeevidence und fail-closed Zwischenzustand als `BLOCKED_EXTERNAL`
+klassifiziert. Das technische `GO` aktiviert daher weder Productiontraffic
+noch einen Provider und ist kein `GO_LIVE_APPROVED`; maßgeblich ist der
+[Phase-34-Abschlussrecord](./evidence/2026-08-07-phase-34.md).

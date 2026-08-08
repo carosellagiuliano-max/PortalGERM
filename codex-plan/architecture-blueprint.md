@@ -14,7 +14,11 @@
 > Phase 33 ist als technische LC4-/LC5-Closure `COMPLETED`; Technik ist
 > `TECHNICALLY_READY_FOR_LC4` und
 > `TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, Quality ist `PASSED`, Aktivierung
-> ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Abschnitte 1–16
+> ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Phase 34 hat diesen Gesamtbaum
+> anschließend unabhängig re-auditiert, 106 Findings final klassifiziert und
+> den repository-internen Technik-/Quality-Scope erneut als `GO`/`PASSED`
+> geschlossen; reale Aktivierung bleibt unverändert extern blockiert.
+> Abschnitte 1–16
 > beschreiben den geschützten MVP-Kern, die
 > Remediation-Architektur steht ab Abschnitt 17. Ist-Routen kommen aus
 > `route-inventory.json`; Server Actions und schema-definierte

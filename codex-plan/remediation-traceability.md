@@ -26,7 +26,10 @@
 > Befunde aus. Diese technische Closure ist mit
 > [Phase-33-Evidence](./evidence/2026-08-05-phase-33.md) `PASSED`; die reale
 > Aktivierung bleibt `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Dieses Dokument
-> erteilt keine Go-live-Freigabe.
+> erteilt keine Go-live-Freigabe. Phase 34 hat dieselben Requirements auf dem
+> gehärteten Gesamtcandidate erneut geprüft: repository-interne Technik `GO`,
+> Quality `PASSED`, 18/20 Reisen `COVERED`; die zwei realen PSP-Reisen und
+> weitere Fach-/Provider-/Operations-Evidence bleiben `BLOCKED_EXTERNAL`.
 
 ## 1. Methodik und Statussemantik
 

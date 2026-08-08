@@ -11,9 +11,12 @@
 > Legal-, Privacy-, AVG-, Tax-, Finance-, Operations-, Markt- oder
 > Production-Evidence vortäuschen. Optionale Phase-27/28-, Salary-, Boost- und
 > Paid-Radar-Tracks bleiben bis zu ihren eigenen Gates `DISABLED`. Phase 34
-> ist der laufende unabhängige Re-Audit: Technical und Quality Status sind
-> `PENDING`, Activation ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`, das
-> Gesamturteil bleibt `NO_GO`.
+> ist als unabhängiger Re-Audit `COMPLETED`: Technik ist
+> `TECHNICALLY_READY_FOR_LC4` und
+> `TECHNICALLY_READY_FOR_LC5_CONFIGURATION`, Quality ist `PASSED` und das
+> technische Urteil lautet `GO`. Activation bleibt
+> `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`; das Produktions-/Aktivierungsurteil
+> bleibt `NO_GO`.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -348,21 +351,24 @@ ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Siehe
 [Evidence](./evidence/2026-08-05-phase-33.md) und
 [Findings Ledger](./phase33-findings-ledger.md).
 
-### [ ] 34 — Verifizierte Befunde, Production-Härtung und finale Validierung
+### [x] 34 — Verifizierte Befunde, Production-Härtung und finale Validierung
 
 [`34-verified-findings-production-hardening.md`](./34-verified-findings-production-hardening.md) ·
-laufender unabhängiger Re-Audit des aktuellen Phase-33-Gesamtbaums. Jede
+abgeschlossener unabhängiger Re-Audit des Phase-33-Gesamtbaums. Jede
 eingereichte Behauptung wird zunächst als Hypothese behandelt und im
 [`Phase-34-Findingsregister`](./phase34-findings-register.md) reproduzierbar
 klassifiziert. Bestätigte repository-interne Defekte werden nur mit positivem
 und negativem End-to-End-Nachweis geschlossen; externe Legal-/Privacy-/AVG-/
 Tax-/Provider-/Ops-/Staging-/Research-Gates bleiben `BLOCKED_EXTERNAL`.
-Activation bleibt `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`; das Gesamturteil
-bleibt `NO_GO`. Der aktuelle
-[Abschlussrecord](./evidence/2026-08-07-phase-34.md) weist alle vorhandenen
-Repository-Suites als grün aus, aber nur 4 von 20 Pflichtreisen als vollständig
-`COVERED`; 14 bleiben `PARTIAL` und 2 `EXTERNAL`. Technical und Quality Status
-bleiben deshalb `PENDING`, die Checkbox bleibt offen und es erfolgte keine
+Der [Abschlussrecord](./evidence/2026-08-07-phase-34.md) bindet die grüne
+Vollsuite und 18 von 20 Pflichtreisen als repository-intern `COVERED`; die
+zwei realen PSP-Reisen bleiben `EXTERNAL`. Alle 106 Findings sind final als
+61 `FIXED`, 14 `FALSE_POSITIVE`, 17 `OBSOLETE`, 2 `DUPLICATE` und 12
+`BLOCKED_EXTERNAL` klassifiziert. Phase und Quality sind abgeschlossen,
+Technik ist `TECHNICALLY_READY_FOR_LC4` und
+`TECHNICALLY_READY_FOR_LC5_CONFIGURATION`. Activation bleibt
+`ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`; das technische Urteil lautet `GO`,
+das Produktions-/Aktivierungsurteil `NO_GO`. Es erfolgte keine
 Produktionsfreigabe.
 
 Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in

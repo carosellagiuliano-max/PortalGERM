@@ -7,7 +7,9 @@
 > korrekt mit `NO_GO`; LC2–LC6 sind `NOT APPROVED`. Phase 33 ist technisch
 > `COMPLETED`, quality-seitig `PASSED` und aktivierungsseitig
 > `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Daraus folgt weder Pilot- noch
-> Produktionsfreigabe. Die Phasen 01 bis 18 und alle bestehenden Evidence-
+> Produktionsfreigabe. Der nachgelagerte unabhängige Phase-34-Re-Audit ist
+> technisch `COMPLETED`/`GO`, Quality `PASSED`; die Aktivierung bleibt wegen
+> zwölf echten External-Gates `NO_GO`. Die Phasen 01 bis 18 und alle bestehenden Evidence-
 > Records werden nicht rückwirkend umgedeutet.
 
 ## 1. Auftrag, Geltungsbereich und Status
