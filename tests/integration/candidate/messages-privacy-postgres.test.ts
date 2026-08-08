@@ -280,6 +280,74 @@ describe.sequential("Phase 09 candidate messages and privacy", () => {
     }
   });
 
+  it("blocks new prod-like Talent-Radar messages transactionally but not application messages", async () => {
+    const owner = candidateUsers[0]!;
+    const radarConversation = await client().conversation.findFirstOrThrow({
+      where: {
+        kind: "TALENT_RADAR",
+        participants: {
+          some: { kind: "USER", userId: owner.userId, leftAt: null },
+        },
+        contactRequest: { status: "ACCEPTED", candidateProfileId: owner.id },
+      },
+      select: { id: true },
+    });
+    const blockedKey = `phase34-radar-legal-blocked-${randomUUID()}`;
+    const blockedEnvironment = {
+      APP_ENV: "preview" as const,
+      LEGAL_PUBLICATION_PRIVACY: false,
+    };
+
+    await expect(sendCandidateMessage(
+      client(),
+      owner.userId,
+      {
+        conversationId: radarConversation.id,
+        body: "Diese neue Radar-Nachricht darf nicht persistieren.",
+        idempotencyKey: blockedKey,
+      },
+      ANCHOR,
+      blockedEnvironment,
+    )).resolves.toEqual({ ok: false, code: "LEGAL_GATE_BLOCKED" });
+    await expect(client().message.count({
+      where: { idempotencyKey: blockedKey },
+    })).resolves.toBe(0);
+    await expect(getCandidateConversation(
+      client(),
+      owner.userId,
+      radarConversation.id,
+      { legalGateEnvironment: blockedEnvironment, now: ANCHOR },
+    )).resolves.toMatchObject({
+      messageSendAvailability: {
+        allowed: false,
+        reason: "RADAR_LEGAL_REVIEW_REQUIRED",
+      },
+    });
+
+    const applicationConversation = await client().conversation.findFirstOrThrow({
+      where: {
+        kind: "APPLICATION",
+        application: { candidateProfileId: owner.id },
+      },
+      select: { id: true },
+    });
+    const applicationKey = `phase34-application-message-${randomUUID()}`;
+    await expect(sendCandidateMessage(
+      client(),
+      owner.userId,
+      {
+        conversationId: applicationConversation.id,
+        body: "Bewerbungsgespräche sind nicht Teil des Radar-AVG-Gates.",
+        idempotencyKey: applicationKey,
+      },
+      ANCHOR,
+      blockedEnvironment,
+    )).resolves.toMatchObject({ ok: true, duplicate: false });
+    await expect(client().message.count({
+      where: { idempotencyKey: applicationKey },
+    })).resolves.toBe(1);
+  });
+
   it("notifies the active application pipeline assignee but excludes inactive recipients", async () => {
     const owner = candidateUsers[0]!;
     const conversation = await client().conversation.findFirstOrThrow({

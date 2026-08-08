@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { AUDIT_ACTIONS_V1 } from "@/lib/domains/audit/audit-actions";
 
 const ACTION_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+const PHASE_34_ADDITIVE_AUDIT_ACTIONS = ["COMPANY_CLOSED"] as const;
 
 function readRepositoryFile(path: string) {
   return readFileSync(resolve(process.cwd(), path), "utf8");
@@ -261,6 +262,7 @@ describe("AUDIT_ACTIONS_V1 contract", () => {
       ...extractPhase30AuditActions(
         readRepositoryFile("codex-plan/30-search-scale-operations.md"),
       ),
+      ...PHASE_34_ADDITIVE_AUDIT_ACTIONS,
     ];
 
     expect(new Set(constantActions).size).toBe(constantActions.length);

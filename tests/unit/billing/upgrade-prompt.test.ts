@@ -37,7 +37,7 @@ const CONTACT_PACK_VERSION = Object.freeze({
 describe("billing upgrade prompt allowlist", () => {
   it("maps the seat limit to the literal Pro checkout target", () => {
     expect(
-      buildUpgradePrompt({ reason: "SEAT_LIMIT_REACHED", suggestedPlanSlug: "pro" }),
+      buildUpgradePrompt({ reason: "SEAT_LIMIT_REACHED", suggestedPlanSlug: "pro", mockCheckoutAvailable: true }),
     ).toMatchObject({
       title: "Sitzplatzlimit erreicht",
       cta: {
@@ -54,6 +54,7 @@ describe("billing upgrade prompt allowlist", () => {
         reason: "ACTIVE_JOB_LIMIT_REACHED",
         suggestedPlanSlug: "pro",
         suggestedProductSlug,
+        mockCheckoutAvailable: true,
       });
       expect(prompt.cta.href).toBe("/employer/billing");
       expect(prompt.cta.href).not.toContain("checkout");
@@ -68,6 +69,7 @@ describe("billing upgrade prompt allowlist", () => {
         suggestedProductSlug: "additional-job-30d",
         targetJobId,
         actorRole: "OWNER",
+        mockCheckoutAvailable: true,
       }).cta,
     ).toEqual({
       href: `/employer/billing/checkout?product=additional-job-30d&job=${targetJobId}`,
@@ -79,6 +81,7 @@ describe("billing upgrade prompt allowlist", () => {
         suggestedProductSlug: "additional-job-30d",
         targetJobId: "../foreign-job",
         actorRole: "OWNER",
+        mockCheckoutAvailable: true,
       }).cta.href,
     ).toBe("/employer/billing");
   });
@@ -88,6 +91,7 @@ describe("billing upgrade prompt allowlist", () => {
       buildUpgradePrompt({
         reason: "CONTACT_FUNDING_UNAVAILABLE",
         suggestedProductSlug: "contact-pack-10",
+        mockCheckoutAvailable: true,
       }).cta.href,
     ).toBe("/employer/billing/checkout?product=contact-pack-10");
 
@@ -95,12 +99,14 @@ describe("billing upgrade prompt allowlist", () => {
       buildUpgradePrompt({
         reason: "CONTACT_FUNDING_UNAVAILABLE",
         suggestedProductSlug: "contact-pack-10&next=https://evil.example",
+        mockCheckoutAvailable: true,
       }).cta.href,
     ).toBe("/pricing");
     expect(
       buildUpgradePrompt({
         reason: "SEAT_LIMIT_REACHED",
         suggestedPlanSlug: "starter",
+        mockCheckoutAvailable: true,
       }).cta.href,
     ).toBe("/pricing");
   });
@@ -111,6 +117,7 @@ describe("billing upgrade prompt allowlist", () => {
         reason: "SEAT_LIMIT_REACHED",
         suggestedPlanSlug: "pro",
         actorRole: "ADMIN",
+        mockCheckoutAvailable: true,
       }).cta,
     ).toEqual({ href: "/pricing", label: "Pläne vergleichen" });
   });
@@ -122,6 +129,7 @@ describe("billing upgrade prompt allowlist", () => {
         suggestedProductSlug: "additional-job-30d",
         suggestedPlanSlug: "pro",
         actorRole: "RECRUITER",
+        mockCheckoutAvailable: true,
       }).cta,
     ).toEqual({ href: "/pricing", label: "Pläne vergleichen" });
   });
@@ -133,6 +141,7 @@ describe("billing upgrade prompt allowlist", () => {
           reason: "CONTACT_FUNDING_UNAVAILABLE",
           suggestedProductSlug: "contact-pack-10",
           actorRole,
+          mockCheckoutAvailable: true,
         }).cta.href,
       ).toBe("/employer/billing/checkout?product=contact-pack-10");
     }
@@ -149,6 +158,7 @@ describe("server-side catalog upgrade prompt", () => {
         reason: "SEAT_LIMIT_REACHED",
         suggestedPlanSlug: "pro",
         actorRole: "OWNER",
+        mockCheckoutAvailable: true,
       },
       { database: database as never, now: NOW },
     );
@@ -185,6 +195,7 @@ describe("server-side catalog upgrade prompt", () => {
         reason: "CONTACT_FUNDING_UNAVAILABLE",
         suggestedProductSlug: "contact-pack-10",
         actorRole: "ADMIN",
+        mockCheckoutAvailable: true,
       },
       { database: database as never, now: NOW },
     );

@@ -6,9 +6,14 @@ const mocks = vi.hoisted(() => ({
   getPublicPricingCatalog: vi.fn(),
   getCheckoutPreview: vi.fn(),
   getDatabase: vi.fn(),
+  getServerEnvironment: vi.fn(),
+  notFound: vi.fn(() => {
+    throw new Error("SAFE_NOT_FOUND");
+  }),
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
 vi.mock("@/lib/billing/employer-page-access", () => ({
   requireEmployerBillingPage: mocks.requireEmployerBillingPage,
 }));
@@ -19,6 +24,9 @@ vi.mock("@/lib/billing/employer-read-model", () => ({
   getCheckoutPreview: mocks.getCheckoutPreview,
 }));
 vi.mock("@/lib/db/client", () => ({ getDatabase: mocks.getDatabase }));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: mocks.getServerEnvironment,
+}));
 
 import EmployerBillingCheckoutPage from "@/app/employer/billing/checkout/page";
 import type { EntitlementRights } from "@/lib/billing/entitlements";
@@ -39,6 +47,10 @@ const RIGHTS: EntitlementRights = {
 describe("employer checkout choice page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getServerEnvironment.mockReturnValue({
+      APP_ENV: "local",
+      PAYMENT_PROVIDER_MODE: "disabled",
+    });
     mocks.requireEmployerBillingPage.mockResolvedValue({
       context: {
         companyId: "20000000-0000-4000-8000-000000000001",
@@ -147,6 +159,20 @@ describe("employer checkout choice page", () => {
     expect(screen.queryByRole("link", { name: "Prüfen" })).not.toBeInTheDocument();
     expect(screen.queryByText(/CHF/u)).not.toBeInTheDocument();
   });
+
+  it.each(["preview", "staging", "production"] as const)(
+    "returns a generic 404 before loading employer or catalog state in %s",
+    async (APP_ENV) => {
+      mocks.getServerEnvironment.mockReturnValue({
+        APP_ENV,
+        PAYMENT_PROVIDER_MODE: "disabled",
+      });
+
+      await expect(renderChoicePage()).rejects.toThrow("SAFE_NOT_FOUND");
+      expect(mocks.requireEmployerBillingPage).not.toHaveBeenCalled();
+      expect(mocks.getPublicPricingCatalog).not.toHaveBeenCalled();
+    },
+  );
 });
 
 async function renderChoicePage() {

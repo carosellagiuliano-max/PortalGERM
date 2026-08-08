@@ -26,6 +26,7 @@ import {
   revokeCompanyVerification,
   suspendCompany,
   reactivateCompany,
+  closeCompany,
   requestCompanyClaimEvidence,
   rejectCompanyClaim,
   approveCompanyClaim,
@@ -166,7 +167,9 @@ export async function adminCommandAction(
                               ? await suspendCompany(input, dependencies)
                               : operation === "company-reactivate"
                                 ? await reactivateCompany(input, dependencies)
-                                : operation === "claim-evidence"
+                                : operation === "company-close"
+                                  ? await closeCompany(input, dependencies)
+                                  : operation === "claim-evidence"
                                   ? await requestCompanyClaimEvidence(
                                       input,
                                       dependencies,
@@ -458,6 +461,14 @@ export async function adminCommandAction(
           : "Mock-Verlängerung wurde aktiviert. Es wurde keine Zahlung oder Rechnung erzeugt.",
       });
     }
+    if (operation === "company-close") {
+      return Object.freeze({
+        status: "success",
+        message: result.replay
+          ? "Der Firmenabschluss war bereits sicher verarbeitet."
+          : "Die Firma wurde geschlossen. Daten und Auditverlauf bleiben erhalten.",
+      });
+    }
     return Object.freeze({
       status: "success",
       message: result.replay
@@ -517,6 +528,8 @@ function messageForCode(code: string) {
                 ? "Die Firma ist aktuell nicht gültig verifiziert."
                 : code === "INCOMPLETE"
                   ? "Die nötigen Entscheidungen oder Angaben sind noch nicht vollständig."
+                  : code === "ACTIVE_SUBSCRIPTION"
+                    ? "Die Firma hat noch ein laufendes bezahltes Abo. Beende oder kläre es zuerst im Billing; es wurden keine Daten geändert."
                   : code === "INVALID_INPUT"
                     ? "Bitte prüfe die Eingaben."
                     : "Die Änderung konnte nicht gespeichert werden.";

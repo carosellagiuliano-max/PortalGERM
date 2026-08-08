@@ -19,6 +19,10 @@ import {
   runJobAlertDigestMock,
   updateJobAlert,
 } from "@/lib/candidate/job-alerts";
+import {
+  resolveJobAlertDeliveryAvailability,
+  type JobAlertDeliveryAvailability,
+} from "@/lib/candidate/job-alert-delivery-runtime";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
@@ -32,16 +36,22 @@ export async function createJobAlertAction(
   if (!security.ok) return security.state;
   const command = readAlertForm(formData);
   if (command === null) return invalidFormState();
+  let availability: JobAlertDeliveryAvailability | null = null;
+  if (command.active) {
+    availability = await loadActivationAvailability(security);
+    if (!availability.canActivate) return deliveryUnavailableState();
+  }
   try {
     await createJobAlert(command, {
       actorUserId: security.userId,
       correlationId: security.correlationId,
-      now: new Date(),
+      database: security.database,
+      now: security.now,
     });
     revalidateAlertPaths();
     return successState(
       command.active
-        ? "Jobabo erstellt und ausdrücklich aktiviert."
+        ? activationSuccessMessage("created", availability!)
         : "Jobabo als pausierter Entwurf erstellt.",
     );
   } catch (error) {
@@ -58,14 +68,24 @@ export async function updateJobAlertAction(
   if (!security.ok) return security.state;
   const command = readAlertForm(formData);
   if (command === null) return invalidFormState();
+  let availability: JobAlertDeliveryAvailability | null = null;
+  if (command.active) {
+    availability = await loadActivationAvailability(security);
+    if (!availability.canActivate) return deliveryUnavailableState();
+  }
   try {
     await updateJobAlert(jobAlertId, command, {
       actorUserId: security.userId,
       correlationId: security.correlationId,
-      now: new Date(),
+      database: security.database,
+      now: security.now,
     });
     revalidateAlertPaths();
-    return successState("Jobabo gespeichert.");
+    return successState(
+      command.active
+        ? activationSuccessMessage("updated", availability!)
+        : "Jobabo pausiert gespeichert.",
+    );
   } catch (error) {
     return domainErrorState(error);
   }
@@ -99,7 +119,8 @@ export async function deleteJobAlertAction(
     await deleteJobAlert(jobAlertId, {
       actorUserId: security.userId,
       correlationId: security.correlationId,
-      now: new Date(),
+      database: security.database,
+      now: security.now,
     });
     revalidateAlertPaths();
     return successState("Jobabo gelöscht.");
@@ -115,16 +136,17 @@ export async function grantJobAlertDeliveryAction(
   const security = await secureCandidateMutation();
   if (!security.ok) return security.state;
   if (!isEmptyForm(formData)) return invalidFormState();
+  const availability = await loadActivationAvailability(security);
+  if (!availability.canActivate) return deliveryUnavailableState();
   try {
     await grantJobAlertDeliveryConsent({
       actorUserId: security.userId,
       correlationId: security.correlationId,
-      now: new Date(),
+      database: security.database,
+      now: security.now,
     });
     revalidateAlertPaths();
-    return successState(
-      "Service-Zustellung freigegeben. Pausierte Jobabos bleiben pausiert, bis du sie einzeln aktivierst.",
-    );
+    return successState(consentSuccessMessage(availability));
   } catch (error) {
     return domainErrorState(error);
   }
@@ -141,7 +163,8 @@ export async function revokeJobAlertDeliveryAction(
     const result = await revokeJobAlertDeliveryConsentGlobally({
       actorUserId: security.userId,
       correlationId: security.correlationId,
-      now: new Date(),
+      database: security.database,
+      now: security.now,
     });
     revalidateAlertPaths();
     return successState(
@@ -171,9 +194,10 @@ export async function runJobAlertDigestMockAction(
   }
   try {
     const result = await runJobAlertDigestMock({
-      now: new Date(),
+      now: security.now,
       alertId: jobAlertId,
       candidateUserId: security.userId,
+      database: security.database,
     });
     revalidateAlertPaths();
     const digest = result.completed[0];
@@ -195,25 +219,32 @@ async function lifecycleAction(
   const security = await secureCandidateMutation();
   if (!security.ok) return security.state;
   if (!isEmptyForm(formData)) return invalidFormState();
+  let availability: JobAlertDeliveryAvailability | null = null;
+  if (command === "resume") {
+    availability = await loadActivationAvailability(security);
+    if (!availability.canActivate) return deliveryUnavailableState();
+  }
   try {
     if (command === "pause") {
       await pauseJobAlert(jobAlertId, {
         actorUserId: security.userId,
         correlationId: security.correlationId,
-        now: new Date(),
+        database: security.database,
+        now: security.now,
       });
     } else {
       await resumeJobAlert(jobAlertId, {
         actorUserId: security.userId,
         correlationId: security.correlationId,
-        now: new Date(),
+        database: security.database,
+        now: security.now,
       });
     }
     revalidateAlertPaths();
     return successState(
       command === "pause"
         ? "Jobabo pausiert."
-        : "Jobabo ausdrücklich aktiviert.",
+        : activationSuccessMessage("resumed", availability!),
     );
   } catch (error) {
     return domainErrorState(error);
@@ -261,7 +292,67 @@ async function secureCandidateMutation() {
     ok: true as const,
     userId: user.id,
     correlationId: request.correlationId,
+    database,
+    environment,
+    now,
   });
+}
+
+async function loadActivationAvailability(
+  security: Extract<
+    Awaited<ReturnType<typeof secureCandidateMutation>>,
+    { ok: true }
+  >,
+) {
+  try {
+    return await resolveJobAlertDeliveryAvailability(
+      security.database,
+      security.environment,
+      security.now,
+    );
+  } catch {
+    return Object.freeze({
+      canActivate: false,
+      manualMockEnabled: false,
+      mode: "UNAVAILABLE",
+      reason: "DELIVERY_CONFIGURATION_UNAVAILABLE",
+    }) satisfies JobAlertDeliveryAvailability;
+  }
+}
+
+function deliveryUnavailableState() {
+  return errorState(
+    "Der Jobabo-Zustellpfad ist derzeit nicht betriebsbereit. Du kannst Filter pausiert speichern; eine Aktivierung ist erst nach gültiger Provider-, Worker- und Scheduler-Freigabe möglich.",
+  );
+}
+
+function activationSuccessMessage(
+  operation: "created" | "resumed" | "updated",
+  availability: JobAlertDeliveryAvailability,
+) {
+  const prefix =
+    operation === "created"
+      ? "Jobabo erstellt."
+      : operation === "resumed"
+        ? "Jobabo aktiviert."
+        : "Jobabo gespeichert und aktiviert.";
+  if (availability.mode === "LOCAL_MOCK") {
+    return `${prefix} Es ist ausschliesslich für den lokalen Mock-Test vorgemerkt; es wird keine echte E-Mail versendet.`;
+  }
+  if (availability.mode === "PROVIDER_CONTRACT") {
+    return `${prefix} Es wird ausschliesslich über den isolierten Providervertrag verarbeitet; eine echte Empfängerzustellung wird nicht behauptet.`;
+  }
+  return `${prefix} Der freigegebene Zustellpfad darf den nächsten fälligen Lauf verarbeiten; Übergabe und endgültige E-Mail-Zustellung sind damit noch nicht bestätigt.`;
+}
+
+function consentSuccessMessage(availability: JobAlertDeliveryAvailability) {
+  const suffix =
+    availability.mode === "LOCAL_MOCK"
+      ? "Der lokale Mock-Test bleibt klar von einer echten E-Mail getrennt."
+      : availability.mode === "PROVIDER_CONTRACT"
+        ? "Der isolierte Providervertrag bestätigt keine echte Empfängerzustellung."
+        : "Eine tatsächliche E-Mail gilt erst nach Providerbestätigung als übergeben.";
+  return `Jobabo-Einwilligung gespeichert. Pausierte Jobabos bleiben pausiert, bis du sie einzeln aktivierst. ${suffix}`;
 }
 
 function readAlertForm(formData: FormData) {

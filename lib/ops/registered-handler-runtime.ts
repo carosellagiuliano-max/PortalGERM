@@ -51,6 +51,7 @@ import {
 import { createEmailDeliveryProvider } from "@/lib/providers/email/delivery-composition";
 import { emailProvider } from "@/lib/providers/email";
 import { emailProviderActivationBinding } from "@/lib/providers/email/provider-activation-binding";
+import { projectResendEventInbox } from "@/lib/providers/email/resend-event-inbox";
 import { paymentProviderActivationBinding } from "@/lib/providers/payments/provider-activation-binding";
 import { createHostedPaymentProvider } from "@/lib/providers/payments/payment-composition";
 import {
@@ -230,6 +231,87 @@ async function invokeHandler(
         );
       }
       return digestSummary(summary);
+    }
+    case "notifications.provider-event-project": {
+      const payload = z
+        .strictObject({ emailProviderEventInboxId: uuidSchema })
+        .parse(claimed.payloadReference);
+      const inbox =
+        await dependencies.database.emailProviderEventInbox.findUnique({
+          where: { id: payload.emailProviderEventInboxId },
+          select: {
+            adapterKey: true,
+            adapterVersion: true,
+            environment: true,
+            status: true,
+          },
+        });
+      if (inbox === null) {
+        throw new HandlerFailure(
+          "PERMANENT_VALIDATION",
+          "EMAIL_PROVIDER_EVENT_NOT_FOUND",
+        );
+      }
+      const providerBinding = emailProviderActivationBinding(
+        dependencies.environment,
+        "email.delivery-events",
+      );
+      if (
+        providerBinding === null ||
+        providerBinding.adapterKey === "local_mock"
+      ) {
+        throw new HandlerFailure("CONFIGURATION", "PROVIDER_DISABLED");
+      }
+      if (
+        inbox.environment !== dependencies.environment.APP_ENV ||
+        inbox.adapterKey !== providerBinding.adapterKey ||
+        inbox.adapterVersion !== providerBinding.adapterVersion
+      ) {
+        throw new HandlerFailure(
+          "PERMANENT_VALIDATION",
+          "EMAIL_PROVIDER_EVENT_BINDING_MISMATCH",
+        );
+      }
+      if (inbox.status !== "RECEIVED") {
+        return digestSummary({
+          inboxId: payload.emailProviderEventInboxId,
+          projectedSuppressions: 0,
+          status: inbox.status,
+        });
+      }
+      const providerActivationId = await requireProvider(dependencies, {
+        ...providerBinding,
+        now,
+      });
+      const projection = await projectResendEventInbox(
+        {
+          expectedAdapterKey: providerBinding.adapterKey,
+          expectedEnvironment: dependencies.environment.APP_ENV,
+          expectedProviderActivationId: providerActivationId,
+          inboxId: payload.emailProviderEventInboxId,
+          now,
+        },
+        dependencies.database,
+      );
+      if (projection.status === "RECEIVED") {
+        throw new HandlerFailure("TRANSIENT", "EMAIL_PROVIDER_ATTEMPT_PENDING");
+      }
+      if (projection.status === "NOT_FOUND") {
+        throw new HandlerFailure(
+          "PERMANENT_VALIDATION",
+          "EMAIL_PROVIDER_EVENT_NOT_FOUND",
+        );
+      }
+      if (projection.status === "BINDING_MISMATCH") {
+        throw new HandlerFailure(
+          "CONFIGURATION",
+          "EMAIL_PROVIDER_ACTIVATION_MISMATCH",
+        );
+      }
+      return digestSummary({
+        inboxId: payload.emailProviderEventInboxId,
+        ...projection,
+      });
     }
     case "notifications.retention":
       return digestSummary(
@@ -715,6 +797,7 @@ async function requireProvider(
       `PROVIDER_${decision.reason}`,
     );
   }
+  return decision.activationId;
 }
 
 class HandlerFailure extends Error {

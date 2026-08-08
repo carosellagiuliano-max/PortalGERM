@@ -19,7 +19,7 @@ import {
 
 test.describe.configure({ mode: "serial" });
 
-test("[E2E-03] @journey upgrades a full Free quota exactly once and publishes the next Job", async ({
+test("[E2E-03][E2E-34-08][F34-PAY-009] @journey @phase34 upgrades a full Free quota exactly once and publishes the next Job", async ({
   browser,
   page,
 }) => {

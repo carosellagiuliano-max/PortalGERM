@@ -49,6 +49,11 @@ Referenced by: Phase 13 (ranking), Phase 15 (search).
 
 ## ADR-004 — No background worker in the controlled MVP: effective time state plus explicit projection
 
+**Status:** accepted as the historical read-side-effect baseline; its
+"no background worker" MVP limitation is superseded by ADR-034 and ADR-043.
+Public GETs remain side-effect free, while durable worker/scheduler operation
+is now an explicit, separately activated runtime role.
+
 **Decision:** Public GET requests remain side-effect free. Effective Boost, Job and Subscription state is calculated from persisted lifecycle status plus an injected `now` and timestamp boundaries; public queries exclude ineligible/expired rows without writing. An idempotent, auditable maintenance command can project due lifecycle transitions for operational queues, demo startup and tests. Subscription renewal remains an explicit mock Admin action. A durable scheduler/outbox is a P1/real-operation gate.
 
 **Why:** The MVP stays self-contained and deterministic without surprising database writes on search traffic. The same pure predicate drives reads, writes and fixed-clock tests, while explicit commands make stored operational state inspectable.
@@ -162,6 +167,12 @@ Referenced by: Phase 01, 06.
 ---
 
 ## ADR-014 — Mock-only MVP boundary; real providers are deferred
+
+**Status:** accepted as the historical mock-only MVP baseline; superseded only
+for explicitly approved provider/worker scopes by ADR-031, ADR-032, ADR-034 and
+ADR-043. Its invariant remains binding: environment variables or secrets alone
+never activate a provider, Production never falls back to Mock, and a Contract-
+or Sandboxreceipt is not Live-Evidence.
 
 **Decision:** The MVP uses mock adapters only for payments, email, AI, Job-Room, storage and commute. Analytics is an internal domain contract; invoice output is a deterministic internal HTML renderer. Real-provider files may exist as explicit placeholders to protect architecture, but they must not be selected automatically by env keys and must not call external APIs during MVP implementation.
 

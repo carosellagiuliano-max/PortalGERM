@@ -48,7 +48,9 @@ vi.mock("@/lib/employer/applications", () => ({
   sendEmployerApplicationMessage: mocks.sendEmployerApplicationMessage,
   transitionEmployerApplication: vi.fn(),
 }));
-vi.mock("@/lib/providers/ai", () => ({ aiProvider: { marker: "ai" } }));
+vi.mock("@/lib/providers/ai", () => ({
+  resolveAiProvider: () => ({ marker: "ai" }),
+}));
 vi.mock("@/lib/providers/email", () => ({
   emailProvider: { marker: "email" },
 }));
@@ -61,6 +63,7 @@ import {
   sendEmployerMessageAction,
 } from "@/app/employer/applicants/actions";
 import { INITIAL_EMPLOYER_ACTION_STATE } from "@/lib/employer/action-state";
+import { appendLocalPublicIntakePrivacyBinding } from "@/tests/fixtures/public-intake-privacy";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const MEMBERSHIP_ID = "22222222-2222-4222-8222-222222222222";
@@ -91,7 +94,7 @@ describe("employer applicant report action", () => {
     });
     mocks.isValidAuthMutationOrigin.mockReturnValue(true);
     mocks.getDatabase.mockReturnValue(mocks.database);
-    mocks.getServerEnvironment.mockReturnValue({ APP_ENV: "test" });
+    mocks.getServerEnvironment.mockReturnValue({ APP_ENV: "local" });
     mocks.resolveEmployerApplicantReportTarget.mockResolvedValue({
       userId: CANDIDATE_USER_ID,
       companyId: COMPANY_ID,
@@ -227,7 +230,7 @@ function validForm(): FormData {
     "description",
     "Das Profil enthält widersprüchliche Angaben, die geprüft werden sollen.",
   );
-  return formData;
+  return appendLocalPublicIntakePrivacyBinding(formData, "ABUSE_REPORT");
 }
 
 function messageForm(): FormData {

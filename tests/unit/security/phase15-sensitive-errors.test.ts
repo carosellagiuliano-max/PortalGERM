@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getAuthRequestContext: vi.fn(),
   getCompanyOrder: vi.fn(),
+  getServerEnvironment: vi.fn(),
   getRequesterSupportCase: vi.fn(),
   isValidAuthMutationOrigin: vi.fn(),
   notFound: vi.fn(() => {
@@ -43,6 +44,9 @@ vi.mock("@/lib/candidate/job-alerts", () => ({
   unsubscribeJobAlertWithToken: mocks.unsubscribeJobAlertWithToken,
 }));
 vi.mock("@/lib/db/client", () => ({ getDatabase: () => ({}) }));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: mocks.getServerEnvironment,
+}));
 
 import { unsubscribeJobAlertAction } from "@/app/alerts/unsubscribe/[token]/actions";
 import MockCheckoutPage from "@/app/mock/checkout/[orderId]/page";
@@ -57,6 +61,10 @@ const COMPANY_ID = "15000000-0000-4000-8000-000000000402";
 describe("Phase-15 sensitive-route safe failures", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getServerEnvironment.mockReturnValue({
+      APP_ENV: "local",
+      PAYMENT_PROVIDER_MODE: "disabled",
+    });
     mocks.requireAuthenticatedPage.mockResolvedValue(USER);
     mocks.requireEmployerBillingPage.mockResolvedValue({
       context: { companyId: COMPANY_ID, membershipRole: "OWNER" },

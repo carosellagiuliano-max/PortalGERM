@@ -68,9 +68,9 @@ beforeAll(async () => {
     providerReceipt: "legacy_expired_receipt",
   });
 
-  migrationStartedAt = new Date();
+  migrationStartedAt = await databaseStatementTime(migrated);
   await migrated.migrate();
-  migrationFinishedAt = new Date();
+  migrationFinishedAt = await databaseStatementTime(migrated);
   database = createDatabaseClient(migrated.connectionString);
   providerActivationId = await createProviderActivation(migrated);
 }, 600_000);
@@ -249,12 +249,12 @@ describe("Phase-33 notification-attempt evidence retention", () => {
       recipientEvidenceWipedAt: null,
     });
 
-    const afterDeadline = new Date();
+    const atDeadline = retainUntil;
     const first = await maintainNotificationPrivacyRetention(
       client,
-      afterDeadline,
+      atDeadline,
     );
-    const sweepFinishedAt = new Date();
+    const sweepFinishedAt = await databaseStatementTime(fixture);
     expect(first.attemptEvidenceWiped).toBe(1);
     const wiped = await readAttempt(fixture, attemptId);
     expect(wiped).toMatchObject({
@@ -270,7 +270,7 @@ describe("Phase-33 notification-attempt evidence retention", () => {
       recipientEvidenceRetainUntil: retainUntil,
     });
     expect(wiped?.recipientEvidenceWipedAt?.getTime()).toBeGreaterThanOrEqual(
-      afterDeadline.getTime(),
+      retainUntil.getTime(),
     );
     expect(wiped?.recipientEvidenceWipedAt?.getTime()).toBeLessThanOrEqual(
       sweepFinishedAt.getTime(),
@@ -278,7 +278,7 @@ describe("Phase-33 notification-attempt evidence retention", () => {
 
     const second = await maintainNotificationPrivacyRetention(
       client,
-      new Date(afterDeadline.getTime() + 1),
+      new Date(atDeadline.getTime() + 1),
     );
     expect(second.attemptEvidenceWiped).toBe(0);
   });
@@ -408,7 +408,7 @@ describe("Phase-33 notification-attempt evidence retention", () => {
       providerReceipt: expect.any(String),
       recipientEvidenceWipedAt: null,
     });
-    const reclaimedAt = new Date();
+    const reclaimedAt = await databaseStatementTime(fixture);
     await fixture.pool.query(
       `
         UPDATE "NotificationOutbox"
@@ -421,7 +421,7 @@ describe("Phase-33 notification-attempt evidence retention", () => {
       client,
       reclaimedAt,
     );
-    const reclaimedFinishedAt = new Date();
+    const reclaimedFinishedAt = await databaseStatementTime(fixture);
     expect(afterLease.attemptEvidenceWiped).toBe(1);
     const reclaimed = await readAttempt(fixture, attemptId);
     expect(reclaimed).toMatchObject({
@@ -673,6 +673,17 @@ async function readAttempt(fixture: MigratedDatabase, attemptId: string) {
     [attemptId],
   );
   return result.rows[0];
+}
+
+async function databaseStatementTime(fixture: MigratedDatabase) {
+  const result = await fixture.pool.query<{ now: Date }>(`
+    SELECT date_trunc('milliseconds', statement_timestamp()) AS "now"
+  `);
+  const now = result.rows[0]?.now;
+  if (now === undefined) {
+    throw new Error("PostgreSQL did not return its statement clock.");
+  }
+  return now;
 }
 
 async function expectPgConstraint(

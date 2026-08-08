@@ -33,6 +33,11 @@ import {
   type RadarOpaqueMappingRecord,
 } from "@/lib/talentradar/opaque-id";
 import {
+  lockTalentRadarRuntimeGate,
+  type TalentRadarLegalEnvironment,
+  type TalentRadarLegalGateDecision,
+} from "@/lib/talentradar/legal-gate";
+import {
   RADAR_CANTON_CODES_V1,
   RADAR_PRIVACY_POLICY_V1,
   gateRadarCohortV1,
@@ -108,52 +113,64 @@ export type RadarSearchSessionSnapshot = Readonly<{
 }>;
 
 export interface RadarCandidateListRepository {
-  getEmployerAccess(input: Readonly<{
-    actorUserId: string;
-    companyId: string;
-    now: Date;
-  }>): Promise<RadarEmployerAccessSnapshot | null>;
-  findSearchSession(input: Readonly<{
-    companyId: string;
-    membershipId: string;
-    requestingUserId: string;
-    filterHash: string;
-    calendarDate: string;
-    policyVersion: "v1";
-  }>): Promise<RadarSearchSessionSnapshot | null>;
-  listCandidates(input: Readonly<{
-    filters: NormalizedRadarFiltersV1;
-    now: Date;
-    environment: RadarEligibilityEnvironment;
-    afterCandidateProfileId: string | null;
-    limit: number;
-  }>): Promise<readonly RadarListCandidateRecord[]>;
-  persistSearchSession(input: Readonly<{
-    companyId: string;
-    membershipId: string;
-    requestingUserId: string;
-    filterHash: string;
-    calendarDate: string;
-    policyVersion: "v1";
-    normalizedFilters: NormalizedRadarFiltersV1;
-    resultCount: number;
-    expiresAt: Date;
-    candidateProfileIds: readonly string[];
-  }>): Promise<RadarSearchSessionSnapshot>;
-  getOrCreateOpaqueId(input: Readonly<{
-    companyId: string;
-    candidateProfileId: string;
-    now: Date;
-    lookupKeyring: readonly RadarOpaqueKey[];
-    encryptionKeyring: readonly RadarOpaqueKey[];
-  }>): Promise<string>;
+  getEmployerAccess(
+    input: Readonly<{
+      actorUserId: string;
+      companyId: string;
+      now: Date;
+    }>,
+  ): Promise<RadarEmployerAccessSnapshot | null>;
+  findSearchSession(
+    input: Readonly<{
+      companyId: string;
+      membershipId: string;
+      requestingUserId: string;
+      filterHash: string;
+      calendarDate: string;
+      policyVersion: "v1";
+    }>,
+  ): Promise<RadarSearchSessionSnapshot | null>;
+  listCandidates(
+    input: Readonly<{
+      filters: NormalizedRadarFiltersV1;
+      now: Date;
+      environment: RadarEligibilityEnvironment;
+      afterCandidateProfileId: string | null;
+      limit: number;
+    }>,
+  ): Promise<readonly RadarListCandidateRecord[]>;
+  persistSearchSession(
+    input: Readonly<{
+      companyId: string;
+      membershipId: string;
+      requestingUserId: string;
+      filterHash: string;
+      calendarDate: string;
+      policyVersion: "v1";
+      normalizedFilters: NormalizedRadarFiltersV1;
+      resultCount: number;
+      expiresAt: Date;
+      candidateProfileIds: readonly string[];
+    }>,
+  ): Promise<RadarSearchSessionSnapshot>;
+  getOrCreateOpaqueId(
+    input: Readonly<{
+      companyId: string;
+      candidateProfileId: string;
+      now: Date;
+      lookupKeyring: readonly RadarOpaqueKey[];
+      encryptionKeyring: readonly RadarOpaqueKey[];
+    }>,
+  ): Promise<string>;
 }
 
 export interface RadarMembershipListRateLimit {
-  consume(input: Readonly<{
-    membershipId: string;
-    now: Date;
-  }>): Promise<
+  consume(
+    input: Readonly<{
+      membershipId: string;
+      now: Date;
+    }>,
+  ): Promise<
     | Readonly<{ allowed: true }>
     | Readonly<{ allowed: false; retryAfterSeconds: number }>
   >;
@@ -166,6 +183,7 @@ export type RadarListCandidatesInput = Readonly<{
   cursor?: string | null;
   now: Date;
   environment: RadarEligibilityEnvironment;
+  legalGate: TalentRadarLegalGateDecision;
 }>;
 
 export type RadarListCandidatesResult =
@@ -176,7 +194,8 @@ export type RadarListCandidatesResult =
         | "USER_INACTIVE"
         | "COMPANY_INACTIVE"
         | "COMPANY_UNVERIFIED"
-        | "TALENT_RADAR_NOT_INCLUDED";
+        | "TALENT_RADAR_NOT_INCLUDED"
+        | "LEGAL_REVIEW_REQUIRED";
       suggestedPlanSlug?: "pro";
     }>
   | Readonly<{ status: "INVALID_FILTER" }>
@@ -207,6 +226,61 @@ export type RadarListCandidatesDependencies = Readonly<{
   opaqueEncryptionKeyring: readonly RadarOpaqueKey[];
 }>;
 
+export type LockedRadarListCandidatesInput = Omit<
+  RadarListCandidatesInput,
+  "legalGate"
+> &
+  Readonly<{ legalGateEnvironment: TalentRadarLegalEnvironment }>;
+
+export type LockedRadarListCandidatesDependencies = Omit<
+  RadarListCandidatesDependencies,
+  "repository"
+>;
+
+/**
+ * Keeps the prod-like legal evidence locked from the final authorization
+ * decision through every Candidate read and every search-session/opaque-id
+ * write. The repository receives the same TransactionClient, so no nested or
+ * detached transaction can outlive that evidence lock.
+ */
+export async function listRadarCandidatesWithLockedLegalGate(
+  database: DatabaseClient,
+  input: LockedRadarListCandidatesInput,
+  dependencies: LockedRadarListCandidatesDependencies,
+): Promise<RadarListCandidatesResult> {
+  return database.$transaction(
+    async (transaction) => {
+      const legalGate = await lockTalentRadarRuntimeGate(transaction, {
+        scope: "TALENT_RADAR",
+        environment: input.legalGateEnvironment,
+        now: input.now,
+      });
+      if (!legalGate.allowed) return locked("LEGAL_REVIEW_REQUIRED");
+
+      return listRadarCandidates(
+        {
+          actorUserId: input.actorUserId,
+          companyId: input.companyId,
+          filters: input.filters,
+          cursor: input.cursor,
+          now: input.now,
+          environment: input.environment,
+          legalGate,
+        },
+        {
+          ...dependencies,
+          repository: createPrismaRadarCandidateListRepository(transaction),
+        },
+      );
+    },
+    {
+      isolationLevel: "ReadCommitted",
+      maxWait: 15_000,
+      timeout: 30_000,
+    },
+  );
+}
+
 /**
  * Produces one privacy-bounded page. Authorization, both enumeration limits,
  * cursor scope and member-scoped session ownership are resolved before the
@@ -216,7 +290,8 @@ export async function listRadarCandidates(
   input: RadarListCandidatesInput,
   dependencies: RadarListCandidatesDependencies,
 ): Promise<RadarListCandidatesResult> {
-  if (!isValidDate(input.now)) return Object.freeze({ status: "INVALID_FILTER" });
+  if (!isValidDate(input.now))
+    return Object.freeze({ status: "INVALID_FILTER" });
 
   let normalized: ReturnType<typeof normalizeRadarFiltersV1>;
   try {
@@ -225,8 +300,14 @@ export async function listRadarCandidates(
     return Object.freeze({ status: "INVALID_FILTER" });
   }
 
-  if (!UUID.safeParse(input.actorUserId).success || !UUID.safeParse(input.companyId).success) {
+  if (
+    !UUID.safeParse(input.actorUserId).success ||
+    !UUID.safeParse(input.companyId).success
+  ) {
     return locked("NO_ACTIVE_MEMBERSHIP");
+  }
+  if (!input.legalGate.allowed || input.legalGate.scope !== "TALENT_RADAR") {
+    return locked("LEGAL_REVIEW_REQUIRED");
   }
 
   const access = await dependencies.repository.getEmployerAccess({
@@ -258,12 +339,15 @@ export async function listRadarCandidates(
   if (!distinctBudget.allowed) return distinctFilterLimit(distinctBudget);
 
   const calendarDate = getRadarZurichCalendarDateV1(input.now);
-  const dailySampleId = selectRadarDailySampleV1({
-    companyId: input.companyId,
-    filterHash: normalized.filterHash,
-    calendarDate,
-    candidateProfileIds: [],
-  }, dependencies.samplingKey).sampleId;
+  const dailySampleId = selectRadarDailySampleV1(
+    {
+      companyId: input.companyId,
+      filterHash: normalized.filterHash,
+      calendarDate,
+      candidateProfileIds: [],
+    },
+    dependencies.samplingKey,
+  ).sampleId;
   const sessionScope = {
     companyId: input.companyId,
     membershipId: access.membershipId,
@@ -272,17 +356,23 @@ export async function listRadarCandidates(
     calendarDate,
     policyVersion: RADAR_PRIVACY_POLICY_V1.version,
   } as const;
-  const existingSession = await dependencies.repository.findSearchSession(sessionScope);
+  const existingSession =
+    await dependencies.repository.findSearchSession(sessionScope);
 
   let position: 0 | 10 = 0;
   if (input.cursor !== undefined && input.cursor !== null) {
-    if (input.cursor.length === 0) return Object.freeze({ status: "INVALID_CURSOR" });
-    const payload = verifyRadarCursorV1(input.cursor, {
-      companyId: input.companyId,
-      filterHash: normalized.filterHash,
-      dailySampleId,
-      now: input.now,
-    }, dependencies.cursorKeyring);
+    if (input.cursor.length === 0)
+      return Object.freeze({ status: "INVALID_CURSOR" });
+    const payload = verifyRadarCursorV1(
+      input.cursor,
+      {
+        companyId: input.companyId,
+        filterHash: normalized.filterHash,
+        dailySampleId,
+        now: input.now,
+      },
+      dependencies.cursorKeyring,
+    );
     if (
       payload === null ||
       existingSession === null ||
@@ -308,9 +398,10 @@ export async function listRadarCandidates(
   const cohort = gateRadarCohortV1(scanned.eligibleCount);
   if (cohort.status === "INSUFFICIENT_COHORT") return cohort;
 
-  const desiredSample = existingSession === null
-    ? scanned.computedSampleCandidateProfileIds
-    : requireValidSessionSample(existingSession.candidateProfileIds);
+  const desiredSample =
+    existingSession === null
+      ? scanned.computedSampleCandidateProfileIds
+      : requireValidSessionSample(existingSession.candidateProfileIds);
   const expiresAt = new Date(
     input.now.getTime() + RADAR_PRIVACY_POLICY_V1.cursor.ttlMilliseconds,
   );
@@ -322,7 +413,9 @@ export async function listRadarCandidates(
     candidateProfileIds: desiredSample,
   });
   if (!isCurrentScopedSession(persistedSession, sessionScope, input.now)) {
-    throw new Error("Radar repository returned an invalid scoped search session.");
+    throw new Error(
+      "Radar repository returned an invalid scoped search session.",
+    );
   }
   const persistedSample = requireValidSessionSample(
     persistedSession.candidateProfileIds,
@@ -332,29 +425,37 @@ export async function listRadarCandidates(
     const candidate = scanned.retainedCandidates.get(candidateProfileId);
     return candidate === undefined ? [] : [candidate];
   });
-  const candidates = await Promise.all(pageRows.map(async (candidate) => {
-    const opaqueId = await dependencies.repository.getOrCreateOpaqueId({
-      companyId: input.companyId,
-      candidateProfileId: candidate.candidateProfileId,
-      now: input.now,
-      lookupKeyring: dependencies.opaqueLookupKeyring,
-      encryptionKeyring: dependencies.opaqueEncryptionKeyring,
-    });
-    const dto = toSafeRadarCard(candidate, normalized.filters, opaqueId);
-    if (dto === null) {
-      throw new Error("An eligible Radar candidate could not be mapped to a Safe DTO.");
-    }
-    return dto;
-  }));
-
-  const nextCursor = page.nextPosition === null
-    ? null
-    : signRadarCursorV1({
+  const candidates = await Promise.all(
+    pageRows.map(async (candidate) => {
+      const opaqueId = await dependencies.repository.getOrCreateOpaqueId({
         companyId: input.companyId,
-        filterHash: normalized.filterHash,
-        dailySampleId,
+        candidateProfileId: candidate.candidateProfileId,
         now: input.now,
-      }, requireWriterKey(dependencies.cursorKeyring));
+        lookupKeyring: dependencies.opaqueLookupKeyring,
+        encryptionKeyring: dependencies.opaqueEncryptionKeyring,
+      });
+      const dto = toSafeRadarCard(candidate, normalized.filters, opaqueId);
+      if (dto === null) {
+        throw new Error(
+          "An eligible Radar candidate could not be mapped to a Safe DTO.",
+        );
+      }
+      return dto;
+    }),
+  );
+
+  const nextCursor =
+    page.nextPosition === null
+      ? null
+      : signRadarCursorV1(
+          {
+            companyId: input.companyId,
+            filterHash: normalized.filterHash,
+            dailySampleId,
+            now: input.now,
+          },
+          requireWriterKey(dependencies.cursorKeyring),
+        );
 
   return Object.freeze({
     status: "AVAILABLE",
@@ -377,10 +478,12 @@ function employerLockReason(
     access.companyId !== input.companyId ||
     access.membershipStatus !== "ACTIVE" ||
     !ALLOWED_EMPLOYER_ROLES.has(access.membershipRole)
-  ) return locked("NO_ACTIVE_MEMBERSHIP");
+  )
+    return locked("NO_ACTIVE_MEMBERSHIP");
   if (access.userStatus !== "ACTIVE") return locked("USER_INACTIVE");
   if (access.companyStatus !== "ACTIVE") return locked("COMPANY_INACTIVE");
-  if (access.currentVerifiedEvidenceCount !== 1) return locked("COMPANY_UNVERIFIED");
+  if (access.currentVerifiedEvidenceCount !== 1)
+    return locked("COMPANY_UNVERIFIED");
   if (!access.talentRadarAccess) {
     return Object.freeze({
       status: "LOCKED",
@@ -411,21 +514,25 @@ function safeRetryAfter(value: number): number {
   return Number.isSafeInteger(value) && value > 0 ? value : 1;
 }
 
-async function scanRadarCandidateCohort(input: Readonly<{
-  repository: RadarCandidateListRepository;
-  filters: NormalizedRadarFiltersV1;
-  now: Date;
-  environment: RadarEligibilityEnvironment;
-  companyId: string;
-  filterHash: string;
-  calendarDate: string;
-  samplingKey: RadarPrivacyHmacKeyV1;
-  retainedCandidateProfileIds: readonly string[];
-}>): Promise<Readonly<{
-  eligibleCount: number;
-  computedSampleCandidateProfileIds: readonly string[];
-  retainedCandidates: ReadonlyMap<string, RadarListCandidateRecord>;
-}>> {
+async function scanRadarCandidateCohort(
+  input: Readonly<{
+    repository: RadarCandidateListRepository;
+    filters: NormalizedRadarFiltersV1;
+    now: Date;
+    environment: RadarEligibilityEnvironment;
+    companyId: string;
+    filterHash: string;
+    calendarDate: string;
+    samplingKey: RadarPrivacyHmacKeyV1;
+    retainedCandidateProfileIds: readonly string[];
+  }>,
+): Promise<
+  Readonly<{
+    eligibleCount: number;
+    computedSampleCandidateProfileIds: readonly string[];
+    retainedCandidates: ReadonlyMap<string, RadarListCandidateRecord>;
+  }>
+> {
   const retainedSessionIds = new Set(input.retainedCandidateProfileIds);
   const retainedCandidates = new Map<string, RadarListCandidateRecord>();
   let computedSampleCandidateProfileIds: readonly string[] = Object.freeze([]);
@@ -444,7 +551,8 @@ async function scanRadarCandidateCohort(input: Readonly<{
       throw new Error("Radar repository exceeded the bounded scan batch size.");
     }
     const orderedRows = [...rows].sort((left, right) =>
-      left.candidateProfileId.localeCompare(right.candidateProfileId));
+      left.candidateProfileId.localeCompare(right.candidateProfileId),
+    );
     assertStrictRadarBatchOrder(orderedRows, afterCandidateProfileId);
     const eligible = distinctEligibleCandidates(
       orderedRows,
@@ -453,15 +561,18 @@ async function scanRadarCandidateCohort(input: Readonly<{
       input.environment,
     );
     eligibleCount += eligible.length;
-    const sample = selectRadarDailySampleV1({
-      companyId: input.companyId,
-      filterHash: input.filterHash,
-      calendarDate: input.calendarDate,
-      candidateProfileIds: [
-        ...computedSampleCandidateProfileIds,
-        ...eligible.map(({ candidateProfileId }) => candidateProfileId),
-      ],
-    }, input.samplingKey);
+    const sample = selectRadarDailySampleV1(
+      {
+        companyId: input.companyId,
+        filterHash: input.filterHash,
+        calendarDate: input.calendarDate,
+        candidateProfileIds: [
+          ...computedSampleCandidateProfileIds,
+          ...eligible.map(({ candidateProfileId }) => candidateProfileId),
+        ],
+      },
+      input.samplingKey,
+    );
     computedSampleCandidateProfileIds = sample.candidateProfileIds;
     const retainedIds = new Set([
       ...retainedSessionIds,
@@ -499,7 +610,9 @@ function assertStrictRadarBatchOrder(
       !UUID.safeParse(row.candidateProfileId).success ||
       (previous !== null && row.candidateProfileId.localeCompare(previous) <= 0)
     ) {
-      throw new Error("Radar repository returned an invalid candidate scan page.");
+      throw new Error(
+        "Radar repository returned an invalid candidate scan page.",
+      );
     }
     previous = row.candidateProfileId;
   }
@@ -533,7 +646,8 @@ function hasSafeRadarProjection(row: RadarListCandidateRecord): boolean {
     !CANTON_CODES.has(radar.cantonBucket) ||
     !SAFE_SLUG.test(radar.categoryBucket) ||
     !row.activeCategorySlugs.includes(radar.categoryBucket)
-  ) return false;
+  )
+    return false;
   return true;
 }
 
@@ -545,13 +659,19 @@ function matchesAllFilters(
   if (radar === null) return false;
   if (
     filters.skillId !== null &&
-    !row.skills.some((skill) =>
-      skill.active &&
-      skill.skillId === filters.skillId &&
-      SAFE_SLUG.test(skill.slug) &&
-      radar.skillSlugs.includes(skill.slug))
-  ) return false;
-  if (filters.cantonCode !== null && radar.cantonBucket !== filters.cantonCode) {
+    !row.skills.some(
+      (skill) =>
+        skill.active &&
+        skill.skillId === filters.skillId &&
+        SAFE_SLUG.test(skill.slug) &&
+        radar.skillSlugs.includes(skill.slug),
+    )
+  )
+    return false;
+  if (
+    filters.cantonCode !== null &&
+    radar.cantonBucket !== filters.cantonCode
+  ) {
     return false;
   }
   if (
@@ -561,26 +681,35 @@ function matchesAllFilters(
       !Number.isSafeInteger(radar.salaryYearlyMinChf) ||
       radar.salaryYearlyMinChf < 0 ||
       radar.salaryYearlyMinChf > filters.salaryBudgetCeilingChf)
-  ) return false;
+  )
+    return false;
   if (
     filters.workloadMinimumPercent !== null &&
     (radar.workloadMax === null ||
       !Number.isSafeInteger(radar.workloadMax) ||
       radar.workloadMax < filters.workloadMinimumPercent ||
       workloadBucket(radar.workloadMin, radar.workloadMax) === null)
-  ) return false;
+  )
+    return false;
   if (
     filters.languageCode !== null &&
     filters.languageMinimumLevel !== null &&
-    !row.languages.some((language) =>
-      language.code.trim().toLowerCase() === filters.languageCode &&
-      radar.languageCodes.includes(filters.languageCode!) &&
-      radarLanguageMeetsMinimumV1(language.level, filters.languageMinimumLevel!))
-  ) return false;
+    !row.languages.some(
+      (language) =>
+        language.code.trim().toLowerCase() === filters.languageCode &&
+        radar.languageCodes.includes(filters.languageCode!) &&
+        radarLanguageMeetsMinimumV1(
+          language.level,
+          filters.languageMinimumLevel!,
+        ),
+    )
+  )
+    return false;
   if (
     filters.remotePreference !== null &&
     radar.remotePreference !== filters.remotePreference
-  ) return false;
+  )
+    return false;
   return true;
 }
 
@@ -591,15 +720,19 @@ function toSafeRadarCard(
 ): AnonymousCandidateDto | null {
   const radar = row.radar;
   if (radar === null) return null;
-  const selectedSkills = filters.skillId === null
-    ? []
-    : row.skills
-        .filter(({ skillId, active }) => skillId === filters.skillId && active)
-        .map(({ slug }) => slug)
-        .filter((slug) => radar.skillSlugs.includes(slug));
-  const selectedLanguages = filters.languageCode === null
-    ? []
-    : radar.languageCodes.filter((code) => code === filters.languageCode);
+  const selectedSkills =
+    filters.skillId === null
+      ? []
+      : row.skills
+          .filter(
+            ({ skillId, active }) => skillId === filters.skillId && active,
+          )
+          .map(({ slug }) => slug)
+          .filter((slug) => radar.skillSlugs.includes(slug));
+  const selectedLanguages =
+    filters.languageCode === null
+      ? []
+      : radar.languageCodes.filter((code) => code === filters.languageCode);
   return toAnonymousCandidate({
     opaqueId,
     cantonBucket: radar.cantonBucket,
@@ -631,26 +764,46 @@ function toSafeRadarCard(
   });
 }
 
-function workloadBucket(minimum: number | null, maximum: number | null): string | null {
+function workloadBucket(
+  minimum: number | null,
+  maximum: number | null,
+): string | null {
   if (
-    minimum === null || maximum === null ||
-    !Number.isSafeInteger(minimum) || !Number.isSafeInteger(maximum) ||
-    minimum < 0 || maximum > 100 || minimum > maximum
-  ) return null;
+    minimum === null ||
+    maximum === null ||
+    !Number.isSafeInteger(minimum) ||
+    !Number.isSafeInteger(maximum) ||
+    minimum < 0 ||
+    maximum > 100 ||
+    minimum > maximum
+  )
+    return null;
   const midpoint = (minimum + maximum) / 2;
-  return String([20, 40, 60, 80, 100].reduce((closest, bucket) =>
-    Math.abs(bucket - midpoint) < Math.abs(closest - midpoint) ? bucket : closest));
+  return String(
+    [20, 40, 60, 80, 100].reduce((closest, bucket) =>
+      Math.abs(bucket - midpoint) < Math.abs(closest - midpoint)
+        ? bucket
+        : closest,
+    ),
+  );
 }
 
 function salaryBucket(minimum: number | null): string | null {
-  if (minimum === null || !Number.isSafeInteger(minimum) || minimum < 0) return null;
-  const bounded = Math.min(250_000, Math.max(40_000, Math.floor(minimum / 10_000) * 10_000));
+  if (minimum === null || !Number.isSafeInteger(minimum) || minimum < 0)
+    return null;
+  const bounded = Math.min(
+    250_000,
+    Math.max(40_000, Math.floor(minimum / 10_000) * 10_000),
+  );
   return `CHF_${bounded}`;
 }
 
 function isCurrentScopedSession(
   session: RadarSearchSessionSnapshot,
-  scope: Omit<Parameters<RadarCandidateListRepository["findSearchSession"]>[0], never>,
+  scope: Omit<
+    Parameters<RadarCandidateListRepository["findSearchSession"]>[0],
+    never
+  >,
   now: Date,
 ): boolean {
   return (
@@ -668,9 +821,12 @@ function isCurrentScopedSession(
 function isValidSessionSample(candidateProfileIds: readonly string[]): boolean {
   return (
     Array.isArray(candidateProfileIds) &&
-    candidateProfileIds.length <= RADAR_PRIVACY_POLICY_V1.discovery.maximumSampleSize &&
+    candidateProfileIds.length <=
+      RADAR_PRIVACY_POLICY_V1.discovery.maximumSampleSize &&
     new Set(candidateProfileIds).size === candidateProfileIds.length &&
-    candidateProfileIds.every((candidateProfileId) => UUID.safeParse(candidateProfileId).success)
+    candidateProfileIds.every(
+      (candidateProfileId) => UUID.safeParse(candidateProfileId).success,
+    )
   );
 }
 
@@ -687,7 +843,8 @@ function requireWriterKey(
   keyring: readonly RadarPrivacyHmacKeyV1[],
 ): RadarPrivacyHmacKeyV1 {
   const writer = keyring[0];
-  if (writer === undefined) throw new TypeError("Radar cursor keyring requires a writer.");
+  if (writer === undefined)
+    throw new TypeError("Radar cursor keyring requires a writer.");
   return writer;
 }
 
@@ -701,7 +858,7 @@ function isValidDate(value: Date): boolean {
  * storage-key or other identity-bearing field.
  */
 export function createPrismaRadarCandidateListRepository(
-  database: DatabaseClient,
+  database: Prisma.TransactionClient,
 ): RadarCandidateListRepository {
   const repository: RadarCandidateListRepository = {
     async getEmployerAccess(input) {
@@ -787,7 +944,11 @@ export function createPrismaRadarCandidateListRepository(
 
     async listCandidates(input) {
       const rows = await database.candidateProfile.findMany({
-        where: buildPrismaRadarCandidateWhere(input.filters, input.now, input.environment),
+        where: buildPrismaRadarCandidateWhere(
+          input.filters,
+          input.now,
+          input.environment,
+        ),
         orderBy: { id: "asc" },
         take: input.limit,
         ...(input.afterCandidateProfileId === null
@@ -802,94 +963,97 @@ export function createPrismaRadarCandidateListRepository(
     },
 
     async persistSearchSession(input) {
-      return database.$transaction(async (transaction) => {
-        const calendarDate = calendarDateToDatabase(input.calendarDate);
-        const session = await transaction.radarSearchSession.upsert({
-          where: {
-            companyId_membershipId_filterHash_calendarDate_policyVersion: {
-              companyId: input.companyId,
-              membershipId: input.membershipId,
-              filterHash: input.filterHash,
-              calendarDate,
-              policyVersion: input.policyVersion,
-            },
-          },
-          create: {
+      const calendarDate = calendarDateToDatabase(input.calendarDate);
+      const session = await database.radarSearchSession.upsert({
+        where: {
+          companyId_membershipId_filterHash_calendarDate_policyVersion: {
             companyId: input.companyId,
             membershipId: input.membershipId,
-            requestingUserId: input.requestingUserId,
             filterHash: input.filterHash,
             calendarDate,
             policyVersion: input.policyVersion,
-            normalizedFilters: input.normalizedFilters as Prisma.InputJsonValue,
-            resultCount: input.resultCount,
-            expiresAt: input.expiresAt,
           },
-          update: {
-            normalizedFilters: input.normalizedFilters as Prisma.InputJsonValue,
-            resultCount: input.resultCount,
-            expiresAt: input.expiresAt,
-          },
-          select: { id: true },
-        });
-        await transaction.radarSearchSessionCandidate.createMany({
-          data: input.candidateProfileIds.map((candidateProfileId, position) => ({
-            radarSearchSessionId: session.id,
-            candidateProfileId,
-            position,
-          })),
-          skipDuplicates: true,
-        });
-        const persisted = await transaction.radarSearchSession.findUniqueOrThrow({
-          where: { id: session.id },
-          select: {
-            id: true,
-            companyId: true,
-            membershipId: true,
-            requestingUserId: true,
-            filterHash: true,
-            calendarDate: true,
-            policyVersion: true,
-            expiresAt: true,
-            candidates: {
-              orderBy: { position: "asc" },
-              select: { candidateProfileId: true },
-            },
-          },
-        });
-        return toSessionSnapshot(persisted);
+        },
+        create: {
+          companyId: input.companyId,
+          membershipId: input.membershipId,
+          requestingUserId: input.requestingUserId,
+          filterHash: input.filterHash,
+          calendarDate,
+          policyVersion: input.policyVersion,
+          normalizedFilters: input.normalizedFilters as Prisma.InputJsonValue,
+          resultCount: input.resultCount,
+          expiresAt: input.expiresAt,
+        },
+        update: {
+          normalizedFilters: input.normalizedFilters as Prisma.InputJsonValue,
+          resultCount: input.resultCount,
+          expiresAt: input.expiresAt,
+        },
+        select: { id: true },
       });
+      await database.radarSearchSessionCandidate.createMany({
+        data: input.candidateProfileIds.map((candidateProfileId, position) => ({
+          radarSearchSessionId: session.id,
+          candidateProfileId,
+          position,
+        })),
+        skipDuplicates: true,
+      });
+      const persisted = await database.radarSearchSession.findUniqueOrThrow({
+        where: { id: session.id },
+        select: {
+          id: true,
+          companyId: true,
+          membershipId: true,
+          requestingUserId: true,
+          filterHash: true,
+          calendarDate: true,
+          policyVersion: true,
+          expiresAt: true,
+          candidates: {
+            orderBy: { position: "asc" },
+            select: { candidateProfileId: true },
+          },
+        },
+      });
+      return toSessionSnapshot(persisted);
     },
 
     async getOrCreateOpaqueId(input) {
       const epoch = getRadarOpaqueEpoch(input.now);
-      return database.$transaction(async (transaction) => {
-        await transaction.$queryRawUnsafe(
-          'SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS "locked"',
-          `v1:radar-opaque:${input.companyId}:${input.candidateProfileId}:${epoch.epoch.toISOString()}`,
-        );
-        const existing = await transaction.radarOpaqueMapping.findUnique({
-          where: {
-            candidateProfileId_companyId_epoch: {
-              candidateProfileId: input.candidateProfileId,
-              companyId: input.companyId,
-              epoch: epoch.epoch,
-            },
+      await database.$queryRawUnsafe(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS "locked"',
+        `v1:radar-opaque:${input.companyId}:${input.candidateProfileId}:${epoch.epoch.toISOString()}`,
+      );
+      const existing = await database.radarOpaqueMapping.findUnique({
+        where: {
+          candidateProfileId_companyId_epoch: {
+            candidateProfileId: input.candidateProfileId,
+            companyId: input.companyId,
+            epoch: epoch.epoch,
           },
-          select: opaqueMappingSelect,
-        });
-        if (existing !== null && isCurrentRadarOpaqueMapping(
+        },
+        select: opaqueMappingSelect,
+      });
+      if (
+        existing !== null &&
+        isCurrentRadarOpaqueMapping(existing, input.companyId, input.now)
+      ) {
+        return decryptMapping(
           existing,
-          input.companyId,
-          input.now,
-        )) {
-          return decryptMapping(existing, input.lookupKeyring, input.encryptionKeyring);
-        }
+          input.lookupKeyring,
+          input.encryptionKeyring,
+        );
+      }
 
-        if (existing !== null && existing.revokedAt === null) {
-          throw new Error("Radar opaque mapping is not current and cannot be reused.");
-        }
-        const issued = existing === null
+      if (existing !== null && existing.revokedAt === null) {
+        throw new Error(
+          "Radar opaque mapping is not current and cannot be reused.",
+        );
+      }
+      const issued =
+        existing === null
           ? mintRadarOpaqueIdForAuthorizedDto({
               candidateProfileId: input.candidateProfileId,
               companyId: input.companyId,
@@ -903,19 +1067,18 @@ export function createPrismaRadarCandidateListRepository(
               lookupKeyring: input.lookupKeyring,
               encryptionKeyring: input.encryptionKeyring,
             });
-        await transaction.radarOpaqueMapping.upsert({
-          where: {
-            candidateProfileId_companyId_epoch: {
-              candidateProfileId: input.candidateProfileId,
-              companyId: input.companyId,
-              epoch: epoch.epoch,
-            },
+      await database.radarOpaqueMapping.upsert({
+        where: {
+          candidateProfileId_companyId_epoch: {
+            candidateProfileId: input.candidateProfileId,
+            companyId: input.companyId,
+            epoch: epoch.epoch,
           },
-          create: opaqueMappingCreate(issued.mapping),
-          update: opaqueMappingUpdate(issued.mapping),
-        });
-        return issued.opaqueId;
+        },
+        create: opaqueMappingCreate(issued.mapping),
+        update: opaqueMappingUpdate(issued.mapping),
       });
+      return issued.opaqueId;
     },
   };
   return Object.freeze(repository);
@@ -932,7 +1095,10 @@ function buildPrismaRadarCandidateWhere(
   const radar: Prisma.RadarProfileWhereInput = {};
   if (filters.cantonCode !== null) radar.cantonBucket = filters.cantonCode;
   if (filters.salaryBudgetCeilingChf !== null) {
-    radar.salaryYearlyMinChf = { not: null, lte: filters.salaryBudgetCeilingChf };
+    radar.salaryYearlyMinChf = {
+      not: null,
+      lte: filters.salaryBudgetCeilingChf,
+    };
     predicates.push({ preference: { is: { salaryPeriod: "YEARLY" } } });
   }
   if (filters.workloadMinimumPercent !== null) {
@@ -941,7 +1107,8 @@ function buildPrismaRadarCandidateWhere(
   if (filters.remotePreference !== null) {
     radar.remotePreference = filters.remotePreference;
   }
-  if (Object.keys(radar).length > 0) predicates.push({ radarProfile: { is: radar } });
+  if (Object.keys(radar).length > 0)
+    predicates.push({ radarProfile: { is: radar } });
   if (filters.skillId !== null) {
     predicates.push({
       skills: { some: { skillId: filters.skillId, skill: { isActive: true } } },
@@ -952,7 +1119,9 @@ function buildPrismaRadarCandidateWhere(
       languages: {
         some: {
           code: filters.languageCode,
-          level: { in: [...languageLevelsAtLeast(filters.languageMinimumLevel)] },
+          level: {
+            in: [...languageLevelsAtLeast(filters.languageMinimumLevel)],
+          },
         },
       },
     });
@@ -1009,28 +1178,36 @@ function toRadarListCandidateRecord(
     candidateProfileId: row.id,
     eligibility: toRadarCandidateEligibilityInput(row),
     salaryPeriod: row.preference?.salaryPeriod ?? null,
-    radar: row.radarProfile === null ? null : Object.freeze({
-      cantonBucket: row.radarProfile.cantonBucket,
-      categoryBucket: row.radarProfile.categoryBucket,
-      workloadMin: row.radarProfile.workloadMin,
-      workloadMax: row.radarProfile.workloadMax,
-      salaryYearlyMinChf: row.radarProfile.salaryYearlyMinChf,
-      salaryYearlyMaxChf: row.radarProfile.salaryYearlyMaxChf,
-      languageCodes: Object.freeze([...row.radarProfile.languageCodes]),
-      skillSlugs: Object.freeze([...row.radarProfile.skillSlugs]),
-      remotePreference: row.radarProfile.remotePreference,
-      availabilityBucket: row.radarProfile.availabilityBucket,
-    }),
+    radar:
+      row.radarProfile === null
+        ? null
+        : Object.freeze({
+            cantonBucket: row.radarProfile.cantonBucket,
+            categoryBucket: row.radarProfile.categoryBucket,
+            workloadMin: row.radarProfile.workloadMin,
+            workloadMax: row.radarProfile.workloadMax,
+            salaryYearlyMinChf: row.radarProfile.salaryYearlyMinChf,
+            salaryYearlyMaxChf: row.radarProfile.salaryYearlyMaxChf,
+            languageCodes: Object.freeze([...row.radarProfile.languageCodes]),
+            skillSlugs: Object.freeze([...row.radarProfile.skillSlugs]),
+            remotePreference: row.radarProfile.remotePreference,
+            availabilityBucket: row.radarProfile.availabilityBucket,
+          }),
     activeCategorySlugs: Object.freeze(
       row.preference?.categories.map(({ category }) => category.slug) ?? [],
     ),
-    skills: Object.freeze(row.skills.map(({ skillId, skill }) => Object.freeze({
-      skillId,
-      slug: skill.slug,
-      active: skill.isActive,
-    }))),
-    languages: Object.freeze(row.languages.map(({ code, level }) =>
-      Object.freeze({ code, level }))),
+    skills: Object.freeze(
+      row.skills.map(({ skillId, skill }) =>
+        Object.freeze({
+          skillId,
+          slug: skill.slug,
+          active: skill.isActive,
+        }),
+      ),
+    ),
+    languages: Object.freeze(
+      row.languages.map(({ code, level }) => Object.freeze({ code, level })),
+    ),
   });
 }
 
@@ -1055,26 +1232,29 @@ export async function isCurrentRadarContactCohortAuthorized(
     take: 1,
     select: buildPrismaRadarCandidateSelect(input.now),
   });
-  if (distinctEligibleCandidates(
-    target.map(toRadarListCandidateRecord),
-    input.filters,
-    input.now,
-    input.environment,
-  ).length !== 1) return false;
+  if (
+    distinctEligibleCandidates(
+      target.map(toRadarListCandidateRecord),
+      input.filters,
+      input.now,
+      input.environment,
+    ).length !== 1
+  )
+    return false;
 
   let eligibleCount = 0;
   let afterCandidateProfileId: string | null = null;
   while (eligibleCount < RADAR_PRIVACY_POLICY_V1.cohort.minimumSize) {
     const rows: readonly PrismaRadarCandidateRow[] =
       await database.candidateProfile.findMany({
-      where: baseWhere,
-      orderBy: { id: "asc" },
-      take: RADAR_SCAN_BATCH_SIZE,
-      ...(afterCandidateProfileId === null
-        ? {}
-        : { cursor: { id: afterCandidateProfileId }, skip: 1 }),
-      select: buildPrismaRadarCandidateSelect(input.now),
-    });
+        where: baseWhere,
+        orderBy: { id: "asc" },
+        take: RADAR_SCAN_BATCH_SIZE,
+        ...(afterCandidateProfileId === null
+          ? {}
+          : { cursor: { id: afterCandidateProfileId }, skip: 1 }),
+        select: buildPrismaRadarCandidateSelect(input.now),
+      });
     if (rows.length === 0) return false;
     const records = rows.map(toRadarListCandidateRecord);
     assertStrictRadarBatchOrder(records, afterCandidateProfileId);
@@ -1094,9 +1274,12 @@ function languageLevelsAtLeast(
   minimum: RadarLanguageBucketV1,
 ): readonly ("A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "NATIVE")[] {
   switch (minimum) {
-    case "BASIC": return ["A1", "A2", "B1", "B2", "C1", "C2", "NATIVE"];
-    case "WORKING": return ["B1", "B2", "C1", "C2", "NATIVE"];
-    case "ADVANCED": return ["C1", "C2", "NATIVE"];
+    case "BASIC":
+      return ["A1", "A2", "B1", "B2", "C1", "C2", "NATIVE"];
+    case "WORKING":
+      return ["B1", "B2", "C1", "C2", "NATIVE"];
+    case "ADVANCED":
+      return ["C1", "C2", "NATIVE"];
   }
 }
 
@@ -1133,7 +1316,10 @@ function toSessionSnapshot(row: PrismaSessionRow): RadarSearchSessionSnapshot {
 
 function calendarDateToDatabase(calendarDate: string): Date {
   const date = new Date(`${calendarDate}T00:00:00.000Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(calendarDate) || date.toISOString().slice(0, 10) !== calendarDate) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/u.test(calendarDate) ||
+    date.toISOString().slice(0, 10) !== calendarDate
+  ) {
     throw new TypeError("Radar calendar date is invalid.");
   }
   return date;
@@ -1161,19 +1347,24 @@ function decryptMapping(
   lookupKeyring: readonly RadarOpaqueKey[],
   encryptionKeyring: readonly RadarOpaqueKey[],
 ): string {
-  return decryptRadarOpaqueToken({
-    lookupHmac: mapping.lookupHmac,
-    encryptedToken: mapping.encryptedToken,
-    nonce: mapping.nonce,
-    authTag: mapping.authTag,
-    lookupKeyVersion: mapping.lookupKeyVersion,
-    encryptionKeyVersion: mapping.encryptionKeyVersion,
-  }, lookupKeyring, encryptionKeyring, {
-    mappingId: mapping.id,
-    candidateProfileId: mapping.candidateProfileId,
-    companyId: mapping.companyId,
-    epoch: mapping.epoch,
-  });
+  return decryptRadarOpaqueToken(
+    {
+      lookupHmac: mapping.lookupHmac,
+      encryptedToken: mapping.encryptedToken,
+      nonce: mapping.nonce,
+      authTag: mapping.authTag,
+      lookupKeyVersion: mapping.lookupKeyVersion,
+      encryptionKeyVersion: mapping.encryptionKeyVersion,
+    },
+    lookupKeyring,
+    encryptionKeyring,
+    {
+      mappingId: mapping.id,
+      candidateProfileId: mapping.candidateProfileId,
+      companyId: mapping.companyId,
+      epoch: mapping.epoch,
+    },
+  );
 }
 
 function opaqueMappingUpdate(mapping: RadarOpaqueMappingRecord) {

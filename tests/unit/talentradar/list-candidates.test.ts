@@ -205,6 +205,13 @@ function request(
     filters: {},
     now: NOW,
     environment: "development" as const,
+    legalGate: {
+      allowed: true,
+      mode: "LOCAL_SYNTHETIC",
+      scope: "TALENT_RADAR",
+      approvalId: null,
+      inventoryVersionId: null,
+    } as const,
     ...override,
   };
 }
@@ -239,6 +246,27 @@ function deniedDistinctBudget(): RadarDistinctFilterBudgetDecision {
 }
 
 describe("Talent Radar employer authorization before Candidate access", () => {
+  it("blocks a missing prod-like Legal/AVG gate before every repository call", async () => {
+    const test = harness({
+      rows: Array.from({ length: 20 }, (_, index) => candidate(index + 1)),
+    });
+    await expect(listRadarCandidates(request({
+      legalGate: {
+        allowed: false,
+        mode: "BLOCKED",
+        scope: "TALENT_RADAR",
+        code: "AVG_DECISION_UNAVAILABLE",
+      },
+    }), test.dependencies)).resolves.toEqual({
+      status: "LOCKED",
+      reason: "LEGAL_REVIEW_REQUIRED",
+    });
+    expect(test.repository.getEmployerAccess).not.toHaveBeenCalled();
+    expect(test.candidateQuery).not.toHaveBeenCalled();
+    expect(test.membershipLimit).not.toHaveBeenCalled();
+    expect(test.distinctBudget).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["missing Membership", null, "NO_ACTIVE_MEMBERSHIP"],
     ["VIEWER", access({ membershipRole: "VIEWER" }), "NO_ACTIVE_MEMBERSHIP"],

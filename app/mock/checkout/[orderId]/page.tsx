@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireEmployerBillingPage } from "@/lib/billing/employer-page-access";
+import { isLegacyMockBillingAllowed } from "@/lib/billing/mock-billing-policy";
+import { getServerEnvironment } from "@/lib/config/env";
 import { getCompanyOrder } from "@/lib/billing/employer-read-model";
 import { getDatabase } from "@/lib/db/client";
 import { formatChfFromRappen, formatDateTime } from "@/lib/utils/format";
@@ -25,6 +27,7 @@ export const runtime = "nodejs";
 export default async function MockCheckoutPage({
   params,
 }: Readonly<{ params: Promise<{ orderId: string }> }>) {
+  if (!isLegacyMockBillingAllowed(getServerEnvironment())) notFound();
   const { context } = await requireEmployerBillingPage();
   const parsed = z.uuid().safeParse((await params).orderId);
   if (!parsed.success) notFound();

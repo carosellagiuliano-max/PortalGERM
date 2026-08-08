@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { createServer, type Server, type ServerResponse } from "node:http";
+import type { Server } from "node:http";
 
 import {
   parseEnvironment,
@@ -10,6 +10,13 @@ import {
   startHeartbeatLoop,
   type HeartbeatLoop,
 } from "@/lib/ops/heartbeat-loop";
+import {
+  runtimeReadinessPolicy,
+  startRuntimeHealthServer,
+  type RuntimeHealthState,
+  type RuntimeRole,
+} from "@/lib/ops/runtime-health";
+import { readProviderInboxHealth } from "@/lib/ops/provider-inbox-health";
 import {
   beginWorkerDrain,
   createWorkerRun,
@@ -22,6 +29,7 @@ import { refreshConfiguredProviderHealth } from "@/lib/ops/provider-health-monit
 
 const runtimeVersion = "phase33-runtime-v1";
 const workerRunHeartbeatMilliseconds = 10_000;
+const providerInboxHealthSampleMilliseconds = 30_000;
 
 try {
   await main();
@@ -53,19 +61,25 @@ async function main() {
     `phase33-${command.role}-${randomBytes(8).toString("hex")}`;
   const state: RuntimeHealthState = {
     buildIdentifier: deploymentDigest,
+    cycleStartedAt: null,
     lastCycleAt: null,
-    ready: false,
+    providerInboxCheckedAt: null,
+    providerInboxProcessingState: "UNKNOWN",
     role: command.role,
     shuttingDown: false,
   };
-  const healthServer = startHealthServer(command.healthPort, state);
   let workerRunId: string | undefined;
   let workerRunHeartbeat: HeartbeatLoop | null = null;
+  const healthServer = startRuntimeHealthServer({
+    heartbeatHealthy: () => workerRunHeartbeat?.isHealthy() === true,
+    policy: runtimeReadinessPolicy(command.pollMilliseconds),
+    port: command.healthPort,
+    state,
+  });
   let shutdownRequested = false;
   const requestShutdown = () => {
     shutdownRequested = true;
     state.shuttingDown = true;
-    state.ready = false;
   };
   process.once("SIGINT", requestShutdown);
   process.once("SIGTERM", requestShutdown);
@@ -83,6 +97,7 @@ async function main() {
     const activeWorkerRunId = workerRun.id;
     workerRunHeartbeat = startHeartbeatLoop({
       intervalMilliseconds: workerRunHeartbeatMilliseconds,
+      timeoutMilliseconds: workerRunHeartbeatMilliseconds,
       heartbeat: () =>
         heartbeatWorkerRun(database, {
           workerRunId: activeWorkerRunId,
@@ -91,6 +106,7 @@ async function main() {
     });
 
     do {
+      state.cycleStartedAt = new Date().toISOString();
       const cycle =
         command.role === "scheduler"
           ? await runSchedulerCycle(database, environment, deploymentDigest)
@@ -105,8 +121,14 @@ async function main() {
       if (!workerRunHeartbeat.isHealthy()) {
         throw new Error("PHASE33_WORKER_RUN_HEARTBEAT_LOST");
       }
+      await refreshProviderInboxHealth(
+        database,
+        environment.APP_ENV,
+        cycleAt,
+        state,
+      );
+      state.cycleStartedAt = null;
       state.lastCycleAt = cycleAt.toISOString();
-      state.ready = true;
       process.stdout.write(
         `${JSON.stringify({
           command: "phase33-runtime",
@@ -152,7 +174,7 @@ async function main() {
     throw error;
   } finally {
     await workerRunHeartbeat?.stop();
-    state.ready = false;
+    state.shuttingDown = true;
     process.removeListener("SIGINT", requestShutdown);
     process.removeListener("SIGTERM", requestShutdown);
     await closeServer(healthServer);
@@ -204,55 +226,30 @@ async function runConsumerCycle(
   });
 }
 
-type RuntimeRole = "scheduler" | "worker";
-type RuntimeHealthState = {
-  buildIdentifier: string;
-  lastCycleAt: string | null;
-  ready: boolean;
-  role: RuntimeRole;
-  shuttingDown: boolean;
-};
-
-function startHealthServer(port: number, state: RuntimeHealthState) {
-  const server = createServer((request, response) => {
-    const path = new URL(
-      request.url ?? "/",
-      `http://${request.headers.host ?? "runtime.invalid"}`,
-    ).pathname;
-    if (request.method !== "GET") {
-      return respond(response, 405, { status: "method_not_allowed" });
-    }
-    if (path === "/health/live") {
-      return respond(response, 200, {
-        status: "ok",
-        buildId: state.buildIdentifier,
-        role: state.role,
-      });
-    }
-    if (path === "/health/ready") {
-      return respond(response, state.ready ? 200 : 503, {
-        status: state.ready ? "ready" : "unavailable",
-        role: state.role,
-        lastCycleAt: state.lastCycleAt,
-      });
-    }
-    return respond(response, 404, { status: "not_found" });
-  });
-  server.listen(port, "0.0.0.0");
-  return server;
-}
-
-function respond(
-  response: ServerResponse,
-  status: number,
-  body: Readonly<Record<string, unknown>>,
+async function refreshProviderInboxHealth(
+  database: DatabaseClient,
+  environment: string,
+  now: Date,
+  state: RuntimeHealthState,
 ) {
-  response.writeHead(status, {
-    "cache-control": "no-store",
-    "content-type": "application/json; charset=utf-8",
-    "x-content-type-options": "nosniff",
+  const checkedAt =
+    state.providerInboxCheckedAt === null
+      ? null
+      : Date.parse(state.providerInboxCheckedAt);
+  if (
+    checkedAt !== null &&
+    Number.isFinite(checkedAt) &&
+    now.getTime() - checkedAt < providerInboxHealthSampleMilliseconds
+  ) {
+    return;
+  }
+  const health = await readProviderInboxHealth(database, {
+    environment,
+    includeEmail: state.role === "worker",
+    now,
   });
-  response.end(`${JSON.stringify(body)}\n`);
+  state.providerInboxCheckedAt = now.toISOString();
+  state.providerInboxProcessingState = health.processingState;
 }
 
 function parseArguments(values: readonly string[]) {

@@ -184,7 +184,7 @@ werden niemals durch Löschen von Queue-/Ledgerzeilen „zurückgerollt“.
 Der exakte Deployment-Zeitpunkt des Phase-33-Cutovers wird als Release-
 Evidence festgehalten. Seit diesem Zeitpunkt schreiben Dispatcher und
 Provider-Webhooks ausschließlich den HMAC mit dem aktiven
-`NOTIFICATION_DELIVERY_KEYS`-Schlüssel; Lesezugriffe prüfen während der
+`NOTIFICATION_RECIPIENT_HASH_KEYS`-Schlüssel; Lesezugriffe prüfen während der
 Rotation zusätzlich alle ausdrücklich zurückbehaltenen Schlüsselversionen.
 
 Vor dem Cutover erzeugte, aktive 64-Zeichen-SHA-256-Suppressions lassen sich

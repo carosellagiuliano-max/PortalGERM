@@ -28,6 +28,7 @@ import {
 import { submitPublicEmployerLead } from "@/lib/sales/public-lead";
 import type { LeadFormInput } from "@/lib/validation/billing";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
+import { localPublicIntakePrivacyBinding } from "@/tests/fixtures/public-intake-privacy";
 
 type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
@@ -109,6 +110,7 @@ beforeEach(async () => {
   // gives every case exact, independent cardinality assertions.
   await migrated.pool.query(`
     TRUNCATE TABLE
+      "RateLimitBucket",
       "NotificationOutbox",
       "SalesLeadIntake",
       "AnalyticsEvent",
@@ -134,6 +136,7 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
       }),
       request: requestContext(correlationId(330)),
       now: NOW,
+      privacyBinding: localPublicIntakePrivacyBinding("EMPLOYER_DEMO"),
     });
 
     expect(result).toMatchObject({ ok: true, duplicate: false });
@@ -229,6 +232,10 @@ describe.sequential("Phase-08 PostgreSQL public employer Lead intake", () => {
       message: MESSAGE_CANARY,
       noticeVersion: SALES_LEAD_INTAKE_POLICY_V1.notice.version,
       noticeHash: SALES_LEAD_NOTICE_HASH_V1,
+      privacyEvidenceMode: "LOCAL_SYNTHETIC",
+      privacyLegalPublicationId: null,
+      privacyPublicationHash: null,
+      privacyPublicationVersion: null,
       slaPolicyVersion: SALES_LEAD_INTAKE_POLICY_V1.sla.version,
       dueAt: salesLeadDueAtV1(NOW),
       retainUntil: salesLeadRetainUntilV1(NOW),
@@ -671,6 +678,7 @@ async function submit(
     environment: runtimeEnvironment(),
     request,
     now,
+    privacyBinding: localPublicIntakePrivacyBinding("EMPLOYER_DEMO"),
   });
 }
 

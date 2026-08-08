@@ -5,7 +5,10 @@ import {
   OCCUPATION_CODES_2026_FIXTURE,
   type OccupationCodeDatasetFixture,
 } from "@/lib/providers/jobroom/fixtures/occupation-codes-2026";
-import { jobroomProvider, MockJobroomProvider } from "@/lib/providers/jobroom";
+import {
+  MockJobroomProvider,
+  resolveJobroomProvider,
+} from "@/lib/providers/jobroom";
 import { describe, expect, it, vi } from "vitest";
 
 const NOW = new Date("2026-07-20T12:00:00.000Z");
@@ -51,8 +54,12 @@ async function checkInjectedFixture(runtimeFixture: unknown) {
 }
 
 describe("MockJobroomProvider", () => {
-  it("is selected explicitly by the composition root", () => {
-    expect(jobroomProvider).toBeInstanceOf(MockJobroomProvider);
+  it("selects the fixture provider only in isolated Local/CI environments", () => {
+    expect(resolveJobroomProvider("local")).toBeInstanceOf(MockJobroomProvider);
+    expect(resolveJobroomProvider("ci")).toBeInstanceOf(MockJobroomProvider);
+    expect(resolveJobroomProvider("preview")).toBeUndefined();
+    expect(resolveJobroomProvider("staging")).toBeUndefined();
+    expect(resolveJobroomProvider("production")).toBeUndefined();
   });
 
   it("keeps fixture identifiers seed-compatible and unique", () => {

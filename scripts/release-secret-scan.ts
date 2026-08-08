@@ -2,13 +2,14 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { config } from "dotenv";
+import { config, parse } from "dotenv";
 
 import {
   scanPhase32ArtifactSecrets,
   type Phase32SecretCandidate,
 } from "@/lib/release/phase32-artifact-secret-scan";
 import { SENSITIVE_ENVIRONMENT_VARIABLES } from "@/lib/security/sensitive-data-registry";
+import { isSafeTrackedEnvironmentTemplateMatch } from "@/lib/security/release-secret-scan-policy";
 
 const repository = process.cwd();
 const tracked = execFileSync("git", ["ls-files", "-z"], {
@@ -62,12 +63,31 @@ config({
   quiet: true,
 });
 const secretVariables = SENSITIVE_ENVIRONMENT_VARIABLES;
+const environmentTemplate = parse(trackedText.get(".env.example") ?? "");
+for (const variable of ["DATABASE_URL", "TEST_DATABASE_URL"] as const) {
+  const value = environmentTemplate[variable]?.trim();
+  if (
+    value !== undefined &&
+    !isSafeTrackedEnvironmentTemplateMatch(variable, value, ".env.example")
+  ) {
+    failures.push(
+      `.env.example contains an unsafe non-loopback ${variable} template.`,
+    );
+  }
+}
 for (const variable of secretVariables) {
   const value = process.env[variable]?.trim();
   if (value === undefined || value.length < 12) continue;
   for (const candidate of secretCandidates(variable, value)) {
     const leaked = tracked.find(
-      (path) => trackedText.get(path)?.includes(candidate) ?? false,
+      (path) =>
+        (trackedText.get(path)?.includes(candidate) ?? false) &&
+        !isSafeTrackedEnvironmentTemplateMatch(
+          variable,
+          candidate,
+          path,
+          environmentTemplate[variable]?.trim(),
+        ),
     );
     if (leaked !== undefined) {
       failures.push(`${variable} exact value appears in ${leaked}.`);

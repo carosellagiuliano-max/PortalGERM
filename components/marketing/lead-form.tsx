@@ -3,6 +3,12 @@
 import { useActionState, useEffect, useRef } from "react";
 
 import { submitEmployerDemoLeadAction } from "@/app/(public)/employers/demo/actions";
+import {
+  PublicIntakePrivacyDisclosure,
+  PublicIntakePrivacyHiddenFields,
+  PublicIntakePrivacyLocked,
+  usePublicIntakePrivacy,
+} from "@/components/privacy/public-intake-privacy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,17 +54,16 @@ const callbackWindows = [
 export function LeadForm({
   idempotencyKey,
   initialInterest,
-  privacyNotice,
 }: Readonly<{
   idempotencyKey: string;
   initialInterest: LeadFormInput["interestCode"];
-  privacyNotice: string;
 }>) {
   const [state, action, pending] = useActionState(
     submitEmployerDemoLeadAction,
     INITIAL_LEAD_ACTION_STATE,
   );
   const resultRef = useRef<HTMLDivElement>(null);
+  const privacyGate = usePublicIntakePrivacy("EMPLOYER_DEMO");
 
   useEffect(() => {
     if (state.status === "success") resultRef.current?.focus();
@@ -78,9 +83,14 @@ export function LeadForm({
     );
   }
 
+  if (!privacyGate.allowed) {
+    return <PublicIntakePrivacyLocked purpose="EMPLOYER_DEMO" />;
+  }
+
   return (
     <form action={action} className="grid gap-5" noValidate>
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      <PublicIntakePrivacyHiddenFields purpose="EMPLOYER_DEMO" />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute left-[-10000px] top-auto size-px overflow-hidden"
@@ -212,9 +222,9 @@ export function LeadForm({
             Dies ist keine Einwilligung in allgemeine Marketing-E-Mails.
           </span>
         </label>
-        <p id="lead-purpose-notice" className="mt-3 text-xs leading-5 text-muted-foreground">
-          {privacyNotice}
-        </p>
+        <div id="lead-purpose-notice" className="mt-3">
+          <PublicIntakePrivacyDisclosure purpose="EMPLOYER_DEMO" />
+        </div>
         <FieldError id="lead-purpose-error" errors={state.fieldErrors?.acceptedContactPurpose} />
       </div>
 

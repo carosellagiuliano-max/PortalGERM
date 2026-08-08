@@ -45,6 +45,7 @@ const LIVE_STORAGE = Object.freeze({
     "postgresql://app:staging-only@db.example.ch:5432/swisstalenthub?schema=public&sslmode=require",
   TEST_DATABASE_URL: undefined,
   TRUSTED_PROXY_HOPS: "2",
+  NOTIFICATION_OUTBOX_PRODUCERS: "true",
   DOCUMENT_VAULT_WRITES: "true",
   DOCUMENT_CLEAN_READS: "true",
   DOCUMENT_RECONCILIATION: "command",
@@ -127,9 +128,7 @@ describe("Phase-33 object-storage and malware-scanner mode matrix", () => {
   });
 
   it("accepts TLS/KMS live providers but never filesystem or sandbox fallbacks", () => {
-    const environment = parseEnvironment(
-      createValidEnvironment(LIVE_STORAGE),
-    );
+    const environment = parseEnvironment(createValidEnvironment(LIVE_STORAGE));
 
     expect(resolveDocumentRuntime(environment)).toMatchObject({
       available: true,

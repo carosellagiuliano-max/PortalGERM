@@ -665,6 +665,7 @@ async function setupExportExecution(
   return dependencies.database.$transaction(async (transaction) => {
     await acquireExportLock(transaction, input.privacyRequestId);
     const request = await transaction.privacyRequest.findUnique({
+      relationLoadStrategy: "join",
       where: { id: input.privacyRequestId },
       select: {
         id: true,
@@ -822,6 +823,7 @@ async function setupExportExecution(
     if (existing !== undefined) return failure("CONFLICT");
 
     const inventory = await transaction.privacyDataInventoryVersion.findFirst({
+      relationLoadStrategy: "join",
       where: {
         status: "ACTIVE",
         effectiveAt: { lte: now },
@@ -863,6 +865,7 @@ async function setupExportExecution(
     const approvals = [];
     for (const processorKey of requiredProcessors) {
       const approval = await transaction.processingApproval.findFirst({
+        relationLoadStrategy: "join",
         where: {
           scope: "PRIVACY_EXPORT",
           region: processorRegions.get(processorKey)!,
@@ -902,6 +905,7 @@ async function setupExportExecution(
     );
     if (token === null) return failure("INVENTORY_UNAVAILABLE");
     const execution = await transaction.privacyExecution.create({
+      relationLoadStrategy: "join",
       data: {
         privacyRequestId: request.id,
         inventoryVersionId: inventory.id,
@@ -2291,15 +2295,19 @@ async function subjectClassesForIdentity(
   userId: string,
   legacyRole: string,
 ) {
-  const [candidateProfileCount, membershipCount, assignments] =
-    await Promise.all([
-      transaction.candidateProfile.count({ where: { userId } }),
-      transaction.companyMembership.count({ where: { userId } }),
-      transaction.personaAssignment.findMany({
-        where: { userId },
-        select: { kind: true },
-      }),
-    ]);
+  // This helper runs inside an interactive transaction and therefore owns a
+  // single PostgreSQL client. pg 9 removes implicit query queueing, so these
+  // independent reads must still be awaited one after another.
+  const candidateProfileCount = await transaction.candidateProfile.count({
+    where: { userId },
+  });
+  const membershipCount = await transaction.companyMembership.count({
+    where: { userId },
+  });
+  const assignments = await transaction.personaAssignment.findMany({
+    where: { userId },
+    select: { kind: true },
+  });
   const classes = new Set<string>([
     "USER",
     "INVITEE",

@@ -43,6 +43,7 @@ vi.mock("@/lib/security/rate-limit-audit", () => ({
 }));
 
 import { submitPublicReportAction } from "@/app/(public)/actions";
+import { appendLocalPublicIntakePrivacyBinding } from "@/tests/fixtures/public-intake-privacy";
 
 describe("public report action", () => {
   beforeEach(() => {
@@ -53,7 +54,7 @@ describe("public report action", () => {
     });
     mocks.isValidAuthMutationOrigin.mockReturnValue(true);
     mocks.getDatabase.mockReturnValue({ marker: "database" });
-    mocks.getServerEnvironment.mockReturnValue({ marker: "environment" });
+    mocks.getServerEnvironment.mockReturnValue({ APP_ENV: "local", marker: "environment" });
     mocks.getCurrentUser.mockResolvedValue(null);
     mocks.consumeRequestRateLimit.mockResolvedValue({ allowed: true, status: 200 });
     mocks.createPublicReport.mockResolvedValue({ ok: true, reportId: "report-1" });
@@ -76,13 +77,14 @@ describe("public report action", () => {
     expect(mocks.getPublicCompanyCardBySlug).not.toHaveBeenCalled();
   });
 
-  it("rate-limits valid-looking requests before resolving an attacker-controlled slug", async () => {
-    mocks.consumeRequestRateLimit.mockResolvedValue({
-      allowed: false,
-      status: 429,
+  it("delegates rate limiting to the locked use case after canonical target resolution", async () => {
+    mocks.getPublicJobBySlug.mockResolvedValue({
+      id: "11111111-1111-4111-8111-111111111111",
+      company: { id: "22222222-2222-4222-8222-222222222222" },
+    });
+    mocks.createPublicReport.mockResolvedValue({
+      ok: false,
       code: "RATE_LIMITED",
-      retryAfterSeconds: 60,
-      audit: { action: "RATE_LIMITED", preset: "ABUSE_INTAKE_PRECHECK", scope: "IP" },
     });
 
     const result = await submitPublicReportAction(
@@ -91,34 +93,10 @@ describe("public report action", () => {
     );
 
     expect(result.message).toMatch(/Zu viele Meldungen/u);
-    expect(mocks.consumeRequestRateLimit).toHaveBeenCalledWith(
-      "ABUSE_INTAKE_PRECHECK",
-      {},
-      expect.any(Object),
-      expect.any(Date),
-      expect.objectContaining({
-        database: { marker: "database" },
-        environment: { marker: "environment" },
-      }),
-    );
-    expect(mocks.getPublicJobBySlug).not.toHaveBeenCalled();
-    expect(mocks.createPublicReport).not.toHaveBeenCalled();
-    expect(mocks.recordRateLimitDenial).toHaveBeenCalledWith(
-      expect.objectContaining({
-        preset: "ABUSE_INTAKE_PRECHECK",
-        scope: "IP",
-      }),
-      expect.objectContaining({
-        actorKind: "ANONYMOUS",
-        capability: "PUBLIC_ABUSE_REPORT_PRECHECK",
-        targetId: "77777777-7777-4777-8777-777777777777",
-        targetType: "SYSTEM_TASK",
-      }),
-      expect.objectContaining({
-        database: { marker: "database" },
-        environment: { marker: "environment" },
-      }),
-    );
+    expect(mocks.consumeRequestRateLimit).not.toHaveBeenCalled();
+    expect(mocks.getPublicJobBySlug).toHaveBeenCalledWith("public-job");
+    expect(mocks.createPublicReport).toHaveBeenCalled();
+    expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
 
   it("resolves a target only after the precheck and forwards the canonical id", async () => {
@@ -158,5 +136,5 @@ function validReportForm(): FormData {
     "description",
     "Die veröffentlichten Angaben stimmen so nachweislich nicht.",
   );
-  return formData;
+  return appendLocalPublicIntakePrivacyBinding(formData, "ABUSE_REPORT");
 }

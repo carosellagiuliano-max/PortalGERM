@@ -218,6 +218,7 @@ describe("parseEnvironment", () => {
           APP_URL: "https://swisstalenthub.test",
           TRUSTED_PROXY_HOPS: "2",
           TEST_DATABASE_URL: undefined,
+          NOTIFICATION_OUTBOX_PRODUCERS: "true",
         }),
       );
       expect(environment.TRUSTED_PROXY_HOPS).toBe(2);
@@ -288,6 +289,17 @@ describe("parseEnvironment", () => {
       },
       "LOGIN_EMAIL_CHANGE",
     );
+    for (const appEnvironment of ["preview", "staging", "production"]) {
+      expectValidationFailure(
+        {
+          APP_ENV: appEnvironment,
+          APP_URL: "https://swisstalenthub.test",
+          TRUSTED_PROXY_HOPS: "1",
+          IDENTITY_VERIFICATION_ENFORCEMENT: "false",
+        },
+        "IDENTITY_VERIFICATION_ENFORCEMENT",
+      );
+    }
   });
 
   it("normalizes, freezes and safely summarizes the abuse-report distribution", () => {
@@ -333,7 +345,7 @@ describe("parseEnvironment", () => {
     },
   );
 
-  it("keeps the local mailbox closed in a production Node runtime", () => {
+  it("keeps the local mailbox closed while allowing a digest-bound local provider sink in a production Node runtime", () => {
     expectValidationFailure(
       {
         APP_ENV: "local",
@@ -348,10 +360,18 @@ describe("parseEnvironment", () => {
       createValidEnvironment({
         APP_ENV: "local",
         NODE_ENV: "production",
+        APP_BUILD_ID: "a".repeat(64),
         ENABLE_LOCAL_MOCK_MAILBOX: "false",
+        DEV_MAILBOX_SECRET: "",
+        EMAIL_PROVIDER_MODE: "local_mock",
+        NOTIFICATION_DISPATCH: "command",
+        PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT: "false",
       }),
     );
     expect(environment.APP_URL).toBe("http://127.0.0.1:3000");
+    expect(environment.ENABLE_LOCAL_MOCK_MAILBOX).toBe(false);
+    expect(environment.EMAIL_PROVIDER_MODE).toBe("local_mock");
+    expect(environment.PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT).toBe(false);
   });
 
   it("permits only the exact loopback-bound Phase-33 local/mock production-build contract", () => {

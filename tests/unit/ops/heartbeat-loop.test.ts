@@ -48,6 +48,21 @@ describe("Phase-33 non-overlapping heartbeat loop", () => {
     expect(heartbeat).toHaveBeenCalledTimes(1);
   });
 
+  it("bounds a heartbeat that never settles", async () => {
+    vi.useFakeTimers();
+    const heartbeat = vi.fn(() => new Promise<boolean>(() => undefined));
+    const loop = startHeartbeatLoop({
+      heartbeat,
+      intervalMilliseconds: 100,
+      timeoutMilliseconds: 50,
+    });
+
+    await vi.advanceTimersByTimeAsync(151);
+    expect(heartbeat).toHaveBeenCalledTimes(1);
+    expect(loop.isHealthy()).toBe(false);
+    await expect(loop.stop()).resolves.toEqual({ healthy: false });
+  });
+
   it("rejects unsafe intervals", () => {
     expect(() =>
       startHeartbeatLoop({

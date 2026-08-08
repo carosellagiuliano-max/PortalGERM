@@ -12,15 +12,13 @@ import {
   test,
 } from "@/tests/e2e/fixtures/phase17-test";
 
-const TARGET_CANDIDATE_EMAIL =
-  "candidate-02@demo.swisstalenthub.invalid";
+const TARGET_CANDIDATE_EMAIL = "candidate-02@demo.swisstalenthub.invalid";
 const COMPANY_SLUG = "novarigi-digital";
 const COMPANY_NAME = "NovaRigi Digital AG";
 const FIRST_SUBJECT = "Phase 17 Radar: erster vertraulicher Austausch";
 const FIRST_MESSAGE =
   "Wir möchten eine passende Gesundheitsrolle in einem anonymen Erstgespräch vorstellen.";
-const COOLDOWN_SUBJECT =
-  "Phase 17 Radar: unzulässiger sofortiger Zweitkontakt";
+const COOLDOWN_SUBJECT = "Phase 17 Radar: unzulässiger sofortiger Zweitkontakt";
 const COOLDOWN_MESSAGE =
   "Dieser Kontaktversuch muss innerhalb der Schutzfrist ohne Credit-Verbrauch abgewiesen werden.";
 const SECOND_SUBJECT =
@@ -37,7 +35,7 @@ const ANONYMOUS_IDENTITY_NOTICE =
 type Database = ReturnType<typeof phase17Database>;
 type Actor = Awaited<ReturnType<typeof openActor>>;
 
-test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reveal", async ({
+test("[E2E-04][E2E-34-11][F34-LEG-002] @journey @phase34 anonymous Radar decline, cooldown, accept and typed reveal", async ({
   browser,
 }) => {
   const database = phase17Database();
@@ -46,10 +44,11 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
   let secondEmployer: Actor | undefined;
   let acceptingCandidate: Actor | undefined;
   let revealedEmployer: Actor | undefined;
+  let scenario: Awaited<ReturnType<typeof prepareScenario>> | undefined;
 
   try {
     resetServerClock();
-    const scenario = await prepareScenario(database);
+    scenario = await prepareScenario(database);
     const consumeBaseline = await companyContactConsumeCount(
       database,
       scenario.companyId,
@@ -65,40 +64,40 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
     await expect(
       firstDialog.getByText(CONTACT_SUCCESS, { exact: true }),
     ).toBeVisible();
-    await firstDialog
-      .getByRole("link", { name: "Anfrage ansehen" })
-      .click();
+    await firstDialog.getByRole("link", { name: "Anfrage ansehen" }).click();
 
-    const firstRequest = await database.employerContactRequest.findFirstOrThrow({
-      where: {
-        companyId: scenario.companyId,
-        candidateProfileId: scenario.candidateProfileId,
-        subject: FIRST_SUBJECT,
-      },
-      select: {
-        id: true,
-        status: true,
-        terminalAt: true,
-        createdAt: true,
-        expiresAt: true,
-        fundingSource: true,
-        creditLedgerEntry: {
-          select: {
-            id: true,
-            kind: true,
-            amount: true,
-            fundingSource: true,
-            reasonCode: true,
+    const firstRequest = await database.employerContactRequest.findFirstOrThrow(
+      {
+        where: {
+          companyId: scenario.companyId,
+          candidateProfileId: scenario.candidateProfileId,
+          subject: FIRST_SUBJECT,
+        },
+        select: {
+          id: true,
+          status: true,
+          terminalAt: true,
+          createdAt: true,
+          expiresAt: true,
+          fundingSource: true,
+          creditLedgerEntry: {
+            select: {
+              id: true,
+              kind: true,
+              amount: true,
+              fundingSource: true,
+              reasonCode: true,
+            },
           },
+          events: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: { kind: true },
+          },
+          conversation: { select: { id: true } },
+          revealGrant: { select: { id: true } },
         },
-        events: {
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { kind: true },
-        },
-        conversation: { select: { id: true } },
-        revealGrant: { select: { id: true } },
       },
-    });
+    );
     expect(firstRequest.status).toBe("PENDING");
     expect(firstRequest.terminalAt).toBeNull();
     expect(
@@ -116,19 +115,16 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
     expect(firstRequest.events).toEqual([{ kind: "CREATED" }]);
     expect(firstRequest.conversation).toBeNull();
     expect(firstRequest.revealGrant).toBeNull();
-    expect(
-      await companyContactConsumeCount(database, scenario.companyId),
-    ).toBe(consumeBaseline + 1);
+    expect(await companyContactConsumeCount(database, scenario.companyId)).toBe(
+      consumeBaseline + 1,
+    );
 
     await expect(firstEmployer.page).toHaveURL(
       `/employer/talent-radar/requests/${firstRequest.id}`,
     );
     await assertEmployerRequestIsAnonymous(firstEmployer.page, scenario);
 
-    decliningCandidate = await openActor(
-      browser,
-      TARGET_CANDIDATE_EMAIL,
-    );
+    decliningCandidate = await openActor(browser, TARGET_CANDIDATE_EMAIL);
     await decliningCandidate.page.goto(
       `/candidate/talent-radar/requests/${firstRequest.id}`,
     );
@@ -186,8 +182,10 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
     expect(declinedEvidence.conversation).toBeNull();
     expect(declinedEvidence.revealGrant).toBeNull();
 
-    const requestsBeforeCooldownAttempt =
-      await companyCandidateRequestIds(database, scenario);
+    const requestsBeforeCooldownAttempt = await companyCandidateRequestIds(
+      database,
+      scenario,
+    );
     const consumesBeforeCooldownAttempt = await companyContactConsumeCount(
       database,
       scenario.companyId,
@@ -197,9 +195,7 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
       subject: COOLDOWN_SUBJECT,
       message: COOLDOWN_MESSAGE,
     });
-    await expect(
-      cooldownDialog.getByRole("alert"),
-    ).toHaveText(COOLDOWN_ERROR);
+    await expect(cooldownDialog.getByRole("alert")).toHaveText(COOLDOWN_ERROR);
     expect(await companyCandidateRequestIds(database, scenario)).toEqual(
       requestsBeforeCooldownAttempt,
     );
@@ -212,9 +208,9 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
         },
       }),
     ).toBe(0);
-    expect(
-      await companyContactConsumeCount(database, scenario.companyId),
-    ).toBe(consumesBeforeCooldownAttempt);
+    expect(await companyContactConsumeCount(database, scenario.companyId)).toBe(
+      consumesBeforeCooldownAttempt,
+    );
 
     await closeActor(firstEmployer);
     firstEmployer = undefined;
@@ -233,9 +229,7 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
     await expect(
       secondDialog.getByText(CONTACT_SUCCESS, { exact: true }),
     ).toBeVisible();
-    await secondDialog
-      .getByRole("link", { name: "Anfrage ansehen" })
-      .click();
+    await secondDialog.getByRole("link", { name: "Anfrage ansehen" }).click();
 
     const secondRequest =
       await database.employerContactRequest.findFirstOrThrow({
@@ -281,9 +275,9 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
     expect(secondRequest.events).toEqual([{ kind: "CREATED" }]);
     expect(secondRequest.conversation).toBeNull();
     expect(secondRequest.revealGrant).toBeNull();
-    expect(
-      await companyContactConsumeCount(database, scenario.companyId),
-    ).toBe(consumeBaseline + 2);
+    expect(await companyContactConsumeCount(database, scenario.companyId)).toBe(
+      consumeBaseline + 2,
+    );
     expect(
       new Set([
         firstRequest.creditLedgerEntry.id,
@@ -291,10 +285,7 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
       ]).size,
     ).toBe(2);
 
-    acceptingCandidate = await openActor(
-      browser,
-      TARGET_CANDIDATE_EMAIL,
-    );
+    acceptingCandidate = await openActor(browser, TARGET_CANDIDATE_EMAIL);
     await acceptingCandidate.page.goto(
       `/candidate/talent-radar/requests/${secondRequest.id}`,
     );
@@ -544,9 +535,7 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
       expect(ciphertext.toString("utf8")).not.toContain(
         scenario.publicDisplayName,
       );
-      expect(ciphertext.toString("utf8")).not.toContain(
-        TARGET_CANDIDATE_EMAIL,
-      );
+      expect(ciphertext.toString("utf8")).not.toContain(TARGET_CANDIDATE_EMAIL);
       expect(Buffer.from(field.nonce)).toHaveLength(12);
       expect(Buffer.from(field.authTag)).toHaveLength(16);
       expect(field.encryptionKeyVersion).not.toHaveLength(0);
@@ -567,8 +556,9 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
     expect(revealGrant.confirmations[0]?.previewHmac).toMatch(
       /^[0-9a-f]{64}$/u,
     );
-    expect(revealGrant.confirmations[0]?.confirmationKeyVersion).not
-      .toHaveLength(0);
+    expect(
+      revealGrant.confirmations[0]?.confirmationKeyVersion,
+    ).not.toHaveLength(0);
     expect(revealGrant.confirmations[0]?.confirmationTokenDigest).toMatch(
       /^[0-9a-f]{64}$/u,
     );
@@ -619,9 +609,9 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
     await expect(
       identityCard.getByText(TARGET_CANDIDATE_EMAIL, { exact: true }),
     ).toBeVisible();
-    expect(
-      await companyContactConsumeCount(database, scenario.companyId),
-    ).toBe(consumeBaseline + 2);
+    expect(await companyContactConsumeCount(database, scenario.companyId)).toBe(
+      consumeBaseline + 2,
+    );
   } finally {
     let cleanupError: unknown;
     for (const actor of [
@@ -643,6 +633,23 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
     } catch (error) {
       cleanupError ??= error;
     }
+    if (scenario !== undefined) {
+      try {
+        const revoked = await database.entitlementGrant.updateMany({
+          where: {
+            id: scenario.entitlementGrantId,
+            reasonCode: "PHASE17_E2E04_CLOCK_WINDOW",
+            revokedAt: null,
+          },
+          data: { revokedAt: new Date() },
+        });
+        if (revoked.count !== 1) {
+          throw new Error("PHASE17_RADAR_ENTITLEMENT_FIXTURE_CLEANUP_FAILED");
+        }
+      } catch (error) {
+        cleanupError ??= error;
+      }
+    }
     try {
       await database.$disconnect();
     } catch (error) {
@@ -655,52 +662,47 @@ test("[E2E-04] @journey anonymous Radar decline, cooldown, accept and typed reve
 async function prepareScenario(database: Database) {
   const now = new Date();
   const validUntil = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1_000);
-  const [
-    company,
-    targetUser,
-    demoCredential,
-    adminUser,
-    employerUser,
-  ] = await Promise.all([
-    database.company.findUniqueOrThrow({
-      where: { slug: COMPANY_SLUG },
-      select: { id: true, name: true },
-    }),
-    database.user.findUniqueOrThrow({
-      where: { emailNormalized: TARGET_CANDIDATE_EMAIL },
-      select: {
-        id: true,
-        email: true,
-        candidateProfile: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            publicDisplayName: true,
+  const [company, targetUser, demoCredential, adminUser, employerUser] =
+    await Promise.all([
+      database.company.findUniqueOrThrow({
+        where: { slug: COMPANY_SLUG },
+        select: { id: true, name: true },
+      }),
+      database.user.findUniqueOrThrow({
+        where: { emailNormalized: TARGET_CANDIDATE_EMAIL },
+        select: {
+          id: true,
+          email: true,
+          candidateProfile: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              publicDisplayName: true,
+            },
           },
         },
-      },
-    }),
-    database.credential.findFirstOrThrow({
-      where: {
-        user: { emailNormalized: DEMO_ACCOUNTS.candidate },
-      },
-      select: {
-        passwordHash: true,
-        algorithm: true,
-        algorithmVersion: true,
-        passwordChangedAt: true,
-      },
-    }),
-    database.user.findUniqueOrThrow({
-      where: { emailNormalized: DEMO_ACCOUNTS.admin },
-      select: { id: true },
-    }),
-    database.user.findUniqueOrThrow({
-      where: { emailNormalized: DEMO_ACCOUNTS.employer },
-      select: { id: true },
-    }),
-  ]);
+      }),
+      database.credential.findFirstOrThrow({
+        where: {
+          user: { emailNormalized: DEMO_ACCOUNTS.candidate },
+        },
+        select: {
+          passwordHash: true,
+          algorithm: true,
+          algorithmVersion: true,
+          passwordChangedAt: true,
+        },
+      }),
+      database.user.findUniqueOrThrow({
+        where: { emailNormalized: DEMO_ACCOUNTS.admin },
+        select: { id: true },
+      }),
+      database.user.findUniqueOrThrow({
+        where: { emailNormalized: DEMO_ACCOUNTS.employer },
+        select: { id: true },
+      }),
+    ]);
   expect(company.name).toBe(COMPANY_NAME);
   expect(targetUser.email).toBe(TARGET_CANDIDATE_EMAIL);
   if (
@@ -728,7 +730,7 @@ async function prepareScenario(database: Database) {
     },
   });
 
-  await database.entitlementGrant.create({
+  const entitlementGrant = await database.entitlementGrant.create({
     data: {
       id: randomUUID(),
       companyId: company.id,
@@ -746,6 +748,7 @@ async function prepareScenario(database: Database) {
       revokedAt: null,
       createdAt: now,
     },
+    select: { id: true },
   });
 
   const creditAccount = await database.creditAccount.create({
@@ -789,6 +792,7 @@ async function prepareScenario(database: Database) {
     lastName: targetUser.candidateProfile.lastName,
     publicDisplayName: targetUser.candidateProfile.publicDisplayName,
     employerUserId: employerUser.id,
+    entitlementGrantId: entitlementGrant.id,
   });
 }
 
@@ -822,9 +826,7 @@ async function submitContactRequest(
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Betreff").fill(input.subject);
   await dialog.getByLabel("Nachricht").fill(input.message);
-  await dialog
-    .getByRole("button", { name: "1 Credit einsetzen" })
-    .click();
+  await dialog.getByRole("button", { name: "1 Credit einsetzen" }).click();
   return dialog;
 }
 
@@ -850,11 +852,9 @@ async function assertEmployerRequestIsAnonymous(
     publicDisplayName: string;
   }>,
 ) {
-  const identityCard = page
-    .locator('[data-slot="card"]')
-    .filter({
-      has: page.getByRole("heading", { name: "Identitätsfreigabe" }),
-    });
+  const identityCard = page.locator('[data-slot="card"]').filter({
+    has: page.getByRole("heading", { name: "Identitätsfreigabe" }),
+  });
   await expect(identityCard).toHaveCount(1);
   await expect(
     identityCard.getByText(ANONYMOUS_IDENTITY_NOTICE, {
@@ -867,10 +867,7 @@ async function assertEmployerRequestIsAnonymous(
   await expect(identityCard).not.toContainText(TARGET_CANDIDATE_EMAIL);
 }
 
-function companyContactConsumeCount(
-  database: Database,
-  companyId: string,
-) {
+function companyContactConsumeCount(database: Database, companyId: string) {
   return database.creditLedgerEntry.count({
     where: {
       kind: "CONSUME",

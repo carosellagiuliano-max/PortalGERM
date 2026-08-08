@@ -312,12 +312,22 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
       has: page.getByRole("button", { name: "Jobabo erstellen" }),
     });
     await alertForm.getByLabel("Suchbegriff").fill(alertKeyword);
-    await alertForm.getByLabel("Dieses Jobabo ausdrücklich aktivieren").check();
-    await alertForm.getByLabel(/per Service-E-Mail erhalten/u).check();
+    await expect(
+      alertForm.getByLabel("Dieses Jobabo ausdrücklich aktivieren"),
+    ).toBeDisabled();
+    await expect(
+      alertForm.getByLabel(/per Service-E-Mail erhalten/u),
+    ).toBeDisabled();
+    await expect(
+      alertForm.getByRole("status").filter({
+        hasText:
+          "Provider, Worker und Scheduler sind nicht vollständig freigegeben",
+      }),
+    ).toBeVisible();
     await alertForm.getByRole("button", { name: "Jobabo erstellen" }).click();
     await expect(
       page.getByRole("status").filter({
-        hasText: "Jobabo erstellt und ausdrücklich aktiviert.",
+        hasText: "Jobabo als pausierter Entwurf erstellt.",
       }),
     ).toBeVisible();
     await assertAccessibleAndOperable(page);
@@ -337,12 +347,12 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
       },
     });
     expect(alert).toMatchObject({
-      status: "ACTIVE",
+      status: "PAUSED",
       events: [
         {
           kind: "CREATED",
           actorUserId: candidate.id,
-          reasonCode: "EXPLICIT_ACTIVATION",
+          reasonCode: "CREATED_PAUSED",
         },
       ],
     });
@@ -360,7 +370,7 @@ test("[P33-AC-10][P33-AC-14] @journey public discovery persists a private save a
         select: { status: true, candidateProfileId: true },
       }),
     ).resolves.toEqual({
-      status: "ACTIVE",
+      status: "PAUSED",
       candidateProfileId: candidate.candidateProfile!.id,
     });
   } finally {

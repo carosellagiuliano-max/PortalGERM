@@ -488,6 +488,15 @@ const rawEnvironmentSchema = z
       });
     }
 
+    if (publicIngress && !environment.IDENTITY_VERIFICATION_ENFORCEMENT) {
+      context.addIssue({
+        code: "custom",
+        path: ["IDENTITY_VERIFICATION_ENFORCEMENT"],
+        message:
+          "must be enabled in preview, staging and production so public application submission cannot bypass verified identity",
+      });
+    }
+
     const phase33LocalMockRuntimeContract =
       environment.PHASE33_LOCAL_MOCK_RUNTIME_CONTRACT &&
       environment.APP_ENV === "local" &&

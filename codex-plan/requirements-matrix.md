@@ -119,7 +119,7 @@
 | REQ-INT-001 | Alle externen Dienste über Ports mit persistierenden Mocks.                            | System/Ops · P0 · 04             | provider-specific logs/domain rows                                                            | composition root; no real call/env autoselect                                                                    | network-disabled E2E succeeds; expected DB records exist                                                       |
 | REQ-INT-002 | Real-Provider erst nach Security/Legal/Ops-Gate.                                       | Owner/Ops · später · after MVP   | adapter config + provider fields later                                                        | explicit approval, DPA, monitoring, retries/webhooks                                                             | checklist approved; fallback/runbook tested; otherwise disabled                                                |
 | REQ-QA-001  | Unit + echte Postgres-Integration + kritische E2E-Flows.                               | Engineering · P0 · jede Phase/17 | `tests/fixtures/isolated-postgres.ts`, `scripts/phase17-browser-gate.ts`, Playwright manifest | isolierte Migration/Seed, logische Uhr, Zero-Retry, Loopback-only; kein Mock-only-Atomicitätsbeweis              | alle Befehle Exit 0; echte Discover/Pass/Skip-Zahlen; E2E-01–07 je exakt ein Pass im Manifest                  |
-| REQ-QA-002  | Jede Route hat UX-State, 360px und Accessibility-Beleg.                                | alle · P0/P1 · 07–21             | route read models + `tests/e2e/quality/all-routes.spec.ts` + `critical-routes.spec.ts`        | vollständiges Inventar mit keyboard/focus/critical axe/clipping/console plus vertiefte State-/Performance-Matrix | alle 103 Seiten auf Desktop/360 px; kritische axe violations 0; Route-Audit exakt 103 Seiten/16 Handler        |
+| REQ-QA-002  | Jede Route hat UX-State, 360px und Accessibility-Beleg.                                | alle · P0/P1 · 07–34             | route read models + `tests/e2e/quality/all-routes.spec.ts` + `critical-routes.spec.ts`        | vollständiges Inventar mit keyboard/focus/critical axe/clipping/console plus vertiefte State-/Performance-Matrix | alle 130 Seiten auf Desktop/360 px; kritische axe violations 0; Route-Audit exakt 130 Seiten/22 Handler/2 Metadata-Routen |
 | REQ-OPS-001 | CI/Preview/Staging/Production, Migration/Rollback und Env validation.                  | Ops · P1 before launch · 01/18   | migrations/config                                                                             | no demo seed prod; fail-fast secrets; explicit release                                                           | clean clone pipeline succeeds; migration dry-run and rollback documented                                       |
 | REQ-OPS-002 | Logs/Metriken/Health/Alerts ohne sensible Daten.                                       | Ops · P1 · 03/11/16/18           | Audit/metrics/system tasks                                                                    | request/correlation ID; redaction; runbooks                                                                      | health distinguishes live/ready; simulated failure observable, no PII                                          |
 | REQ-OPS-003 | Backups und Restore-Probe vor Production.                                              | Ops/Owner · P1 · 18              | DB backup metadata                                                                            | encrypted, retention, RPO/RTO confirmed                                                                          | dated restore succeeds in isolated environment                                                                 |
@@ -145,14 +145,13 @@
 | E2E-08  | REQ-OPS-001–003                         | Clean clone → Migration/Seed/Build → Backup/Restore → Smoke                                                                                                                                             | `npm run test:release`; [Phase-18-Evidence](./evidence/2026-07-24-phase-18.md) mit Run-ID, Checksummen, getrennten DBs, RPO/RTO und Cleanup                                                       | bestanden; lokale technische Probe, externe Ops-Freigaben offen |
 
 `tests/e2e/quality/all-routes.spec.ts` prüft je Viewport einen exakten
-Inventarvertrag plus alle 103 Seiten; zusammen sind das 208 exhaustive Fälle.
+Inventarvertrag plus alle 130 Seiten; zusammen sind das 262 exhaustive Fälle.
 `critical-routes.spec.ts` ergänzt je fünf vertiefte Desktop-/360px-Gruppen.
 Phase 20 ergänzt zwei Identity-Journeys sowie je drei Desktop-/Mobile-
-Identity-/Notification-Qualitätsfälle. Phase 21 ergänzt E2E-21 sowie je zwei
-Desktop-/Mobile-Vault-Zustandsfälle. Der vollständige Browservertrag umfasst
-damit 238 Fälle: sieben historische Journeys, 208 exhaustive Route-Fälle,
-zehn Critical-Route-Fälle, acht Phase-20- und fünf Phase-21-Fälle, jeweils
-Retry `0`.
+Identity-/Notification-Qualitätsfälle. Phase 21 und die Folgephasen ergänzen
+ihre owning Journey- und Qualitäts-Specs. Für den aktuellen Gesamtumfang ist
+das erzeugte Playwright-Manifest bindend; ein handgepflegter historischer
+Summenzähler darf die tatsächliche Discover-/Pass-/Skip-Zahl nicht ersetzen.
 
 ## 10. Änderungsdisziplin
 

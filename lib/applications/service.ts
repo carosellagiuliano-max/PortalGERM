@@ -23,6 +23,7 @@ import {
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import type { CurrentUser } from "@/lib/auth/current-user";
+import { isIdentityActionAllowed } from "@/lib/auth/email-verification-policy";
 import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { verifyJobIntent } from "@/lib/auth/signed-intent";
@@ -96,9 +97,11 @@ export async function applyToJob(
     return Object.freeze({ ok: false, code: "UNAUTHORIZED" });
   }
   if (
-    dependencies.environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
-    (dependencies.currentUser.emailVerifiedAt === null ||
-      dependencies.currentUser.identityAssurance !== "VERIFIED_EMAIL")
+    !isIdentityActionAllowed({
+      action: "APPLICATION_SUBMIT",
+      assurance: dependencies.currentUser.identityAssurance,
+      emailVerifiedAt: dependencies.currentUser.emailVerifiedAt,
+    })
   ) {
     return Object.freeze({
       ok: false,

@@ -7,6 +7,7 @@ import {
   consumePrivacyExportV2,
   createPrivacyExportV2,
 } from "@/lib/privacy/export-v2";
+import { ABUSE_REPORT_PRIVACY_NOTICE_V1 } from "@/lib/privacy/public-intake-privacy-contract";
 import {
   createMemoryDocumentStore,
   createPhase22Harness,
@@ -156,6 +157,9 @@ describe("Phase-22 privacy export V2", () => {
         reporterUserId: users.requester.id,
         reasonCode: "OWN_REPORT_CANARY",
         description: "Own reporter evidence",
+        privacyEvidenceMode: "LOCAL_SYNTHETIC",
+        privacyNoticeVersion: ABUSE_REPORT_PRIVACY_NOTICE_V1.version,
+        privacyNoticeHash: ABUSE_REPORT_PRIVACY_NOTICE_V1.hash,
         dueAt: new Date(PHASE22_NOW.getTime() + 86_400_000),
       },
     });
@@ -225,6 +229,9 @@ describe("Phase-22 privacy export V2", () => {
           reporterUserId: foreign.id,
           reasonCode: "FOREIGN_REPORT_CANARY",
           description: "Foreign reporter evidence",
+          privacyEvidenceMode: "LOCAL_SYNTHETIC",
+          privacyNoticeVersion: ABUSE_REPORT_PRIVACY_NOTICE_V1.version,
+          privacyNoticeHash: ABUSE_REPORT_PRIVACY_NOTICE_V1.hash,
           dueAt: new Date(PHASE22_NOW.getTime() + 86_400_000),
         },
       }),

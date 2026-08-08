@@ -60,6 +60,7 @@ import {
   withdrawCandidateApplicationAction,
 } from "@/app/candidate/applications/actions";
 import { INITIAL_APPLICATION_ACTION_STATE } from "@/lib/applications/action-state";
+import { appendLocalPublicIntakePrivacyBinding } from "@/tests/fixtures/public-intake-privacy";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const APPLICATION_ID = "22222222-2222-4222-8222-222222222222";
@@ -239,17 +240,10 @@ describe("candidate application mutation actions", () => {
     expect(mocks.withdrawCandidateApplication).not.toHaveBeenCalled();
   });
 
-  it("records a gated denial when the application-report precheck is exhausted", async () => {
-    mocks.consumeRequestRateLimit.mockResolvedValue({
-      allowed: false,
-      status: 429,
+  it("returns the locked use-case rate denial for an application report", async () => {
+    mocks.createPublicReport.mockResolvedValue({
+      ok: false,
       code: "RATE_LIMITED",
-      retryAfterSeconds: 60,
-      audit: {
-        action: "RATE_LIMITED",
-        preset: "ABUSE_INTAKE_PRECHECK",
-        scope: "ACTOR_OR_IP",
-      },
     });
 
     const state = await reportApplicationEmployerAction(
@@ -261,26 +255,8 @@ describe("candidate application mutation actions", () => {
       status: "error",
       message: expect.stringMatching(/Zu viele Meldungen/u),
     });
-    expect(mocks.recordRateLimitDenial).toHaveBeenCalledWith(
-      expect.objectContaining({
-        preset: "ABUSE_INTAKE_PRECHECK",
-        scope: "ACTOR_OR_IP",
-      }),
-      {
-        actorKind: "USER",
-        actorUserId: USER_ID,
-        capability: "CANDIDATE_APPLICATION_ABUSE_REPORT_PRECHECK",
-        companyId: COMPANY_ID,
-        targetId: COMPANY_ID,
-        targetType: "COMPANY",
-      },
-      expect.objectContaining({
-        database: mocks.database,
-        environment: mocks.environment,
-        request,
-      }),
-    );
-    expect(mocks.createPublicReport).not.toHaveBeenCalled();
+    expect(mocks.createPublicReport).toHaveBeenCalled();
+    expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
 });
 
@@ -308,5 +284,5 @@ function reportForm(): FormData {
     "description",
     "Die Firmenkommunikation fordert verdächtige Zahlungen außerhalb der Plattform.",
   );
-  return formData;
+  return appendLocalPublicIntakePrivacyBinding(formData, "ABUSE_REPORT");
 }

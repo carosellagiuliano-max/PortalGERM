@@ -14,7 +14,7 @@ const EMPLOYER = Object.freeze({
 });
 const JOB_TITLE = "Phase 17 Verifikationsingenieur:in";
 
-test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
+test("[E2E-02][E2E-34-02][E2E-34-03] @journey @phase34 employer onboarding to reviewed publication", async ({
   browser,
   page,
 }) => {
@@ -26,12 +26,8 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
     ).toBeVisible();
     await page.getByLabel("Kontaktperson").fill(EMPLOYER.name);
     await page.getByLabel("Geschäftliche E-Mail").fill(EMPLOYER.email);
-    await page
-      .getByLabel("Passwort", { exact: true })
-      .fill(EMPLOYER.password);
-    await page
-      .getByLabel("Passwort bestätigen")
-      .fill(EMPLOYER.password);
+    await page.getByLabel("Passwort", { exact: true }).fill(EMPLOYER.password);
+    await page.getByLabel("Passwort bestätigen").fill(EMPLOYER.password);
     await page.getByLabel("Unternehmensname").fill(EMPLOYER.companyName);
     await page.getByLabel("Kanton").selectOption("ZH");
     await page.getByLabel("Unternehmensgrösse").selectOption("10-49");
@@ -44,9 +40,7 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
     await expect(page).toHaveURL(/\/verify-email\?registered=1/u);
     const verificationToken = await verificationTokenForEmail(EMPLOYER.email);
     await page.goto(`/verify-email#token=${verificationToken}`);
-    await page
-      .getByRole("button", { name: "E-Mail jetzt bestätigen" })
-      .click();
+    await page.getByRole("button", { name: "E-Mail jetzt bestätigen" }).click();
     await expect(
       page.getByText("Deine E-Mail-Adresse wurde bestätigt."),
     ).toBeVisible();
@@ -82,9 +76,7 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
     await page.locator("#location-0-city").selectOption({
       label: "Zürich",
     });
-    await page
-      .getByRole("button", { name: "Firmenprofil speichern" })
-      .click();
+    await page.getByRole("button", { name: "Firmenprofil speichern" }).click();
     await expect(
       page.getByText("Firmenprofil sicher gespeichert.", { exact: true }),
     ).toBeVisible();
@@ -138,30 +130,29 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
     await expect(page.getByLabel("Gefundener Nachweis")).toHaveValue(
       `sth-domain-verification=${challengeToken}`,
     );
-    await page
-      .getByRole("button", { name: "Domainnachweis prüfen" })
-      .click();
+    await page.getByRole("button", { name: "Domainnachweis prüfen" }).click();
     await expect(
       page.getByText(
         "Domainkontrolle bestätigt. Der Antrag ist bereit für die unabhängige Prüfung.",
       ),
     ).toBeVisible();
 
-    const verification = await database.companyVerificationRequest.findFirstOrThrow({
-      where: {
-        companyId: company.id,
-        supersededBy: null,
-        policyVersion: "COMPANY_TRUST_POLICY_V2",
-      },
-      select: {
-        id: true,
-        status: true,
-        evidence: {
-          select: { type: true, status: true },
-          orderBy: { type: "asc" },
+    const verification =
+      await database.companyVerificationRequest.findFirstOrThrow({
+        where: {
+          companyId: company.id,
+          supersededBy: null,
+          policyVersion: "COMPANY_TRUST_POLICY_V2",
         },
-      },
-    });
+        select: {
+          id: true,
+          status: true,
+          evidence: {
+            select: { type: true, status: true },
+            orderBy: { type: "asc" },
+          },
+        },
+      });
     expect(verification.status).toBe("PENDING");
     expect(verification.evidence).toEqual([
       { type: "UID_REGISTER", status: "VALID" },
@@ -171,7 +162,13 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
       (await page.request.get(`/companies/${company.slug}`)).status(),
     ).toBe(200);
 
-    const admin = await openActor(browser, "admin@demo.ch");
+    const admin = await openActor(
+      browser,
+      "admin@demo.ch",
+      undefined,
+      undefined,
+      process.env.PHASE34_TRUST_BASE_URL,
+    );
     try {
       await admin.page.goto(`/admin/company-verification/${verification.id}`);
       await expect(
@@ -261,9 +258,7 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
         "FLEXIBLE_WORK|Flexible Arbeitszeiten mit dokumentiertem Gleitzeitrahmen",
       );
     await page.getByLabel("TypeScript", { exact: true }).check();
-    await page
-      .getByRole("button", { name: "Schritt 2 speichern" })
-      .click();
+    await page.getByRole("button", { name: "Schritt 2 speichern" }).click();
     await expect(page).toHaveURL(/step=3&saved=1/u);
 
     await page.getByLabel("Lohnperiode").selectOption("YEARLY");
@@ -273,15 +268,19 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
     await page
       .getByLabel("Bewerbungsprozess (ein Schritt pro Zeile)")
       .fill("Unterlagen prüfen\nStrukturiertes Fachgespräch");
-    await page.getByLabel("NONE", { exact: true }).check();
+    await page
+      .getByRole("group", { name: "Benötigte Unterlagen" })
+      .getByRole("checkbox", {
+        name: "Keine Pflichtunterlagen",
+        exact: true,
+      })
+      .check();
     await page
       .getByLabel("Inklusionshinweis")
       .fill(
         "Wir begrüssen Bewerbungen unabhängig von Herkunft, Geschlecht oder Lebenslauf.",
       );
-    await page
-      .getByRole("button", { name: "Schritt 3 speichern" })
-      .click();
+    await page.getByRole("button", { name: "Schritt 3 speichern" }).click();
     await expect(page).toHaveURL(/step=4&saved=1/u);
 
     const occupation = page.getByLabel("Berufsart");
@@ -300,9 +299,7 @@ test("[E2E-02] @journey employer onboarding to reviewed publication", async ({
     await expect(
       page.getByRole("heading", { name: JOB_TITLE, level: 1 }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Zur Prüfung einreichen" })
-      .click();
+    await page.getByRole("button", { name: "Zur Prüfung einreichen" }).click();
     await expect(page).toHaveURL(/submitted=1/u);
 
     const job = await database.job.findFirstOrThrow({

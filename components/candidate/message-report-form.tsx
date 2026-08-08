@@ -6,6 +6,12 @@ import { useActionState } from "react";
 import { reportCandidateMessageAction } from "@/app/candidate/messages/actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PublicIntakePrivacyDisclosure,
+  PublicIntakePrivacyHiddenFields,
+  PublicIntakePrivacyLocked,
+  usePublicIntakePrivacy,
+} from "@/components/privacy/public-intake-privacy";
 import { INITIAL_CANDIDATE_MESSAGE_ACTION_STATE } from "@/lib/candidate/message-action-state";
 
 export function CandidateMessageReportForm({
@@ -15,13 +21,18 @@ export function CandidateMessageReportForm({
     reportCandidateMessageAction,
     INITIAL_CANDIDATE_MESSAGE_ACTION_STATE,
   );
+  const privacyGate = usePublicIntakePrivacy("ABUSE_REPORT");
   return (
     <details className="mt-3 rounded-lg border bg-background/70 p-3 text-foreground">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-medium">
         <FlagIcon className="size-3.5" aria-hidden="true" /> Nachricht melden
       </summary>
+      {!privacyGate.allowed ? (
+        <div className="mt-3"><PublicIntakePrivacyLocked purpose="ABUSE_REPORT" /></div>
+      ) : (
       <form action={action} className="mt-3 grid gap-3" noValidate>
         <input type="hidden" name="messageId" value={messageId} />
+        <PublicIntakePrivacyHiddenFields purpose="ABUSE_REPORT" />
         {state.status === "idle" ? null : (
           <p
             role={state.status === "error" ? "alert" : "status"}
@@ -62,12 +73,14 @@ export function CandidateMessageReportForm({
                 placeholder="Was soll das Moderationsteam prüfen?"
               />
             </label>
+            <PublicIntakePrivacyDisclosure purpose="ABUSE_REPORT" />
             <Button type="submit" size="sm" variant="outline" disabled={pending}>
               {pending ? "Wird gemeldet …" : "Sicher melden"}
             </Button>
           </>
         )}
       </form>
+      )}
     </details>
   );
 }

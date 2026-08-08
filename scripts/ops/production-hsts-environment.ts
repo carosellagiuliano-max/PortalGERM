@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 
 import { safeToolEnvironment } from "@/scripts/ops/process-tools";
@@ -44,6 +45,16 @@ export function createProductionHstsEnvironment({
   buildId,
   secretCanary,
 }: ProductionHstsEnvironmentInput): NodeJS.ProcessEnv {
+  const notificationDeliveryKeys = hstsSmokeKeyring(
+    "hsts-notification-v1",
+    databaseUrl,
+    buildId,
+  );
+  const notificationRecipientHashKeys = hstsSmokeKeyring(
+    "hsts-recipient-v1",
+    databaseUrl,
+    buildId,
+  );
   return {
     ...safeToolEnvironment(sourceEnvironment),
     APP_ENV: "production",
@@ -61,11 +72,16 @@ export function createProductionHstsEnvironment({
       sourceEnvironment.RADAR_OPAQUE_ENCRYPTION_KEYS,
     REVEAL_CONFIRMATION_KEYS: sourceEnvironment.REVEAL_CONFIRMATION_KEYS,
     PII_REVEAL_KEYS: sourceEnvironment.PII_REVEAL_KEYS,
+    // The smoke owns an isolated database and must never require or inherit a
+    // developer's/live notification keyring merely to boot the health route.
+    NOTIFICATION_DELIVERY_KEYS: notificationDeliveryKeys,
+    NOTIFICATION_RECIPIENT_HASH_KEYS: notificationRecipientHashKeys,
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "1",
+    IDENTITY_VERIFICATION_ENFORCEMENT: "true",
     ENABLE_LOCAL_MOCK_MAILBOX: "false",
     DEV_MAILBOX_SECRET: "",
-    NOTIFICATION_OUTBOX_PRODUCERS: "false",
+    NOTIFICATION_OUTBOX_PRODUCERS: "true",
     EMAIL_PROVIDER_MODE: "disabled",
     NOTIFICATION_DISPATCH: "paused",
     WORKER_RUNTIME: "paused",
@@ -89,4 +105,15 @@ export function createProductionHstsEnvironment({
       : { HTTP_SMOKE_SECRET_CANARY: secretCanary }),
     NEXT_TELEMETRY_DISABLED: "1",
   };
+}
+
+function hstsSmokeKeyring(
+  version: string,
+  databaseUrl: string,
+  buildId: string,
+) {
+  const key = createHash("sha256")
+    .update(`phase34-hsts-smoke\0${version}\0${databaseUrl}\0${buildId}`)
+    .digest("base64");
+  return `${version}:${key}`;
 }

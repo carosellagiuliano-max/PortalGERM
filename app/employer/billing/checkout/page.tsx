@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Metadata } from "next";
 import Link from "@/components/shared/app-link";
+import { notFound } from "next/navigation";
 
 import { CheckoutSubmitForm } from "@/components/billing/checkout-submit-form";
 import { CheckoutSummary } from "@/components/billing/checkout-summary";
@@ -23,6 +24,7 @@ import { getCheckoutPreview } from "@/lib/billing/employer-read-model";
 import { getPublicPricingCatalog } from "@/lib/billing/public-catalog";
 import { getDatabase } from "@/lib/db/client";
 import { getServerEnvironment } from "@/lib/config/env";
+import { isLegacyMockBillingAllowed } from "@/lib/billing/mock-billing-policy";
 import { formatChfFromRappen } from "@/lib/utils/format";
 
 export const metadata: Metadata = {
@@ -43,6 +45,7 @@ type CheckoutSearchParams = Promise<{
 export default async function EmployerBillingCheckoutPage({
   searchParams,
 }: Readonly<{ searchParams: CheckoutSearchParams }>) {
+  if (!isLegacyMockBillingAllowed(getServerEnvironment())) notFound();
   const query = await searchParams;
   const plan = scalar(query.plan);
   const product = scalar(query.product);

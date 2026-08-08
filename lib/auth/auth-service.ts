@@ -46,6 +46,7 @@ import { enqueueNotification } from "@/lib/notifications/outbox";
 import type { EmailProvider } from "@/lib/providers/email/email-provider";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { hashIpWithFirstKey } from "@/lib/utils/hash";
+import { createLogger } from "@/lib/utils/logger";
 import { slugify } from "@/lib/utils/slug";
 import type {
   CandidateRegistrationInput,
@@ -57,6 +58,7 @@ import type {
 const AUTH_AUDIT_RETENTION_MILLISECONDS = 365 * 24 * 60 * 60 * 1_000;
 const PASSWORD_RESET_TTL_MILLISECONDS = 15 * 60 * 1_000;
 const FORGOT_TIMING_FLOOR_MILLISECONDS = 650;
+const logger = createLogger();
 
 // A fixed cost-12 hash makes an unknown account follow the same single bcrypt
 // verification path as a known account without creating a process-start timing oracle.
@@ -869,6 +871,12 @@ export async function requestPasswordReset(
   } catch {
     // Enumeration-safe public contract: provider and persistence failures do not
     // reveal whether an account exists. Operators retain redacted audit/log data.
+    reportAuthObservabilityFailure(
+      "security.password_reset_request_failed",
+      "PASSWORD_RESET_REQUEST_FAILED",
+      "password_reset_request",
+      dependencies.request.correlationId,
+    );
   }
 
   await completeTimingEnvelope(startedAt);
@@ -881,6 +889,22 @@ export async function resetPassword(
 ): Promise<PasswordResetResult> {
   const now = dependencies.now ?? new Date();
   const tokenHash = hashPasswordResetToken(input.token);
+  const rate = await consumeAuthRateLimit(
+    "PASSWORD_RESET_CONSUME",
+    { targetId: tokenHash },
+    dependencies.request,
+    now,
+    { environment: dependencies.environment, database: dependencies.database },
+  );
+  if (!rate.allowed) {
+    await auditRateLimit(
+      dependencies,
+      "PASSWORD_RESET_CONSUME",
+      rate.audit.scope,
+      now,
+    );
+    return Object.freeze({ ok: false, code: "INVALID_RESET_TOKEN" });
+  }
 
   try {
     // Reject arbitrary bearer-shaped input before the intentionally expensive
@@ -1103,7 +1127,13 @@ async function auditFailedLogin(
       targetId: existingUserId ?? randomUUID(),
       targetType: "USER",
     },
-    undefined,
+    (failure) =>
+      reportAuthObservabilityFailure(
+        "security.auth_audit_write_failed",
+        failure.code,
+        failure.action,
+        dependencies.request.correlationId,
+      ),
     auditIpContext(dependencies),
   );
   await recordAuthSecuritySignal(dependencies, {
@@ -1136,14 +1166,24 @@ async function auditFailedPasswordReset(
       targetId: userId,
       targetType: "USER",
     },
-    undefined,
+    (failure) =>
+      reportAuthObservabilityFailure(
+        "security.auth_audit_write_failed",
+        failure.code,
+        failure.action,
+        dependencies.request.correlationId,
+      ),
     auditIpContext(dependencies),
   );
 }
 
 async function auditRateLimit(
   dependencies: AuthServiceDependencies,
-  preset: "LOGIN" | "REGISTER" | "FORGOT_PASSWORD",
+  preset:
+    | "LOGIN"
+    | "REGISTER"
+    | "FORGOT_PASSWORD"
+    | "PASSWORD_RESET_CONSUME",
   scope: RateLimitScope | "OPEN_TYPE" | "UNKNOWN",
   now: Date,
   riskSubjectUserId?: string,
@@ -1207,6 +1247,25 @@ async function recordAuthSecuritySignal(
     });
   } catch {
     // A minimized anomaly signal must never change enumeration-safe results.
+    reportAuthObservabilityFailure(
+      "security.auth_signal_write_failed",
+      "AUTH_SECURITY_SIGNAL_WRITE_FAILED",
+      "auth_security_signal",
+      dependencies.request.correlationId,
+    );
+  }
+}
+
+function reportAuthObservabilityFailure(
+  event: string,
+  errorCode: string,
+  operation: string,
+  correlationId: string,
+) {
+  try {
+    logger.error(event, { errorCode, operation }, correlationId);
+  } catch {
+    // Observability must never change an authentication response.
   }
 }
 

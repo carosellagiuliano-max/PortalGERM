@@ -81,6 +81,7 @@
     "phase33:manifest": "tsx scripts/phase33-technical-manifest.ts",
     "phase33:providers": "tsx scripts/phase33-provider-gate.ts",
     "phase33:e2e": "tsx --conditions react-server scripts/phase17-browser-gate.ts tests/e2e/flows/phase33-public-candidate.spec.ts tests/e2e/flows/phase33-employer-recruiter.spec.ts tests/e2e/flows/phase33-privileged-operations.spec.ts",
+    "phase34:e2e": "tsx --conditions react-server scripts/phase34-browser-gate.ts",
     "test:phase33": "tsx scripts/phase33-test-report.ts",
     "test:phase33:runtime": "vitest run --config vitest.config.ts tests/unit/release/phase33-release-verdict.test.ts tests/unit/release/phase33-test-report-contract.test.ts tests/unit/ops/phase33-runtime-roles.test.ts",
     "test:phase32": "vitest run --config vitest.config.ts tests/unit/release",

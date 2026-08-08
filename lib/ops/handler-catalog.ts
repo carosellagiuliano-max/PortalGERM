@@ -32,6 +32,13 @@ export const WORKER_HANDLER_CATALOG = Object.freeze([
     sloRef: "codex-plan/20-identity-email-notifications.md",
   }),
   handler({
+    handlerKey: "notifications.provider-event-project",
+    owner: "Platform Engineering / Communications",
+    providerUseCase: "email.delivery-events",
+    schedule: "event-driven",
+    sloRef: "codex-plan/34-verified-findings-production-hardening.md",
+  }),
+  handler({
     handlerKey: "notifications.retention",
     owner: "Privacy / Platform Engineering",
     schedule: "minute-boundary",

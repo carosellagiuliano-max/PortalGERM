@@ -4,11 +4,12 @@ import type { Metadata } from "next";
 import { Clock3Icon, LockKeyholeIcon, MailCheckIcon } from "lucide-react";
 
 import { LeadForm } from "@/components/marketing/lead-form";
+import { PublicIntakePrivacyProvider } from "@/components/privacy/public-intake-privacy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  SALES_LEAD_INTAKE_POLICY_V1,
-  normalizeLeadInterestQuery,
-} from "@/lib/sales/lead-policy";
+import { getServerEnvironment } from "@/lib/config/env";
+import { getDatabase } from "@/lib/db/client";
+import { resolvePublicIntakePrivacyGate } from "@/lib/privacy/public-intake-privacy-gate";
+import { normalizeLeadInterestQuery } from "@/lib/sales/lead-policy";
 
 export const metadata: Metadata = {
   title: "Arbeitgeber-Demo anfragen",
@@ -25,6 +26,10 @@ export default async function EmployerDemoPage({
 }: Readonly<{ searchParams: DemoSearchParams }>) {
   const query = await searchParams;
   const initialInterest = normalizeLeadInterestQuery(query.interest);
+  const privacyGate = await resolvePublicIntakePrivacyGate("EMPLOYER_DEMO", {
+    database: getDatabase(),
+    environment: getServerEnvironment(),
+  });
 
   return (
     <section className="page-shell py-14 sm:py-20" aria-labelledby="demo-title">
@@ -36,8 +41,9 @@ export default async function EmployerDemoPage({
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-8 text-muted-foreground">
             Die Anfrage ist unverbindlich und erzeugt weder ein Abo noch eine Bestellung.
-            Im aktuellen Mock-MVP wird eine interne Benachrichtigung protokolliert; es
-            findet kein automatischer Versand an externe Dienste statt.
+            Eine erfolgreiche Bestätigung bedeutet, dass die Anfrage und ihre
+            interne Bearbeitung sicher vorgemerkt wurden. Sie behauptet keine
+            E-Mail-Zustellung.
           </p>
           <div className="mt-8 grid gap-4">
             <TrustCard icon={Clock3Icon} title="Internes Ziel, keine Garantie">
@@ -47,9 +53,9 @@ export default async function EmployerDemoPage({
             <TrustCard icon={LockKeyholeIcon} title="Zweckgebundene Angaben">
               Kontaktangaben und Nachricht werden nur für diese Vertriebsanfrage erfasst.
             </TrustCard>
-            <TrustCard icon={MailCheckIcon} title="Nachvollziehbarer Mock">
-              Die interne Demo-Mail wird dedupliziert als Mock-Protokoll gespeichert und
-              behauptet keine reale Zustellung.
+            <TrustCard icon={MailCheckIcon} title="Nachvollziehbare Bearbeitung">
+              Benachrichtigungen werden getrennt von der Anfrage verarbeitet. Der
+              Formularstatus behauptet deshalb keine externe Zustellung.
             </TrustCard>
           </div>
         </div>
@@ -59,11 +65,12 @@ export default async function EmployerDemoPage({
             <CardTitle as="h2" className="text-2xl">Anfrage erfassen</CardTitle>
           </CardHeader>
           <CardContent>
-            <LeadForm
-              idempotencyKey={`lead-${randomUUID()}`}
-              initialInterest={initialInterest}
-              privacyNotice={SALES_LEAD_INTAKE_POLICY_V1.notice.text}
-            />
+            <PublicIntakePrivacyProvider decision={privacyGate}>
+              <LeadForm
+                idempotencyKey={`lead-${randomUUID()}`}
+                initialInterest={initialInterest}
+              />
+            </PublicIntakePrivacyProvider>
           </CardContent>
         </Card>
       </div>

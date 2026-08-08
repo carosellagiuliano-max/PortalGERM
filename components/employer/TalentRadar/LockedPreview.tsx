@@ -16,7 +16,8 @@ type LockedReason =
   | "ROLE"
   | "COMPANY_INACTIVE"
   | "COMPANY_UNVERIFIED"
-  | "TALENT_RADAR_NOT_INCLUDED";
+  | "TALENT_RADAR_NOT_INCLUDED"
+  | "LEGAL_REVIEW_REQUIRED";
 
 const reasonCopy: Readonly<Record<LockedReason, string>> = Object.freeze({
   ROLE:
@@ -27,6 +28,8 @@ const reasonCopy: Readonly<Record<LockedReason, string>> = Object.freeze({
     "Talent Radar bleibt gesperrt, bis die aktuelle Firmenverifizierung abgeschlossen ist.",
   TALENT_RADAR_NOT_INCLUDED:
     "Talent Radar ist in den aktuell wirksamen Planrechten nicht enthalten.",
+  LEGAL_REVIEW_REQUIRED:
+    "Talent Radar bleibt ausserhalb der lokalen Testumgebung gesperrt, bis die aktuelle Datenschutz-, AVG- und DSFA-Freigabe für genau diesen Ablauf dokumentiert ist.",
 });
 
 export function LockedPreview({
@@ -84,8 +87,13 @@ export function LockedPreview({
           <CardContent className="grid gap-4">
             <p className="text-muted-foreground">{reasonCopy[reason]}</p>
             {upgradePrompt === undefined ? (
-              <Link href="/employer/company" className={buttonVariants({ className: "w-fit" })}>
-                Firmenstatus prüfen
+              <Link
+                href={reason === "LEGAL_REVIEW_REQUIRED" ? "/legal/privacy" : "/employer/company"}
+                className={buttonVariants({ className: "w-fit" })}
+              >
+                {reason === "LEGAL_REVIEW_REQUIRED"
+                  ? "Datenschutzstatus ansehen"
+                  : "Firmenstatus prüfen"}
               </Link>
             ) : (
               <UpgradeDialog

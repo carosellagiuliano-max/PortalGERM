@@ -18,6 +18,10 @@ import { buildCatalogUpgradePrompt } from "@/lib/billing/upgrade-prompt";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { emailProvider } from "@/lib/providers/email";
+import {
+  preflightPublicIntakePrivacyGate,
+  readPublicIntakePrivacyExpectedBinding,
+} from "@/lib/privacy/public-intake-privacy-gate";
 import { toRadarEligibilityEnvironment } from "@/lib/talentradar/eligibility";
 import { cancelEmployerContactRequest } from "@/lib/talentradar/contact-requests";
 import {
@@ -58,6 +62,7 @@ export async function sendContactRequestAction(
         environment: dependencies.environment,
         request: dependencies.request,
       }),
+      legalGateEnvironment: dependencies.environment,
       now: dependencies.now,
     },
   );
@@ -156,6 +161,24 @@ export async function reportRadarCandidateAction(
         "Bitte wähle einen Grund und beschreibe den Verdacht mit mindestens 20 Zeichen.",
     });
   }
+  const privacyBinding = readPublicIntakePrivacyExpectedBinding(
+    formData,
+    "ABUSE_REPORT",
+  );
+  if (
+    privacyBinding === null ||
+    !(await preflightPublicIntakePrivacyGate(privacyBinding, {
+      database: dependencies.database,
+      environment: dependencies.environment,
+      now: dependencies.now,
+    })).allowed
+  ) {
+    return Object.freeze({
+      status: "error" as const,
+      message:
+        "Der Datenschutzhinweis ist nicht verfügbar oder hat sich geändert. Es wurden keine Angaben übermittelt. Bitte lade die Seite neu.",
+    });
+  }
 
   const target = await resolveEmployerRadarCandidateReportTarget(
     targetInput.data,
@@ -190,6 +213,7 @@ export async function reportRadarCandidateAction(
       environment: dependencies.environment,
       request: dependencies.request,
       now: dependencies.now,
+      privacyBinding,
     },
   );
   if (!result.ok) {
@@ -250,6 +274,8 @@ function contactError(
     INVALID_INPUT: "Bitte prüfe Betreff und Nachricht.",
     FORBIDDEN:
       "Talent Radar ist für diese Firma oder deine Rolle derzeit nicht verfügbar.",
+    LEGAL_GATE_BLOCKED:
+      "Neue Talent-Radar-Kontakte bleiben gesperrt, bis die aktuelle Datenschutz-, AVG- und DSFA-Freigabe dokumentiert ist.",
     NOT_FOUND:
       "Dieses anonyme Profil ist nicht mehr verfügbar. Bitte aktualisiere die Suche.",
     PENDING_DUPLICATE:

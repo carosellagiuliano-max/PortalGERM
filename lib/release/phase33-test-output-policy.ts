@@ -9,6 +9,7 @@ const VITEST_INFRASTRUCTURE_FAILURES = Object.freeze([
   /(?:^|\n)\s*Errors\s+[1-9]\d*\s+errors?\b/iu,
   /\[vitest-pool(?:-runner)?\]:\s+(?:Failed|Timeout)/iu,
   /UnhandledPromiseRejection|Unhandled Rejection|Uncaught Exception/iu,
+  /Calling client\.query\(\) when the client is already executing a query/iu,
 ]);
 
 // Vitest recreates an isolated worker for every file. On Windows, repeatedly

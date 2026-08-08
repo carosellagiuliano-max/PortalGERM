@@ -74,6 +74,8 @@ describe("employer billing action boundaries", () => {
     mocks.getAuthRequestContext.mockResolvedValue({ correlationId: "correlation-1" });
     mocks.isValidAuthMutationOrigin.mockReturnValue(true);
     mocks.getServerEnvironment.mockReturnValue({
+      APP_ENV: "local",
+      PAYMENT_PROVIDER_MODE: "disabled",
       PRIVILEGED_STEP_UP_MODE: "disabled",
       TRUST_RISK_MODE: "observe",
     });
@@ -109,6 +111,44 @@ describe("employer billing action boundaries", () => {
 
     expect(state.status).toBe("error");
     expect(state.message).toMatch(/Nur ein aktiver Firmeninhaber/u);
+    expect(mocks.createCheckoutOrder).not.toHaveBeenCalled();
+  });
+
+  it.each(["preview", "staging", "production"] as const)(
+    "denies the legacy mock checkout before auth or persistence in %s",
+    async (APP_ENV) => {
+      mocks.getServerEnvironment.mockReturnValue({
+        APP_ENV,
+        PAYMENT_PROVIDER_MODE: "disabled",
+        PRIVILEGED_STEP_UP_MODE: "disabled",
+        TRUST_RISK_MODE: "observe",
+      });
+
+      const state = await startBillingCheckoutAction(
+        INITIAL_BILLING_ACTION_STATE,
+        checkoutForm("PLAN", "pro"),
+      );
+
+      expect(state.status).toBe("error");
+      expect(mocks.getEmployerContext).not.toHaveBeenCalled();
+      expect(mocks.createCheckoutOrder).not.toHaveBeenCalled();
+    },
+  );
+
+  it("denies the legacy mock while a real provider contract is selected", async () => {
+    mocks.getServerEnvironment.mockReturnValue({
+      APP_ENV: "ci",
+      PAYMENT_PROVIDER_MODE: "stripe_contract",
+      PRIVILEGED_STEP_UP_MODE: "disabled",
+      TRUST_RISK_MODE: "observe",
+    });
+
+    await startBillingCheckoutAction(
+      INITIAL_BILLING_ACTION_STATE,
+      checkoutForm("PRODUCT", "contact-pack-10"),
+    );
+
+    expect(mocks.getEmployerContext).not.toHaveBeenCalled();
     expect(mocks.createCheckoutOrder).not.toHaveBeenCalled();
   });
 

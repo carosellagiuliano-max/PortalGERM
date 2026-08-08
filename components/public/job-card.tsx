@@ -12,33 +12,17 @@ import { PublicJobActions } from "@/components/public/apply-save-actions";
 import { ResponseSignal } from "@/components/public/response-signal";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  jobTypeLabel,
+  remoteTypeLabel,
+  salaryPeriodLabel,
+} from "@/lib/jobs/labels-de";
 import type { PublicJobCardModel } from "@/lib/public/types";
 import { formatDate, formatSalaryRange, formatWorkload } from "@/lib/utils/format";
 
-const JOB_TYPE_LABELS: Readonly<Record<PublicJobCardModel["jobType"], string>> = {
-  PERMANENT: "Festanstellung",
-  TEMPORARY: "Befristet",
-  FREELANCE: "Freelance",
-  INTERNSHIP: "Praktikum",
-  APPRENTICESHIP: "Lehrstelle",
-  HOLIDAY_JOB: "Ferienjob",
-};
-
-const REMOTE_LABELS: Readonly<Record<PublicJobCardModel["remoteType"], string>> = {
-  ONSITE: "Vor Ort",
-  HYBRID: "Hybrid",
-  REMOTE: "Remote",
-};
-
-const SALARY_PERIOD_LABELS = {
-  YEARLY: "Jahr",
-  MONTHLY: "Monat",
-  HOURLY: "Stunde",
-} as const;
-
 export function JobCard({ job }: Readonly<{ job: PublicJobCardModel }>) {
   const salary = job.salaryMin !== null && job.salaryMax !== null && job.salaryPeriod !== null
-    ? formatSalaryRange(job.salaryMin, job.salaryMax, SALARY_PERIOD_LABELS[job.salaryPeriod])
+    ? formatSalaryRange(job.salaryMin, job.salaryMax, salaryPeriodLabel(job.salaryPeriod))
     : null;
 
   return (
@@ -47,7 +31,7 @@ export function JobCard({ job }: Readonly<{ job: PublicJobCardModel }>) {
         <div className="mb-2 flex flex-wrap gap-2">
           {job.activeBoost ? <BoostedBadge /> : null}
           <FairScoreBadge score={job.fairScore} />
-          <Badge variant="outline">{JOB_TYPE_LABELS[job.jobType]}</Badge>
+          <Badge variant="outline">{jobTypeLabel(job.jobType)}</Badge>
         </div>
         <CardTitle as="h3" className="text-lg">
           <Link className="underline-offset-4 hover:text-primary hover:underline" href={`/jobs/${job.slug}`}>
@@ -68,7 +52,7 @@ export function JobCard({ job }: Readonly<{ job: PublicJobCardModel }>) {
           <div className="flex items-center gap-2">
             <MapPinIcon className="size-4 shrink-0 text-primary" aria-hidden="true" />
             <dt className="sr-only">Arbeitsort</dt>
-            <dd>{job.city?.name ?? job.canton?.name ?? job.locationLabel ?? "Schweiz"} · {REMOTE_LABELS[job.remoteType]}</dd>
+            <dd>{job.city?.name ?? job.canton?.name ?? job.locationLabel ?? "Schweiz"} · {remoteTypeLabel(job.remoteType)}</dd>
           </div>
           <div className="flex items-center gap-2">
             <BriefcaseBusinessIcon className="size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -92,5 +76,3 @@ export function JobCard({ job }: Readonly<{ job: PublicJobCardModel }>) {
     </Card>
   );
 }
-
-export { JOB_TYPE_LABELS, REMOTE_LABELS, SALARY_PERIOD_LABELS };

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { ADMIN_CAPABILITIES_V1 } from "@/lib/admin/capabilities";
+import { ABUSE_REPORT_PRIVACY_NOTICE_V1 } from "@/lib/privacy/public-intake-privacy-contract";
 import {
   approveAdminJob,
   publishAdminJob,
@@ -1326,6 +1327,9 @@ async function createReport(targetType: "JOB" | "COMPANY" | "USER" | "MESSAGE", 
     description: "Begrenzte Integrationstestbeschreibung ohne private Inhaltsdaten.",
     severity: "HIGH",
     status: "OPEN",
+    privacyEvidenceMode: "LOCAL_SYNTHETIC",
+    privacyNoticeVersion: ABUSE_REPORT_PRIVACY_NOTICE_V1.version,
+    privacyNoticeHash: ABUSE_REPORT_PRIVACY_NOTICE_V1.hash,
     createdAt: NOW,
     updatedAt: NOW,
     dueAt: new Date(NOW.getTime() + 4 * 3_600_000),

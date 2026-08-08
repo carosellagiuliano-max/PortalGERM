@@ -12,13 +12,21 @@ export type HeartbeatLoop = Readonly<{
 export function startHeartbeatLoop(input: Readonly<{
   heartbeat: () => Promise<boolean>;
   intervalMilliseconds: number;
+  timeoutMilliseconds?: number;
 }>): HeartbeatLoop {
+  const timeoutMilliseconds =
+    input.timeoutMilliseconds ?? input.intervalMilliseconds;
   if (
     !Number.isInteger(input.intervalMilliseconds) ||
     input.intervalMilliseconds < 10 ||
-    input.intervalMilliseconds > 300_000
+    input.intervalMilliseconds > 300_000 ||
+    !Number.isInteger(timeoutMilliseconds) ||
+    timeoutMilliseconds < 10 ||
+    timeoutMilliseconds > 300_000
   ) {
-    throw new TypeError("Heartbeat interval is outside the bounded contract.");
+    throw new TypeError(
+      "Heartbeat interval or timeout is outside the bounded contract.",
+    );
   }
 
   let healthy = true;
@@ -36,7 +44,8 @@ export function startHeartbeatLoop(input: Readonly<{
 
   const pulse = async () => {
     try {
-      healthy = (await input.heartbeat()) === true;
+      healthy =
+        (await withTimeout(input.heartbeat(), timeoutMilliseconds)) === true;
     } catch {
       healthy = false;
     } finally {
@@ -58,5 +67,24 @@ export function startHeartbeatLoop(input: Readonly<{
       await running;
       return Object.freeze({ healthy });
     },
+  });
+}
+
+function withTimeout<T>(operation: Promise<T>, timeoutMilliseconds: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("HEARTBEAT_TIMEOUT")),
+      timeoutMilliseconds,
+    );
+    operation.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
   });
 }

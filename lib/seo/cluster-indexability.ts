@@ -196,20 +196,20 @@ export async function isClusterIndexable(
   if (!isUuid(cantonId) || !isUuid(categoryId) || !isValidDate(now)) return false;
   const pair = await database.$transaction(
     async (transaction) => {
-      const [catalog, assessment] = await Promise.all([
-        Promise.all([
-          transaction.canton.findFirst({
-            where: { id: cantonId, isActive: true },
-            select: { slug: true },
-          }),
-          transaction.category.findFirst({
-            where: { id: categoryId, isActive: true },
-            select: { slug: true },
-          }),
-        ]),
-        loadEffectivePairAssessment(transaction, cantonId, categoryId, now),
-      ]);
-      const [canton, category] = catalog;
+      const canton = await transaction.canton.findFirst({
+        where: { id: cantonId, isActive: true },
+        select: { slug: true },
+      });
+      const category = await transaction.category.findFirst({
+        where: { id: categoryId, isActive: true },
+        select: { slug: true },
+      });
+      const assessment = await loadEffectivePairAssessment(
+        transaction,
+        cantonId,
+        categoryId,
+        now,
+      );
       if (canton === null || category === null || assessment === null) return null;
       const content = await loadCurrentClusterContent(
         transaction,

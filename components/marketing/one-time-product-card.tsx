@@ -11,18 +11,20 @@ export function OneTimeProductCard({
   product,
   canBuyContactPack = false,
   signedInEmployer = false,
+  mockCheckoutAvailable = false,
 }: Readonly<{
   product: PublicPricingProduct;
   canBuyContactPack?: boolean;
   signedInEmployer?: boolean;
+  mockCheckoutAvailable?: boolean;
 }>) {
   const boost = product.kind === "JOB_BOOST";
-  const purchasable = !boost && canBuyContactPack;
+  const purchasable = !boost && canBuyContactPack && mockCheckoutAvailable;
   return (
     <Card className="h-full">
       <CardHeader>
         <Badge variant="outline" className="mb-2 w-fit">
-          {purchasable ? "Im lokalen Mock kaufbar" : boost ? "Auf einer Stelle auswählen" : "Zugang erforderlich"}
+          {purchasable ? "Im lokalen Mock kaufbar" : boost ? "Auf einer Stelle auswählen" : canBuyContactPack ? "Zahlungsfreigabe ausstehend" : "Zugang erforderlich"}
         </Badge>
         <CardTitle as="h3" className="text-xl">{product.name}</CardTitle>
         <p className="mt-2 text-2xl font-semibold">{formatChfFromRappen(product.netPriceRappen)} netto</p>
@@ -41,7 +43,9 @@ export function OneTimeProductCard({
                 : "/employers/post-job"
               : purchasable
                 ? `/employer/billing/checkout?product=${product.code}`
-                : "/employers/talent-radar"
+                : canBuyContactPack
+                  ? "/employer/billing/subscription"
+                  : "/employers/talent-radar"
           }
           className={buttonVariants({ variant: "outline", className: "mt-5 w-full" })}
         >
@@ -49,7 +53,9 @@ export function OneTimeProductCard({
             ? "Eigene Stellen ansehen"
             : purchasable
               ? "Contact Pack im Mock kaufen"
-              : "Talent Radar verstehen"}
+              : canBuyContactPack
+                ? "Zahlungsfreigabe prüfen"
+                : "Talent Radar verstehen"}
           <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
         </Link>
       </CardContent>

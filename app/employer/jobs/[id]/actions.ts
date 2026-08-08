@@ -15,6 +15,7 @@ import {
   buildUpgradePrompt,
 } from "@/lib/billing/upgrade-prompt";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
 import {
   closeEmployerJob,
   createEmployerJobRevisionFromPaused,
@@ -34,8 +35,8 @@ import {
   type EmployerJobFormState,
   type EmployerJobQuotaReason,
 } from "@/lib/employer/jobs";
-import { aiProvider } from "@/lib/providers/ai";
-import { jobroomProvider } from "@/lib/providers/jobroom";
+import { resolveAiProvider } from "@/lib/providers/ai";
+import { resolveJobroomProvider } from "@/lib/providers/jobroom";
 import {
   markEmployerJobFilled,
   reconfirmEmployerJobFreshness,
@@ -126,6 +127,11 @@ export async function submitEmployerJobForReviewAction(
 ): Promise<EmployerJobFormState> {
   const dependencies = await actionDependencies();
   if (dependencies === null) return genericError();
+  if (dependencies.jobroomProvider === undefined) {
+    return errorState(
+      "Die Einreichung ist ohne freigegebenen Meldepflicht-Anbieter nicht aktiviert.",
+    );
+  }
   const result = await submitEmployerJobForReview(
     commandEnvelope(formData),
     dependencies,
@@ -318,13 +324,14 @@ async function actionDependencies(): Promise<EmployerJobCommandDependencies | nu
     membershipRole: context.current.membershipRole,
     companyId: context.current.companyId,
   };
+  const environment = getServerEnvironment();
   return Object.freeze({
     actor,
     correlationId: request.correlationId,
     database: getDatabase(),
     now: new Date(),
-    aiProvider,
-    jobroomProvider,
+    aiProvider: resolveAiProvider(environment.APP_ENV),
+    jobroomProvider: resolveJobroomProvider(environment.APP_ENV),
   });
 }
 

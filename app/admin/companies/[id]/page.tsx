@@ -10,6 +10,7 @@ import {
 } from "@/components/admin/action-form";
 import { AuditFeed } from "@/components/admin/AuditFeed";
 import { BillingCredits } from "@/components/admin/BillingCredits";
+import { CompanyClosureAction } from "@/components/admin/company-closure-action";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -314,25 +315,31 @@ export default async function AdminCompanyDetailPage({
               </label>
             </AdminActionForm>
           ) : company.status === "SUSPENDED" ? (
-            <AdminActionForm
-              operation="company-reactivate"
-              label="Firma reaktivieren (Jobs bleiben pausiert)"
-              hidden={{
-                companyId: company.id,
-                expectedStatus: "SUSPENDED",
-                idempotencyKey: randomUUID(),
-              }}
-            >
-              <label className="grid gap-1 text-sm">
-                Pflichtgrund
-                <input
-                  name="reasonCode"
-                  defaultValue="REVIEW_COMPLETED"
-                  required
-                  className={adminInputClass}
-                />
-              </label>
-            </AdminActionForm>
+            <>
+              <AdminActionForm
+                operation="company-reactivate"
+                label="Firma reaktivieren (Jobs bleiben pausiert)"
+                hidden={{
+                  companyId: company.id,
+                  expectedStatus: "SUSPENDED",
+                  idempotencyKey: randomUUID(),
+                }}
+              >
+                <label className="grid gap-1 text-sm">
+                  Pflichtgrund
+                  <input
+                    name="reasonCode"
+                    defaultValue="REVIEW_COMPLETED"
+                    required
+                    className={adminInputClass}
+                  />
+                </label>
+              </AdminActionForm>
+              <CompanyClosureAction
+                companyId={company.id}
+                blockingSubscription={detail.closureBlockingSubscription}
+              />
+            </>
           ) : null}
 
           <h2 className="pt-3 text-lg font-semibold">Verifizierung</h2>

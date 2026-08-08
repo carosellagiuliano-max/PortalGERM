@@ -47,7 +47,21 @@ export function proxy(request: NextRequest) {
     TRUSTED_PATHNAME_HEADER,
     `${request.nextUrl.pathname}${request.nextUrl.search}`,
   );
-  requestHeaders.set(TRUSTED_SOURCE_IP_HEADER, resolveTrustedSourceIp(request));
+  const sourceIp = resolveTrustedSourceIp(request);
+  if (!sourceIp.ok) {
+    const response = NextResponse.json(
+      { status: "invalid_forwarded_topology" },
+      { status: sourceIp.status },
+    );
+    response.headers.set("cache-control", "no-store");
+    response.headers.set("x-content-type-options", "nosniff");
+    setDynamicSecurityHeaders(response.headers, {
+      contentSecurityPolicy,
+      correlationId,
+    });
+    return response;
+  }
+  requestHeaders.set(TRUSTED_SOURCE_IP_HEADER, sourceIp.value);
 
   if (
     isPrivatePath(request.nextUrl.pathname) &&
@@ -120,22 +134,43 @@ function resolveTrustedSourceIp(request: NextRequest) {
   // client-supplied X-Forwarded-For value and TRUSTED_PROXY_HOPS matching that
   // exact topology. Without that boundary the forwarded chain is untrusted.
   const trustedProxyHops = parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS);
-  if (trustedProxyHops === undefined) return SAFE_FALLBACK_IP;
+  const strict = isPublicIngressEnvironment(process.env.APP_ENV);
+  if (trustedProxyHops === undefined) {
+    return strict
+      ? Object.freeze({ ok: false as const, status: 503 as const })
+      : Object.freeze({ ok: true as const, value: SAFE_FALLBACK_IP });
+  }
 
   const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor === null) return SAFE_FALLBACK_IP;
+  if (forwardedFor === null) {
+    return strict
+      ? Object.freeze({ ok: false as const, status: 400 as const })
+      : Object.freeze({ ok: true as const, value: SAFE_FALLBACK_IP });
+  }
   const chain = forwardedFor.split(",").map((value) => value.trim());
+  if (chain.some((value) => isIP(value) === 0)) {
+    return strict
+      ? Object.freeze({ ok: false as const, status: 400 as const })
+      : Object.freeze({ ok: true as const, value: SAFE_FALLBACK_IP });
+  }
   const candidate = chain[chain.length - trustedProxyHops];
 
-  return candidate !== undefined && isIP(candidate) !== 0
-    ? candidate
-    : SAFE_FALLBACK_IP;
+  if (candidate === undefined) {
+    return strict
+      ? Object.freeze({ ok: false as const, status: 400 as const })
+      : Object.freeze({ ok: true as const, value: SAFE_FALLBACK_IP });
+  }
+  return Object.freeze({ ok: true as const, value: candidate });
 }
 
 function parseTrustedProxyHops(value: string | undefined) {
   if (value === undefined || !/^[1-9]\d*$/.test(value)) return undefined;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function isPublicIngressEnvironment(value: string | undefined) {
+  return value === "preview" || value === "staging" || value === "production";
 }
 
 export const config = {

@@ -4,7 +4,8 @@ import { z } from "zod";
 
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
-import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
+import type { RateLimitDecision } from "@/lib/auth/rate-limit";
+import { consumeRequestRateLimitInTransaction } from "@/lib/auth/rate-limit-runtime";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import type { CurrentUser } from "@/lib/auth/current-user";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
@@ -12,6 +13,11 @@ import type { DatabaseClient } from "@/lib/db/factory";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { enqueueNotification } from "@/lib/notifications/outbox";
 import { notificationRecipientMaterialExpiresAt } from "@/lib/notifications/retention";
+import type { PublicIntakePrivacyExpectedBinding } from "@/lib/privacy/public-intake-privacy-contract";
+import {
+  lockPublicIntakePrivacyGate,
+  preflightPublicIntakePrivacyGate,
+} from "@/lib/privacy/public-intake-privacy-gate";
 import type { EmailProvider } from "@/lib/providers/email";
 import { recordCandidateFreshnessReport } from "@/lib/jobs/freshness";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
@@ -64,7 +70,11 @@ export type PublicReportResult =
   | Readonly<{
       ok: false;
       code:
-        "INVALID_INPUT" | "TARGET_NOT_FOUND" | "RATE_LIMITED" | "WRITE_FAILED";
+        | "INVALID_INPUT"
+        | "TARGET_NOT_FOUND"
+        | "RATE_LIMITED"
+        | "PRIVACY_UNAVAILABLE"
+        | "WRITE_FAILED";
     }>;
 
 export type AbuseReportDependencies = Readonly<{
@@ -74,7 +84,17 @@ export type AbuseReportDependencies = Readonly<{
   currentUser: CurrentUser | null;
   emailProvider?: EmailProvider;
   now?: Date;
+  privacyBinding: PublicIntakePrivacyExpectedBinding;
 }>;
+
+type AbuseReportTransactionOutcome =
+  | Readonly<{ kind: "SUCCESS"; reportId: string }>
+  | Readonly<{ kind: "PRIVACY_UNAVAILABLE" }>
+  | Readonly<{
+      kind: "RATE_LIMITED";
+      stage: "PRECHECK" | "TARGET";
+      audit: Extract<RateLimitDecision, { allowed: false }>["audit"];
+    }>;
 
 export async function createPublicReport(
   rawInput: unknown,
@@ -106,6 +126,9 @@ export async function createResolvedAbuseReport(
   target: ResolvedAbuseReportTarget | null,
   dependencies: AbuseReportDependencies,
 ): Promise<PublicReportResult> {
+  if (dependencies.privacyBinding.purpose !== "ABUSE_REPORT") {
+    return Object.freeze({ ok: false, code: "PRIVACY_UNAVAILABLE" });
+  }
   const parsed = abuseReportContentSchema.safeParse(rawInput);
   const parsedTarget = z
     .strictObject({
@@ -132,42 +155,69 @@ export async function createResolvedAbuseReport(
     return Object.freeze({ ok: false, code: "INVALID_INPUT" });
   }
 
-  const rate = await consumeRequestRateLimit(
-    "ABUSE_INTAKE",
+  const privacyPreflight = await preflightPublicIntakePrivacyGate(
+    dependencies.privacyBinding,
     {
-      ...(dependencies.currentUser === null
-        ? {}
-        : { actorId: dependencies.currentUser.id }),
-      targetId: resolvedTarget.id,
+      database: dependencies.database,
+      environment: dependencies.environment,
+      now,
     },
-    dependencies.request,
-    now,
-    { environment: dependencies.environment, database: dependencies.database },
   );
-  if (!rate.allowed) {
-    await recordRateLimitDenial(
-      rate.audit,
-      {
-        actorKind: dependencies.currentUser === null ? "ANONYMOUS" : "USER",
-        actorUserId: dependencies.currentUser?.id,
-        capability: "PUBLIC_ABUSE_REPORT",
-        companyId: resolvedTarget.companyId,
-        targetId: resolvedTarget.id,
-        targetType: resolvedTarget.targetType,
-      },
-      {
-        database: dependencies.database,
-        environment: dependencies.environment,
-        request: dependencies.request,
-        now,
-      },
-    );
-    return Object.freeze({ ok: false, code: "RATE_LIMITED" });
+  if (!privacyPreflight.allowed) {
+    return Object.freeze({ ok: false, code: "PRIVACY_UNAVAILABLE" });
   }
 
+  let outcome: AbuseReportTransactionOutcome;
   try {
-    const report = await dependencies.database.$transaction(
+    outcome = await dependencies.database.$transaction(
       async (transaction) => {
+        const privacy = await lockPublicIntakePrivacyGate(
+          transaction,
+          dependencies.privacyBinding,
+          { environment: dependencies.environment, now },
+        );
+        if (!privacy.allowed) {
+          return Object.freeze({
+            kind: "PRIVACY_UNAVAILABLE",
+          } satisfies AbuseReportTransactionOutcome);
+        }
+
+        const rateIdentity =
+          dependencies.currentUser === null
+            ? {}
+            : { actorId: dependencies.currentUser.id };
+        const precheck = await consumeRequestRateLimitInTransaction(
+          "ABUSE_INTAKE_PRECHECK",
+          rateIdentity,
+          dependencies.request,
+          transaction,
+          now,
+          dependencies.environment,
+        );
+        if (!precheck.allowed) {
+          return Object.freeze({
+            kind: "RATE_LIMITED",
+            stage: "PRECHECK",
+            audit: precheck.audit,
+          } satisfies AbuseReportTransactionOutcome);
+        }
+
+        const targetRate = await consumeRequestRateLimitInTransaction(
+          "ABUSE_INTAKE",
+          { ...rateIdentity, targetId: resolvedTarget.id },
+          dependencies.request,
+          transaction,
+          now,
+          dependencies.environment,
+        );
+        if (!targetRate.allowed) {
+          return Object.freeze({
+            kind: "RATE_LIMITED",
+            stage: "TARGET",
+            audit: targetRate.audit,
+          } satisfies AbuseReportTransactionOutcome);
+        }
+
         const priorityFreshness =
           parsed.data.reasonCode === "OUTDATED" &&
           resolvedTarget.targetType === "JOB" &&
@@ -181,6 +231,12 @@ export async function createResolvedAbuseReport(
             description,
             severity: severityFor(parsed.data.reasonCode, priorityFreshness),
             status: "OPEN",
+            privacyEvidenceMode: privacy.binding.evidenceMode,
+            privacyLegalPublicationId: privacy.binding.legalPublicationId,
+            privacyPublicationHash: privacy.binding.publicationHash,
+            privacyPublicationVersion: privacy.binding.publicationVersion,
+            privacyNoticeVersion: privacy.binding.noticeVersion,
+            privacyNoticeHash: privacy.binding.noticeHash,
             dueAt: new Date(
               now.getTime() +
                 dueMilliseconds(parsed.data.reasonCode, priorityFreshness),
@@ -234,17 +290,13 @@ export async function createResolvedAbuseReport(
           availableAt: now,
           environment: dependencies.environment,
         });
-        return created;
+        return Object.freeze({
+          kind: "SUCCESS",
+          reportId: created.id,
+        } satisfies AbuseReportTransactionOutcome);
       },
+      { isolationLevel: "ReadCommitted" },
     );
-    await recordTrustSignalForReport(
-      report.id,
-      resolvedTarget,
-      parsed.data.reasonCode,
-      now,
-      dependencies,
-    ).catch(() => undefined);
-    return Object.freeze({ ok: true, reportId: report.id });
   } catch (error) {
     logger.error(
       "public_abuse_report.write_failed",
@@ -256,6 +308,48 @@ export async function createResolvedAbuseReport(
     );
     return Object.freeze({ ok: false, code: "WRITE_FAILED" });
   }
+
+  if (outcome.kind === "PRIVACY_UNAVAILABLE") {
+    return Object.freeze({ ok: false, code: "PRIVACY_UNAVAILABLE" });
+  }
+  if (outcome.kind === "RATE_LIMITED") {
+    const precheck = outcome.stage === "PRECHECK";
+    await recordRateLimitDenial(
+      outcome.audit,
+      {
+        actorKind: dependencies.currentUser === null ? "ANONYMOUS" : "USER",
+        actorUserId: dependencies.currentUser?.id,
+        capability: precheck
+          ? "PUBLIC_ABUSE_REPORT_PRECHECK"
+          : "PUBLIC_ABUSE_REPORT",
+        companyId: resolvedTarget.companyId,
+        targetId: precheck
+          ? (dependencies.currentUser?.id ?? dependencies.request.correlationId)
+          : resolvedTarget.id,
+        targetType: precheck
+          ? dependencies.currentUser === null
+            ? "SYSTEM_TASK"
+            : "USER"
+          : resolvedTarget.targetType,
+      },
+      {
+        database: dependencies.database,
+        environment: dependencies.environment,
+        request: dependencies.request,
+        now,
+      },
+    );
+    return Object.freeze({ ok: false, code: "RATE_LIMITED" });
+  }
+
+  await recordTrustSignalForReport(
+    outcome.reportId,
+    resolvedTarget,
+    parsed.data.reasonCode,
+    now,
+    dependencies,
+  ).catch(() => undefined);
+  return Object.freeze({ ok: true, reportId: outcome.reportId });
 }
 
 function safeDatabaseErrorReference(error: unknown): string | undefined {

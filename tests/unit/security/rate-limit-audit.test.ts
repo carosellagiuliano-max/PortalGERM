@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   consumeRequestRateLimit,
   createPrismaAuditPort,
+  logError,
   writeBestEffortAudit,
 } = vi.hoisted(() => ({
   consumeRequestRateLimit: vi.fn(),
   createPrismaAuditPort: vi.fn(() => ({ auditLog: {} })),
+  logError: vi.fn(),
   writeBestEffortAudit: vi.fn(),
 }));
 
@@ -16,6 +18,9 @@ vi.mock("@/lib/auth/rate-limit-runtime", () => ({
 }));
 vi.mock("@/lib/audit/prisma-port", () => ({ createPrismaAuditPort }));
 vi.mock("@/lib/audit/log", () => ({ writeBestEffortAudit }));
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({ error: logError }),
+}));
 
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
@@ -44,6 +49,7 @@ describe("recordRateLimitDenial", () => {
   beforeEach(() => {
     consumeRequestRateLimit.mockReset();
     createPrismaAuditPort.mockClear();
+    logError.mockReset();
     writeBestEffortAudit.mockReset();
   });
 
@@ -61,7 +67,10 @@ describe("recordRateLimitDenial", () => {
 
     expect(consumeRequestRateLimit).toHaveBeenCalledWith(
       "SECURITY_DENIAL_AUDIT",
-      { actorId: TARGET.actorUserId },
+      {
+        actorId: TARGET.actorUserId,
+        targetId: "APPLICATION_SUBMIT:USER",
+      },
       REQUEST,
       NOW,
       expect.any(Object),
@@ -78,7 +87,7 @@ describe("recordRateLimitDenial", () => {
         targetId: TARGET.targetId,
         targetType: "USER",
       }),
-      undefined,
+      expect.any(Function),
       expect.objectContaining({ sourceIp: REQUEST.sourceIp }),
     );
   });
@@ -119,6 +128,14 @@ describe("recordRateLimitDenial", () => {
       ),
     ).resolves.toEqual({ written: false, gated: false });
     expect(writeBestEffortAudit).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith(
+      "security.rate_limit_observability_failed",
+      {
+        errorCode: "SECONDARY_OBSERVABILITY_FAILED",
+        operation: "rate_limit_denial",
+      },
+      REQUEST.correlationId,
+    );
   });
 
   it("never replaces the primary denial when the audit writer fails", async () => {
@@ -134,5 +151,35 @@ describe("recordRateLimitDenial", () => {
         DEPENDENCIES,
       ),
     ).resolves.toEqual({ written: false, gated: false });
+    expect(logError).toHaveBeenCalledOnce();
+  });
+
+  it("reports a best-effort audit result failure without changing the denial", async () => {
+    consumeRequestRateLimit.mockResolvedValue({ allowed: true, status: 200 });
+    writeBestEffortAudit.mockImplementation(
+      async (_port, _input, onFailure: (failure: unknown) => void) => {
+        onFailure({
+          action: "RATE_LIMITED",
+          code: "AUDIT_WRITE_FAILED",
+        });
+        return { written: false, code: "AUDIT_WRITE_FAILED" };
+      },
+    );
+
+    await expect(
+      recordRateLimitDenial(
+        { preset: "LOGIN", scope: "AUTH_IDENTIFIER" },
+        TARGET,
+        DEPENDENCIES,
+      ),
+    ).resolves.toEqual({ written: false, gated: false });
+    expect(logError).toHaveBeenCalledWith(
+      "security.rate_limit_audit_write_failed",
+      {
+        errorCode: "AUDIT_WRITE_FAILED",
+        operation: "RATE_LIMITED",
+      },
+      REQUEST.correlationId,
+    );
   });
 });

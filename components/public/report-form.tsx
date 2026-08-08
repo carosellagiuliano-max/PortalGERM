@@ -4,6 +4,12 @@ import { useActionState } from "react";
 import { FlagIcon } from "lucide-react";
 
 import { submitPublicReportAction } from "@/app/(public)/actions";
+import {
+  PublicIntakePrivacyDisclosure,
+  PublicIntakePrivacyHiddenFields,
+  PublicIntakePrivacyLocked,
+  usePublicIntakePrivacy,
+} from "@/components/privacy/public-intake-privacy";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { INITIAL_PUBLIC_REPORT_STATE } from "@/lib/abuse/public-report-state";
@@ -16,15 +22,22 @@ export function ReportForm({
     submitPublicReportAction,
     INITIAL_PUBLIC_REPORT_STATE,
   );
+  const privacyGate = usePublicIntakePrivacy("ABUSE_REPORT");
 
   return (
     <details className="rounded-xl border bg-muted/20 p-4">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium">
         <FlagIcon className="size-4" aria-hidden="true" /> Inhalt melden
       </summary>
+      {!privacyGate.allowed ? (
+        <div className="mt-4">
+          <PublicIntakePrivacyLocked purpose="ABUSE_REPORT" />
+        </div>
+      ) : (
       <form action={action} className="mt-4 grid gap-4" noValidate>
         <input type="hidden" name="targetType" value={targetType} />
         <input type="hidden" name="slug" value={slug} />
+        <PublicIntakePrivacyHiddenFields purpose="ABUSE_REPORT" />
         {state.status === "idle" ? null : (
           <p role="status" className={state.status === "success" ? "rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900" : "rounded-lg bg-destructive/10 p-3 text-sm text-destructive"}>
             {state.message}
@@ -47,12 +60,14 @@ export function ReportForm({
               Beschreibung
               <Textarea name="description" required minLength={20} maxLength={1_500} rows={5} placeholder="Was sollten wir prüfen? Bitte keine sensiblen persönlichen Daten eintragen." />
             </label>
+            <PublicIntakePrivacyDisclosure purpose="ABUSE_REPORT" />
             <Button type="submit" variant="outline" disabled={pending}>
               {pending ? "Meldung wird erfasst …" : "Meldung absenden"}
             </Button>
           </>
         )}
       </form>
+      )}
     </details>
   );
 }

@@ -8,7 +8,9 @@ import { createPublicReport } from "@/lib/abuse/public-report";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
 import { parseEnvironment, type ServerEnvironment } from "@/lib/config/env-schema";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
+import { ABUSE_REPORT_PRIVACY_NOTICE_V1 } from "@/lib/privacy/public-intake-privacy-contract";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
+import { localPublicIntakePrivacyBinding } from "@/tests/fixtures/public-intake-privacy";
 
 type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
@@ -94,6 +96,7 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
         request: requestContext(CORRELATION_ID),
         currentUser: null,
         now: NOW,
+        privacyBinding: localPublicIntakePrivacyBinding("ABUSE_REPORT"),
       },
     );
 
@@ -112,6 +115,12 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
       description: "Belegter Betrugsverdacht mit nachvollziehbaren Angaben.",
       severity: "HIGH",
       status: "OPEN",
+      privacyEvidenceMode: "LOCAL_SYNTHETIC",
+      privacyLegalPublicationId: null,
+      privacyPublicationHash: null,
+      privacyPublicationVersion: null,
+      privacyNoticeVersion: ABUSE_REPORT_PRIVACY_NOTICE_V1.version,
+      privacyNoticeHash: ABUSE_REPORT_PRIVACY_NOTICE_V1.hash,
     });
     expect(report?.dueAt).toEqual(new Date(NOW.getTime() + DAY));
     expect(report?.events).toEqual([
@@ -166,13 +175,24 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
     expect(email.recipientAddressCiphertext).toBeInstanceOf(Uint8Array);
 
     const buckets = await client().rateLimitBucket.findMany();
-    expect(buckets).toEqual([
+    expect(buckets).toHaveLength(3);
+    expect(buckets).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        namespace: "v1:ABUSE_INTAKE_PRECHECK:ACTOR_OR_IP",
+        count: 1,
+        windowStart: NOW,
+      }),
+      expect.objectContaining({
+        namespace: "v1:ABUSE_INTAKE_PRECHECK:IP",
+        count: 1,
+        windowStart: NOW,
+      }),
       expect.objectContaining({
         namespace: "v1:ABUSE_INTAKE:ACTOR_OR_IP_TARGET",
         count: 1,
         windowStart: NOW,
       }),
-    ]);
+    ]));
   });
 
   it("limits one IP per target without letting it exhaust the target for everyone", async () => {
@@ -199,6 +219,7 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
             ),
             currentUser: null,
             now: NOW,
+            privacyBinding: localPublicIntakePrivacyBinding("ABUSE_REPORT"),
           },
         ),
       );
@@ -232,6 +253,7 @@ describe.sequential("Phase-07 PostgreSQL public abuse-report intake", () => {
         ),
         currentUser: null,
         now: NOW,
+        privacyBinding: localPublicIntakePrivacyBinding("ABUSE_REPORT"),
       },
     );
     expect(independentReporter.ok).toBe(true);

@@ -139,8 +139,9 @@ export async function projectCompanyTrustLifecycle(input: Readonly<{
             correlationId: input.correlationId,
             now,
           });
-          await Promise.all([
-            writeRequiredAudit(createPrismaTransactionAuditPort(transaction), {
+          await writeRequiredAudit(
+            createPrismaTransactionAuditPort(transaction),
+            {
               action: "COMPANY_TRUST_EXPIRED_V2",
               actorKind: "SYSTEM",
               actorUserId: null,
@@ -152,15 +153,15 @@ export async function projectCompanyTrustLifecycle(input: Readonly<{
               retainUntil: new Date(now.getTime() + 400 * DAY),
               targetId: current.id,
               targetType: "COMPANY_TRUST_PROJECTION",
-            }),
-            notifyCompanyManagers(transaction, {
-              companyId: current.companyId,
-              verificationRequestId: current.verificationRequestId,
-              status: "EXPIRED",
-              reasonCode: "EXPIRED",
-              dedupeKey: `company-trust-expired:${current.id}:${current.expiresAt.toISOString()}`,
-            }),
-          ]);
+            },
+          );
+          await notifyCompanyManagers(transaction, {
+            companyId: current.companyId,
+            verificationRequestId: current.verificationRequestId,
+            status: "EXPIRED",
+            reasonCode: "EXPIRED",
+            dedupeKey: `company-trust-expired:${current.id}:${current.expiresAt.toISOString()}`,
+          });
           return Object.freeze({
             expired: 1,
             markedExpiring: 0,

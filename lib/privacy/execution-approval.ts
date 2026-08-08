@@ -422,33 +422,34 @@ export async function approveAndEnqueuePrivacyExecution(
           return approvalFailure("CONFLICT");
         }
 
-        const [approver, requester, request] = await Promise.all([
-          resolveAdminActor(
-            transaction,
-            {
-              userId: dependencies.actor.userId,
-              role: dependencies.actor.role,
-              status: dependencies.actor.status,
-            },
-            dependencies.now,
-          ),
-          transaction.user.findUnique({
-            where: { id: approval.requestedByUserId },
-            select: { id: true, role: true, status: true },
-          }),
-          transaction.privacyRequest.findUnique({
-            where: { id: input.requestId },
-            select: {
-              id: true,
-              type: true,
-              status: true,
-              version: true,
-              verifiedAt: true,
-              assignedAdminUserId: true,
-              requesterUserId: true,
-            },
-          }),
-        ]);
+        // Interactive transactions own one PostgreSQL client. Keep every
+        // query sequential so the flow remains compatible with pg 9, which no
+        // longer queues overlapping client.query calls.
+        const approver = await resolveAdminActor(
+          transaction,
+          {
+            userId: dependencies.actor.userId,
+            role: dependencies.actor.role,
+            status: dependencies.actor.status,
+          },
+          dependencies.now,
+        );
+        const requester = await transaction.user.findUnique({
+          where: { id: approval.requestedByUserId },
+          select: { id: true, role: true, status: true },
+        });
+        const request = await transaction.privacyRequest.findUnique({
+          where: { id: input.requestId },
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            version: true,
+            verifiedAt: true,
+            assignedAdminUserId: true,
+            requesterUserId: true,
+          },
+        });
         const resolvedRequester =
           requester === null
             ? null

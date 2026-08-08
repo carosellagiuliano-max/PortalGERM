@@ -183,19 +183,17 @@ export async function scheduleSubscriptionCancellation(
           return billingFailure("CHANGE_ALREADY_SCHEDULED");
         }
 
-        const [memberships, freeSeatLimit] = await Promise.all([
-          transaction.companyMembership.findMany({
-            where: { companyId: dependencies.actor.companyId },
-            select: {
-              id: true,
-              userId: true,
-              role: true,
-              status: true,
-              joinedAt: true,
-            },
-          }),
-          loadDefaultFreeSeatLimit(transaction, now),
-        ]);
+        const memberships = await transaction.companyMembership.findMany({
+          where: { companyId: dependencies.actor.companyId },
+          select: {
+            id: true,
+            userId: true,
+            role: true,
+            status: true,
+            joinedAt: true,
+          },
+        });
+        const freeSeatLimit = await loadDefaultFreeSeatLimit(transaction, now);
         if (freeSeatLimit === null) return billingFailure("CATALOG_UNAVAILABLE");
 
         const selected = selectRetainedMemberships(

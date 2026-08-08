@@ -9,6 +9,11 @@ const actions = vi.hoisted(() => ({
 vi.mock("@/app/(public)/employers/demo/actions", () => actions);
 
 import { LeadForm } from "@/components/marketing/lead-form";
+import { PublicIntakePrivacyProvider } from "@/components/privacy/public-intake-privacy";
+import {
+  SALES_LEAD_INTAKE_POLICY_V1,
+  SALES_LEAD_NOTICE_HASH_V1,
+} from "@/lib/sales/lead-policy";
 import {
   INITIAL_LEAD_ACTION_STATE,
   type LeadActionState,
@@ -20,7 +25,6 @@ const privacyNotice =
 const defaultProps = {
   idempotencyKey: "lead-test-idempotency-key",
   initialInterest: "IMPORT" as const,
-  privacyNotice,
 };
 
 describe("Phase 08 employer demo lead form", () => {
@@ -36,7 +40,7 @@ describe("Phase 08 employer demo lead form", () => {
   });
 
   it("renders every labelled field with the intended browser hints and optionality", () => {
-    render(<LeadForm {...defaultProps} />);
+    renderLeadForm();
 
     const company = screen.getByRole("textbox", { name: "Unternehmen" });
     expect(company).toHaveAttribute("name", "companyName");
@@ -84,7 +88,7 @@ describe("Phase 08 employer demo lead form", () => {
   });
 
   it("offers the complete controlled option sets and keeps phone and callback optional", () => {
-    render(<LeadForm {...defaultProps} />);
+    renderLeadForm();
 
     expectOptions(screen.getByRole("combobox", { name: "Unternehmensgrösse" }), [
       ["", "Grösse wählen"],
@@ -129,7 +133,7 @@ describe("Phase 08 employer demo lead form", () => {
 
   it("keeps the honeypot outside the tab and accessibility trees and explains privacy", async () => {
     const user = userEvent.setup();
-    render(<LeadForm {...defaultProps} />);
+    renderLeadForm();
 
     const honeypot = document.querySelector<HTMLInputElement>(
       'input[name="websiteConfirmation"]',
@@ -166,7 +170,7 @@ describe("Phase 08 employer demo lead form", () => {
       resolveAction = resolve;
     });
     actions.submitEmployerDemoLeadAction.mockReturnValue(pendingResult);
-    render(<LeadForm {...defaultProps} />);
+    renderLeadForm();
 
     await user.click(screen.getByRole("button", { name: "Demo anfragen" }));
 
@@ -205,7 +209,7 @@ describe("Phase 08 employer demo lead form", () => {
         message: "Wir möchten einen kontrollierten Import besprechen.",
       },
     } satisfies LeadActionState);
-    render(<LeadForm {...defaultProps} />);
+    renderLeadForm();
 
     const company = screen.getByRole("textbox", { name: "Unternehmen" });
     const contact = screen.getByRole("textbox", { name: "Kontaktperson" });
@@ -230,7 +234,7 @@ describe("Phase 08 employer demo lead form", () => {
     });
     expect(purpose).toHaveAttribute("aria-invalid", "true");
     expect(purpose).toHaveAccessibleDescription(
-      `${privacyNotice} Bitte bestätige den Kontaktzweck.`,
+      `${privacyNotice} Lokaler synthetischer Testvertrag — keine veröffentlichte Rechtsfreigabe. Bitte bestätige den Kontaktzweck.`,
     );
     expect(returnedCompany).toHaveValue("Alpenblick AG");
     expect(returnedContact).toHaveValue("Mira Muster");
@@ -252,7 +256,7 @@ describe("Phase 08 employer demo lead form", () => {
       status: "success",
       message: "Danke. Wir haben deine Anfrage sicher erfasst.",
     } satisfies LeadActionState);
-    render(<LeadForm {...defaultProps} />);
+    renderLeadForm();
 
     await user.click(screen.getByRole("button", { name: "Demo anfragen" }));
 
@@ -264,6 +268,28 @@ describe("Phase 08 employer demo lead form", () => {
     expect(screen.queryByRole("button", { name: "Demo anfragen" })).not.toBeInTheDocument();
   });
 });
+
+function renderLeadForm() {
+  return render(
+    <PublicIntakePrivacyProvider
+      decision={{
+        allowed: true,
+        binding: {
+          purpose: "EMPLOYER_DEMO",
+          evidenceMode: "LOCAL_SYNTHETIC",
+          legalPublicationId: null,
+          publicationHash: null,
+          publicationVersion: null,
+          noticeVersion: SALES_LEAD_INTAKE_POLICY_V1.notice.version,
+          noticeHash: SALES_LEAD_NOTICE_HASH_V1,
+          noticeText: privacyNotice,
+        },
+      }}
+    >
+      <LeadForm {...defaultProps} />
+    </PublicIntakePrivacyProvider>,
+  );
+}
 
 function expectOptions(
   select: HTMLElement,

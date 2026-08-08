@@ -29,10 +29,21 @@ import {
   REMOTE_TYPES,
   REQUIRED_DOCUMENT_KINDS,
   SALARY_PERIODS,
+  employerJobBoostStatusLabel,
+  employerJobEventLabel,
+  employerJobStatusLabel,
+  employerReportingResultLabel,
   type EmployerJobCatalog,
   type EmployerJobFormState,
   type EmployerJobFullDetail,
 } from "@/lib/employer/job-contracts";
+import {
+  applicationEffortLabel as employerApplicationEffortLabel,
+  jobTypeLabel as employerJobTypeLabel,
+  remoteTypeLabel as employerRemoteTypeLabel,
+  requiredDocumentLabel as employerRequiredDocumentLabel,
+  salaryPeriodLabel as employerSalaryPeriodLabel,
+} from "@/lib/jobs/labels-de";
 import { getFairJobEmployerHintDe } from "@/lib/scoring/fair-job-employer-hints";
 import { useUnsavedChanges } from "@/components/employer/job-wizard/use-unsaved-changes";
 
@@ -108,6 +119,7 @@ export function EmployerJobWizard({
   actions,
   idempotencyKeys,
   additionalJobCheckoutHref,
+  isolatedMockToolsAvailable,
 }: Readonly<{
   job: EmployerJobFullDetail;
   catalog: EmployerJobCatalog;
@@ -115,6 +127,7 @@ export function EmployerJobWizard({
   actions: EmployerJobWizardActions;
   idempotencyKeys: EmployerJobWizardIdempotencyKeys;
   additionalJobCheckoutHref: string | null;
+  isolatedMockToolsAvailable: boolean;
 }>) {
   const revision = job.revision;
   const [saveState, saveAction, savePending] = useActionState(actions.saveStep, INITIAL_EMPLOYER_JOB_FORM_STATE);
@@ -180,9 +193,9 @@ export function EmployerJobWizard({
           </WizardCard>
         ) : null}
         {step === 4 ? (
-          <WizardCard title="Schweiz-Compliance" description="Die Mock-Prüfung wird mit vollständigem Datensatz-, Quellen- und Disclaimer-Snapshot gespeichert.">
+          <WizardCard title="Schweiz-Compliance" description={isolatedMockToolsAvailable ? "Die lokale Mock-Prüfung wird mit vollständigem Datensatz-, Quellen- und Disclaimer-Snapshot gespeichert." : "Für eine neue Prüfung ist ein freigegebener, aktivierter Meldepflicht-Anbieter erforderlich."}>
             {revision.reportingCheck === null ? null : <ReportingEvidence check={revision.reportingCheck} />}
-            {editable ? (
+            {editable && isolatedMockToolsAvailable ? (
               <form action={reportAction} className="mt-5 grid gap-4" onChangeCapture={markDirty}>
                 <CommandFields job={job} idempotencyKey={reportState.nextIdempotencyKey ?? idempotencyKeys.reporting} />
                 <Field label="Berufsart" htmlFor="occupationCodeId">
@@ -195,13 +208,16 @@ export function EmployerJobWizard({
                 <SubmitButton pending={reportPending} label="Meldepflicht prüfen und speichern" />
               </form>
             ) : null}
+            {editable && !isolatedMockToolsAvailable ? (
+              <Alert className="mt-5"><AlertTriangleIcon /><AlertTitle>Prüfung nicht aktiviert</AlertTitle><AlertDescription>Die lokale Demo-Prüfung ist in Vorschau-, Staging- und Produktionsumgebungen gesperrt. Vor einer Einreichung muss ein realer Anbieter fachlich freigegeben, konfiguriert und aktiviert werden.</AlertDescription></Alert>
+            ) : null}
           </WizardCard>
         ) : null}
         {step === 5 ? (
           <div className="grid gap-5">
             <JobPreview job={job} catalog={catalog} />
             <ScorePreview job={job} />
-            {editable ? (
+            {editable && isolatedMockToolsAvailable ? (
               <WizardCard title="Lokale Mock-Textassistenz" description="Vorschläge werden serverseitig erzeugt, nie automatisch gespeichert und enthalten keine externen Netzwerkaufrufe.">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <AiForm action={aiAction} jobId={job.id} operation="IMPROVE" text={revision.offer ?? revision.description} label="Jobtext verbessern" pending={aiPending} />
@@ -213,7 +229,7 @@ export function EmployerJobWizard({
                 {aiState.suggestion === undefined ? null : <pre className="mt-4 whitespace-pre-wrap rounded-lg border bg-muted/40 p-4 text-sm leading-6">{aiState.suggestion}</pre>}
               </WizardCard>
             ) : null}
-            {editable ? (
+            {editable && isolatedMockToolsAvailable ? (
               <Card className="border-primary/30">
                 <CardHeader><CardTitle as="h2">Zur Moderation einreichen</CardTitle><CardDescription>Alle fünf Schritte werden erneut aus der Datenbank validiert. Danach werden Revision und Fair-Score-Snapshot unveränderbar.</CardDescription></CardHeader>
                 <CardContent>
@@ -225,6 +241,9 @@ export function EmployerJobWizard({
                 </CardContent>
               </Card>
             ) : null}
+            {editable && !isolatedMockToolsAvailable ? (
+              <Alert><AlertTriangleIcon /><AlertTitle>Einreichung nicht aktiviert</AlertTitle><AlertDescription>Ohne einen freigegebenen Meldepflicht-Anbieter kann dieses Inserat nicht zur Moderation eingereicht werden. Dein Entwurf bleibt erhalten.</AlertDescription></Alert>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -233,10 +252,10 @@ export function EmployerJobWizard({
         <Card>
           <CardHeader><CardTitle as="h2">Inseratestatus</CardTitle></CardHeader>
           <CardContent className="grid gap-3 text-sm">
-            <div className="flex items-center justify-between"><span>Status</span><Badge variant="outline">{job.status}</Badge></div>
+            <div className="flex items-center justify-between"><span>Status</span><Badge variant="outline">{employerJobStatusLabel(job.status)}</Badge></div>
             <div className="flex items-center justify-between"><span>Revision</span><span>#{revision.revisionNumber} · v{revision.version}</span></div>
             <div className="grid grid-cols-3 gap-2 text-center"><Metric value={job.views} label="Views" /><Metric value={job.saves} label="Saves" /><Metric value={job.applications} label="Bewerb." /></div>
-            <p className="text-xs text-muted-foreground">Boost: {job.boostStatus ?? "nicht aktiv"}. Eine Aktivierungsaktion folgt erst in Phase 13.</p>
+            <p className="text-xs text-muted-foreground">Boost: {job.boostStatus === null ? "nicht aktiv" : employerJobBoostStatusLabel(job.boostStatus)}. Verfügbare Boost-Aktionen erscheinen nach der Veröffentlichung.</p>
           </CardContent>
         </Card>
         {job.capabilities.manageLifecycle ? (
@@ -279,7 +298,7 @@ export function EmployerJobWizard({
           <CardContent className="grid gap-3">
             {job.statusEvents.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine Statusereignisse.</p> : job.statusEvents.map((event, index) => (
               <div key={`${event.kind}-${event.createdAt.toISOString()}-${index}`} className="border-l-2 pl-3 text-sm">
-                <p className="font-medium">{event.kind}</p><p className="text-xs text-muted-foreground">{formatDateTime(event.createdAt)} · {event.fromStatus ?? "Neu"} → {event.toStatus}</p>
+                <p className="font-medium">{employerJobEventLabel(event.kind)}</p><p className="text-xs text-muted-foreground">{formatDateTime(event.createdAt)} · {event.fromStatus === null ? "Neu" : employerJobStatusLabel(event.fromStatus)} → {employerJobStatusLabel(event.toStatus)}</p>
               </div>
             ))}
           </CardContent>
@@ -295,10 +314,10 @@ function StepOneFields({ catalog, revision, defaultValidThrough, disabled = fals
     <Field label="Stellentitel" htmlFor="title"><Input id="title" name="title" required minLength={3} maxLength={200} defaultValue={value?.title ?? ""} disabled={disabled} /></Field>
     <div className="grid gap-4 md:grid-cols-2">
       <Field label="Kategorie" htmlFor="categoryId"><select id="categoryId" name="categoryId" required className={selectClass} defaultValue={value?.categoryId ?? ""} disabled={disabled}><option value="" disabled>Kategorie wählen</option>{catalog.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></Field>
-      <Field label="Vertragsart" htmlFor="jobType"><select id="jobType" name="jobType" className={selectClass} defaultValue={value?.jobType ?? "PERMANENT"} disabled={disabled}>{JOB_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field>
+      <Field label="Vertragsart" htmlFor="jobType"><select id="jobType" name="jobType" className={selectClass} defaultValue={value?.jobType ?? "PERMANENT"} disabled={disabled}>{JOB_TYPES.map((type) => <option key={type} value={type}>{employerJobTypeLabel(type)}</option>)}</select></Field>
       <Field label="Pensum min. %" htmlFor="workloadMin"><Input id="workloadMin" name="workloadMin" type="number" min={1} max={100} required defaultValue={value?.workloadMin ?? 80} disabled={disabled} /></Field>
       <Field label="Pensum max. %" htmlFor="workloadMax"><Input id="workloadMax" name="workloadMax" type="number" min={1} max={100} required defaultValue={value?.workloadMax ?? 100} disabled={disabled} /></Field>
-      <Field label="Arbeitsmodell" htmlFor="remoteType"><select id="remoteType" name="remoteType" className={selectClass} defaultValue={value?.remoteType ?? "HYBRID"} disabled={disabled}>{REMOTE_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field>
+      <Field label="Arbeitsmodell" htmlFor="remoteType"><select id="remoteType" name="remoteType" className={selectClass} defaultValue={value?.remoteType ?? "HYBRID"} disabled={disabled}>{REMOTE_TYPES.map((type) => <option key={type} value={type}>{employerRemoteTypeLabel(type)}</option>)}</select></Field>
       <Field label="Remote-Land (nur bei vollständig Remote)" htmlFor="remoteCountryCode"><Input id="remoteCountryCode" name="remoteCountryCode" maxLength={2} placeholder="CH" defaultValue={value?.remoteType === "REMOTE" ? value.remoteCountryCode ?? "CH" : ""} disabled={disabled} /></Field>
       <Field label="Kanton" htmlFor="cantonId"><select id="cantonId" name="cantonId" className={selectClass} defaultValue={value?.cantonId ?? ""} disabled={disabled}><option value="">Kein Kanton</option>{catalog.cantons.map((canton) => <option key={canton.id} value={canton.id}>{canton.code} · {canton.name}</option>)}</select></Field>
       <Field label="Ort (Pflicht bei Onsite/Hybrid)" htmlFor="cityId"><select id="cityId" name="cityId" className={selectClass} defaultValue={value?.cityId ?? ""} disabled={disabled}><option value="">Kein Ort bei vollständig Remote</option>{catalog.cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}</select></Field>
@@ -328,19 +347,19 @@ function StepThreeFields({ revision, disabled }: Readonly<{ revision: NonNullabl
   const selectedDocs = new Set(revision.requiredDocumentKinds);
   return <>
     <div className="grid gap-4 md:grid-cols-3">
-      <Field label="Lohnperiode" htmlFor="salaryPeriod"><select id="salaryPeriod" name="salaryPeriod" className={selectClass} defaultValue={revision.salaryPeriod ?? ""} disabled={disabled}><option value="">Keine Angabe</option>{SALARY_PERIODS.map((period) => <option key={period}>{period}</option>)}</select></Field>
+      <Field label="Lohnperiode" htmlFor="salaryPeriod"><select id="salaryPeriod" name="salaryPeriod" className={selectClass} defaultValue={revision.salaryPeriod ?? ""} disabled={disabled}><option value="">Keine Angabe</option>{SALARY_PERIODS.map((period) => <option key={period} value={period}>{employerSalaryPeriodLabel(period)}</option>)}</select></Field>
       <Field label="Lohn min. CHF" htmlFor="salaryMin"><Input id="salaryMin" name="salaryMin" type="number" min={0} defaultValue={revision.salaryMin ?? ""} disabled={disabled} /></Field>
       <Field label="Lohn max. CHF" htmlFor="salaryMax"><Input id="salaryMax" name="salaryMax" type="number" min={0} defaultValue={revision.salaryMax ?? ""} disabled={disabled} /></Field>
     </div>
     <div className="grid gap-4 md:grid-cols-2">
       <Field label="Antwortziel in Tagen" htmlFor="responseTargetDays"><Input id="responseTargetDays" name="responseTargetDays" type="number" min={1} max={30} required defaultValue={revision.responseTargetDays} disabled={disabled} /></Field>
-      <Field label="Bewerbungsaufwand" htmlFor="applicationEffort"><select id="applicationEffort" name="applicationEffort" className={selectClass} defaultValue={revision.applicationEffort} disabled={disabled}>{APPLICATION_EFFORTS.map((effort) => <option key={effort}>{effort}</option>)}</select></Field>
+      <Field label="Bewerbungsaufwand" htmlFor="applicationEffort"><select id="applicationEffort" name="applicationEffort" className={selectClass} defaultValue={revision.applicationEffort} disabled={disabled}>{APPLICATION_EFFORTS.map((effort) => <option key={effort} value={effort}>{employerApplicationEffortLabel(effort)}</option>)}</select></Field>
     </div>
     <Field label="Bewerbungsprozess (ein Schritt pro Zeile)" htmlFor="applicationProcessSteps"><Textarea id="applicationProcessSteps" name="applicationProcessSteps" rows={5} required defaultValue={revision.applicationProcessSteps.join("\n")} disabled={disabled} /></Field>
-    <fieldset className="grid gap-2"><legend className="text-sm font-medium">Benötigte Unterlagen</legend><div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2">{REQUIRED_DOCUMENT_KINDS.map((kind) => <label key={kind} className="flex items-center gap-2 text-sm"><input type="checkbox" name="requiredDocumentKinds" value={kind} defaultChecked={selectedDocs.has(kind)} disabled={disabled} /> {kind}</label>)}</div></fieldset>
+    <fieldset className="grid gap-2"><legend className="text-sm font-medium">Benötigte Unterlagen</legend><div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2">{REQUIRED_DOCUMENT_KINDS.map((kind) => <label key={kind} className="flex items-center gap-2 text-sm"><input type="checkbox" name="requiredDocumentKinds" value={kind} defaultChecked={selectedDocs.has(kind)} disabled={disabled} /> {employerRequiredDocumentLabel(kind)}</label>)}</div></fieldset>
     <Field label="Inklusionshinweis" htmlFor="inclusionStatement"><Textarea id="inclusionStatement" name="inclusionStatement" rows={4} maxLength={1000} defaultValue={revision.inclusionStatement ?? ""} disabled={disabled} /></Field>
     <div className="grid gap-4 md:grid-cols-[14rem_1fr]">
-      <Field label="Bewerbungskontakt" htmlFor="applicationContactKind"><select id="applicationContactKind" name="applicationContactKind" className={selectClass} defaultValue={revision.applicationContactKind} disabled={disabled}>{APPLICATION_CONTACT_KINDS.map((kind) => <option key={kind}>{kind}</option>)}</select></Field>
+      <Field label="Bewerbungskontakt" htmlFor="applicationContactKind"><select id="applicationContactKind" name="applicationContactKind" className={selectClass} defaultValue={revision.applicationContactKind} disabled={disabled}>{APPLICATION_CONTACT_KINDS.map((kind) => <option key={kind} value={kind}>{applicationContactLabel(kind)}</option>)}</select></Field>
       <Field label="Öffentlicher Kontaktwert" htmlFor="applicationContactValue"><Input id="applicationContactValue" name="applicationContactValue" required maxLength={512} defaultValue={revision.applicationContactValue} disabled={disabled} /></Field>
     </div>
   </>;
@@ -424,7 +443,10 @@ function ScorePreview({ job }: Readonly<{ job: EmployerJobFullDetail }>) {
 }
 
 function ReportingEvidence({ check }: Readonly<{ check: NonNullable<NonNullable<EmployerJobFullDetail["revision"]>["reportingCheck"]> }>) {
-  return <Alert><CheckCircle2Icon /><AlertTitle>{check.result} · {check.occupationCode} {check.occupationLabel}</AlertTitle><AlertDescription><p>{check.reason}</p><p>Datensatz {check.datasetVersion} / {check.dataYear} · {check.source}</p><p>{check.disclaimer}</p>{check.referenceUrl === null ? null : <p><a href={check.referenceUrl} target="_blank" rel="noreferrer noopener">Offizielle Quelle öffnen</a></p>}</AlertDescription></Alert>;
+  const occupation = [check.occupationCode, check.occupationLabel]
+    .filter((value): value is string => value !== null && value.length > 0)
+    .join(" ");
+  return <Alert><CheckCircle2Icon /><AlertTitle>{employerReportingResultLabel(check.result)}{occupation === "" ? null : ` · ${occupation}`}</AlertTitle><AlertDescription><p>{check.reason}</p><p>Datensatz {check.datasetVersion} / {check.dataYear} · {check.source}</p><p>{check.disclaimer}</p>{check.referenceUrl === null ? null : <p><a href={check.referenceUrl} target="_blank" rel="noreferrer noopener">Offizielle Quelle öffnen</a></p>}</AlertDescription></Alert>;
 }
 
 function AiForm({ action, jobId, operation, text, label, pending }: Readonly<{ action: (formData: FormData) => void; jobId: string; operation: string; text: string; label: string; pending: boolean }>) {

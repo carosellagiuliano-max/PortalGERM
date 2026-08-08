@@ -100,7 +100,7 @@ describe("team invitation seat-limit action", () => {
     expect(state.upgradePrompt).toMatchObject({
       reason: "SEAT_LIMIT_REACHED",
       description: expect.stringContaining("Pro Team für CHF 249.00"),
-      cta: { href: "/employer/billing/checkout?plan=pro" },
+      cta: { href: "/employer/billing/subscription" },
     });
     expect(mocks.sendCompanyInvitation).toHaveBeenCalledOnce();
   });

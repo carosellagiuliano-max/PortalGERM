@@ -1340,5 +1340,6 @@ korrekte Produktaussage:
 > serverseitigen Schutzmechanismen und klaren Mock-Grenzen. Reale Provider,
 > autonome Operations, Rechts-/Privacy-/Tax-Freigaben, bezahlte
 > Marktvalidierung und ein exakt identisch verifizierter Produktionskandidat
-> sind durch den historischen Phase-32-`NO_GO`, die laufende technische Phase
-> 33 und weiterhin offene externe Aktivierungsgates gesperrt.
+> sind durch den historischen Phase-32-`NO_GO`, die abgeschlossene technische
+> Phase 33, die laufende Verifikationsphase 34 und weiterhin offene externe
+> Aktivierungsgates gesperrt.

@@ -29,6 +29,22 @@ import { trimmedString } from "@/lib/validation/common";
 
 const reasonSchema = z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,63}$/u);
 const idempotencySchema = z.uuid();
+const COMPANY_CLOSURE_BLOCKING_SUBSCRIPTION_STATUSES = [
+  "SCHEDULED",
+  "ACTIVE",
+  "CANCELLING",
+  "SUSPENDED",
+] as const;
+
+function companyClosureBlockingSubscriptionWhere(
+  companyId: string,
+): Prisma.EmployerSubscriptionWhereInput {
+  return {
+    companyId,
+    recurringNetRappenSnapshot: { gt: 0 },
+    status: { in: [...COMPANY_CLOSURE_BLOCKING_SUBSCRIPTION_STATUSES] },
+  };
+}
 
 export async function listAdminCompanies(dependencies: AdminDependencies) {
   if (!await requireCapability(dependencies, "ADMIN_COMPANY_REVIEW")) return null;
@@ -63,7 +79,7 @@ export async function listAdminCompanies(dependencies: AdminDependencies) {
 export async function getAdminCompanyDetail(dependencies: AdminDependencies, companyId: string) {
   if (!await requireCapability(dependencies, "ADMIN_COMPANY_REVIEW") || !z.uuid().safeParse(companyId).success) return null;
   const now = adminNow(dependencies.now);
-  const [company, entitlements] = await Promise.all([
+  const [company, entitlements, closureBlockingSubscription] = await Promise.all([
     dependencies.database.company.findUnique({
       where: { id: companyId },
       select: {
@@ -110,6 +126,11 @@ export async function getAdminCompanyDetail(dependencies: AdminDependencies, com
       },
     }),
     getEffectiveEntitlements(companyId, now, createPrismaEntitlementRepository(dependencies.database)),
+    dependencies.database.employerSubscription.findFirst({
+      where: companyClosureBlockingSubscriptionWhere(companyId),
+      orderBy: [{ currentPeriodEnd: "desc" }, { id: "asc" }],
+      select: { id: true, status: true, currentPeriodEnd: true },
+    }),
   ]);
   if (company === null) return null;
   const [abuseReports, contactsByStatus, contactsByFunding, revealCounts] = await Promise.all([
@@ -182,7 +203,14 @@ export async function getAdminCompanyDetail(dependencies: AdminDependencies, com
         .reduce((sum, row) => sum + row._count._all, 0),
     }),
   });
-  return Object.freeze({ company, entitlements, renewalCandidate, abuseReports, talentRadarUsage });
+  return Object.freeze({
+    company,
+    entitlements,
+    renewalCandidate,
+    closureBlockingSubscription,
+    abuseReports,
+    talentRadarUsage,
+  });
 }
 
 const verificationCommandSchema = z.strictObject({
@@ -284,6 +312,10 @@ const companyLifecycleSchema = z.strictObject({
   reasonCode: reasonSchema,
   idempotencyKey: idempotencySchema,
 });
+const companyClosureSchema = companyLifecycleSchema.extend({
+  expectedStatus: z.literal("SUSPENDED"),
+  confirmationCode: z.literal("FIRMA_SCHLIESSEN"),
+});
 
 export async function suspendCompany(raw: unknown, dependencies: AdminDependencies) {
   return transitionCompanyLifecycle(raw, dependencies, "SUSPEND");
@@ -293,12 +325,20 @@ export async function reactivateCompany(raw: unknown, dependencies: AdminDepende
   return transitionCompanyLifecycle(raw, dependencies, "REACTIVATE");
 }
 
-async function transitionCompanyLifecycle(raw: unknown, dependencies: AdminDependencies, action: "SUSPEND" | "REACTIVATE") {
-  const parsed = companyLifecycleSchema.safeParse(raw);
+export async function closeCompany(raw: unknown, dependencies: AdminDependencies) {
+  return transitionCompanyLifecycle(raw, dependencies, "CLOSE");
+}
+
+async function transitionCompanyLifecycle(raw: unknown, dependencies: AdminDependencies, action: "SUSPEND" | "REACTIVATE" | "CLOSE") {
+  const parsed = (action === "CLOSE" ? companyClosureSchema : companyLifecycleSchema).safeParse(raw);
   if (!parsed.success) return adminFailure("INVALID_INPUT");
   if (!await requireCapability(dependencies, "ADMIN_COMPANY_MODERATE")) return adminFailure("FORBIDDEN");
   const now = adminNow(dependencies.now);
-  const toStatus = action === "SUSPEND" ? "SUSPENDED" as const : "ACTIVE" as const;
+  const toStatus = action === "SUSPEND"
+    ? "SUSPENDED" as const
+    : action === "REACTIVATE"
+      ? "ACTIVE" as const
+      : "CLOSED" as const;
   const eventKey = operationKey(`admin-company-${action.toLowerCase()}`, parsed.data.idempotencyKey);
   try {
     return await dependencies.database.$transaction(async (transaction) => {
@@ -312,15 +352,25 @@ async function transitionCompanyLifecycle(raw: unknown, dependencies: AdminDepen
       if (company.status !== parsed.data.expectedStatus) return adminFailure("CONFLICT");
       const decision = decideCompanyTransition({ action, actor: "PLATFORM_COMPANY_MODERATOR", currentStatus: company.status, reasonCode: parsed.data.reasonCode });
       if (decision.type !== "OK") return adminFailure("CONFLICT");
+      if (action === "CLOSE") {
+        const blockingSubscription = await transaction.employerSubscription.findFirst({
+          where: companyClosureBlockingSubscriptionWhere(company.id),
+          orderBy: [{ currentPeriodEnd: "desc" }, { id: "asc" }],
+          select: { id: true, status: true },
+        });
+        if (blockingSubscription !== null) {
+          return adminFailure("ACTIVE_SUBSCRIPTION", [blockingSubscription.status]);
+        }
+      }
       const changed = await transaction.company.updateMany({ where: { id: company.id, status: company.status }, data: { status: toStatus, updatedAt: now } });
       if (changed.count !== 1) return adminFailure("CONFLICT");
       let pausedJobs = 0;
-      if (action === "SUSPEND") {
+      if (action !== "REACTIVATE") {
         const jobs = await transaction.job.findMany({ where: { companyId: company.id, status: "PUBLISHED" }, select: { id: true, version: true, currentRevisionId: true } });
         for (const job of jobs) {
           const changedJob = await transaction.job.updateMany({ where: { id: job.id, companyId: company.id, status: "PUBLISHED", version: job.version }, data: { status: "PAUSED", version: { increment: 1 } } });
           if (changedJob.count !== 1) throw new AdminDomainError("CONFLICT");
-          await transaction.jobStatusEvent.create({ data: { id: randomUUID(), jobId: job.id, jobRevisionId: job.currentRevisionId, kind: "PAUSED", fromStatus: "PUBLISHED", toStatus: "PAUSED", actorUserId: dependencies.actor.userId, reasonCode: "COMPANY_SUSPENDED", idempotencyKey: `${eventKey}:job:${job.id}`, correlationId: dependencies.correlationId, createdAt: now } });
+          await transaction.jobStatusEvent.create({ data: { id: randomUUID(), jobId: job.id, jobRevisionId: job.currentRevisionId, kind: "PAUSED", fromStatus: "PUBLISHED", toStatus: "PAUSED", actorUserId: dependencies.actor.userId, reasonCode: action === "SUSPEND" ? "COMPANY_SUSPENDED" : "COMPANY_CLOSED", idempotencyKey: `${eventKey}:job:${job.id}`, correlationId: dependencies.correlationId, createdAt: now } });
           pausedJobs += 1;
         }
         await applyCompanyRadarEligibilityLoss(transaction, {
@@ -331,8 +381,8 @@ async function transitionCompanyLifecycle(raw: unknown, dependencies: AdminDepen
           now,
         });
       }
-      await transaction.companyStatusEvent.create({ data: { id: randomUUID(), companyId: company.id, kind: action === "SUSPEND" ? "SUSPENDED" : "REACTIVATED", fromStatus: company.status, toStatus, actorUserId: dependencies.actor.userId, reasonCode: parsed.data.reasonCode, correlationId: eventKey, createdAt: now } });
-      await writeAdminAudit(transaction, dependencies, now, { action: action === "SUSPEND" ? "COMPANY_SUSPENDED" : "COMPANY_REACTIVATED", capability: "ADMIN_COMPANY_MODERATE", targetType: "COMPANY", targetId: company.id, companyId: company.id, reasonCode: parsed.data.reasonCode });
+      await transaction.companyStatusEvent.create({ data: { id: randomUUID(), companyId: company.id, kind: action === "SUSPEND" ? "SUSPENDED" : action === "REACTIVATE" ? "REACTIVATED" : "CLOSED", fromStatus: company.status, toStatus, actorUserId: dependencies.actor.userId, reasonCode: parsed.data.reasonCode, correlationId: eventKey, createdAt: now } });
+      await writeAdminAudit(transaction, dependencies, now, { action: action === "SUSPEND" ? "COMPANY_SUSPENDED" : action === "REACTIVATE" ? "COMPANY_REACTIVATED" : "COMPANY_CLOSED", capability: "ADMIN_COMPANY_MODERATE", targetType: "COMPANY", targetId: company.id, companyId: company.id, reasonCode: parsed.data.reasonCode });
       return adminSuccess({ companyId: company.id, status: toStatus, pausedJobs });
     }, { isolationLevel: "Serializable" });
   } catch (error) {
@@ -395,22 +445,20 @@ async function reviewClaim(raw: unknown, dependencies: AdminDependencies, action
         if (existing !== null) return adminFailure("CONFLICT");
         const rights = await getEffectiveEntitlements(claim.candidateCompanyId, now, createPrismaEntitlementRepository(transaction));
         if (!rights.ok) return adminFailure("CONFLICT");
-        const [activeMemberships, pendingInvitations] = await Promise.all([
-          transaction.companyMembership.count({
-            where: {
-              companyId: claim.candidateCompanyId,
-              status: "ACTIVE",
-              removedAt: null,
-            },
-          }),
-          transaction.companyInvitation.count({
-            where: {
-              companyId: claim.candidateCompanyId,
-              status: "PENDING",
-              expiresAt: { gt: now },
-            },
-          }),
-        ]);
+        const activeMemberships = await transaction.companyMembership.count({
+          where: {
+            companyId: claim.candidateCompanyId,
+            status: "ACTIVE",
+            removedAt: null,
+          },
+        });
+        const pendingInvitations = await transaction.companyInvitation.count({
+          where: {
+            companyId: claim.candidateCompanyId,
+            status: "PENDING",
+            expiresAt: { gt: now },
+          },
+        });
         const seatGate = canAddRecruiterSeat({
           effectiveEntitlements: rights.value,
           currentSeatCount: activeMemberships + pendingInvitations,

@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 
 import type { DatabaseClient } from "@/lib/db/factory";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { normalizeIpAddress, type VersionedHashKey } from "@/lib/utils/hash";
 
 const MINUTE = 60_000;
@@ -11,6 +12,7 @@ export const RATE_LIMIT_PRESET_NAMES_V1 = [
   "LOGIN",
   "REGISTER",
   "FORGOT_PASSWORD",
+  "PASSWORD_RESET_CONSUME",
   "EMAIL_VERIFICATION_RESEND",
   "EMAIL_VERIFICATION_CONSUME",
   "LOGIN_EMAIL_CHANGE",
@@ -43,6 +45,8 @@ export type RateLimitPresetName = (typeof RATE_LIMIT_PRESET_NAMES_V1)[number];
 export const RATE_LIMIT_SCOPES_V1 = [
   "IP_EMAIL",
   "IP",
+  "AUTH_IDENTIFIER",
+  "TARGET",
   "USER",
   "ACTOR_OR_IP",
   "ACTOR_OR_IP_TARGET",
@@ -57,16 +61,28 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
   LOGIN: {
     buckets: [
       { scope: "IP_EMAIL", limit: 10, windowMs: 15 * MINUTE },
+      { scope: "AUTH_IDENTIFIER", limit: 10, windowMs: 15 * MINUTE },
       { scope: "IP", limit: 30, windowMs: HOUR },
     ],
   },
   REGISTER: { buckets: [{ scope: "IP", limit: 10, windowMs: HOUR }] },
   FORGOT_PASSWORD: {
-    buckets: [{ scope: "IP_EMAIL", limit: 5, windowMs: HOUR }],
+    buckets: [
+      { scope: "IP_EMAIL", limit: 5, windowMs: HOUR },
+      { scope: "AUTH_IDENTIFIER", limit: 5, windowMs: HOUR },
+      { scope: "IP", limit: 20, windowMs: HOUR },
+    ],
+  },
+  PASSWORD_RESET_CONSUME: {
+    buckets: [
+      { scope: "TARGET", limit: 10, windowMs: HOUR },
+      { scope: "IP", limit: 30, windowMs: HOUR },
+    ],
   },
   EMAIL_VERIFICATION_RESEND: {
     buckets: [
       { scope: "IP_EMAIL", limit: 5, windowMs: HOUR },
+      { scope: "AUTH_IDENTIFIER", limit: 5, windowMs: HOUR },
       { scope: "IP", limit: 20, windowMs: HOUR },
     ],
   },
@@ -152,7 +168,7 @@ export const RATE_LIMIT_PRESETS_V1 = Object.freeze({
     buckets: [{ scope: "IP", limit: 1, windowMs: HOUR }],
   },
   SECURITY_DENIAL_AUDIT: {
-    buckets: [{ scope: "ACTOR_OR_IP", limit: 1, windowMs: HOUR }],
+    buckets: [{ scope: "ACTOR_OR_IP_TARGET", limit: 1, windowMs: HOUR }],
   },
   ABUSE_INTAKE_PRECHECK: {
     buckets: [
@@ -314,6 +330,15 @@ function identityValue(
   switch (scope) {
     case "IP":
       return ["ip", ip ?? ""];
+    case "AUTH_IDENTIFIER": {
+      const identifier = identity.normalizedEmail?.trim().toLowerCase();
+      if (!identifier) {
+        throw new TypeError("Normalized auth identifier is required.");
+      }
+      return ["auth-identifier", identifier];
+    }
+    case "TARGET":
+      return ["target", identity.targetId ?? ""];
     case "IP_EMAIL": {
       const email = identity.normalizedEmail?.trim().toLowerCase();
       if (ip === undefined || !email)
@@ -471,66 +496,93 @@ export function createPostgresRateLimitStore(
   const store: RateLimitStore = {
     async consume(checks, now) {
       if (checks.length === 0) return Object.freeze({ allowed: true });
-      return database.$transaction(async (transaction) => {
-        const sorted = [...checks].sort((a, b) =>
-          `${a.namespace}:${a.keyHash}`.localeCompare(
-            `${b.namespace}:${b.keyHash}`,
-          ),
-        );
-        for (const check of sorted) {
-          await transaction.$queryRawUnsafe(
-            'SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS "locked"',
-            `${check.namespace}:${check.keyHash}`,
-          );
-        }
-
-        for (const check of checks) {
-          const cutoff = new Date(now.getTime() - check.windowMs);
-          const rows = await transaction.$queryRawUnsafe<
-            Array<{ count: bigint; oldest: Date | null }>
-          >(
-            `SELECT COALESCE(SUM("count"), 0)::bigint AS "count", MIN("windowStart") AS "oldest"
-             FROM "RateLimitBucket"
-             WHERE "namespace" = $1 AND "keyHash" = $2
-               AND "windowStart" > $3 AND "windowStart" <= $4`,
-            check.namespace,
-            check.keyHash,
-            cutoff,
-            now,
-          );
-          const count = Number(rows[0]?.count ?? 0n);
-          if (count >= check.limit) {
-            const oldest = rows[0]?.oldest?.getTime() ?? now.getTime();
-            return Object.freeze({
-              allowed: false,
-              blockedScope: check.scope,
-              retryAfterMilliseconds: Math.max(
-                1,
-                oldest + check.windowMs - now.getTime(),
-              ),
-            });
-          }
-        }
-
-        for (const check of checks) {
-          const end = new Date(now.getTime() + check.windowMs);
-          await transaction.$executeRawUnsafe(
-            `INSERT INTO "RateLimitBucket"
-               ("id","namespace","keyHash","windowStart","windowEnd","count","version","expiresAt","createdAt","updatedAt")
-             VALUES (gen_random_uuid(),$1,$2,$3,$4,1,1,$4,$3,$3)
-             ON CONFLICT ("namespace","keyHash","windowStart")
-             DO UPDATE SET "count" = "RateLimitBucket"."count" + 1, "updatedAt" = EXCLUDED."updatedAt"`,
-            check.namespace,
-            check.keyHash,
-            now,
-            end,
-          );
-        }
-        return Object.freeze({ allowed: true });
-      });
+      return database.$transaction((transaction) =>
+        createPostgresTransactionRateLimitStore(transaction).consume(
+          checks,
+          now,
+        ),
+      );
     },
   };
   return Object.freeze(store);
+}
+
+/**
+ * Transaction-scoped Postgres rate-limit store. Callers that must establish
+ * another database lock before consuming a bucket can compose both effects
+ * atomically without opening a nested Prisma transaction.
+ */
+export function createPostgresTransactionRateLimitStore(
+  transaction: Prisma.TransactionClient,
+): RateLimitStore {
+  const store: RateLimitStore = {
+    consume(checks, now) {
+      return consumePostgresRateLimitChecks(transaction, checks, now);
+    },
+  };
+  return Object.freeze(store);
+}
+
+async function consumePostgresRateLimitChecks(
+  transaction: Prisma.TransactionClient,
+  checks: readonly RateLimitCheck[],
+  now: Date,
+): Promise<RateLimitStoreDecision> {
+  if (checks.length === 0) return Object.freeze({ allowed: true });
+
+  const sorted = [...checks].sort((a, b) =>
+    `${a.namespace}:${a.keyHash}`.localeCompare(`${b.namespace}:${b.keyHash}`),
+  );
+  for (const check of sorted) {
+    await transaction.$queryRawUnsafe(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) IS NULL AS "locked"',
+      `${check.namespace}:${check.keyHash}`,
+    );
+  }
+
+  for (const check of checks) {
+    const cutoff = new Date(now.getTime() - check.windowMs);
+    const rows = await transaction.$queryRawUnsafe<
+      Array<{ count: bigint; oldest: Date | null }>
+    >(
+      `SELECT COALESCE(SUM("count"), 0)::bigint AS "count", MIN("windowStart") AS "oldest"
+       FROM "RateLimitBucket"
+       WHERE "namespace" = $1 AND "keyHash" = $2
+         AND "windowStart" > $3 AND "windowStart" <= $4`,
+      check.namespace,
+      check.keyHash,
+      cutoff,
+      now,
+    );
+    const count = Number(rows[0]?.count ?? 0n);
+    if (count >= check.limit) {
+      const oldest = rows[0]?.oldest?.getTime() ?? now.getTime();
+      return Object.freeze({
+        allowed: false,
+        blockedScope: check.scope,
+        retryAfterMilliseconds: Math.max(
+          1,
+          oldest + check.windowMs - now.getTime(),
+        ),
+      });
+    }
+  }
+
+  for (const check of checks) {
+    const end = new Date(now.getTime() + check.windowMs);
+    await transaction.$executeRawUnsafe(
+      `INSERT INTO "RateLimitBucket"
+         ("id","namespace","keyHash","windowStart","windowEnd","count","version","expiresAt","createdAt","updatedAt")
+       VALUES (gen_random_uuid(),$1,$2,$3,$4,1,1,$4,$3,$3)
+       ON CONFLICT ("namespace","keyHash","windowStart")
+       DO UPDATE SET "count" = "RateLimitBucket"."count" + 1, "updatedAt" = EXCLUDED."updatedAt"`,
+      check.namespace,
+      check.keyHash,
+      now,
+      end,
+    );
+  }
+  return Object.freeze({ allowed: true });
 }
 
 /**

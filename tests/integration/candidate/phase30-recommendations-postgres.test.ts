@@ -87,6 +87,64 @@ describe.sequential("Phase 30 recommendation batch budget", () => {
       CANDIDATE_RECOMMENDATION_QUERY_POLICY_V1.p95BudgetMs,
     );
   });
+
+  it("keeps synthetic response evidence local and suppresses it in public preview recommendations", async () => {
+    const selection = {
+      categorySlugs: Object.freeze([]),
+      jobTypes: Object.freeze([]),
+      remoteTypes: Object.freeze([]),
+    };
+    const local = await listCandidateRecommendationProjections(
+      db(),
+      selection,
+      NOW,
+      { applicationEnvironment: "local" },
+    );
+    const preview = await listCandidateRecommendationProjections(
+      db(),
+      selection,
+      NOW,
+      { applicationEnvironment: "preview" },
+    );
+
+    expect(local).toHaveLength(TOTAL_CANDIDATES - INELIGIBLE_CANARIES);
+    expect(local.every(({ job }) => job.response.known)).toBe(true);
+    expect(preview).toHaveLength(TOTAL_CANDIDATES - INELIGIBLE_CANARIES);
+    expect(
+      preview.every(({ job }) =>
+        !job.response.known &&
+        job.response.targetDays === null &&
+        job.response.onTimeRateBps === null &&
+        job.response.sampleSizeBucket === null),
+    ).toBe(true);
+  });
+
+  it("never uses the Company response projection as Job recommendation eligibility", async () => {
+    await db().company.updateMany({
+      where: { slug: "phase30-empfehlungen-ag" },
+      data: { responseTargetDays: 365 },
+    });
+    try {
+      const projections = await listCandidateRecommendationProjections(
+        db(),
+        {
+          categorySlugs: Object.freeze([]),
+          jobTypes: Object.freeze([]),
+          remoteTypes: Object.freeze([]),
+        },
+        NOW,
+        { applicationEnvironment: "local" },
+      );
+
+      expect(projections).toHaveLength(TOTAL_CANDIDATES - INELIGIBLE_CANARIES);
+      expect(projections.every(({ job }) => !job.response.known)).toBe(true);
+    } finally {
+      await db().company.updateMany({
+        where: { slug: "phase30-empfehlungen-ag" },
+        data: { responseTargetDays: 5 },
+      });
+    }
+  });
 });
 
 async function seedRecommendationCandidates(client: DatabaseClient) {
@@ -148,6 +206,9 @@ async function seedRecommendationCandidates(client: DatabaseClient) {
         about: "Fiktive Firma für den isolierten Empfehlungslasttest.",
         values: [],
         benefits: [],
+        responseTargetDays: 5,
+        responseSampleSize: 20,
+        responseWithinTargetBps: 8_500,
         dataProvenance: "LIVE",
       },
       {
@@ -161,6 +222,9 @@ async function seedRecommendationCandidates(client: DatabaseClient) {
         about: "Fiktive, nicht verifizierte Canary-Firma.",
         values: [],
         benefits: [],
+        responseTargetDays: 5,
+        responseSampleSize: 20,
+        responseWithinTargetBps: 8_500,
         dataProvenance: "LIVE",
       },
     ],

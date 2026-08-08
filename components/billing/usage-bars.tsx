@@ -19,21 +19,27 @@ export function UsageBars({
   usage,
   canManagePlan,
   canStartPlanChange,
+  mockCheckoutAvailable = false,
 }: Readonly<{
   usage: EmployerBillingUsage;
   canManagePlan: boolean;
   canStartPlanChange: boolean;
+  mockCheckoutAvailable?: boolean;
 }>) {
   const pendingPlanChange = canManagePlan && !canStartPlanChange;
   const upgradeHref = pendingPlanChange
     ? "/employer/billing"
-    : canManagePlan && usage.activeJobs.limit <= 3
+    : canManagePlan && mockCheckoutAvailable && usage.activeJobs.limit <= 3
       ? "/employer/billing/checkout?plan=pro"
+      : canManagePlan
+        ? "/employer/billing/subscription"
       : "/pricing";
   const upgradeLabel = pendingPlanChange
     ? "Vorgemerkte Planänderung ansehen"
     : canManagePlan
-      ? "Plan upgraden"
+      ? mockCheckoutAvailable
+        ? "Plan upgraden"
+        : "Kaufstatus prüfen"
       : "Planoptionen ansehen";
   const warning = [
     usage.activeJobs.limit > 0 ? usage.activeJobs.used / usage.activeJobs.limit : 0,

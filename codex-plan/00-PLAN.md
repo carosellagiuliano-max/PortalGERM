@@ -1,6 +1,6 @@
 # SwissTalentHub — Masterplan
 
-> **Planstatus:** Stand 5. August 2026. Phasen 01–32 besitzen jeweils ihren
+> **Planstatus:** Stand 7. August 2026. Phasen 01–32 besitzen jeweils ihren
 > datierten, commitgebundenen Technik-, Quality- und Aktivierungsstand. Die
 > Phase-32-Evidence bewertet ausschließlich LC1 und endet ehrlich mit
 > `NO_GO`; LC2–LC6 sind dort `NOT APPROVED`. Phase 33 ist technisch
@@ -10,7 +10,10 @@
 > darf aber weder Phase 32 rückwirkend umdeuten noch reale Staging-, Provider-,
 > Legal-, Privacy-, AVG-, Tax-, Finance-, Operations-, Markt- oder
 > Production-Evidence vortäuschen. Optionale Phase-27/28-, Salary-, Boost- und
-> Paid-Radar-Tracks bleiben bis zu ihren eigenen Gates `DISABLED`.
+> Paid-Radar-Tracks bleiben bis zu ihren eigenen Gates `DISABLED`. Phase 34
+> ist der laufende unabhängige Re-Audit: Technical und Quality Status sind
+> `PENDING`, Activation ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`, das
+> Gesamturteil bleibt `NO_GO`.
 
 ## 1. Lesereihenfolge und Konfliktpräzedenz
 
@@ -41,8 +44,9 @@ Die folgende Liste ist die empfohlene **Lesereihenfolge**, nicht die Konflikthie
     — geplanter LC2–LC6-Ops-/Recovery-Vertrag; noch nicht ausgeführt.
 16. Die Detailphasen `01` bis `18` — implementierte technische Deliverables und ihre Evidence.
 17. Die Detailphasen `19` bis `32` mit ihrem jeweils datierten Technik-,
-    Quality- und Aktivierungsstatus sowie Phase `33` als aktuelle technische
-    Abschlussarbeit; ein Plandokument ist keine Erledigung.
+    Quality- und Aktivierungsstatus, Phase `33` als abgeschlossene technische
+    LC4-/LC5-Konfigurationsarbeit und Phase `34` als laufender unabhängiger
+    Abschluss-Re-Audit; ein Plandokument ist keine Erledigung.
 18. [`remediation-evidence-template.md`](./remediation-evidence-template.md)
     — leere, nicht rückwirkende Evidence-Vorlage für Phase 19+.
 
@@ -343,6 +347,23 @@ Reconciliation unbekannter Provider-Ausgänge. Technik ist
 ist `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`. Siehe
 [Evidence](./evidence/2026-08-05-phase-33.md) und
 [Findings Ledger](./phase33-findings-ledger.md).
+
+### [ ] 34 — Verifizierte Befunde, Production-Härtung und finale Validierung
+
+[`34-verified-findings-production-hardening.md`](./34-verified-findings-production-hardening.md) ·
+laufender unabhängiger Re-Audit des aktuellen Phase-33-Gesamtbaums. Jede
+eingereichte Behauptung wird zunächst als Hypothese behandelt und im
+[`Phase-34-Findingsregister`](./phase34-findings-register.md) reproduzierbar
+klassifiziert. Bestätigte repository-interne Defekte werden nur mit positivem
+und negativem End-to-End-Nachweis geschlossen; externe Legal-/Privacy-/AVG-/
+Tax-/Provider-/Ops-/Staging-/Research-Gates bleiben `BLOCKED_EXTERNAL`.
+Activation bleibt `ACTIVATION_BLOCKED_BY_EXTERNAL_GATES`; das Gesamturteil
+bleibt `NO_GO`. Der aktuelle
+[Abschlussrecord](./evidence/2026-08-07-phase-34.md) weist alle vorhandenen
+Repository-Suites als grün aus, aber nur 4 von 20 Pflichtreisen als vollständig
+`COVERED`; 14 bleiben `PARTIAL` und 2 `EXTERNAL`. Technical und Quality Status
+bleiben deshalb `PENDING`, die Checkbox bleibt offen und es erfolgte keine
+Produktionsfreigabe.
 
 Die historische Abhängigkeitsgrafik der Phasen 01 bis 18 steht in
 [`implementation-plan.md`](./implementation-plan.md). Für die

@@ -94,9 +94,11 @@ Order/Invoice/PaymentEvent nicht konsistent, wiederholte Checkout-Konflikte.
 - Order, Permit, Grant, Ledger und Audit über IDs/Correlation verknüpfen.
 
 **Recovery:** ausschliesslich idempotente Fulfillment- oder explizite
-Reversal-Use-Cases verwenden. Der MVP-Provider ist ein lokaler Mock; es gibt
-keine echte Belastung, keinen Stripe-Webhook und keine automatische
-Reconciliation.
+Reversal-Use-Cases verwenden. Lokale Mock-Orders sind reine Demo-Evidence.
+Phase 33 enthält zusätzlich einen deaktivierten Live-Adaptervertrag mit
+signierter Webhook-Inbox und automatischer Reconciliation; ohne gültige
+environment-, account-, mode- und artefaktgebundene Aktivierung darf er keine
+Wirkung ausführen. Ein Live-/Sandbox-Fehler fällt niemals auf Mock zurück.
 
 ## Import- oder Content-Vorfall
 

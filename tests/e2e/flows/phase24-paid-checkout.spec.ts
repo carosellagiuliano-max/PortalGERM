@@ -8,7 +8,7 @@ import {
 
 test.describe.configure({ mode: "serial" });
 
-test("[24-AC-01] @journey keeps hosted checkout fail-closed until every external gate exists", async ({
+test("[24-AC-01][E2E-34-09] @journey @phase34 keeps hosted checkout fail-closed until every external gate exists", async ({
   browser,
   page,
 }) => {

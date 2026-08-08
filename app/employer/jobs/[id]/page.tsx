@@ -13,6 +13,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getCheckoutPreview } from "@/lib/billing/employer-read-model";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
+import { isIsolatedSandboxEnvironment } from "@/lib/config/application-environment";
+import { isLegacyMockBillingAllowed } from "@/lib/billing/mock-billing-policy";
 import { requireEmployerCompanyContext } from "@/lib/employer/context";
 import {
   getEmployerJobCatalog,
@@ -110,6 +113,11 @@ export default async function EmployerJobDetailPage({
     );
   }
   const now = new Date();
+  const environment = getServerEnvironment();
+  const isolatedMockToolsAvailable = isIsolatedSandboxEnvironment(
+    environment.APP_ENV,
+  );
+  const mockCheckoutAvailable = isLegacyMockBillingAllowed(environment);
   const [catalog, additionalJobPreview] = await Promise.all([
     getEmployerJobCatalog(actor, database),
     detail.status === "APPROVED" &&
@@ -128,7 +136,7 @@ export default async function EmployerJobDetailPage({
   ]);
   if (catalog === null) notFound();
   const additionalJobCheckoutHref =
-    additionalJobPreview?.ok === true
+    mockCheckoutAvailable && additionalJobPreview?.ok === true
       ? `/employer/billing/checkout?product=additional-job-30d&job=${detail.id}`
       : null;
   const step = parseStep(query.step);
@@ -218,6 +226,7 @@ export default async function EmployerJobDetailPage({
         job={detail}
         catalog={catalog}
         additionalJobCheckoutHref={additionalJobCheckoutHref}
+        isolatedMockToolsAvailable={isolatedMockToolsAvailable}
         step={step}
         actions={{
           saveStep: saveEmployerJobStepAction,

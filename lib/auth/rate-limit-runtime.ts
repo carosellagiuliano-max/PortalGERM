@@ -6,6 +6,7 @@ import {
   consumeRateLimit,
   createMemoryRateLimitStore,
   createPostgresRateLimitStore,
+  createPostgresTransactionRateLimitStore,
   type RateLimitDecision,
   type RateLimitPresetName,
   type RateLimitStore,
@@ -16,6 +17,7 @@ import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
+import type { Prisma } from "@/lib/generated/prisma/client";
 
 let memoryStore: RateLimitStore | undefined;
 let postgresStore: RateLimitStore | undefined;
@@ -26,6 +28,7 @@ export async function consumeAuthRateLimit(
     | "LOGIN"
     | "REGISTER"
     | "FORGOT_PASSWORD"
+    | "PASSWORD_RESET_CONSUME"
     | "EMAIL_VERIFICATION_RESEND"
     | "EMAIL_VERIFICATION_CONSUME"
     | "LOGIN_EMAIL_CHANGE"
@@ -63,6 +66,42 @@ export async function consumeRequestRateLimit(
     : environment.RATE_LIMIT_BACKEND === "memory"
       ? (memoryStore ??= createMemoryRateLimitStore(memoryRuntime(environment)))
       : createPostgresRateLimitStore(runtime.database);
+  const writer = environment.secrets.keyrings.AUDIT_IP_HASH_KEYS[0];
+  if (writer === undefined) {
+    throw new Error("The audit keyring has no active writer.");
+  }
+
+  return writer.key.withValue((secret) =>
+    consumeRateLimit(
+      preset,
+      { ...identity, sourceIp: context.sourceIp },
+      {
+        store,
+        key: { version: writer.version, secret },
+        now,
+      },
+    ),
+  );
+}
+
+/**
+ * Consumes a request rate limit inside an existing Prisma transaction. This
+ * is intentionally explicit: security-sensitive callers can order another
+ * transactional lock before the bucket mutation without client heuristics or
+ * a nested transaction.
+ */
+export async function consumeRequestRateLimitInTransaction(
+  preset: RateLimitPresetName,
+  identity: Omit<ServerRateLimitIdentity, "sourceIp">,
+  context: Pick<AuthRequestContext, "sourceIp">,
+  transaction: Prisma.TransactionClient,
+  now: Date,
+  environment: ServerEnvironment,
+): Promise<RateLimitDecision> {
+  const store =
+    environment.RATE_LIMIT_BACKEND === "memory"
+      ? (memoryStore ??= createMemoryRateLimitStore(memoryRuntime(environment)))
+      : createPostgresTransactionRateLimitStore(transaction);
   const writer = environment.secrets.keyrings.AUDIT_IP_HASH_KEYS[0];
   if (writer === undefined) {
     throw new Error("The audit keyring has no active writer.");

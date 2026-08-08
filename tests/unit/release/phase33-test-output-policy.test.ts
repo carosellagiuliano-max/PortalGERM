@@ -33,6 +33,18 @@ describe("Phase 33 test output policy", () => {
     ).toThrow("PHASE33_UNEXPLAINED_SKIP:unit");
   });
 
+  it("rejects PostgreSQL client queueing that pg 9 removes", () => {
+    const output = [
+      "Test Files 1 passed (1)",
+      "Tests 21 passed (21)",
+      "DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0.",
+    ].join("\n");
+
+    expect(() => assertVitestOutputHasNoInfrastructureFailures(output)).toThrow(
+      "VITEST_INFRASTRUCTURE_ERROR_REPORTED",
+    );
+  });
+
   it("runs targeted arguments once and the complete suite in bounded file batches", () => {
     expect(unitTestInvocations(["tests/unit/example.test.ts"])).toEqual([
       ["run", "--config", "vitest.config.ts", "tests/unit/example.test.ts"],

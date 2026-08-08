@@ -1,4 +1,4 @@
-import { aiProvider, MockAiProvider } from "@/lib/providers/ai";
+import { MockAiProvider, resolveAiProvider } from "@/lib/providers/ai";
 import {
   OPENAI_AI_PROVIDER_UNAVAILABLE,
   OpenAiAiProvider,
@@ -6,8 +6,12 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 describe("MockAiProvider", () => {
-  it("is selected explicitly by the composition root", () => {
-    expect(aiProvider).toBeInstanceOf(MockAiProvider);
+  it("selects the mock only in isolated Local/CI environments", () => {
+    expect(resolveAiProvider("local")).toBeInstanceOf(MockAiProvider);
+    expect(resolveAiProvider("ci")).toBeInstanceOf(MockAiProvider);
+    expect(resolveAiProvider("preview")).toBeUndefined();
+    expect(resolveAiProvider("staging")).toBeUndefined();
+    expect(resolveAiProvider("production")).toBeUndefined();
   });
 
   it("improves text deterministically without inventing job facts", async () => {

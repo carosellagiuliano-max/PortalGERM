@@ -292,7 +292,8 @@ export async function approveImportSetup(raw: unknown, dependencies: AdminDepend
     return await dependencies.database.$transaction(async (transaction) => {
       const replay = await transaction.importSetupApproval.findUnique({ where: { idempotencyKey: approvalKey }, select: { id: true, status: true } });
       if (replay !== null) return replay.status === "APPROVED" ? adminSuccess({ approvalId: replay.id, status: replay.status }, true) : adminFailure("CONFLICT");
-      const [company, source] = await Promise.all([transaction.company.findUnique({ where: { id: parsed.data.companyId }, select: { id: true } }), transaction.importSource.findFirst({ where: { id: parsed.data.importSourceId, isActive: true }, select: { id: true } })]);
+      const company = await transaction.company.findUnique({ where: { id: parsed.data.companyId }, select: { id: true } });
+      const source = await transaction.importSource.findFirst({ where: { id: parsed.data.importSourceId, isActive: true }, select: { id: true } });
       if (company === null || source === null) return adminFailure("NOT_FOUND");
       const approval = await transaction.importSetupApproval.create({ data: { id: randomUUID(), companyId: company.id, importSourceId: source.id, sourceRightsEvidence: parsed.data.rightsEvidence, mappingEvidence: parsed.data.mappingEvidence, approvedByUserId: dependencies.actor.userId, approvalReason: parsed.data.reasonCode, validUntil: parsed.data.validUntil, status: "APPROVED", idempotencyKey: approvalKey, createdAt: now, updatedAt: now } });
       await transaction.importSetupApprovalEvent.create({ data: { id: randomUUID(), importSetupApprovalId: approval.id, kind: "APPROVED", actorUserId: dependencies.actor.userId, reasonCode: parsed.data.reasonCode, correlationId: dependencies.correlationId, idempotencyKey: `${approvalKey}:event`, createdAt: now } });

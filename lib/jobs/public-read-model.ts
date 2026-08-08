@@ -6,7 +6,15 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { ANALYTICS_MINIMUM_COHORT_SIZE_V1 } from "@/lib/analytics/metric-contracts";
 import { EMPLOYER_RESPONSE_POLICY_V1 } from "@/lib/analytics/response-policy-v1";
 import { jobHasActiveBoost } from "@/lib/billing/boosts";
-import { evaluateCompanyTrustForCompanies } from "@/lib/companies/verification/read-model";
+import {
+  companyTrustActivationFromEnvironment,
+  evaluateCompanyTrustForCompanies,
+} from "@/lib/companies/verification/read-model";
+import {
+  COMPANY_TRUST_POLICY_V2,
+  type CompanyTrustActivation,
+} from "@/lib/companies/verification/policy-v2";
+import type { ApplicationEnvironment } from "@/lib/config/application-environment";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -37,7 +45,11 @@ import {
   type SearchTermGroupV2,
 } from "@/lib/search/concepts-v2";
 import { calculateRelevanceProxy } from "@/lib/search/relevance";
-import { paginateSearchJobs, rankSearchJobs } from "@/lib/search/ranking";
+import { paginateSearchJobs } from "@/lib/search/ranking";
+import {
+  canUseSyntheticPublicResponseEvidence,
+  projectSyntheticPublicResponseEvidence,
+} from "@/lib/search/public-response-evidence-policy";
 import { projectCanonicalResponseMedianMinutes } from "@/lib/search/response-evidence";
 import type {
   JobSearchSort,
@@ -93,13 +105,6 @@ export const PUBLIC_CLUSTER_DISCOVERY_POLICY_V1 = Object.freeze({
     "engineering-technik",
   ] as const),
 });
-
-const PROMOTED_CANTON_CODES = new Set<string>(
-  PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCantonCodes,
-);
-const PROMOTED_CATEGORY_SLUGS = new Set<string>(
-  PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCategorySlugs,
-);
 
 const PUBLIC_JOB_ELIGIBILITY_SELECT = {
   id: true,
@@ -216,19 +221,6 @@ function buildPublicJobSearchSelect(now: Date) {
   } as const satisfies Prisma.JobSelect;
 }
 
-const PUBLIC_JOB_CLUSTER_SELECT = {
-  ...PUBLIC_JOB_ELIGIBILITY_SELECT,
-  publishedRevision: {
-    select: {
-      ...PUBLIC_JOB_ELIGIBILITY_SELECT.publishedRevision.select,
-      category: {
-        select: { id: true, name: true, slug: true, isActive: true },
-      },
-      canton: { select: { id: true, code: true, name: true, slug: true } },
-    },
-  },
-} as const satisfies Prisma.JobSelect;
-
 const PUBLIC_JOB_DETAIL_EXTRAS_SELECT = {
   id: true,
   companyIntro: true,
@@ -300,9 +292,6 @@ type PublicJobEligibilityRow = Prisma.JobGetPayload<{
 type PublicJobRow = Prisma.JobGetPayload<{
   select: ReturnType<typeof buildPublicJobCardSelect>;
 }>;
-type PublicJobClusterRow = Prisma.JobGetPayload<{
-  select: typeof PUBLIC_JOB_CLUSTER_SELECT;
-}>;
 type PublicJobDetailRow = Prisma.JobGetPayload<{
   select: ReturnType<typeof buildPublicJobDetailSelect>;
 }>;
@@ -312,14 +301,27 @@ type EligibleRow<Row extends PublicJobEligibilityRow> = Row &
     companyTrustBadge: PublicCompanyTrustBadge | null;
   }>;
 type EligiblePublicJobRow = EligibleRow<PublicJobRow>;
-type EligiblePublicJobClusterRow = EligibleRow<PublicJobClusterRow>;
 type EligiblePublicJobDetailRow = EligibleRow<PublicJobDetailRow>;
-type PublicJobClusterCanton = NonNullable<
-  EligiblePublicJobClusterRow["publishedRevision"]["canton"]
->;
-type PublicJobClusterCategory =
-  EligiblePublicJobClusterRow["publishedRevision"]["category"];
+type PublicJobClusterCanton = Readonly<{
+  id: string;
+  code: string;
+  name: string;
+  slug: string;
+}>;
+type PublicJobClusterCategory = Readonly<{
+  id: string;
+  name: string;
+  slug: string;
+}>;
 type ClusterCount<Value> = { value: Value; count: number };
+type DatabaseClusterCountRow = Readonly<{
+  clusterKind: "canton" | "category";
+  id: string;
+  code: string | null;
+  name: string;
+  slug: string;
+  count: bigint | number | string;
+}>;
 type PublicReadTransaction = Parameters<
   Parameters<DatabaseClient["$transaction"]>[0]
 >[0];
@@ -392,6 +394,8 @@ type PublishedProjectionFilters = Readonly<{
 }>;
 
 type DatabaseSearchQueryContext = Readonly<{
+  applicationEnvironment: "local" | "ci" | "preview" | "staging" | "production";
+  companyTrustActivation: CompanyTrustActivation;
   input: PublicJobSearchInput;
   now: Date;
   rankingAsOf: Date;
@@ -427,13 +431,34 @@ export async function listPublicJobs(
   input: PublicJobSearchInput,
   options: Readonly<{
     pageSize?: number;
+    sponsoredLimit?: number;
     now?: Date;
     database?: DatabaseClient;
+    /** Test seam; runtime callers use the validated server environment. */
+    applicationEnvironment?: ApplicationEnvironment;
   }> = {},
 ): Promise<PublicJobSearchPage> {
   const pageSize = options.pageSize ?? input.pageSize;
   if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) {
     throw new RangeError("Public job page size must be between 1 and 50.");
+  }
+  const sponsoredLimit = options.sponsoredLimit ??
+    Math.min(pageSize, MAXIMUM_SPONSORED_SEARCH_RESULTS);
+  if (
+    !Number.isInteger(sponsoredLimit) ||
+    sponsoredLimit < 0 ||
+    sponsoredLimit > MAXIMUM_SPONSORED_SEARCH_RESULTS ||
+    sponsoredLimit > pageSize
+  ) {
+    throw new RangeError("Sponsored result limit is outside its safety bound.");
+  }
+  const applicationEnvironment =
+    options.applicationEnvironment ?? getServerEnvironment().APP_ENV;
+  if (
+    !canUseSyntheticPublicResponseEvidence(applicationEnvironment) &&
+    (input.responseEvidenceOnly || input.sort === "response")
+  ) {
+    return emptyPublicJobSearchPage();
   }
   if (
     hasBlockingPublicJobSearchIssue(input) ||
@@ -465,6 +490,7 @@ export async function listPublicJobs(
       now,
       {
         pageSize,
+        sponsoredLimit,
         queryHash,
         rankingAsOf,
         ...(decoded === undefined || decoded === null
@@ -472,6 +498,7 @@ export async function listPublicJobs(
           : { cursor: decoded }),
       },
       options.database ?? getDatabase(),
+      applicationEnvironment,
     );
   } catch (error) {
     if (
@@ -492,16 +519,20 @@ export async function listPublicJobs(
       now,
       {
         pageSize,
+        sponsoredLimit,
         queryHash,
         rankingAsOf: now,
       },
       options.database ?? getDatabase(),
+      applicationEnvironment,
     );
   }
   const page = loaded.page;
   const jobs = page.ranked.flatMap((entry) => {
     const row = loaded.rowById.get(entry.job.id);
-    return row === undefined ? [] : [toCardModel(row, now, entry.sponsored)];
+    return row === undefined
+      ? []
+      : [toCardModel(row, now, entry.sponsored, applicationEnvironment)];
   });
   return Object.freeze({
     jobs: Object.freeze(jobs),
@@ -535,31 +566,30 @@ export async function listHomepageJobs(
   const now = validNow(options.now);
   const limit = Math.max(1, Math.min(12, options.limit ?? 6));
   const input = emptyPublicJobSearchInput();
-  const loaded = await loadEligibleJobs(input, now);
-  const ranked = rankSearchJobs({
-    candidates: loaded.candidates,
-    sort: "relevance",
-    hasQuery: false,
-    firstPage: true,
+  const page = await listPublicJobs(input, {
+    pageSize: limit,
     sponsoredLimit: Math.min(2, limit),
-  }).ranked.slice(0, limit);
-
-  return Object.freeze(
-    ranked.flatMap((entry) => {
-      const row = loaded.rowById.get(entry.job.id);
-      return row === undefined ? [] : [toCardModel(row, now, entry.sponsored)];
-    }),
-  );
+    now,
+  });
+  return Object.freeze(page.jobs);
 }
 
 export async function getPublicJobBySlug(
   slug: string,
-  options: Readonly<{ now?: Date }> = {},
+  options: Readonly<{
+    now?: Date;
+    /** Test seam; runtime callers use the validated server environment. */
+    applicationEnvironment?: ApplicationEnvironment;
+  }> = {},
 ): Promise<PublicJobDetailModel | null> {
   if (!isSafeSlug(slug)) return null;
   const now = validNow(options.now);
   const row = await loadEligibleDetailJob(slug, now);
-  return row === null ? null : toDetailModel(row, now);
+  const applicationEnvironment =
+    options.applicationEnvironment ?? getServerEnvironment().APP_ENV;
+  return row === null
+    ? null
+    : toDetailModel(row, now, applicationEnvironment);
 }
 
 /**
@@ -569,7 +599,12 @@ export async function getPublicJobBySlug(
  */
 export async function getPublicJobsBySlugs(
   slugs: readonly string[],
-  options: Readonly<{ now?: Date; database?: DatabaseClient }> = {},
+  options: Readonly<{
+    now?: Date;
+    database?: DatabaseClient;
+    /** Test seam; runtime callers use the validated server environment. */
+    applicationEnvironment?: ApplicationEnvironment;
+  }> = {},
 ): Promise<readonly PublicJobDetailModel[]> {
   if (slugs.length > MAXIMUM_PUBLIC_JOB_DETAIL_BATCH_SIZE) {
     throw new RangeError(
@@ -584,8 +619,13 @@ export async function getPublicJobsBySlugs(
     now,
     options.database ?? getDatabase(),
   );
+  const applicationEnvironment =
+    options.applicationEnvironment ?? getServerEnvironment().APP_ENV;
   const detailBySlug = new Map(
-    rows.map((row) => [row.slug, toDetailModel(row, now)] as const),
+    rows.map(
+      (row) =>
+        [row.slug, toDetailModel(row, now, applicationEnvironment)] as const,
+    ),
   );
   return Object.freeze(
     requestedSlugs.flatMap((slug) => {
@@ -620,14 +660,25 @@ export async function listRelatedPublicJobs(
 
 export async function listPublicJobsForCompany(
   companyId: string,
-  options: Readonly<{ limit?: number; now?: Date }> = {},
+  options: Readonly<{
+    limit?: number;
+    now?: Date;
+    /** Test seam; runtime callers use the validated server environment. */
+    applicationEnvironment?: ApplicationEnvironment;
+  }> = {},
 ): Promise<readonly PublicJobCardModel[]> {
   const now = validNow(options.now);
+  const applicationEnvironment =
+    options.applicationEnvironment ?? getServerEnvironment().APP_ENV;
   const loaded = await loadEligibleJobs(emptyPublicJobSearchInput(), now, {
     companyId,
     take: Math.max(1, Math.min(100, options.limit ?? 100)),
-  });
-  return Object.freeze(loaded.rows.map((row) => toCardModel(row, now, false)));
+  }, applicationEnvironment);
+  return Object.freeze(
+    loaded.rows.map((row) =>
+      toCardModel(row, now, false, applicationEnvironment),
+    ),
+  );
 }
 
 /** Batch adapter for the Company directory; all counts reuse this module's one eligibility query. */
@@ -650,6 +701,7 @@ export async function loadPublicOpenJobCounts(
     dataContext.eligibilityEnvironment,
     (transaction, afterId) =>
       transaction.job.findMany({
+        relationLoadStrategy: "join",
         where: {
           ...buildPublicJobWhere(input, now, dataContext.liveOnly, {
             companyIds: ids,
@@ -742,13 +794,16 @@ async function loadExactSearchPage(
   now: Date,
   pagination: Readonly<{
     pageSize: number;
+    sponsoredLimit: number;
     queryHash: string;
     rankingAsOf: Date;
     cursor?: NonNullable<ReturnType<typeof decodeSearchCursor>>;
   }>,
   database: DatabaseClient,
+  applicationEnvironment: ApplicationEnvironment,
 ): Promise<LoadedSearchPage> {
   const dataContext = getPublicDataContext();
+  const companyTrustActivation = companyTrustActivationFromEnvironment();
   return database.$transaction(
     async (transaction) => {
       const projectionFilters = await resolvePublishedProjectionFilters(
@@ -771,6 +826,8 @@ async function loadExactSearchPage(
       }
 
       const queryContext = Object.freeze({
+        applicationEnvironment,
+        companyTrustActivation,
         input,
         now,
         rankingAsOf: pagination.rankingAsOf,
@@ -783,7 +840,7 @@ async function loadExactSearchPage(
         transaction,
         queryContext,
         firstPage
-          ? Math.min(pagination.pageSize, MAXIMUM_SPONSORED_SEARCH_RESULTS)
+          ? pagination.sponsoredLimit
           : 0,
       );
       const totalEligible = exactSearchCount(sponsorEnvelope);
@@ -805,7 +862,7 @@ async function loadExactSearchPage(
         : [];
       if (
         sponsoredRows.length >
-        Math.min(pagination.pageSize, MAXIMUM_SPONSORED_SEARCH_RESULTS)
+        pagination.sponsoredLimit
       ) {
         throw new PublicSearchRankingContractError(
           "DATABASE_RESULT_BOUND_EXCEEDED",
@@ -848,6 +905,7 @@ async function loadExactSearchPage(
         uniqueIds.length === 0
           ? []
           : await transaction.job.findMany({
+              relationLoadStrategy: "join",
               where: {
                 ...buildPublicJobWhere(input, now, dataContext.liveOnly, {
                   publishedAtUpperBound: pagination.rankingAsOf,
@@ -872,6 +930,10 @@ async function loadExactSearchPage(
         now,
         dataContext.eligibilityEnvironment,
         transaction,
+        {
+          activation: companyTrustActivation,
+          environment: applicationEnvironment,
+        },
       );
       if (eligibleRows.length !== uniqueIds.length) {
         throw new PublicSearchRankingContractError(
@@ -887,6 +949,7 @@ async function loadExactSearchPage(
           eligibleRows,
           pagination.rankingAsOf,
           responseMedianByCompany,
+          applicationEnvironment,
         );
       }
       const candidates = rankingRows.map((rankingRow) => {
@@ -902,6 +965,7 @@ async function loadExactSearchPage(
           rankingRow,
           now,
           responseMedianByCompany,
+          applicationEnvironment,
         );
       });
       const paginated = paginateSearchJobs({
@@ -1207,11 +1271,61 @@ function buildDatabaseRankingCtes(
     + ${databaseFieldMatchTier(bodyText, termGroups)}
   )`;
   const predicates = databaseSearchPredicates(context);
+  const keywordJobMatches =
+    termGroups.length === 0
+      ? Prisma.empty
+      : Prisma.sql`
+    keyword_job_matches AS MATERIALIZED (
+      SELECT keyword_job."id" AS "jobId"
+      FROM "JobRevision" AS keyword_revision
+      JOIN "Job" AS keyword_job
+        ON keyword_job."publishedRevisionId" = keyword_revision."id"
+      WHERE ${databaseSearchDocumentMatch(
+        Prisma.raw('keyword_revision."searchDocument"'),
+        termGroups,
+      )}
+      UNION
+      SELECT keyword_job."id" AS "jobId"
+      FROM "Company" AS keyword_company
+      JOIN "Job" AS keyword_job
+        ON keyword_job."companyId" = keyword_company."id"
+      WHERE ${databaseSearchDocumentMatch(
+        Prisma.raw('keyword_company."searchDocument"'),
+        termGroups,
+      )}
+    ),`;
+  const keywordJoin =
+    termGroups.length === 0
+      ? Prisma.empty
+      : Prisma.sql`JOIN keyword_job_matches AS keyword_match
+        ON keyword_match."jobId" = job."id"`;
   const keywordGate =
     context.input.keyword === undefined
       ? Prisma.sql`TRUE`
       : Prisma.sql`source."relevanceScore" > 0`;
+  const canUseSyntheticResponse = canUseSyntheticPublicResponseEvidence(
+    context.applicationEnvironment,
+  );
+  const responseTargetDays = canUseSyntheticResponse
+    ? Prisma.sql`company."responseTargetDays"`
+    : Prisma.sql`NULL::integer`;
+  const responseSampleSize = canUseSyntheticResponse
+    ? Prisma.sql`company."responseSampleSize"`
+    : Prisma.sql`0::integer`;
+  const responseWithinTargetBps = canUseSyntheticResponse
+    ? Prisma.sql`company."responseWithinTargetBps"`
+    : Prisma.sql`NULL::integer`;
+  const responseProjectionKnown = canUseSyntheticResponse
+    ? Prisma.sql`(
+        company."responseSampleSize" >= ${ANALYTICS_MINIMUM_COHORT_SIZE_V1}
+        AND company."responseTargetDays" BETWEEN
+          ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
+          AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
+        AND company."responseWithinTargetBps" BETWEEN 0 AND 10000
+      )`
+    : Prisma.sql`FALSE`;
   const source = Prisma.sql`
+    ${keywordJobMatches}
     candidate_source AS MATERIALIZED (
       SELECT job."id",
         job."companyId",
@@ -1231,22 +1345,17 @@ function buildDatabaseRankingCtes(
             AND boost."startsAt" <= ${context.now}
             AND boost."endsAt" > ${context.now}
         ) AS "activeBoost",
-        company."responseTargetDays" AS "responseTargetDays",
-        company."responseSampleSize" AS "responseSampleSize",
-        company."responseWithinTargetBps" AS "responseWithinTargetBps",
-        (
-          company."responseSampleSize" >= ${ANALYTICS_MINIMUM_COHORT_SIZE_V1}
-          AND company."responseTargetDays" BETWEEN
-            ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
-            AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
-          AND company."responseWithinTargetBps" BETWEEN 0 AND 10000
-        ) AS "responseProjectionKnown"
+        ${responseTargetDays} AS "responseTargetDays",
+        ${responseSampleSize} AS "responseSampleSize",
+        ${responseWithinTargetBps} AS "responseWithinTargetBps",
+        ${responseProjectionKnown} AS "responseProjectionKnown"
       FROM "Job" AS job
       JOIN "JobRevision" AS revision
         ON revision."id" = job."publishedRevisionId"
         AND revision."jobId" = job."id"
       JOIN "Company" AS company ON company."id" = job."companyId"
       JOIN "Category" AS category ON category."id" = revision."categoryId"
+      ${keywordJoin}
       LEFT JOIN "City" AS city ON city."id" = job."publishedCityId"
       LEFT JOIN "JobScoreSnapshot" AS score
         ON score."jobRevisionId" = revision."id"
@@ -1257,7 +1366,7 @@ function buildDatabaseRankingCtes(
       SELECT source.* FROM candidate_source AS source WHERE ${keywordGate}
     )
   `;
-  if (!includeCanonicalResponse) {
+  if (!includeCanonicalResponse || !canUseSyntheticResponse) {
     return Prisma.sql`${source},
       ranked_candidates AS MATERIALIZED (
         SELECT candidate.*,
@@ -1421,16 +1530,7 @@ function databaseSearchPredicates(
           )
         )
     )`,
-    Prisma.sql`(
-      SELECT COUNT(*)
-      FROM "CompanyVerificationRequest" AS verification
-      WHERE verification."companyId" = company."id"
-        AND verification."status" = 'VERIFIED'::"CompanyVerificationStatus"
-        AND NOT EXISTS (
-          SELECT 1 FROM "CompanyVerificationRequest" AS superseding
-          WHERE superseding."supersedesRequestId" = verification."id"
-        )
-    ) = 1`,
+    databaseCompanyTrustEligibilityPredicate(context),
     Prisma.sql`NOT EXISTS (
       SELECT 1
       FROM "ModerationRestriction" AS restriction
@@ -1525,13 +1625,17 @@ function databaseSearchPredicates(
     )`);
   }
   if (input.responseEvidenceOnly) {
-    predicates.push(Prisma.sql`
-      company."responseSampleSize" >= ${ANALYTICS_MINIMUM_COHORT_SIZE_V1}
-      AND company."responseTargetDays" BETWEEN
-        ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
-        AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
-      AND company."responseWithinTargetBps" BETWEEN 0 AND 10000
-    `);
+    predicates.push(
+      canUseSyntheticPublicResponseEvidence(context.applicationEnvironment)
+        ? Prisma.sql`
+            company."responseSampleSize" >= ${ANALYTICS_MINIMUM_COHORT_SIZE_V1}
+            AND company."responseTargetDays" BETWEEN
+              ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min}
+              AND ${EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max}
+            AND company."responseWithinTargetBps" BETWEEN 0 AND 10000
+          `
+        : Prisma.sql`FALSE`,
+    );
   }
   if (radiusCenter !== undefined && radiusCenter !== null) {
     predicates.push(Prisma.sql`
@@ -1548,6 +1652,174 @@ function databaseSearchPredicates(
     `);
   }
   return predicates;
+}
+
+/**
+ * SQL half of the canonical Company Trust decision used by hydration. Keeping
+ * this predicate complete prevents ranked IDs/counts from admitting a company
+ * that the policy evaluator will subsequently remove.
+ */
+function databaseCompanyTrustEligibilityPredicate(
+  context: DatabaseSearchQueryContext,
+): Prisma.Sql {
+  const activation = context.companyTrustActivation;
+  const strongPublicEligible =
+    activation.policyMode === "enforce" && activation.publicEligibility;
+  const legacyEnvironment =
+    activation.legacyDemoCompatibility &&
+    (context.applicationEnvironment === "local" ||
+      context.applicationEnvironment === "ci" ||
+      context.applicationEnvironment === "preview");
+  const strongLegacyEligible =
+    legacyEnvironment &&
+    (activation.policyMode !== "enforce" ||
+      (!activation.strongBadge && !activation.publicEligibility));
+  const now = context.now;
+  const currentVerifiedCycle = Prisma.sql`(
+    SELECT COUNT(*)
+    FROM "CompanyVerificationRequest" AS verification
+    WHERE verification."companyId" = company."id"
+      AND verification."status" = 'VERIFIED'::"CompanyVerificationStatus"
+      AND NOT EXISTS (
+        SELECT 1 FROM "CompanyVerificationRequest" AS superseding
+        WHERE superseding."supersedesRequestId" = verification."id"
+      )
+  ) = 1`;
+  const strongProjection = Prisma.sql`EXISTS (
+    SELECT 1
+    FROM "CompanyTrustProjection" AS trust_projection
+    JOIN "CompanyVerificationRequest" AS trust_request
+      ON trust_request."id" = trust_projection."verificationRequestId"
+      AND trust_request."companyId" = trust_projection."companyId"
+    JOIN "CompanyVerificationDecision" AS trust_decision
+      ON trust_decision."id" = trust_projection."decisionId"
+      AND trust_decision."companyId" = trust_projection."companyId"
+    JOIN "CompanyVerificationRequest" AS decision_request
+      ON decision_request."id" = trust_decision."verificationRequestId"
+      AND decision_request."companyId" = trust_decision."companyId"
+    WHERE trust_projection."companyId" = company."id"
+      AND trust_projection."scope" = 'COMPANY_IDENTITY'::"CompanyVerificationScope"
+      AND trust_projection."level" = 'STRONG'::"CompanyTrustLevel"
+      AND trust_projection."status" IN (
+        'ACTIVE'::"CompanyTrustStatus",
+        'EXPIRING'::"CompanyTrustStatus"
+      )
+      AND trust_projection."riskState" = 'CLEAR'::"CompanyTrustRiskState"
+      AND trust_projection."policyVersion" = ${COMPANY_TRUST_POLICY_V2.version}
+      AND trust_projection."verifiedAt" IS NOT NULL
+      AND trust_projection."verifiedAt" <= ${now}
+      AND trust_projection."expiresAt" IS NOT NULL
+      AND trust_projection."expiresAt" > ${now}
+      AND trust_projection."evidenceDigest" ~ '^[a-f0-9]{64}$'
+      AND trust_request."status" = 'VERIFIED'::"CompanyVerificationStatus"
+      AND trust_decision."kind" IN (
+        'APPROVED'::"CompanyVerificationDecisionKind",
+        'RESTORED'::"CompanyVerificationDecisionKind"
+      )
+      AND trust_decision."scope" = 'COMPANY_IDENTITY'::"CompanyVerificationScope"
+      AND trust_decision."policyVersion" = ${COMPANY_TRUST_POLICY_V2.version}
+      AND decision_request."requestedByUserId" <> trust_decision."decidedByUserId"
+      AND trust_decision."evidenceDigest" ~ '^[a-f0-9]{64}$'
+      AND trust_decision."evidenceDigest" = trust_projection."evidenceDigest"
+      AND trust_decision."validFrom" IS NOT NULL
+      AND trust_decision."validFrom" <= ${now}
+      AND trust_decision."validTo" IS NOT NULL
+      AND trust_decision."validTo" > ${now}
+      AND trust_decision."decidedAt" <= trust_projection."verifiedAt"
+      AND trust_projection."expiresAt" <= trust_decision."validTo"
+      AND (
+        trust_decision."riskLevel" = 'NORMAL'::"CompanyVerificationRiskLevel"
+        OR (
+          trust_decision."approvedByUserId" IS NOT NULL
+          AND trust_decision."approvedByUserId" <> trust_decision."decidedByUserId"
+          AND trust_decision."approvedByUserId" <> decision_request."requestedByUserId"
+        )
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM "CompanyVerificationEvidence" AS domain_evidence
+        CROSS JOIN "CompanyVerificationEvidence" AS register_evidence
+        WHERE domain_evidence."verificationRequestId" = trust_projection."verificationRequestId"
+          AND domain_evidence."companyId" = trust_projection."companyId"
+          AND domain_evidence."type" = 'DOMAIN_CHALLENGE'::"CompanyVerificationEvidenceType"
+          AND domain_evidence."scope" = 'COMPANY_IDENTITY'::"CompanyVerificationScope"
+          AND domain_evidence."status" = 'VALID'::"CompanyVerificationEvidenceStatus"
+          AND domain_evidence."revokedAt" IS NULL
+          AND domain_evidence."checkedAt" IS NOT NULL
+          AND domain_evidence."validFrom" IS NOT NULL
+          AND domain_evidence."validFrom" <= ${now}
+          AND domain_evidence."validTo" IS NOT NULL
+          AND domain_evidence."validTo" > ${now}
+          AND domain_evidence."responseDigest" ~ '^[a-f0-9]{64}$'
+          AND trust_projection."expiresAt" <= domain_evidence."validTo"
+          AND register_evidence."verificationRequestId" = trust_projection."verificationRequestId"
+          AND register_evidence."companyId" = trust_projection."companyId"
+          AND register_evidence."type" = 'UID_REGISTER'::"CompanyVerificationEvidenceType"
+          AND register_evidence."scope" = 'COMPANY_IDENTITY'::"CompanyVerificationScope"
+          AND register_evidence."status" = 'VALID'::"CompanyVerificationEvidenceStatus"
+          AND register_evidence."revokedAt" IS NULL
+          AND register_evidence."checkedAt" IS NOT NULL
+          AND register_evidence."validFrom" IS NOT NULL
+          AND register_evidence."validFrom" <= ${now}
+          AND register_evidence."validTo" IS NOT NULL
+          AND register_evidence."validTo" > ${now}
+          AND register_evidence."responseDigest" ~ '^[a-f0-9]{64}$'
+          AND trust_projection."expiresAt" <= register_evidence."validTo"
+          AND encode(digest(convert_to(concat(
+            '[{"type":"DOMAIN_CHALLENGE","responseDigest":"',
+            domain_evidence."responseDigest",
+            '","validTo":"',
+            to_char(domain_evidence."validTo" AT TIME ZONE 'UTC',
+              'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+            '"},{"type":"UID_REGISTER","responseDigest":"',
+            register_evidence."responseDigest",
+            '","validTo":"',
+            to_char(register_evidence."validTo" AT TIME ZONE 'UTC',
+              'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+            '"}]'
+          ), 'UTF8'), 'sha256'), 'hex') = trust_projection."evidenceDigest"
+      )
+  )`;
+  const validLegacyProjection = Prisma.sql`(
+    NOT EXISTS (
+      SELECT 1
+      FROM "CompanyTrustProjection" AS legacy_projection
+      WHERE legacy_projection."companyId" = company."id"
+        AND legacy_projection."scope" = 'COMPANY_IDENTITY'::"CompanyVerificationScope"
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM "CompanyTrustProjection" AS legacy_projection
+      WHERE legacy_projection."companyId" = company."id"
+        AND legacy_projection."scope" = 'COMPANY_IDENTITY'::"CompanyVerificationScope"
+        AND legacy_projection."level" = 'LEGACY'::"CompanyTrustLevel"
+        AND legacy_projection."status" = 'ACTIVE'::"CompanyTrustStatus"
+        AND legacy_projection."riskState" NOT IN (
+          'HOLD'::"CompanyTrustRiskState",
+          'REVOKED'::"CompanyTrustRiskState"
+        )
+        AND (
+          legacy_projection."expiresAt" IS NULL
+          OR legacy_projection."expiresAt" > ${now}
+        )
+    )
+  )`;
+
+  return Prisma.sql`NOT EXISTS (
+    SELECT 1
+    FROM "TrustSafetyContainmentEffect" AS trust_containment
+    WHERE trust_containment."targetType" = 'COMPANY'
+      AND trust_containment."targetId" = company."id"::text
+      AND trust_containment."reversedAt" IS NULL
+  ) AND CASE
+    WHEN ${strongProjection} THEN
+      ${strongPublicEligible}
+      OR (${strongLegacyEligible} AND ${currentVerifiedCycle})
+    ELSE
+      ${legacyEnvironment}
+      AND ${currentVerifiedCycle}
+      AND ${validLegacyProjection}
+  END`;
 }
 
 function normalizedDatabaseSearchText(field: Prisma.Sql): Prisma.Sql {
@@ -1597,6 +1869,20 @@ function databaseFieldMatchTier(
     ),
     " OR ",
   )} THEN 1 ELSE 0 END`;
+}
+
+function databaseSearchDocumentMatch(
+  searchDocument: Prisma.Sql,
+  groups: readonly SearchTermGroupV2[],
+): Prisma.Sql {
+  const terms = groups.flatMap((group) => group.terms);
+  if (terms.length === 0) return Prisma.sql`TRUE`;
+  return Prisma.sql`(${Prisma.join(
+    terms.map(
+      (term) => Prisma.sql`${searchDocument} LIKE ${`%${term}%`}`,
+    ),
+    " OR ",
+  )})`;
 }
 
 function pushUuidListPredicate(
@@ -1845,6 +2131,8 @@ async function loadEligibleJobs(
   input: PublicJobSearchInput,
   now: Date,
   scope: PublicJobLoadScope = {},
+  applicationEnvironment: ApplicationEnvironment =
+    getServerEnvironment().APP_ENV,
 ): Promise<LoadedJobs> {
   const database = getDatabase();
   const dataContext = getPublicDataContext();
@@ -1861,6 +2149,7 @@ async function loadEligibleJobs(
     detectTruncation,
     (transaction) =>
       transaction.job.findMany({
+        relationLoadStrategy: "join",
         where: buildPublicJobWhere(input, now, dataContext.liveOnly, scope),
         orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
         // The extra row is a sentinel. It is never ranked, but proves that a
@@ -1882,7 +2171,13 @@ async function loadEligibleJobs(
     });
   }
   const candidates = eligibleRows.map((row) =>
-    toRankingCandidate(row, input.keyword, now),
+    toRankingCandidate(
+      row,
+      input.keyword,
+      now,
+      new Map(),
+      applicationEnvironment,
+    ),
   );
   const rowById = new Map(eligibleRows.map((row) => [row.id, row]));
 
@@ -1907,6 +2202,7 @@ async function loadEligibleDetailJob(
     dataContext.eligibilityEnvironment,
     (transaction) =>
       transaction.job.findMany({
+        relationLoadStrategy: "join",
         where: buildPublicJobWhere(input, now, dataContext.liveOnly, { slug }),
         orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
         take: 1,
@@ -1929,6 +2225,7 @@ async function loadEligibleDetailJobs(
     dataContext.eligibilityEnvironment,
     (transaction) =>
       transaction.job.findMany({
+        relationLoadStrategy: "join",
         where: {
           ...buildPublicJobWhere(input, now, dataContext.liveOnly, {}),
           slug: { in: [...slugs] },
@@ -1948,74 +2245,125 @@ async function loadExactPublicClusterCounts(now: Date): Promise<
 > {
   const database = getDatabase();
   const input = emptyPublicJobSearchInput();
+  const environment = getServerEnvironment();
+  const queryContext: DatabaseSearchQueryContext = Object.freeze({
+    applicationEnvironment: environment.APP_ENV,
+    companyTrustActivation: companyTrustActivationFromEnvironment(),
+    input,
+    now,
+    rankingAsOf: now,
+    liveOnly: true,
+    projectionFilters: Object.freeze({
+      categoryIds: Object.freeze([]),
+      cantonIds: Object.freeze([]),
+      cityIds: Object.freeze([]),
+    }),
+    radiusCenter: undefined,
+  });
+  const predicates = databaseSearchPredicates(queryContext);
+  const promotedCantonCodes =
+    PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCantonCodes.map((code) =>
+      Prisma.sql`${code}`,
+    );
+  const promotedCategorySlugs =
+    PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCategorySlugs.map((slug) =>
+      Prisma.sql`${slug}`,
+    );
+  const rows = await database.$transaction(
+    (transaction) => transaction.$queryRaw<DatabaseClusterCountRow[]>(Prisma.sql`
+      WITH eligible_cluster_jobs AS MATERIALIZED (
+        SELECT
+          job."id",
+          category."id" AS "categoryId",
+          category."name" AS "categoryName",
+          category."slug" AS "categorySlug",
+          canton."id" AS "cantonId",
+          canton."code" AS "cantonCode",
+          canton."name" AS "cantonName",
+          canton."slug" AS "cantonSlug"
+        FROM "Job" AS job
+        JOIN "JobRevision" AS revision
+          ON revision."id" = job."publishedRevisionId"
+          AND revision."jobId" = job."id"
+        JOIN "Company" AS company ON company."id" = job."companyId"
+        JOIN "Category" AS category ON category."id" = revision."categoryId"
+        LEFT JOIN "Canton" AS canton ON canton."id" = revision."cantonId"
+        WHERE ${Prisma.join(predicates, " AND ")}
+          AND (
+            category."slug" IN (${Prisma.join(promotedCategorySlugs)})
+            OR canton."code" IN (${Prisma.join(promotedCantonCodes)})
+          )
+      )
+      SELECT
+        'canton'::text AS "clusterKind",
+        eligible."cantonId" AS "id",
+        eligible."cantonCode" AS "code",
+        eligible."cantonName" AS "name",
+        eligible."cantonSlug" AS "slug",
+        COUNT(*)::bigint AS "count"
+      FROM eligible_cluster_jobs AS eligible
+      WHERE eligible."cantonCode" IN (${Prisma.join(promotedCantonCodes)})
+      GROUP BY
+        eligible."cantonId",
+        eligible."cantonCode",
+        eligible."cantonName",
+        eligible."cantonSlug"
+      UNION ALL
+      SELECT
+        'category'::text AS "clusterKind",
+        eligible."categoryId" AS "id",
+        NULL::text AS "code",
+        eligible."categoryName" AS "name",
+        eligible."categorySlug" AS "slug",
+        COUNT(*)::bigint AS "count"
+      FROM eligible_cluster_jobs AS eligible
+      WHERE eligible."categorySlug" IN (${Prisma.join(promotedCategorySlugs)})
+      GROUP BY
+        eligible."categoryId",
+        eligible."categoryName",
+        eligible."categorySlug"
+    `),
+    {
+      isolationLevel: "RepeatableRead",
+      timeout: EXACT_COUNT_TRANSACTION_TIMEOUT_MS,
+    },
+  );
   const cantonCounts = new Map<string, ClusterCount<PublicJobClusterCanton>>();
   const categoryCounts = new Map<
     string,
     ClusterCount<PublicJobClusterCategory>
   >();
-  await scanEligibleRowsInSnapshot<PublicJobClusterRow>(
-    database,
-    now,
-    "production",
-    (transaction, afterId) =>
-      transaction.job.findMany({
-        where: {
-          ...buildPublicJobWhere(input, now, true, {}),
-          ...(afterId === undefined ? {} : { id: { gt: afterId } }),
-          AND: [
-            {
-              OR: [
-                {
-                  publishedRevision: {
-                    is: {
-                      canton: {
-                        is: {
-                          code: {
-                            in: [
-                              ...PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCantonCodes,
-                            ],
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-                {
-                  publishedRevision: {
-                    is: {
-                      category: {
-                        is: {
-                          slug: {
-                            in: [
-                              ...PUBLIC_CLUSTER_DISCOVERY_POLICY_V1.promotedCategorySlugs,
-                            ],
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              ],
-            },
-          ],
-        },
-        orderBy: { id: "asc" },
-        take: EXACT_COUNT_SCAN_BATCH_SIZE,
-        select: PUBLIC_JOB_CLUSTER_SELECT,
-      }),
-    (rows) => {
-      for (const row of rows) {
-        const canton = row.publishedRevision.canton;
-        if (canton !== null && PROMOTED_CANTON_CODES.has(canton.code)) {
-          incrementClusterCount(cantonCounts, canton);
-        }
-        const category = row.publishedRevision.category;
-        if (PROMOTED_CATEGORY_SLUGS.has(category.slug)) {
-          incrementClusterCount(categoryCounts, category);
-        }
+  for (const row of rows) {
+    const count = Number(row.count);
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new PublicSearchRankingContractError(
+        "COUNT_OVERFLOW",
+        "A public cluster count is outside the safe integer range.",
+      );
+    }
+    if (row.clusterKind === "canton") {
+      if (row.code === null) {
+        throw new PublicSearchRankingContractError(
+          "RANKING_PROJECTION_DRIFT",
+          "A promoted canton aggregate has no canton code.",
+        );
       }
-    },
-  );
+      cantonCounts.set(row.id, {
+        value: Object.freeze({
+          id: row.id,
+          code: row.code,
+          name: row.name,
+          slug: row.slug,
+        }),
+        count,
+      });
+    } else {
+      categoryCounts.set(row.id, {
+        value: Object.freeze({ id: row.id, name: row.name, slug: row.slug }),
+        count,
+      });
+    }
+  }
   return Object.freeze({ cantonCounts, categoryCounts });
 }
 
@@ -2198,6 +2546,10 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
   now: Date,
   environment: PublicEligibilityEnvironment,
   database: PublicReadTransaction,
+  trustOptions: Readonly<{
+    environment: "local" | "ci" | "preview" | "staging" | "production";
+    activation: CompanyTrustActivation;
+  }> | undefined = undefined,
 ): Promise<EligibleRow<Row>[]> {
   if (rows.length === 0) return [];
   // Interactive transactions own one PostgreSQL client. Keep their queries
@@ -2228,8 +2580,18 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
   const trustByCompanyId = await evaluateCompanyTrustForCompanies(
     database,
     rows.map((row) => row.companyId),
-    { now },
+    { now, ...trustOptions },
   );
+  const freshnessRows = await database.jobFreshnessProjection.findMany({
+    where: { jobId: { in: rows.map((row) => row.id) } },
+    select: {
+      jobId: true,
+      state: true,
+      dueAt: true,
+      enforceAt: true,
+      reviewDueAt: true,
+    },
+  });
   const hiddenJobs = new Set(
     restrictions
       .filter((row) => row.targetType === "HIDE_JOB")
@@ -2240,6 +2602,9 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
       .filter((row) => row.targetType === "PAUSE_COMPANY")
       .map((row) => row.targetId),
   );
+  const freshnessByJobId = new Map(
+    freshnessRows.map((row) => [row.jobId, row]),
+  );
   const eligibleRows: EligibleRow<Row>[] = [];
   for (const row of rows) {
     const companyTrust = trustByCompanyId.get(row.companyId);
@@ -2249,6 +2614,7 @@ async function filterEligibleRows<Row extends PublicJobEligibilityRow>(
         hiddenJobs,
         pausedCompanies,
         companyTrust?.publicEligible === true,
+        freshnessByJobId.get(row.id) ?? null,
       ),
       now,
       environment,
@@ -2302,6 +2668,7 @@ function toPublicEligibilitySnapshot<Row extends PublicJobEligibilityRow>(
   hiddenJobs: ReadonlySet<string>,
   pausedCompanies: ReadonlySet<string>,
   hasCurrentTrustEligibility: boolean,
+  freshness: PublicEligibilitySnapshot["freshness"],
 ): PublicEligibilitySnapshot {
   const revision = row.publishedRevision;
   return Object.freeze({
@@ -2350,6 +2717,7 @@ function toPublicEligibilitySnapshot<Row extends PublicJobEligibilityRow>(
           }),
     hasEffectivePublicHideRestriction:
       hiddenJobs.has(row.id) || pausedCompanies.has(row.companyId),
+    freshness,
   });
 }
 
@@ -2358,10 +2726,15 @@ async function loadCanonicalResponseMedians(
   rows: readonly EligiblePublicJobRow[],
   now: Date,
   cache: Map<string, number | null>,
+  applicationEnvironment: ApplicationEnvironment,
 ): Promise<void> {
+  if (!canUseSyntheticPublicResponseEvidence(applicationEnvironment)) return;
   const projections = new Map<string, EligiblePublicJobRow["company"]>();
   for (const row of rows) {
-    if (!cache.has(row.companyId) && responseEvidence(row.company).known) {
+    if (
+      !cache.has(row.companyId) &&
+      responseEvidence(row.company, applicationEnvironment).known
+    ) {
       projections.set(row.companyId, row.company);
     }
   }
@@ -2445,12 +2818,14 @@ function toDatabaseRankingCandidate(
   ranking: DatabaseRankingRow,
   now: Date,
   responseMedianByCompany: ReadonlyMap<string, number | null>,
+  applicationEnvironment: ApplicationEnvironment,
 ): RankingCandidate {
   const projected = toRankingCandidate(
     row,
     undefined,
     now,
     responseMedianByCompany,
+    applicationEnvironment,
   );
   if (
     projected.id !== ranking.id ||
@@ -2480,6 +2855,8 @@ function toRankingCandidate(
   keyword: string | undefined,
   now: Date,
   responseMedianByCompany: ReadonlyMap<string, number | null> = new Map(),
+  applicationEnvironment: ApplicationEnvironment =
+    getServerEnvironment().APP_ENV,
 ): RankingCandidate {
   const revision = row.publishedRevision;
   const relevance = keyword
@@ -2493,7 +2870,7 @@ function toRankingCandidate(
     revision.scoreSnapshots.length === 1
       ? (revision.scoreSnapshots[0]?.scorePoints ?? null)
       : null;
-  const response = responseEvidence(row.company);
+  const response = responseEvidence(row.company, applicationEnvironment);
   return Object.freeze({
     id: row.id,
     slug: row.slug,
@@ -2547,6 +2924,7 @@ function toCardModel(
   row: EligiblePublicJobRow,
   now: Date,
   sponsored: boolean,
+  applicationEnvironment: ApplicationEnvironment,
 ): PublicJobCardModel {
   const revision = row.publishedRevision;
   const score =
@@ -2584,7 +2962,7 @@ function toCardModel(
     applicationEffort: revision.applicationEffort,
     contentLanguage: revision.contentLanguage,
     fairScore: score,
-    response: responseEvidence(row.company),
+    response: responseEvidence(row.company, applicationEnvironment),
     publishedAt: new Date(row.publishedAt!),
     expiresAt: new Date(row.expiresAt!),
     dataProvenance: row.dataProvenance,
@@ -2618,9 +2996,10 @@ function toPublicTrustBadge(
 function toDetailModel(
   row: EligiblePublicJobDetailRow,
   now: Date,
+  applicationEnvironment: ApplicationEnvironment,
 ): PublicJobDetailModel {
   const revision = row.publishedRevision;
-  const card = toCardModel(row, now, false);
+  const card = toCardModel(row, now, false, applicationEnvironment);
   return Object.freeze({
     ...card,
     company: Object.freeze({
@@ -2705,30 +3084,9 @@ function responseEvidence(
     responseSampleSize: number;
     responseWithinTargetBps: number | null;
   }>,
+  applicationEnvironment: ApplicationEnvironment,
 ): PublicResponseEvidence {
-  const known =
-    Number.isSafeInteger(company.responseSampleSize) &&
-    company.responseSampleSize >= ANALYTICS_MINIMUM_COHORT_SIZE_V1 &&
-    Number.isInteger(company.responseTargetDays) &&
-    company.responseTargetDays !== null &&
-    company.responseTargetDays >=
-      EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min &&
-    company.responseTargetDays <=
-      EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max &&
-    Number.isInteger(company.responseWithinTargetBps) &&
-    company.responseWithinTargetBps !== null &&
-    company.responseWithinTargetBps >= 0 &&
-    company.responseWithinTargetBps <= 10_000;
-  return Object.freeze({
-    known,
-    targetDays: known ? company.responseTargetDays : null,
-    onTimeRateBps: known ? company.responseWithinTargetBps : null,
-    sampleSizeBucket: known
-      ? company.responseSampleSize >= 50
-        ? "50+"
-        : "20–49"
-      : null,
-  });
+  return projectSyntheticPublicResponseEvidence(company, applicationEnvironment);
 }
 
 function hasActiveBoost(row: PublicJobRow, now: Date): boolean {
@@ -2857,12 +3215,4 @@ function validNow(value: Date | undefined): Date {
 
 function isSafeSlug(value: string): boolean {
   return value.length <= 220 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value);
-}
-
-function incrementClusterCount<Value extends Readonly<{ id: string }>>(
-  counts: Map<string, ClusterCount<Value>>,
-  value: Value,
-): void {
-  const current = counts.get(value.id);
-  counts.set(value.id, { value, count: (current?.count ?? 0) + 1 });
 }

@@ -8,15 +8,18 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import type {
-  ApplicationContactKind,
-  ApplicationEffort,
-  JobType,
-  Language,
-  RemoteType,
-  SalaryPeriod,
-} from "@/lib/generated/prisma/enums";
+import {
+  applicationContactLabel,
+  applicationEffortLabel,
+  contentLanguageLabel,
+  jobTypeLabel,
+  remoteTypeLabel,
+  requiredDocumentLabel,
+  salaryPeriodLabel,
+} from "@/lib/jobs/labels-de";
 import { formatDate, formatSalaryRange, formatWorkload } from "@/lib/utils/format";
+
+export { applicationContactLabel, contentLanguageLabel };
 
 export type ApplicantFacingJobContent = Readonly<{
   description: string;
@@ -57,55 +60,6 @@ export type ApplicantFacingJobFacts = Readonly<{
   }>;
 }>;
 
-const JOB_TYPE_LABELS: Readonly<Record<JobType, string>> = {
-  PERMANENT: "Festanstellung",
-  TEMPORARY: "Befristet",
-  FREELANCE: "Freelance",
-  INTERNSHIP: "Praktikum",
-  APPRENTICESHIP: "Lehrstelle",
-  HOLIDAY_JOB: "Ferienjob",
-};
-
-const REMOTE_LABELS: Readonly<Record<RemoteType, string>> = {
-  ONSITE: "Vor Ort",
-  HYBRID: "Hybrid",
-  REMOTE: "Remote",
-};
-
-const SALARY_PERIOD_LABELS: Readonly<Record<SalaryPeriod, string>> = {
-  YEARLY: "Jahr",
-  MONTHLY: "Monat",
-  HOURLY: "Stunde",
-};
-
-const APPLICATION_EFFORT_LABELS: Readonly<Record<ApplicationEffort, string>> = {
-  SIMPLE: "Kurz",
-  MEDIUM: "Mittel",
-  LONG: "Umfangreich",
-};
-
-const APPLICATION_CONTACT_LABELS: Readonly<Record<ApplicationContactKind, string>> = {
-  EMAIL: "E-Mail",
-  PHONE: "Telefon",
-  APPLY_URL: "Externer Bewerbungslink",
-};
-
-const CONTENT_LANGUAGE_LABELS: Readonly<Record<Language, string>> = {
-  DE: "Deutsch",
-  FR: "Französisch",
-  IT: "Italienisch",
-  EN: "Englisch",
-};
-
-const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
-  CV: "Lebenslauf",
-  COVER_LETTER: "Motivationsschreiben",
-  CERTIFICATES: "Zeugnisse",
-  REFERENCES: "Referenzen",
-  PORTFOLIO: "Portfolio",
-  OTHER: "Weitere Unterlagen",
-};
-
 /**
  * The single applicant-facing content renderer used by the public job page and
  * the employer's persisted Step-5 preview. Its deliberately narrow input keeps
@@ -120,7 +74,7 @@ export function JobContentSections({
   const description = content.description || (preview ? "Noch keine Beschreibung erfasst." : "");
   const documents = content.requiredDocumentKinds
     .filter((kind) => kind !== "NONE")
-    .map((kind) => DOCUMENT_LABELS[kind] ?? kind);
+    .map(requiredDocumentLabel);
 
   return (
     <>
@@ -237,15 +191,7 @@ export function JobContentSections({
 }
 
 export function JobTypeBadge({ jobType }: Readonly<{ jobType: string }>) {
-  return <Badge variant="outline">{localizedLabel(JOB_TYPE_LABELS, jobType)}</Badge>;
-}
-
-export function applicationContactLabel(kind: string): string {
-  return localizedLabel(APPLICATION_CONTACT_LABELS, kind);
-}
-
-export function contentLanguageLabel(language: string): string {
-  return localizedLabel(CONTENT_LANGUAGE_LABELS, language);
+  return <Badge variant="outline">{jobTypeLabel(jobType)}</Badge>;
 }
 
 export function JobFacts({
@@ -260,7 +206,7 @@ export function JobFacts({
       ? formatSalaryRange(
           facts.salaryMin,
           facts.salaryMax,
-          localizedLabel(SALARY_PERIOD_LABELS, facts.salaryPeriod),
+          salaryPeriodLabel(facts.salaryPeriod),
         )
       : "Nicht transparent ausgewiesen";
   const start = facts.startByArrangement
@@ -274,12 +220,12 @@ export function JobFacts({
 
   return (
     <dl className={presentation === "preview" ? "grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3" : "mt-7 grid gap-3 text-sm sm:grid-cols-2"}>
-      <Fact icon={MapPinIcon} label="Arbeitsort" value={`${facts.locationLabel} · ${localizedLabel(REMOTE_LABELS, facts.remoteType)}`} />
+      <Fact icon={MapPinIcon} label="Arbeitsort" value={`${facts.locationLabel} · ${remoteTypeLabel(facts.remoteType)}`} />
       <Fact icon={BriefcaseBusinessIcon} label="Pensum" value={formatWorkload(facts.workloadMin, facts.workloadMax)} />
       <Fact icon={BanknoteIcon} label="Lohn" value={salary} />
       <Fact icon={CalendarDaysIcon} label={facts.dateFact.label} value={dateValue} />
       <Fact icon={CalendarDaysIcon} label="Start" value={start} />
-      <Fact icon={BriefcaseBusinessIcon} label="Bewerbungsaufwand" value={localizedLabel(APPLICATION_EFFORT_LABELS, facts.applicationEffort)} />
+      <Fact icon={BriefcaseBusinessIcon} label="Bewerbungsaufwand" value={applicationEffortLabel(facts.applicationEffort)} />
     </dl>
   );
 }
@@ -294,10 +240,6 @@ function Fact({ icon: Icon, label, value }: Readonly<{ icon: LucideIcon; label: 
       </div>
     </div>
   );
-}
-
-function localizedLabel<T extends string>(labels: Readonly<Record<T, string>>, value: string): string {
-  return Object.hasOwn(labels, value) ? labels[value as T] : value;
 }
 
 function ContentSection({

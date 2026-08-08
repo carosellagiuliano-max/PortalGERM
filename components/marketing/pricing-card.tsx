@@ -11,6 +11,7 @@ export type SignedInPlanPricingContext = Readonly<{
   canManagePlan: boolean;
   canStartPlanChange: boolean;
   currentPlanCode: PublicPricingPlan["code"] | null;
+  mockCheckoutAvailable: boolean;
 }>;
 
 export function PricingCard({
@@ -107,6 +108,12 @@ function resolvePricingCta(
   }
   if (signedIn.currentPlanCode === plan.code) {
     return { href: "/employer/billing", label: "Aktueller Plan" };
+  }
+  if (!signedIn.mockCheckoutAvailable) {
+    return {
+      href: "/employer/billing/subscription",
+      label: "Kaufstatus prüfen",
+    };
   }
   return {
     href: `/employer/billing/checkout?plan=${plan.slug}`,

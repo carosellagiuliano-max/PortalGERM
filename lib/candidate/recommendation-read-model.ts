@@ -1,7 +1,5 @@
 import "server-only";
 
-import { ANALYTICS_MINIMUM_COHORT_SIZE_V1 } from "@/lib/analytics/metric-contracts";
-import { EMPLOYER_RESPONSE_POLICY_V1 } from "@/lib/analytics/response-policy-v1";
 import { companyTrustActivationFromEnvironment } from "@/lib/companies/verification/read-model";
 import {
   evaluateCompanyTrust,
@@ -11,6 +9,9 @@ import {
   type CompanyTrustProjectionSnapshot,
   type CompanyTrustPublicDescriptor,
 } from "@/lib/companies/verification/policy-v2";
+import {
+  type ApplicationEnvironment,
+} from "@/lib/config/application-environment";
 import { getServerEnvironment } from "@/lib/config/env";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
@@ -34,6 +35,10 @@ import type {
   PublicJobCardModel,
   PublicResponseEvidence,
 } from "@/lib/public/types";
+import {
+  canUseSyntheticPublicResponseEvidence,
+  projectSyntheticPublicResponseEvidence,
+} from "@/lib/search/public-response-evidence-policy";
 import { sanitizePlainText, stripUnsafeHtml } from "@/lib/security/sanitize";
 
 export const CANDIDATE_RECOMMENDATION_QUERY_POLICY_V1 = Object.freeze({
@@ -78,6 +83,7 @@ type RecommendationRow = Readonly<{
   responseSampleSize: number;
   responseWithinTargetBps: number | null;
   revisionId: string;
+  revisionResponseTargetDays: number;
   title: string;
   description: string;
   approvedAt: Date | null;
@@ -162,10 +168,15 @@ export async function listCandidateRecommendationProjections(
   database: DatabaseClient,
   selection: CandidateRecommendationSelection,
   now: Date,
+  options: Readonly<{
+    /** Test seam; runtime callers use the validated server environment. */
+    applicationEnvironment?: ApplicationEnvironment;
+  }> = {},
 ): Promise<readonly CandidateRecommendationProjection[]> {
   if (!Number.isFinite(now.getTime())) return Object.freeze([]);
   const dataContext = getPublicDataContext();
-  const environment = getServerEnvironment().APP_ENV;
+  const environment =
+    options.applicationEnvironment ?? getServerEnvironment().APP_ENV;
   const trustActivation = companyTrustActivationFromEnvironment();
 
   return database.$transaction(
@@ -175,6 +186,7 @@ export async function listCandidateRecommendationProjections(
         selection,
         now,
         dataContext.liveOnly,
+        environment,
       );
       if (rows.length === 0) return Object.freeze([]);
       const trustRows = await loadTrustRows(
@@ -213,7 +225,13 @@ export async function listCandidateRecommendationProjections(
             dataContext.eligibilityEnvironment,
           );
           return eligibility.eligible
-            ? [toRecommendationProjection(row, trust.evaluation.badge)]
+            ? [
+                toRecommendationProjection(
+                  row,
+                  trust.evaluation.badge,
+                  environment,
+                ),
+              ]
             : [];
         }),
       );
@@ -227,6 +245,7 @@ function loadRecommendationRows(
   selection: CandidateRecommendationSelection,
   now: Date,
   liveOnly: boolean,
+  applicationEnvironment: ApplicationEnvironment,
 ): Promise<readonly RecommendationRow[]> {
   const categoryPreference = textPreference(
     Prisma.sql`category."slug"`,
@@ -250,6 +269,18 @@ function loadRecommendationRows(
         AND company."dataProvenance" = 'LIVE'::"DataProvenance"
       `
     : Prisma.empty;
+  const canUseSyntheticResponse = canUseSyntheticPublicResponseEvidence(
+    applicationEnvironment,
+  );
+  const responseTargetDays = canUseSyntheticResponse
+    ? Prisma.sql`company."responseTargetDays"`
+    : Prisma.sql`NULL::integer`;
+  const responseSampleSize = canUseSyntheticResponse
+    ? Prisma.sql`company."responseSampleSize"`
+    : Prisma.sql`0::integer`;
+  const responseWithinTargetBps = canUseSyntheticResponse
+    ? Prisma.sql`company."responseWithinTargetBps"`
+    : Prisma.sql`NULL::integer`;
 
   return transaction.$queryRaw<readonly RecommendationRow[]>(Prisma.sql`
     SELECT
@@ -266,10 +297,11 @@ function loadRecommendationRows(
       company."name" AS "companyName",
       company."status"::text AS "companyStatus",
       company."dataProvenance" AS "companyDataProvenance",
-      company."responseTargetDays",
-      company."responseSampleSize",
-      company."responseWithinTargetBps",
+      ${responseTargetDays} AS "responseTargetDays",
+      ${responseSampleSize} AS "responseSampleSize",
+      ${responseWithinTargetBps} AS "responseWithinTargetBps",
       revision."id" AS "revisionId",
+      revision."responseTargetDays" AS "revisionResponseTargetDays",
       revision."title",
       revision."description",
       revision."approvedAt",
@@ -631,7 +663,7 @@ function toEligibilitySnapshot(
       salaryMin: row.salaryMin,
       salaryMax: row.salaryMax,
       salaryPeriod: row.salaryPeriod,
-      responseTargetDays: row.responseTargetDays ?? 7,
+      responseTargetDays: row.revisionResponseTargetDays,
       remoteType: row.remoteType,
       jobType: row.jobType,
       workloadMin: row.workloadMin,
@@ -646,6 +678,7 @@ function toEligibilitySnapshot(
 function toRecommendationProjection(
   row: RecommendationRow,
   trustDescriptor: CompanyTrustPublicDescriptor | null,
+  applicationEnvironment: ApplicationEnvironment,
 ): CandidateRecommendationProjection {
   const skills = parseSkills(row.skills);
   const languages = parseLanguages(row.languages);
@@ -699,7 +732,7 @@ function toRecommendationProjection(
       applicationEffort: row.applicationEffort,
       contentLanguage: row.contentLanguage,
       fairScore: row.fairScore,
-      response: responseEvidence(row),
+      response: responseEvidence(row, applicationEnvironment),
       publishedAt: new Date(row.publishedAt!),
       expiresAt: new Date(row.expiresAt!),
       dataProvenance: row.dataProvenance,
@@ -774,30 +807,9 @@ function responseEvidence(
     RecommendationRow,
     "responseTargetDays" | "responseSampleSize" | "responseWithinTargetBps"
   >,
+  applicationEnvironment: ApplicationEnvironment,
 ): PublicResponseEvidence {
-  const known =
-    Number.isSafeInteger(company.responseSampleSize) &&
-    company.responseSampleSize >= ANALYTICS_MINIMUM_COHORT_SIZE_V1 &&
-    Number.isInteger(company.responseTargetDays) &&
-    company.responseTargetDays !== null &&
-    company.responseTargetDays >=
-      EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min &&
-    company.responseTargetDays <=
-      EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max &&
-    Number.isInteger(company.responseWithinTargetBps) &&
-    company.responseWithinTargetBps !== null &&
-    company.responseWithinTargetBps >= 0 &&
-    company.responseWithinTargetBps <= 10_000;
-  return Object.freeze({
-    known,
-    targetDays: known ? company.responseTargetDays : null,
-    onTimeRateBps: known ? company.responseWithinTargetBps : null,
-    sampleSizeBucket: known
-      ? company.responseSampleSize >= 50
-        ? "50+"
-        : "20–49"
-      : null,
-  });
+  return projectSyntheticPublicResponseEvidence(company, applicationEnvironment);
 }
 
 function toPublicTrustBadge(

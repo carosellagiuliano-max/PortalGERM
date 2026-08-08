@@ -13,7 +13,7 @@ import {
 
 test.describe.configure({ mode: "serial" });
 
-test("[E2E-21] @journey preserves CV v1 through replacement and lets only the owning employer download it once", async ({
+test("[E2E-21][E2E-34-13] @journey @phase34 preserves CV v1 through replacement and lets only the owning employer download it once", async ({
   browser,
   page,
 }) => {

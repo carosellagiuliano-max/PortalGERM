@@ -13,6 +13,8 @@ import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quo
 import { getEmployerContext } from "@/lib/auth/employer-context";
 import { PHASE31_RESEARCH_COPY } from "@/lib/commercial/production-offer";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
+import { isLegacyMockBillingAllowed } from "@/lib/billing/mock-billing-policy";
 
 export const metadata: Metadata = {
   title: "Preise für Arbeitgeber",
@@ -24,6 +26,9 @@ export const runtime = "nodejs";
 
 export default async function PricingPage() {
   const now = new Date();
+  const mockCheckoutAvailable = isLegacyMockBillingAllowed(
+    getServerEnvironment(),
+  );
   const [catalog, employerContext] = await Promise.all([
     getPublicPricingCatalog(now),
     getEmployerContext(),
@@ -59,6 +64,7 @@ export default async function PricingPage() {
             canManagePlan: false,
             canStartPlanChange: false,
             currentPlanCode: null,
+            mockCheckoutAvailable,
           }
       : {
           canManagePlan: current.membershipRole === "OWNER",
@@ -69,6 +75,7 @@ export default async function PricingPage() {
             | "PRO"
             | "BUSINESS"
             | "ENTERPRISE_CONTRACT",
+          mockCheckoutAvailable,
         };
   const canBuyContactPack =
     current?.companyStatus === "ACTIVE" &&
@@ -89,7 +96,9 @@ export default async function PricingPage() {
         </p>
         <div className="mt-6 inline-flex items-center gap-2 rounded-full border bg-muted/25 px-4 py-2 text-sm">
           <ShieldCheckIcon className="size-4 text-primary" aria-hidden="true" />
-          Lokaler Mock-Checkout · keine echte Belastung oder automatische Verlängerung
+          {mockCheckoutAvailable
+            ? "Lokaler Mock-Checkout · keine echte Belastung oder automatische Verlängerung"
+            : "Self-Service-Käufe serverseitig gesperrt · Angebote unverbindlich"}
         </div>
         <div
           className="mx-auto mt-6 max-w-3xl rounded-xl border border-amber-300 bg-amber-50 p-4 text-left text-amber-950"
@@ -128,6 +137,7 @@ export default async function PricingPage() {
                 product={product}
                 canBuyContactPack={canBuyContactPack}
                 signedInEmployer={employerContext !== null}
+                mockCheckoutAvailable={mockCheckoutAvailable}
               />
             ))}
             <SuccessFeeCard />

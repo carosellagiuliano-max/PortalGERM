@@ -28,6 +28,11 @@ import {
   type RevealValue,
 } from "@/lib/privacy/reveal-dto";
 import { canSeeRadarIdentity } from "@/lib/talentradar/can-see-identity";
+import {
+  decideTalentRadarRuntimeGate,
+  lockTalentRadarRuntimeGate,
+  type TalentRadarLegalEnvironment,
+} from "@/lib/talentradar/legal-gate";
 
 const AUDIT_RETENTION_MS = 10 * 365 * 24 * 60 * 60 * 1_000;
 const TOKEN_CONTEXT = "swisstalenthub:talent-radar:reveal-preview:v1";
@@ -96,7 +101,11 @@ export type CandidateRevealPreviewResult =
     }>
   | Readonly<{
       ok: false;
-      code: "UNAVAILABLE" | "FIELD_UNAVAILABLE" | "ALREADY_REVEALED";
+      code:
+        | "UNAVAILABLE"
+        | "FIELD_UNAVAILABLE"
+        | "ALREADY_REVEALED"
+        | "LEGAL_GATE_BLOCKED";
     }>;
 
 export type RevealGrantResult =
@@ -114,7 +123,8 @@ export type RevealGrantResult =
         | "INVALID_CONFIRMATION"
         | "STALE_REVEAL_PREVIEW"
         | "FIELD_UNAVAILABLE"
-        | "ALREADY_REVEALED";
+        | "ALREADY_REVEALED"
+        | "LEGAL_GATE_BLOCKED";
     }>;
 
 export type EmployerRadarRequestView = Readonly<{
@@ -132,88 +142,106 @@ export async function buildCandidateRevealPreview(
   database: DatabaseClient,
   raw: unknown,
   confirmationKeys: readonly RevealKey[],
+  legalGateEnvironment: TalentRadarLegalEnvironment,
 ): Promise<CandidateRevealPreviewResult> {
   const parsed = previewCommandSchema.safeParse(raw);
   if (!parsed.success || !validDate(parsed.data.now)) return unavailable();
   const command = parsed.data;
-  const request = await database.employerContactRequest.findFirst({
-    where: {
-      id: command.contactRequestId,
-      status: "ACCEPTED",
-      candidateProfile: { userId: command.actorUserId },
-    },
-    select: {
-      id: true,
-      companyId: true,
-      candidateProfileId: true,
-      company: {
-        select: {
-          name: true,
-          status: true,
-          verificationRequests: {
-            where: { status: "VERIFIED", supersededBy: null },
-            take: 2,
-            select: { id: true },
+  return database.$transaction(async (transaction) => {
+    const legalGate = await decideTalentRadarRuntimeGate(transaction, {
+      scope: "TALENT_RADAR",
+      environment: legalGateEnvironment,
+      now: command.now,
+    });
+    if (!legalGate.allowed) {
+      return Object.freeze({
+        ok: false as const,
+        code: "LEGAL_GATE_BLOCKED" as const,
+      });
+    }
+    const request = await transaction.employerContactRequest.findFirst({
+      where: {
+        id: command.contactRequestId,
+        status: "ACCEPTED",
+        candidateProfile: { userId: command.actorUserId },
+      },
+      select: {
+        id: true,
+        companyId: true,
+        candidateProfileId: true,
+        company: {
+          select: {
+            name: true,
+            status: true,
+            verificationRequests: {
+              where: { status: "VERIFIED", supersededBy: null },
+              take: 2,
+              select: { id: true },
+            },
+          },
+        },
+        candidateProfile: { select: { user: { select: { status: true } } } },
+        conversation: { select: { id: true, kind: true } },
+        revealGrant: {
+          select: {
+            revokedAt: true,
+            fields: { select: { field: true } },
           },
         },
       },
-      candidateProfile: { select: { user: { select: { status: true } } } },
-      conversation: { select: { id: true, kind: true } },
-      revealGrant: {
-        select: {
-          revokedAt: true,
-          fields: { select: { field: true } },
-        },
+    });
+    const trust = request === null
+      ? null
+      : await evaluateCompanyTrustForCompany(transaction, request.companyId, {
+          now: command.now,
+        });
+    if (
+      request === null ||
+      request.conversation?.kind !== "TALENT_RADAR" ||
+      trust?.radarEligible !== true ||
+      request.candidateProfile.user.status !== "ACTIVE" ||
+      request.revealGrant?.revokedAt != null
+    ) {
+      return unavailable();
+    }
+    const existing = new Set(
+      request.revealGrant?.fields.map(({ field }) => field) ?? [],
+    );
+    if (command.fields.some((field) => existing.has(field))) {
+      return Object.freeze({ ok: false, code: "ALREADY_REVEALED" });
+    }
+    const values = await loadCurrentRevealValues(
+      transaction,
+      request.candidateProfileId,
+      command.fields,
+    );
+    if (values === null) {
+      return Object.freeze({ ok: false, code: "FIELD_UNAVAILABLE" });
+    }
+    const preview = buildRevealPreview(
+      values,
+      {
+        contactRequestId: request.id,
+        conversationId: request.conversation.id,
+        candidateProfileId: request.candidateProfileId,
+        companyId: request.companyId,
       },
-    },
-  });
-  const trust = request === null
-    ? null
-    : await evaluateCompanyTrustForCompany(database, request.companyId, {
-        now: command.now,
-      });
-  if (
-    request === null ||
-    request.conversation?.kind !== "TALENT_RADAR" ||
-    trust?.radarEligible !== true ||
-    request.candidateProfile.user.status !== "ACTIVE" ||
-    request.revealGrant?.revokedAt != null
-  ) {
-    return unavailable();
-  }
-  const existing = new Set(
-    request.revealGrant?.fields.map(({ field }) => field) ?? [],
-  );
-  if (command.fields.some((field) => existing.has(field))) {
-    return Object.freeze({ ok: false, code: "ALREADY_REVEALED" });
-  }
-  const values = await loadCurrentRevealValues(
-    database,
-    request.candidateProfileId,
-    command.fields,
-  );
-  if (values === null) {
-    return Object.freeze({ ok: false, code: "FIELD_UNAVAILABLE" });
-  }
-  const preview = buildRevealPreview(
-    values,
-    {
-      contactRequestId: request.id,
-      conversationId: request.conversation.id,
-      candidateProfileId: request.candidateProfileId,
-      companyId: request.companyId,
-    },
-    confirmationKeys,
-    command.now,
-  );
-  return Object.freeze({
-    ok: true,
-    values: preview.values,
-    confirmationToken: signPreviewToken(preview.evidence, command.now, confirmationKeys),
-    expiresAt: new Date(preview.evidence.expiresAt),
-    recipientCompanyName: request.company.name,
-    noticeVersion: REVEAL_SNAPSHOT_POLICY_V1.noticeVersion,
-  });
+      confirmationKeys,
+      command.now,
+    );
+    return Object.freeze({
+      ok: true,
+      values: preview.values,
+      confirmationToken: signPreviewToken(
+        preview.evidence,
+        command.now,
+        confirmationKeys,
+      ),
+      expiresAt: new Date(preview.evidence.expiresAt),
+      recipientCompanyName: request.company.name,
+      noticeVersion: REVEAL_SNAPSHOT_POLICY_V1.noticeVersion,
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
 export async function grantRevealFields(
@@ -222,6 +250,7 @@ export async function grantRevealFields(
   keys: Readonly<{
     confirmation: readonly RevealKey[];
     pii: readonly RevealKey[];
+    legalGateEnvironment: TalentRadarLegalEnvironment;
   }>,
 ): Promise<RevealGrantResult> {
   const parsed = grantCommandSchema.safeParse(raw);
@@ -244,6 +273,17 @@ export async function grantRevealFields(
       conversationId: token.conversationId,
     },
     async (authorization, transaction) => {
+      const initialLegalGate = await lockTalentRadarRuntimeGate(transaction, {
+        scope: "TALENT_RADAR",
+        environment: keys.legalGateEnvironment,
+        now: command.now,
+      });
+      if (!initialLegalGate.allowed) {
+        return Object.freeze({
+          ok: false as const,
+          code: "LEGAL_GATE_BLOCKED" as const,
+        });
+      }
       const replay = await transaction.identityRevealConfirmation.findUnique({
         where: { idempotencyKey: command.idempotencyKey },
         select: {

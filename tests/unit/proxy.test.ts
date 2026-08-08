@@ -214,6 +214,7 @@ describe("proxy", () => {
   });
 
   it("falls back safely for invalid or insufficient forwarded IP chains", () => {
+    vi.stubEnv("APP_ENV", "local");
     vi.stubEnv("TRUSTED_PROXY_HOPS", "3");
     const request = new NextRequest("https://swisstalenthub.test/", {
       headers: { "x-forwarded-for": "not-an-ip, 203.0.113.5" },
@@ -224,6 +225,40 @@ describe("proxy", () => {
     expect(
       response.headers.get(`x-middleware-request-${TRUSTED_SOURCE_IP_HEADER}`),
     ).toBe("127.0.0.1");
+  });
+
+  it.each(["preview", "staging", "production"])(
+    "rejects malformed or missing forwarded topology in %s",
+    (appEnvironment) => {
+      vi.stubEnv("APP_ENV", appEnvironment);
+      vi.stubEnv("TRUSTED_PROXY_HOPS", "2");
+
+      for (const headers of [
+        undefined,
+        { "x-forwarded-for": "not-an-ip, 203.0.113.5" },
+        { "x-forwarded-for": "203.0.113.5" },
+      ]) {
+        const response = proxy(
+          new NextRequest("https://swisstalenthub.test/login", { headers }),
+        );
+        expect(response.status).toBe(400);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+      }
+    },
+  );
+
+  it("fails unavailable when public ingress has no trusted-hop configuration", () => {
+    vi.stubEnv("APP_ENV", "production");
+    vi.stubEnv("TRUSTED_PROXY_HOPS", "0");
+    const response = proxy(
+      new NextRequest("https://swisstalenthub.test/login", {
+        headers: { "x-forwarded-for": "203.0.113.5" },
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
   it.each([

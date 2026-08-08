@@ -123,6 +123,7 @@ export async function previewCandidateRadarRevealAction(
     revealKeyring(
       dependencies.environment.secrets.keyrings.REVEAL_CONFIRMATION_KEYS,
     ),
+    dependencies.environment,
   );
   if (!result.ok) {
     return errorState(revealPreviewError(result.code));
@@ -190,6 +191,7 @@ export async function grantCandidateRadarRevealAction(
         environment.secrets.keyrings.REVEAL_CONFIRMATION_KEYS,
       ),
       pii: revealKeyring(environment.secrets.keyrings.PII_REVEAL_KEYS),
+      legalGateEnvironment: environment,
     },
   );
   if (!result.ok) return errorState(revealGrantError(result.code));
@@ -268,6 +270,7 @@ async function runLifecycleAction(
   const serviceDependencies = {
     correlationId: dependencies.correlationId,
     database: dependencies.database,
+    legalGateEnvironment: dependencies.environment,
     now: new Date(),
   };
   const result =
@@ -286,6 +289,8 @@ async function runLifecycleAction(
     return errorState(
       result.code === "CONFLICT"
         ? "Diese Anfrage ist nicht mehr offen. Lade die Seite neu."
+        : result.code === "LEGAL_GATE_BLOCKED"
+          ? "Annehmen bleibt gesperrt, bis die aktuelle Datenschutz-, AVG- und DSFA-Freigabe dokumentiert ist. Ablehnen ist weiterhin möglich."
         : result.code === "TRUST_REQUIRED"
           ? "Die Firma ist derzeit nicht verifiziert."
           : GENERIC_ERROR,
@@ -390,6 +395,9 @@ function revalidateRequestPaths(requestId: string): void {
 }
 
 function revealPreviewError(code: string): string {
+  if (code === "LEGAL_GATE_BLOCKED") {
+    return "Neue Identitätsfreigaben bleiben gesperrt, bis die aktuelle Datenschutz-, AVG- und DSFA-Freigabe dokumentiert ist.";
+  }
   if (code === "FIELD_UNAVAILABLE") {
     return "Mindestens ein gewählter Wert ist im SwissJobPass nicht verfügbar.";
   }
@@ -400,6 +408,9 @@ function revealPreviewError(code: string): string {
 }
 
 function revealGrantError(code: string): string {
+  if (code === "LEGAL_GATE_BLOCKED") {
+    return "Neue Identitätsfreigaben bleiben gesperrt, bis die aktuelle Datenschutz-, AVG- und DSFA-Freigabe dokumentiert ist.";
+  }
   if (code === "STALE_REVEAL_PREVIEW") {
     return "Deine Daten haben sich seit der Vorschau geändert. Erstelle eine neue Vorschau.";
   }

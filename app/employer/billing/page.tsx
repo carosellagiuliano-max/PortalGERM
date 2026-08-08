@@ -31,6 +31,7 @@ import { getEmployerBillingOverview } from "@/lib/billing/employer-read-model";
 import { getDatabase } from "@/lib/db/client";
 import { formatChfFromRappen, formatDate } from "@/lib/utils/format";
 import { getServerEnvironment } from "@/lib/config/env";
+import { isLegacyMockBillingAllowed } from "@/lib/billing/mock-billing-policy";
 
 export const metadata: Metadata = {
   title: "Billing und Abonnement",
@@ -41,6 +42,8 @@ export const runtime = "nodejs";
 
 export default async function EmployerBillingPage() {
   const { context } = await requireEmployerBillingPage();
+  const environment = getServerEnvironment();
+  const mockCheckoutAvailable = isLegacyMockBillingAllowed(environment);
   const now = new Date();
   const overview = await getEmployerBillingOverview(
     getDatabase(),
@@ -72,8 +75,9 @@ export default async function EmployerBillingPage() {
           </h1>
           <p className="mt-3 max-w-3xl leading-7 text-muted-foreground">
             Transparente CHF-Beträge, unveränderliche Rechnungen und getrennte
-            Guthabenquellen. Der lokale Mock bleibt als klar gekennzeichnete
-            Demo; reale Käufe sind bis zu allen Freigaben serverseitig gesperrt.
+            Guthabenquellen. {mockCheckoutAvailable
+              ? "Der lokale Mock bleibt als klar gekennzeichnete Demo; reale Käufe sind bis zu allen Freigaben serverseitig gesperrt."
+              : "Käufe bleiben bis zu allen dokumentierten Freigaben serverseitig gesperrt; ein lokaler Mock ist in dieser Umgebung nicht verfügbar."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -161,18 +165,21 @@ export default async function EmployerBillingPage() {
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {isOwner && overview.plan.pendingChange === null ? (
-            <PlanActions currentCode={overview.plan.code} />
+            <PlanActions
+              currentCode={overview.plan.code}
+              mockCheckoutAvailable={mockCheckoutAvailable}
+            />
           ) : !isOwner ? (
             <Badge variant="outline">Planänderung nur durch Inhaber:in</Badge>
           ) : null}
-          {overview.usage.talentRadarAccess ? (
+          {mockCheckoutAvailable && overview.usage.talentRadarAccess ? (
             <Link
               href="/employer/billing/checkout?product=contact-pack-10"
               className={buttonVariants({ variant: "outline" })}
             >
               Contact Pack kaufen
             </Link>
-          ) : isOwner ? (
+          ) : mockCheckoutAvailable && isOwner ? (
             <Link
               href="/employer/billing/checkout?plan=pro"
               className={buttonVariants({ variant: "outline" })}
@@ -217,7 +224,7 @@ export default async function EmployerBillingPage() {
               idempotencyKey={randomUUID()}
               retentionOptions={overview.cancellationRetentionOptions}
               stepUpRequired={
-                getServerEnvironment().PRIVILEGED_STEP_UP_MODE === "enforce"
+                environment.PRIVILEGED_STEP_UP_MODE === "enforce"
               }
               subscriptionId={overview.plan.subscriptionId ?? undefined}
             />
@@ -322,7 +329,20 @@ function MetricCard({
   );
 }
 
-function PlanActions({ currentCode }: Readonly<{ currentCode: string }>) {
+function PlanActions({
+  currentCode,
+  mockCheckoutAvailable,
+}: Readonly<{ currentCode: string; mockCheckoutAvailable: boolean }>) {
+  if (!mockCheckoutAvailable) {
+    return (
+      <Link
+        href="/employer/billing/subscription"
+        className={buttonVariants()}
+      >
+        Kaufstatus und Freigaben prüfen <ArrowRightIcon aria-hidden="true" />
+      </Link>
+    );
+  }
   if (currentCode === "FREE_BASIC") {
     return (
       <>

@@ -5,15 +5,11 @@ import {
   buildRadarOpaqueLookup,
   type RadarOpaqueKey,
 } from "@/lib/privacy/radar-opaque";
-import {
-  createPrismaRadarCandidateListRepository,
-} from "@/lib/talentradar/list-candidates";
+import { createPrismaRadarCandidateListRepository } from "@/lib/talentradar/list-candidates";
 import { getRadarOpaqueEpoch } from "@/lib/talentradar/opaque-id";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
-type MigratedDatabase = Awaited<
-  ReturnType<typeof createMigratedTestDatabase>
->;
+type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const CANDIDATE_ID = "22222222-2222-4222-8222-222222222222";
@@ -87,7 +83,6 @@ afterAll(async () => {
 
 describe.sequential("Phase 17 Radar opaque PostgreSQL roundtrip", () => {
   it("returns the same decryptable token after a freshly persisted epoch mapping", async () => {
-    const repository = createPrismaRadarCandidateListRepository(db());
     const input = {
       companyId: COMPANY_ID,
       candidateProfileId: CANDIDATE_ID,
@@ -95,8 +90,14 @@ describe.sequential("Phase 17 Radar opaque PostgreSQL roundtrip", () => {
       lookupKeyring: LOOKUP_KEYS,
       encryptionKeyring: ENCRYPTION_KEYS,
     };
+    const getOrCreate = () =>
+      db().$transaction((transaction) =>
+        createPrismaRadarCandidateListRepository(
+          transaction,
+        ).getOrCreateOpaqueId(input),
+      );
 
-    const first = await repository.getOrCreateOpaqueId(input);
+    const first = await getOrCreate();
     const persisted = await db().radarOpaqueMapping.findUniqueOrThrow({
       where: {
         candidateProfileId_companyId_epoch: {
@@ -117,7 +118,7 @@ describe.sequential("Phase 17 Radar opaque PostgreSQL roundtrip", () => {
       lookupKeyVersion: persisted.lookupKeyVersion,
     });
 
-    await expect(repository.getOrCreateOpaqueId(input)).resolves.toBe(first);
+    await expect(getOrCreate()).resolves.toBe(first);
     await expect(
       db().radarOpaqueMapping.count({
         where: {
@@ -129,7 +130,6 @@ describe.sequential("Phase 17 Radar opaque PostgreSQL roundtrip", () => {
   });
 
   it("converges concurrent first reads on one row-id-bound token", async () => {
-    const repository = createPrismaRadarCandidateListRepository(db());
     const input = {
       companyId: COMPANY_ID,
       candidateProfileId: CONCURRENT_CANDIDATE_ID,
@@ -140,11 +140,21 @@ describe.sequential("Phase 17 Radar opaque PostgreSQL roundtrip", () => {
 
     const tokens = await Promise.all(
       Array.from({ length: 8 }, () =>
-        repository.getOrCreateOpaqueId(input),
+        db().$transaction((transaction) =>
+          createPrismaRadarCandidateListRepository(
+            transaction,
+          ).getOrCreateOpaqueId(input),
+        ),
       ),
     );
     expect(new Set(tokens)).toEqual(new Set([tokens[0]]));
-    await expect(repository.getOrCreateOpaqueId(input)).resolves.toBe(tokens[0]);
+    await expect(
+      db().$transaction((transaction) =>
+        createPrismaRadarCandidateListRepository(
+          transaction,
+        ).getOrCreateOpaqueId(input),
+      ),
+    ).resolves.toBe(tokens[0]);
     await expect(
       db().radarOpaqueMapping.count({
         where: {

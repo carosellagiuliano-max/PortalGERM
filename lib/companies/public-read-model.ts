@@ -3,9 +3,6 @@ import "server-only";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import {
-  EMPLOYER_RESPONSE_POLICY_V1,
-} from "@/lib/analytics/response-policy-v1";
-import {
   getEffectiveEntitlements,
   type EntitlementGrantRecord,
   type EntitlementRepository,
@@ -17,6 +14,7 @@ import {
   companyTrustActivationFromEnvironment,
   evaluateCompanyTrustForCompanies,
 } from "@/lib/companies/verification/read-model";
+import type { ApplicationEnvironment } from "@/lib/config/application-environment";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import type { DatabaseClient } from "@/lib/db/factory";
@@ -34,6 +32,10 @@ import type {
   PublicJobCardModel,
   PublicResponseEvidence,
 } from "@/lib/public/types";
+import {
+  projectSyntheticPublicResponseEvidence,
+  UNKNOWN_PUBLIC_RESPONSE_EVIDENCE,
+} from "@/lib/search/public-response-evidence-policy";
 import { stripUnsafeHtml } from "@/lib/security/sanitize";
 
 export type PublicCompanyEligibilityEnvironment =
@@ -88,6 +90,8 @@ export type PublicCompanyReadOptions = Readonly<{
   /** Test seams; runtime callers use the validated activation contract. */
   trustActivation?: CompanyTrustActivation;
   trustEnvironment?: "local" | "ci" | "preview" | "staging" | "production";
+  /** Test seam; runtime callers use the validated server environment. */
+  applicationEnvironment?: ApplicationEnvironment;
 }>;
 
 export type PublicCompanyJobsLoader = (
@@ -118,13 +122,6 @@ const MAX_CARD_BENEFITS = 3;
 const MAX_VALUE_LENGTH = 240;
 const MAX_CURSOR_LENGTH = 2_048;
 const DIRECTORY_CURSOR_VERSION = "v1";
-
-const UNKNOWN_RESPONSE: PublicResponseEvidence = Object.freeze({
-  known: false,
-  targetDays: null,
-  onTimeRateBps: null,
-  sampleSizeBucket: null,
-});
 
 const PUBLIC_COMPANY_CARD_SELECT = {
   id: true,
@@ -209,6 +206,8 @@ export function projectPublicCompanyCard(
     environment: PublicCompanyEligibilityEnvironment;
     enhancedProfile: boolean;
     openJobCount: number;
+    /** Undefined fails closed; runtime callers always pass APP_ENV. */
+    applicationEnvironment?: ApplicationEnvironment;
   }>,
 ): PublicCompanyCardModel | null {
   if (!evaluatePublicCompanyEligibility(source, input.environment) || source === null) {
@@ -244,8 +243,12 @@ export function projectPublicCompanyCard(
         ? sanitizeList(source.benefits, MAX_CARD_BENEFITS)
         : Object.freeze([]),
     response: hasResponseEvidenceSource(source)
-      ? projectPublicResponseEvidence(source, input.enhancedProfile)
-      : UNKNOWN_RESPONSE,
+      ? projectPublicResponseEvidence(
+          source,
+          input.enhancedProfile,
+          input.applicationEnvironment,
+        )
+      : UNKNOWN_PUBLIC_RESPONSE_EVIDENCE,
     dataProvenance: source.dataProvenance,
   });
 }
@@ -256,6 +259,8 @@ export function projectPublicCompanyDetail(
     environment: PublicCompanyEligibilityEnvironment;
     enhancedProfile: boolean;
     jobs: readonly PublicJobCardModel[];
+    /** Undefined fails closed; runtime callers always pass APP_ENV. */
+    applicationEnvironment?: ApplicationEnvironment;
   }>,
 ): PublicCompanyDetailModel | null {
   if (source === null) return null;
@@ -270,6 +275,9 @@ export function projectPublicCompanyDetail(
     environment: input.environment,
     enhancedProfile: input.enhancedProfile,
     openJobCount: jobs.length,
+    ...(input.applicationEnvironment === undefined
+      ? {}
+      : { applicationEnvironment: input.applicationEnvironment }),
   });
   if (card === null) return null;
 
@@ -337,6 +345,8 @@ export async function listPublicCompanyDirectory(
     options.trustActivation ?? companyTrustActivationFromEnvironment();
   const trustEnvironment =
     options.trustEnvironment ?? getServerEnvironment().APP_ENV;
+  const applicationEnvironment =
+    options.applicationEnvironment ?? trustEnvironment;
   const queryHash = createCompanyDirectoryQueryHash(
     normalizedInput,
     dataContext.liveOnly,
@@ -358,25 +368,24 @@ export async function listPublicCompanyDirectory(
 
   const loaded = await database.$transaction(
     async (transaction) => {
-      const [restrictions, activeContainments] = await Promise.all([
-        transaction.moderationRestriction.findMany({
-          where: {
-            targetType: "PAUSE_COMPANY",
-            status: "ACTIVE",
-            startsAt: { lte: now },
-            liftedAt: null,
-            OR: [{ endsAt: null }, { endsAt: { gt: now } }],
-          },
-          select: { targetId: true },
-        }),
-        transaction.trustSafetyContainmentEffect.findMany({
+      const restrictions = await transaction.moderationRestriction.findMany({
+        where: {
+          targetType: "PAUSE_COMPANY",
+          status: "ACTIVE",
+          startsAt: { lte: now },
+          liftedAt: null,
+          OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+        },
+        select: { targetId: true },
+      });
+      const activeContainments =
+        await transaction.trustSafetyContainmentEffect.findMany({
           where: {
             targetType: "COMPANY",
             reversedAt: null,
           },
           select: { targetId: true },
-        }),
-      ]);
+        });
       const excludedIds = [
         ...new Set([
           ...restrictions.map((restriction) => restriction.targetId),
@@ -582,6 +591,7 @@ export async function listPublicCompanyDirectory(
       environment: dataContext.eligibilityEnvironment,
       enhancedProfile,
       openJobCount: openJobCounts.get(source.id) ?? 0,
+      applicationEnvironment,
     });
     return card === null ? [] : [card];
   });
@@ -616,6 +626,7 @@ export async function getPublicCompanyCardBySlug(
         environment: loaded.environment,
         enhancedProfile: false,
         openJobCount,
+        applicationEnvironment: loaded.applicationEnvironment,
       });
 }
 
@@ -631,6 +642,7 @@ export async function getPublicCompanyDetailBySlug(
       environment: loaded.environment,
       enhancedProfile: loaded.enhancedProfile,
       openJobCount: 0,
+      applicationEnvironment: loaded.applicationEnvironment,
     }) === null
   ) {
     return null;
@@ -640,6 +652,7 @@ export async function getPublicCompanyDetailBySlug(
     environment: loaded.environment,
     enhancedProfile: loaded.enhancedProfile,
     jobs,
+    applicationEnvironment: loaded.applicationEnvironment,
   });
 }
 
@@ -649,30 +662,42 @@ async function loadCardProjectionSource(
 ): Promise<Readonly<{
   source: PublicCompanyCardProjectionSource;
   environment: PublicCompanyEligibilityEnvironment;
+  applicationEnvironment: ApplicationEnvironment;
 }> | null> {
   if (!validCompanySlug(slug)) return null;
   const now = options.now ?? new Date();
   if (!isValidDate(now)) return null;
   const database = options.database ?? getDatabase();
   const dataContext = options.dataContext ?? getPublicDataContext();
+  const applicationEnvironment =
+    options.applicationEnvironment ??
+    options.trustEnvironment ??
+    getServerEnvironment().APP_ENV;
 
   return database.$transaction(
     async (transaction) => {
       const company = await transaction.company.findUnique({
+        relationLoadStrategy: "join",
         where: { slug },
         select: PUBLIC_COMPANY_CARD_SELECT,
       });
       if (company === null) return null;
-      const [restrictionCount, trustByCompanyId] = await Promise.all([
-        countEffectiveCompanyPauses(transaction, company.id, now),
-        evaluateCompanyTrustForCompanies(transaction, [company.id], {
+      const restrictionCount = await countEffectiveCompanyPauses(
+        transaction,
+        company.id,
+        now,
+      );
+      const trustByCompanyId = await evaluateCompanyTrustForCompanies(
+        transaction,
+        [company.id],
+        {
           now,
           activation:
             options.trustActivation ?? companyTrustActivationFromEnvironment(),
           environment:
             options.trustEnvironment ?? getServerEnvironment().APP_ENV,
-        }),
-      ]);
+        },
+      );
       const source = toPublicCompanyCardProjectionSource(
         company,
         restrictionCount > 0,
@@ -687,6 +712,7 @@ async function loadCardProjectionSource(
         ? Object.freeze({
             source,
             environment: dataContext.eligibilityEnvironment,
+            applicationEnvironment,
           })
         : null;
     },
@@ -701,6 +727,7 @@ async function loadDetailProjectionSource(
   source: PublicCompanyProjectionSource;
   enhancedProfile: boolean;
   environment: PublicCompanyEligibilityEnvironment;
+  applicationEnvironment: ApplicationEnvironment;
   now: Date;
 }> | null> {
   if (!validCompanySlug(slug)) return null;
@@ -708,25 +735,36 @@ async function loadDetailProjectionSource(
   if (!isValidDate(now)) return null;
   const database = options.database ?? getDatabase();
   const dataContext = options.dataContext ?? getPublicDataContext();
+  const applicationEnvironment =
+    options.applicationEnvironment ??
+    options.trustEnvironment ??
+    getServerEnvironment().APP_ENV;
 
   return database.$transaction(
     async (transaction) => {
       const company = await transaction.company.findUnique({
+        relationLoadStrategy: "join",
         where: { slug },
         select: PUBLIC_COMPANY_DETAIL_SELECT,
       });
       if (company === null) return null;
 
-      const [restrictionCount, trustByCompanyId] = await Promise.all([
-        countEffectiveCompanyPauses(transaction, company.id, now),
-        evaluateCompanyTrustForCompanies(transaction, [company.id], {
+      const restrictionCount = await countEffectiveCompanyPauses(
+        transaction,
+        company.id,
+        now,
+      );
+      const trustByCompanyId = await evaluateCompanyTrustForCompanies(
+        transaction,
+        [company.id],
+        {
           now,
           activation:
             options.trustActivation ?? companyTrustActivationFromEnvironment(),
           environment:
             options.trustEnvironment ?? getServerEnvironment().APP_ENV,
-        }),
-      ]);
+        },
+      );
       const source = toPublicCompanyProjectionSource(
         company,
         restrictionCount > 0,
@@ -752,6 +790,7 @@ async function loadDetailProjectionSource(
         source,
         enhancedProfile,
         environment: dataContext.eligibilityEnvironment,
+        applicationEnvironment,
         now: new Date(now),
       });
     },
@@ -1089,32 +1128,10 @@ function projectPublicResponseEvidence(
     | "responseWithinTargetBps"
   >,
   enhancedProfile: boolean,
+  applicationEnvironment: ApplicationEnvironment | undefined,
 ): PublicResponseEvidence {
-  const targetDays = source.responseTargetDays;
-  const sampleSize = source.responseSampleSize;
-  const onTimeRateBps = source.responseWithinTargetBps;
-  if (
-    !enhancedProfile ||
-    !Number.isInteger(targetDays) ||
-    targetDays === null ||
-    targetDays < EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.min ||
-    targetDays > EMPLOYER_RESPONSE_POLICY_V1.validResponseTargetDays.max ||
-    !Number.isSafeInteger(sampleSize) ||
-    sampleSize < EMPLOYER_RESPONSE_POLICY_V1.minimumDueCases ||
-    !Number.isInteger(onTimeRateBps) ||
-    onTimeRateBps === null ||
-    onTimeRateBps < 0 ||
-    onTimeRateBps > 10_000
-  ) {
-    return UNKNOWN_RESPONSE;
-  }
-
-  return Object.freeze({
-    known: true,
-    targetDays,
-    onTimeRateBps,
-    sampleSizeBucket: sampleSize >= 50 ? "50+" : "20–49",
-  });
+  if (!enhancedProfile) return UNKNOWN_PUBLIC_RESPONSE_EVIDENCE;
+  return projectSyntheticPublicResponseEvidence(source, applicationEnvironment);
 }
 
 function hasResponseEvidenceSource(

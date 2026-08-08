@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { JOB_ALERT_DELIVERY_NOTICE_V2 } from "@/lib/candidate/job-alert-policy";
+import type { JobAlertDeliveryAvailability } from "@/lib/candidate/job-alert-delivery-runtime";
 import type { CandidateJobAlertListItem } from "@/lib/candidate/job-alerts";
 
 type References = Readonly<{
@@ -26,10 +27,12 @@ type References = Readonly<{
 
 export function AlertForm({
   alert,
+  deliveryAvailability,
   deliveryConsentGranted,
   references,
 }: Readonly<{
   alert?: CandidateJobAlertListItem;
+  deliveryAvailability: JobAlertDeliveryAvailability;
   deliveryConsentGranted: boolean;
   references: References;
 }>) {
@@ -44,6 +47,7 @@ export function AlertForm({
   const query = alert?.query;
   const formPrefix = alert?.id ?? "new";
   const active = alert?.status === "ACTIVE";
+  const activationDisabled = !deliveryAvailability.canActivate && !active;
 
   return (
     <form action={action} className="grid gap-5" noValidate>
@@ -189,13 +193,29 @@ export function AlertForm({
         >
           Nur Stellen mit transparenter Lohnspanne
         </CheckboxField>
-        <CheckboxField name="active" defaultChecked={active}>
+        <CheckboxField
+          name="active"
+          defaultChecked={active}
+          disabled={activationDisabled}
+        >
           Dieses Jobabo ausdrücklich aktivieren
         </CheckboxField>
         {alert === undefined ? (
-          <CheckboxField name="deliveryConsentAccepted" defaultChecked={false}>
+          <CheckboxField
+            name="deliveryConsentAccepted"
+            defaultChecked={false}
+            disabled={!deliveryAvailability.canActivate}
+          >
             {JOB_ALERT_DELIVERY_NOTICE_V2.copy}
           </CheckboxField>
+        ) : null}
+        {!deliveryAvailability.canActivate ? (
+          <p className="text-xs leading-5 text-amber-800" role="status">
+            Provider, Worker und Scheduler sind nicht vollständig freigegeben
+            oder erreichbar. Du kannst den Filter pausiert speichern und
+            bestehende aktive Jobabos pausieren; eine neue Aktivierung ist
+            derzeit gesperrt.
+          </p>
         ) : null}
         {!deliveryConsentGranted ? (
           <p className="text-xs leading-5 text-amber-800">
@@ -233,10 +253,12 @@ function Field({
 function CheckboxField({
   name,
   defaultChecked,
+  disabled = false,
   children,
 }: Readonly<{
   name: "salaryTransparentOnly" | "active" | "deliveryConsentAccepted";
   defaultChecked: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
 }>) {
   return (
@@ -246,6 +268,7 @@ function CheckboxField({
         name={name}
         value="true"
         defaultChecked={defaultChecked}
+        disabled={disabled}
         className="mt-1 size-4 shrink-0 accent-primary"
       />
       <span>{children}</span>

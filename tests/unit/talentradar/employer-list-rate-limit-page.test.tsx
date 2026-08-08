@@ -64,8 +64,7 @@ vi.mock("@/lib/talentradar/eligibility", () => ({
   toRadarEligibilityEnvironment: vi.fn(() => "production"),
 }));
 vi.mock("@/lib/talentradar/list-candidates", () => ({
-  createPrismaRadarCandidateListRepository: vi.fn(() => ({})),
-  listRadarCandidates: mocks.listRadarCandidates,
+  listRadarCandidatesWithLockedLegalGate: mocks.listRadarCandidates,
 }));
 vi.mock("@/lib/talentradar/request-contact", () => ({
   signRadarContactSearchSessionProof: vi.fn(),
@@ -88,6 +87,7 @@ const secretKey = Object.freeze({
 });
 const ENVIRONMENT = Object.freeze({
   APP_ENV: "ci",
+  LEGAL_PUBLICATION_PRIVACY: false,
   COMPANY_TRUST_V2: "enforce",
   COMPANY_STRONG_BADGE: true,
   COMPANY_TRUST_PUBLIC_ELIGIBILITY: true,
@@ -146,6 +146,7 @@ describe("employer Radar list rate-limit denial", () => {
     });
     mocks.listRadarCandidates.mockImplementation(
       async (
+        _database: unknown,
         _input: unknown,
         dependencies: {
           membershipRateLimit: {
@@ -153,8 +154,7 @@ describe("employer Radar list rate-limit denial", () => {
               membershipId: string;
               now: Date;
             }): Promise<
-              | { allowed: true }
-              | { allowed: false; retryAfterSeconds: number }
+              { allowed: true } | { allowed: false; retryAfterSeconds: number }
             >;
           };
         },
@@ -171,6 +171,21 @@ describe("employer Radar list rate-limit denial", () => {
             };
       },
     );
+  });
+
+  it("renders the legal lock in preview before company, entitlement or Candidate queries", async () => {
+    mocks.getServerEnvironment.mockReturnValue({
+      ...ENVIRONMENT,
+      APP_ENV: "preview",
+      LEGAL_PUBLICATION_PRIVACY: false,
+    });
+
+    await EmployerTalentRadarPage({ searchParams: Promise.resolve({}) });
+
+    expect(mocks.database.company.findUnique).not.toHaveBeenCalled();
+    expect(mocks.getPrismaEffectiveEntitlements).not.toHaveBeenCalled();
+    expect(mocks.listRadarCandidates).not.toHaveBeenCalled();
+    expect(mocks.database.skill.findMany).not.toHaveBeenCalled();
   });
 
   it("records the denied membership search against its company", async () => {

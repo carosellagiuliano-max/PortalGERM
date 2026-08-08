@@ -392,6 +392,42 @@ describe.sequential(
         send: legacySend,
       };
 
+      const environment = runtimeEnvironment();
+      expect(environment.IDENTITY_VERIFICATION_ENFORCEMENT).toBe(false);
+      const beforeIdentityDenial = await Promise.all([
+        client().application.count(),
+        client().conversation.count(),
+        client().notification.count(),
+        client().notificationOutbox.count(),
+        client().auditLog.count({ where: { action: "APPLICATION_SUBMITTED" } }),
+      ]);
+      await expect(
+        applyToJob(input, {
+          database: client(),
+          environment,
+          request: requestContext(8),
+          currentUser: {
+            ...otherCandidateUser(),
+            emailVerifiedAt: null,
+            identityAssurance: "LOW_ASSURANCE",
+          },
+          emailProvider: retryingProvider,
+          now: NOW,
+        }),
+      ).resolves.toEqual({
+        ok: false,
+        code: "IDENTITY_VERIFICATION_REQUIRED",
+      });
+      await expect(
+        Promise.all([
+          client().application.count(),
+          client().conversation.count(),
+          client().notification.count(),
+          client().notificationOutbox.count(),
+          client().auditLog.count({ where: { action: "APPLICATION_SUBMITTED" } }),
+        ]),
+      ).resolves.toEqual(beforeIdentityDenial);
+
       const unconfirmed = await applyToJob(
         { ...input, confirmed: false },
         {
@@ -733,6 +769,9 @@ describe.sequential(
           },
         }),
       ]);
+      const { searchDocument: _generatedSearchDocument, ...revisionInput } =
+        originalRevision;
+      expect(_generatedSearchDocument).toContain("phase 09");
       const successorRevisionId = randomUUID();
       try {
         await Promise.all([
@@ -758,7 +797,7 @@ describe.sequential(
         ]);
         await client().jobRevision.create({
           data: {
-            ...originalRevision,
+            ...revisionInput,
             id: successorRevisionId,
             revisionNumber: originalRevision.revisionNumber + 1,
             title: "Nachträglich geänderter Stellentitel",
@@ -1740,9 +1779,9 @@ function candidateUser(): CurrentUser {
     role: "CANDIDATE",
     name: "Mara Muster",
     status: "ACTIVE",
-    emailVerifiedAt: null,
+    emailVerifiedAt: NOW,
     emailAddressEpoch: 1,
-    identityAssurance: "LOW_ASSURANCE",
+    identityAssurance: "VERIFIED_EMAIL",
   });
 }
 
@@ -1753,9 +1792,9 @@ function otherCandidateUser(): CurrentUser {
     role: "CANDIDATE",
     name: "Noah Neben",
     status: "ACTIVE",
-    emailVerifiedAt: null,
+    emailVerifiedAt: NOW,
     emailAddressEpoch: 1,
-    identityAssurance: "LOW_ASSURANCE",
+    identityAssurance: "VERIFIED_EMAIL",
   });
 }
 

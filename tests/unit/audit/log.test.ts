@@ -48,7 +48,7 @@ describe("audit log contract", () => {
     expect(Object.keys(AUDIT_METADATA_SCHEMAS_V1)).toEqual([
       ...AUDIT_ACTIONS_V1,
     ]);
-    expect(Object.keys(AUDIT_METADATA_SCHEMAS_V1)).toHaveLength(209);
+    expect(Object.keys(AUDIT_METADATA_SCHEMAS_V1)).toHaveLength(210);
     expect(AUDIT_ACTOR_KINDS_V1).toEqual(Object.values(AuditActorKind));
     expect(AUDIT_RESULTS_V1).toEqual(Object.values(AuditResult));
     expect(AUDIT_TARGET_TYPES_V1).toEqual(Object.values(AuditTargetType));

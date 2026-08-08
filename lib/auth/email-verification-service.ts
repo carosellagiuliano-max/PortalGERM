@@ -34,6 +34,7 @@ import type {
 import { enqueueNotification } from "@/lib/notifications/outbox";
 import { notificationRecipientMaterialExpiresAt } from "@/lib/notifications/retention";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
+import { createLogger } from "@/lib/utils/logger";
 
 import {
   EMAIL_VERIFICATION_POLICY_V1,
@@ -43,6 +44,7 @@ import { canCommitLoginEmailChange } from "./email-change-policy";
 
 const AUDIT_RETENTION_MILLISECONDS = 365 * 24 * 60 * 60 * 1_000;
 const PUBLIC_TIMING_FLOOR_MILLISECONDS = 250;
+const logger = createLogger();
 
 type VerificationDependencies = Readonly<{
   database: DatabaseClient;
@@ -128,17 +130,25 @@ export async function requestEmailVerification(
         },
         { ...dependencies, now },
       ),
-      dependencies.database.authSecurityEvent.create({
-        data: {
-          kind: "VERIFICATION_RATE_LIMITED",
-          targetHash,
-          correlationId: dependencies.request.correlationId,
-          outcomeCode: "RATE_LIMITED",
-          occurredAt: now,
-          retainUntil: securityRetainUntil(now),
-        },
-        select: { id: true },
-      }),
+      dependencies.database.authSecurityEvent
+        .create({
+          data: {
+            kind: "VERIFICATION_RATE_LIMITED",
+            targetHash,
+            correlationId: dependencies.request.correlationId,
+            outcomeCode: "RATE_LIMITED",
+            occurredAt: now,
+            retainUntil: securityRetainUntil(now),
+          },
+          select: { id: true },
+        })
+        .catch(() =>
+          reportVerificationObservabilityFailure(
+            "security.verification_signal_write_failed",
+            "VERIFICATION_RATE_LIMIT_SIGNAL_WRITE_FAILED",
+            dependencies.request.correlationId,
+          ),
+        ),
     ]);
     await completeTimingEnvelope(startedAt);
     return Object.freeze({
@@ -195,6 +205,11 @@ export async function requestEmailVerification(
   } catch {
     // The public contract is deliberately indistinguishable for unknown
     // identities, uniqueness races and persistence failures.
+    reportVerificationObservabilityFailure(
+      "security.verification_request_failed",
+      "VERIFICATION_REQUEST_FAILED",
+      dependencies.request.correlationId,
+    );
   }
   await completeTimingEnvelope(startedAt);
   return Object.freeze({ ok: true as const, rateLimited: false });
@@ -763,6 +778,27 @@ async function recordRejectedConsume(
     });
   } catch {
     // A redacted signal must not alter the public token result.
+    reportVerificationObservabilityFailure(
+      "security.verification_signal_write_failed",
+      "VERIFICATION_REJECTED_SIGNAL_WRITE_FAILED",
+      dependencies.request.correlationId,
+    );
+  }
+}
+
+function reportVerificationObservabilityFailure(
+  event: string,
+  errorCode: string,
+  correlationId: string,
+) {
+  try {
+    logger.error(
+      event,
+      { errorCode, operation: "email_verification" },
+      correlationId,
+    );
+  } catch {
+    // Observability must never change enumeration-safe verification results.
   }
 }
 

@@ -33,6 +33,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { JOB_ALERT_DELIVERY_NOTICE_V2 } from "@/lib/candidate/job-alert-policy";
+import type { JobAlertDeliveryAvailability } from "@/lib/candidate/job-alert-delivery-runtime";
 import type { CandidateJobAlertPageData } from "@/lib/candidate/job-alerts";
 
 type Action = (
@@ -41,34 +42,56 @@ type Action = (
 ) => Promise<JobAlertActionState>;
 
 export function AlertDeliveryConsentCard({
+  availability,
   granted,
-}: Readonly<{ granted: boolean }>) {
+}: Readonly<{
+  availability: JobAlertDeliveryAvailability;
+  granted: boolean;
+}>) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h2">Service-Zustellung</CardTitle>
+        <CardTitle as="h2">Jobabo-Einwilligung</CardTitle>
         <CardDescription>
-          Eigenständige Einwilligung nur für Jobabos; unabhängig von Marketing.
+          Eigenständige Einwilligung nur für Jobabos; sie aktiviert keinen
+          technischen Zustellpfad und ist unabhängig von Marketing.
         </CardDescription>
         <CardAction>
           <Badge variant={granted ? "default" : "secondary"}>
-            {granted ? "Freigegeben" : "Nicht freigegeben"}
+            {granted ? "Einwilligung gespeichert" : "Keine Einwilligung"}
           </Badge>
         </CardAction>
       </CardHeader>
       <CardContent className="grid gap-4">
         <p className="text-sm leading-6 text-muted-foreground">
-          {JOB_ALERT_DELIVERY_NOTICE_V2.copy} Ein globaler Widerruf pausiert
-          alle aktiven Jobabos. Eine spätere Freigabe aktiviert keines davon
+          {JOB_ALERT_DELIVERY_NOTICE_V2.copy} Diese gespeicherte Einwilligung
+          ist keine Zustellbestätigung. Ein globaler Widerruf pausiert alle
+          aktiven Jobabos. Eine spätere Freigabe aktiviert keines davon
           automatisch.
         </p>
+        {!availability.canActivate ? (
+          <p
+            role="status"
+            className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm leading-6 text-amber-950"
+          >
+            Die technische Zustellung ist derzeit gesperrt. Eine vorhandene
+            Einwilligung kann weiterhin widerrufen werden; eine neue
+            Freigabe ist erst mit aktivem Provider-, Worker- und
+            Scheduler-Pfad möglich.
+          </p>
+        ) : null}
         <InlineAction
           action={
             granted ? revokeJobAlertDeliveryAction : grantJobAlertDeliveryAction
           }
           label={
-            granted ? "Zustellung global widerrufen" : "Zustellung freigeben"
+            granted
+              ? "Jobabo-Einwilligung global widerrufen"
+              : availability.canActivate
+                ? "Jobabo-Einwilligung speichern"
+                : "Zustellung derzeit nicht verfügbar"
           }
+          disabled={!granted && !availability.canActivate}
           variant={granted ? "outline" : "default"}
           icon={
             granted ? (
@@ -84,11 +107,11 @@ export function AlertDeliveryConsentCard({
 }
 
 export function AlertList({
+  availability,
   data,
-  manualMockEnabled,
 }: Readonly<{
+  availability: JobAlertDeliveryAvailability;
   data: CandidateJobAlertPageData;
-  manualMockEnabled: boolean;
 }>) {
   if (data.alerts.length === 0) {
     return (
@@ -108,6 +131,7 @@ export function AlertList({
         const title =
           alert.query.keyword || alert.legacyLabel || "Alle passenden Stellen";
         const canResume =
+          availability.canActivate &&
           data.deliveryConsentGranted &&
           alert.status !== "DELETED" &&
           !alert.filterRequiresRepair;
@@ -121,9 +145,13 @@ export function AlertList({
               </CardDescription>
               <CardAction>
                 <Badge
-                  variant={alert.status === "ACTIVE" ? "default" : "secondary"}
+                  variant={
+                    alert.status === "ACTIVE" && availability.canActivate
+                      ? "default"
+                      : "secondary"
+                  }
                 >
-                  {statusLabel(alert.status)}
+                  {statusLabel(alert.status, availability.canActivate)}
                 </Badge>
               </CardAction>
             </CardHeader>
@@ -141,7 +169,11 @@ export function AlertList({
               <dl className="grid gap-3 text-sm sm:grid-cols-3">
                 <Stat
                   label="Nächster Termin"
-                  value={formatDateTime(alert.nextDueAt)}
+                  value={
+                    alert.status === "ACTIVE" && !availability.canActivate
+                      ? "Zustellung gesperrt"
+                      : formatDateTime(alert.nextDueAt)
+                  }
                 />
                 <Stat
                   label="Letzter Digest"
@@ -177,7 +209,7 @@ export function AlertList({
                     icon={<PlayIcon aria-hidden="true" />}
                   />
                 )}
-                {manualMockEnabled ? (
+                {availability.manualMockEnabled ? (
                   <InlineAction
                     action={runJobAlertDigestMockAction.bind(null, alert.id)}
                     label="Fälligen Mock-Digest ausführen"
@@ -214,6 +246,7 @@ export function AlertList({
                 <div className="mt-5">
                   <AlertForm
                     alert={alert}
+                    deliveryAvailability={availability}
                     deliveryConsentGranted={data.deliveryConsentGranted}
                     references={data.references}
                   />
@@ -283,10 +316,15 @@ function frequencyLabel(value: "DAILY" | "WEEKLY") {
   return value === "DAILY" ? "Täglich um 08:00" : "Montags um 08:00";
 }
 
-function statusLabel(value: "ACTIVE" | "PAUSED" | "UNSUBSCRIBED" | "DELETED") {
+function statusLabel(
+  value: "ACTIVE" | "PAUSED" | "UNSUBSCRIBED" | "DELETED",
+  deliveryAvailable: boolean,
+) {
   switch (value) {
     case "ACTIVE":
-      return "Aktiv";
+      return deliveryAvailable
+        ? "Aktiv · Zustellpfad freigegeben"
+        : "Aktivierungswunsch · Zustellung gesperrt";
     case "PAUSED":
       return "Pausiert";
     case "UNSUBSCRIBED":

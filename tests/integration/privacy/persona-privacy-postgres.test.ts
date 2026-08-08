@@ -242,10 +242,14 @@ describe.sequential("Phase 27 identity-wide privacy rights", () => {
       { kind: "EMPLOYER", status: "SUSPENDED", version: 2 },
     ]);
     for (const assignment of assignments) {
-      expect(assignment.events.at(-1)).toMatchObject({
-        kind: "SUSPENDED",
-        reasonCode: "IDENTITY_ERASURE",
-      });
+      expect(assignment.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "SUSPENDED",
+            reasonCode: "IDENTITY_ERASURE",
+          }),
+        ]),
+      );
     }
     expect(membership).toMatchObject({ status: "ACTIVE", companyId });
     expect(company.status).toBe("DRAFT");

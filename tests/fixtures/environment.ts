@@ -27,6 +27,13 @@ export function createValidEnvironment(
     PRIVACY_EXPORT_KEYS: "",
     RATE_LIMIT_BACKEND: "postgres",
     TRUSTED_PROXY_HOPS: "0",
+    IDENTITY_VERIFICATION_ENFORCEMENT:
+      overrides.IDENTITY_VERIFICATION_ENFORCEMENT ??
+      (["preview", "staging", "production"].includes(
+        overrides.APP_ENV ?? "local",
+      )
+        ? "true"
+        : "false"),
     ENABLE_LOCAL_MOCK_MAILBOX: "false",
     ABUSE_REPORT_ADMIN_EMAILS: "admin@demo.ch",
     LOG_LEVEL: "info",

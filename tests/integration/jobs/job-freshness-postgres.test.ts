@@ -20,6 +20,7 @@ import { buildNotificationStorageDedupeKey } from "@/lib/notifications/writer";
 import { listEligibleJobSitemapRows } from "@/lib/seo/public-sitemap";
 import { createValidEnvironment } from "@/tests/fixtures/environment";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
+import { localPublicIntakePrivacyBinding } from "@/tests/fixtures/public-intake-privacy";
 
 type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
@@ -411,6 +412,7 @@ describe.sequential("Phase 30 PostgreSQL job freshness", () => {
           identityAssurance: "VERIFIED_EMAIL",
         },
         now: reportAt,
+        privacyBinding: localPublicIntakePrivacyBinding("ABUSE_REPORT"),
       },
     );
     expect(report).toMatchObject({ ok: true });
@@ -444,6 +446,7 @@ describe.sequential("Phase 30 PostgreSQL job freshness", () => {
           identityAssurance: "VERIFIED_EMAIL",
         },
         now: reportAt,
+        privacyBinding: localPublicIntakePrivacyBinding("ABUSE_REPORT"),
       },
     );
     expect(duplicateReporterSubmission).toMatchObject({ ok: true });
@@ -485,6 +488,7 @@ describe.sequential("Phase 30 PostgreSQL job freshness", () => {
           identityAssurance: "VERIFIED_EMAIL",
         },
         now: reportAt,
+        privacyBinding: localPublicIntakePrivacyBinding("ABUSE_REPORT"),
       },
     );
     expect(secondReport).toMatchObject({ ok: true });
@@ -620,6 +624,7 @@ describe.sequential("Phase 30 PostgreSQL job freshness", () => {
         request: requestContext(id(110), "198.51.100.31"),
         currentUser: null,
         now: reportAt,
+        privacyBinding: localPublicIntakePrivacyBinding("ABUSE_REPORT"),
       },
     );
     expect(anonymous).toMatchObject({ ok: true });

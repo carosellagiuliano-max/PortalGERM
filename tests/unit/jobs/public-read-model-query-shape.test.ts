@@ -15,6 +15,7 @@ const databaseMocks = vi.hoisted(() => ({
   queryRaw: vi.fn(),
   jobRevisionFindFirst: vi.fn(),
   restrictionFindMany: vi.fn(),
+  freshnessFindMany: vi.fn(),
   companyFindMany: vi.fn(),
   containmentFindMany: vi.fn(),
   transactionOptions: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock("@/lib/db/client", () => ({
       canton: { findMany: databaseMocks.cantonFindMany },
       city: { findMany: databaseMocks.cityFindMany },
       moderationRestriction: { findMany: databaseMocks.restrictionFindMany },
+      jobFreshnessProjection: { findMany: databaseMocks.freshnessFindMany },
       company: { findMany: databaseMocks.companyFindMany },
       trustSafetyContainmentEffect: {
         findMany: databaseMocks.containmentFindMany,
@@ -119,6 +121,14 @@ let rankingScenario: Readonly<{
   totalEligible: number;
   responseProjectionFingerprint: string;
 }>;
+let clusterScenario: readonly Readonly<{
+  clusterKind: "canton" | "category";
+  id: string;
+  code: string | null;
+  name: string;
+  slug: string;
+  count: bigint;
+}>[];
 
 const DETAIL_ONLY_REVISION_FIELDS = [
   "companyIntro",
@@ -152,9 +162,11 @@ describe("public Job query data minimization", () => {
     databaseMocks.categoryFindMany.mockResolvedValue([]);
     databaseMocks.cantonFindMany.mockResolvedValue([]);
     databaseMocks.cityFindMany.mockResolvedValue([]);
+    clusterScenario = Object.freeze([]);
     installDatabaseRanking({ organic: [], totalEligible: 0 });
     databaseMocks.jobRevisionFindFirst.mockResolvedValue(null);
     databaseMocks.restrictionFindMany.mockResolvedValue([]);
+    databaseMocks.freshnessFindMany.mockResolvedValue([]);
     databaseMocks.containmentFindMany.mockResolvedValue([]);
     databaseMocks.companyFindMany.mockImplementation(
       async (query: { where?: { id?: { in?: readonly string[] } } }) =>
@@ -566,6 +578,68 @@ describe("public Job query data minimization", () => {
     expect(restarted.jobs.map((job) => job.id)).toEqual([JOB_ID]);
   });
 
+  it.each(["preview", "staging", "production"] as const)(
+    "does not execute a seed-backed response filter or ranking query in %s",
+    async (applicationEnvironment) => {
+      const ranked = await listPublicJobs(
+        {
+          ...emptyPublicJobSearchInput(),
+          sort: "response",
+        },
+        { now: NOW, applicationEnvironment },
+      );
+      const filtered = await listPublicJobs(
+        {
+          ...emptyPublicJobSearchInput(),
+          responseEvidenceOnly: true,
+        },
+        { now: NOW, applicationEnvironment },
+      );
+
+      expect(ranked).toMatchObject({ jobs: [], totalEligible: 0 });
+      expect(filtered).toMatchObject({ jobs: [], totalEligible: 0 });
+      expect(databaseMocks.queryRaw).not.toHaveBeenCalled();
+      expect(databaseMocks.jobFindMany).not.toHaveBeenCalled();
+      expect(databaseMocks.applicationFindMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it("serves ordinary preview results without response evidence or response-backed ranking", async () => {
+    const row = searchCardRow(JOB_ID, "preview-job", NOW);
+    installDatabaseRanking({
+      organic: [
+        databaseRankingRow(row, {
+          responseEvidenceKnown: false,
+          onTimeRateBps: null,
+          medianFirstResponseMinutes: null,
+        }),
+      ],
+      totalEligible: 1,
+    });
+    installSearchHydrationRows([row]);
+
+    const result = await listPublicJobs(emptyPublicJobSearchInput(), {
+      now: NOW,
+      applicationEnvironment: "preview",
+    });
+
+    expect(result.jobs).toHaveLength(1);
+    expect(result.jobs[0]?.response).toEqual({
+      known: false,
+      targetDays: null,
+      onTimeRateBps: null,
+      sampleSizeBucket: null,
+    });
+    expect(databaseMocks.applicationFindMany).not.toHaveBeenCalled();
+    const rankingSql = databaseMocks.queryRaw.mock.calls
+      .map(([query]) => query?.strings?.join(" ") ?? "")
+      .find((sql) => sql.includes("candidate_source"));
+    expect(rankingSql).toBeDefined();
+    expect(rankingSql).not.toContain('company."responseTargetDays"');
+    expect(rankingSql).not.toContain('company."responseSampleSize"');
+    expect(rankingSql).not.toContain('company."responseWithinTargetBps"');
+  });
+
   it("keeps the count exact at the 2,000-candidate boundary", async () => {
     const rows = [
       searchCardRow(JOB_ID, "boundary-newest", NOW),
@@ -624,22 +698,28 @@ describe("public Job query data minimization", () => {
     });
   });
 
-  it("loads only taxonomy data in the cluster count query", async () => {
+  it("aggregates cluster counts in one bounded database query", async () => {
     await listPublicClusterLinks({ now: NOW });
 
-    const query = databaseMocks.jobFindMany.mock.calls[0]?.[0];
-    expect(query?.select).not.toHaveProperty("boosts");
-    expect(query?.select?.publishedRevision?.select).toHaveProperty("category");
-    expect(query?.select?.publishedRevision?.select).toHaveProperty("canton");
-    expect(query?.select?.publishedRevision?.select).not.toHaveProperty("tasks");
-    expect(query?.select?.publishedRevision?.select).not.toHaveProperty("benefits");
+    expect(databaseMocks.queryRaw).toHaveBeenCalledOnce();
+    expect(databaseMocks.jobFindMany).not.toHaveBeenCalled();
+    expect(databaseMocks.companyFindMany).not.toHaveBeenCalled();
+    expect(databaseMocks.restrictionFindMany).not.toHaveBeenCalled();
+    const sql = databaseMocks.queryRaw.mock.calls[0]?.[0]?.strings.join(" ");
+    expect(sql).toContain("eligible_cluster_jobs");
+    expect(sql).toContain('COUNT(*)::bigint AS "count"');
+    expect(sql).toContain('job."dataProvenance"');
+    expect(sql).toContain('company."dataProvenance"');
+    expect(sql).not.toContain('revision."tasks"');
+    expect(sql).not.toContain('revision."benefits"');
+    expect(databaseMocks.transactionOptions).toHaveBeenCalledWith({
+      isolationLevel: "RepeatableRead",
+      timeout: 30_000,
+    });
   });
 
   it("promotes only the seeded launch-wedge cantons and categories", async () => {
-    databaseMocks.jobFindMany.mockResolvedValue([
-      ...Array.from({ length: 3 }, (_, index) => launchClusterRow(index)),
-      ...Array.from({ length: 4 }, (_, index) => outsideClusterRow(index)),
-    ]);
+    installClusterAggregateCounts(3);
 
     const result = await listPublicClusterLinks({ now: NOW });
 
@@ -660,31 +740,7 @@ describe("public Job query data minimization", () => {
       publicIndexingAllowed: false,
       showDemoBanner: true,
     };
-    const liveRows = Array.from({ length: 3 }, (_, index) =>
-      launchClusterRow(index));
-    const demoJob = {
-      ...launchClusterRow(10),
-      dataProvenance: "DEMO",
-    };
-    const testJob = {
-      ...launchClusterRow(11),
-      dataProvenance: "TEST",
-    };
-    const demoCompany = launchClusterRow(12);
-    const testCompany = launchClusterRow(13);
-    databaseMocks.jobFindMany.mockResolvedValue([
-      ...liveRows,
-      demoJob,
-      testJob,
-      {
-        ...demoCompany,
-        company: { ...demoCompany.company, dataProvenance: "DEMO" },
-      },
-      {
-        ...testCompany,
-        company: { ...testCompany.company, dataProvenance: "TEST" },
-      },
-    ]);
+    installClusterAggregateCounts(3);
 
     const result = await listPublicClusterLinks({ now: NOW });
 
@@ -692,11 +748,9 @@ describe("public Job query data minimization", () => {
       ["category", 3],
       ["canton", 3],
     ]);
-    const query = databaseMocks.jobFindMany.mock.calls[0]?.[0];
-    expect(query?.where).toMatchObject({
-      dataProvenance: "LIVE",
-      company: { is: { dataProvenance: "LIVE" } },
-    });
+    const sql = databaseMocks.queryRaw.mock.calls[0]?.[0]?.strings.join(" ");
+    expect(sql).toContain('job."dataProvenance" = \'LIVE\'');
+    expect(sql).toContain('company."dataProvenance" = \'LIVE\'');
   });
 
   it("counts more than 2,000 company Jobs exactly with an ID keyset scan", async () => {
@@ -719,9 +773,7 @@ describe("public Job query data minimization", () => {
   });
 
   it("counts more than 2,000 LIVE launch-evidence rows exactly", async () => {
-    const rows = Array.from({ length: 2_001 }, (_, index) =>
-      launchClusterRow(index));
-    installKeysetRows(rows);
+    installClusterAggregateCounts(2_001);
 
     const result = await listPublicClusterLinks({ now: NOW });
 
@@ -729,7 +781,8 @@ describe("public Job query data minimization", () => {
       ["category", 2_001],
       ["canton", 2_001],
     ]);
-    expect(databaseMocks.jobFindMany).toHaveBeenCalledTimes(5);
+    expect(databaseMocks.queryRaw).toHaveBeenCalledOnce();
+    expect(databaseMocks.jobFindMany).not.toHaveBeenCalled();
   });
 
   it("decodes the cursor before loading and bounds candidates by rankingAsOf", async () => {
@@ -832,6 +885,33 @@ describe("public Job query data minimization", () => {
     }));
     expect(JSON.stringify(result)).not.toContain("public/company-logos/");
     expect(databaseMocks.jobRevisionFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("fails the direct public detail read when its enforced freshness projection is stale", async () => {
+    databaseMocks.jobFindMany.mockResolvedValue([eligibleDetailRow()]);
+    databaseMocks.freshnessFindMany.mockResolvedValue([
+      {
+        jobId: JOB_ID,
+        state: "STALE",
+        dueAt: new Date(NOW.getTime() + 86_400_000),
+        enforceAt: new Date(NOW.getTime() - 1),
+        reviewDueAt: null,
+      },
+    ]);
+
+    await expect(
+      getPublicJobBySlug("software-engineer", { now: NOW }),
+    ).resolves.toBeNull();
+    expect(databaseMocks.freshnessFindMany).toHaveBeenCalledWith({
+      where: { jobId: { in: [JOB_ID] } },
+      select: {
+        jobId: true,
+        state: true,
+        dueAt: true,
+        enforceAt: true,
+        reviewDueAt: true,
+      },
+    });
   });
 
   it("hydrates a bounded detail batch in one eligibility snapshot and preserves order", async () => {
@@ -1028,58 +1108,6 @@ function eligibleDetailRow() {
   };
 }
 
-function launchClusterRow(index: number) {
-  const row = eligibleCardRow();
-  return {
-    ...row,
-    id: `launch-job-${index}`,
-    publishedRevision: {
-      ...row.publishedRevision,
-      category: {
-        id: row.publishedRevision.categoryId,
-        name: "Engineering/Technik",
-        slug: "engineering-technik",
-        isActive: true,
-      },
-      canton: {
-        id: row.publishedRevision.cantonId,
-        code: "ZH",
-        name: "Zürich",
-        slug: "zuerich",
-      },
-    },
-  };
-}
-
-function outsideClusterRow(index: number) {
-  const row = eligibleCardRow();
-  const categoryId = "77777777-7777-4777-8777-777777777777";
-  const cantonId = "88888888-8888-4888-8888-888888888888";
-  return {
-    ...row,
-    id: `outside-job-${index}`,
-    publishedCategoryId: categoryId,
-    publishedCantonId: cantonId,
-    publishedRevision: {
-      ...row.publishedRevision,
-      categoryId,
-      category: {
-        id: categoryId,
-        name: "Administration",
-        slug: "administration-dienste",
-        isActive: true,
-      },
-      cantonId,
-      canton: {
-        id: cantonId,
-        code: "VD",
-        name: "Waadt",
-        slug: "waadt",
-      },
-    },
-  };
-}
-
 function countRow(index: number) {
   const row = eligibleCardRow();
   const suffix = String(index).padStart(6, "0");
@@ -1114,6 +1142,7 @@ function installDatabaseRanking(input: Readonly<{
   });
   databaseMocks.queryRaw.mockImplementation(async (query) => {
     const text = Array.isArray(query?.strings) ? query.strings.join(" ") : "";
+    if (text.includes("eligible_cluster_jobs")) return [...clusterScenario];
     if (text.includes("response_projection_version")) {
       const common = {
         totalEligible: BigInt(rankingScenario.totalEligible),
@@ -1138,6 +1167,27 @@ function installDatabaseRanking(input: Readonly<{
     }
     return [...rankingScenario.organic];
   });
+}
+
+function installClusterAggregateCounts(count: number): void {
+  clusterScenario = Object.freeze([
+    Object.freeze({
+      clusterKind: "category" as const,
+      id: "44444444-4444-4444-8444-444444444444",
+      code: null,
+      name: "Engineering/Technik",
+      slug: "engineering-technik",
+      count: BigInt(count),
+    }),
+    Object.freeze({
+      clusterKind: "canton" as const,
+      id: "55555555-5555-4555-8555-555555555555",
+      code: "ZH",
+      name: "Zürich",
+      slug: "zuerich",
+      count: BigInt(count),
+    }),
+  ]);
 }
 
 function databaseRankingRow(

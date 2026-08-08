@@ -30,6 +30,10 @@ import {
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { emailProvider } from "@/lib/providers/email";
+import {
+  preflightPublicIntakePrivacyGate,
+  readPublicIntakePrivacyExpectedBinding,
+} from "@/lib/privacy/public-intake-privacy-gate";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 const GENERIC_ERROR = "Die Aktion konnte nicht sicher ausgeführt werden.";
@@ -193,6 +197,23 @@ export async function reportApplicationEmployerAction(
   const applicationId = z.uuid().safeParse(formData.get("applicationId"));
   if (!applicationId.success) return errorState(GENERIC_ERROR);
   const database = getDatabase();
+  const now = new Date();
+  const privacyBinding = readPublicIntakePrivacyExpectedBinding(
+    formData,
+    "ABUSE_REPORT",
+  );
+  if (
+    privacyBinding === null ||
+    !(await preflightPublicIntakePrivacyGate(privacyBinding, {
+      database,
+      environment: dependencies.environment,
+      now,
+    })).allowed
+  ) {
+    return errorState(
+      "Der Datenschutzhinweis ist nicht verfügbar oder hat sich geändert. Es wurden keine Angaben übermittelt. Bitte lade die Seite neu.",
+    );
+  }
   const application = await database.application.findFirst({
     where: {
       id: applicationId.data,
@@ -218,34 +239,6 @@ export async function reportApplicationEmployerAction(
       "Bitte wähle einen Grund und beschreibe den Verdacht mit mindestens 20 Zeichen.",
     );
   }
-  const now = new Date();
-  const precheck = await consumeRequestRateLimit(
-    "ABUSE_INTAKE_PRECHECK",
-    { actorId: dependencies.currentUser!.id },
-    dependencies.request,
-    now,
-    { database, environment: dependencies.environment },
-  );
-  if (!precheck.allowed) {
-    await recordRateLimitDenial(
-      precheck.audit,
-      {
-        actorKind: "USER",
-        actorUserId: dependencies.currentUser.id,
-        capability: "CANDIDATE_APPLICATION_ABUSE_REPORT_PRECHECK",
-        companyId: application.job.company.id,
-        targetId: application.job.company.id,
-        targetType: "COMPANY",
-      },
-      {
-        database,
-        environment: dependencies.environment,
-        request: dependencies.request,
-        now,
-      },
-    );
-    return errorState("Zu viele Meldungen in kurzer Zeit. Bitte versuche es später erneut.");
-  }
   const result = await createPublicReport(
     parsed.data,
     {
@@ -253,14 +246,16 @@ export async function reportApplicationEmployerAction(
       targetType: "COMPANY",
       companyId: application.job.company.id,
     },
-    { ...dependencies, emailProvider, now },
+    { ...dependencies, emailProvider, now, privacyBinding },
   );
   return result.ok
     ? successState("Danke. Deine Meldung wurde erfasst und wird geprüft.")
     : errorState(
         result.code === "RATE_LIMITED"
           ? "Zu viele Meldungen in kurzer Zeit. Bitte versuche es später erneut."
-          : GENERIC_ERROR,
+          : result.code === "PRIVACY_UNAVAILABLE"
+            ? "Der Datenschutzhinweis ist nicht verfügbar oder hat sich geändert. Es wurden keine Angaben übermittelt. Bitte lade die Seite neu."
+            : GENERIC_ERROR,
       );
 }
 

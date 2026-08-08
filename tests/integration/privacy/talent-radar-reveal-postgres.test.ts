@@ -4,7 +4,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import type { RevealKey } from "@/lib/privacy/reveal-dto";
-import { acceptContactRequest } from "@/lib/talentradar/contact-requests";
+import {
+  acceptContactRequest,
+  declineContactRequest,
+} from "@/lib/talentradar/contact-requests";
 import {
   buildCandidateRevealPreview,
   getEmployerRadarRequestView,
@@ -29,6 +32,23 @@ const PII_KEYS = Object.freeze([
     secret: Buffer.alloc(32, 0x22).toString("base64"),
   }),
 ]) satisfies readonly RevealKey[];
+const LOCAL_LEGAL_ENVIRONMENT = Object.freeze({
+  APP_ENV: "ci" as const,
+  LEGAL_PUBLICATION_PRIVACY: false,
+});
+const REVEAL_KEYS = Object.freeze({
+  confirmation: CONFIRMATION_KEYS,
+  pii: PII_KEYS,
+  legalGateEnvironment: LOCAL_LEGAL_ENVIRONMENT,
+});
+const PROD_LIKE_BLOCKED_REVEAL_KEYS = Object.freeze({
+  confirmation: CONFIRMATION_KEYS,
+  pii: PII_KEYS,
+  legalGateEnvironment: Object.freeze({
+    APP_ENV: "staging" as const,
+    LEGAL_PUBLICATION_PRIVACY: false,
+  }),
+});
 
 let migrated: MigratedDatabase | undefined;
 let database: DatabaseClient | undefined;
@@ -48,6 +68,52 @@ afterAll(async () => {
 });
 
 describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
+  it("blocks prod-like ACCEPT before status/conversation writes while DECLINE remains available", async () => {
+    const fixture = await createPendingContactFixture("phase34-accept-legal-denial");
+
+    await expect(acceptContactRequest(
+      {
+        requestId: fixture.contactRequestId,
+        idempotencyKey: "phase34-accept-legal-denial-v1",
+      },
+      { userId: fixture.candidateUserId },
+      {
+        database: db(),
+        correlationId: randomUUID(),
+        legalGateEnvironment: {
+          APP_ENV: "production",
+          LEGAL_PUBLICATION_PRIVACY: false,
+        },
+        now: NOW,
+      },
+    )).resolves.toEqual({ ok: false, code: "LEGAL_GATE_BLOCKED" });
+    await expect(db().employerContactRequest.findUniqueOrThrow({
+      where: { id: fixture.contactRequestId },
+      select: { status: true },
+    })).resolves.toEqual({ status: "PENDING" });
+    await expect(db().conversation.count({
+      where: { contactRequestId: fixture.contactRequestId },
+    })).resolves.toBe(0);
+    await expect(db().contactRequestEvent.count({
+      where: {
+        contactRequestId: fixture.contactRequestId,
+        kind: "ACCEPTED",
+      },
+    })).resolves.toBe(0);
+
+    await expect(declineContactRequest(
+      {
+        requestId: fixture.contactRequestId,
+        idempotencyKey: "phase34-decline-remains-available-v1",
+      },
+      { userId: fixture.candidateUserId },
+      { database: db(), correlationId: randomUUID(), now: NOW },
+    )).resolves.toMatchObject({
+      ok: true,
+      value: { status: "DECLINED", conversationId: null },
+    });
+  });
+
   it("keeps Accept separate from Reveal: one Conversation, zero Grants and zero identity", async () => {
     const fixture = await createPendingContactFixture("accept-only");
     const accepted = await acceptFixture(fixture, "accept-only-transition");
@@ -92,6 +158,56 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
     });
   });
 
+  it("blocks prod-like Reveal preview and grant with zero PII/grant effects", async () => {
+    const previewFixture = await createPendingContactFixture(
+      "phase34-preview-legal-denial",
+    );
+    await acceptFixture(previewFixture, "phase34-preview-accept-v1");
+    await expect(buildCandidateRevealPreview(
+      db(),
+      {
+        actorUserId: previewFixture.candidateUserId,
+        contactRequestId: previewFixture.contactRequestId,
+        fields: ["EMAIL"],
+        now: NOW,
+      },
+      CONFIRMATION_KEYS,
+      PROD_LIKE_BLOCKED_REVEAL_KEYS.legalGateEnvironment,
+    )).resolves.toEqual({ ok: false, code: "LEGAL_GATE_BLOCKED" });
+    await expect(db().identityRevealGrant.count({
+      where: { contactRequestId: previewFixture.contactRequestId },
+    })).resolves.toBe(0);
+
+    const grantFixture = await createPendingContactFixture(
+      "phase34-grant-legal-denial",
+    );
+    await acceptFixture(grantFixture, "phase34-grant-accept-v1");
+    const localPreview = await preview(grantFixture, ["EMAIL"]);
+    await expect(grantRevealFields(
+      db(),
+      {
+        actorUserId: grantFixture.candidateUserId,
+        contactRequestId: grantFixture.contactRequestId,
+        confirmationToken: localPreview.confirmationToken,
+        idempotencyKey: "phase34-grant-legal-denial-v1",
+        now: NOW,
+      },
+      PROD_LIKE_BLOCKED_REVEAL_KEYS,
+    )).resolves.toEqual({ ok: false, code: "LEGAL_GATE_BLOCKED" });
+    await expect(db().identityRevealGrant.count({
+      where: { contactRequestId: grantFixture.contactRequestId },
+    })).resolves.toBe(0);
+    await expect(db().identityRevealConfirmation.count({
+      where: { contactRequestId: grantFixture.contactRequestId },
+    })).resolves.toBe(0);
+    await expect(db().contactRequestEvent.count({
+      where: {
+        contactRequestId: grantFixture.contactRequestId,
+        kind: "REVEAL_GRANTED",
+      },
+    })).resolves.toBe(0);
+  });
+
   it("persists exactly one encrypted snapshot and never follows later live-profile edits", async () => {
     const fixture = await createPendingContactFixture("snapshot");
     await acceptFixture(fixture, "snapshot-accept");
@@ -110,7 +226,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
         idempotencyKey: "snapshot-confirmation-v1",
         now: NOW,
       },
-      { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+      REVEAL_KEYS,
     );
     expect(granted).toMatchObject({
       ok: true,
@@ -184,7 +300,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
           idempotencyKey: "tampered-confirmation-v1",
           now: NOW,
         },
-        { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+        REVEAL_KEYS,
       ),
     ).resolves.toEqual({ ok: false, code: "INVALID_CONFIRMATION" });
 
@@ -197,7 +313,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
         idempotencyKey: "display-confirmation-v1",
         now: NOW,
       },
-      { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+      REVEAL_KEYS,
     );
     expect(first).toMatchObject({
       ok: true,
@@ -217,7 +333,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
           idempotencyKey: "display-confirmation-v1",
           now: new Date(NOW.getTime() + 1_000),
         },
-        { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+        REVEAL_KEYS,
       ),
     ).resolves.toMatchObject({ ok: true, grantId: first.grantId, replay: true });
     await expect(
@@ -230,7 +346,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
           idempotencyKey: "display-replay-new-key-v1",
           now: new Date(NOW.getTime() + 2_000),
         },
-        { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+        REVEAL_KEYS,
       ),
     ).resolves.toEqual({ ok: false, code: "INVALID_CONFIRMATION" });
 
@@ -248,7 +364,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
         idempotencyKey: "email-confirmation-v1",
         now: new Date(NOW.getTime() + 3_000),
       },
-      { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+      REVEAL_KEYS,
     );
     expect(second).toEqual({
       ok: true,
@@ -292,7 +408,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
           idempotencyKey: "stale-confirmation-v1",
           now: new Date(NOW.getTime() + 1_000),
         },
-        { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+        REVEAL_KEYS,
       ),
     ).resolves.toEqual({ ok: false, code: "STALE_REVEAL_PREVIEW" });
     await expect(
@@ -338,6 +454,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
             now: NOW,
           },
           CONFIRMATION_KEYS,
+          LOCAL_LEGAL_ENVIRONMENT,
         ),
       ).resolves.toEqual({ ok: false, code: "UNAVAILABLE" });
       await expect(
@@ -350,7 +467,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
             idempotencyKey: `forbidden-${actor.kind}-grant-v1`,
             now: NOW,
           },
-          { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+          REVEAL_KEYS,
         ),
       ).resolves.toEqual({ ok: false, code: "UNAVAILABLE" });
     }
@@ -364,7 +481,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
         idempotencyKey: "forbidden-actors-candidate-grant-v1",
         now: NOW,
       },
-      { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+      REVEAL_KEYS,
     );
     if (!granted.ok) throw new Error("The Candidate Reveal fixture failed.");
 
@@ -415,6 +532,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
           now: NOW,
         },
         CONFIRMATION_KEYS,
+        LOCAL_LEGAL_ENVIRONMENT,
       ),
     ).resolves.toEqual({ ok: false, code: "UNAVAILABLE" });
     await expect(
@@ -427,7 +545,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
           idempotencyKey: "cross-candidate-grant-v1",
           now: NOW,
         },
-        { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+        REVEAL_KEYS,
       ),
     ).resolves.toEqual({ ok: false, code: "UNAVAILABLE" });
 
@@ -440,7 +558,7 @@ describe.sequential("Phase 14 Talent Radar identity Reveal", () => {
         idempotencyKey: "scope-a-confirmation-v1",
         now: NOW,
       },
-      { confirmation: CONFIRMATION_KEYS, pii: PII_KEYS },
+      REVEAL_KEYS,
     );
     if (!granted.ok) throw new Error("The scoped Reveal confirmation failed.");
     await expect(
@@ -592,7 +710,7 @@ async function createPendingContactFixture(suffix: string): Promise<ContactFixtu
   });
   const canton = await db().canton.create({
     data: {
-      code: `R${fixtureSequence}`,
+      code: fixtureCantonCode(fixtureSequence),
       name: `Reveal Canton ${fixtureSequence}`,
       slug: `reveal-canton-${fixtureSequence}`,
       language: "DE",
@@ -726,11 +844,26 @@ async function createPendingContactFixture(suffix: string): Promise<ContactFixtu
   });
 }
 
+function fixtureCantonCode(value: number): string {
+  if (!Number.isSafeInteger(value) || value < 1 || value > 1_295) {
+    throw new TypeError("Reveal fixture sequence is outside the two-character code range.");
+  }
+  return value.toString(36).toUpperCase().padStart(2, "0");
+}
+
 async function acceptFixture(fixture: ContactFixture, idempotencyKey: string) {
   return acceptContactRequest(
     { requestId: fixture.contactRequestId, idempotencyKey },
     { userId: fixture.candidateUserId },
-    { database: db(), correlationId: randomUUID(), now: NOW },
+    {
+      database: db(),
+      correlationId: randomUUID(),
+      legalGateEnvironment: {
+        APP_ENV: "ci",
+        LEGAL_PUBLICATION_PRIVACY: false,
+      },
+      now: NOW,
+    },
   );
 }
 
@@ -748,6 +881,7 @@ async function preview(
       now,
     },
     CONFIRMATION_KEYS,
+    LOCAL_LEGAL_ENVIRONMENT,
   );
   if (!result.ok) throw new Error(`Reveal preview failed: ${result.code}`);
   return result;

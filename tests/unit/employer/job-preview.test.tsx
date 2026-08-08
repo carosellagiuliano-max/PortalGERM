@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { JobPreview } from "@/components/employer/job-wizard/job-wizard";
+import {
+  EmployerJobWizard,
+  JobPreview,
+  type EmployerJobWizardActions,
+  type EmployerJobWizardIdempotencyKeys,
+} from "@/components/employer/job-wizard/job-wizard";
 import type {
   EmployerJobCatalog,
   EmployerJobFullDetail,
@@ -93,6 +98,33 @@ const job: EmployerJobFullDetail = {
   },
 };
 
+const idleAction = async () => ({ status: "idle" as const });
+const actions: EmployerJobWizardActions = {
+  saveStep: idleAction,
+  reportingCheck: idleAction,
+  aiSuggestion: idleAction,
+  submit: idleAction,
+  pause: idleAction,
+  pauseAndRevise: idleAction,
+  clonePaused: idleAction,
+  cloneRejected: idleAction,
+  reactivate: idleAction,
+  close: idleAction,
+};
+const idempotencyKeys: EmployerJobWizardIdempotencyKeys = {
+  step1: "step-1-test-key",
+  step2: "step-2-test-key",
+  step3: "step-3-test-key",
+  reporting: "reporting-test-key",
+  submit: "submit-test-key",
+  pause: "pause-test-key",
+  pauseEdit: "pause-edit-test-key",
+  clonePaused: "clone-paused-test-key",
+  cloneRejected: "clone-rejected-test-key",
+  reactivate: "reactivate-test-key",
+  close: "close-test-key",
+};
+
 describe("employer job step-five preview", () => {
   it("renders every persisted applicant-facing content group without reporting or score evidence", () => {
     render(<JobPreview job={job} catalog={catalog} />);
@@ -140,5 +172,86 @@ describe("employer job step-five preview", () => {
     }
     expect(screen.queryByText(/Meldepflicht/u)).not.toBeInTheDocument();
     expect(screen.queryByText(/Fair-Job-Score:/u)).not.toBeInTheDocument();
+  });
+
+  it("hides every mock-provider action outside isolated local and CI environments", () => {
+    const { rerender } = render(
+      <EmployerJobWizard
+        job={job}
+        catalog={catalog}
+        step={4}
+        actions={actions}
+        idempotencyKeys={idempotencyKeys}
+        additionalJobCheckoutHref={null}
+        isolatedMockToolsAvailable={false}
+      />,
+    );
+
+    expect(screen.getByText("Prüfung nicht aktiviert")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Meldepflicht prüfen und speichern",
+      }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <EmployerJobWizard
+        job={job}
+        catalog={catalog}
+        step={5}
+        actions={actions}
+        idempotencyKeys={idempotencyKeys}
+        additionalJobCheckoutHref={null}
+        isolatedMockToolsAvailable={false}
+      />,
+    );
+
+    expect(screen.getByText("Einreichung nicht aktiviert")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Lokale Mock-Textassistenz" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Zur Prüfung einreichen" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps isolated mock tools available for explicit local or CI rendering", () => {
+    const { rerender } = render(
+      <EmployerJobWizard
+        job={job}
+        catalog={catalog}
+        step={4}
+        actions={actions}
+        idempotencyKeys={idempotencyKeys}
+        additionalJobCheckoutHref={null}
+        isolatedMockToolsAvailable
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Meldepflicht prüfen und speichern",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Prüfung nicht aktiviert")).not.toBeInTheDocument();
+
+    rerender(
+      <EmployerJobWizard
+        job={job}
+        catalog={catalog}
+        step={5}
+        actions={actions}
+        idempotencyKeys={idempotencyKeys}
+        additionalJobCheckoutHref={null}
+        isolatedMockToolsAvailable
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Lokale Mock-Textassistenz" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Zur Prüfung einreichen" }),
+    ).toBeInTheDocument();
   });
 });

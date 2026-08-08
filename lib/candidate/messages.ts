@@ -7,6 +7,12 @@ import { z } from "zod";
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import { evaluateCompanyTrustForCompany } from "@/lib/companies/verification/read-model";
+import { getServerEnvironment } from "@/lib/config/env";
+import {
+  decideTalentRadarRuntimeGate,
+  lockTalentRadarRuntimeGate,
+  type TalentRadarLegalEnvironment,
+} from "@/lib/talentradar/legal-gate";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { buildNotificationPersistenceRecord } from "@/lib/notifications/writer";
@@ -48,7 +54,10 @@ export type CandidateMessageSendAvailability =
   | Readonly<{ allowed: true; reason: null }>
   | Readonly<{
       allowed: false;
-      reason: "RADAR_COMPANY_INACTIVE" | "RADAR_COMPANY_UNVERIFIED";
+      reason:
+        | "RADAR_COMPANY_INACTIVE"
+        | "RADAR_COMPANY_UNVERIFIED"
+        | "RADAR_LEGAL_REVIEW_REQUIRED";
     }>;
 
 export async function listCandidateConversations(
@@ -164,7 +173,11 @@ export async function getCandidateConversation(
   database: DatabaseClient,
   userId: string,
   conversationId: string,
-  options: Readonly<{ beforeMessageId?: string }> = {},
+  options: Readonly<{
+    beforeMessageId?: string;
+    legalGateEnvironment?: TalentRadarLegalEnvironment;
+    now?: Date;
+  }> = {},
 ) {
   if (
     !UUID.safeParse(userId).success ||
@@ -212,6 +225,14 @@ export async function getCandidateConversation(
             conversation.company.id,
           )
         : null;
+      const radarLegalGate = conversation.kind === "TALENT_RADAR"
+        ? await decideTalentRadarRuntimeGate(transaction, {
+            scope: "RECRUITING_CONVERSATION",
+            environment:
+              options.legalGateEnvironment ?? getServerEnvironment(),
+            now: options.now ?? new Date(),
+          })
+        : null;
 
       const anchor = options.beforeMessageId === undefined
         ? null
@@ -257,6 +278,7 @@ export async function getCandidateConversation(
         kind: conversation.kind,
         companyStatus: conversation.company.status,
         currentVerifiedCycles: companyTrust?.radarEligible ? 1 : 0,
+        legalGateAllowed: radarLegalGate?.allowed ?? true,
       });
 
       return Object.freeze({
@@ -315,7 +337,12 @@ export type SendCandidateMessageResult =
   | Readonly<{ ok: true; messageId: string; duplicate: boolean }>
   | Readonly<{
       ok: false;
-      code: "INVALID" | "NOT_FOUND" | "CONFLICT" | "TRUST_BLOCKED";
+      code:
+        | "INVALID"
+        | "NOT_FOUND"
+        | "CONFLICT"
+        | "TRUST_BLOCKED"
+        | "LEGAL_GATE_BLOCKED";
     }>;
 
 export async function sendCandidateMessage(
@@ -323,6 +350,7 @@ export async function sendCandidateMessage(
   userId: string,
   rawInput: unknown,
   now = new Date(),
+  legalGateEnvironment: TalentRadarLegalEnvironment = getServerEnvironment(),
 ): Promise<SendCandidateMessageResult> {
   const parsed = candidateMessageInputSchema.safeParse(rawInput);
   if (!parsed.success || !UUID.safeParse(userId).success || !Number.isFinite(now.getTime())) {
@@ -359,6 +387,19 @@ export async function sendCandidateMessage(
         },
       });
       if (conversation === null) return Object.freeze({ ok: false as const, code: "NOT_FOUND" as const });
+      const initialLegalGate = conversation.kind === "TALENT_RADAR"
+        ? await decideTalentRadarRuntimeGate(transaction, {
+            scope: "RECRUITING_CONVERSATION",
+            environment: legalGateEnvironment,
+            now,
+          })
+        : null;
+      if (initialLegalGate !== null && !initialLegalGate.allowed) {
+        return Object.freeze({
+          ok: false as const,
+          code: "LEGAL_GATE_BLOCKED" as const,
+        });
+      }
       const companyTrust = conversation.kind === "TALENT_RADAR"
         ? await evaluateCompanyTrustForCompany(
             transaction,
@@ -391,6 +432,20 @@ export async function sendCandidateMessage(
 
       if (await isConversationMessageBlocked(transaction, conversation.id, now)) {
         return Object.freeze({ ok: false as const, code: "CONFLICT" as const });
+      }
+
+      if (conversation.kind === "TALENT_RADAR") {
+        const lockedLegalGate = await lockTalentRadarRuntimeGate(transaction, {
+          scope: "RECRUITING_CONVERSATION",
+          environment: legalGateEnvironment,
+          now,
+        });
+        if (!lockedLegalGate.allowed) {
+          return Object.freeze({
+            ok: false as const,
+            code: "LEGAL_GATE_BLOCKED" as const,
+          });
+        }
       }
 
       const created = await transaction.message.create({
@@ -576,9 +631,16 @@ export function deriveCandidateMessageSendAvailability(input: Readonly<{
   kind: "APPLICATION" | "TALENT_RADAR";
   companyStatus: "DRAFT" | "ACTIVE" | "SUSPENDED" | "CLOSED";
   currentVerifiedCycles: number;
+  legalGateAllowed?: boolean;
 }>): CandidateMessageSendAvailability {
   if (input.kind !== "TALENT_RADAR") {
     return Object.freeze({ allowed: true, reason: null });
+  }
+  if (input.legalGateAllowed === false) {
+    return Object.freeze({
+      allowed: false,
+      reason: "RADAR_LEGAL_REVIEW_REQUIRED",
+    });
   }
   if (input.companyStatus !== "ACTIVE") {
     return Object.freeze({

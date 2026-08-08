@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../lib/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../lib/generated/prisma"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -1344,6 +1345,12 @@ enum LegalPublicationStatus {
   EXPIRED
 }
 
+enum PublicIntakePrivacyEvidenceMode {
+  LEGACY_UNBOUND
+  LOCAL_SYNTHETIC
+  PUBLISHED_LEGAL
+}
+
 enum ProcessingApprovalStatus {
   DRAFT
   APPROVED
@@ -1758,6 +1765,7 @@ enum AuditAction {
   COMPANY_VERIFICATION_REVOKED
   COMPANY_SUSPENDED
   COMPANY_REACTIVATED
+  COMPANY_CLOSED
   INVITATION_SENT
   INVITATION_REVOKED
   INVITATION_ACCEPTED
@@ -2754,6 +2762,7 @@ model EmployerProfile {
 model Company {
   id                                String                        @id @default(uuid()) @db.Uuid
   name                              String                        @db.VarChar(200)
+  searchDocument                    String                        @default(dbgenerated()) @db.Text
   slug                              String                        @unique @db.VarChar(200)
   uid                               String?                       @unique @db.VarChar(32)
   registrationEmailDomainNormalized String?                       @db.VarChar(253)
@@ -3283,6 +3292,7 @@ model JobRevision {
   requirements            String[]
   niceToHave              String[]                        @default([])
   offer                   String?                         @db.Text
+  searchDocument          String                          @default(dbgenerated()) @db.Text
   applicationProcessSteps String[]
   requiredDocumentKinds   RequiredDocumentKind[]
   jobType                 JobType
@@ -4623,11 +4633,16 @@ model LegalPublication {
   legalRevision       LegalRevision           @relation(fields: [legalRevisionId], references: [id], onDelete: Restrict)
   processingApprovals ProcessingApproval[]
   analyticsConsents   AnalyticsConsentEvent[]
+  salesLeadIntakes    SalesLeadIntake[]         @relation("SalesLeadIntakePrivacyPublication")
+  abuseReports        AbuseReport[]             @relation("AbuseReportPrivacyPublication")
 
   @@unique([legalRevisionId])
   @@index([legalDocumentId, status, effectiveAt])
 }
 
+/// Phase 34 additionally enforces one APPROVED row per
+/// scope/region/processor in SQL with a partial unique index. Prisma cannot
+/// represent that predicate, so the invariant lives in the additive migration.
 model ProcessingApproval {
   id                 String                   @id @default(uuid()) @db.Uuid
   scope              String                   @db.VarChar(128)
@@ -4655,6 +4670,7 @@ model ProcessingApproval {
 
   @@unique([scope, region, processorKey, version])
   @@index([scope, processorKey, status, effectiveAt, expiresAt])
+  @@index([scope, region, processorKey, status, createdAt], map: "ProcessingApproval_scope_region_processor_status_created_idx")
 }
 
 model PrivacyExecution {
@@ -4845,15 +4861,23 @@ model AbuseReport {
   resolvedAt       DateTime?               @db.Timestamptz(3)
   createdAt        DateTime                @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime                @updatedAt @db.Timestamptz(3)
+  privacyEvidenceMode       PublicIntakePrivacyEvidenceMode @default(LEGACY_UNBOUND)
+  privacyLegalPublicationId String?                         @db.Uuid
+  privacyPublicationHash    String?                         @db.Char(64)
+  privacyPublicationVersion String?                         @db.VarChar(32)
+  privacyNoticeVersion       String?                         @db.VarChar(32)
+  privacyNoticeHash          String?                         @db.Char(64)
   events           AbuseReportEvent[]
   restrictions     ModerationRestriction[]
   reporter         User?                   @relation("AbuseReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
   assignee         User?                   @relation("AbuseAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
+  privacyLegalPublication LegalPublication? @relation("AbuseReportPrivacyPublication", fields: [privacyLegalPublicationId], references: [id], onDelete: Restrict)
   freshnessReport  JobFreshnessReport?
 
   @@index([status, severity, dueAt])
   @@index([assigneeUserId, status, dueAt])
   @@index([targetType, targetId, createdAt])
+  @@index([privacyLegalPublicationId])
 }
 
 model AbuseReportEvent {
@@ -5850,6 +5874,8 @@ model ProviderEventInbox {
   @@unique([provider, environment, providerEventId])
   @@unique([provider, environment, adapterKey, providerAccountReference, providerEventId])
   @@index([status, receivedAt, id])
+  @@index([environment, status, receivedAt, id])
+  @@index([environment, status, nextRetryAt, id])
   @@index([paymentAttemptId, eventCreatedAt, id])
 }
 
@@ -5920,6 +5946,7 @@ model EmailProviderEventInbox {
 
   @@unique([environment, adapterKey, svixId])
   @@index([status, receivedAt, id])
+  @@index([environment, status, receivedAt, id])
   @@index([providerReceipt, eventCreatedAt, id])
   @@index([providerActivationId, status, receivedAt])
 }
@@ -6333,13 +6360,19 @@ model SalesLeadIntake {
   retainUntil             DateTime      @db.Timestamptz(3)
   interestedPlanVersionId String?       @db.Uuid
   createdAt               DateTime      @default(now()) @db.Timestamptz(3)
+  privacyEvidenceMode       PublicIntakePrivacyEvidenceMode @default(LEGACY_UNBOUND)
+  privacyLegalPublicationId String?                         @db.Uuid
+  privacyPublicationHash    String?                         @db.Char(64)
+  privacyPublicationVersion String?                         @db.VarChar(32)
   salesLead               SalesLead     @relation(fields: [salesLeadId], references: [id], onDelete: Restrict)
   salesActivity           SalesActivity @relation(fields: [salesActivityId], references: [id], onDelete: Restrict)
   interestedPlanVersion   PlanVersion?  @relation("InterestedPlanVersionIntake", fields: [interestedPlanVersionId], references: [id], onDelete: Restrict)
+  privacyLegalPublication LegalPublication? @relation("SalesLeadIntakePrivacyPublication", fields: [privacyLegalPublicationId], references: [id], onDelete: Restrict)
 
   @@index([salesLeadId, createdAt])
   @@index([interestedPlanVersionId])
   @@index([retainUntil])
+  @@index([privacyLegalPublicationId])
 }
 
 model SystemTask {

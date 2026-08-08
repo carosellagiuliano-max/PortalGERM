@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   requireEmployerBillingPage: vi.fn(),
   getEmployerBillingOverview: vi.fn(),
   getDatabase: vi.fn(),
+  getServerEnvironment: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -15,12 +16,20 @@ vi.mock("@/lib/billing/employer-read-model", () => ({
   getEmployerBillingOverview: mocks.getEmployerBillingOverview,
 }));
 vi.mock("@/lib/db/client", () => ({ getDatabase: mocks.getDatabase }));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: mocks.getServerEnvironment,
+}));
 
 import EmployerBillingPage from "@/app/employer/billing/page";
 
 describe("employer Billing overview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getServerEnvironment.mockReturnValue({
+      APP_ENV: "local",
+      PAYMENT_PROVIDER_MODE: "disabled",
+      PRIVILEGED_STEP_UP_MODE: "disabled",
+    });
     mocks.requireEmployerBillingPage.mockResolvedValue({
       context: {
         companyId: "20000000-0000-4000-8000-000000000001",

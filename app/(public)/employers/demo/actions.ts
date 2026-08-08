@@ -1,16 +1,18 @@
 "use server";
 
-import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
+import {
+  preflightPublicIntakePrivacyGate,
+  readPublicIntakePrivacyExpectedBinding,
+} from "@/lib/privacy/public-intake-privacy-gate";
 import { SALES_LEAD_INTAKE_POLICY_V1 } from "@/lib/sales/lead-policy";
 import type {
   LeadActionField,
   LeadActionState,
 } from "@/lib/sales/lead-action-state";
 import { submitPublicEmployerLead } from "@/lib/sales/public-lead";
-import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { leadFormSchema } from "@/lib/validation/billing";
 
 const FORM_FIELDS = [
@@ -75,27 +77,23 @@ export async function submitEmployerDemoLeadAction(
   const database = getDatabase();
   const environment = getServerEnvironment();
   const now = new Date();
-  const rate = await consumeRequestRateLimit(
-    "LEAD",
-    {},
-    request,
-    now,
-    { database, environment },
+  const privacyBinding = readPublicIntakePrivacyExpectedBinding(
+    formData,
+    "EMPLOYER_DEMO",
   );
-  if (!rate.allowed) {
-    await recordRateLimitDenial(
-      rate.audit,
-      {
-        actorKind: "ANONYMOUS",
-        capability: "PUBLIC_EMPLOYER_DEMO_SUBMIT",
-        targetId: request.correlationId,
-        targetType: "SALES_LEAD",
-      },
-      { database, environment, request, now },
+  if (
+    privacyBinding === null ||
+    !(await preflightPublicIntakePrivacyGate(privacyBinding, {
+      database,
+      environment,
+      now,
+    })).allowed
+  ) {
+    return errorState(
+      "Der Datenschutzhinweis ist nicht verfügbar oder hat sich geändert. Es wurden keine Angaben übermittelt. Bitte lade die Seite neu.",
+      raw,
     );
-    return errorState("Zu viele Anfragen in kurzer Zeit. Bitte versuche es später erneut.", raw);
   }
-
   if (parsed.data.websiteConfirmation !== "") {
     return Object.freeze({
       status: "success",
@@ -108,6 +106,7 @@ export async function submitEmployerDemoLeadAction(
     environment,
     request,
     now,
+    privacyBinding,
   });
   if (result.ok) {
     return Object.freeze({
@@ -123,6 +122,18 @@ export async function submitEmployerDemoLeadAction(
   }
   if (result.code === "IDEMPOTENCY_CONFLICT") {
     return errorState("Bitte lade das Formular neu, bevor du eine weitere Anfrage sendest.", raw);
+  }
+  if (result.code === "PRIVACY_UNAVAILABLE") {
+    return errorState(
+      "Der Datenschutzhinweis ist nicht verfügbar oder hat sich geändert. Es wurden keine Angaben übermittelt. Bitte lade die Seite neu.",
+      raw,
+    );
+  }
+  if (result.code === "RATE_LIMITED") {
+    return errorState(
+      "Zu viele Anfragen in kurzer Zeit. Bitte versuche es später erneut.",
+      raw,
+    );
   }
   return errorState("Die Anfrage konnte nicht gespeichert werden. Bitte versuche es erneut.", raw);
 }

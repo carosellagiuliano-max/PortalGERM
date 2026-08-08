@@ -287,6 +287,7 @@ export async function ingestVerifiedPaymentEvent(
 export async function resumePaymentInboxProjectionBacklog(
   input: Readonly<{
     batchSize?: number;
+    environment: string;
     now: Date;
   }>,
   database: DatabaseClient,
@@ -296,6 +297,8 @@ export async function resumePaymentInboxProjectionBacklog(
     !Number.isInteger(batchSize) ||
     batchSize < 1 ||
     batchSize > 100 ||
+    input.environment.trim().length === 0 ||
+    input.environment.length > 32 ||
     !Number.isFinite(input.now.getTime())
   ) {
     throw new TypeError("Payment inbox backlog resume input is invalid.");
@@ -306,7 +309,8 @@ export async function resumePaymentInboxProjectionBacklog(
     >`
       SELECT inbox."id", inbox."nextRetryAt"
       FROM "ProviderEventInbox" inbox
-      WHERE inbox."status" IN ('RECEIVED', 'FAILED')
+      WHERE inbox."environment" = ${input.environment}
+        AND inbox."status" IN ('RECEIVED', 'FAILED')
         AND NOT EXISTS (
           SELECT 1
           FROM "WorkItem" work

@@ -86,6 +86,7 @@ const PARTIAL_UNIQUE_INDEXES = [
   "job_publication_active_exact_unique",
   "plan_single_default_free_unique",
   "privacy_active_challenge_unique",
+  "processing_approval_one_approved_scope",
   "subscription_pending_change_unique",
   "CommercialClusterDecision_single_first_cluster_key",
   "CommercialOfferRelease_single_first_public_offer_key",
@@ -620,6 +621,12 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "20260729190000_phase_30_search_freshness_operations",
       "20260730120000_phase_31_commercial_validation",
       "20260801090000_phase_33_payment_provider_bindings",
+      "20260806200000_phase_34_provider_inbox_health",
+      "20260806210000_phase_34_public_search_trigram",
+      "20260806220000_phase_34_company_closure",
+      "20260806230000_phase_34_job_revision_generated_column_immutability",
+      "20260806240000_phase_34_talent_radar_legal_gate_serialization",
+      "20260806250000_phase_34_public_intake_privacy_evidence",
     ]);
     expect(
       migrations.rows.every(
@@ -728,10 +735,12 @@ describe("Phase 02 PostgreSQL schema contract", () => {
         [
           "candidate_single_active_cv_unique",
           "credit_ledger_purchased_grant_source_unique",
+          "ProcessingApproval_scope_region_processor_status_created_idx",
         ],
       ],
     );
     expect(addedIndexes.rows.map((row) => row.index_name).sort()).toEqual([
+      "ProcessingApproval_scope_region_processor_status_created_idx",
       "candidate_single_active_cv_unique",
       "credit_ledger_purchased_grant_source_unique",
     ]);
@@ -798,6 +807,7 @@ describe("Phase 02 PostgreSQL schema contract", () => {
       "phase30_search_relation_append_only",
       "phase30_search_release_lifecycle",
       "phase30_sitemap_capacity_observation_append_only",
+      "phase34_inventory_entry_draft_only_insert",
     ];
     const triggers = await target.query<{ trigger_name: string }>(
       [

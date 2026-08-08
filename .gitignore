@@ -30,3 +30,4 @@ Thumbs.db
 *.dump
 *.dump.age
 *.sha256
+.vercel/

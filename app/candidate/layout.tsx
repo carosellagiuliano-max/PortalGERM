@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 
 import { PrivateShell } from "@/components/auth/private-shell";
 import { PersonaContextSwitcher } from "@/components/auth/persona-context-switcher";
+import { PublicIntakePrivacyProvider } from "@/components/privacy/public-intake-privacy";
 import { getCurrentPersonaContextOverview } from "@/lib/auth/persona-page";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { isRecruitingFeatureAvailableV1 } from "@/lib/recruiting/feature-gates";
+import { resolvePublicIntakePrivacyGate } from "@/lib/privacy/public-intake-privacy-gate";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,6 +34,10 @@ export default async function CandidateLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireCandidatePage();
   const environment = getServerEnvironment();
+  const reportPrivacyGate = await resolvePublicIntakePrivacyGate("ABUSE_REPORT", {
+    database: getDatabase(),
+    environment,
+  });
   if (
     environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
     (user.emailVerifiedAt === null ||
@@ -53,7 +59,9 @@ export default async function CandidateLayout({
           secondaryLabel: "E-Mail-Bestätigung ausstehend",
         }}
       >
-        {children}
+        <PublicIntakePrivacyProvider decision={reportPrivacyGate}>
+          {children}
+        </PublicIntakePrivacyProvider>
       </PrivateShell>
     );
   }
@@ -128,7 +136,9 @@ export default async function CandidateLayout({
         )
       }
     >
-      {children}
+      <PublicIntakePrivacyProvider decision={reportPrivacyGate}>
+        {children}
+      </PublicIntakePrivacyProvider>
     </PrivateShell>
   );
 }

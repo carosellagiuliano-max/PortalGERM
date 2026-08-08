@@ -199,7 +199,7 @@ die genannte Capability; sensible Reads sind begrenzt und Audit-Metadaten
 redigiert.
 
 | Route(n) | Capability / Zweck |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| --- | --- |
 | `/admin` | `ADMIN_OVERVIEW_READ`; Queues, SLA und letzte Audits |
 | `/admin/analytics` | `ADMIN_ANALYTICS_READ`; suppressierte Funnels/Finanzen |
 | `/admin/audit` | `ADMIN_AUDIT_READ`; max. 100, geschlossene Filter/Correlation |
@@ -234,17 +234,17 @@ redigiert.
 | `/admin/orders/[id]` | gespeicherte Order/Payment/Fulfillment-Evidence |
 | `/admin/invoices` | Billing-Read |
 | `/admin/invoices/[id]` | `ADMIN_INVOICE_MUTATE` für erlaubte Transition |
-| `/admin/plans` | `ADMIN_CATALOG_READ                                                                                                                                                                                           | MUTATE`; versioniert |
-| `/admin/products` | `ADMIN_CATALOG_READ                                                                                                                                                                                           | MUTATE`; Release-Permits |
+| `/admin/plans` | `ADMIN_CATALOG_READ` / `ADMIN_CATALOG_MUTATE`; versioniert |
+| `/admin/products` | `ADMIN_CATALOG_READ` / `ADMIN_CATALOG_MUTATE`; Release-Permits |
 | `/admin/privacy-requests` | `PRIVACY_CASE_READ`; minimale Queue |
 | `/admin/privacy-requests/[id]` | Read/Verify/Process getrennt; Verifier→Processor-Handoff, zwei unabhängige action-/resource-bound Step-ups und genau eine Approval→WorkItem-Wirkung; Need-to-know |
 | `/admin/security` | aktive Adminsession; serverseitiger Redirect auf den eigenen Authenticator-Einstieg, keine Capability-Erweiterung |
 | `/admin/security/authenticators` | eigener Passkey-/TOTP-/Recovery-Lifecycle; Admin-Mutationswirkung erst mit frischer Assurance |
-| `/admin/security/roles` | `ADMIN_SECURITY_READ`; Antrag/Freigabe zusätzlich `ADMIN_SECURITY_GRANT                                                                                                                                       | APPROVE`, unterschiedliche Actors und konfliktfreie Duties |
+| `/admin/security/roles` | `ADMIN_SECURITY_READ`; Antrag/Freigabe zusätzlich `ADMIN_SECURITY_GRANT` / `ADMIN_SECURITY_APPROVE`, unterschiedliche Actors und konfliktfreie Duties |
 | `/admin/security/grants` | `ADMIN_SECURITY_READ`; bounded Direktgrant und Geräte-Reset mit SoD, AAL2, Revoke und Audit |
-| `/admin/security/break-glass` | `ADMIN_SECURITY_READ`; Mutation nur `ADMIN_BREAK_GLASS_MANAGE                                                                                                                                                 | APPROVE`, anderem Actor, Incident-ID, TTL und aktivem Gate |
+| `/admin/security/break-glass` | `ADMIN_SECURITY_READ`; Mutation nur mit `ADMIN_BREAK_GLASS_MANAGE` / `ADMIN_BREAK_GLASS_APPROVE`, anderem Actor, Incident-ID, TTL und aktivem Gate |
 | `/admin/trust-safety` | `TRUST_SAFETY_READ`; keyset-bounded, minimale Fall-/SLA-/Assignee-Daten ohne geheime Evidenz |
-| `/admin/trust-safety/[id]` | `TRUST_SAFETY_READ                                                                                                                                                                                            | REVIEW                                                     | RESTORE` je Aktion; Assignment, fallgebundenes AAL2, SoD-Appeal und versionierter Conflict-Schutz |
+| `/admin/trust-safety/[id]` | `TRUST_SAFETY_READ` / `TRUST_SAFETY_REVIEW` / `TRUST_SAFETY_RESTORE` je Aktion; Assignment, fallgebundenes AAL2, SoD-Appeal und versionierter Conflict-Schutz |
 
 ## Operations-Handler — 3
 

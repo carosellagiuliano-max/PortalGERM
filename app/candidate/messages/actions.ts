@@ -25,6 +25,10 @@ import {
   sendCandidateMessage,
 } from "@/lib/candidate/messages";
 import { emailProvider } from "@/lib/providers/email";
+import {
+  preflightPublicIntakePrivacyGate,
+  readPublicIntakePrivacyExpectedBinding,
+} from "@/lib/privacy/public-intake-privacy-gate";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 export async function sendCandidateMessageAction(
@@ -75,7 +79,7 @@ export async function sendCandidateMessageAction(
     conversationId,
     body: parsed.data.body,
     idempotencyKey: parsed.data.idempotencyKey,
-  });
+  }, now, environment);
   if (result.ok) {
     revalidatePath(`/candidate/messages/${conversationId}`);
     revalidatePath("/candidate/messages");
@@ -93,6 +97,8 @@ export async function sendCandidateMessageAction(
       ? "Dieses Gespräch ist nicht mehr verfügbar."
       : result.code === "TRUST_BLOCKED"
         ? "Neue Nachrichten sind gesperrt, weil die Firma nicht aktiv und aktuell verifiziert ist. Bitte lade neu."
+        : result.code === "LEGAL_GATE_BLOCKED"
+          ? "Neue Talent-Radar-Nachrichten bleiben gesperrt, bis die aktuelle Datenschutz-, AVG- und DSFA-Freigabe dokumentiert ist."
         : result.code === "CONFLICT"
           ? "Die Anfrage steht im Konflikt mit einer früheren Übermittlung. Bitte lade neu."
           : "Die Nachricht konnte nicht gesendet werden.",
@@ -135,6 +141,24 @@ export async function reportCandidateMessageAction(
     );
   }
   const database = getDatabase();
+  const environment = getServerEnvironment();
+  const now = new Date();
+  const privacyBinding = readPublicIntakePrivacyExpectedBinding(
+    formData,
+    "ABUSE_REPORT",
+  );
+  if (
+    privacyBinding === null ||
+    !(await preflightPublicIntakePrivacyGate(privacyBinding, {
+      database,
+      environment,
+      now,
+    })).allowed
+  ) {
+    return errorState(
+      "Der Datenschutzhinweis ist nicht verfügbar oder hat sich geändert. Es wurden keine Angaben übermittelt. Bitte lade die Seite neu.",
+    );
+  }
   const target = await resolveCandidateMessageReportTarget(
     database,
     user.id,
@@ -152,10 +176,12 @@ export async function reportCandidateMessageAction(
     },
     {
       database,
-      environment: getServerEnvironment(),
+      environment,
       request,
       currentUser: user,
       emailProvider,
+      now,
+      privacyBinding,
     },
   );
   if (!result.ok) {

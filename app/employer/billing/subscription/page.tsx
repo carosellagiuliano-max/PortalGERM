@@ -15,6 +15,7 @@ import { requireEmployerBillingPage } from "@/lib/billing/employer-page-access";
 import { getPaidCheckoutAvailability } from "@/lib/billing/paid-checkout-read-model";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
+import { isLegacyMockBillingAllowed } from "@/lib/billing/mock-billing-policy";
 
 export const metadata: Metadata = {
   title: "Bezahltes Abonnement",
@@ -26,6 +27,7 @@ export const runtime = "nodejs";
 export default async function EmployerSubscriptionPaymentPage() {
   await requireEmployerBillingPage(true);
   const environment = getServerEnvironment();
+  const mockCheckoutAvailable = isLegacyMockBillingAllowed(environment);
   const now = new Date();
   const [starter, pro] = await Promise.all([
     getPaidCheckoutAvailability(getDatabase(), environment, "STARTER", now),
@@ -100,12 +102,14 @@ export default async function EmployerSubscriptionPaymentPage() {
         >
           Zur Billing-Übersicht
         </Link>
-        <Link
-          href="/employer/billing/checkout"
-          className={buttonVariants({ variant: "ghost" })}
-        >
-          Lokale Demo ansehen
-        </Link>
+        {mockCheckoutAvailable ? (
+          <Link
+            href="/employer/billing/checkout"
+            className={buttonVariants({ variant: "ghost" })}
+          >
+            Lokale Demo ansehen
+          </Link>
+        ) : null}
       </div>
     </section>
   );

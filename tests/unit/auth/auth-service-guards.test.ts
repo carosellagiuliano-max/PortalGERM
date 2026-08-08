@@ -48,7 +48,10 @@ describe("Phase 06 auth service guards", () => {
   beforeEach(() => {
     password.hashPassword.mockReset();
     password.verifyPassword.mockReset();
-    rateLimit.consumeAuthRateLimit.mockReset();
+    rateLimit.consumeAuthRateLimit.mockReset().mockResolvedValue({
+      allowed: true,
+      status: 200,
+    });
     rateLimit.recordRateLimitDenial.mockReset().mockResolvedValue({
       written: true,
       gated: false,

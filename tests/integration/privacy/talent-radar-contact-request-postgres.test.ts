@@ -85,6 +85,50 @@ afterAll(async () => {
 });
 
 describe.sequential("Phase 14 Talent Radar ContactRequest transaction", () => {
+  it("blocks a direct preview contact before proof, Candidate, Credit or ContactRequest effects", async () => {
+    const employer = await createEmployerFixture("phase34-legal-denial");
+    await createAdminGrant(employer, 1);
+    const candidate = await createCandidateProof(employer, "phase34-legal-denial");
+    let proofCalls = 0;
+
+    const result = await sendContactRequest(
+      contactInput(candidate, "phase34-legal-denial-v1"),
+      {
+        actor: employer.actor,
+        correlationId: randomUUID(),
+        database: db(),
+        eligibilityEnvironment: "production",
+        proofPort: {
+          async authorizeForContact() {
+            proofCalls += 1;
+            throw new Error("The legal denial must precede Radar proof access.");
+          },
+        },
+        rateLimitPort: ALLOW_RATE_LIMIT,
+        legalGateEnvironment: {
+          APP_ENV: "preview",
+          LEGAL_PUBLICATION_PRIVACY: false,
+        },
+        now: NOW,
+      },
+    );
+
+    expect(result).toEqual({ ok: false, code: "LEGAL_GATE_BLOCKED" });
+    expect(proofCalls).toBe(0);
+    await expect(db().employerContactRequest.count({
+      where: { companyId: employer.companyId },
+    })).resolves.toBe(0);
+    await expect(db().creditLedgerEntry.count({
+      where: {
+        account: { companyId: employer.companyId },
+        kind: "CONSUME",
+      },
+    })).resolves.toBe(0);
+    await expect(db().contactRequestEvent.count({
+      where: { contactRequest: { companyId: employer.companyId } },
+    })).resolves.toBe(0);
+  });
+
   it("uses a signed member/company SearchSession proof, consumes exactly one Credit and replays after the last Credit", async () => {
     const employer = await createEmployerFixture("success-replay");
     const grantId = await createAdminGrant(employer, 1);
@@ -1446,6 +1490,10 @@ function send(
     eligibilityEnvironment: "test",
     proofPort: PROOF_PORT,
     rateLimitPort: ALLOW_RATE_LIMIT,
+    legalGateEnvironment: {
+      APP_ENV: "ci",
+      LEGAL_PUBLICATION_PRIVACY: false,
+    },
     now,
   });
 }

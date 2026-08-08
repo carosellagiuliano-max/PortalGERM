@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  consumeRequestRateLimit: vi.fn(),
+  consumeRequestRateLimitInTransaction: vi.fn(),
   createPrismaTransactionAuditPort: vi.fn(),
   enqueueNotification: vi.fn(),
   recordRateLimitDenial: vi.fn(),
@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/rate-limit-runtime", () => ({
-  consumeRequestRateLimit: mocks.consumeRequestRateLimit,
+  consumeRequestRateLimitInTransaction:
+    mocks.consumeRequestRateLimitInTransaction,
 }));
 vi.mock("@/lib/audit/log", () => ({
   writeRequiredAudit: mocks.writeRequiredAudit,
@@ -28,6 +29,7 @@ vi.mock("@/lib/notifications/outbox", () => ({
 }));
 
 import { createPublicReport } from "@/lib/abuse/public-report";
+import { localPublicIntakePrivacyBinding } from "@/tests/fixtures/public-intake-privacy";
 
 const NOW = new Date("2026-07-20T12:00:00.000Z");
 const TARGET = Object.freeze({
@@ -45,7 +47,7 @@ const INPUT = Object.freeze({
 describe("public abuse report use case", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
-    mocks.consumeRequestRateLimit.mockResolvedValue({
+    mocks.consumeRequestRateLimitInTransaction.mockResolvedValue({
       allowed: true,
       status: 200,
     });
@@ -88,13 +90,15 @@ describe("public abuse report use case", () => {
       ),
     ).resolves.toEqual({ ok: false, code: "TARGET_NOT_FOUND" });
 
-    expect(mocks.consumeRequestRateLimit).not.toHaveBeenCalled();
+    expect(mocks.consumeRequestRateLimitInTransaction).not.toHaveBeenCalled();
     expect(database.$transaction).not.toHaveBeenCalled();
     expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
 
-  it("applies the actor-or-IP per-target quota before opening a write transaction", async () => {
-    mocks.consumeRequestRateLimit.mockResolvedValue({
+  it("applies precheck and actor-or-IP target quotas after opening the locked transaction", async () => {
+    mocks.consumeRequestRateLimitInTransaction
+      .mockResolvedValueOnce({ allowed: true, status: 200 })
+      .mockResolvedValueOnce({
       allowed: false,
       status: 429,
       code: "RATE_LIMITED",
@@ -104,7 +108,7 @@ describe("public abuse report use case", () => {
         preset: "ABUSE_INTAKE",
         scope: "ACTOR_OR_IP_TARGET",
       },
-    });
+      });
     const database = databaseMock();
 
     const result = await createPublicReport(
@@ -114,14 +118,25 @@ describe("public abuse report use case", () => {
     );
 
     expect(result).toEqual({ ok: false, code: "RATE_LIMITED" });
-    expect(mocks.consumeRequestRateLimit).toHaveBeenCalledWith(
+    expect(mocks.consumeRequestRateLimitInTransaction).toHaveBeenNthCalledWith(
+      1,
+      "ABUSE_INTAKE_PRECHECK",
+      {},
+      expect.any(Object),
+      database.transaction,
+      NOW,
+      expect.any(Object),
+    );
+    expect(mocks.consumeRequestRateLimitInTransaction).toHaveBeenNthCalledWith(
+      2,
       "ABUSE_INTAKE",
       { targetId: TARGET.id },
       expect.any(Object),
+      database.transaction,
       NOW,
-      expect.objectContaining({ database }),
+      expect.any(Object),
     );
-    expect(database.$transaction).not.toHaveBeenCalled();
+    expect(database.$transaction).toHaveBeenCalledTimes(1);
     expect(mocks.recordRateLimitDenial).toHaveBeenCalledWith(
       expect.objectContaining({
         preset: "ABUSE_INTAKE",
@@ -199,6 +214,8 @@ describe("public abuse report use case", () => {
       createPublicReport(INPUT, TARGET, {
         ...dependencies(database),
         environment: {
+          APP_ENV: "local",
+          RATE_LIMIT_BACKEND: "memory",
           ABUSE_REPORT_ADMIN_EMAILS: [
             "security@example.test",
             "ops@example.test",
@@ -243,6 +260,8 @@ describe("public abuse report use case", () => {
       createPublicReport(INPUT, TARGET, {
         ...dependencies(database),
         environment: {
+          APP_ENV: "local",
+          RATE_LIMIT_BACKEND: "memory",
           ABUSE_REPORT_ADMIN_EMAILS: ["security@example.test"],
           secrets: {
             keyrings: {
@@ -261,6 +280,8 @@ function dependencies(database: ReturnType<typeof databaseMock>) {
   return {
     database: database as never,
     environment: {
+      APP_ENV: "local",
+      RATE_LIMIT_BACKEND: "memory",
       secrets: { keyrings: { AUDIT_IP_HASH_KEYS: [] } },
     } as never,
     request: {
@@ -269,6 +290,7 @@ function dependencies(database: ReturnType<typeof databaseMock>) {
     } as never,
     currentUser: null,
     now: NOW,
+    privacyBinding: localPublicIntakePrivacyBinding("ABUSE_REPORT"),
   };
 }
 

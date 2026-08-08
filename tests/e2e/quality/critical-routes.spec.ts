@@ -138,12 +138,25 @@ function defineQualityMatrix(viewport: QualityViewport) {
       path: "/candidate/alerts",
       heading: "Passende Stellen im Blick behalten",
       assertState: async (currentPage) => {
+        const seededAlert = currentPage.locator('[data-slot="card"]').filter({
+          has: currentPage.getByRole("heading", {
+            level: 2,
+            name: "Alle passenden Stellen",
+          }),
+        });
         await expect(
-          currentPage.getByRole("button", { name: "Pausieren" }).first(),
+          seededAlert.getByRole("button", { name: "Pausieren" }),
         ).toBeVisible();
         await expect(
-          currentPage.getByText("Freigegeben", { exact: true }).first(),
+          seededAlert.getByText("Aktivierungswunsch · Zustellung gesperrt", {
+            exact: true,
+          }),
         ).toBeVisible();
+        await expect(
+          seededAlert.getByText("Aktiv · Zustellpfad freigegeben", {
+            exact: true,
+          }),
+        ).toHaveCount(0);
       },
     });
     await auditRoute(page, pageObservation, {

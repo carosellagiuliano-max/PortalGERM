@@ -89,50 +89,56 @@ const publicEligibilityJobSelect = {
   publishedRevisionId: true,
   publishedAt: true,
   expiresAt: true,
-  company: {
-    select: {
-      name: true,
-      status: true,
-      dataProvenance: true,
-      verificationRequests: {
-        where: { status: "VERIFIED", supersededBy: null },
-        select: { id: true },
-        take: 2,
-      },
-    },
-  },
-  publishedRevision: {
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      approvedAt: true,
-      rejectedAt: true,
-      validThrough: true,
-      categoryId: true,
-      category: { select: { isActive: true } },
-      cantonId: true,
-      cityId: true,
-      salaryMin: true,
-      salaryMax: true,
-      salaryPeriod: true,
-      responseTargetDays: true,
-      remoteType: true,
-      jobType: true,
-      workloadMin: true,
-      workloadMax: true,
-      scoreSnapshots: {
-        where: { scoreVersion: "v2" },
-        select: { scorePoints: true },
-        take: 2,
-      },
-    },
-  },
 } as const satisfies Prisma.JobSelect;
 
-type PublicEligibilityJobRow = Prisma.JobGetPayload<{
+const publicEligibilityCompanySelect = {
+  id: true,
+  name: true,
+  status: true,
+  dataProvenance: true,
+} as const satisfies Prisma.CompanySelect;
+
+const publicEligibilityRevisionSelect = {
+  id: true,
+  title: true,
+  description: true,
+  approvedAt: true,
+  rejectedAt: true,
+  validThrough: true,
+  categoryId: true,
+  cantonId: true,
+  cityId: true,
+  salaryMin: true,
+  salaryMax: true,
+  salaryPeriod: true,
+  responseTargetDays: true,
+  remoteType: true,
+  jobType: true,
+  workloadMin: true,
+  workloadMax: true,
+} as const satisfies Prisma.JobRevisionSelect;
+
+type PublicEligibilityJobBaseRow = Prisma.JobGetPayload<{
   select: typeof publicEligibilityJobSelect;
 }>;
+type PublicEligibilityCompanyRow = Prisma.CompanyGetPayload<{
+  select: typeof publicEligibilityCompanySelect;
+}>;
+type PublicEligibilityRevisionRow = Prisma.JobRevisionGetPayload<{
+  select: typeof publicEligibilityRevisionSelect;
+}>;
+type PublicEligibilityJobRow = PublicEligibilityJobBaseRow &
+  Readonly<{
+    company: PublicEligibilityCompanyRow &
+      Readonly<{ verificationRequests: readonly Readonly<{ id: string }>[] }>;
+    publishedRevision:
+      | (PublicEligibilityRevisionRow &
+          Readonly<{
+            category: Readonly<{ isActive: boolean }>;
+            scoreSnapshots: readonly Readonly<{ scorePoints: number }>[];
+          }>)
+      | null;
+  }>;
 
 export function evaluatePublicJobEligibility(
   snapshot: PublicEligibilitySnapshot | null,
@@ -372,6 +378,122 @@ async function loadPublicEligibilitySnapshots(
     });
   }
 
+  // Prisma's query-plan interpreter fans multiple selected relations out with
+  // Promise.all. Inside an interactive transaction those reads share one pg
+  // client, which pg 8 deprecates and pg 9 removes. Load every bounded relation
+  // explicitly and sequentially so the transaction never relies on the
+  // driver's legacy client-side query queue.
+  const companyIds = [...new Set(jobs.map(({ companyId }) => companyId))];
+  const revisionIds = jobs.flatMap(({ publishedRevisionId }) =>
+    publishedRevisionId === null ? [] : [publishedRevisionId],
+  );
+  const companies = await database.company.findMany({
+    where: { id: { in: companyIds } },
+    select: publicEligibilityCompanySelect,
+  });
+  const verificationRequestLimit = companyIds.length * 2;
+  const verificationRequests =
+    verificationRequestLimit === 0
+      ? []
+      : await database.companyVerificationRequest.findMany({
+          where: {
+            companyId: { in: companyIds },
+            status: "VERIFIED",
+            supersededBy: null,
+          },
+          orderBy: [{ companyId: "asc" }, { id: "asc" }],
+          take: verificationRequestLimit + 1,
+          select: { id: true, companyId: true },
+        });
+  if (verificationRequests.length > verificationRequestLimit) {
+    throw new RangeError(
+      "Current company-verification rows exceeded the eligibility safety bound.",
+    );
+  }
+  const revisions =
+    revisionIds.length === 0
+      ? []
+      : await database.jobRevision.findMany({
+          where: { id: { in: revisionIds } },
+          select: publicEligibilityRevisionSelect,
+        });
+  const categoryIds = [
+    ...new Set(revisions.map(({ categoryId }) => categoryId)),
+  ];
+  const categories =
+    categoryIds.length === 0
+      ? []
+      : await database.category.findMany({
+          where: { id: { in: categoryIds } },
+          select: { id: true, isActive: true },
+        });
+  const scoreSnapshots =
+    revisionIds.length === 0
+      ? []
+      : await database.jobScoreSnapshot.findMany({
+          where: {
+            jobRevisionId: { in: revisionIds },
+            scoreVersion: "v2",
+          },
+          orderBy: { id: "asc" },
+          select: { jobRevisionId: true, scorePoints: true },
+        });
+
+  const companiesById = new Map(companies.map((row) => [row.id, row]));
+  const verificationRequestsByCompanyId = new Map<
+    string,
+    Array<Readonly<{ id: string }>>
+  >();
+  for (const request of verificationRequests) {
+    const rows = verificationRequestsByCompanyId.get(request.companyId) ?? [];
+    if (rows.length < 2) rows.push(Object.freeze({ id: request.id }));
+    verificationRequestsByCompanyId.set(request.companyId, rows);
+  }
+  const revisionsById = new Map(revisions.map((row) => [row.id, row]));
+  const categoriesById = new Map(categories.map((row) => [row.id, row]));
+  const scoresByRevisionId = new Map(
+    scoreSnapshots.map((row) => [
+      row.jobRevisionId,
+      Object.freeze({ scorePoints: row.scorePoints }),
+    ]),
+  );
+  const hydratedJobs: PublicEligibilityJobRow[] = jobs.map((job) => {
+    const company = companiesById.get(job.companyId);
+    if (company === undefined) {
+      throw new Error("Public eligibility company relation is unavailable.");
+    }
+    const revision =
+      job.publishedRevisionId === null
+        ? null
+        : revisionsById.get(job.publishedRevisionId);
+    if (revision === undefined) {
+      throw new Error("Public eligibility revision relation is unavailable.");
+    }
+    const category =
+      revision === null ? null : categoriesById.get(revision.categoryId);
+    if (revision !== null && category === undefined) {
+      throw new Error("Public eligibility category relation is unavailable.");
+    }
+    const score =
+      revision === null ? undefined : scoresByRevisionId.get(revision.id);
+    return {
+      ...job,
+      company: {
+        ...company,
+        verificationRequests:
+          verificationRequestsByCompanyId.get(job.companyId) ?? [],
+      },
+      publishedRevision:
+        revision === null
+          ? null
+          : {
+              ...revision,
+              category: { isActive: category?.isActive === true },
+              scoreSnapshots: score === undefined ? [] : [score],
+            },
+    };
+  });
+
   // Interactive transactions use one PostgreSQL connection. These bounded
   // reads must remain sequential; concurrent client.query calls are not a
   // supported source of latency improvement and become an error in pg 9.
@@ -428,7 +550,7 @@ async function loadPublicEligibilitySnapshots(
   );
   return Object.freeze({
     snapshots: new Map(
-      jobs.map((job) => [
+      hydratedJobs.map((job) => [
         job.id,
         toPublicEligibilitySnapshot(
           job,

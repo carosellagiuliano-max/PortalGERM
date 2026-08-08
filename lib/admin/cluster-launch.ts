@@ -76,16 +76,14 @@ export async function evaluateClusterLaunch(
           );
         }
 
-        const [canton, category] = await Promise.all([
-          transaction.canton.findFirst({
-            where: { id: parsed.data.cantonId, isActive: true },
-            select: { id: true, code: true, name: true },
-          }),
-          transaction.category.findFirst({
-            where: { id: parsed.data.categoryId, isActive: true },
-            select: { id: true, name: true },
-          }),
-        ]);
+        const canton = await transaction.canton.findFirst({
+          where: { id: parsed.data.cantonId, isActive: true },
+          select: { id: true, code: true, name: true },
+        });
+        const category = await transaction.category.findFirst({
+          where: { id: parsed.data.categoryId, isActive: true },
+          select: { id: true, name: true },
+        });
         if (canton === null || category === null)
           return adminFailure("NOT_FOUND");
 

@@ -14,8 +14,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
+import { resolveJobAlertDeliveryAvailability } from "@/lib/candidate/job-alert-delivery-runtime";
 import { getCandidateJobAlertPageData } from "@/lib/candidate/job-alerts";
 import { getServerEnvironment } from "@/lib/config/env";
+import { getDatabase } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -26,11 +28,13 @@ export const metadata: Metadata = {
 
 export default async function CandidateAlertsPage() {
   const user = await requireCandidatePage();
-  const data = await getCandidateJobAlertPageData(user.id);
   const environment = getServerEnvironment();
-  const manualMockEnabled =
-    environment.EMAIL_PROVIDER_MODE === "local_mock" &&
-    (environment.APP_ENV === "local" || environment.APP_ENV === "ci");
+  const database = getDatabase();
+  const now = new Date();
+  const [data, deliveryAvailability] = await Promise.all([
+    getCandidateJobAlertPageData(user.id, database, now),
+    resolveJobAlertDeliveryAvailability(database, environment, now),
+  ]);
 
   return (
     <section aria-labelledby="alerts-title" className="grid max-w-5xl gap-7">
@@ -62,6 +66,7 @@ export default async function CandidateAlertsPage() {
           </CardHeader>
           <CardContent>
             <AlertForm
+              deliveryAvailability={deliveryAvailability}
               deliveryConsentGranted={data.deliveryConsentGranted}
               references={data.references}
             />
@@ -69,23 +74,28 @@ export default async function CandidateAlertsPage() {
         </Card>
 
         <div className="grid content-start gap-5">
-          <AlertDeliveryConsentCard granted={data.deliveryConsentGranted} />
+          <AlertDeliveryConsentCard
+            availability={deliveryAvailability}
+            granted={data.deliveryConsentGranted}
+          />
           <Card>
             <CardHeader>
-              <span className="mb-2 grid size-11 place-items-center rounded-lg bg-emerald-100 text-emerald-800">
+              <span
+                className={
+                  deliveryAvailability.canActivate
+                    ? "mb-2 grid size-11 place-items-center rounded-lg bg-emerald-100 text-emerald-800"
+                    : "mb-2 grid size-11 place-items-center rounded-lg bg-amber-100 text-amber-900"
+                }
+              >
                 <ShieldCheckIcon className="size-5" aria-hidden="true" />
               </span>
               <CardTitle as="h2">
-                {manualMockEnabled
-                  ? "Transparenter Testmodus"
-                  : "Service-Zustellung"}
+                {deliveryTitle(deliveryAvailability.mode)}
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm leading-6 text-muted-foreground">
-              {manualMockEnabled
-                ? "Job-Alerts werden lokal als klar gekennzeichneter Mock-Eintrag erzeugt, ohne externe Wirkung."
-                : "Fällige Job-Alerts werden über die freigegebene Service-Zustellung verarbeitet, ohne Marketing-Einwilligung oder Tracking-Pixel."}{" "}
-              Du kannst sie jederzeit mit einem Klick pausieren.
+              {deliveryCopy(deliveryAvailability.mode)} Du kannst gespeicherte
+              Jobabos jederzeit mit einem Klick pausieren.
             </CardContent>
           </Card>
         </div>
@@ -94,9 +104,42 @@ export default async function CandidateAlertsPage() {
       <div>
         <h2 className="text-xl font-semibold">Deine Jobabos</h2>
         <div className="mt-4">
-          <AlertList data={data} manualMockEnabled={manualMockEnabled} />
+          <AlertList
+            availability={deliveryAvailability}
+            data={data}
+          />
         </div>
       </div>
     </section>
   );
+}
+
+function deliveryTitle(
+  mode: "LOCAL_MOCK" | "PROVIDER_CONTRACT" | "EXTERNAL" | "UNAVAILABLE",
+) {
+  switch (mode) {
+    case "LOCAL_MOCK":
+      return "Transparenter lokaler Testmodus";
+    case "PROVIDER_CONTRACT":
+      return "Isolierter Providervertrag";
+    case "EXTERNAL":
+      return "Freigegebener Zustellpfad";
+    case "UNAVAILABLE":
+      return "Zustellung derzeit gesperrt";
+  }
+}
+
+function deliveryCopy(
+  mode: "LOCAL_MOCK" | "PROVIDER_CONTRACT" | "EXTERNAL" | "UNAVAILABLE",
+) {
+  switch (mode) {
+    case "LOCAL_MOCK":
+      return "Fällige Jobabos können lokal als klar gekennzeichneter Mock-Eintrag erzeugt werden. Es wird keine echte E-Mail versendet.";
+    case "PROVIDER_CONTRACT":
+      return "Provider, Worker und Scheduler sind für den isolierten Vertrag freigegeben. Das ist keine echte Empfängerzustellung.";
+    case "EXTERNAL":
+      return "Provider, Worker und Scheduler sind aktuell freigegeben. Eine E-Mail gilt trotzdem erst mit Providerbestätigung als übergeben und nicht schon beim Speichern des Jobabos.";
+    case "UNAVAILABLE":
+      return "Es gibt aktuell keinen vollständig freigegebenen und erreichbaren Provider-, Worker- und Scheduler-Pfad. Filter können pausiert gespeichert, aber nicht aktiviert oder als zustellbar bezeichnet werden.";
+  }
 }

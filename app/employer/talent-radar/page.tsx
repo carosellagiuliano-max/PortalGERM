@@ -24,9 +24,9 @@ import { getDatabase } from "@/lib/db/client";
 import { requireEmployerCompanyContext } from "@/lib/employer/context";
 import type { RadarOpaqueKey } from "@/lib/privacy/radar-opaque";
 import { toRadarEligibilityEnvironment } from "@/lib/talentradar/eligibility";
+import { decideTalentRadarRuntimeGate } from "@/lib/talentradar/legal-gate";
 import {
-  createPrismaRadarCandidateListRepository,
-  listRadarCandidates,
+  listRadarCandidatesWithLockedLegalGate,
   type RadarListCandidatesResult,
 } from "@/lib/talentradar/list-candidates";
 import type { RadarPrivacyHmacKeyV1 } from "@/lib/talentradar/privacy-policy-v1";
@@ -57,8 +57,15 @@ export default async function EmployerTalentRadarPage({
   const environment = getServerEnvironment();
   const now = new Date();
 
-  // This gate intentionally completes before listRadarCandidates or any other
-  // Candidate/Radar query is reachable.
+  const legalGatePreflight = await decideTalentRadarRuntimeGate(database, {
+    scope: "TALENT_RADAR",
+    environment,
+    now,
+  });
+  if (!legalGatePreflight.allowed) {
+    return <LockedPreview reason="LEGAL_REVIEW_REQUIRED" />;
+  }
+
   const gate = await loadRadarGate({
     companyId: context.companyId,
     membershipRole: context.membershipRole,
@@ -66,22 +73,24 @@ export default async function EmployerTalentRadarPage({
     now,
   });
   if (!gate.allowed) {
-    const upgradePrompt = gate.reason === "TALENT_RADAR_NOT_INCLUDED"
-      ? await buildCatalogUpgradePrompt(
-          {
-            reason: "TALENT_RADAR_NOT_INCLUDED",
-            suggestedPlanSlug: "pro",
-            actorRole: context.membershipRole,
-          },
-          { database, now },
-        )
-      : undefined;
+    const upgradePrompt =
+      gate.reason === "TALENT_RADAR_NOT_INCLUDED"
+        ? await buildCatalogUpgradePrompt(
+            {
+              reason: "TALENT_RADAR_NOT_INCLUDED",
+              suggestedPlanSlug: "pro",
+              actorRole: context.membershipRole,
+            },
+            { database, now },
+          )
+        : undefined;
     return <LockedPreview reason={gate.reason} upgradePrompt={upgradePrompt} />;
   }
 
   const filters = filterPayload(query);
   const [result, skills] = await Promise.all([
-    listRadarCandidates(
+    listRadarCandidatesWithLockedLegalGate(
+      database,
       {
         actorUserId: employerContext.user.id,
         companyId: context.companyId,
@@ -89,9 +98,9 @@ export default async function EmployerTalentRadarPage({
         cursor: singleValue(query.cursor),
         now,
         environment: toRadarEligibilityEnvironment(environment.APP_ENV),
+        legalGateEnvironment: environment,
       },
       {
-        repository: createPrismaRadarCandidateListRepository(database),
         membershipRateLimit: {
           async consume({ membershipId, now: consumedAt }) {
             const decision = await consumeRequestRateLimit(
@@ -145,30 +154,34 @@ export default async function EmployerTalentRadarPage({
   ]);
 
   if (result.status === "LOCKED") {
-    const reason = result.reason === "TALENT_RADAR_NOT_INCLUDED"
-      ? "TALENT_RADAR_NOT_INCLUDED"
-      : result.reason === "COMPANY_UNVERIFIED"
-        ? "COMPANY_UNVERIFIED"
-        : result.reason === "COMPANY_INACTIVE"
-          ? "COMPANY_INACTIVE"
-          : "ROLE";
+    const reason =
+      result.reason === "TALENT_RADAR_NOT_INCLUDED"
+        ? "TALENT_RADAR_NOT_INCLUDED"
+        : result.reason === "COMPANY_UNVERIFIED"
+          ? "COMPANY_UNVERIFIED"
+          : result.reason === "COMPANY_INACTIVE"
+            ? "COMPANY_INACTIVE"
+            : result.reason === "LEGAL_REVIEW_REQUIRED"
+              ? "LEGAL_REVIEW_REQUIRED"
+              : "ROLE";
     return <LockedPreview reason={reason} />;
   }
 
-  const signedSearchSession = result.status === "AVAILABLE"
-    ? signRadarContactSearchSessionProof(
-        {
-          searchSessionId: result.searchSessionId,
-          actorUserId: employerContext.user.id,
-          companyId: context.companyId,
-          membershipId: context.membershipId,
-          filterHash: result.filterHash,
-          sessionExpiresAt: result.searchSessionExpiresAt,
-          now,
-        },
-        environment.secrets.session,
-      )
-    : null;
+  const signedSearchSession =
+    result.status === "AVAILABLE"
+      ? signRadarContactSearchSessionProof(
+          {
+            searchSessionId: result.searchSessionId,
+            actorUserId: employerContext.user.id,
+            companyId: context.companyId,
+            membershipId: context.membershipId,
+            filterHash: result.filterHash,
+            sessionExpiresAt: result.searchSessionExpiresAt,
+            now,
+          },
+          environment.secrets.session,
+        )
+      : null;
 
   return (
     <section aria-labelledby="talent-radar-title" className="grid gap-7">
@@ -176,7 +189,10 @@ export default async function EmployerTalentRadarPage({
         <div>
           <p className="eyebrow">Datenschutzfreundliche Talentsuche</p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h1 id="talent-radar-title" className="text-3xl font-semibold tracking-tight">
+            <h1
+              id="talent-radar-title"
+              className="text-3xl font-semibold tracking-tight"
+            >
               Talent Radar
             </h1>
             <Badge variant="outline">
@@ -225,7 +241,10 @@ function RadarResult({
   query: RadarQuery;
   signedSearchSession: string | null;
 }>) {
-  if (result.status === "INVALID_FILTER" || result.status === "INVALID_CURSOR") {
+  if (
+    result.status === "INVALID_FILTER" ||
+    result.status === "INVALID_CURSOR"
+  ) {
     return (
       <Alert variant="destructive">
         <AlertTitle>Suche nicht gültig</AlertTitle>
@@ -266,7 +285,8 @@ function RadarResult({
     <div className="grid gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Kohortengrösse: <strong className="text-foreground">{result.countLabel}</strong>
+          Kohortengrösse:{" "}
+          <strong className="text-foreground">{result.countLabel}</strong>
         </p>
         <p className="text-xs text-muted-foreground">
           Maximal 20 täglich stabil ausgewählte Profile
@@ -285,7 +305,10 @@ function RadarResult({
       {result.nextCursor === null ? null : (
         <Link
           href={nextPageHref(query, result.nextCursor)}
-          className={buttonVariants({ variant: "outline", className: "mx-auto" })}
+          className={buttonVariants({
+            variant: "outline",
+            className: "mx-auto",
+          })}
         >
           Weitere anonyme Profile
         </Link>
@@ -393,22 +416,28 @@ function materializeOpaqueKeyring(
     "RADAR_OPAQUE_LOOKUP_KEYS" | "RADAR_OPAQUE_ENCRYPTION_KEYS"
   >[],
 ): readonly RadarOpaqueKey[] {
-  return Object.freeze(entries.map((entry) =>
-    entry.key.withValue((secret) => Object.freeze({
-      version: entry.version,
-      secret,
-    })),
-  ));
+  return Object.freeze(
+    entries.map((entry) =>
+      entry.key.withValue((secret) =>
+        Object.freeze({
+          version: entry.version,
+          secret,
+        }),
+      ),
+    ),
+  );
 }
 
 function deriveRadarPrivacyKey(
   environment: ServerEnvironment,
   purpose: "daily-sample" | "cursor",
 ): RadarPrivacyHmacKeyV1 {
-  return environment.secrets.session.withValue((secret) => Object.freeze({
-    version: "phase14-v1",
-    secret: createHmac("sha256", Buffer.from(secret, "base64"))
-      .update(`swisstalenthub:talent-radar:${purpose}:v1`, "utf8")
-      .digest("base64"),
-  }));
+  return environment.secrets.session.withValue((secret) =>
+    Object.freeze({
+      version: "phase14-v1",
+      secret: createHmac("sha256", Buffer.from(secret, "base64"))
+        .update(`swisstalenthub:talent-radar:${purpose}:v1`, "utf8")
+        .digest("base64"),
+    }),
+  );
 }

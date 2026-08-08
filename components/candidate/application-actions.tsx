@@ -10,6 +10,12 @@ import {
 } from "@/app/candidate/applications/actions";
 import { Button } from "@/components/ui/button";
 import {
+  PublicIntakePrivacyDisclosure,
+  PublicIntakePrivacyHiddenFields,
+  PublicIntakePrivacyLocked,
+  usePublicIntakePrivacy,
+} from "@/components/privacy/public-intake-privacy";
+import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -174,11 +180,16 @@ function EmployerReportForm({ applicationId }: Readonly<{ applicationId: string 
     reportApplicationEmployerAction,
     INITIAL_APPLICATION_ACTION_STATE,
   );
+  const privacyGate = usePublicIntakePrivacy("ABUSE_REPORT");
   return (
     <details className="rounded-xl border p-4">
       <summary className="cursor-pointer font-medium">Verdächtiges Unternehmen melden</summary>
+      {!privacyGate.allowed ? (
+        <div className="mt-4"><PublicIntakePrivacyLocked purpose="ABUSE_REPORT" /></div>
+      ) : (
       <form action={action} className="mt-4 grid gap-3">
         <input type="hidden" name="applicationId" value={applicationId} />
+        <PublicIntakePrivacyHiddenFields purpose="ABUSE_REPORT" />
         <div className="grid gap-1.5">
           <Label htmlFor="application-report-reason">Grund</Label>
           <select
@@ -208,6 +219,7 @@ function EmployerReportForm({ applicationId }: Readonly<{ applicationId: string 
             placeholder="Beschreibe nachvollziehbar, was dir aufgefallen ist."
           />
         </div>
+        <PublicIntakePrivacyDisclosure purpose="ABUSE_REPORT" />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <ActionMessage state={state} />
           <Button type="submit" variant="outline" disabled={pending}>
@@ -216,6 +228,7 @@ function EmployerReportForm({ applicationId }: Readonly<{ applicationId: string 
           </Button>
         </div>
       </form>
+      )}
     </details>
   );
 }

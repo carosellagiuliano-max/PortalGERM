@@ -50,6 +50,7 @@ export type AdminCommandCode =
   | "QUOTA_EXCEEDED"
   | "DUPLICATE"
   | "INCOMPLETE"
+  | "ACTIVE_SUBSCRIPTION"
   | "WRITE_FAILED";
 
 export type AdminCommandResult<T> = Readonly<

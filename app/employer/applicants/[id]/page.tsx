@@ -15,6 +15,7 @@ import { getDatabase } from "@/lib/db/client";
 import { getEmployerApplicationDetail } from "@/lib/employer/applications";
 import { requireEmployerCompanyContext } from "@/lib/employer/context";
 import { getServerEnvironment } from "@/lib/config/env";
+import { isIsolatedSandboxEnvironment } from "@/lib/config/application-environment";
 import { isRecruitingFeatureAvailableV1 } from "@/lib/recruiting/feature-gates";
 
 export const metadata: Metadata = { title: "Bewerbungsdetail" };
@@ -46,10 +47,12 @@ export default async function EmployerApplicantDetailPage({
       companyId: current.companyId,
     },
   });
+  const environment = getServerEnvironment();
   const interviewSchedulingAvailable = isRecruitingFeatureAvailableV1(
-    getServerEnvironment(),
+    environment,
     "interview_scheduler",
   );
+  const mockTextAvailable = isIsolatedSandboxEnvironment(environment.APP_ENV);
   const snapshot = application.submissionSnapshot;
 
   return (
@@ -217,6 +220,7 @@ export default async function EmployerApplicantDetailPage({
           <ApplicantDetailActions
             applicationId={application.id}
             currentStatus={application.status}
+            mockTextAvailable={mockTextAvailable}
             keys={{
               transition: randomUUID(),
               note: randomUUID(),

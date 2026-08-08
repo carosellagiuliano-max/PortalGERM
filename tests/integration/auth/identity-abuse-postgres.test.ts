@@ -12,6 +12,7 @@ vi.mock("server-only", () => ({}));
 import {
   loginWithPassword,
   requestPasswordReset,
+  resetPassword,
 } from "@/lib/auth/auth-service";
 import { requestEmailVerification } from "@/lib/auth/email-verification-service";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
@@ -82,7 +83,7 @@ describe.sequential("Phase 20 identity abuse and enumeration controls", () => {
       decisions.push(
         await requestEmailVerification(
           limitedUser.emailNormalized,
-          dependencies(20),
+          dependencies(20 + attempt),
         ),
       );
     }
@@ -140,7 +141,7 @@ describe.sequential("Phase 20 identity abuse and enumeration controls", () => {
             email: "identity-abuse-login-limit@example.test",
             password: "WrongPassword!42",
           },
-          dependencies(40),
+          dependencies(40 + attempt),
         ),
       );
     }
@@ -201,7 +202,7 @@ describe.sequential("Phase 20 identity abuse and enumeration controls", () => {
         await requestPasswordReset(
           { email: "identity-abuse-recovery-limit@example.test" },
           {
-            ...dependencies(60),
+            ...dependencies(60 + attempt),
             emailProvider: noDeliveryProvider,
           },
         ),
@@ -218,6 +219,63 @@ describe.sequential("Phase 20 identity abuse and enumeration controls", () => {
         where: { kind: "PASSWORD_RECOVERY_RATE_LIMITED" },
       }),
     ).toBe(1);
+  });
+
+  it("bounds password-recovery address spraying by source IP", async () => {
+    const decisions = [];
+    for (let attempt = 0; attempt < 21; attempt += 1) {
+      decisions.push(
+        await requestPasswordReset(
+          { email: `identity-abuse-spray-${attempt}@example.test` },
+          {
+            ...dependencies(100),
+            emailProvider: noDeliveryProvider,
+          },
+        ),
+      );
+    }
+    expect(decisions.slice(0, 20).every(({ rateLimited }) => !rateLimited)).toBe(
+      true,
+    );
+    expect(decisions[20]).toMatchObject({ ok: true, rateLimited: true });
+  });
+
+  it("bounds reset-token consumption across distributed source IPs without changing the public error", async () => {
+    const token = "z".repeat(43);
+    const decisions = [];
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      decisions.push(
+        await resetPassword(
+          {
+            token,
+            password: "Phase34!ResetAttempt42",
+            passwordConfirmation: "Phase34!ResetAttempt42",
+          },
+          dependencies(130 + attempt),
+        ),
+      );
+    }
+    expect(decisions).toEqual(
+      Array.from({ length: 11 }, () => ({
+        ok: false,
+        code: "INVALID_RESET_TOKEN",
+      })),
+    );
+    const denialAudits = await db().auditLog.findMany({
+      where: { action: "RATE_LIMITED" },
+      select: { metadata: true },
+    });
+    expect(
+      denialAudits.some(
+        ({ metadata }) =>
+          typeof metadata === "object" &&
+          metadata !== null &&
+          "preset" in metadata &&
+          metadata.preset === "PASSWORD_RESET_CONSUME" &&
+          "scope" in metadata &&
+          metadata.scope === "TARGET",
+      ),
+    ).toBe(true);
   });
 
   it("denies Support replay before payload lookup and persists only hashes in security/audit records", async () => {

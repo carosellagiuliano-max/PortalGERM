@@ -1,14 +1,15 @@
-# Payment Operations — Phase 24
+# Payment Operations — Phase 24/33
 
 ## Zweck und Schutzgrenze
 
-Dieses Runbook gilt für den technisch implementierten Phase‑24-Sandboxvertrag:
+Dieses Runbook gilt für den technisch implementierten Phase‑24-Sandboxvertrag
+und den in Phase 33 ergänzten, weiterhin nicht aktivierten Live-Adaptervertrag:
 Hosted Checkout, signierte Webhook-Inbox, Projection, Reconciliation, Refund,
-Chargeback, Dunning und Service-Recovery. Es ist keine LIVE-, Steuer-, Rechts-,
-Finance- oder WTP-Freigabe.
+Chargeback, Dunning und Service-Recovery. Vorhandener Live-Code ist weder
+LIVE-, Steuer-, Rechts-, Finance- noch WTP-Freigabe. Es gibt keine datierte
+Provider- oder Production-Evidence, die eine Aktivierung erlauben würde.
 
-Production und `LIVE` sind im Phase‑24-Adapter absichtlich nicht konfigurierbar.
-Der sichere Ausgangszustand ist:
+Der sichere Ausgangszustand bleibt:
 
 ```text
 PAYMENT_PROVIDER_MODE=disabled
@@ -36,9 +37,11 @@ gesperrte Records bedeuten `0` neue Providerwirkungen.
    fachlich projiziert.
 4. `ALLOWLIST`: zusätzlich datierter WTP-GO-Entscheid für exakt ein Paket und
    eine Testkohorte; Self-Service bleibt ohne Phase‑25B-Step-up-UX geschlossen.
-5. `LIVE`: nicht Bestandteil von Phase 24. Erst Phase 31B/32 darf dies nach
-   Tax, Legal, Finance, Security, Ops, WTP und deploygebundener G4-Evidence
-   entscheiden.
+5. `LIVE`: Der Phase-33-Adaptervertrag ist technisch vorhanden, bleibt aber
+   deaktiviert. Erst eine neue, environment- und artefaktgebundene Freigabe
+   nach Tax, Legal, Finance, Security, Ops, WTP sowie deploygebundener
+   Provider-/G4-Evidence darf die persistierte Aktivierung setzen. Weder ein
+   Secret noch der Adaptercode allein aktiviert den Pfad.
 
 Vor jeder Promotion:
 

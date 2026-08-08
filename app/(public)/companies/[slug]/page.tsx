@@ -13,6 +13,7 @@ import {
 import { CompanyTrustBadge } from "@/components/public/company-trust-badge";
 import { JobGrid } from "@/components/public/job-grid";
 import { ReportForm } from "@/components/public/report-form";
+import { PublicIntakePrivacyProvider } from "@/components/privacy/public-intake-privacy";
 import { ResponseSignal } from "@/components/public/response-signal";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -21,7 +22,9 @@ import { signCompanyClaimIntent } from "@/lib/auth/company-claim-intent";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getPublicCompanyDetailBySlug } from "@/lib/companies/public-read-model";
 import { getServerEnvironment } from "@/lib/config/env";
+import { getDatabase } from "@/lib/db/client";
 import { listPublicJobsForCompany } from "@/lib/jobs/public-read-model";
+import { resolvePublicIntakePrivacyGate } from "@/lib/privacy/public-intake-privacy-gate";
 import { getPublicDataContext } from "@/lib/public/environment";
 
 const getCompany = cache((slug: string) =>
@@ -58,6 +61,10 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
   const company = await getCompany(slug);
   if (company === null) notFound();
   const currentUser = await getCurrentUser();
+  const reportPrivacyGate = await resolvePublicIntakePrivacyGate("ABUSE_REPORT", {
+    database: getDatabase(),
+    environment: getServerEnvironment(),
+  });
   const claimHref =
     currentUser === null ? buildCompanyClaimHref(company.slug) : null;
 
@@ -179,7 +186,9 @@ export default async function CompanyDetailPage({ params }: CompanyPageProps) {
               <ResponseSignal response={company.response} />
             </CardContent>
           </Card>
-          <ReportForm targetType="COMPANY" slug={company.slug} />
+          <PublicIntakePrivacyProvider decision={reportPrivacyGate}>
+            <ReportForm targetType="COMPANY" slug={company.slug} />
+          </PublicIntakePrivacyProvider>
         </aside>
       </div>
 

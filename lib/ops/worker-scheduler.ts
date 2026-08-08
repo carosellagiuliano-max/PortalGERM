@@ -98,6 +98,7 @@ export async function scheduleActivatedWork(
         ? await resumePaymentInboxProjectionBacklog(
             {
               batchSize: activation.policy.batchSize,
+              environment: dependencies.environment.APP_ENV,
               now: dependencies.now,
             },
             dependencies.database,
@@ -315,6 +316,13 @@ function providerRequirements(
         providerRequirement(
           emailProviderActivationBinding(environment, "email.job-alert"),
           "email.job-alert",
+        ),
+      ];
+    case "notifications.provider-event-project":
+      return [
+        providerRequirement(
+          emailProviderActivationBinding(environment, "email.delivery-events"),
+          "email.delivery-events",
         ),
       ];
     case "documents.scan":

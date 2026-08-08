@@ -59,6 +59,7 @@ import {
   sendCandidateMessageAction,
 } from "@/app/candidate/messages/actions";
 import { INITIAL_CANDIDATE_MESSAGE_ACTION_STATE } from "@/lib/candidate/message-action-state";
+import { appendLocalPublicIntakePrivacyBinding } from "@/tests/fixtures/public-intake-privacy";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const CONVERSATION_ID = "22222222-2222-4222-8222-222222222222";
@@ -88,7 +89,7 @@ describe("candidate message action", () => {
     });
     mocks.isValidAuthMutationOrigin.mockReturnValue(true);
     mocks.getDatabase.mockReturnValue(mocks.database);
-    mocks.getServerEnvironment.mockReturnValue({ NODE_ENV: "test" });
+    mocks.getServerEnvironment.mockReturnValue({ APP_ENV: "local", NODE_ENV: "test" });
     mocks.recordRateLimitDenial.mockResolvedValue({
       written: true,
       gated: false,
@@ -146,6 +147,8 @@ describe("candidate message action", () => {
         body: "Sichere Nachricht",
         idempotencyKey: "message-action-0001",
       },
+      expect.any(Date),
+      expect.objectContaining({ NODE_ENV: "test" }),
     );
     expect(state).toMatchObject({ status: "success", message: "Nachricht gesendet." });
     expect(state.nextIdempotencyKey).toMatch(/^[a-f0-9-]{36}$/u);
@@ -209,6 +212,25 @@ describe("candidate message action", () => {
       status: "error",
       message:
         "Neue Nachrichten sind gesperrt, weil die Firma nicht aktiv und aktuell verifiziert ist. Bitte lade neu.",
+    });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("reports the server-side Radar legal gate without claiming a send", async () => {
+    mocks.sendCandidateMessage.mockResolvedValue({
+      ok: false,
+      code: "LEGAL_GATE_BLOCKED",
+    });
+
+    const state = await sendCandidateMessageAction(
+      INITIAL_CANDIDATE_MESSAGE_ACTION_STATE,
+      messageForm(),
+    );
+
+    expect(state).toEqual({
+      status: "error",
+      message:
+        "Neue Talent-Radar-Nachrichten bleiben gesperrt, bis die aktuelle Datenschutz-, AVG- und DSFA-Freigabe dokumentiert ist.",
     });
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
@@ -281,5 +303,5 @@ function reportForm(): FormData {
     "description",
     "Diese Nachricht fordert verdächtige Zahlungen außerhalb der Plattform.",
   );
-  return formData;
+  return appendLocalPublicIntakePrivacyBinding(formData, "ABUSE_REPORT");
 }

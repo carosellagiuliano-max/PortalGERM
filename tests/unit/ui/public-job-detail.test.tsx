@@ -25,7 +25,7 @@ vi.mock("@/lib/jobs/public-read-model", () => ({
 
 vi.mock("@/lib/config/env", () => ({
   getServerEnvironment: () => ({
-    APP_ENV: "test",
+    APP_ENV: "ci",
     APP_URL: "https://example.test",
     secrets: { session: "test-session-secret" },
   }),

@@ -20,7 +20,9 @@ export async function confirmMockPaymentAction(
   const orderId = readSingleFormString(formData, "orderId");
   const idempotencyKey = readSingleFormString(formData, "idempotencyKey");
   if (orderId === null || idempotencyKey === null) return invalidState();
-  const dependencies = await getEmployerBillingActionDependencies();
+  const dependencies = await getEmployerBillingActionDependencies(false, {
+    requireLegacyMockBilling: true,
+  });
   if (dependencies === null) return deniedState();
 
   const result = await confirmMockPayment({ orderId, idempotencyKey }, dependencies);

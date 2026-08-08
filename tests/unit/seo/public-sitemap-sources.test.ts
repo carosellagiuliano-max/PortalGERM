@@ -38,14 +38,15 @@ function databaseWithTransaction(transaction: object) {
 }
 
 function eligibleJobRow(id: string, slug: string) {
+  const revisionId = id;
   return {
     id,
     slug,
     companyId: COMPANY_ID,
     status: "PUBLISHED",
     dataProvenance: "LIVE",
-    currentRevisionId: `${id.slice(0, -2)}20`,
-    publishedRevisionId: `${id.slice(0, -2)}20`,
+    currentRevisionId: revisionId,
+    publishedRevisionId: revisionId,
     publishedAt: new Date("2026-07-01T08:00:00.000Z"),
     expiresAt: new Date("2026-08-01T08:00:00.000Z"),
     company: {
@@ -55,7 +56,7 @@ function eligibleJobRow(id: string, slug: string) {
       verificationRequests: [{ id: "verified-cycle" }],
     },
     publishedRevision: {
-      id: `${id.slice(0, -2)}20`,
+      id: revisionId,
       title: "Pflegefachperson",
       description: "Eine öffentliche Stelle.",
       approvedAt: new Date("2026-06-30T08:00:00.000Z"),
@@ -89,6 +90,27 @@ describe("Phase 15 sitemap database sources", () => {
     const driftId = "00000000-0000-4000-8000-000000000003";
     const inactiveCategoryId = "00000000-0000-4000-8000-000000000004";
     const staleId = "00000000-0000-4000-8000-000000000005";
+    const inactiveCategory = "00000000-0000-4000-8000-000000000031";
+    const eligibilityRows = [
+      eligibleJobRow(visibleId, "pflegefachperson-acme-a1"),
+      eligibleJobRow(hiddenId, "hidden-acme-b2"),
+      {
+        ...eligibleJobRow(driftId, "revision-drift-acme-c3"),
+        currentRevisionId: "00000000-0000-4000-8000-000000000099",
+      },
+      {
+        ...eligibleJobRow(inactiveCategoryId, "inactive-category-acme-d4"),
+        publishedRevision: {
+          ...eligibleJobRow(
+            inactiveCategoryId,
+            "inactive-category-acme-d4",
+          ).publishedRevision,
+          categoryId: inactiveCategory,
+          category: { isActive: false },
+        },
+      },
+      eligibleJobRow(staleId, "stale-acme-e5"),
+    ];
     const jobFindMany = vi.fn(
       async (query: { select?: { updatedAt?: boolean } }) =>
         query.select?.updatedAt
@@ -111,28 +133,7 @@ describe("Phase 15 sitemap database sources", () => {
               },
               { id: staleId, slug: "stale-acme-e5", updatedAt: UPDATED_AT },
             ]
-          : [
-              eligibleJobRow(visibleId, "pflegefachperson-acme-a1"),
-              eligibleJobRow(hiddenId, "hidden-acme-b2"),
-              {
-                ...eligibleJobRow(driftId, "revision-drift-acme-c3"),
-                currentRevisionId: "00000000-0000-4000-8000-000000000099",
-              },
-              {
-                ...eligibleJobRow(
-                  inactiveCategoryId,
-                  "inactive-category-acme-d4",
-                ),
-                publishedRevision: {
-                  ...eligibleJobRow(
-                    inactiveCategoryId,
-                    "inactive-category-acme-d4",
-                  ).publishedRevision,
-                  category: { isActive: false },
-                },
-              },
-              eligibleJobRow(staleId, "stale-acme-e5"),
-            ],
+          : eligibilityRows,
     );
     const moderationRestrictionFindMany = vi
       .fn()
@@ -141,11 +142,47 @@ describe("Phase 15 sitemap database sources", () => {
       job: { findMany: jobFindMany },
       moderationRestriction: { findMany: moderationRestrictionFindMany },
       company: {
+        findMany: vi.fn(async (query: { select?: { name?: boolean } }) =>
+          query.select?.name
+            ? [
+                {
+                  id: COMPANY_ID,
+                  name: "Acme AG",
+                  status: "ACTIVE",
+                  dataProvenance: "LIVE",
+                },
+              ]
+            : [companyTrustReadRow({ companyId: COMPANY_ID, now: NOW })],
+        ),
+      },
+      companyVerificationRequest: {
         findMany: vi
           .fn()
           .mockResolvedValue([
-            companyTrustReadRow({ companyId: COMPANY_ID, now: NOW }),
+            { id: "verified-cycle", companyId: COMPANY_ID },
           ]),
+      },
+      jobRevision: {
+        findMany: vi.fn().mockResolvedValue(
+          eligibilityRows.map(({ publishedRevision }) => publishedRevision),
+        ),
+      },
+      category: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "00000000-0000-4000-8000-000000000030",
+            isActive: true,
+          },
+          { id: inactiveCategory, isActive: false },
+        ]),
+      },
+      jobScoreSnapshot: {
+        findMany: vi.fn().mockResolvedValue(
+          eligibilityRows.map(({ publishedRevision }) => ({
+            jobRevisionId: publishedRevision.id,
+            scorePoints: publishedRevision.scoreSnapshots[0]?.scorePoints,
+          })),
+        ),
       },
       trustSafetyContainmentEffect: {
         findMany: vi.fn().mockResolvedValue([]),

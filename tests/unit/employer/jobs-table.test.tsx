@@ -33,7 +33,7 @@ const reviewerJob: EmployerJobListItem = {
   views: 0,
   saves: 0,
   score: null,
-  boostStatus: null,
+  boostStatus: "ACTIVE",
   capabilities: { assignmentRole: "REVIEWER", readSummary: true, readFullRevision: true, mutateDraft: false, manageLifecycle: false },
 };
 
@@ -54,6 +54,11 @@ describe("employer jobs table duplicate capability", () => {
       }),
     ).toHaveAttribute("data-responsive-table", "true");
     expect(screen.queryByRole("button", { name: "Duplizieren" })).not.toBeInTheDocument();
+    expect(screen.getByText("Zuweisung: Prüfung")).toBeInTheDocument();
+    expect(screen.getByText("Entwurf")).toBeInTheDocument();
+    expect(screen.getByText("Aktiv")).toBeInTheDocument();
+    expect(screen.queryByText("REVIEWER")).not.toBeInTheDocument();
+    expect(screen.queryByText("DRAFT")).not.toBeInTheDocument();
 
     rerender(<JobsTable jobs={[{
       ...reviewerJob,
@@ -61,6 +66,7 @@ describe("employer jobs table duplicate capability", () => {
       capabilities: { ...reviewerJob.capabilities, assignmentRole: "EDITOR", mutateDraft: true },
     }]} actions={actions} idempotencyKeys={{}} />);
     expect(screen.getByRole("button", { name: "Duplizieren" })).toBeInTheDocument();
+    expect(screen.getByText("Zuweisung: Redaktion")).toBeInTheDocument();
   });
 
   it("opens the shared upgrade dialog when reactivation returns the typed job limit", async () => {
@@ -97,6 +103,8 @@ describe("employer jobs table duplicate capability", () => {
     expect(reactivate).toHaveBeenCalledOnce();
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Aktives Joblimit erreicht" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Billing und verfügbare Optionen ansehen/u })).toHaveAttribute("href", "/employer/billing");
+    expect(
+      screen.getByRole("link", { name: /Kaufstatus und Freigaben prüfen/u }),
+    ).toHaveAttribute("href", "/employer/billing/subscription");
   });
 });

@@ -13,6 +13,7 @@ import { applyModerationRestriction } from "@/lib/admin/moderation";
 import { suspendUser } from "@/lib/admin/users";
 import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import { buildNotificationStorageDedupeKey } from "@/lib/notifications/writer";
+import { ABUSE_REPORT_PRIVACY_NOTICE_V1 } from "@/lib/privacy/public-intake-privacy-contract";
 import { RADAR_CONSENT_NOTICE_V1 } from "@/lib/privacy/radar-consent";
 import type { RadarEligibilityLossReason } from "@/lib/talentradar/eligibility-loss-effects";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
@@ -673,6 +674,9 @@ async function createReport(
       description: "Bounded integration fixture for a confirmed eligibility loss.",
       severity: "HIGH",
       status: "OPEN",
+      privacyEvidenceMode: "LOCAL_SYNTHETIC",
+      privacyNoticeVersion: ABUSE_REPORT_PRIVACY_NOTICE_V1.version,
+      privacyNoticeHash: ABUSE_REPORT_PRIVACY_NOTICE_V1.hash,
       dueAt: new Date(NOW.getTime() + 4 * 3_600_000),
       createdAt: new Date(NOW.getTime() - 1_000),
       updatedAt: new Date(NOW.getTime() - 1_000),

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import {
   parseEnvironment,
@@ -14,10 +14,18 @@ import {
 } from "@/lib/notifications/outbox";
 import { encryptNotificationProviderRequest } from "@/lib/notifications/provider-request-material";
 import { notificationAttemptEvidenceRetainUntil } from "@/lib/notifications/retention";
+import { executeRegisteredHandler } from "@/lib/ops/registered-handler-runtime";
+import {
+  claimWorkBatch,
+  createWorkerRun,
+  type ClaimedWorkItem,
+  type WorkLeaseIdentity,
+} from "@/lib/ops/worker-runtime";
 import { emailProviderActivationBinding } from "@/lib/providers/email/provider-activation-binding";
 import {
   ingestVerifiedResendDeliveryWebhook,
   projectPendingResendEventsForReceipt,
+  RESEND_EVENT_PROJECTION_POLICY_V1,
   ResendEventInboxConflictError,
 } from "@/lib/providers/email/resend-event-inbox";
 import type { VerifiedResendDeliveryWebhook } from "@/lib/providers/email/resend-webhook";
@@ -31,6 +39,7 @@ type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 type Database = ReturnType<typeof createDatabaseClient>;
 
 const RECEIVED_AT = new Date("2026-08-01T12:00:00.000Z");
+const DEPLOYMENT_DIGEST = "phase34-resend-event-worker";
 
 describe.sequential("PostgreSQL Phase-33 Resend event inbox", () => {
   let migrated: MigratedDatabase;
@@ -38,6 +47,7 @@ describe.sequential("PostgreSQL Phase-33 Resend event inbox", () => {
   let environment: ServerEnvironment;
   let sendActivationId: string;
   let eventActivationId: string;
+  let handlerActivation: Readonly<{ generation: number; id: string }>;
 
   beforeAll(async () => {
     migrated = await createMigratedTestDatabase("phase33_resend_inbox");
@@ -62,6 +72,8 @@ describe.sequential("PostgreSQL Phase-33 Resend event inbox", () => {
         RESEND_SECRET_VERSION: "phase33-email-contract-v1",
         RESEND_WEBHOOK_SECRET: "whsec_phase33_contract_webhook",
         RESEND_WEBHOOK_SECRET_VERSION: "phase33-webhook-contract-v1",
+        APP_BUILD_ID: DEPLOYMENT_DIGEST,
+        WORKER_RUNTIME: "sandbox_command",
       }),
     );
     sendActivationId = await createActivation(
@@ -72,11 +84,43 @@ describe.sequential("PostgreSQL Phase-33 Resend event inbox", () => {
       "email.delivery-events",
       environment,
     );
+    handlerActivation = await database.workerHandlerActivation.create({
+      data: {
+        environment: "ci",
+        handlerKey: RESEND_EVENT_PROJECTION_POLICY_V1.handlerKey,
+        handlerVersion: RESEND_EVENT_PROJECTION_POLICY_V1.handlerVersion,
+        payloadVersion: RESEND_EVENT_PROJECTION_POLICY_V1.payloadVersion,
+        mode: "SANDBOX",
+        configurationDigest: "b".repeat(64),
+        deploymentDigest: DEPLOYMENT_DIGEST,
+        owner: "Platform Engineering / Communications",
+        runbookRef: "codex-plan/runbooks/worker-operations.md",
+        sloRef: "codex-plan/34-verified-findings-production-hardening.md",
+        evidenceDigest: "c".repeat(64),
+        providerUseCase: "email.delivery-events",
+        leaseMilliseconds: 15_000,
+        heartbeatMilliseconds: 5_000,
+        batchSize: 1,
+        maxAttempts: RESEND_EVENT_PROJECTION_POLICY_V1.maximumAttempts,
+        maxConcurrency: 1,
+        killSwitchEngaged: false,
+        effectiveAt: RECEIVED_AT,
+      },
+      select: { generation: true, id: true },
+    });
   });
 
   afterAll(async () => {
     if (database !== undefined) await database.$disconnect();
     if (migrated !== undefined) await migrated.dispose();
+  });
+
+  afterEach(async () => {
+    if (database === undefined || eventActivationId === undefined) return;
+    await database.providerActivation.updateMany({
+      where: { id: eventActivationId, revokedAt: null },
+      data: { health: "HEALTHY", healthCheckedAt: RECEIVED_AT },
+    });
   });
 
   it("projects a correlated hard bounce exactly once and accepts an exact retry", async () => {
@@ -118,6 +162,258 @@ describe.sequential("PostgreSQL Phase-33 Resend event inbox", () => {
         select: { reason: true, source: true },
       }),
     ).toEqual([{ reason: "HARD_BOUNCE", source: "resend-webhook-v1" }]);
+  });
+
+  it("queues an out-of-order webhook once, retries it, and projects it through the fenced worker", async () => {
+    const address = "phase34-worker-recovery@example.ch";
+    const recipientHash = hash(address);
+    const verified = event(
+      "msg_phase34WorkerRecovery01",
+      "BOUNCED",
+      "5",
+      recipientHash,
+      "email_phase34_worker_recovery_receipt",
+    );
+
+    const first = await ingest(verified, RECEIVED_AT);
+    const replay = await ingest(verified, new Date(RECEIVED_AT.getTime() + 1));
+    expect(first).toMatchObject({
+      projectedSuppressions: 0,
+      queued: true,
+      replay: false,
+      status: "RECEIVED",
+    });
+    expect(replay).toMatchObject({
+      inboxId: first.inboxId,
+      queued: true,
+      replay: true,
+      status: "RECEIVED",
+    });
+
+    const queued = await database.workItem.findMany({
+      where: {
+        handlerKey: RESEND_EVENT_PROJECTION_POLICY_V1.handlerKey,
+        subjectId: first.inboxId,
+      },
+      select: {
+        dedupeKey: true,
+        effectKey: true,
+        maxAttempts: true,
+        payloadReference: true,
+        status: true,
+        subjectType: true,
+      },
+    });
+    expect(queued).toEqual([
+      {
+        dedupeKey: `notifications.provider-event-project:v1:${first.inboxId}`,
+        effectKey: `effect:notifications.provider-event-project:v1:${first.inboxId}`,
+        maxAttempts: 8,
+        payloadReference: { emailProviderEventInboxId: first.inboxId },
+        status: "PENDING",
+        subjectType: "EMAIL_PROVIDER_EVENT_INBOX",
+      },
+    ]);
+    expect(JSON.stringify(queued)).not.toContain(address);
+    expect(JSON.stringify(queued)).not.toContain(recipientHash);
+    expect(JSON.stringify(queued)).not.toContain(
+      verified.event.providerReceipt,
+    );
+
+    const firstAttemptAt = new Date(RECEIVED_AT.getTime() + 100);
+    const firstAttempt = await executeProjectionAttempt(
+      first.inboxId,
+      "phase34-resend-retry-a",
+      firstAttemptAt,
+    );
+    expect(firstAttempt.result.completion).toBe("RETRY");
+    await expect(
+      database.workItem.findUniqueOrThrow({
+        where: { id: firstAttempt.claimed.id },
+        select: {
+          lastErrorCode: true,
+          lastFailureClass: true,
+          status: true,
+        },
+      }),
+    ).resolves.toEqual({
+      lastErrorCode: "EMAIL_PROVIDER_ATTEMPT_PENDING",
+      lastFailureClass: "TRANSIENT",
+      status: "RETRY",
+    });
+    await expect(
+      database.notificationSuppression.count({
+        where: { recipientHash },
+      }),
+    ).resolves.toBe(0);
+
+    await bindAcceptedDelivery(
+      address,
+      recipientHash,
+      verified.event.providerReceipt,
+    );
+    const retryAt = await database.workItem
+      .findUniqueOrThrow({
+        where: { id: firstAttempt.claimed.id },
+        select: { availableAt: true },
+      })
+      .then(({ availableAt }) => new Date(availableAt.getTime() + 1));
+    const recovered = await executeProjectionAttempt(
+      first.inboxId,
+      "phase34-resend-retry-b",
+      retryAt,
+    );
+
+    expect(recovered.result.completion).toBe("COMPLETED");
+    await expect(
+      database.emailProviderEventInbox.findUniqueOrThrow({
+        where: { id: first.inboxId },
+        select: {
+          recipientHashes: true,
+          recipientHashesWipedAt: true,
+          status: true,
+        },
+      }),
+    ).resolves.toMatchObject({
+      recipientHashes: [],
+      recipientHashesWipedAt: expect.any(Date),
+      status: "PROJECTED",
+    });
+    await expect(
+      database.notificationSuppression.count({
+        where: { recipientHash, releasedAt: null },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      database.workAttempt.findMany({
+        where: { workItemId: firstAttempt.claimed.id },
+        orderBy: { attemptNumber: "asc" },
+        select: { failureClass: true, outcome: true },
+      }),
+    ).resolves.toEqual([
+      { failureClass: "TRANSIENT", outcome: "RETRY_SCHEDULED" },
+      { failureClass: null, outcome: "SUCCEEDED" },
+    ]);
+    await expect(
+      database.workEffectReceipt.count({
+        where: { workItemId: firstAttempt.claimed.id },
+      }),
+    ).resolves.toBe(1);
+  });
+
+  it("moves a permanently uncorrelated provider event to the existing DLQ without an effect", async () => {
+    const address = "phase34-worker-poison@example.ch";
+    const recipientHash = hash(address);
+    const verified = event(
+      "msg_phase34WorkerPoison01",
+      "BOUNCED",
+      "6",
+      recipientHash,
+      "email_phase34_worker_poison_receipt",
+    );
+    const pending = await ingest(verified, RECEIVED_AT);
+    let attemptAt = new Date(RECEIVED_AT.getTime() + 200);
+    let workItemId: string | null = null;
+
+    try {
+      for (
+        let attempt = 1;
+        attempt <= RESEND_EVENT_PROJECTION_POLICY_V1.maximumAttempts;
+        attempt += 1
+      ) {
+        const execution = await executeProjectionAttempt(
+          pending.inboxId,
+          `phase34-resend-poison-${attempt}`,
+          attemptAt,
+        );
+        workItemId ??= execution.claimed.id;
+        expect(execution.result.completion).toBe(
+          attempt === RESEND_EVENT_PROJECTION_POLICY_V1.maximumAttempts
+            ? "DEAD_LETTER"
+            : "RETRY",
+        );
+        if (attempt < RESEND_EVENT_PROJECTION_POLICY_V1.maximumAttempts) {
+          attemptAt = await database.workItem
+            .findUniqueOrThrow({
+              where: { id: execution.claimed.id },
+              select: { availableAt: true },
+            })
+            .then(({ availableAt }) => new Date(availableAt.getTime() + 1));
+        }
+      }
+    } finally {
+      await database.providerActivation.update({
+        where: { id: eventActivationId },
+        data: { healthCheckedAt: RECEIVED_AT },
+      });
+    }
+
+    expect(workItemId).not.toBeNull();
+    await expect(
+      database.workDeadLetter.findUniqueOrThrow({
+        where: { workItemId: workItemId! },
+        select: { failureClass: true, reasonCode: true, terminalAttempt: true },
+      }),
+    ).resolves.toEqual({
+      failureClass: "TRANSIENT",
+      reasonCode: "EMAIL_PROVIDER_ATTEMPT_PENDING",
+      terminalAttempt: 8,
+    });
+    await expect(
+      database.workEffectReceipt.count({ where: { workItemId: workItemId! } }),
+    ).resolves.toBe(0);
+    await expect(
+      database.notificationSuppression.count({ where: { recipientHash } }),
+    ).resolves.toBe(0);
+    await expect(
+      database.emailProviderEventInbox.findUniqueOrThrow({
+        where: { id: pending.inboxId },
+        select: { status: true },
+      }),
+    ).resolves.toEqual({ status: "RECEIVED" });
+  });
+
+  it("rejects a cross-environment queue payload before any provider-event effect", async () => {
+    const address = "phase34-cross-environment@example.ch";
+    const recipientHash = hash(address);
+    const verified = event(
+      "msg_phase34CrossEnvironment01",
+      "BOUNCED",
+      "7",
+      recipientHash,
+      "email_phase34_cross_environment_receipt",
+    );
+    const pending = await ingest(verified, RECEIVED_AT);
+    const wrongEnvironment = Object.freeze({
+      ...environment,
+      APP_ENV: "preview" as const,
+    });
+    const denied = await executeProjectionAttempt(
+      pending.inboxId,
+      "phase34-resend-cross-environment",
+      new Date(RECEIVED_AT.getTime() + 300),
+      wrongEnvironment,
+    );
+
+    expect(denied.result.completion).toBe("DEAD_LETTER");
+    await expect(
+      database.workDeadLetter.findUniqueOrThrow({
+        where: { workItemId: denied.claimed.id },
+        select: { failureClass: true, reasonCode: true },
+      }),
+    ).resolves.toEqual({
+      failureClass: "PERMANENT_VALIDATION",
+      reasonCode: "EMAIL_PROVIDER_EVENT_BINDING_MISMATCH",
+    });
+    await expect(
+      database.notificationSuppression.count({ where: { recipientHash } }),
+    ).resolves.toBe(0);
+    await expect(
+      database.emailProviderEventInbox.findUniqueOrThrow({
+        where: { id: pending.inboxId },
+        select: { status: true },
+      }),
+    ).resolves.toEqual({ status: "RECEIVED" });
   });
 
   it("keeps a verified out-of-order webhook pending until the exact delivery attempt is durable", async () => {
@@ -164,6 +460,23 @@ describe.sequential("PostgreSQL Phase-33 Resend event inbox", () => {
         where: { recipientHash, releasedAt: null },
       }),
     ).toBe(1);
+
+    const terminalReplay = await executeProjectionAttempt(
+      beforeAttempt.inboxId,
+      "phase34-resend-terminal-noop",
+      new Date(RECEIVED_AT.getTime() + 2_000),
+    );
+    expect(terminalReplay.result.completion).toBe("COMPLETED");
+    await expect(
+      database.notificationSuppression.count({
+        where: { recipientHash, releasedAt: null },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      database.workEffectReceipt.count({
+        where: { workItemId: terminalReplay.claimed.id },
+      }),
+    ).resolves.toBe(1);
   });
 
   it("never lets a foreign receipt or recipient create an application suppression", async () => {
@@ -699,6 +1012,68 @@ describe.sequential("PostgreSQL Phase-33 Resend event inbox", () => {
         },
       },
     });
+  }
+
+  async function executeProjectionAttempt(
+    inboxId: string,
+    workerId: string,
+    at: Date,
+    runtimeEnvironment: ServerEnvironment = environment,
+  ): Promise<
+    Readonly<{
+      claimed: ClaimedWorkItem;
+      identity: WorkLeaseIdentity;
+      result: Awaited<ReturnType<typeof executeRegisteredHandler>>;
+    }>
+  > {
+    if (runtimeEnvironment.APP_ENV === environment.APP_ENV) {
+      await database.providerActivation.update({
+        where: { id: eventActivationId },
+        data: { health: "HEALTHY", healthCheckedAt: at },
+      });
+    }
+    const run = await createWorkerRun(database, {
+      deploymentDigest: DEPLOYMENT_DIGEST,
+      environment: "ci",
+      now: at,
+      runtimeVersion: "v1",
+      workerId,
+    });
+    const [claimed] = await claimWorkBatch(database, {
+      deploymentDigest: DEPLOYMENT_DIGEST,
+      handlerKey: RESEND_EVENT_PROJECTION_POLICY_V1.handlerKey,
+      handlerVersion: RESEND_EVENT_PROJECTION_POLICY_V1.handlerVersion,
+      now: at,
+      payloadVersion: RESEND_EVENT_PROJECTION_POLICY_V1.payloadVersion,
+      policy: {
+        activationGeneration: handlerActivation.generation,
+        activationId: handlerActivation.id,
+        batchSize: 1,
+        heartbeatMilliseconds: 5_000,
+        leaseMilliseconds: 15_000,
+      },
+      workerId,
+      workerRunId: run.id,
+    });
+    if (claimed === undefined || claimed.subjectId !== inboxId) {
+      throw new Error("TEST_RESEND_EVENT_WORK_ITEM_NOT_CLAIMED");
+    }
+    const identity = Object.freeze({
+      deploymentDigest: DEPLOYMENT_DIGEST,
+      fencingToken: claimed.fencingToken,
+      workerId,
+      workerRunId: run.id,
+      workItemId: claimed.id,
+    });
+    const result = await executeRegisteredHandler(claimed, {
+      database,
+      environment: runtimeEnvironment,
+      identity,
+      heartbeatMilliseconds: 5_000,
+      leaseMilliseconds: 15_000,
+      now: () => new Date(at.getTime() + 100),
+    });
+    return Object.freeze({ claimed, identity, result });
   }
 
   function ingest(verified: VerifiedResendDeliveryWebhook, receivedAt: Date) {

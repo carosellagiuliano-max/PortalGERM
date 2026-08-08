@@ -6,6 +6,7 @@ const pricingCatalog = vi.hoisted(() => ({
   getEmployerContext: vi.fn(),
   getEffectiveEntitlements: vi.fn(),
   findCurrentSubscriptions: vi.fn(),
+  getServerEnvironment: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -24,6 +25,9 @@ vi.mock("@/lib/db/client", () => ({
       findMany: pricingCatalog.findCurrentSubscriptions,
     },
   }),
+}));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: pricingCatalog.getServerEnvironment,
 }));
 
 import PricingPage from "@/app/(public)/pricing/page";
@@ -204,6 +208,11 @@ function successfulCatalog(): Extract<PublicPricingCatalogResult, { ok: true }> 
 
 describe("public pricing page", () => {
   beforeEach(() => {
+    pricingCatalog.getServerEnvironment.mockReset();
+    pricingCatalog.getServerEnvironment.mockReturnValue({
+      APP_ENV: "local",
+      PAYMENT_PROVIDER_MODE: "disabled",
+    });
     pricingCatalog.getPublicPricingCatalog.mockReset();
     pricingCatalog.getPublicPricingCatalog.mockResolvedValue(successfulCatalog());
     pricingCatalog.getEmployerContext.mockReset();
@@ -385,6 +394,47 @@ describe("public pricing page", () => {
       "/employers/demo?interest=business",
     );
   });
+
+  it.each(["preview", "staging", "production"] as const)(
+    "renders no legacy mock CTA or checkout target for a signed-in owner in %s",
+    async (APP_ENV) => {
+      pricingCatalog.getServerEnvironment.mockReturnValue({
+        APP_ENV,
+        PAYMENT_PROVIDER_MODE: "disabled",
+      });
+      pricingCatalog.getEmployerContext.mockResolvedValue({
+        user: { id: "owner", role: "EMPLOYER" },
+        memberships: [],
+        needsSelection: false,
+        current: {
+          membershipId: "membership",
+          membershipRole: "OWNER",
+          companyId: "company",
+          companyName: "Demo AG",
+          companySlug: "demo-ag",
+          companyStatus: "ACTIVE",
+        },
+      });
+      pricingCatalog.getEffectiveEntitlements.mockResolvedValue({
+        ok: true,
+        value: {
+          source: { planSlug: "PRO" },
+          rights: { ...BASE_RIGHTS, TALENT_RADAR_ACCESS: true },
+        },
+      });
+
+      render(await PricingPage());
+
+      expect(screen.queryByText(/Lokaler Mock-Checkout/u)).not.toBeInTheDocument();
+      expect(screen.queryByText(/im lokalen Mock kaufbar/u)).not.toBeInTheDocument();
+      expect(screen.queryByText(/im Mock wählen/u)).not.toBeInTheDocument();
+      for (const link of screen.getAllByRole("link")) {
+        expect(link.getAttribute("href")).not.toMatch(
+          /^\/employer\/billing\/checkout(?:\?|$)/u,
+        );
+      }
+    },
+  );
 
   it("routes a cancelling owner to the existing Plan change instead of a new checkout", async () => {
     pricingCatalog.getEmployerContext.mockResolvedValue({

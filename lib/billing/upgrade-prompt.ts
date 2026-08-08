@@ -23,6 +23,7 @@ export type UpgradePromptInput = Readonly<{
   suggestedProductSlug?: string;
   targetJobId?: string;
   actorRole?: "OWNER" | "ADMIN" | "RECRUITER" | "VIEWER";
+  mockCheckoutAvailable?: boolean;
 }>;
 
 export type UpgradePromptCatalogDependencies = Readonly<{
@@ -240,6 +241,7 @@ function resolveCta(input: UpgradePromptInput): UpgradePrompt["cta"] {
   if (productSlug !== null) {
     if (productSlug === "additional-job-30d") {
       if (!canManageOneTimeProducts) return pricingCta();
+      if (!input.mockCheckoutAvailable) return paymentAvailabilityCta();
       const targetJobId = normalizeUuid(input.targetJobId);
       return targetJobId === null
         ? Object.freeze({
@@ -253,6 +255,7 @@ function resolveCta(input: UpgradePromptInput): UpgradePrompt["cta"] {
     }
     if (productSlug in RELEASED_PRODUCT_TARGETS) {
       if (!canManageOneTimeProducts) return pricingCta();
+      if (!input.mockCheckoutAvailable) return paymentAvailabilityCta();
       return RELEASED_PRODUCT_TARGETS[
         productSlug as keyof typeof RELEASED_PRODUCT_TARGETS
       ];
@@ -268,11 +271,23 @@ function resolveCta(input: UpgradePromptInput): UpgradePrompt["cta"] {
   }
 
   return normalizeSlug(input.suggestedPlanSlug) === "pro" && canManagePlan
-    ? Object.freeze({
-        href: "/employer/billing/checkout?plan=pro",
-        label: "Pro-Upgrade ansehen",
-      })
+    ? !input.mockCheckoutAvailable
+      ? Object.freeze({
+          href: "/employer/billing/subscription",
+          label: "Kaufstatus und Freigaben prüfen",
+        })
+      : Object.freeze({
+          href: "/employer/billing/checkout?plan=pro",
+          label: "Pro-Upgrade ansehen",
+        })
     : pricingCta();
+}
+
+function paymentAvailabilityCta(): UpgradePrompt["cta"] {
+  return Object.freeze({
+    href: "/employer/billing/subscription",
+    label: "Kaufstatus und Freigaben prüfen",
+  });
 }
 
 function copyForReason(reason: UpgradePromptReason) {

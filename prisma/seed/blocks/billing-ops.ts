@@ -18,6 +18,7 @@ import {
   type Prisma,
   type PrismaClient,
 } from "@/lib/generated/prisma/client";
+import { ABUSE_REPORT_PRIVACY_NOTICE_V1 } from "@/lib/privacy/public-intake-privacy-contract";
 import {
   canonicalJson,
   type CanonicalJsonValue,
@@ -1979,6 +1980,9 @@ async function seedAbuseReports(
         db.abuseReport.create({
           data: {
             ...expected,
+            privacyEvidenceMode: "LOCAL_SYNTHETIC",
+            privacyNoticeVersion: ABUSE_REPORT_PRIVACY_NOTICE_V1.version,
+            privacyNoticeHash: ABUSE_REPORT_PRIVACY_NOTICE_V1.hash,
             createdAt,
             dueAt: new Date(expected.dueAt),
           },

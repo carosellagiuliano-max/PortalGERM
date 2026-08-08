@@ -8,13 +8,22 @@ import {
   isValidAuthMutationOrigin,
 } from "@/lib/auth/request-context";
 import type { BillingDependencies } from "@/lib/billing/contracts";
+import { isLegacyMockBillingAllowed } from "@/lib/billing/mock-billing-policy";
 import { getDatabase } from "@/lib/db/client";
 import { emailProvider } from "@/lib/providers/email";
 import { paymentProvider } from "@/lib/providers/payments";
 
 export async function getEmployerBillingActionDependencies(
   ownerOnly = false,
+  options: Readonly<{ requireLegacyMockBilling?: boolean }> = {},
 ): Promise<BillingDependencies | null> {
+  const environment = getServerEnvironment();
+  if (
+    options.requireLegacyMockBilling === true &&
+    !isLegacyMockBillingAllowed(environment)
+  ) {
+    return null;
+  }
   const [context, request, authContext] = await Promise.all([
     getEmployerContext(),
     getAuthRequestContext(),
@@ -48,11 +57,11 @@ export async function getEmployerBillingActionDependencies(
     paymentProvider,
     emailProvider,
     stepUp: {
-      mode: getServerEnvironment().PRIVILEGED_STEP_UP_MODE,
+      mode: environment.PRIVILEGED_STEP_UP_MODE,
       sessionId: authContext.session.id,
       globalRole: authContext.user.role,
     },
-    trustRiskMode: getServerEnvironment().TRUST_RISK_MODE,
+    trustRiskMode: environment.TRUST_RISK_MODE,
     now: new Date(),
   });
 }

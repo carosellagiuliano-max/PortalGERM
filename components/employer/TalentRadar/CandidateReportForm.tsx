@@ -9,6 +9,12 @@ import {
 } from "@/components/employer/TalentRadar/action-state";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PublicIntakePrivacyDisclosure,
+  PublicIntakePrivacyHiddenFields,
+  PublicIntakePrivacyLocked,
+  usePublicIntakePrivacy,
+} from "@/components/privacy/public-intake-privacy";
 
 export function CandidateReportForm({
   opaqueCandidateId,
@@ -21,12 +27,16 @@ export function CandidateReportForm({
     reportRadarCandidateAction,
     INITIAL_TALENT_RADAR_ACTION_STATE,
   );
+  const privacyGate = usePublicIntakePrivacy("ABUSE_REPORT");
 
   return (
     <details className="rounded-lg border bg-background p-3">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium">
         <FlagIcon className="size-4" aria-hidden="true" /> Profil melden
       </summary>
+      {!privacyGate.allowed ? (
+        <div className="mt-3"><PublicIntakePrivacyLocked purpose="ABUSE_REPORT" /></div>
+      ) : (
       <form action={action} className="mt-3 grid min-w-64 gap-3" noValidate>
         <input
           type="hidden"
@@ -38,6 +48,7 @@ export function CandidateReportForm({
           name="signedSearchSession"
           value={signedSearchSession}
         />
+        <PublicIntakePrivacyHiddenFields purpose="ABUSE_REPORT" />
         {state.status === "idle" ? null : (
           <p
             role={state.status === "error" ? "alert" : "status"}
@@ -78,12 +89,14 @@ export function CandidateReportForm({
                 placeholder="Was soll das Moderationsteam prüfen?"
               />
             </label>
+            <PublicIntakePrivacyDisclosure purpose="ABUSE_REPORT" />
             <Button type="submit" size="sm" variant="outline" disabled={pending}>
               {pending ? "Wird gemeldet …" : "Sicher melden"}
             </Button>
           </>
         )}
       </form>
+      )}
     </details>
   );
 }

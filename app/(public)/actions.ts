@@ -6,15 +6,17 @@ import {
   type ResolvedPublicReportTarget,
 } from "@/lib/abuse/public-report";
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { consumeRequestRateLimit } from "@/lib/auth/rate-limit-runtime";
 import { getAuthRequestContext, isValidAuthMutationOrigin } from "@/lib/auth/request-context";
 import { getPublicCompanyCardBySlug } from "@/lib/companies/public-read-model";
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { emailProvider } from "@/lib/providers/email";
-import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 import { getPublicJobBySlug } from "@/lib/jobs/public-read-model";
 import type { PublicReportActionState } from "@/lib/abuse/public-report-state";
+import {
+  preflightPublicIntakePrivacyGate,
+  readPublicIntakePrivacyExpectedBinding,
+} from "@/lib/privacy/public-intake-privacy-gate";
 
 export async function submitPublicReportAction(
   _previousState: PublicReportActionState,
@@ -37,30 +39,24 @@ export async function submitPublicReportAction(
 
   const database = getDatabase();
   const environment = getServerEnvironment();
-  const currentUser = await getCurrentUser();
   const now = new Date();
-  const precheck = await consumeRequestRateLimit(
-    "ABUSE_INTAKE_PRECHECK",
-    currentUser === null ? {} : { actorId: currentUser.id },
-    request,
-    now,
-    { database, environment },
+  const privacyBinding = readPublicIntakePrivacyExpectedBinding(
+    formData,
+    "ABUSE_REPORT",
   );
-  if (!precheck.allowed) {
-    await recordRateLimitDenial(
-      precheck.audit,
-      {
-        actorKind: currentUser === null ? "ANONYMOUS" : "USER",
-        actorUserId: currentUser?.id,
-        capability: "PUBLIC_ABUSE_REPORT_PRECHECK",
-        targetId: currentUser?.id ?? request.correlationId,
-        targetType: currentUser === null ? "SYSTEM_TASK" : "USER",
-      },
-      { database, environment, request, now },
+  if (
+    privacyBinding === null ||
+    !(await preflightPublicIntakePrivacyGate(privacyBinding, {
+      database,
+      environment,
+      now,
+    })).allowed
+  ) {
+    return errorState(
+      "Der Datenschutzhinweis ist nicht verfügbar oder hat sich geändert. Es wurden keine Angaben übermittelt. Bitte lade die Seite neu.",
     );
-    return errorState("Zu viele Meldungen in kurzer Zeit. Bitte versuche es später erneut.");
   }
-
+  const currentUser = await getCurrentUser();
   const resolved = await resolveReportTarget(parsed.data.targetType, parsed.data.slug);
   const result = await createPublicReport(
     parsed.data,
@@ -72,6 +68,7 @@ export async function submitPublicReportAction(
       currentUser,
       emailProvider,
       now,
+      privacyBinding,
     },
   );
 
@@ -86,6 +83,11 @@ export async function submitPublicReportAction(
   }
   if (result.code === "INVALID_INPUT") {
     return errorState("Bitte wähle einen Grund und beschreibe das Problem mit mindestens 20 Zeichen.");
+  }
+  if (result.code === "PRIVACY_UNAVAILABLE") {
+    return errorState(
+      "Der Datenschutzhinweis ist nicht verfügbar oder hat sich geändert. Es wurden keine Angaben übermittelt. Bitte lade die Seite neu.",
+    );
   }
   return errorState("Die Meldung konnte nicht erfasst werden. Bitte versuche es später erneut.");
 }

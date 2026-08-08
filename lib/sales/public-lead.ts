@@ -8,6 +8,8 @@ import {
 } from "@/lib/analytics/track";
 import { getAnonymousOperationalRuntimeProvenanceV1 } from "@/lib/analytics/runtime-policy";
 import type { AuthRequestContext } from "@/lib/auth/request-context";
+import type { RateLimitDecision } from "@/lib/auth/rate-limit";
+import { consumeRequestRateLimitInTransaction } from "@/lib/auth/rate-limit-runtime";
 import { writeRequiredAudit } from "@/lib/audit/log";
 import { createPrismaTransactionAuditPort } from "@/lib/audit/prisma-port";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
@@ -15,9 +17,13 @@ import type { DatabaseClient } from "@/lib/db/factory";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { enqueueNotification } from "@/lib/notifications/outbox";
 import { notificationRecipientMaterialExpiresAt } from "@/lib/notifications/retention";
+import type { PublicIntakePrivacyExpectedBinding } from "@/lib/privacy/public-intake-privacy-contract";
+import {
+  lockPublicIntakePrivacyGate,
+  preflightPublicIntakePrivacyGate,
+} from "@/lib/privacy/public-intake-privacy-gate";
 import {
   SALES_LEAD_INTAKE_POLICY_V1,
-  SALES_LEAD_NOTICE_HASH_V1,
   leadPurposeForInterest,
   planCodeForLeadInterest,
   salesLeadAnalyticsKeyV1,
@@ -26,6 +32,7 @@ import {
 } from "@/lib/sales/lead-policy";
 import type { LeadFormInput } from "@/lib/validation/billing";
 import { createLogger } from "@/lib/utils/logger";
+import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 const logger = createLogger();
 
@@ -33,7 +40,12 @@ export type PublicLeadSubmissionResult = Readonly<
   | { ok: true; leadId: string; activityId: string; duplicate: boolean }
   | {
       ok: false;
-      code: "IDEMPOTENCY_CONFLICT" | "WRITE_FAILED" | "NOTIFICATION_FAILED";
+      code:
+        | "IDEMPOTENCY_CONFLICT"
+        | "WRITE_FAILED"
+        | "NOTIFICATION_FAILED"
+        | "PRIVACY_UNAVAILABLE"
+        | "RATE_LIMITED";
     }
 >;
 
@@ -45,6 +57,14 @@ type LeadTransactionResult = Readonly<{
   duplicate: boolean;
 }>;
 
+type LeadTransactionOutcome =
+  | Readonly<{ kind: "SUCCESS"; result: LeadTransactionResult }>
+  | Readonly<{ kind: "PRIVACY_UNAVAILABLE" }>
+  | Readonly<{
+      kind: "RATE_LIMITED";
+      audit: Extract<RateLimitDecision, { allowed: false }>["audit"];
+    }>;
+
 class LeadIdempotencyConflict extends Error {}
 
 export async function submitPublicEmployerLead(
@@ -54,17 +74,61 @@ export async function submitPublicEmployerLead(
     environment: ServerEnvironment;
     request: AuthRequestContext;
     now: Date;
+    privacyBinding: PublicIntakePrivacyExpectedBinding;
   }>,
 ): Promise<PublicLeadSubmissionResult> {
+  if (dependencies.privacyBinding.purpose !== "EMPLOYER_DEMO") {
+    return Object.freeze({ ok: false, code: "PRIVACY_UNAVAILABLE" });
+  }
+  const privacyPreflight = await preflightPublicIntakePrivacyGate(
+    dependencies.privacyBinding,
+    {
+      database: dependencies.database,
+      environment: dependencies.environment,
+      now: dependencies.now,
+    },
+  );
+  if (!privacyPreflight.allowed) {
+    return Object.freeze({ ok: false, code: "PRIVACY_UNAVAILABLE" });
+  }
   const payloadHash = hashLeadIntakePayloadV1(input);
   const purpose = leadPurposeForInterest(input.interestCode);
   const dueAt = salesLeadDueAtV1(dependencies.now);
   const retainUntil = salesLeadRetainUntilV1(dependencies.now);
 
-  let result: LeadTransactionResult;
+  let outcome: LeadTransactionOutcome;
   try {
-    result = await dependencies.database.$transaction(
+    outcome = await dependencies.database.$transaction(
       async (transaction) => {
+        const privacy = await lockPublicIntakePrivacyGate(
+          transaction,
+          dependencies.privacyBinding,
+          {
+            environment: dependencies.environment,
+            now: dependencies.now,
+          },
+        );
+        if (!privacy.allowed) {
+          return Object.freeze({
+            kind: "PRIVACY_UNAVAILABLE",
+          } satisfies LeadTransactionOutcome);
+        }
+
+        const rate = await consumeRequestRateLimitInTransaction(
+          "LEAD",
+          {},
+          dependencies.request,
+          transaction,
+          dependencies.now,
+          dependencies.environment,
+        );
+        if (!rate.allowed) {
+          return Object.freeze({
+            kind: "RATE_LIMITED",
+            audit: rate.audit,
+          } satisfies LeadTransactionOutcome);
+        }
+
         await acquireLeadLocks(
           transaction,
           input.idempotencyKey,
@@ -91,12 +155,15 @@ export async function submitPublicEmployerLead(
             throw new LeadIdempotencyConflict();
           }
           return Object.freeze({
-            leadId: priorActivity.salesLead.id,
-            activityId: priorActivity.id,
-            purpose: asLeadPurpose(priorActivity.salesLead.purpose),
-            occurredAt: priorActivity.createdAt,
-            duplicate: true,
-          });
+            kind: "SUCCESS",
+            result: Object.freeze({
+              leadId: priorActivity.salesLead.id,
+              activityId: priorActivity.id,
+              purpose: asLeadPurpose(priorActivity.salesLead.purpose),
+              occurredAt: priorActivity.createdAt,
+              duplicate: true,
+            }),
+          } satisfies LeadTransactionOutcome);
         }
 
         const planVersionId = await resolveInterestedPlanVersionId(
@@ -129,8 +196,8 @@ export async function submitPublicEmployerLead(
           callbackWindowCode: input.callbackWindowCode ?? null,
           consentSource: SALES_LEAD_INTAKE_POLICY_V1.consentSource,
           message: input.message,
-          noticeVersion: SALES_LEAD_INTAKE_POLICY_V1.notice.version,
-          noticeHash: SALES_LEAD_NOTICE_HASH_V1,
+          noticeVersion: privacy.binding.noticeVersion,
+          noticeHash: privacy.binding.noticeHash,
           slaPolicyVersion: SALES_LEAD_INTAKE_POLICY_V1.sla.version,
           interestedPlanVersionId: planVersionId,
         } as const;
@@ -176,8 +243,12 @@ export async function submitPublicEmployerLead(
             interestCode: input.interestCode,
             callbackWindowCode: input.callbackWindowCode ?? null,
             message: input.message,
-            noticeVersion: SALES_LEAD_INTAKE_POLICY_V1.notice.version,
-            noticeHash: SALES_LEAD_NOTICE_HASH_V1,
+            noticeVersion: privacy.binding.noticeVersion,
+            noticeHash: privacy.binding.noticeHash,
+            privacyEvidenceMode: privacy.binding.evidenceMode,
+            privacyLegalPublicationId: privacy.binding.legalPublicationId,
+            privacyPublicationHash: privacy.binding.publicationHash,
+            privacyPublicationVersion: privacy.binding.publicationVersion,
             slaPolicyVersion: SALES_LEAD_INTAKE_POLICY_V1.sla.version,
             dueAt,
             retainUntil,
@@ -261,12 +332,15 @@ export async function submitPublicEmployerLead(
         });
 
         return Object.freeze({
-          leadId: lead.id,
-          activityId: activity.id,
-          purpose,
-          occurredAt: activity.createdAt,
-          duplicate: false,
-        });
+          kind: "SUCCESS",
+          result: Object.freeze({
+            leadId: lead.id,
+            activityId: activity.id,
+            purpose,
+            occurredAt: activity.createdAt,
+            duplicate: false,
+          }),
+        } satisfies LeadTransactionOutcome);
       },
       { isolationLevel: "ReadCommitted" },
     );
@@ -287,6 +361,30 @@ export async function submitPublicEmployerLead(
       code: "WRITE_FAILED",
     });
   }
+
+  if (outcome.kind === "PRIVACY_UNAVAILABLE") {
+    return Object.freeze({ ok: false, code: "PRIVACY_UNAVAILABLE" });
+  }
+  if (outcome.kind === "RATE_LIMITED") {
+    await recordRateLimitDenial(
+      outcome.audit,
+      {
+        actorKind: "ANONYMOUS",
+        capability: "PUBLIC_EMPLOYER_DEMO_SUBMIT",
+        targetId: dependencies.request.correlationId,
+        targetType: "SALES_LEAD",
+      },
+      {
+        database: dependencies.database,
+        environment: dependencies.environment,
+        request: dependencies.request,
+        now: dependencies.now,
+      },
+    );
+    return Object.freeze({ ok: false, code: "RATE_LIMITED" });
+  }
+
+  const result = outcome.result;
 
   return Object.freeze({
     ok: true,

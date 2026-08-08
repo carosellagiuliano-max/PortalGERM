@@ -70,6 +70,7 @@ export async function startBillingCheckoutAction(
 
   const dependencies = await getEmployerBillingActionDependencies(
     kind === "PLAN",
+    { requireLegacyMockBilling: true },
   );
   if (dependencies === null) {
     return Object.freeze({

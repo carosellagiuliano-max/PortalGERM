@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getEmployerBoostPurchaseView } from "@/lib/billing/boosts";
 import { requireEmployerBillingPage } from "@/lib/billing/employer-page-access";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
+import { isLegacyMockBillingAllowed } from "@/lib/billing/mock-billing-policy";
 
 export const metadata: Metadata = {
   title: "Job boosten",
@@ -61,6 +63,9 @@ export default async function EmployerJobBoostPage({
         view={view}
         creditIdempotencyKey={randomUUID()}
         cancellationIdempotencyKey={randomUUID()}
+        mockCheckoutAvailable={isLegacyMockBillingAllowed(
+          getServerEnvironment(),
+        )}
       />
     </section>
   );

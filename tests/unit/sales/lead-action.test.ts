@@ -32,6 +32,10 @@ vi.mock("@/lib/security/rate-limit-audit", () => ({
 }));
 
 import { submitEmployerDemoLeadAction } from "@/app/(public)/employers/demo/actions";
+import {
+  appendLocalPublicIntakePrivacyBinding,
+  localPublicIntakePrivacyBinding,
+} from "@/tests/fixtures/public-intake-privacy";
 
 const NOW = new Date("2026-07-20T10:15:30.000Z");
 const NEUTRAL_SUCCESS_MESSAGE =
@@ -47,6 +51,7 @@ const REQUEST = Object.freeze({
 const DATABASE = Object.freeze({ marker: "database" });
 const AUDIT_KEYRING = Object.freeze([{ marker: "audit-keyring" }]);
 const ENVIRONMENT = Object.freeze({
+  APP_ENV: "local" as const,
   marker: "environment",
   secrets: Object.freeze({
     keyrings: Object.freeze({ AUDIT_IP_HASH_KEYS: AUDIT_KEYRING }),
@@ -150,7 +155,7 @@ describe("public employer lead action", () => {
     expect(mocks.submitPublicEmployerLead).not.toHaveBeenCalled();
   });
 
-  it("consumes the LEAD limit for a honeypot hit but persists and notifies nothing", async () => {
+  it("returns neutral success for a honeypot hit without rate or business writes", async () => {
     const formData = validLeadForm();
     formData.set("websiteConfirmation", "https://spam.example");
 
@@ -163,28 +168,25 @@ describe("public employer lead action", () => {
       status: "success",
       message: NEUTRAL_SUCCESS_MESSAGE,
     });
-    expect(mocks.consumeRequestRateLimit).toHaveBeenCalledWith(
-      "LEAD",
-      {},
-      REQUEST,
-      NOW,
-      { database: DATABASE, environment: ENVIRONMENT },
-    );
+    expect(mocks.consumeRequestRateLimit).not.toHaveBeenCalled();
     expect(mocks.submitPublicEmployerLead).not.toHaveBeenCalled();
     expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
 
   it("denies after ten requests and delegates bounded denial auditing", async () => {
     let leadAttempts = 0;
-    mocks.consumeRequestRateLimit.mockImplementation(async () => {
+    mocks.submitPublicEmployerLead.mockImplementation(async () => {
       leadAttempts += 1;
-      if (leadAttempts <= 10) return { allowed: true, status: 200 };
+      if (leadAttempts <= 10)
+        return {
+          ok: true,
+          leadId: "11111111-1111-4111-8111-111111111111",
+          activityId: "22222222-2222-4222-8222-222222222222",
+          duplicate: false,
+        };
       return {
-        allowed: false,
-        status: 429,
+        ok: false,
         code: "RATE_LIMITED",
-        retryAfterSeconds: 60,
-        audit: { action: "RATE_LIMITED", preset: "LEAD", scope: "IP" },
       };
     });
 
@@ -206,29 +208,10 @@ describe("public employer lead action", () => {
         message: "Zu viele Anfragen in kurzer Zeit. Bitte versuche es später erneut.",
       });
     }
-    expect(mocks.consumeRequestRateLimit).toHaveBeenCalledTimes(12);
+    expect(mocks.consumeRequestRateLimit).not.toHaveBeenCalled();
     expect(leadAttempts).toBe(12);
-    expect(mocks.submitPublicEmployerLead).toHaveBeenCalledTimes(10);
-    expect(mocks.recordRateLimitDenial).toHaveBeenCalledTimes(2);
-    expect(mocks.recordRateLimitDenial).toHaveBeenCalledWith(
-      {
-        action: "RATE_LIMITED",
-        preset: "LEAD",
-        scope: "IP",
-      },
-      {
-        actorKind: "ANONYMOUS",
-        capability: "PUBLIC_EMPLOYER_DEMO_SUBMIT",
-        targetId: REQUEST.correlationId,
-        targetType: "SALES_LEAD",
-      },
-      {
-        database: DATABASE,
-        environment: ENVIRONMENT,
-        request: REQUEST,
-        now: NOW,
-      },
-    );
+    expect(mocks.submitPublicEmployerLead).toHaveBeenCalledTimes(12);
+    expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
 
   it("normalizes and forwards a valid submission", async () => {
@@ -257,12 +240,13 @@ describe("public employer lead action", () => {
         idempotencyKey: "lead-action-request-0001",
         websiteConfirmation: "",
       },
-      {
+      expect.objectContaining({
         database: DATABASE,
         environment: ENVIRONMENT,
         request: REQUEST,
         now: NOW,
-      },
+        privacyBinding: localPublicIntakePrivacyBinding("EMPLOYER_DEMO"),
+      }),
     );
     expect(mocks.recordRateLimitDenial).not.toHaveBeenCalled();
   });
@@ -318,5 +302,5 @@ function validLeadForm(
   formData.set("acceptedContactPurpose", "yes");
   formData.set("idempotencyKey", idempotencyKey);
   formData.set("websiteConfirmation", "");
-  return formData;
+  return appendLocalPublicIntakePrivacyBinding(formData, "EMPLOYER_DEMO");
 }

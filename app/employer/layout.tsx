@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PrivateShell } from "@/components/auth/private-shell";
 import { PersonaContextSwitcher } from "@/components/auth/persona-context-switcher";
 import { CompanyContextPicker } from "@/components/employer/company-context-picker";
+import { PublicIntakePrivacyProvider } from "@/components/privacy/public-intake-privacy";
 import { getEmployerContext } from "@/lib/auth/employer-context";
 import { requireEmployerPage } from "@/lib/auth/route-guards";
 import { getCurrentPersonaContextOverview } from "@/lib/auth/persona-page";
@@ -10,6 +11,7 @@ import { getPrismaEffectiveEntitlements } from "@/lib/billing/prisma-publish-quo
 import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import { planLabel as formatPlanLabel } from "@/lib/employer/dashboard";
+import { resolvePublicIntakePrivacyGate } from "@/lib/privacy/public-intake-privacy-gate";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,6 +39,10 @@ export default async function EmployerLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireEmployerPage();
   const environment = getServerEnvironment();
+  const reportPrivacyGate = await resolvePublicIntakePrivacyGate("ABUSE_REPORT", {
+    database: getDatabase(),
+    environment,
+  });
   if (
     environment.IDENTITY_VERIFICATION_ENFORCEMENT &&
     (user.emailVerifiedAt === null ||
@@ -58,7 +64,9 @@ export default async function EmployerLayout({
           secondaryLabel: "E-Mail-Bestätigung ausstehend",
         }}
       >
-        {children}
+        <PublicIntakePrivacyProvider decision={reportPrivacyGate}>
+          {children}
+        </PublicIntakePrivacyProvider>
       </PrivateShell>
     );
   }
@@ -124,7 +132,9 @@ export default async function EmployerLayout({
         )
       }
     >
-      {children}
+      <PublicIntakePrivacyProvider decision={reportPrivacyGate}>
+        {children}
+      </PublicIntakePrivacyProvider>
     </PrivateShell>
   );
 }

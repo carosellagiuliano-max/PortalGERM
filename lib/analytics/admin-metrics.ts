@@ -45,13 +45,8 @@ export async function getAdminFinancialMetrics(
   const { subscriptions, activeCompanyCount, paidInvoices, invoiceGroups } =
     await dependencies.database.$transaction(
       async (transaction) => {
-        const [
-          subscriptionRows,
-          companyCount,
-          paidInvoiceRows,
-          invoiceStatusGroups,
-        ] = await Promise.all([
-          transaction.employerSubscription.findMany({
+        const subscriptionRows =
+          await transaction.employerSubscription.findMany({
             where: {
               status: { in: ["ACTIVE", "CANCELLING"] },
               currentPeriodStart: { lte: now },
@@ -63,9 +58,12 @@ export async function getAdminFinancialMetrics(
               monthlyEquivalentRappenSnapshot: true,
               recurringNetRappenSnapshot: true,
             },
-          }),
-          transaction.company.count({ where: { status: "ACTIVE" } }),
-          transaction.invoice.findMany({
+          });
+        const companyCount = await transaction.company.count({
+          where: { status: "ACTIVE" },
+        });
+        const paidInvoiceRows = await transaction.invoice.findMany({
+            relationLoadStrategy: "join",
             where: {
               status: "PAID",
               order: {
@@ -105,13 +103,12 @@ export async function getAdminFinancialMetrics(
                 },
               },
             },
-          }),
-          transaction.invoice.groupBy({
-            by: ["status"],
-            _count: { _all: true },
-            _sum: { totalRappen: true },
-          }),
-        ]);
+          });
+        const invoiceStatusGroups = await transaction.invoice.groupBy({
+          by: ["status"],
+          _count: { _all: true },
+          _sum: { totalRappen: true },
+        });
         return {
           subscriptions: subscriptionRows,
           activeCompanyCount: companyCount,

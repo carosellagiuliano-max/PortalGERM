@@ -34,6 +34,7 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
       LOGIN: {
         buckets: [
           { scope: "IP_EMAIL", limit: 10, windowMs: 15 * MINUTE },
+          { scope: "AUTH_IDENTIFIER", limit: 10, windowMs: 15 * MINUTE },
           { scope: "IP", limit: 30, windowMs: HOUR },
         ],
       },
@@ -41,11 +42,22 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
         buckets: [{ scope: "IP", limit: 10, windowMs: HOUR }],
       },
       FORGOT_PASSWORD: {
-        buckets: [{ scope: "IP_EMAIL", limit: 5, windowMs: HOUR }],
+        buckets: [
+          { scope: "IP_EMAIL", limit: 5, windowMs: HOUR },
+          { scope: "AUTH_IDENTIFIER", limit: 5, windowMs: HOUR },
+          { scope: "IP", limit: 20, windowMs: HOUR },
+        ],
+      },
+      PASSWORD_RESET_CONSUME: {
+        buckets: [
+          { scope: "TARGET", limit: 10, windowMs: HOUR },
+          { scope: "IP", limit: 30, windowMs: HOUR },
+        ],
       },
       EMAIL_VERIFICATION_RESEND: {
         buckets: [
           { scope: "IP_EMAIL", limit: 5, windowMs: HOUR },
+          { scope: "AUTH_IDENTIFIER", limit: 5, windowMs: HOUR },
           { scope: "IP", limit: 20, windowMs: HOUR },
         ],
       },
@@ -145,7 +157,9 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
         buckets: [{ scope: "IP", limit: 1, windowMs: HOUR }],
       },
       SECURITY_DENIAL_AUDIT: {
-        buckets: [{ scope: "ACTOR_OR_IP", limit: 1, windowMs: HOUR }],
+        buckets: [
+          { scope: "ACTOR_OR_IP_TARGET", limit: 1, windowMs: HOUR },
+        ],
       },
       ABUSE_INTAKE_PRECHECK: {
         buckets: [
@@ -187,7 +201,11 @@ describe("RATE_LIMIT_PRESETS_V1", () => {
     expect(serialized).not.toContain(IDENTITY.normalizedEmail);
     expect(serialized).toContain("2026-07:");
     expect(() =>
-      buildRateLimitChecks("LOGIN", { sourceIp: IDENTITY.sourceIp }, KEY),
+      buildRateLimitChecks(
+        "LOGIN",
+        { sourceIp: IDENTITY.sourceIp },
+        KEY,
+      ),
     ).toThrow(TypeError);
     const abuse = JSON.stringify(
       buildRateLimitChecks("ABUSE_INTAKE", IDENTITY, KEY),

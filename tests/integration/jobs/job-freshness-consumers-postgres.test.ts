@@ -13,6 +13,7 @@ import { calculateJobFreshnessScheduleV1 } from "@/lib/jobs/freshness-policy";
 import { backfillJobPublicationFingerprints } from "@/lib/jobs/freshness";
 import {
   emptyPublicJobSearchInput,
+  getPublicJobsBySlugs,
   listPublicJobs,
 } from "@/lib/jobs/public-read-model";
 import { listEligibleJobSitemapRows } from "@/lib/seo/public-sitemap";
@@ -122,6 +123,7 @@ describe.sequential("Phase 30 freshness consumer parity", () => {
       admin,
       client,
       jobId: job.id,
+      jobSlug: job.slug,
       membership: managingMembership,
       now,
     });
@@ -138,12 +140,15 @@ describe.sequential("Phase 30 freshness consumer parity", () => {
       admin,
       client,
       jobId: job.id,
+      jobSlug: job.slug,
       membership: managingMembership,
       now,
     });
 
     expect(before.directEligible).toBe(true);
     expect(after.directEligible).toBe(false);
+    expect(before.publicDetailIds).toContain(job.id);
+    expect(after.publicDetailIds).not.toContain(job.id);
     expect(before.searchTotal - after.searchTotal).toBe(1);
     expect(before.recommendationIds).toContain(job.id);
     expect(after.recommendationIds).not.toContain(job.id);
@@ -163,6 +168,7 @@ async function loadConsumerSnapshot(
     admin: Readonly<{ id: string; email: string }>;
     client: DatabaseClient;
     jobId: string;
+    jobSlug: string;
     membership: Readonly<{
       id: string;
       role: "OWNER" | "ADMIN";
@@ -185,6 +191,7 @@ async function loadConsumerSnapshot(
   };
   const [
     eligible,
+    publicDetails,
     search,
     recommendations,
     sitemap,
@@ -198,6 +205,10 @@ async function loadConsumerSnapshot(
       "non-production",
       input.client,
     ),
+    getPublicJobsBySlugs([input.jobSlug], {
+      database: input.client,
+      now: input.now,
+    }),
     listPublicJobs(emptyPublicJobSearchInput(), {
       database: input.client,
       now: input.now,
@@ -236,6 +247,7 @@ async function loadConsumerSnapshot(
   }
   return Object.freeze({
     directEligible: eligible.some(({ id }) => id === input.jobId),
+    publicDetailIds: Object.freeze(publicDetails.map(({ id }) => id)),
     searchTotal: search.totalEligible,
     recommendationIds: Object.freeze(recommendations.map(({ job }) => job.id)),
     sitemapPaths: Object.freeze(sitemap.map(({ path }) => path)),

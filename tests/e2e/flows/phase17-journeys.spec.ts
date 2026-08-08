@@ -9,7 +9,7 @@ import {
 
 test.describe.configure({ mode: "serial" });
 
-test("[E2E-01] @journey candidate search to employer status update", async ({
+test("[E2E-01][E2E-34-01] @journey @phase34 candidate search to employer status update", async ({
   browser,
   page,
 }) => {

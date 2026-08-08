@@ -18,6 +18,36 @@ import {
 
 const repository = resolve(import.meta.dirname, "..");
 const phase33BaselineCommit = "59ed81033d409aac847c55f1da3ecf5370f4f035";
+const phase33AdditiveMigration =
+  "20260801090000_phase_33_payment_provider_bindings/migration.sql";
+const phase33WorkerHandlerIdentities = Object.freeze([
+  "ops.diagnostic-effect@v1",
+  "notifications.dispatch@v1",
+  "notifications.retention@v1",
+  "candidate.job-alert-digest@v1",
+  "jobs.expiry-projection@v1",
+  "employer.invitation-expiry@v1",
+  "billing.boost-projection@v1",
+  "billing.credit-expiry@v1",
+  "billing.subscription-boundary@v1",
+  "radar.contact-expiry@v1",
+  "documents.scan@v1",
+  "documents.reconcile@v1",
+  "payments.inbox-project@v1",
+  "privacy.export@v1",
+  "privacy.correction@v1",
+  "privacy.erasure@v1",
+  "payments.reconcile@v1",
+  "payments.dunning@v1",
+  "payments.service-recovery@v1",
+  "security.expiry-projection@v1",
+  "trust.case-expiry@v1",
+  "company-trust.expiry-review@v1",
+  "recruiting.reminder-expiry@v1",
+  "jobs.freshness@v1",
+  "seo.sitemap-capacity@v1",
+  "search.learning-expiry@v1",
+] as const);
 const baselinePath = resolve(
   repository,
   "codex-plan/evidence/phase33-migration-baseline.json",
@@ -68,9 +98,9 @@ try {
     historicalMigrationCheck(anchoredBaseline, migrations),
     check(
       "PHASE_33_ADDITIVE_MIGRATION",
-      migrations.newFiles.length === 1 &&
-        /phase_33/iu.test(migrations.newFiles[0] ?? ""),
-      `Expected exactly one additive Phase-33 migration; observed ${migrations.newFiles.length}.`,
+      migrations.newFiles.filter((path) => /phase_33/iu.test(path)).length ===
+        1 && migrations.newFiles.includes(phase33AdditiveMigration),
+      `Expected the immutable Phase-33 migration ${phase33AdditiveMigration}; observed ${migrations.newFiles.filter((path) => /phase_33/iu.test(path)).join(",") || "none"}. Later additive phase migrations are allowed.`,
     ),
     check(
       "ROUTE_INVENTORY_CLASSIFIED",
@@ -238,9 +268,12 @@ function providerMatrixCheck() {
 }
 
 function workerCatalogCheck() {
-  const expectedHandlerCount = 26;
   const identities = WORKER_HANDLER_CATALOG.map(
     ({ handlerKey, handlerVersion }) => `${handlerKey}@${handlerVersion}`,
+  );
+  const identitySet = new Set(identities);
+  const missingPhase33Handlers = phase33WorkerHandlerIdentities.filter(
+    (identity) => !identitySet.has(identity),
   );
   const complete = WORKER_HANDLER_CATALOG.every(
     (handler) =>
@@ -252,10 +285,10 @@ function workerCatalogCheck() {
   );
   return check(
     "WORKER_HANDLER_IDENTITIES_UNIQUE",
-    identities.length === expectedHandlerCount &&
+    missingPhase33Handlers.length === 0 &&
       unique(identities) &&
       complete,
-    `${identities.length}/${expectedHandlerCount} exact versioned handlers; every launch handler must be implemented and owned.`,
+    `${phase33WorkerHandlerIdentities.length - missingPhase33Handlers.length}/${phase33WorkerHandlerIdentities.length} required Phase-33 handlers present; ${identities.length} total exact versioned handlers; every launch handler must be implemented and owned.`,
   );
 }
 

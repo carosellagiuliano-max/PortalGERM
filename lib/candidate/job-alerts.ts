@@ -1616,22 +1616,24 @@ async function assertQueryReferences(
   transaction: Prisma.TransactionClient,
   query: JobAlertQuery,
 ) {
-  const [canton, category, city] = await Promise.all([
+  const canton =
     query.cantonId === null
       ? null
-      : transaction.canton.findFirst({
+      : await transaction.canton.findFirst({
           where: { id: query.cantonId, isActive: true },
           select: { id: true },
-        }),
+        });
+  const category =
     query.categoryId === null
       ? null
-      : transaction.category.findFirst({
+      : await transaction.category.findFirst({
           where: { id: query.categoryId, isActive: true },
           select: { id: true },
-        }),
+        });
+  const city =
     query.cityId === null
       ? null
-      : transaction.city.findFirst({
+      : await transaction.city.findFirst({
           where: {
             id: query.cityId,
             cantonId: query.cantonId ?? undefined,
@@ -1639,8 +1641,7 @@ async function assertQueryReferences(
             canton: { isActive: true },
           },
           select: { id: true },
-        }),
-  ]);
+        });
   if (
     (query.cantonId !== null && canton === null) ||
     (query.categoryId !== null && category === null) ||
@@ -1660,19 +1661,17 @@ async function hasCurrentDeliveryAuthorization(
   userId: string,
   at: Date,
 ) {
-  const [consent, preference] = await Promise.all([
-    latestDeliveryConsent(database, userId, at),
-    database.notificationPreference.findUnique({
-      where: {
-        userId_purpose_channel: {
-          userId,
-          purpose: "JOB_ALERT",
-          channel: "EMAIL",
-        },
+  const consent = await latestDeliveryConsent(database, userId, at);
+  const preference = await database.notificationPreference.findUnique({
+    where: {
+      userId_purpose_channel: {
+        userId,
+        purpose: "JOB_ALERT",
+        channel: "EMAIL",
       },
-      select: { enabled: true },
-    }),
-  ]);
+    },
+    select: { enabled: true },
+  });
   // A missing projection is tolerated only for pre-outbox rows. The durable
   // producer creates it atomically before enqueueing; an explicit opt-out is
   // authoritative immediately.
@@ -1901,20 +1900,20 @@ async function resolveStoredQuery(
   const parsed = parseStoredJobAlertQuery(storedValue);
   if (parsed.kind === "v1") return parsed.query;
   if (parsed.kind === "invalid") return null;
-  const [category, canton] = await Promise.all([
+  const category =
     parsed.query.categorySlug === null
       ? null
-      : transaction.category.findFirst({
+      : await transaction.category.findFirst({
           where: { slug: parsed.query.categorySlug, isActive: true },
           select: { id: true },
-        }),
+        });
+  const canton =
     parsed.query.cantonCode === null
       ? null
-      : transaction.canton.findFirst({
+      : await transaction.canton.findFirst({
           where: { code: parsed.query.cantonCode, isActive: true },
           select: { id: true },
-        }),
-  ]);
+        });
   if (
     (parsed.query.categorySlug !== null && category === null) ||
     (parsed.query.cantonCode !== null && canton === null)

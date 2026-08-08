@@ -25,9 +25,9 @@ describe("UpgradeDialog", () => {
     expect(
       screen.getByRole("heading", { name: "Sitzplatzlimit erreicht" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Pro-Upgrade ansehen/u })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Kaufstatus und Freigaben prüfen/u })).toHaveAttribute(
       "href",
-      "/employer/billing/checkout?plan=pro",
+      "/employer/billing/subscription",
     );
     expect(screen.getByRole("button", { name: "Später" })).toBeInTheDocument();
   });

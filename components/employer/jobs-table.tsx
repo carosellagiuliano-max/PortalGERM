@@ -15,6 +15,9 @@ import {
 } from "@/components/ui/responsive-table";
 import {
   INITIAL_EMPLOYER_JOB_FORM_STATE,
+  employerJobAssignmentRoleLabel,
+  employerJobBoostStatusLabel,
+  employerJobStatusLabel,
   type EmployerJobFormState,
   type EmployerJobListItem,
 } from "@/lib/employer/job-contracts";
@@ -72,14 +75,14 @@ function JobRow({ job, actions, keys }: Readonly<{ job: EmployerJobListItem; act
   const states = [submitState, pauseState, pauseEditState, clonePausedState, cloneRejectedState, duplicateState, reactivateState, closeState];
   return (
     <tr className="align-top">
-      <ResponsiveTableCell className="px-4 py-4" label="Titel" primary><Link href={`/employer/jobs/${job.id}`} className="font-medium text-primary hover:underline">{job.title}</Link>{job.capabilities.assignmentRole === null ? null : <p className="mt-1 text-xs text-muted-foreground">Zuweisung: {job.capabilities.assignmentRole}</p>}</ResponsiveTableCell>
-      <ResponsiveTableCell className="px-4 py-4" label="Status"><Badge variant={job.status === "REJECTED" ? "destructive" : "outline"}>{job.status}</Badge></ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Titel" primary><Link href={`/employer/jobs/${job.id}`} className="font-medium text-primary hover:underline">{job.title}</Link>{job.capabilities.assignmentRole === null ? null : <p className="mt-1 text-xs text-muted-foreground">Zuweisung: {employerJobAssignmentRoleLabel(job.capabilities.assignmentRole)}</p>}</ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Status"><Badge variant={job.status === "REJECTED" ? "destructive" : "outline"}>{employerJobStatusLabel(job.status)}</Badge></ResponsiveTableCell>
       <ResponsiveTableCell className="px-4 py-4 text-muted-foreground" label="Standort">{job.location}</ResponsiveTableCell>
       <ResponsiveTableCell className="px-4 py-4" label="Bewerbungen">{job.applications}</ResponsiveTableCell>
       <ResponsiveTableCell className="px-4 py-4" label="Views">{job.views}</ResponsiveTableCell>
       <ResponsiveTableCell className="px-4 py-4" label="Saves">{job.saves}</ResponsiveTableCell>
       <ResponsiveTableCell className="px-4 py-4" label="Fair-Job-Score">{job.score === null ? "Noch kein Snapshot" : `${job.score.points}/${job.score.maxPoints}`}</ResponsiveTableCell>
-      <ResponsiveTableCell className="px-4 py-4" label="Boost">{job.boostStatus ?? "—"}</ResponsiveTableCell>
+      <ResponsiveTableCell className="px-4 py-4" label="Boost">{job.boostStatus === null ? "—" : employerJobBoostStatusLabel(job.boostStatus)}</ResponsiveTableCell>
       <ResponsiveTableCell className="px-4 py-4" label="Aktionen" actions>
         <div className="flex max-w-[24rem] flex-wrap gap-2">
           <Link href={`/employer/jobs/${job.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>Öffnen</Link>

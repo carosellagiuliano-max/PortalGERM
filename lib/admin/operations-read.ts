@@ -2,6 +2,7 @@ import "server-only";
 
 import { requireCapability, type AdminDependencies } from "@/lib/admin/common";
 import { WORKER_HANDLER_CATALOG } from "@/lib/ops/handler-catalog";
+import { readProviderInboxHealth } from "@/lib/ops/provider-inbox-health";
 
 const OPEN_WORK_STATUSES = ["PENDING", "RETRY", "LEASED", "PAUSED"] as const;
 
@@ -18,6 +19,7 @@ export async function getRedactedOperationsOverview(
     providerActivations,
     workerRuns,
     capacitySamples,
+    providerInboxHealth,
   ] = await Promise.all([
     dependencies.database.workItem.groupBy({
       by: ["status"],
@@ -128,6 +130,10 @@ export async function getRedactedOperationsOverview(
         unitCostSource: true,
       },
     }),
+    readProviderInboxHealth(dependencies.database, {
+      environment,
+      now: dependencies.now ?? new Date(),
+    }),
   ]);
   const statusCounts = Object.fromEntries(
     queueGroups.map((group) => [group.status, group._count._all]),
@@ -164,5 +170,6 @@ export async function getRedactedOperationsOverview(
     providerActivations: Object.freeze(providerActivations),
     workerRuns: Object.freeze(workerRuns),
     capacitySamples: Object.freeze(capacitySamples),
+    providerInboxHealth,
   });
 }

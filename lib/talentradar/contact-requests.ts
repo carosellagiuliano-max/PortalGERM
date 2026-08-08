@@ -12,6 +12,11 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { createPrismaNotificationPort } from "@/lib/notifications/prisma-port";
 import { writeNotificationExactlyOnce } from "@/lib/notifications/writer";
 import { decideContactRequestTransition } from "@/lib/policies/status/contact-request";
+import {
+  decideTalentRadarRuntimeGate,
+  lockTalentRadarRuntimeGate,
+  type TalentRadarLegalEnvironment,
+} from "@/lib/talentradar/legal-gate";
 import type { EmployerRadarContactActor } from "@/lib/talentradar/request-contact";
 
 const DAY_MILLISECONDS = 86_400_000;
@@ -32,6 +37,10 @@ export type ContactRequestLifecycleDependencies = Readonly<{
   now?: Date;
 }>;
 
+export type ContactRequestAcceptanceDependencies =
+  ContactRequestLifecycleDependencies &
+    Readonly<{ legalGateEnvironment: TalentRadarLegalEnvironment }>;
+
 export type ContactRequestLifecycleResult =
   | Readonly<{
       ok: true;
@@ -48,6 +57,7 @@ export type ContactRequestLifecycleResult =
         | "INVALID_INPUT"
         | "NOT_FOUND"
         | "TRUST_REQUIRED"
+        | "LEGAL_GATE_BLOCKED"
         | "CONFLICT"
         | "IDEMPOTENCY_CONFLICT"
         | "WRITE_FAILED";
@@ -58,9 +68,15 @@ type CandidateTransitionAction = "ACCEPT" | "DECLINE";
 export async function acceptContactRequest(
   raw: unknown,
   actor: CandidateContactRequestActor,
-  dependencies: ContactRequestLifecycleDependencies,
+  dependencies: ContactRequestAcceptanceDependencies,
 ): Promise<ContactRequestLifecycleResult> {
-  return transitionCandidateContactRequest("ACCEPT", raw, actor, dependencies);
+  return transitionCandidateContactRequest(
+    "ACCEPT",
+    raw,
+    actor,
+    dependencies,
+    dependencies.legalGateEnvironment,
+  );
 }
 
 export async function declineContactRequest(
@@ -68,7 +84,7 @@ export async function declineContactRequest(
   actor: CandidateContactRequestActor,
   dependencies: ContactRequestLifecycleDependencies,
 ): Promise<ContactRequestLifecycleResult> {
-  return transitionCandidateContactRequest("DECLINE", raw, actor, dependencies);
+  return transitionCandidateContactRequest("DECLINE", raw, actor, dependencies, null);
 }
 
 export async function cancelEmployerContactRequest(
@@ -325,6 +341,7 @@ async function transitionCandidateContactRequest(
   raw: unknown,
   actor: CandidateContactRequestActor,
   dependencies: ContactRequestLifecycleDependencies,
+  legalGateEnvironment: TalentRadarLegalEnvironment | null,
 ): Promise<ContactRequestLifecycleResult> {
   const parsed = parseLifecycleInput(raw, actor.userId, dependencies);
   if (!parsed.ok) return lifecycleFailure("INVALID_INPUT");
@@ -332,6 +349,19 @@ async function transitionCandidateContactRequest(
   const now = parsed.now;
 
   return runSerializableLifecycleCommand(dependencies.database, async (transaction) => {
+    if (action === "ACCEPT") {
+      if (legalGateEnvironment === null) {
+        return lifecycleFailure("LEGAL_GATE_BLOCKED");
+      }
+      const initialLegalGate = await decideTalentRadarRuntimeGate(transaction, {
+        scope: "TALENT_RADAR",
+        environment: legalGateEnvironment,
+        now,
+      });
+      if (!initialLegalGate.allowed) {
+        return lifecycleFailure("LEGAL_GATE_BLOCKED");
+      }
+    }
     await acquireRequestLock(transaction, input.requestId);
     const request = await transaction.employerContactRequest.findFirst({
       where: {
@@ -402,6 +432,20 @@ async function transitionCandidateContactRequest(
       now,
     });
     if (decision.type !== "OK") return lifecycleFailure("CONFLICT");
+
+    if (action === "ACCEPT") {
+      if (legalGateEnvironment === null) {
+        return lifecycleFailure("LEGAL_GATE_BLOCKED");
+      }
+      const lockedLegalGate = await lockTalentRadarRuntimeGate(transaction, {
+        scope: "TALENT_RADAR",
+        environment: legalGateEnvironment,
+        now,
+      });
+      if (!lockedLegalGate.allowed) {
+        return lifecycleFailure("LEGAL_GATE_BLOCKED");
+      }
+    }
 
     const updated = await transaction.employerContactRequest.updateMany({
       where: { id: request.id, status: "PENDING" },

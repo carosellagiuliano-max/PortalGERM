@@ -20,6 +20,7 @@ import { PublicJobDetailAnalytics } from "@/components/analytics/public-job-anal
 import { FairScoreBreakdown } from "@/components/public/fair-score";
 import { JobCard } from "@/components/public/job-card";
 import { ReportForm } from "@/components/public/report-form";
+import { PublicIntakePrivacyProvider } from "@/components/privacy/public-intake-privacy";
 import { ResponseSignal } from "@/components/public/response-signal";
 import { ShareButton } from "@/components/public/share-button";
 import {
@@ -48,6 +49,7 @@ import {
   listRelatedPublicJobs,
 } from "@/lib/jobs/public-read-model";
 import { getPublicDataContext } from "@/lib/public/environment";
+import { resolvePublicIntakePrivacyGate } from "@/lib/privacy/public-intake-privacy-gate";
 import { formatDate } from "@/lib/utils/format";
 import {
   CONTENT_SECURITY_POLICY_NONCE_HEADER,
@@ -104,6 +106,10 @@ export default async function JobDetailPage({
     : undefined;
   const intentValue = firstValue(query.intent);
   const environment = getServerEnvironment();
+  const reportPrivacyGate = await resolvePublicIntakePrivacyGate("ABUSE_REPORT", {
+    database: getDatabase(),
+    environment,
+  });
   const intent = verifyJobIntent(
     intentValue,
     { now: new Date(), jobSlug: job.slug },
@@ -309,7 +315,9 @@ export default async function JobDetailPage({
                 </Link>
               </CardContent>
             </Card>
-            <ReportForm targetType="JOB" slug={job.slug} />
+            <PublicIntakePrivacyProvider decision={reportPrivacyGate}>
+              <ReportForm targetType="JOB" slug={job.slug} />
+            </PublicIntakePrivacyProvider>
           </aside>
         </div>
       </div>

@@ -27,14 +27,29 @@ describe("transactional email delivery state", () => {
     })).toBe("local_mailbox");
     expect(getTransactionalEmailDeliveryState({
       ...BASE,
-      NOTIFICATION_OUTBOX_PRODUCERS: true,
-    })).toBe("queued_paused");
-    expect(getTransactionalEmailDeliveryState({
-      ...BASE,
-      EMAIL_PROVIDER_MODE: "resend_sandbox",
+      EMAIL_PROVIDER_MODE: "local_mock",
+      ENABLE_LOCAL_MOCK_MAILBOX: true,
       NOTIFICATION_DISPATCH: "command",
       NOTIFICATION_OUTBOX_PRODUCERS: true,
-    })).toBe("external_dispatch");
+    })).toBe("local_mailbox_queued");
+    expect(getTransactionalEmailDeliveryState({
+      ...BASE,
+      NOTIFICATION_OUTBOX_PRODUCERS: true,
+    })).toBe("queued_paused");
+    for (const EMAIL_PROVIDER_MODE of ["resend_sandbox", "resend_live"] as const) {
+      expect(getTransactionalEmailDeliveryState({
+        ...BASE,
+        EMAIL_PROVIDER_MODE,
+        NOTIFICATION_DISPATCH: "command",
+        NOTIFICATION_OUTBOX_PRODUCERS: true,
+      })).toBe("external_dispatch");
+    }
+    expect(getTransactionalEmailDeliveryState({
+      ...BASE,
+      EMAIL_PROVIDER_MODE: "resend_contract",
+      NOTIFICATION_DISPATCH: "command",
+      NOTIFICATION_OUTBOX_PRODUCERS: true,
+    })).toBe("record_only");
   });
 
   it("does not describe an inaccessible mock log as a delivered invitation", () => {
@@ -47,6 +62,21 @@ describe("transactional email delivery state", () => {
     expect(message).toContain("kein erreichbarer E-Mail-Versand aktiv");
     expect(message).not.toContain("zugestellt");
     expect(message).not.toContain("lokalen Mailbox");
+  });
+
+  it("does not claim that an outbox-backed local invitation already reached the mailbox", () => {
+    const message = getInvitationDeliveryFeedback({
+      deliveryState: "local_mailbox_queued",
+      emailRecorded: true,
+      operation: "created",
+    });
+
+    expect(message).toContain("für die geschützte lokale Test-Mailbox vorgemerkt");
+    expect(message).toContain(
+      "erst eine erfolgreiche Worker-Verarbeitung bestätigt die Erfassung",
+    );
+    expect(message).not.toContain("Mailbox erfasst");
+    expect(message).not.toContain("zugestellt");
   });
 
   it("marks password recovery unavailable when no recipient-reachable path exists", () => {
@@ -64,6 +94,12 @@ describe("transactional email delivery state", () => {
     expect(getPasswordResetDeliveryFeedback("local_mailbox")).toEqual({
       status: "success",
       message: expect.stringContaining("geschützten lokalen Test-Mailbox"),
+    });
+    expect(getPasswordResetDeliveryFeedback("local_mailbox_queued")).toEqual({
+      status: "success",
+      message: expect.stringContaining(
+        "Erst eine erfolgreiche Worker-Verarbeitung bestätigt die Erfassung",
+      ),
     });
   });
 });

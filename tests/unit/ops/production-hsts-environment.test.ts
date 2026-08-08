@@ -41,6 +41,8 @@ describe("production HSTS smoke environment", () => {
       DOCUMENT_SCANNER_MODE: "sandbox",
       PRIVACY_PROCESSING_MODE: "sandbox_command",
       PRIVACY_EXPORT_STORAGE_MODE: "filesystem_sandbox",
+      NOTIFICATION_DELIVERY_KEYS: undefined,
+      NOTIFICATION_RECIPIENT_HASH_KEYS: undefined,
     }) as NodeJS.ProcessEnv;
 
     const environment = createProductionHstsEnvironment({
@@ -54,6 +56,8 @@ describe("production HSTS smoke environment", () => {
     expect(environment).toMatchObject({
       APP_ENV: "production",
       NODE_ENV: "production",
+      IDENTITY_VERIFICATION_ENFORCEMENT: "true",
+      NOTIFICATION_OUTBOX_PRODUCERS: "true",
       WORKER_RUNTIME: "paused",
       WORKER_SANDBOX_REPLAY: "false",
       EMAIL_PROVIDER_MODE: "disabled",
@@ -65,6 +69,12 @@ describe("production HSTS smoke environment", () => {
       HTTP_SMOKE_SECRET_CANARY: "hsts-regression-canary",
     });
     expect(environment).not.toHaveProperty("DELIVERY_REPLAY");
+    expect(environment.NOTIFICATION_DELIVERY_KEYS).toMatch(
+      /^hsts-notification-v1:/u,
+    );
+    expect(environment.NOTIFICATION_RECIPIENT_HASH_KEYS).toMatch(
+      /^hsts-recipient-v1:/u,
+    );
     expect(() => parseEnvironment(environment)).not.toThrow();
   });
 });

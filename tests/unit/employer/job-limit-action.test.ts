@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   findPlanVersions: vi.fn(),
   findProductVersions: vi.fn(),
   reactivateEmployerJob: vi.fn(),
+  submitEmployerJobForReview: vi.fn(),
+  getServerEnvironment: vi.fn(),
+  resolveAiProvider: vi.fn(),
+  resolveJobroomProvider: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -21,6 +25,9 @@ vi.mock("@/lib/auth/request-context", () => ({
   isValidAuthMutationOrigin: mocks.isValidAuthMutationOrigin,
 }));
 vi.mock("@/lib/db/client", () => ({ getDatabase: mocks.getDatabase }));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: mocks.getServerEnvironment,
+}));
 vi.mock("@/lib/employer/jobs", () => ({
   closeEmployerJob: vi.fn(),
   createEmployerJobRevisionFromPaused: vi.fn(),
@@ -33,12 +40,19 @@ vi.mock("@/lib/employer/jobs", () => ({
   reactivateEmployerJob: mocks.reactivateEmployerJob,
   runEmployerJobReportingCheck: vi.fn(),
   saveEmployerJobStep: vi.fn(),
-  submitEmployerJobForReview: vi.fn(),
+  submitEmployerJobForReview: mocks.submitEmployerJobForReview,
 }));
-vi.mock("@/lib/providers/ai", () => ({ aiProvider: {} }));
-vi.mock("@/lib/providers/jobroom", () => ({ jobroomProvider: {} }));
+vi.mock("@/lib/providers/ai", () => ({
+  resolveAiProvider: mocks.resolveAiProvider,
+}));
+vi.mock("@/lib/providers/jobroom", () => ({
+  resolveJobroomProvider: mocks.resolveJobroomProvider,
+}));
 
-import { reactivateEmployerJobAction } from "@/app/employer/jobs/[id]/actions";
+import {
+  reactivateEmployerJobAction,
+  submitEmployerJobForReviewAction,
+} from "@/app/employer/jobs/[id]/actions";
 import { INITIAL_EMPLOYER_JOB_FORM_STATE } from "@/lib/employer/job-contracts";
 
 describe("employer job-limit action", () => {
@@ -59,6 +73,9 @@ describe("employer job-limit action", () => {
       correlationId: "40000000-0000-4000-8000-000000000001",
     });
     mocks.isValidAuthMutationOrigin.mockReturnValue(true);
+    mocks.getServerEnvironment.mockReturnValue({ APP_ENV: "local" });
+    mocks.resolveAiProvider.mockReturnValue({});
+    mocks.resolveJobroomProvider.mockReturnValue({});
     mocks.getDatabase.mockReturnValue({
       planVersion: { findMany: mocks.findPlanVersions },
       productVersion: { findMany: mocks.findProductVersions },
@@ -107,7 +124,7 @@ describe("employer job-limit action", () => {
       status: "error",
       upgradePrompt: {
         reason: "ACTIVE_JOB_LIMIT_REACHED",
-        cta: { href: "/employer/billing/checkout?plan=pro" },
+        cta: { href: "/employer/billing/subscription" },
       },
     });
     expect(mocks.reactivateEmployerJob).toHaveBeenCalledOnce();
@@ -146,5 +163,27 @@ describe("employer job-limit action", () => {
       href: "/pricing",
       label: "Pläne vergleichen",
     });
+  });
+
+  it("denies a forged submit when no environment-approved reporting provider exists", async () => {
+    mocks.getServerEnvironment.mockReturnValue({ APP_ENV: "preview" });
+    mocks.resolveJobroomProvider.mockReturnValue(undefined);
+    const formData = new FormData();
+    formData.set("jobId", "50000000-0000-4000-8000-000000000001");
+    formData.set("expectedJobVersion", "2");
+    formData.set("expectedRevisionVersion", "3");
+    formData.set("idempotencyKey", "submit-without-reporting-provider");
+
+    const state = await submitEmployerJobForReviewAction(
+      INITIAL_EMPLOYER_JOB_FORM_STATE,
+      formData,
+    );
+
+    expect(state).toMatchObject({
+      status: "error",
+      message:
+        "Die Einreichung ist ohne freigegebenen Meldepflicht-Anbieter nicht aktiviert.",
+    });
+    expect(mocks.submitEmployerJobForReview).not.toHaveBeenCalled();
   });
 });

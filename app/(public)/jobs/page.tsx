@@ -8,6 +8,7 @@ import { JobSearchForm } from "@/components/public/job-search-form";
 import { PublicSearchResultsAnalytics } from "@/components/analytics/public-job-analytics";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
+import { getServerEnvironment } from "@/lib/config/env";
 import { getPublicCatalog } from "@/lib/jobs/public-read-model";
 import { getPublicDataContext } from "@/lib/public/environment";
 import {
@@ -21,6 +22,7 @@ import {
 } from "@/lib/seo/job-filter-landing";
 import { loadPublicClusterLanding } from "@/lib/seo/cluster-indexability";
 import { searchJobs } from "@/lib/search/query";
+import { canUseSyntheticPublicResponseEvidence } from "@/lib/search/public-response-evidence-policy";
 
 const JOBS_METADATA = Object.freeze({
   title: "Jobs suchen",
@@ -50,7 +52,20 @@ export default async function JobsPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<RawPublicSearchParams> }>) {
   const raw = await searchParams;
-  const input = parsePublicJobSearchParams(raw);
+  const parsedInput = parsePublicJobSearchParams(raw);
+  const responseEvidenceAvailable = canUseSyntheticPublicResponseEvidence(
+    getServerEnvironment().APP_ENV,
+  );
+  const requestedUnavailableResponseEvidence =
+    !responseEvidenceAvailable &&
+    (parsedInput.responseEvidenceOnly || parsedInput.sort === "response");
+  const input = responseEvidenceAvailable
+    ? parsedInput
+    : Object.freeze({
+        ...parsedInput,
+        responseEvidenceOnly: false,
+        sort: parsedInput.sort === "response" ? "relevance" : parsedInput.sort,
+      });
   const exactCluster = exactClusterFilterFromSearch(raw, input);
   if (exactCluster !== null && getPublicDataContext().publicIndexingAllowed) {
     const landing = await loadPublicClusterLanding(exactCluster);
@@ -101,8 +116,21 @@ export default async function JobsPage({
         werden für die öffentliche Suche nicht geladen.
       </p>
       <div className="mt-8">
-        <JobSearchForm input={formInput} catalog={catalog} />
+        <JobSearchForm
+          input={formInput}
+          catalog={catalog}
+          responseEvidenceAvailable={responseEvidenceAvailable}
+        />
       </div>
+      {requestedUnavailableResponseEvidence ? (
+        <Alert className="mt-6" role="status">
+          <AlertTitle>Antwortsignale sind noch nicht verfügbar.</AlertTitle>
+          <AlertDescription>
+            Die Suche wurde ohne Antwortsignal und nach Relevanz ausgeführt,
+            weil noch keine belastbare Live-Datenbasis besteht.
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {result.invalidCursor ? (
         <Alert className="mt-6">
           <AlertTitle>Der Seitenlink war nicht mehr gültig.</AlertTitle>

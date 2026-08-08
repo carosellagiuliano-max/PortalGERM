@@ -16,8 +16,12 @@ import { getServerEnvironment } from "@/lib/config/env";
 import { getDatabase } from "@/lib/db/client";
 import type { EmployerActionState } from "@/lib/employer/action-state";
 import { addEmployerApplicationNote, draftEmployerApplicationText, resolveEmployerApplicantReportTarget, sendEmployerApplicationMessage, transitionEmployerApplication } from "@/lib/employer/applications";
-import { aiProvider } from "@/lib/providers/ai";
+import { resolveAiProvider } from "@/lib/providers/ai";
 import { emailProvider } from "@/lib/providers/email";
+import {
+  preflightPublicIntakePrivacyGate,
+  readPublicIntakePrivacyExpectedBinding,
+} from "@/lib/privacy/public-intake-privacy-gate";
 import { recordRateLimitDenial } from "@/lib/security/rate-limit-audit";
 
 export async function transitionApplicationAction(_state: EmployerActionState, formData: FormData): Promise<EmployerActionState> {
@@ -112,6 +116,23 @@ export async function reportEmployerApplicantAction(
       "Bitte wähle einen Grund und beschreibe den Verdacht mit mindestens 20 Zeichen.",
     );
   }
+  const now = new Date();
+  const privacyBinding = readPublicIntakePrivacyExpectedBinding(
+    formData,
+    "ABUSE_REPORT",
+  );
+  if (
+    privacyBinding === null ||
+    !(await preflightPublicIntakePrivacyGate(privacyBinding, {
+      database: deps.database,
+      environment: deps.environment,
+      now,
+    })).allowed
+  ) {
+    return fail(
+      "Der Datenschutzhinweis ist nicht verfügbar oder hat sich geändert. Es wurden keine Angaben übermittelt. Bitte lade die Seite neu.",
+    );
+  }
   const target = await resolveEmployerApplicantReportTarget(
     applicationId.data,
     deps.access,
@@ -131,6 +152,8 @@ export async function reportEmployerApplicantAction(
       request: deps.request,
       currentUser: deps.currentUser,
       emailProvider,
+      now,
+      privacyBinding,
     },
   );
   if (!result.ok) {
@@ -149,7 +172,8 @@ async function dependencies() {
   const [context, request] = await Promise.all([getEmployerContext(), getAuthRequestContext()]);
   const current = context?.current;
   if (context === null || current === null || current === undefined || !isValidAuthMutationOrigin(request) || current.membershipRole === "VIEWER") return null;
-  return { access: { companyId: current.companyId, membershipId: current.membershipId, userId: context.user.id, membershipRole: current.membershipRole }, currentUser: context.user, database: getDatabase(), request, environment: getServerEnvironment(), emailProvider, aiProvider } as const;
+  const environment = getServerEnvironment();
+  return { access: { companyId: current.companyId, membershipId: current.membershipId, userId: context.user.id, membershipRole: current.membershipRole }, currentUser: context.user, database: getDatabase(), request, environment, emailProvider, aiProvider: resolveAiProvider(environment.APP_ENV) } as const;
 }
 function emptyUndefined(value: FormDataEntryValue | null) { const text = String(value ?? "").trim(); return text === "" ? undefined : text; }
 function fail(message = "Die Bewerbungsaktion konnte nicht sicher ausgeführt werden."): EmployerActionState { return { status: "error", message }; }

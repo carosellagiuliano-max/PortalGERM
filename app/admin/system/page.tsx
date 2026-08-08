@@ -296,6 +296,53 @@ export default async function AdminSystemPage() {
             </article>
           ) : null}
         </div>
+        <article className="mt-4 rounded-lg border bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-medium">Provider-Inboxen</h3>
+            <Badge
+              variant={
+                operations.providerInboxHealth.processingState === "DEGRADED" ||
+                operations.providerInboxHealth.processingState === "UNKNOWN"
+                  ? "destructive"
+                  : "outline"
+              }
+            >
+              {operations.providerInboxHealth.processingState}
+            </Badge>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Policy {operations.providerInboxHealth.policyVersion} · manuelle
+            Prüfung {operations.providerInboxHealth.manualAttention === "REQUIRED"
+              ? "erforderlich"
+              : "nicht erforderlich"}. Nur Zähler, gerundetes Alter und feste
+            Zustandsgründe werden angezeigt.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              ["Payment offen", operations.providerInboxHealth.payment.received],
+              ["Payment Retry", operations.providerInboxHealth.payment.failed],
+              ["Payment Hold", operations.providerInboxHealth.payment.held],
+              ["E-Mail offen", operations.providerInboxHealth.email.received],
+              ["E-Mail fehlgeschlagen", operations.providerInboxHealth.email.failed],
+            ].map(([label, value]) => {
+              const summary = value as { count: number; oldestAgeSeconds: number | null };
+              return (
+                <div className="rounded-md border p-3 text-sm" key={label as string}>
+                  <p className="text-muted-foreground">{label as string}</p>
+                  <p className="mt-1 text-xl font-semibold">{summary.count}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    ältestes: {formatInboxAge(summary.oldestAgeSeconds)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          {operations.providerInboxHealth.reasons.length > 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+              Gründe: {operations.providerInboxHealth.reasons.join(", ")}
+            </p>
+          ) : null}
+        </article>
       </section>
 
       <section aria-labelledby="capacity-heading">
@@ -519,6 +566,12 @@ function deliveryStatusLabel(status: string) {
       PAUSED: "Provider degradiert / pausiert",
     }[status] ?? status
   );
+}
+
+function formatInboxAge(seconds: number | null) {
+  if (seconds === null) return "keine offene Zeile";
+  if (seconds < 60) return `${seconds} s`;
+  return `${Math.floor(seconds / 60)} min`;
 }
 
 function StatusCard({

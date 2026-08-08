@@ -100,14 +100,18 @@ export async function openActor(
   browser: Browser,
   email: string,
   password = DEMO_PASSWORD,
+  sourceIp?: string,
+  baseURL = requiredEnvironment("PHASE17_BASE_URL"),
 ): Promise<BrowserActor> {
   const context = await browser.newContext({
-    baseURL: requiredEnvironment("PHASE17_BASE_URL"),
+    baseURL,
     locale: "de-CH",
     timezoneId: "Europe/Zurich",
     viewport: { width: 1_440, height: 900 },
     colorScheme: "light",
     serviceWorkers: "block",
+    extraHTTPHeaders:
+      sourceIp === undefined ? undefined : { "x-forwarded-for": sourceIp },
   });
   const page = await context.newPage();
   const observation = await observePage(page);
@@ -153,10 +157,7 @@ export async function verificationTokenForEmail(email: string) {
         },
       });
     const sessionSecret = requiredEnvironment("SESSION_SECRET");
-    const signature = createHmac(
-      "sha256",
-      Buffer.from(sessionSecret, "base64"),
-    )
+    const signature = createHmac("sha256", Buffer.from(sessionSecret, "base64"))
       .update("swisstalenthub.email-verification-token.v1", "utf8")
       .update("\0", "utf8")
       .update(challenge.id, "utf8")
@@ -229,7 +230,9 @@ export async function assertNoViewportClipping(page: Page) {
     const viewportWidth = document.documentElement.clientWidth;
     const intentionallyScrollable = new Set(
       Array.from(
-        document.querySelectorAll<HTMLElement>('[data-e2e-horizontal-scroll="true"]'),
+        document.querySelectorAll<HTMLElement>(
+          '[data-e2e-horizontal-scroll="true"]',
+        ),
       ),
     );
     const clipped: string[] = [];
@@ -246,10 +249,7 @@ export async function assertNoViewportClipping(page: Page) {
       }
       const rectangle = element.getBoundingClientRect();
       if (rectangle.width === 0 || rectangle.height === 0) continue;
-      if (
-        rectangle.left < -1 ||
-        rectangle.right > viewportWidth + 1
-      ) {
+      if (rectangle.left < -1 || rectangle.right > viewportWidth + 1) {
         const scrollOwner = element.closest<HTMLElement>(
           '[data-e2e-horizontal-scroll="true"]',
         );

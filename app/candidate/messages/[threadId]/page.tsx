@@ -15,6 +15,7 @@ import {
   type CandidateMessageSendAvailability,
 } from "@/lib/candidate/messages";
 import { getDatabase } from "@/lib/db/client";
+import { getServerEnvironment } from "@/lib/config/env";
 import { formatDate } from "@/lib/utils/format";
 import { markCandidateConversationReadAction } from "../actions";
 
@@ -25,11 +26,16 @@ export default async function CandidateConversationPage({ params, searchParams }
   const { threadId } = await params;
   const { before: rawBefore } = await searchParams;
   const beforeMessageId = Array.isArray(rawBefore) ? rawBefore[0] : rawBefore;
+  const now = new Date();
   const conversation = await getCandidateConversation(
     getDatabase(),
     user.id,
     threadId,
-    beforeMessageId === undefined ? {} : { beforeMessageId },
+    {
+      ...(beforeMessageId === undefined ? {} : { beforeMessageId }),
+      legalGateEnvironment: getServerEnvironment(),
+      now,
+    },
   );
   if (conversation === null) notFound();
 
@@ -125,6 +131,9 @@ function messageSendBlockedCopy(
   availability: CandidateMessageSendAvailability,
 ): string | null {
   if (availability.allowed) return null;
+  if (availability.reason === "RADAR_LEGAL_REVIEW_REQUIRED") {
+    return "Neue Nachrichten in diesem Talent-Radar-Gespräch bleiben gesperrt, bis die aktuelle Datenschutz-, AVG- und DSFA-Freigabe dokumentiert ist.";
+  }
   return availability.reason === "RADAR_COMPANY_INACTIVE"
     ? "Diese Firma ist derzeit nicht aktiv. Neue Nachrichten in diesem Talent-Radar-Gespräch sind gesperrt."
     : "Diese Firma ist derzeit nicht aktuell verifiziert. Neue Nachrichten in diesem Talent-Radar-Gespräch sind gesperrt.";

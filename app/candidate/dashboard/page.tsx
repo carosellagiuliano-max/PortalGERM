@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { requireCandidatePage } from "@/lib/auth/route-guards";
 import { getCandidateDashboard } from "@/lib/candidate/dashboard";
+import { jobAlertNextDueLabel } from "@/lib/candidate/job-alert-copy";
 import { getDatabase } from "@/lib/db/client";
 import { getPublicDataContext } from "@/lib/public/environment";
 import { formatDate } from "@/lib/utils/format";
@@ -25,7 +26,8 @@ export default async function CandidateDashboardPage() {
   const user = await requireCandidatePage();
   const dashboard = await getCandidateDashboard(getDatabase(), user.id);
   if (dashboard === null) return null;
-  const salaryRadarAvailable = !getPublicDataContext().liveOnly;
+  const publicDataContext = getPublicDataContext();
+  const salaryRadarAvailable = !publicDataContext.liveOnly;
   return (
     <section aria-labelledby="candidate-dashboard-title">
       <p className="eyebrow">Übersicht</p>
@@ -83,7 +85,7 @@ export default async function CandidateDashboardPage() {
             )}
           </CardContent>
         </Card>
-        <Card><CardHeader><CardTitle as="h2">Aktive Jobabos</CardTitle></CardHeader><CardContent>{dashboard.alerts.length === 0 ? <p className="text-muted-foreground">Kein aktives Jobabo.</p> : <div className="grid gap-3">{dashboard.alerts.map((alert) => <div key={alert.id} className="rounded-lg border p-3"><p className="font-medium">{alert.frequency === "DAILY" ? "Täglich" : "Wöchentlich"}</p><p className="text-xs text-muted-foreground">Nächster lokaler Mock-Lauf {formatDate(alert.nextDueAt)}</p></div>)}</div>}<Link href="/candidate/alerts" className={buttonVariants({ variant: "outline", className: "mt-4" })}>Jobabos verwalten</Link></CardContent></Card>
+        <Card><CardHeader><CardTitle as="h2">Aktive Jobabos</CardTitle></CardHeader><CardContent>{dashboard.alerts.length === 0 ? <p className="text-muted-foreground">Kein aktives Jobabo.</p> : <div className="grid gap-3">{dashboard.alerts.map((alert) => <div key={alert.id} className="rounded-lg border p-3"><p className="font-medium">{alert.frequency === "DAILY" ? "Täglich" : "Wöchentlich"}</p><p className="text-xs text-muted-foreground">{jobAlertNextDueLabel(publicDataContext.liveOnly)} {formatDate(alert.nextDueAt)}</p></div>)}</div>}<Link href="/candidate/alerts" className={buttonVariants({ variant: "outline", className: "mt-4" })}>Jobabos verwalten</Link></CardContent></Card>
         <Card><CardHeader><CardTitle as="h2">Nachrichten</CardTitle></CardHeader><CardContent className="grid gap-4"><p className="text-3xl font-semibold">{dashboard.unreadMessages}</p><p className="text-muted-foreground">ungelesene Nachrichten in echten Gesprächen</p><Link href="/candidate/messages" className={buttonVariants({ variant: "outline", className: "w-fit" })}>Nachrichten öffnen</Link></CardContent></Card>
       </div>
 

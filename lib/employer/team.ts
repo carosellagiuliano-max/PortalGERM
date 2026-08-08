@@ -129,75 +129,76 @@ export async function getEmployerTeam(
         select: { id: true },
       });
       if (authorized === null) return null;
-      const [memberships, invitations, assignments, jobs] = await Promise.all([
-        tx.companyMembership.findMany({
-          where: {
-            companyId,
-            status: { in: ["ACTIVE", "SUSPENDED"] },
-            company: companyScope,
-          },
-          orderBy: [{ role: "asc" }, { joinedAt: "asc" }, { id: "asc" }],
-          select: {
-            id: true,
-            role: true,
-            status: true,
-            joinedAt: true,
-            user: { select: { id: true, name: true, email: true } },
-          },
-        }),
-        tx.companyInvitation.findMany({
-          where: {
-            companyId,
-            status: "PENDING",
-            expiresAt: { gt: now },
-            company: companyScope,
-          },
-          orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
-          select: {
-            id: true,
-            inviteeEmailNormalized: true,
-            intendedRole: true,
-            tokenVersion: true,
-            expiresAt: true,
-          },
-        }),
-        tx.jobAssignment.findMany({
-          where: {
-            companyId,
-            status: "ACTIVE",
-            validFrom: { lte: now },
-            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-            company: companyScope,
-          },
-          orderBy: [{ job: { createdAt: "desc" } }, { id: "asc" }],
-          select: {
-            id: true,
-            role: true,
-            expiresAt: true,
-            membership: {
-              select: {
-                id: true,
-                user: { select: { name: true, email: true } },
-              },
-            },
-            job: {
-              select: {
-                id: true,
-                currentRevision: { select: { title: true } },
-              },
+      const memberships = await tx.companyMembership.findMany({
+        relationLoadStrategy: "join",
+        where: {
+          companyId,
+          status: { in: ["ACTIVE", "SUSPENDED"] },
+          company: companyScope,
+        },
+        orderBy: [{ role: "asc" }, { joinedAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          role: true,
+          status: true,
+          joinedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      });
+      const invitations = await tx.companyInvitation.findMany({
+        where: {
+          companyId,
+          status: "PENDING",
+          expiresAt: { gt: now },
+          company: companyScope,
+        },
+        orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          inviteeEmailNormalized: true,
+          intendedRole: true,
+          tokenVersion: true,
+          expiresAt: true,
+        },
+      });
+      const assignments = await tx.jobAssignment.findMany({
+        relationLoadStrategy: "join",
+        where: {
+          companyId,
+          status: "ACTIVE",
+          validFrom: { lte: now },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          company: companyScope,
+        },
+        orderBy: [{ job: { createdAt: "desc" } }, { id: "asc" }],
+        select: {
+          id: true,
+          role: true,
+          expiresAt: true,
+          membership: {
+            select: {
+              id: true,
+              user: { select: { name: true, email: true } },
             },
           },
-        }),
-        tx.job.findMany({
-          where: {
-            companyId,
-            status: { not: "REMOVED" },
-            company: companyScope,
+          job: {
+            select: {
+              id: true,
+              currentRevision: { select: { title: true } },
+            },
           },
-          orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-          select: { id: true, currentRevision: { select: { title: true } } },
-        }),
-      ]);
+        },
+      });
+      const jobs = await tx.job.findMany({
+        relationLoadStrategy: "join",
+        where: {
+          companyId,
+          status: { not: "REMOVED" },
+          company: companyScope,
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        select: { id: true, currentRevision: { select: { title: true } } },
+      });
       return Object.freeze({ memberships, invitations, assignments, jobs });
     },
     { isolationLevel: "RepeatableRead" },
@@ -911,25 +912,23 @@ export async function assignRecruiterToJob(
       await lockCompany(tx, companyId);
       if ((await loadTeamManager(tx, companyId, actor.userId)) === null)
         return { ok: false as const, code: "NOT_FOUND" };
-      const [job, membership] = await Promise.all([
-        tx.job.findFirst({
-          where: {
-            id: parsed.data.jobId,
-            companyId,
-            status: { not: "REMOVED" },
-          },
-          select: { id: true },
-        }),
-        tx.companyMembership.findFirst({
-          where: {
-            id: parsed.data.membershipId,
-            companyId,
-            status: "ACTIVE",
-            role: "RECRUITER",
-          },
-          select: { id: true, userId: true },
-        }),
-      ]);
+      const job = await tx.job.findFirst({
+        where: {
+          id: parsed.data.jobId,
+          companyId,
+          status: { not: "REMOVED" },
+        },
+        select: { id: true },
+      });
+      const membership = await tx.companyMembership.findFirst({
+        where: {
+          id: parsed.data.membershipId,
+          companyId,
+          status: "ACTIVE",
+          role: "RECRUITER",
+        },
+        select: { id: true, userId: true },
+      });
       if (job === null || membership === null)
         return { ok: false as const, code: "NOT_FOUND" };
       const expiredAssignments = await tx.jobAssignment.findMany({

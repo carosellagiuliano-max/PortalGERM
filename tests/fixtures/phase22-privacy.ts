@@ -8,7 +8,10 @@ import type {
   DocumentObjectStore,
 } from "@/lib/providers/storage/document-object-store";
 import { hashLegalContent } from "@/lib/legal/publication-service";
-import { createValidEnvironment, keyMaterial } from "@/tests/fixtures/environment";
+import {
+  createValidEnvironment,
+  keyMaterial,
+} from "@/tests/fixtures/environment";
 import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
 export const PHASE22_NOW = new Date("2026-07-26T12:00:00.000Z");
@@ -149,44 +152,53 @@ export async function seedActiveInventory(
   suffix: string,
   processors: readonly string[],
 ) {
-  const inventory = await client.privacyDataInventoryVersion.create({
-    data: {
-      version: `test-${suffix}`.slice(0, 32),
-      status: "ACTIVE",
-      contentHash: createHash("sha256")
-        .update(`phase22-inventory:${suffix}:${processors.join(",")}`)
-        .digest("hex"),
-      owner: "Phase 22 Test Privacy Owner",
-      reviewRef: `test-review:${suffix}`,
-      effectiveAt: new Date(PHASE22_NOW.getTime() - 60_000),
-      createdAt: new Date(PHASE22_NOW.getTime() - 120_000),
-      entries: {
-        create: processors.map((processorKey, index) => ({
-          entityKey: `TEST_ENTITY_${index + 1}`,
-          fieldScope: `isolated Phase-22 test scope ${index + 1}`,
-          subjectClass: "CANDIDATE" as const,
-          purposeCode: "PRIVACY_RIGHTS",
-          legalBasisCode: "COUNSEL_TEST_EVIDENCE_ONLY",
-          processorKey,
-          storageRegion: PHASE22_REGION,
-          retentionDays: processorKey === "payment-ledger" ? 3650 : 400,
-          exportOutcome: "INCLUDE" as const,
-          correctionOutcome:
-            processorKey === "postgres-primary"
-              ? ("CORRECT" as const)
-              : ("RETAIN" as const),
-          erasureOutcome:
-            processorKey === "payment-ledger"
-              ? ("RETAIN" as const)
-              : ("ANONYMIZE" as const),
-          holdRuleCode: "PHASE22_TEST_HOLD_MATRIX",
-          owner: "Phase 22 Test Privacy Owner",
-        })),
+  return client.$transaction(async (transaction) => {
+    const inventory = await transaction.privacyDataInventoryVersion.create({
+      data: {
+        version: `test-${suffix}`.slice(0, 32),
+        status: "DRAFT",
+        contentHash: createHash("sha256")
+          .update(`phase22-inventory:${suffix}:${processors.join(",")}`)
+          .digest("hex"),
+        owner: "Phase 22 Test Privacy Owner",
+        reviewRef: `test-review:${suffix}`,
+        effectiveAt: null,
+        createdAt: new Date(PHASE22_NOW.getTime() - 120_000),
+        entries: {
+          create: processors.map((processorKey, index) => ({
+            entityKey: `TEST_ENTITY_${index + 1}`,
+            fieldScope: `isolated Phase-22 test scope ${index + 1}`,
+            subjectClass: "CANDIDATE" as const,
+            purposeCode: "PRIVACY_RIGHTS",
+            legalBasisCode: "COUNSEL_TEST_EVIDENCE_ONLY",
+            processorKey,
+            storageRegion: PHASE22_REGION,
+            retentionDays: processorKey === "payment-ledger" ? 3650 : 400,
+            exportOutcome: "INCLUDE" as const,
+            correctionOutcome:
+              processorKey === "postgres-primary"
+                ? ("CORRECT" as const)
+                : ("RETAIN" as const),
+            erasureOutcome:
+              processorKey === "payment-ledger"
+                ? ("RETAIN" as const)
+                : ("ANONYMIZE" as const),
+            holdRuleCode: "PHASE22_TEST_HOLD_MATRIX",
+            owner: "Phase 22 Test Privacy Owner",
+          })),
+        },
       },
-    },
-    include: { entries: true },
+      select: { id: true },
+    });
+    return transaction.privacyDataInventoryVersion.update({
+      where: { id: inventory.id },
+      data: {
+        status: "ACTIVE",
+        effectiveAt: new Date(PHASE22_NOW.getTime() - 60_000),
+      },
+      include: { entries: true },
+    });
   });
-  return inventory;
 }
 
 export async function seedProcessingApproval(
@@ -295,7 +307,8 @@ export function createMemoryDocumentStore(
     providerClass: "phase22-memory-test-store",
     storageRegion,
     async putQuarantined(input) {
-      if (objects.has(input.objectKey)) throw new Error("OBJECT_ALREADY_EXISTS");
+      if (objects.has(input.objectKey))
+        throw new Error("OBJECT_ALREADY_EXISTS");
       const chunks: Uint8Array[] = [];
       let sizeBytes = 0;
       for await (const chunk of input.body) {
@@ -312,8 +325,7 @@ export function createMemoryDocumentStore(
       const sha256 = createHash("sha256").update(bytes).digest("hex");
       if (
         sizeBytes !== input.expectedSizeBytes ||
-        (input.expectedSha256 !== undefined &&
-          input.expectedSha256 !== sha256)
+        (input.expectedSha256 !== undefined && input.expectedSha256 !== sha256)
       ) {
         throw new Error("OBJECT_RECEIPT_MISMATCH");
       }
@@ -344,16 +356,13 @@ export function createMemoryDocumentStore(
       };
     },
     async listObjects({ limit }) {
-      return [...objects.entries()].slice(0, limit).map(
-        ([objectKey, stored]) =>
-          Object.freeze({
-            objectKeyHash: createHash("sha256")
-              .update(objectKey)
-              .digest("hex"),
-            sizeBytes: stored.receipt.sizeBytes,
-            sha256: stored.receipt.sha256,
-            lastModifiedAt: stored.modifiedAt,
-          }),
+      return [...objects.entries()].slice(0, limit).map(([objectKey, stored]) =>
+        Object.freeze({
+          objectKeyHash: createHash("sha256").update(objectKey).digest("hex"),
+          sizeBytes: stored.receipt.sizeBytes,
+          sha256: stored.receipt.sha256,
+          lastModifiedAt: stored.modifiedAt,
+        }),
       );
     },
     async deleteObject(objectKey, expected) {

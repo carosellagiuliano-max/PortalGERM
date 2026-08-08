@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 
 import type { Pool } from "pg";
@@ -38,6 +38,8 @@ import { createDatabaseClient, type DatabaseClient } from "@/lib/db/factory";
 import {
   emptyPublicJobSearchInput,
   getPublicJobBySlug,
+  listHomepageJobs,
+  listPublicClusterLinks,
   listPublicJobs,
 } from "@/lib/jobs/public-read-model";
 import { parsePublicJobSearchParams } from "@/lib/public/query-params";
@@ -45,8 +47,11 @@ import { createMigratedTestDatabase } from "@/tests/fixtures/isolated-postgres";
 
 type MigratedDatabase = Awaited<ReturnType<typeof createMigratedTestDatabase>>;
 
-const NOW = new Date("2026-07-20T12:00:00.000Z");
 const DAY = 86_400_000;
+// The schema correctly rejects already-expired PUBLISHED fixtures at write
+// time. Keep the evaluator clock seven days ahead of the database wall clock
+// so the deliberately expired row is writable today but expired at `NOW`.
+const NOW = new Date(Math.floor(Date.now() / 60_000) * 60_000 + 7 * DAY);
 const IDS = {
   user: "07000000-0000-4000-8000-000000000001",
   reviewer: "07000000-0000-4000-8000-000000000053",
@@ -235,6 +240,32 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     expect(JSON.stringify(page.jobs)).not.toContain("Kubernetes-Plattform");
   });
 
+  it("keeps generated accent-insensitive search documents current", async () => {
+    setRuntimeEnvironment("production");
+    await pool().query(
+      'UPDATE "Company" SET "name" = $2 WHERE "id" = $1',
+      [IDS.verifiedCompany, "Äquator Arbeitgeber AG"],
+    );
+    try {
+      const generated = await pool().query<{ searchDocument: string }>(
+        'SELECT "searchDocument" FROM "Company" WHERE "id" = $1',
+        [IDS.verifiedCompany],
+      );
+      expect(generated.rows[0]?.searchDocument).toBe("aquator arbeitgeber ag");
+
+      const page = await listPublicJobs(
+        parsePublicJobSearchParams({ keyword: "Aquator" }),
+        { now: NOW },
+      );
+      expect(page.jobs.map((job) => job.slug)).toEqual([SLUGS.platform]);
+    } finally {
+      await pool().query(
+        'UPDATE "Company" SET "name" = $2 WHERE "id" = $1',
+        [IDS.verifiedCompany, "Zürich Platform AG"],
+      );
+    }
+  });
+
   it("uses the Phase-30 de-CH occupation concepts in the database ranking path", async () => {
     setRuntimeEnvironment("production");
 
@@ -384,6 +415,149 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     ).resolves.toBeNull();
   });
 
+  it("keeps SQL ranking and canonical hydration identical for trust hold, evidence revocation and containment", async () => {
+    setRuntimeEnvironment("production");
+    if (database === undefined) throw new Error("Public read-model DB unavailable.");
+    const target = database;
+    const input = parsePublicJobSearchParams({ keyword: "Kubernetes" });
+    const visible = async () => listPublicJobs(input, { now: NOW });
+    await expect(visible()).resolves.toMatchObject({
+      totalEligible: 1,
+      jobs: [expect.objectContaining({ slug: SLUGS.platform })],
+    });
+
+    const projectionKey = {
+      companyId: IDS.verifiedCompany,
+      scope: "COMPANY_IDENTITY" as const,
+    };
+    try {
+      await target.companyTrustProjection.update({
+        where: { companyId_scope: projectionKey },
+        data: {
+          status: "ON_HOLD",
+          riskState: "HOLD",
+          changedAt: NOW,
+          version: { increment: 1 },
+        },
+      });
+      await expect(visible()).resolves.toMatchObject({
+        totalEligible: 0,
+        jobs: [],
+      });
+    } finally {
+      await target.companyTrustProjection.update({
+        where: { companyId_scope: projectionKey },
+        data: {
+          status: "ACTIVE",
+          riskState: "CLEAR",
+          changedAt: NOW,
+          version: { increment: 1 },
+        },
+      });
+    }
+
+    try {
+      await target.companyVerificationEvidence.updateMany({
+        where: {
+          companyId: IDS.verifiedCompany,
+          type: "UID_REGISTER",
+          scope: "COMPANY_IDENTITY",
+        },
+        data: { status: "REVOKED", revokedAt: NOW },
+      });
+      await expect(visible()).resolves.toMatchObject({
+        totalEligible: 0,
+        jobs: [],
+      });
+    } finally {
+      await target.companyVerificationEvidence.updateMany({
+        where: {
+          companyId: IDS.verifiedCompany,
+          type: "UID_REGISTER",
+          scope: "COMPANY_IDENTITY",
+        },
+        data: { status: "VALID", revokedAt: null },
+      });
+    }
+
+    const suffix = randomUUID();
+    const signal = await target.riskSignal.create({
+      data: {
+        kind: "COMPROMISED_COMPANY",
+        subjectType: "COMPANY",
+        subjectId: IDS.verifiedCompany,
+        companyId: IDS.verifiedCompany,
+        source: "PHASE34_SEARCH_CONTRACT",
+        purpose: "PUBLIC_ELIGIBILITY",
+        policyVersion: "phase34-v1",
+        observedCount: 1,
+        evidenceDigest: sha256(`signal:${suffix}`),
+        dedupeKey: `phase34-search-signal:${suffix}`,
+        occurredAt: NOW,
+        retainUntil: atDay(30),
+      },
+    });
+    const decision = await target.trustRiskDecision.create({
+      data: {
+        riskSignalId: signal.id,
+        kind: "HOLD",
+        reasonCode: "PHASE34_SEARCH_CONTAINMENT",
+        policyVersion: "phase34-v1",
+        effectScope: ["PUBLIC_JOBS"],
+        evidenceDigest: sha256(`decision:${suffix}`),
+        idempotencyKey: `phase34-search-decision:${suffix}`,
+        decidedAt: NOW,
+        expiresAt: atDay(1),
+      },
+    });
+    const trustCase = await target.trustSafetyCase.create({
+      data: {
+        riskDecisionId: decision.id,
+        subjectType: "COMPANY",
+        subjectId: IDS.verifiedCompany,
+        companyId: IDS.verifiedCompany,
+        category: "COMPROMISED_COMPANY",
+        severity: "HIGH",
+        status: "HELD",
+        policyVersion: "phase34-v1",
+        safeReasonCode: "PHASE34_SEARCH_CONTAINMENT",
+        evidenceDigest: sha256(`case:${suffix}`),
+        dedupeKey: `phase34-search-case:${suffix}`,
+        reviewDueAt: atDay(1),
+        holdExpiresAt: atDay(1),
+      },
+    });
+    const effect = await target.trustSafetyContainmentEffect.create({
+      data: {
+        trustSafetyCaseId: trustCase.id,
+        effectScope: "PUBLIC_JOBS",
+        targetType: "COMPANY",
+        targetId: IDS.verifiedCompany,
+        previousState: "VISIBLE",
+        appliedState: "HELD",
+        reasonCode: "PHASE34_SEARCH_CONTAINMENT",
+        idempotencyKey: `phase34-search-effect:${suffix}`,
+        appliedAt: NOW,
+      },
+    });
+    try {
+      await expect(visible()).resolves.toMatchObject({
+        totalEligible: 0,
+        jobs: [],
+      });
+    } finally {
+      await target.trustSafetyContainmentEffect.update({
+        where: { id: effect.id },
+        data: { reversedAt: NOW },
+      });
+    }
+
+    await expect(visible()).resolves.toMatchObject({
+      totalEligible: 1,
+      jobs: [expect.objectContaining({ slug: SLUGS.platform })],
+    });
+  });
+
   it("allows DEMO data locally but excludes DEMO Jobs and DEMO companies in production", async () => {
     setRuntimeEnvironment("local");
     const local = await listPublicJobs(
@@ -461,12 +635,12 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     }
   });
 
-  it("sorts a coherent 20-case response median before a known null median", async () => {
+  it("sorts a coherent synthetic 20-case response median in isolated CI", async () => {
     setRuntimeEnvironment("production");
     await insertResponseMedianCohort(pool());
     const page = await listPublicJobs(
       { ...emptyPublicJobSearchInput(), sort: "response" },
-      { now: NOW },
+      { now: NOW, applicationEnvironment: "ci" },
     );
 
     expect(page.jobs.map((job) => job.slug)).toEqual([
@@ -477,6 +651,27 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     expect(JSON.stringify(page.jobs)).not.toContain(
       "phase15-response-candidate",
     );
+  });
+
+  it("suppresses Company response projections and rejects their filters in production", async () => {
+    setRuntimeEnvironment("production");
+    const ordinary = await listPublicJobs(emptyPublicJobSearchInput(), {
+      now: NOW,
+      applicationEnvironment: "production",
+    });
+    const ranked = await listPublicJobs(
+      { ...emptyPublicJobSearchInput(), sort: "response" },
+      { now: NOW, applicationEnvironment: "production" },
+    );
+    const filtered = await listPublicJobs(
+      { ...emptyPublicJobSearchInput(), responseEvidenceOnly: true },
+      { now: NOW, applicationEnvironment: "production" },
+    );
+
+    expect(ordinary.jobs.length).toBeGreaterThan(0);
+    expect(ordinary.jobs.every((job) => !job.response.known)).toBe(true);
+    expect(ranked).toMatchObject({ jobs: [], totalEligible: 0 });
+    expect(filtered).toMatchObject({ jobs: [], totalEligible: 0 });
   });
 
   it("keeps a boosted response-sorted Job coherent in the sponsored zone", async () => {
@@ -550,7 +745,7 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     );
     const page = await listPublicJobs(
       { ...emptyPublicJobSearchInput(), sort: "response" },
-      { now: NOW, pageSize: 1 },
+      { now: NOW, pageSize: 1, applicationEnvironment: "ci" },
     );
 
     expect(page.jobs).toHaveLength(1);
@@ -564,7 +759,11 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
   it("safely restarts a response cursor when a ranked Company projection changes", async () => {
     setRuntimeEnvironment("production");
     const input = { ...emptyPublicJobSearchInput(), sort: "response" as const };
-    const first = await listPublicJobs(input, { now: NOW, pageSize: 1 });
+    const first = await listPublicJobs(input, {
+      now: NOW,
+      pageSize: 1,
+      applicationEnvironment: "ci",
+    });
     expect(first.nextCursor).toEqual(expect.any(String));
     expect(first.invalidCursor).toBe(false);
 
@@ -575,7 +774,11 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     try {
       const restarted = await listPublicJobs(
         { ...input, after: first.nextCursor as string },
-        { now: new Date(NOW.getTime() + 60_000), pageSize: 1 },
+        {
+          now: new Date(NOW.getTime() + 60_000),
+          pageSize: 1,
+          applicationEnvironment: "ci",
+        },
       );
 
       expect(restarted.invalidCursor).toBe(true);
@@ -613,19 +816,98 @@ describe.sequential("Phase-07 PostgreSQL public Job read model", () => {
     );
     expect(broad.totalEligible).toBe(2_006);
     expect(broad.jobs).toHaveLength(50);
+    const homepage = await listHomepageJobs({ limit: 6, now: NOW });
+    expect(homepage).toHaveLength(6);
+    expect(new Set(homepage.map((job) => job.id)).size).toBe(6);
+    const clusters = await listPublicClusterLinks({ now: NOW });
+    expect(clusters.map((cluster) => [cluster.kind, cluster.slug, cluster.count])).toEqual([
+      ["category", "engineering-technik", 2_007],
+      ["canton", "zuerich", 2_007],
+    ]);
+    if (database === undefined) throw new Error("Public read-model DB unavailable.");
+    const projectionKey = {
+      companyId: IDS.verifiedCompany,
+      scope: "COMPANY_IDENTITY" as const,
+    };
+    try {
+      await database.companyTrustProjection.update({
+        where: { companyId_scope: projectionKey },
+        data: {
+          status: "ON_HOLD",
+          riskState: "HOLD",
+          changedAt: NOW,
+          version: { increment: 1 },
+        },
+      });
+      await expect(listPublicClusterLinks({ now: NOW })).resolves.toEqual([]);
+    } finally {
+      await database.companyTrustProjection.update({
+        where: { companyId_scope: projectionKey },
+        data: {
+          status: "ACTIVE",
+          riskState: "CLEAR",
+          changedAt: NOW,
+          version: { increment: 1 },
+        },
+      });
+    }
     const benchmark = await benchmarkGlobalKeywordSearch();
     expect(benchmark.p50Ms).toBeGreaterThan(0);
     expect(benchmark.p95Ms).toBeGreaterThanOrEqual(benchmark.p50Ms);
+    expect(benchmark.p95Ms).toBeLessThan(2_000);
     expect(benchmark.broadP50Ms).toBeGreaterThan(0);
     expect(benchmark.broadP95Ms).toBeGreaterThanOrEqual(benchmark.broadP50Ms);
+    expect(benchmark.broadP95Ms).toBeLessThan(5_000);
     expect(benchmark.explainExecutionMs).toBeGreaterThanOrEqual(0);
     expect(benchmark.broadExplainExecutionMs).toBeGreaterThanOrEqual(0);
-    expect(benchmark.structuredExplainIndexes.length).toBeGreaterThan(0);
+    expect(benchmark.forcedExplainIndexes).toEqual(
+      expect.arrayContaining([
+        "company_phase34_search_document_trgm_idx",
+        "job_revision_phase34_search_document_trgm_idx",
+      ]),
+    );
+    expect(benchmark.forcedStructuredExplainIndexes).toContain(
+      "Job_publishedCategoryId_publishedCantonId_status_idx",
+    );
+    const installedIndexes = await installedSearchIndexes();
+    expect(installedIndexes).toHaveLength(3);
+    expect(installedIndexes).toEqual(
+      expect.arrayContaining([
+        "Job_publishedCategoryId_publishedCantonId_status_idx",
+        "company_phase34_search_document_trgm_idx",
+        "job_revision_phase34_search_document_trgm_idx",
+      ]),
+    );
     process.stdout.write(
       `PHASE15_SEARCH_BENCHMARK ${JSON.stringify(benchmark)}\n`,
     );
-  }, 30_000);
+  }, 45_000);
 });
+
+async function installedSearchIndexes() {
+  const result = await pool().query<{ indexname: string }>(
+    [
+      "SELECT index_relation.relname AS indexname",
+      "FROM pg_catalog.pg_index AS index_state",
+      "JOIN pg_catalog.pg_class AS index_relation",
+      "  ON index_relation.oid = index_state.indexrelid",
+      "JOIN pg_catalog.pg_class AS table_relation",
+      "  ON table_relation.oid = index_state.indrelid",
+      "JOIN pg_catalog.pg_namespace AS table_namespace",
+      "  ON table_namespace.oid = table_relation.relnamespace",
+      "WHERE table_namespace.nspname = current_schema()",
+      "  AND index_state.indisvalid",
+      "  AND index_state.indisready",
+      "  AND index_relation.relname IN (",
+      "    'Job_publishedCategoryId_publishedCantonId_status_idx',",
+      "    'company_phase34_search_document_trgm_idx',",
+      "    'job_revision_phase34_search_document_trgm_idx'",
+      "  )",
+      "ORDER BY index_relation.relname",
+    ].join("\n"),
+  );
+  return result.rows.map(({ indexname }) => indexname);
+}
 
 function setRuntimeEnvironment(appEnvironment: "local" | "production") {
   if (migrated === undefined) {
@@ -953,8 +1235,11 @@ async function insertFixtures(target: Pool) {
     [
       'INSERT INTO "AbuseReport" (',
       '  "id", "targetType", "targetId", "reasonCode", "description",',
-      '  "severity", "status", "dueAt", "updatedAt"',
-      ") VALUES ($1, 'JOB', $2, 'PUBLIC_VISIBILITY_REVIEW', $3, 'HIGH', 'IN_REVIEW', $4, $5)",
+      '  "severity", "status", "privacyEvidenceMode", "privacyNoticeVersion",',
+      '  "privacyNoticeHash", "dueAt", "updatedAt"',
+      ") VALUES ($1, 'JOB', $2, 'PUBLIC_VISIBILITY_REVIEW', $3, 'HIGH', 'IN_REVIEW',",
+      "  'LOCAL_SYNTHETIC', 'abuse-report-privacy-v1',",
+      "  '70db3e2735065e414b44b9f958467c99a0323a79e1099f0ca54b6e7c20788de7', $4, $5)",
     ].join("\n"),
     [
       IDS.restrictionReport,
@@ -1388,6 +1673,7 @@ async function insertLargeSearchCohort(target: Pool) {
       IDS.cityZurich,
     ],
   );
+  await target.query('ANALYZE "Job", "JobRevision", "Company"');
 }
 
 async function insertResponseMedianCohort(target: Pool) {
@@ -1500,6 +1786,54 @@ async function benchmarkGlobalKeywordSearch() {
     "Actual Total Time": number;
     Plans?: readonly ExplainNode[];
   }>;
+  const globalExplainSql = [
+    "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
+    "WITH keyword_job_matches AS MATERIALIZED (",
+    '  SELECT keyword_job."id" AS "jobId"',
+    '  FROM "JobRevision" AS keyword_revision',
+    '  JOIN "Job" AS keyword_job',
+    '    ON keyword_job."publishedRevisionId" = keyword_revision."id"',
+    "  WHERE keyword_revision.\"searchDocument\" LIKE '%globalneedle%'",
+    "  UNION",
+    '  SELECT keyword_job."id" AS "jobId"',
+    '  FROM "Company" AS keyword_company',
+    '  JOIN "Job" AS keyword_job',
+    '    ON keyword_job."companyId" = keyword_company."id"',
+    "  WHERE keyword_company.\"searchDocument\" LIKE '%globalneedle%'",
+    ")",
+    'SELECT job."id"',
+    'FROM "Job" AS job',
+    'JOIN "JobRevision" AS revision ON revision."id" = job."publishedRevisionId"',
+    'JOIN "Company" AS company ON company."id" = job."companyId"',
+    'JOIN keyword_job_matches AS keyword_match ON keyword_match."jobId" = job."id"',
+    'ORDER BY job."id" ASC LIMIT 500',
+  ].join("\n");
+  const forcedRevisionIndexProbeSql = [
+    "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
+    'SELECT revision."id"',
+    'FROM "JobRevision" AS revision',
+    "WHERE revision.\"searchDocument\" LIKE '%globalneedle%'",
+  ].join("\n");
+  const forcedCompanyIndexProbeSql = [
+    "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
+    'SELECT company."id"',
+    'FROM "Company" AS company',
+    "WHERE company.\"searchDocument\" LIKE '%globalneedle%'",
+  ].join("\n");
+  const structuredExplainSql = [
+    "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
+    'SELECT job."id"',
+    'FROM "Job" AS job',
+    'WHERE job."publishedCategoryId" = $1',
+    '  AND job."publishedCantonId" = $2',
+    "  AND job.\"status\" = 'PUBLISHED'",
+    "  AND job.\"publishedSalaryPeriod\" = 'YEARLY'",
+    '  AND job."publishedSalaryMax" >= 80000',
+    '  AND job."publishedAt" <= $3',
+    '  AND job."expiresAt" > $3',
+    'ORDER BY job."publishedAt" DESC, job."id" ASC LIMIT 51',
+  ].join("\n");
+  const structuredExplainParameters = [IDS.categoryHealth, IDS.cantonBe, NOW];
   const explain = await pool().query<{
     "QUERY PLAN": Array<
       Readonly<{
@@ -1507,28 +1841,56 @@ async function benchmarkGlobalKeywordSearch() {
         "Execution Time": number;
       }>
     >;
-  }>(
-    [
-      "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
-      'SELECT job."id"',
-      'FROM "Job" AS job',
-      'JOIN "JobRevision" AS revision ON revision."id" = job."publishedRevisionId"',
-      'JOIN "Company" AS company ON company."id" = job."companyId"',
-      "WHERE translate(lower(revision.\"title\"), $1, $2) LIKE '%globalneedle%'",
-      "   OR translate(lower(revision.\"description\"), $1, $2) LIKE '%globalneedle%'",
-      "   OR translate(lower(COALESCE(revision.\"offer\", '')), $1, $2) LIKE '%globalneedle%'",
-      "   OR translate(lower(company.\"name\"), $1, $2) LIKE '%globalneedle%'",
-      "   OR translate(lower(array_to_string(revision.\"tasks\", ' ')), $1, $2) LIKE '%globalneedle%'",
-      "   OR translate(lower(array_to_string(revision.\"requirements\", ' ')), $1, $2) LIKE '%globalneedle%'",
-      'ORDER BY job."id" ASC LIMIT 500',
-    ].join("\n"),
-    [
-      "àáâãäåçčďèéêëìíîïñňòóôõöřšťùúûüýÿž",
-      "aaaaaaccdeeeeiiiinnooooorstuuuuyyz",
-    ],
-  );
+  }>(globalExplainSql);
   const plan = explain.rows[0]?.["QUERY PLAN"]?.[0];
   const nodes = plan === undefined ? [] : flattenExplainNodes(plan.Plan);
+  const forcedConnection = await pool().connect();
+  let forcedRevisionExplain: typeof explain;
+  let forcedCompanyExplain: typeof explain;
+  let forcedStructuredExplain: typeof explain;
+  let releaseError: Error | undefined;
+  try {
+    await forcedConnection.query("BEGIN");
+    await forcedConnection.query("SET LOCAL enable_seqscan = off");
+    await forcedConnection.query("SET LOCAL enable_indexscan = off");
+    forcedRevisionExplain = await forcedConnection.query(
+      forcedRevisionIndexProbeSql,
+    );
+    forcedCompanyExplain = await forcedConnection.query(
+      forcedCompanyIndexProbeSql,
+    );
+    await forcedConnection.query("SET LOCAL enable_indexscan = on");
+    forcedStructuredExplain = await forcedConnection.query(
+      structuredExplainSql,
+      structuredExplainParameters,
+    );
+    await forcedConnection.query("COMMIT");
+  } catch (error) {
+    try {
+      await forcedConnection.query("ROLLBACK");
+    } catch (rollbackError) {
+      releaseError =
+        rollbackError instanceof Error
+          ? rollbackError
+          : new Error(String(rollbackError));
+    }
+    throw error;
+  } finally {
+    forcedConnection.release(releaseError);
+  }
+  const forcedRevisionPlan =
+    forcedRevisionExplain.rows[0]?.["QUERY PLAN"]?.[0];
+  const forcedCompanyPlan = forcedCompanyExplain.rows[0]?.["QUERY PLAN"]?.[0];
+  const forcedNodes = [forcedRevisionPlan, forcedCompanyPlan].flatMap(
+    (forcedPlan) =>
+      forcedPlan === undefined ? [] : flattenExplainNodes(forcedPlan.Plan),
+  );
+  const forcedStructuredPlan =
+    forcedStructuredExplain.rows[0]?.["QUERY PLAN"]?.[0];
+  const forcedStructuredNodes =
+    forcedStructuredPlan === undefined
+      ? []
+      : flattenExplainNodes(forcedStructuredPlan.Plan);
   const broadExplain = await pool().query<{
     "QUERY PLAN": Array<
       Readonly<{
@@ -1546,14 +1908,13 @@ async function benchmarkGlobalKeywordSearch() {
       "WHERE job.\"status\" = 'PUBLISHED'",
       '  AND job."currentRevisionId" = job."publishedRevisionId"',
       '  AND job."publishedAt" <= $1 AND job."expiresAt" > $1',
-      "  AND regexp_replace(normalize(lower(revision.\"description\"), NFKD), $2, '', 'g')",
-      "    LIKE '%deterministischer%'",
-      'ORDER BY CASE WHEN regexp_replace(normalize(lower(revision."description"), NFKD),',
-      "  $2, '', 'g') LIKE '%deterministischer%' THEN 1 ELSE 0 END DESC,",
+      "  AND revision.\"searchDocument\" LIKE '%deterministischer%'",
+      'ORDER BY CASE WHEN revision."searchDocument"',
+      "  LIKE '%deterministischer%' THEN 1 ELSE 0 END DESC,",
       '  job."publishedAt" DESC, job."id" ASC',
       "LIMIT 51",
     ].join("\n"),
-    [NOW, "[\u0300-\u036f]"],
+    [NOW],
   );
   const broadPlan = broadExplain.rows[0]?.["QUERY PLAN"]?.[0];
   const broadNodes =
@@ -1565,22 +1926,7 @@ async function benchmarkGlobalKeywordSearch() {
         "Execution Time": number;
       }>
     >;
-  }>(
-    [
-      "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)",
-      'SELECT job."id"',
-      'FROM "Job" AS job',
-      'WHERE job."publishedCategoryId" = $1',
-      '  AND job."publishedCantonId" = $2',
-      "  AND job.\"status\" = 'PUBLISHED'",
-      "  AND job.\"publishedSalaryPeriod\" = 'YEARLY'",
-      '  AND job."publishedSalaryMax" >= 80000',
-      '  AND job."publishedAt" <= $3',
-      '  AND job."expiresAt" > $3',
-      'ORDER BY job."publishedAt" DESC, job."id" ASC LIMIT 51',
-    ].join("\n"),
-    [IDS.categoryHealth, IDS.cantonBe, NOW],
-  );
+  }>(structuredExplainSql, structuredExplainParameters);
   const structuredPlan = structuredExplain.rows[0]?.["QUERY PLAN"]?.[0];
   const structuredNodes =
     structuredPlan === undefined
@@ -1609,6 +1955,33 @@ async function benchmarkGlobalKeywordSearch() {
     ]),
     explainRootActualMs: roundMillis(plan?.Plan["Actual Total Time"] ?? 0),
     explainExecutionMs: roundMillis(plan?.["Execution Time"] ?? 0),
+    forcedExplainNodeTypes: Object.freeze([
+      ...new Set(forcedNodes.map((node) => node["Node Type"])),
+    ]),
+    forcedExplainIndexes: Object.freeze([
+      ...new Set(
+        forcedNodes.flatMap((node) =>
+          node["Index Name"] === undefined ? [] : [node["Index Name"]],
+        ),
+      ),
+    ]),
+    forcedExplainExecutionMs: roundMillis(
+      (forcedRevisionPlan?.["Execution Time"] ?? 0) +
+        (forcedCompanyPlan?.["Execution Time"] ?? 0),
+    ),
+    forcedStructuredExplainNodeTypes: Object.freeze([
+      ...new Set(forcedStructuredNodes.map((node) => node["Node Type"])),
+    ]),
+    forcedStructuredExplainIndexes: Object.freeze([
+      ...new Set(
+        forcedStructuredNodes.flatMap((node) =>
+          node["Index Name"] === undefined ? [] : [node["Index Name"]],
+        ),
+      ),
+    ]),
+    forcedStructuredExplainExecutionMs: roundMillis(
+      forcedStructuredPlan?.["Execution Time"] ?? 0,
+    ),
     broadExplainNodeTypes: Object.freeze([
       ...new Set(broadNodes.map((node) => node["Node Type"])),
     ]),

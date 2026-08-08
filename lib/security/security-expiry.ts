@@ -34,16 +34,15 @@ export async function projectExpiredSecurityState(
         where: { status: "PENDING", expiresAt: { lte: input.now } },
         data: { status: "EXPIRED", decidedAt: input.now },
       });
-      const [authenticatorChallenges, stepUpChallenges] = await Promise.all([
-        transaction.authenticatorChallenge.updateMany({
+      const authenticatorChallenges =
+        await transaction.authenticatorChallenge.updateMany({
           where: { status: "PENDING", expiresAt: { lte: input.now } },
           data: { status: "EXPIRED", cancelledAt: input.now },
-        }),
-        transaction.stepUpChallenge.updateMany({
-          where: { status: "PENDING", expiresAt: { lte: input.now } },
-          data: { status: "EXPIRED", cancelledAt: input.now },
-        }),
-      ]);
+        });
+      const stepUpChallenges = await transaction.stepUpChallenge.updateMany({
+        where: { status: "PENDING", expiresAt: { lte: input.now } },
+        data: { status: "EXPIRED", cancelledAt: input.now },
+      });
 
       let sessionsRevoked = 0;
       for (const grant of expiredGrants) {
@@ -66,20 +65,18 @@ export async function projectExpiredSecurityState(
           data: { revokedAt: input.now },
         });
         sessionsRevoked += sessions.count;
-        await Promise.all([
-          transaction.sessionAssurance.updateMany({
-            where: { userId: grant.userId, revokedAt: null },
-            data: { revokedAt: input.now },
-          }),
-          transaction.authAssuranceEvidence.updateMany({
-            where: { userId: grant.userId, revokedAt: null, usedAt: null },
-            data: { revokedAt: input.now },
-          }),
-          transaction.stepUpChallenge.updateMany({
-            where: { userId: grant.userId, status: "PENDING" },
-            data: { status: "REVOKED", cancelledAt: input.now },
-          }),
-        ]);
+        await transaction.sessionAssurance.updateMany({
+          where: { userId: grant.userId, revokedAt: null },
+          data: { revokedAt: input.now },
+        });
+        await transaction.authAssuranceEvidence.updateMany({
+          where: { userId: grant.userId, revokedAt: null, usedAt: null },
+          data: { revokedAt: input.now },
+        });
+        await transaction.stepUpChallenge.updateMany({
+          where: { userId: grant.userId, status: "PENDING" },
+          data: { status: "REVOKED", cancelledAt: input.now },
+        });
         await writeRequiredAudit(
           createPrismaTransactionAuditPort(transaction),
           {

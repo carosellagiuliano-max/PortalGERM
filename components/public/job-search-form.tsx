@@ -15,7 +15,12 @@ const controlClass = "h-10 w-full rounded-lg border border-input bg-background p
 export function JobSearchForm({
   input,
   catalog,
-}: Readonly<{ input: PublicJobSearchInput; catalog: PublicCatalog }>) {
+  responseEvidenceAvailable,
+}: Readonly<{
+  input: PublicJobSearchInput;
+  catalog: PublicCatalog;
+  responseEvidenceAvailable: boolean;
+}>) {
   const issueMessages = [...new Set(input.validationIssues.map(validationMessage))];
   return (
     <form action="/jobs" method="get" className="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
@@ -50,12 +55,18 @@ export function JobSearchForm({
         </label>
         <label className="grid gap-1.5 text-sm font-medium">
           Sortierung
-          <select name="sort" defaultValue={sortValue(input.sort)} className={controlClass}>
+          <select
+            name="sort"
+            defaultValue={sortValue(input.sort, responseEvidenceAvailable)}
+            className={controlClass}
+          >
             <option value="relevance">Relevanz</option>
             <option value="newest">Neueste zuerst</option>
             <option value="fairjobscore">Fair-Job-Score</option>
             <option value="salary">Höchster Lohn</option>
-            <option value="response">Antwortverhalten</option>
+            {responseEvidenceAvailable ? (
+              <option value="response">Antwortverhalten</option>
+            ) : null}
           </select>
         </label>
       </div>
@@ -116,10 +127,12 @@ export function JobSearchForm({
             <input type="checkbox" name="salaryDisclosed" value="true" defaultChecked={input.salaryDisclosedOnly} />
             Lohn offengelegt
           </label>
-          <label className="flex items-center gap-2 self-end rounded-lg border bg-background px-3 py-2.5 text-sm">
-            <input type="checkbox" name="evidence" value="response" defaultChecked={input.responseEvidenceOnly} />
-            Belastbares Antwortsignal
-          </label>
+          {responseEvidenceAvailable ? (
+            <label className="flex items-center gap-2 self-end rounded-lg border bg-background px-3 py-2.5 text-sm">
+              <input type="checkbox" name="evidence" value="response" defaultChecked={input.responseEvidenceOnly} />
+              Belastbares Antwortsignal
+            </label>
+          ) : null}
           <label className="flex items-center gap-2 self-end rounded-lg border bg-background px-3 py-2.5 text-sm">
             <input type="checkbox" name="companyVerified" value="true" defaultChecked={input.companyVerifiedOnly} />
             Verifizierte Firma
@@ -184,7 +197,11 @@ function numberValue(value: number | undefined) {
   return value === undefined ? "" : String(value);
 }
 
-function sortValue(sort: PublicJobSearchInput["sort"]) {
+function sortValue(
+  sort: PublicJobSearchInput["sort"],
+  responseEvidenceAvailable: boolean,
+) {
+  if (sort === "response" && !responseEvidenceAvailable) return "relevance";
   if (sort === "fair-score") return "fairjobscore";
   return sort;
 }

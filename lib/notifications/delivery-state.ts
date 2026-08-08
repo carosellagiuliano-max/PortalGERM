@@ -11,6 +11,7 @@ type DeliveryEnvironment = Pick<
 export type TransactionalEmailDeliveryState =
   | "external_dispatch"
   | "local_mailbox"
+  | "local_mailbox_queued"
   | "queued_paused"
   | "record_only";
 
@@ -21,14 +22,17 @@ export function getTransactionalEmailDeliveryState(
     if (environment.NOTIFICATION_DISPATCH !== "command") {
       return "queued_paused";
     }
-    if (environment.EMAIL_PROVIDER_MODE === "resend_sandbox") {
+    if (
+      environment.EMAIL_PROVIDER_MODE === "resend_sandbox" ||
+      environment.EMAIL_PROVIDER_MODE === "resend_live"
+    ) {
       return "external_dispatch";
     }
     if (
       environment.EMAIL_PROVIDER_MODE === "local_mock" &&
       environment.ENABLE_LOCAL_MOCK_MAILBOX
     ) {
-      return "local_mailbox";
+      return "local_mailbox_queued";
     }
     return "record_only";
   }
@@ -54,6 +58,8 @@ export function getInvitationDeliveryFeedback(input: Readonly<{
       "Die E-Mail wurde in die aktive Warteschlange für den konfigurierten Versanddienst aufgenommen. Übergabe und endgültige Zustellung sind damit noch nicht bestätigt.",
     local_mailbox:
       "Der Link wurde für die geschützte lokale Test-Mailbox erfasst; es wird keine echte E-Mail versendet.",
+    local_mailbox_queued:
+      "Der Link wurde für die geschützte lokale Test-Mailbox vorgemerkt; erst eine erfolgreiche Worker-Verarbeitung bestätigt die Erfassung. Es wird keine echte E-Mail versendet.",
     queued_paused:
       "Die E-Mail liegt in der Versandwarteschlange, der Versand ist in dieser Umgebung aber derzeit pausiert.",
     record_only:
@@ -72,11 +78,16 @@ export function getPasswordResetDeliveryFeedback(
         "Falls ein passendes Konto existiert, wurde ein Zurücksetzlink in die aktive Warteschlange für den konfigurierten Versanddienst aufgenommen. Übergabe und Zustellung sind damit noch nicht bestätigt.",
     });
   }
-  if (deliveryState === "local_mailbox") {
+  if (
+    deliveryState === "local_mailbox" ||
+    deliveryState === "local_mailbox_queued"
+  ) {
     return Object.freeze({
       status: "success",
       message:
-        "Falls ein passendes Konto existiert, wurde der Zurücksetzlink in der geschützten lokalen Test-Mailbox erfasst. Es wurde keine echte E-Mail versendet.",
+        deliveryState === "local_mailbox"
+          ? "Falls ein passendes Konto existiert, wurde der Zurücksetzlink in der geschützten lokalen Test-Mailbox erfasst. Es wurde keine echte E-Mail versendet."
+          : "Falls ein passendes Konto existiert, wurde der Zurücksetzlink für die geschützte lokale Test-Mailbox vorgemerkt. Erst eine erfolgreiche Worker-Verarbeitung bestätigt die Erfassung; es wird keine echte E-Mail versendet.",
     });
   }
   return Object.freeze({

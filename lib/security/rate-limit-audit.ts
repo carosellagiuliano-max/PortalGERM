@@ -15,8 +15,10 @@ import type { AuthRequestContext } from "@/lib/auth/request-context";
 import type { ServerEnvironment } from "@/lib/config/env-schema";
 import type { DatabaseClient } from "@/lib/db/factory";
 import { recordAndDecideRiskSignal } from "@/lib/security/risk/risk-service";
+import { createLogger } from "@/lib/utils/logger";
 
 const AUDIT_RETENTION_MILLISECONDS = 365 * 86_400_000;
+const logger = createLogger();
 
 export async function recordRateLimitDenial(
   denial: Readonly<{
@@ -42,9 +44,12 @@ export async function recordRateLimitDenial(
   try {
     const gate = await consumeRequestRateLimit(
       "SECURITY_DENIAL_AUDIT",
-      target.actorUserId === undefined
-        ? {}
-        : { actorId: target.actorUserId },
+      {
+        ...(target.actorUserId === undefined
+          ? {}
+          : { actorId: target.actorUserId }),
+        targetId: `${denial.preset}:${denial.scope}`,
+      },
       dependencies.request,
       dependencies.now,
       {
@@ -75,24 +80,53 @@ export async function recordRateLimitDenial(
         targetId: target.targetId,
         targetType: target.targetType,
       },
-      undefined,
+      (failure) =>
+        reportObservabilityFailure(
+          "security.rate_limit_audit_write_failed",
+          failure.code,
+          failure.action,
+          dependencies.request.correlationId,
+        ),
       {
         sourceIp: dependencies.request.sourceIp,
         keyring: dependencies.environment.secrets.keyrings.AUDIT_IP_HASH_KEYS,
       },
     );
 
-    await recordAuthenticationRiskSignal(
-      denial,
-      target,
-      dependencies,
-    ).catch(() => undefined);
+    await recordAuthenticationRiskSignal(denial, target, dependencies).catch(
+      () =>
+        reportObservabilityFailure(
+          "security.rate_limit_risk_write_failed",
+          "RISK_SIGNAL_WRITE_FAILED",
+          "rate_limit_risk_signal",
+          dependencies.request.correlationId,
+        ),
+    );
 
     return Object.freeze({ written: result.written, gated: false });
   } catch {
     // Denial observability must never turn the primary friendly rate-limit
     // response into an application error when the secondary gate/store fails.
+    reportObservabilityFailure(
+      "security.rate_limit_observability_failed",
+      "SECONDARY_OBSERVABILITY_FAILED",
+      "rate_limit_denial",
+      dependencies.request.correlationId,
+    );
     return Object.freeze({ written: false, gated: false });
+  }
+}
+
+function reportObservabilityFailure(
+  event: string,
+  errorCode: string,
+  operation: string,
+  correlationId: string,
+) {
+  try {
+    logger.error(event, { errorCode, operation }, correlationId);
+  } catch {
+    // Logging must never replace the primary safe denial response.
   }
 }
 

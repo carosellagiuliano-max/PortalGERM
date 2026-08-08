@@ -25,6 +25,7 @@ import {
   getCandidateRadarRequest,
   type CandidateRadarRequestStatus,
 } from "@/lib/talentradar/candidate-request-view";
+import { decideTalentRadarRuntimeGate } from "@/lib/talentradar/legal-gate";
 import { formatDate, formatDateTime } from "@/lib/utils/format";
 
 export const metadata: Metadata = {
@@ -40,7 +41,17 @@ export default async function CandidateRadarRequestPage({
 }: PageProps) {
   const user = await requireCandidatePage();
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  const request = await getCandidateRadarRequest(getDatabase(), user.id, id);
+  const database = getDatabase();
+  const environment = getServerEnvironment();
+  const now = new Date();
+  const [request, legalGate] = await Promise.all([
+    getCandidateRadarRequest(database, user.id, id),
+    decideTalentRadarRuntimeGate(database, {
+      scope: "TALENT_RADAR",
+      environment,
+      now,
+    }),
+  ]);
   if (request === null) notFound();
   const updated = singleValue(query.updated);
   const existingFields = request.reveal?.fields ?? [];
@@ -96,6 +107,21 @@ export default async function CandidateRadarRequestPage({
         </div>
       ) : null}
 
+      {!legalGate.allowed ? (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <ShieldAlertIcon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-semibold">Neue Radar-Verarbeitung gesperrt</p>
+            <p>
+              Annehmen, neue Identitätsfreigaben und neue Nachrichten bleiben
+              gesperrt, bis die aktuelle Datenschutz-, AVG- und DSFA-Freigabe
+              dokumentiert ist. Ablehnen und bestehende Freigaben widerrufen
+              bleiben möglich.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <Card>
           <CardHeader>
@@ -132,6 +158,7 @@ export default async function CandidateRadarRequestPage({
                 companyName={request.company.name}
                 acceptIdempotencyKey={randomUUID()}
                 declineIdempotencyKey={randomUUID()}
+                acceptAllowed={legalGate.allowed}
               />
             ) : (
               <RequestReadOnlyNotice status={request.status} />
@@ -235,12 +262,12 @@ export default async function CandidateRadarRequestPage({
               existingFields={existingFields}
               grantId={request.reveal?.grantId ?? null}
               grantStatus={revealStatus}
-              trusted={request.trusted}
+              trusted={request.trusted && legalGate.allowed}
               grantIdempotencyKey={randomUUID()}
               revokeIdempotencyKey={randomUUID()}
               companyId={request.company.id}
               stepUpRequired={
-                getServerEnvironment().PRIVILEGED_STEP_UP_MODE === "enforce"
+                environment.PRIVILEGED_STEP_UP_MODE === "enforce"
               }
             />
           </CardContent>

@@ -99,6 +99,7 @@ describe("Phase 24 payment failure recovery", () => {
         resumePaymentInboxProjectionBacklog(
           {
             batchSize: 100,
+            environment: "ci",
             now: new Date(event.eventCreatedAt.getTime() + 4_000),
           },
           fixture.database,
@@ -118,6 +119,7 @@ describe("Phase 24 payment failure recovery", () => {
       resumePaymentInboxProjectionBacklog(
         {
           batchSize: 100,
+          environment: "ci",
           now: new Date(event.eventCreatedAt.getTime() + 4_500),
         },
         fixture.database,

@@ -21,10 +21,12 @@ export function BoostDialog({
   view,
   creditIdempotencyKey,
   cancellationIdempotencyKey,
+  mockCheckoutAvailable = false,
 }: Readonly<{
   view: BoostPurchaseView;
   creditIdempotencyKey: string;
   cancellationIdempotencyKey: string;
+  mockCheckoutAvailable?: boolean;
 }>) {
   const sevenDay = view.products.find((product) => product.slug === "boost-7d")!;
   const thirtyDay = view.products.find((product) => product.slug === "boost-30d")!;
@@ -57,7 +59,7 @@ export function BoostDialog({
                 disabled={active !== null}
               />
             )}
-            <Link
+            {mockCheckoutAvailable ? <Link
               aria-disabled={active !== null}
               className={buttonVariants({ variant: "outline" })}
               href={active === null
@@ -65,7 +67,7 @@ export function BoostDialog({
                 : `/employer/jobs/${view.job.id}/boost`}
             >
               Mit Zahlung boosten
-            </Link>
+            </Link> : <UnavailablePaymentLink />}
           </CardContent>
         </Card>
         <Card>
@@ -77,7 +79,7 @@ export function BoostDialog({
             <CardDescription>30 Tage werden immer als einmaliges Produkt bezahlt.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Link
+            {mockCheckoutAvailable ? <Link
               aria-disabled={active !== null}
               className={buttonVariants({ className: "w-full" })}
               href={active === null
@@ -85,7 +87,7 @@ export function BoostDialog({
                 : `/employer/jobs/${view.job.id}/boost`}
             >
               Mit Zahlung boosten
-            </Link>
+            </Link> : <UnavailablePaymentLink fullWidth />}
           </CardContent>
         </Card>
       </div>
@@ -94,6 +96,20 @@ export function BoostDialog({
         Er verändert weder den Fair-Job-Score noch die inhaltliche Eignung und verspricht keine Bewerbungen.
       </p>
     </div>
+  );
+}
+
+function UnavailablePaymentLink({ fullWidth = false }: Readonly<{ fullWidth?: boolean }>) {
+  return (
+    <Link
+      href="/employer/billing/subscription"
+      className={buttonVariants({
+        variant: "outline",
+        className: fullWidth ? "w-full" : undefined,
+      })}
+    >
+      Zahlungsfreigabe prüfen
+    </Link>
   );
 }
 

@@ -37,6 +37,37 @@ export const JOB_BENEFIT_CODES = [
   "PERFORMANCE_BONUS",
 ] as const;
 
+const REPORTING_RESULT_LABELS_DE = Object.freeze({
+  REQUIRED: "Meldepflichtig",
+  NOT_REQUIRED: "Nicht meldepflichtig",
+  UNKNOWN: "Nicht eindeutig bestimmbar",
+});
+
+const EMPLOYER_JOB_EVENT_LABELS_DE = Object.freeze({
+  DRAFT_CREATED: "Entwurf erstellt",
+  ASSIGNED: "Zuständigkeit zugewiesen",
+  DRAFT_UPDATED: "Entwurf aktualisiert",
+  SUBMITTED: "Zur Prüfung eingereicht",
+  CHANGES_REQUESTED: "Änderungen verlangt",
+  APPROVED: "Freigegeben",
+  REJECTED: "Abgelehnt",
+  PUBLISHED: "Veröffentlicht",
+  PAUSED: "Pausiert",
+  REVISION_REOPENED: "Neue Revision geöffnet",
+  REACTIVATED: "Reaktiviert",
+  EXPIRED: "Abgelaufen",
+  CLOSED: "Geschlossen",
+  REMOVED: "Entfernt",
+});
+
+export function employerReportingResultLabel(value: string): string {
+  return labelFrom(REPORTING_RESULT_LABELS_DE, value);
+}
+
+export function employerJobEventLabel(value: string): string {
+  return labelFrom(EMPLOYER_JOB_EVENT_LABELS_DE, value);
+}
+
 export type EmployerJobFormState = Readonly<{
   status: "idle" | "success" | "error" | "conflict";
   message?: string;
@@ -75,6 +106,45 @@ export type EmployerJobStatus =
   | "CLOSED"
   | "REJECTED"
   | "REMOVED";
+
+const EMPLOYER_JOB_STATUS_LABELS_DE = Object.freeze({
+  DRAFT: "Entwurf",
+  SUBMITTED: "Eingereicht",
+  IN_REVIEW: "In Prüfung",
+  CHANGES_REQUESTED: "Änderungen verlangt",
+  APPROVED: "Freigegeben",
+  PUBLISHED: "Veröffentlicht",
+  PAUSED: "Pausiert",
+  EXPIRED: "Abgelaufen",
+  CLOSED: "Geschlossen",
+  REJECTED: "Abgelehnt",
+  REMOVED: "Entfernt",
+} satisfies Readonly<Record<EmployerJobStatus, string>>);
+
+const EMPLOYER_JOB_BOOST_STATUS_LABELS_DE = Object.freeze({
+  ACTIVE: "Aktiv",
+  SCHEDULED: "Geplant",
+  EXPIRED: "Abgelaufen",
+  CANCELLED: "Abgebrochen",
+});
+
+const EMPLOYER_JOB_ASSIGNMENT_ROLE_LABELS_DE = Object.freeze({
+  EDITOR: "Redaktion",
+  PIPELINE: "Bewerbungsprozess",
+  REVIEWER: "Prüfung",
+});
+
+export function employerJobStatusLabel(value: string): string {
+  return labelFrom(EMPLOYER_JOB_STATUS_LABELS_DE, value);
+}
+
+export function employerJobBoostStatusLabel(value: string): string {
+  return labelFrom(EMPLOYER_JOB_BOOST_STATUS_LABELS_DE, value);
+}
+
+export function employerJobAssignmentRoleLabel(value: string): string {
+  return labelFrom(EMPLOYER_JOB_ASSIGNMENT_ROLE_LABELS_DE, value);
+}
 
 export type EmployerJobListItem = Readonly<{
   id: string;
@@ -176,3 +246,10 @@ export type EmployerJobFullDetail = Readonly<{
   statusEvents: readonly Readonly<{ kind: string; fromStatus: string | null; toStatus: string; createdAt: Date; reasonCode: string | null }>[];
   auditEvents: readonly Readonly<{ action: string; result: string; reasonCode: string | null; createdAt: Date }>[];
 }>;
+
+function labelFrom(
+  labels: Readonly<Record<string, string>>,
+  value: string,
+): string {
+  return labels[value] ?? value;
+}

@@ -9,11 +9,22 @@ const publicJobsData = vi.hoisted(() => ({
 }));
 const loadPublicClusterLanding = vi.hoisted(() => vi.fn());
 const getPublicDataContext = vi.hoisted(() => vi.fn());
+const runtime = vi.hoisted(() => ({
+  appEnvironment: "local" as
+    | "local"
+    | "ci"
+    | "preview"
+    | "staging"
+    | "production",
+}));
 const redirect = vi.hoisted(() => vi.fn((path: string): never => {
   throw new Error(`NEXT_REDIRECT:${path}`);
 }));
 
 vi.mock("next/navigation", () => ({ redirect }));
+vi.mock("@/lib/config/env", () => ({
+  getServerEnvironment: () => ({ APP_ENV: runtime.appEnvironment }),
+}));
 vi.mock("@/lib/public/environment", () => ({ getPublicDataContext }));
 vi.mock("@/lib/seo/cluster-indexability", () => ({ loadPublicClusterLanding }));
 
@@ -30,6 +41,7 @@ import JobsPage, { generateMetadata } from "@/app/(public)/jobs/page";
 
 describe("public Jobs result-count disclosure", () => {
   beforeEach(() => {
+    runtime.appEnvironment = "local";
     redirect.mockClear();
     loadPublicClusterLanding.mockReset();
     loadPublicClusterLanding.mockResolvedValue(null);
@@ -58,6 +70,51 @@ describe("public Jobs result-count disclosure", () => {
     expect(screen.getByRole("heading", { name: "0 Stellen" })).toBeInTheDocument();
     expect(screen.queryByText(/gefilterte Vorauswahl umfasst mehr/iu)).not.toBeInTheDocument();
   });
+
+  it("offers synthetic response controls only in an isolated sandbox", async () => {
+    render(await JobsPage({ searchParams: Promise.resolve({}) }));
+
+    expect(
+      screen.getByRole("option", { name: "Antwortverhalten" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "Belastbares Antwortsignal" }),
+    ).toBeInTheDocument();
+  });
+
+  it.each(["preview", "staging", "production"] as const)(
+    "removes unavailable response controls and normalizes a forged query in %s",
+    async (applicationEnvironment) => {
+      runtime.appEnvironment = applicationEnvironment;
+
+      render(
+        await JobsPage({
+          searchParams: Promise.resolve({
+            sort: "response",
+            evidence: "response",
+          }),
+        }),
+      );
+
+      expect(
+        screen.queryByRole("option", { name: "Antwortverhalten" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("checkbox", {
+          name: "Belastbares Antwortsignal",
+        }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "noch keine belastbare Live-Datenbasis",
+      );
+      expect(publicJobsData.searchJobs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sort: "relevance",
+          responseEvidenceOnly: false,
+        }),
+      );
+    },
+  );
 
   it("shows invalid salary state and marks that URL as noindex", async () => {
     const searchParams = { salaryMin: "120000", sort: "salary" };

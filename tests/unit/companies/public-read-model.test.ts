@@ -161,11 +161,12 @@ describe("safe public Company projections", () => {
     });
   });
 
-  it("reveals only sanitized enhanced fields and bucketed response evidence", () => {
+  it("reveals only sanitized enhanced fields and bucketed synthetic response evidence locally", () => {
     const detail = projectPublicCompanyDetail(SOURCE, {
       environment: "production",
       enhancedProfile: true,
       jobs: [],
+      applicationEnvironment: "local",
     });
 
     expect(detail).toMatchObject({
@@ -184,6 +185,26 @@ describe("safe public Company projections", () => {
     expect(JSON.stringify(detail)).not.toContain("steal");
   });
 
+  it.each(["preview", "staging", "production"] as const)(
+    "suppresses seed-only response evidence in %s despite entitlement",
+    (applicationEnvironment) => {
+      const detail = projectPublicCompanyDetail(SOURCE, {
+        environment: "production",
+        enhancedProfile: true,
+        jobs: [],
+        applicationEnvironment,
+      });
+
+      expect(detail?.response).toEqual({
+        known: false,
+        targetDays: null,
+        onTimeRateBps: null,
+        sampleSizeBucket: null,
+      });
+      expect(detail?.enhancedProfile).toBe(true);
+    },
+  );
+
   it("fails response evidence closed below threshold or for inconsistent values", () => {
     for (const patch of [
       { responseSampleSize: 19 },
@@ -197,6 +218,7 @@ describe("safe public Company projections", () => {
             environment: "production",
             enhancedProfile: true,
             openJobCount: 0,
+            applicationEnvironment: "local",
           },
         )?.response,
       ).toEqual({
@@ -213,6 +235,7 @@ describe("safe public Company projections", () => {
           environment: "production",
           enhancedProfile: true,
           openJobCount: 0,
+          applicationEnvironment: "local",
         },
       )?.response.sampleSizeBucket,
     ).toBe("50+");
@@ -424,6 +447,38 @@ describe("public Company directory", () => {
         responseTargetDays: true,
         responseSampleSize: true,
         responseWithinTargetBps: true,
+      },
+    });
+  });
+
+  it("keeps entitled directory response evidence unknown in public preview", async () => {
+    const entitled = companyRow({
+      id: "11111111-1111-4111-8111-111111111118",
+      slug: "preview-entitled-company",
+      name: "Preview Entitled",
+    });
+    const { database } = directoryDatabase([entitled], [], [entitled.id]);
+
+    const result = await listPublicCompanies(
+      {},
+      async (companyIds) => new Map(companyIds.map((id) => [id, 1])),
+      {
+        now: NOW,
+        database,
+        dataContext: PRODUCTION_DATA_CONTEXT,
+        ...TEST_COMPANY_TRUST_OPTIONS,
+        applicationEnvironment: "preview",
+      },
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: entitled.id,
+      response: {
+        known: false,
+        targetDays: null,
+        onTimeRateBps: null,
+        sampleSizeBucket: null,
       },
     });
   });

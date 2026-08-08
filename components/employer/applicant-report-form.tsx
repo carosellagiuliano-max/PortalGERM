@@ -5,6 +5,12 @@ import { useActionState } from "react";
 
 import { reportEmployerApplicantAction } from "@/app/employer/applicants/actions";
 import { EmployerActionFeedback } from "@/components/employer/action-form-parts";
+import {
+  PublicIntakePrivacyDisclosure,
+  PublicIntakePrivacyHiddenFields,
+  PublicIntakePrivacyLocked,
+  usePublicIntakePrivacy,
+} from "@/components/privacy/public-intake-privacy";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { INITIAL_EMPLOYER_ACTION_STATE } from "@/lib/employer/action-state";
@@ -16,13 +22,18 @@ export function EmployerApplicantReportForm({
     reportEmployerApplicantAction,
     INITIAL_EMPLOYER_ACTION_STATE,
   );
+  const privacyGate = usePublicIntakePrivacy("ABUSE_REPORT");
   return (
     <details className="rounded-xl border bg-card p-4">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium">
         <FlagIcon className="size-4" aria-hidden="true" /> Kandidatenprofil melden
       </summary>
+      {!privacyGate.allowed ? (
+        <div className="mt-4"><PublicIntakePrivacyLocked purpose="ABUSE_REPORT" /></div>
+      ) : (
       <form action={action} className="mt-4 grid gap-3" noValidate>
         <input type="hidden" name="applicationId" value={applicationId} />
+        <PublicIntakePrivacyHiddenFields purpose="ABUSE_REPORT" />
         <EmployerActionFeedback state={state} />
         {state.status === "success" ? null : (
           <>
@@ -52,12 +63,14 @@ export function EmployerApplicantReportForm({
                 placeholder="Beschreibe sachlich, was geprüft werden soll."
               />
             </label>
+            <PublicIntakePrivacyDisclosure purpose="ABUSE_REPORT" />
             <Button type="submit" variant="outline" disabled={pending}>
               {pending ? "Wird gemeldet …" : "Sicher melden"}
             </Button>
           </>
         )}
       </form>
+      )}
     </details>
   );
 }

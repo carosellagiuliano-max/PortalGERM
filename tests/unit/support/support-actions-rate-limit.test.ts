@@ -63,7 +63,7 @@ describe("support action rate-limit boundaries", () => {
     });
     mocks.isValidAuthMutationOrigin.mockReturnValue(true);
     mocks.getDatabase.mockReturnValue(mocks.database);
-    mocks.getServerEnvironment.mockReturnValue({ APP_ENV: "test" });
+    mocks.getServerEnvironment.mockReturnValue({ APP_ENV: "ci" });
     mocks.getRequesterSupportCase.mockResolvedValue({ id: CASE_ID });
     mocks.consumeRequestRateLimit.mockResolvedValue({
       allowed: true,

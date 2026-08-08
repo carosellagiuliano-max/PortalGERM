@@ -39,6 +39,10 @@ import {
 } from "@/lib/talentradar/eligibility";
 import { isCurrentRadarContactCohortAuthorized } from "@/lib/talentradar/list-candidates";
 import {
+  lockTalentRadarRuntimeGate,
+  type TalentRadarLegalEnvironment,
+} from "@/lib/talentradar/legal-gate";
+import {
   resolveRadarOpaqueId,
   type RadarOpaqueMappingRecord,
 } from "@/lib/talentradar/opaque-id";
@@ -524,6 +528,7 @@ export type SendContactRequestDependencies = Readonly<{
   eligibilityEnvironment: RadarEligibilityEnvironment;
   proofPort: RadarContactProofPort;
   rateLimitPort: RadarContactRateLimitPort;
+  legalGateEnvironment: TalentRadarLegalEnvironment;
   now?: Date;
 }>;
 
@@ -543,6 +548,7 @@ export type SendContactRequestResult =
       code:
         | "INVALID_INPUT"
         | "FORBIDDEN"
+        | "LEGAL_GATE_BLOCKED"
         | "NOT_FOUND"
         | "RATE_LIMITED"
         | "LIMIT"
@@ -600,6 +606,14 @@ export async function sendContactRequest(
   });
 
   return runSerializableContactCommand(dependencies.database, async (transaction) => {
+    const initialLegalGate = await lockTalentRadarRuntimeGate(transaction, {
+      scope: "TALENT_RADAR",
+      environment: dependencies.legalGateEnvironment,
+      now,
+    });
+    if (!initialLegalGate.allowed) {
+      return contactFailure("LEGAL_GATE_BLOCKED");
+    }
     await acquireInitialContactLocks(transaction, dependencies.actor, input.idempotencyKey);
 
     // Deliberately complete every employer/trust/entitlement check before the

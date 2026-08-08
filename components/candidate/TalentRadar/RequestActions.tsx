@@ -30,11 +30,13 @@ export function CandidateRadarRequestActions({
   companyName,
   acceptIdempotencyKey,
   declineIdempotencyKey,
+  acceptAllowed = true,
 }: Readonly<{
   requestId: string;
   companyName: string;
   acceptIdempotencyKey: string;
   declineIdempotencyKey: string;
+  acceptAllowed?: boolean;
 }>) {
   const [acceptState, acceptAction, accepting] = useActionState(
     acceptCandidateRadarRequestAction,
@@ -47,7 +49,7 @@ export function CandidateRadarRequestActions({
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <Dialog>
+      {acceptAllowed ? <Dialog>
         <DialogTrigger render={<Button type="button" className="w-full" />}>
           <CheckIcon aria-hidden="true" /> Kontaktanfrage annehmen
         </DialogTrigger>
@@ -89,7 +91,12 @@ export function CandidateRadarRequestActions({
             </DialogFooter>
           </form>
         </DialogContent>
-      </Dialog>
+      </Dialog> : (
+        <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          Annehmen ist bis zur aktuellen Datenschutz-, AVG- und DSFA-Freigabe
+          gesperrt. Ablehnen bleibt möglich.
+        </p>
+      )}
 
       <Dialog>
         <DialogTrigger

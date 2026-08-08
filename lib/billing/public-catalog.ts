@@ -54,78 +54,78 @@ async function loadCatalogSnapshots(
   at: Date,
 ) {
   return database.$transaction(async (transaction) => {
-    const [planVersions, productVersions, successFeeVersions, taxRates] =
-      await Promise.all([
-        transaction.planVersion.findMany({
-          where: {
-            status: "ACTIVE",
-            ...effectiveAt(at),
-            OR: [
-              { isPublic: true },
-              { plan: { code: "ENTERPRISE_CONTRACT" } },
-            ],
-          },
+    const planVersions = await transaction.planVersion.findMany({
+      relationLoadStrategy: "join",
+      where: {
+        status: "ACTIVE",
+        ...effectiveAt(at),
+        OR: [
+          { isPublic: true },
+          { plan: { code: "ENTERPRISE_CONTRACT" } },
+        ],
+      },
+      select: {
+        id: true,
+        version: true,
+        status: true,
+        priceMode: true,
+        billingInterval: true,
+        termMonths: true,
+        netPriceRappen: true,
+        monthlyEquivalentRappen: true,
+        currency: true,
+        isPublic: true,
+        isSelfService: true,
+        validFrom: true,
+        validTo: true,
+        plan: { select: { code: true, name: true, isDefaultFree: true } },
+        entitlements: {
           select: {
-            id: true,
-            version: true,
-            status: true,
-            priceMode: true,
-            billingInterval: true,
-            termMonths: true,
-            netPriceRappen: true,
-            monthlyEquivalentRappen: true,
-            currency: true,
-            isPublic: true,
-            isSelfService: true,
-            validFrom: true,
-            validTo: true,
-            plan: { select: { code: true, name: true, isDefaultFree: true } },
-            entitlements: {
-              select: {
-                key: true,
-                valueType: true,
-                booleanValue: true,
-                integerValue: true,
-                analyticsLevelValue: true,
-              },
-            },
+            key: true,
+            valueType: true,
+            booleanValue: true,
+            integerValue: true,
+            analyticsLevelValue: true,
           },
-        }),
-        transaction.productVersion.findMany({
-          where: {
-            status: "ACTIVE",
-            isPublic: true,
-            product: { code: { in: [...PUBLIC_PRODUCT_CODES_V1] } },
-            ...effectiveAt(at),
-          },
-          select: productVersionSelect,
-        }),
-        transaction.productVersion.findMany({
-          where: {
-            status: "INACTIVE",
-            requiresLegalReview: true,
-            product: { code: "success-fee" },
-            ...effectiveAt(at),
-          },
-          select: productVersionSelect,
-        }),
-        transaction.taxRateVersion.findMany({
-          where: {
-            jurisdiction: "CH",
-            reviewStatus: "APPROVED",
-            ...effectiveAt(at),
-          },
-          select: {
-            jurisdiction: true,
-            taxType: true,
-            rateBasisPoints: true,
-            validFrom: true,
-            validTo: true,
-            source: true,
-            reviewStatus: true,
-          },
-        }),
-      ]);
+        },
+      },
+    });
+    const productVersions = await transaction.productVersion.findMany({
+      relationLoadStrategy: "join",
+      where: {
+        status: "ACTIVE",
+        isPublic: true,
+        product: { code: { in: [...PUBLIC_PRODUCT_CODES_V1] } },
+        ...effectiveAt(at),
+      },
+      select: productVersionSelect,
+    });
+    const successFeeVersions = await transaction.productVersion.findMany({
+      relationLoadStrategy: "join",
+      where: {
+        status: "INACTIVE",
+        requiresLegalReview: true,
+        product: { code: "success-fee" },
+        ...effectiveAt(at),
+      },
+      select: productVersionSelect,
+    });
+    const taxRates = await transaction.taxRateVersion.findMany({
+      where: {
+        jurisdiction: "CH",
+        reviewStatus: "APPROVED",
+        ...effectiveAt(at),
+      },
+      select: {
+        jurisdiction: true,
+        taxType: true,
+        rateBasisPoints: true,
+        validFrom: true,
+        validTo: true,
+        source: true,
+        reviewStatus: true,
+      },
+    });
     return { planVersions, productVersions, successFeeVersions, taxRates };
   }, { isolationLevel: "RepeatableRead" });
 
